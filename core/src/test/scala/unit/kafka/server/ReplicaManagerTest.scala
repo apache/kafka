@@ -1340,10 +1340,10 @@ class ReplicaManagerTest {
       // PartitionView passed to ReplicaSelector should not contain the follower as it's not in the ISR
       val expectedReplicaViews = Set(new DefaultReplicaView(leaderNode, 0, 0))
       val partitionView = replicaManager.replicaSelectorOpt.get
-        .asInstanceOf[MockReplicaSelector].getPartitionViewArgument()
+        .asInstanceOf[MockReplicaSelector].getPartitionViewArgument
 
       assertTrue(partitionView.isDefined)
-      assertEquals(expectedReplicaViews.asJava, partitionView.get.replicas())
+      assertEquals(expectedReplicaViews.asJava, partitionView.get.replicas)
     } finally {
       replicaManager.shutdown()
     }
@@ -4247,7 +4247,7 @@ class MockReplicaSelector extends ReplicaSelector {
   private var partitionViewArgument: Option[PartitionView] = None
 
   def getSelectionCount: Long = selectionCount.get
-  def getPartitionViewArgument(): Option[PartitionView] = partitionViewArgument
+  def getPartitionViewArgument: Option[PartitionView] = partitionViewArgument
 
   override def select(topicPartition: TopicPartition, clientMetadata: ClientMetadata, partitionView: PartitionView): Optional[ReplicaView] = {
     selectionCount.incrementAndGet()

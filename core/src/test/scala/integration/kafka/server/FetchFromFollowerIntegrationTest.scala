@@ -123,18 +123,23 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
 
     // Shutdown follower broker. Consumer will reach out to leader after metadata.max.age.ms
     brokers(followerBrokerId).shutdown()
+    TestUtils.waitUntilTrue(() => {
+      brokers(followerBrokerId).awaitShutdown()
+      true
+    }, "follower did not shut down in time.")
+
     response = connectAndReceive[FetchResponse](request, brokers(leaderBrokerId).socketServer)
     assertEquals(Errors.NONE, response.error)
     assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts)
-    validateFetchResponse(response)
+    validateFetchResponse(response, preferredReadReplica = -1)
   }
 
-  private def validateFetchResponse(response: FetchResponse, preferredReadReplica: Int = -1): Unit = {
+  private def validateFetchResponse(response: FetchResponse, preferredReadReplica: Int): Unit = {
     assertEquals(1, response.data.responses.size)
     response.data.responses.forEach { topicResponse =>
       assertEquals(1, topicResponse.partitions.size)
       topicResponse.partitions.forEach { partitionResponse =>
-        assertEquals(1, partitionResponse.preferredReadReplica)
+        assertEquals(preferredReadReplica, partitionResponse.preferredReadReplica)
       }
     }
   }
