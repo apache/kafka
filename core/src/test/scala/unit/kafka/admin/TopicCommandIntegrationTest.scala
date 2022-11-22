@@ -780,7 +780,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
 
     verify(adminClient, times(1)).deleteTopics(
-      eqThat(Seq(testTopicName).asJavaCollection),
+      argThat((_.contains(testTopicName)): ArgumentMatcher[Collection[String]]),
       argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[DeleteTopicsOptions])
     )
   }

@@ -38,7 +38,7 @@ plugins {
   id 'org.nosphere.apache.rat' version "0.7.0"
 
   id "com.github.spotbugs" version '4.7.1' apply false
-  id 'org.gradle.test-retry' version '1.3.1' apply false
+  id 'org.gradle.test-retry' version '1.2.1' apply false
   id 'org.scoverage' version '5.0.0' apply false
   id 'com.github.johnrengelman.shadow' version '7.0.0' apply false
 }
@@ -48,6 +48,26 @@ spotless {
     target 'streams/**/*.scala'
     scalafmt("$versions.scalafmt").configFile('checkstyle/.scalafmt.conf')
     licenseHeaderFile 'checkstyle/java.header', 'package'
+  }
+}
+
+task copyGitHooks(type: Copy) {
+  description 'Copies the git hooks.'
+  from("${rootDir}/bin/git-hooks/") {
+    include '*'
+  }
+  into "${rootDir}/.git/hooks"
+}
+
+task installGitHooks(type: Exec) {
+  description 'Installs the git hooks.'
+  group 'git hooks'
+  workingDir rootDir
+  commandLine 'chmod'
+  args '-R', '+x', '.git/hooks/'
+  dependsOn copyGitHooks
+  doLast {
+    logger.info('Git hook installed successfully.')
   }
 }
 
@@ -90,6 +110,10 @@ allprojects {
           libs.nettyHandler,
           libs.nettyTransportNativeEpoll
         )
+
+        dependencySubstitution {
+          substitute module("log4j:log4j:1.2.17") because "we use a custom version with security patches" with module("io.confluent:confluent-log4j:1.2.17-cp2.2")
+        }
       }
     }
   }
@@ -112,7 +136,7 @@ ext {
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
 
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
-  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
+  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && !version.contains("-alpha") && !version.matches("[0-9]*\\.[0-9]*\\.[0-9]*-[0-9]*-(ccs|ce)")
 
   mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
   mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
@@ -158,7 +182,7 @@ if (file('.git').exists()) {
         'gradle/wrapper/gradle-wrapper.properties',
         'config/kraft/README.md',
         'TROGDOR.md',
-        '**/README.md',
+        '**/*README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
@@ -232,6 +256,7 @@ subprojects {
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
     if (JavaVersion.current().isJava9Compatible())
       options.compilerArgs << "--release" << minJavaVersion
+    dependsOn installGitHooks
   }
 
   if (shouldPublish) {
@@ -571,6 +596,9 @@ subprojects {
       "-Xlint:unused"
     ]
 
+    if (versions.baseScala == '2.13')
+      scalaCompileOptions.additionalParameters += ["-Wconf:msg=@nowarn annotation does not suppress any warnings:s"] // See https://github.com/scala/scala/pull/9960
+
     // See README.md for details on this option and the meaning of each value
     if (userScalaOptimizerMode.equals("method"))
       scalaCompileOptions.additionalParameters += ["-opt:l:method"]
@@ -856,7 +884,7 @@ project(':core') {
     testImplementation libs.apachedsMavibotPartition
     testImplementation libs.apachedsJdbmPartition
     testImplementation libs.junitJupiter
-    testImplementation libs.slf4jlog4j
+    testImplementation libs.slf4jreload4j
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
@@ -886,8 +914,8 @@ project(':core') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('slf4j-reload4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -1107,7 +1135,7 @@ project(':metadata') {
     compileOnly libs.log4j
     testImplementation libs.junitJupiter
     testImplementation libs.hamcrest
-    testImplementation libs.slf4jlog4j
+    testImplementation libs.slf4jreload4j
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
   }
@@ -1192,7 +1220,7 @@ project(':clients') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
     testImplementation libs.jacksonJaxrsJsonProvider
@@ -1310,7 +1338,7 @@ project(':raft') {
     testImplementation libs.mockitoCore
     testImplementation libs.jqwik
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   task createVersionFile(dependsOn: determineCommitId) {
@@ -1389,7 +1417,7 @@ project(':server-common') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   task createVersionFile(dependsOn: determineCommitId) {
@@ -1445,7 +1473,7 @@ project(':storage:api') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   task createVersionFile(dependsOn: determineCommitId) {
@@ -1508,7 +1536,7 @@ project(':storage') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   task createVersionFile(dependsOn: determineCommitId) {
@@ -1589,7 +1617,7 @@ project(':tools') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   javadoc {
@@ -1598,8 +1626,8 @@ project(':tools') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('slf4j-reload4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -1639,7 +1667,7 @@ project(':trogdor') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   javadoc {
@@ -1648,8 +1676,8 @@ project(':trogdor') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('slf4j-reload4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -1684,7 +1712,7 @@ project(':shell') {
     testImplementation project(':clients')
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   javadoc {
@@ -1736,7 +1764,7 @@ project(':streams') {
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
 
     testRuntimeOnly project(':streams:test-utils')
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   task processMessages(type:JavaExec) {
@@ -1857,7 +1885,7 @@ project(':streams:streams-scala') {
     testImplementation libs.junitJupiter
     testImplementation libs.easymock
     testImplementation libs.hamcrest
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   javadoc {
@@ -1893,7 +1921,7 @@ project(':streams:test-utils') {
     testImplementation libs.easymock
     testImplementation libs.hamcrest
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   javadoc {
@@ -1926,7 +1954,7 @@ project(':streams:examples') {
 
     implementation project(':streams')
 
-    implementation libs.slf4jlog4j
+    implementation libs.slf4jreload4j
 
     testImplementation project(':streams:test-utils')
     testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
@@ -1955,7 +1983,10 @@ project(':streams:upgrade-system-tests-0100') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-0100"
 
   dependencies {
-    testImplementation libs.kafkaStreams_0100
+    testImplementation(libs.kafkaStreams_0100) {
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+      exclude group: 'log4j', module: 'log4j'
+    }
     testRuntimeOnly libs.junitJupiter
   }
 
@@ -1968,7 +1999,10 @@ project(':streams:upgrade-system-tests-0101') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-0101"
 
   dependencies {
-    testImplementation libs.kafkaStreams_0101
+    testImplementation(libs.kafkaStreams_0101) {
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+      exclude group: 'log4j', module: 'log4j'
+    }
     testRuntimeOnly libs.junitJupiter
   }
 
@@ -2172,7 +2206,7 @@ project(':jmh-benchmarks') {
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.mockitoCore
-    implementation libs.slf4jlog4j
+    implementation libs.slf4jreload4j
     implementation libs.scalaLibrary
     implementation libs.scalaJava8Compat
   }
@@ -2214,7 +2248,7 @@ project(':log4j-appender') {
 
   dependencies {
     implementation project(':clients')
-    implementation libs.slf4jlog4j
+    implementation libs.slf4jreload4j
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
@@ -2237,7 +2271,7 @@ project(':connect:api') {
     implementation libs.jaxrsApi
 
     testImplementation libs.junitJupiter
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
     testImplementation project(':clients').sourceSets.test.output
   }
 
@@ -2247,8 +2281,8 @@ project(':connect:api') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('slf4j-reload4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2274,7 +2308,7 @@ project(':connect:transforms') {
     testImplementation libs.easymock
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
     testImplementation project(':clients').sourceSets.test.output
   }
 
@@ -2284,8 +2318,8 @@ project(':connect:transforms') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('slf4j-reload4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2314,7 +2348,7 @@ project(':connect:json') {
     testImplementation libs.easymock
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
     testImplementation project(':clients').sourceSets.test.output
   }
 
@@ -2324,8 +2358,8 @@ project(':connect:json') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('slf4j-reload4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2381,7 +2415,7 @@ project(':connect:runtime') {
     testImplementation libs.mockitoCore
     testImplementation libs.httpclient
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   javadoc {
@@ -2390,8 +2424,8 @@ project(':connect:runtime') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('slf4j-reload4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2459,7 +2493,7 @@ project(':connect:file') {
     testImplementation libs.easymock
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
     testImplementation project(':clients').sourceSets.test.output
   }
 
@@ -2469,8 +2503,8 @@ project(':connect:file') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('slf4j-reload4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2498,7 +2532,7 @@ project(':connect:basic-auth-extension') {
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
     testRuntimeOnly libs.jerseyContainerServlet
   }
 
@@ -2508,8 +2542,8 @@ project(':connect:basic-auth-extension') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('slf4j-reload4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2545,7 +2579,7 @@ project(':connect:mirror') {
     testImplementation project(':core').sourceSets.test.output
 
     testRuntimeOnly project(':connect:runtime')
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
     testRuntimeOnly libs.bcpkix
   }
 
@@ -2555,8 +2589,8 @@ project(':connect:mirror') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('slf4j-reload4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2581,7 +2615,7 @@ project(':connect:mirror-client') {
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jreload4j
   }
 
   javadoc {
@@ -2590,8 +2624,8 @@ project(':connect:mirror-client') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('slf4j-reload4j*jar')
+      include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
@@ -2625,3 +2659,4 @@ task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
   else
     options.links "https://docs.oracle.com/javase/8/docs/api/"
 }
+
