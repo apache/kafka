@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the delegation token feature is not enabled
+ */
 public class DelegationTokenDisabledException extends ApiException {
 
     private static final long serialVersionUID = 1L;

@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the Delegation Token could not be found
+ *
+ */
 public class DelegationTokenNotFoundException extends ApiException {
 
     private static final long serialVersionUID = 1L;

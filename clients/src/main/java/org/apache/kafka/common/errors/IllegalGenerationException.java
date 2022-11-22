@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception represents an error condition where the specified group generation id is not valid
+ */
 public class IllegalGenerationException extends ApiException {
     private static final long serialVersionUID = 1L;
 

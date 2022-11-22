@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This error condition indicates that the committing offset data size is not valid.
+ */
 public class InvalidCommitOffsetSizeException extends ApiException {
     private static final long serialVersionUID = 1L;
 

@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception is thrown when the broker rejected this static consumer
+ * since another consumer with the same group.instance.id has registered with a different member.id
+ */
 public class FencedInstanceIdException extends ApiException {
     private static final long serialVersionUID = 1L;
 

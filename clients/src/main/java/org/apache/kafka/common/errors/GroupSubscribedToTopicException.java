@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it
+ *
+ * This exception is thrown in the event of such occurrence
+ */
 public class GroupSubscribedToTopicException extends ApiException {
     public GroupSubscribedToTopicException(String message) {
         super(message);

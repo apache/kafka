@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Indicates that the configured group identifier is not valid
+ */
 public class InvalidGroupIdException extends ApiException {
     private static final long serialVersionUID = 1L;
 

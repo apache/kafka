@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Indicates that the specified principalType is not supported
+ */
 public class InvalidPrincipalTypeException extends ApiException {
 
     private static final long serialVersionUID = 1L;

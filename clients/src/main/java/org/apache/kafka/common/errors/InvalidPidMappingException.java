@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Represents an error condition where the producer attempted to
+ * use a producer id which is not currently assigned to its transactional id
+ */
 public class InvalidPidMappingException extends ApiException {
     public InvalidPidMappingException(String message) {
         super(message);

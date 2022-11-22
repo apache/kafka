@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that group authorization has failed
+ *
+ */
 public class GroupAuthorizationException extends AuthorizationException {
     private final String groupId;
 

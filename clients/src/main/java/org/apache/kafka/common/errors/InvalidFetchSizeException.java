@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This error condition indicates that the requested fetch size is not valid
+ */
 public class InvalidFetchSizeException extends ApiException {
 
     private static final long serialVersionUID = 1L;

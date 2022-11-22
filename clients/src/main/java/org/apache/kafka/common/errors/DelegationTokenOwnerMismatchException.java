@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the specified principal is not a valid Owner/Renewer
+ */
 public class DelegationTokenOwnerMismatchException extends ApiException {
 
     private static final long serialVersionUID = 1L;

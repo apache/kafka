@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the specified replication factor is below 1
+ * or larger than the number of available brokers
+ */
 public class InvalidReplicationFactorException extends ApiException {
 
     private static final long serialVersionUID = 1L;

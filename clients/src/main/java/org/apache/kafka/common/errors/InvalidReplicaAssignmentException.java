@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Indicates that the replica assignment is not valid
+ */
 public class InvalidReplicaAssignmentException extends ApiException {
 
     private static final long serialVersionUID = 1L;

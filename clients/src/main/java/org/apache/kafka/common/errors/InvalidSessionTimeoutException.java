@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This represents an error condition where the session timeout is not within the range allowed by the broker
+ * (as configured by group.min.session.timeout.ms and group.max.session.timeout.ms)
+ */
 public class InvalidSessionTimeoutException extends ApiException {
     private static final long serialVersionUID = 1L;
 

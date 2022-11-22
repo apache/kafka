@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception is thrown when a leader election is not necessary for a topic partition
+ *
+ */
 public class ElectionNotNeededException extends InvalidMetadataException {
 
     public ElectionNotNeededException(String message) {

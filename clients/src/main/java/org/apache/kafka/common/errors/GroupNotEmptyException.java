@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the group is not empty
+ */
 public class GroupNotEmptyException extends ApiException {
     public GroupNotEmptyException(String message) {
         super(message);

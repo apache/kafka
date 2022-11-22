@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This indicates that the produce request specified an invalid value for required acks
+ */
 public class InvalidRequiredAcksException extends ApiException {
     private static final long serialVersionUID = 1L;
 

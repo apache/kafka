@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the controller has been relocated to another broker
+ *
+ */
 public class ControllerMovedException extends ApiException {
 
     private static final long serialVersionUID = 1L;

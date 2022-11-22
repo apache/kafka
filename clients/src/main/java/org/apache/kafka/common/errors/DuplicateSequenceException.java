@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception represents an error condition where the broker has received a duplicate sequence number
+ *
+ */
 public class DuplicateSequenceException extends ApiException {
 
     public DuplicateSequenceException(String message) {
