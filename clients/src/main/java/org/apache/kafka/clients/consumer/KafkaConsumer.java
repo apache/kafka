@@ -1584,7 +1584,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * The next Consumer Record which will be retrieved when poll() is invoked will have the offset specified, given that
      * a record with that offset exists (ie: it is a valid offset).
      *
-     * seek(0) is equivalent to seek to beginning for a topic with beginning offset 0.
+     * seek(0) is equivalent to seek to beginning for a topic with beginning offset 0,
+     * assuming that there is a record at offset 0 still available.
      * seekToEnd() is equivalent to seeking to the highest known offset + 1.
      *
      * Seeking to the offset smaller than the log start offset or larger than the log end offset
