@@ -461,8 +461,17 @@ public class TaskManager {
                                              final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                              final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                              final Set<Task> tasksToCloseClean) {
+        handleTasksPendingInitialization();
         handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
         handleTasksInStateUpdater(activeTasksToCreate, standbyTasksToCreate);
+    }
+
+    private void handleTasksPendingInitialization() {
+        // All tasks pending initialization are not part of the usual bookkeeping
+        for (final Task task : tasks.drainPendingTaskToInit()) {
+            task.suspend();
+            task.closeClean();
+        }
     }
 
     private void handleRunningAndSuspendedTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
