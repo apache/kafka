@@ -87,7 +87,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         return client.isReady(node, currentTime);
     }
 
-    public boolean doSend(UnsentRequest r) {
+    public void doSend(UnsentRequest r) {
         long now = time.milliseconds();
         Node node = r.node.orElse(client.leastLoadedNode(now));
         ClientRequest request = makeClientRequest(r, node);
@@ -95,9 +95,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         //  authentication error
         if (isReady(client, node, now)) {
             client.send(request, now);
-            return true;
         }
-        return false;
     }
 
     private ClientRequest makeClientRequest(UnsentRequest unsent, Node node) {
