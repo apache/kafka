@@ -236,10 +236,10 @@ public class CoordinatorManager {
     }
 
     private class FindCoordinatorRequestHandler extends NetworkClientDelegate.RequestFutureCompletionHandlerBase {
+
         @Override
-        public void onComplete(ClientResponse response) {
-            super.onComplete(response);
-            CoordinatorManager.this.onResponse((FindCoordinatorResponse) response.responseBody());
+        public void handleResponse(ClientResponse r, Throwable t) {
+            CoordinatorManager.this.onResponse((FindCoordinatorResponse) r.responseBody());
         }
     }
 }

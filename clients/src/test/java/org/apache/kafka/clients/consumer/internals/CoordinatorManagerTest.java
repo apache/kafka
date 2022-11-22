@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -39,6 +40,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -103,6 +105,23 @@ public class CoordinatorManagerTest {
                         this.node));
         // It is permitted to rediscover coordinator again.
         assertTrue(coordinatorManager.tryFindCoordinator().isPresent());
+    }
+
+    @Test
+    public void testRequestFutureCompletionHandlerBase() {
+        NetworkClientDelegate.RequestFutureCompletionHandlerBase h = new MockRequestFutureCompletionHandlerBase();
+        try {
+            h.onFailure(new RuntimeException());
+        } catch (Exception e) {
+            assertEquals("MockRequestFutureCompletionHandlerBase should throw an exception", e.getMessage());
+        }
+    }
+
+    private static class MockRequestFutureCompletionHandlerBase extends NetworkClientDelegate.RequestFutureCompletionHandlerBase {
+        @Override
+        public void handleResponse(ClientResponse r, Throwable t) {
+            throw new RuntimeException("MockRequestFutureCompletionHandlerBase should throw an exception");
+        }
     }
     
     private CoordinatorManager setupCoordinatorManager() {

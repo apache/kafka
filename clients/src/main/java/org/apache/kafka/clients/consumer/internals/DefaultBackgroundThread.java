@@ -71,6 +71,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final CoordinatorManager coordinatorManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
+        this.running = true;
         this.inflightEvent = Optional.empty();
         this.log = logContext.logger(getClass());
         this.applicationEventQueue = applicationEventQueue;
@@ -152,6 +153,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     void runOnce() {
         // TODO: we might not need the inflightEvent here
         this.inflightEvent = maybePollEvent();
+
         if (this.inflightEvent.isPresent()) {
             log.debug("processing application event: {}", this.inflightEvent);
         }
@@ -159,6 +161,8 @@ public class DefaultBackgroundThread extends KafkaThread {
             // clear inflight event upon successful consumption
             this.inflightEvent = Optional.empty();
         }
+
+
 
         if (shouldFindCoordinator() && coordinatorUnknown()) {
             coordinatorManager.tryFindCoordinator().ifPresent(networkClientDelegate::add);

@@ -20,14 +20,13 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Timer;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -40,9 +39,10 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class DefaultBackgroundThreadTest {
@@ -55,7 +55,6 @@ public class DefaultBackgroundThreadTest {
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private ApplicationEventProcessor processor;
     private CoordinatorManager coordinatorManager;
-    private DefaultBackgroundThread backgroundThread;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -67,38 +66,36 @@ public class DefaultBackgroundThreadTest {
         this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
         this.processor = mock(ApplicationEventProcessor.class);
         this.coordinatorManager = mock(CoordinatorManager.class);
-        this.backgroundThread = mockBackgroundThread();
-        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(RETRY_BACKOFF_MS_CONFIG, REFRESH_BACK_OFF_MS);
-        this.backgroundThread = mockBackgroundThread();
-    }
-
-    @AfterEach
-    public void tearDown() {
-        this.backgroundThread.close();
     }
 
     @Test
     public void testStartupAndTearDown() {
-        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         backgroundThread.start();
+        assertTrue(backgroundThread.isRunning());
         backgroundThread.close();
     }
 
     @Test
-    void testWakeup() {
-        backgroundThread.wakeup();
-        assertThrows(WakeupException.class, backgroundThread::runOnce);
+    public void testApplicationEvent() {
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+        ApplicationEvent e = new NoopApplicationEvent("noop event");
+        this.applicationEventsQueue.add(e);
+        backgroundThread.runOnce();
+        verify(processor, times(1)).process(e);
         backgroundThread.close();
     }
 
     @Test
     void testFindCoordinator() {
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         when(this.coordinatorManager.tryFindCoordinator()).thenReturn(Optional.of(findCoordinatorUnsentRequest(this.time.timer(0))));
         backgroundThread.runOnce();
         Mockito.verify(coordinatorManager, times(1)).tryFindCoordinator();
         Mockito.verify(networkClient, times(1)).poll();
+        backgroundThread.close();
     }
 
     private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(Timer timer) {
@@ -112,6 +109,10 @@ public class DefaultBackgroundThreadTest {
     }
 
     private DefaultBackgroundThread mockBackgroundThread() {
+        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(RETRY_BACKOFF_MS_CONFIG, REFRESH_BACK_OFF_MS);
+
         return new DefaultBackgroundThread(
                 this.time,
                 new ConsumerConfig(properties),

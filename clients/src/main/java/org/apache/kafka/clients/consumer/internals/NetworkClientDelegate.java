@@ -204,13 +204,17 @@ public class NetworkClientDelegate implements AutoCloseable {
         public void onFailure(RuntimeException e) {
             this.e = e;
             fireCompletion();
+            handleResponse(response, e);
         }
+
+        public void handleResponse(ClientResponse r, Throwable t) {}
 
         @Override
         public void onComplete(ClientResponse response) {
             this.response = response;
             // TODO: pendingCompletion in the orignal implementation: why did we batch it?
             fireCompletion();
+            handleResponse(response, null);
         }
     }
 
