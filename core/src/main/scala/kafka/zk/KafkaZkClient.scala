@@ -701,7 +701,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     getPartitionAssignmentForTopics(topics).map { topicAndPartitionMap =>
       val topic = topicAndPartitionMap._1
       val partitionMap = topicAndPartitionMap._2
-      topic -> partitionMap.keys.toSeq.sortWith((s, t) => s < t)
+      topic -> partitionMap.keys.toSeq.sorted
     }
   }
 
