@@ -64,11 +64,12 @@ public class MirrorCheckpointConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
-        if (!config.enabled()) {
-            return;
-        }
         String connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
+        if (!config.enabled()) {
+            log.info("Replication flow {} is not enabled,so no need to start connector {}", sourceAndTarget, connectorName);
+            return;
+        }
         groupFilter = config.groupFilter();
         sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
         scheduler = new Scheduler(MirrorCheckpointConnector.class, config.adminTimeout());

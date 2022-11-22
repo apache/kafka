@@ -208,9 +208,11 @@ public class MirrorMaker {
                 .putConnectorConfig(connectorClass.getSimpleName(), connectorProps, true, (e, x) -> {
                     if (e instanceof NotLeaderException) {
                         // No way to determine if the connector is a leader or not beforehand.
-                        log.info("Connector {} is a follower. Using existing configuration.", sourceAndTarget);
+                        log.info("Connector {} for replication flow {} is a follower. Using existing configuration.",
+                                connectorClass.getSimpleName(), sourceAndTarget);
                     } else {
-                        log.info("Connector {} configured.", sourceAndTarget, e);
+                        log.info("Connector {} for replication flow {} is configured.", connectorClass.getSimpleName(),
+                                sourceAndTarget, e);
                     }
                 });
     }
