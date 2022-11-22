@@ -488,10 +488,8 @@ public class StreamThreadTest {
         final EasyMockConsumerClientSupplier mockClientSupplier = new EasyMockConsumerClientSupplier(mockConsumer);
         mockClientSupplier.setCluster(createCluster());
 
-        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
-        topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = StreamThread.create(
-            topologyMetadata,
+            internalTopologyBuilder,
             config,
             mockClientSupplier,
             mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
@@ -548,8 +546,6 @@ public class StreamThreadTest {
         final EasyMockConsumerClientSupplier mockClientSupplier = new EasyMockConsumerClientSupplier(mockConsumer);
         mockClientSupplier.setCluster(createCluster());
 
-        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
-        topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = StreamThread.create(
             internalTopologyBuilder,
             config,
