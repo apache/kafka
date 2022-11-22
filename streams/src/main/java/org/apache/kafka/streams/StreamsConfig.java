@@ -153,7 +153,6 @@ public class StreamsConfig extends AbstractConfig {
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
 
-    public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
 
     // We impose these limitations because client tags are encoded into the subscription info,
@@ -742,7 +741,11 @@ public class StreamsConfig extends AbstractConfig {
 
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
-        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
+        new String[] {
+            ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+            ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+            ConsumerConfig.GROUP_ID_CONFIG
+        };
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
         new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
     private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
