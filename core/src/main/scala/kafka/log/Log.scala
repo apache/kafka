@@ -2682,7 +2682,15 @@ object Log extends Logging {
                                       logDirFailureChannel: LogDirFailureChannel,
                                       producerStateManager: ProducerStateManager,
                                       logPrefix: String): Unit = {
-    segmentsToDelete.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+    segmentsToDelete.foreach(logSegment => {
+      try {
+        logSegment.changeFileSuffixes("", Log.DeletedFileSuffix)
+      } catch {
+        case e: java.nio.file.NoSuchFileException => {
+          info(s"Failed to rename log file ${logSegment.log.file.getAbsoluteFile} with ${Log.DeletedFileSuffix} suffix because it was already deleted")
+        }
+      }
+    })
     val snapshotsToDelete = if (deleteProducerStateSnapshots)
       segmentsToDelete.flatMap { segment =>
         producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)}
