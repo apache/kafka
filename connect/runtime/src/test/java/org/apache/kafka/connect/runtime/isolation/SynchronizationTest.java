@@ -81,10 +81,10 @@ public class SynchronizationTest {
         pclBreakpoint = new Breakpoint<>();
         plugins = new Plugins(pluginProps) {
             @Override
-            protected DelegatingClassLoader newDelegatingClassLoader(List<String> paths) {
+            protected DelegatingClassLoader newDelegatingClassLoader(List<String> paths, ClassLoader parent) {
                 return AccessController.doPrivileged(
                     (PrivilegedAction<DelegatingClassLoader>) () ->
-                        new SynchronizedDelegatingClassLoader(paths)
+                        new SynchronizedDelegatingClassLoader(paths, parent)
                 );
             }
         };
@@ -172,8 +172,8 @@ public class SynchronizationTest {
             ClassLoader.registerAsParallelCapable();
         }
 
-        public SynchronizedDelegatingClassLoader(List<String> pluginPaths) {
-            super(pluginPaths);
+        public SynchronizedDelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
+            super(pluginPaths, parent);
         }
 
         @Override
