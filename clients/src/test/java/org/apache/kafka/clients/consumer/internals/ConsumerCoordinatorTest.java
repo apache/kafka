@@ -3758,7 +3758,8 @@ public abstract class ConsumerCoordinatorTest {
                         .setLeader(memberId)
                         .setSkipAssignment(skipAssignment)
                         .setMemberId(memberId)
-                        .setMembers(metadata)
+                        .setMembers(metadata),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 
@@ -3770,7 +3771,8 @@ public abstract class ConsumerCoordinatorTest {
                         .setProtocolName(partitionAssignor.name())
                         .setLeader(leaderId)
                         .setMemberId(memberId)
-                        .setMembers(Collections.emptyList())
+                        .setMembers(Collections.emptyList()),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 

@@ -584,9 +584,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         void flush() throws RocksDBException;
 
-        void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
-                                    final WriteBatch batch) throws RocksDBException;
-
         void addToBatch(final byte[] key,
                         final byte[] value,
                         final WriteBatch batch) throws RocksDBException;
@@ -701,14 +698,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
-        public void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
-                                           final WriteBatch batch) throws RocksDBException {
-            for (final KeyValue<byte[], byte[]> record : records) {
-                addToBatch(record.key, record.value, batch);
-            }
-        }
-
-        @Override
         public void addToBatch(final byte[] key,
                                final byte[] value,
                                final WriteBatch batch) throws RocksDBException {
@@ -727,7 +716,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
         try (final WriteBatch batch = new WriteBatch()) {
-            final List<KeyValue<byte[], byte[]>> keyValues = new ArrayList<>();
             for (final ConsumerRecord<byte[], byte[]> record : records) {
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                     record,
@@ -735,9 +723,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                     position
                 );
                 // If version headers are not present or version is V0
-                keyValues.add(new KeyValue<>(record.key(), record.value()));
+                dbAccessor.addToBatch(record.key(), record.value(), batch);
             }
-            dbAccessor.prepareBatchForRestore(keyValues, batch);
             write(batch);
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error restoring batch to store " + name, e);

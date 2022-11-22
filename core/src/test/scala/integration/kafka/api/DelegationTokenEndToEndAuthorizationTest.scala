@@ -90,6 +90,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     val privilegedClientLoginContext = JaasTestUtils.tokenClientLoginModule(privilegedToken.tokenInfo().tokenId(), privilegedToken.hmacAsBase64String())
     privilegedAdminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, privilegedClientLoginContext)
+    superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, privilegedClientLoginContext)
   }
 
   @Test

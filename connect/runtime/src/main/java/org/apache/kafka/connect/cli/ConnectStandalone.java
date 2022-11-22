@@ -82,7 +82,8 @@ public class ConnectStandalone {
             String kafkaClusterId = config.kafkaClusterId();
             log.debug("Kafka cluster ID: {}", kafkaClusterId);
 
-            RestServer rest = new RestServer(config);
+            // Do not initialize a RestClient because the ConnectorsResource will not use it in standalone mode.
+            RestServer rest = new RestServer(config, null);
             rest.initializeServer();
 
             URI advertisedUrl = rest.advertisedUrl();

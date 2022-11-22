@@ -17,19 +17,19 @@
 package kafka.server.metadata
 
 import java.util
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import kafka.metrics.KafkaMetricsGroup
-import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.image.writer.{ImageWriterOptions, RecordListWriter}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.snapshot.SnapshotReader
-
-import java.util.concurrent.atomic.AtomicBoolean
+import scala.compat.java8.OptionConverters._
 
 
 object BrokerMetadataListener {
@@ -153,25 +153,27 @@ class BrokerMetadataListener(
   }
 
   private def shouldSnapshot(): Set[SnapshotReason] = {
-    val metadataVersionHasChanged = metadataVersionChanged()
-    val maxBytesHaveExceeded = (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots)
+    val maybeMetadataVersionChanged = metadataVersionChanged.toSet
 
-    if (maxBytesHaveExceeded && metadataVersionHasChanged) {
-      Set(SnapshotReason.MetadataVersionChanged, SnapshotReason.MaxBytesExceeded)
-    } else if (maxBytesHaveExceeded) {
-      Set(SnapshotReason.MaxBytesExceeded)
-    } else if (metadataVersionHasChanged) {
-      Set(SnapshotReason.MetadataVersionChanged)
+    if (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots) {
+      maybeMetadataVersionChanged + SnapshotReason.maxBytesExceeded(_bytesSinceLastSnapshot, maxBytesBetweenSnapshots)
     } else {
-      Set()
+      maybeMetadataVersionChanged
     }
   }
 
-  private def metadataVersionChanged(): Boolean = {
+  private def metadataVersionChanged: Option[SnapshotReason] = {
     // The _publisher is empty before starting publishing, and we won't compute feature delta
     // until we starting publishing
-    _publisher.nonEmpty && Option(_delta.featuresDelta()).exists { featuresDelta =>
-      featuresDelta.metadataVersionChange().isPresent
+    if (_publisher.nonEmpty) {
+      Option(_delta.featuresDelta()).flatMap { featuresDelta =>
+        featuresDelta
+          .metadataVersionChange()
+          .asScala
+          .map(SnapshotReason.metadataVersionChanged)
+      }
+    } else {
+      None
     }
   }
 
@@ -306,9 +308,8 @@ class BrokerMetadataListener(
       _publisher = Some(publisher)
       log.info(s"Starting to publish metadata events at offset $highestMetadataOffset.")
       try {
-        if (metadataVersionChanged()) {
-          maybeStartSnapshot(Set(SnapshotReason.MetadataVersionChanged))
-        }
+        // Generate a snapshot if the metadata version changed
+        metadataVersionChanged.foreach(reason => maybeStartSnapshot(Set(reason)))
         publish(publisher)
         future.complete(null)
       } catch {
