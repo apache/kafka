@@ -119,7 +119,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     var response = connectAndReceive[FetchResponse](request, brokers(leaderBrokerId).socketServer)
     assertEquals(Errors.NONE, response.error)
     assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts)
-    validateFetchResponse(response, preferredReadReplica = 1)
+    validatePreferredReadReplica(response, preferredReadReplica = 1)
 
     // Shutdown follower broker. Consumer will reach out to leader after metadata.max.age.ms
     brokers(followerBrokerId).shutdown()
@@ -131,10 +131,10 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     response = connectAndReceive[FetchResponse](request, brokers(leaderBrokerId).socketServer)
     assertEquals(Errors.NONE, response.error)
     assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts)
-    validateFetchResponse(response, preferredReadReplica = -1)
+    validatePreferredReadReplica(response, preferredReadReplica = -1)
   }
 
-  private def validateFetchResponse(response: FetchResponse, preferredReadReplica: Int): Unit = {
+  private def validatePreferredReadReplica(response: FetchResponse, preferredReadReplica: Int): Unit = {
     assertEquals(1, response.data.responses.size)
     response.data.responses.forEach { topicResponse =>
       assertEquals(1, topicResponse.partitions.size)
