@@ -120,7 +120,7 @@ class KafkaScheduler(val threads: Int,
             trace("Completed execution of scheduled task '%s'.".format(name))
           }
         }
-        if (period >= 0)
+        if (period > 0)
           executor.scheduleAtFixedRate(runnable, delay, period, unit)
         else
           executor.schedule(runnable, delay, unit)
