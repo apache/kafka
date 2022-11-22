@@ -54,11 +54,33 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final ConsumerConfig config;
     private final CoordinatorManager coordinatorManager;
     private final ApplicationEventProcessor applicationEventProcessor;
-    private final NetworkClientUtils networkClientUtils;
+    private final NetworkClientDelegate networkClientDelegate;
 
     private boolean running;
     private Optional<ApplicationEvent> inflightEvent;
 
+    // Visible for testing
+    DefaultBackgroundThread(final Time time,
+                            final ConsumerConfig config,
+                            final LogContext logContext,
+                            final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                            final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                            final ApplicationEventProcessor processor,
+                            final ConsumerMetadata metadata,
+                            final NetworkClientDelegate networkClient,
+                            final CoordinatorManager coordinatorManager) {
+        super(BACKGROUND_THREAD_NAME, true);
+        this.time = time;
+        this.inflightEvent = Optional.empty();
+        this.log = logContext.logger(getClass());
+        this.applicationEventQueue = applicationEventQueue;
+        this.backgroundEventQueue = backgroundEventQueue;
+        this.applicationEventProcessor = processor;
+        this.config = config;
+        this.metadata = metadata;
+        this.networkClientDelegate = networkClient;
+        this.coordinatorManager = coordinatorManager;
+    }
     public DefaultBackgroundThread(final Time time,
                                    final ConsumerConfig config,
                                    final GroupRebalanceConfig rebalanceConfig,
@@ -70,14 +92,14 @@ public class DefaultBackgroundThread extends KafkaThread {
         super(BACKGROUND_THREAD_NAME, true);
         try {
             this.time = time;
-            this.log = logContext.logger(DefaultBackgroundThread.class);
+            this.log = logContext.logger(getClass());
             this.applicationEventQueue = applicationEventQueue;
             this.backgroundEventQueue = backgroundEventQueue;
             this.config = config;
             this.inflightEvent = Optional.empty();
             // subscriptionState is initialized by the polling thread
             this.metadata = metadata;
-            this.networkClientUtils = new NetworkClientUtils(
+            this.networkClientDelegate = new NetworkClientDelegate(
                     this.time,
                     logContext,
                     networkClient);
@@ -139,19 +161,19 @@ public class DefaultBackgroundThread extends KafkaThread {
         }
 
         if (shouldFindCoordinator() && coordinatorUnknown()) {
-            coordinatorManager.tryFindCoordinator().ifPresent(networkClientUtils::add);
+            coordinatorManager.tryFindCoordinator().ifPresent(networkClientDelegate::add);
         }
 
         // if there are pending events to process, poll then continue without
         // blocking.
         if (!applicationEventQueue.isEmpty() || inflightEvent.isPresent()) {
-            networkClientUtils.poll();
+            networkClientDelegate.poll();
             return;
         }
         // if there are no events to process, poll until timeout. The timeout
         // will be the minimum of the requestTimeoutMs, nextHeartBeatMs, and
         // nextMetadataUpdate. See NetworkClient.poll impl.
-        networkClientUtils.poll(time.timer(timeToNextHeartbeatMs()), false);
+        networkClientDelegate.poll(time.timer(timeToNextHeartbeatMs()), false);
     }
 
     /**
@@ -162,9 +184,9 @@ public class DefaultBackgroundThread extends KafkaThread {
      */
     protected Optional<Node> checkAndGetCoordinator(Node coordinator) {
         // If the current coordinator is unavailable, mark it unknown and disconnect it
-        if (coordinator != null && networkClientUtils.nodeUnavailable(coordinator)) {
+        if (coordinator != null && networkClientDelegate.nodeUnavailable(coordinator)) {
             log.info("Requesting disconnect from last known coordinator {}", coordinator);
-            networkClientUtils.tryDisconnect(
+            networkClientDelegate.tryDisconnect(
                     this.coordinatorManager.markCoordinatorUnknown("coordinator unavailable"));
             return Optional.empty();
         }
@@ -210,13 +232,13 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     public void wakeup() {
-        networkClientUtils.wakeup();
+        networkClientDelegate.wakeup();
     }
 
     public void close() {
         this.running = false;
         this.wakeup();
-        Utils.closeQuietly(networkClientUtils, "network client utils");
+        Utils.closeQuietly(networkClientDelegate, "network client utils");
         Utils.closeQuietly(metadata, "consumer metadata client");
     }
 }

@@ -80,11 +80,11 @@ public class CoordinatorManager {
      * 2. If the previous request failed, and the retryBackoff has expired
      * @return Optional UnsentRequest.  Empty if we are not allowed to send a request.
      */
-    public Optional<NetworkClientUtils.UnsentRequest> tryFindCoordinator() {
+    public Optional<NetworkClientDelegate.UnsentRequest> tryFindCoordinator() {
         if (coordinatorRequestState.lastSentMs == -1) {
             // no request has been sent
             return Optional.of(
-                    new NetworkClientUtils.UnsentRequest(
+                    new NetworkClientDelegate.UnsentRequest(
                             this.time.timer(requestTimeoutMs),
                             getFindCoordinatorRequest(),
                             new FindCoordinatorRequestHandler()));
@@ -102,7 +102,7 @@ public class CoordinatorManager {
         }
 
         return Optional.of(
-                new NetworkClientUtils.UnsentRequest(
+                new NetworkClientDelegate.UnsentRequest(
                         this.time.timer(requestTimeoutMs),
                         getFindCoordinatorRequest(),
                         new FindCoordinatorRequestHandler()));
@@ -235,7 +235,7 @@ public class CoordinatorManager {
         }
     }
 
-    private class FindCoordinatorRequestHandler extends NetworkClientUtils.RequestFutureCompletionHandler {
+    private class FindCoordinatorRequestHandler extends NetworkClientDelegate.RequestFutureCompletionHandlerBase {
         @Override
         public void onComplete(ClientResponse response) {
             super.onComplete(response);

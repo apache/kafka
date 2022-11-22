@@ -37,14 +37,17 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 
-public class NetworkClientUtils implements AutoCloseable {
+/**
+ * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle poll and send operations.
+ */
+public class NetworkClientDelegate implements AutoCloseable {
     private final KafkaClient client;
     private final Time time;
     private final Logger log;
     private boolean wakeup = false;
     private final Queue<UnsentRequest> unsentRequests;
 
-    public NetworkClientUtils(
+    public NetworkClientDelegate(
             final Time time,
             final LogContext logContext,
             final KafkaClient client) {
@@ -79,13 +82,18 @@ public class NetworkClientUtils implements AutoCloseable {
         }
     }
 
+    static boolean isReady(KafkaClient client, Node node, long currentTime) {
+        client.poll(0, currentTime);
+        return client.isReady(node, currentTime);
+    }
+
     public boolean doSend(UnsentRequest r) {
         long now = time.milliseconds();
         Node node = r.node.orElse(client.leastLoadedNode(now));
         ClientRequest request = makeClientRequest(r, node);
         // TODO: Sounds like we need to check disconnections for each node and complete the request with
         //  authentication error
-        if (client.ready(node, now)) {
+        if (isReady(client, node, now)) {
             client.send(request, now);
             return true;
         }
@@ -99,7 +107,7 @@ public class NetworkClientUtils implements AutoCloseable {
                 time.milliseconds(),
                 true,
                 (int) unsent.timer.remainingMs(),
-                null);
+                unsent.callback.orElse(new RequestFutureCompletionHandlerBase()));
     }
 
     public List<ClientResponse> poll() {
@@ -147,37 +155,38 @@ public class NetworkClientUtils implements AutoCloseable {
     }
 
     public static class UnsentRequest {
-        private final Optional<RequestFutureCompletionHandler> callback;
+        private final Optional<RequestFutureCompletionHandlerBase> callback;
         private final AbstractRequest.Builder abstractBuilder;
         private final Optional<Node> node; // empty if random node can be choosen
         private final Timer timer;
 
         public UnsentRequest(final Timer timer,
                              final AbstractRequest.Builder abstractBuilder,
-                             final RequestFutureCompletionHandler callback) {
+                             final RequestFutureCompletionHandlerBase callback) {
             this(timer, abstractBuilder, callback, null);
         }
 
         public UnsentRequest(final Timer timer,
                              final AbstractRequest.Builder abstractBuilder,
-                             final RequestFutureCompletionHandler callback,
+                             final RequestFutureCompletionHandlerBase callback,
                              final Node node) {
             Objects.requireNonNull(abstractBuilder);
             this.abstractBuilder = abstractBuilder;
             this.node = Optional.ofNullable(node);
-            this.callback = Optional.of(callback);
+            this.callback = Optional.ofNullable(callback);
             this.timer = timer;
         }
     }
 
-    public static class RequestFutureCompletionHandler implements RequestCompletionHandler {
+    public static class RequestFutureCompletionHandlerBase implements RequestCompletionHandler {
         private final RequestFuture<ClientResponse> future;
         private ClientResponse response;
         private RuntimeException e;
 
-        RequestFutureCompletionHandler() {
+        RequestFutureCompletionHandlerBase() {
             this.future = new RequestFuture<>();
         }
+
         public void fireCompletion() {
             if (e != null) {
                 future.raise(e);

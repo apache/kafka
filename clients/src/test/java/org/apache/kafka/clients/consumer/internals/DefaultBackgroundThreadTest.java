@@ -16,21 +16,20 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Timer;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.util.Optional;
@@ -41,115 +40,86 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 public class DefaultBackgroundThreadTest {
     private static final long REFRESH_BACK_OFF_MS = 100;
-    private int sessionTimeoutMs = 1000;
-    private int rebalanceTimeoutMs = 1000;
-    private int heartbeatIntervalMs = 1000;
-    private String groupId = "g-1";
-    private Optional<String> groupInstanceId = Optional.of("g-1");
-    private long retryBackoffMs = 1000;
     private final Properties properties = new Properties();
     private MockTime time;
-    private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
-    private LogContext context;
-    private KafkaClient networkClient;
-    private Metrics metrics;
+    private NetworkClientDelegate networkClient;
     private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
+    private ApplicationEventProcessor processor;
+    private CoordinatorManager coordinatorManager;
+    private DefaultBackgroundThread backgroundThread;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     public void setup() {
-        this.time = new MockTime();
-        this.subscriptions = mock(SubscriptionState.class);
+        this.time = new MockTime(0);
         this.metadata = mock(ConsumerMetadata.class);
-        this.context = new LogContext();
-        this.networkClient = new MockClient(this.time);
-        this.metrics = mock(Metrics.class);
+        this.networkClient = mock(NetworkClientDelegate.class);
         this.applicationEventsQueue = (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
         this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
+        this.processor = mock(ApplicationEventProcessor.class);
+        this.coordinatorManager = mock(CoordinatorManager.class);
+        this.backgroundThread = mockBackgroundThread();
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, REFRESH_BACK_OFF_MS);
     }
 
-    @Test
-    public void testStartupAndTearDown() throws InterruptedException {
-        this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        final DefaultBackgroundThread backgroundThread = setupMockHandler();
-        backgroundThread.start();
-        assertTrue(networkClient.active());
-        backgroundThread.close();
-        assertFalse(networkClient.active());
+    @AfterEach
+    public void tearDown() {
+        this.backgroundThread.close();
     }
 
     @Test
-    public void testInterruption() throws InterruptedException {
+    public void testStartupAndTearDown() {
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        final DefaultBackgroundThread backgroundThread = setupMockHandler();
         backgroundThread.start();
-        assertTrue(networkClient.active());
         backgroundThread.close();
-        assertFalse(networkClient.active());
     }
 
     @Test
     void testWakeup() {
-        this.time = new MockTime(0);
-        when(applicationEventsQueue.isEmpty()).thenReturn(true);
-        when(applicationEventsQueue.isEmpty()).thenReturn(true);
-        final DefaultBackgroundThread runnable = setupMockHandler();
-        networkClient.poll(0, time.milliseconds());
-        runnable.wakeup();
-
-        assertThrows(WakeupException.class, runnable::runOnce);
-        runnable.close();
+        backgroundThread.wakeup();
+        assertThrows(WakeupException.class, backgroundThread::runOnce);
+        backgroundThread.close();
     }
 
     @Test
-    void testNetworkAndBlockingQueuePoll() {
-        // ensure network poll and application queue poll will happen in a
-        // single iteration
-        this.time = new MockTime(100);
-        this.networkClient = mock(KafkaClient.class);
-        final DefaultBackgroundThread runnable = setupMockHandler();
-        runnable.runOnce();
-
-        when(applicationEventsQueue.isEmpty()).thenReturn(false);
-        when(applicationEventsQueue.poll())
-            .thenReturn(new NoopApplicationEvent(backgroundEventsQueue, "nothing"));
-        final InOrder inOrder = Mockito.inOrder(applicationEventsQueue, this.networkClient);
-        assertFalse(inOrder.verify(applicationEventsQueue).isEmpty());
-        inOrder.verify(applicationEventsQueue).poll();
-        inOrder.verify(this.networkClient).poll(anyLong(), anyLong());
-        runnable.close();
+    void testFindCoordinator() {
+        when(this.coordinatorManager.tryFindCoordinator()).thenReturn(Optional.of(findCoordinatorUnsentRequest(this.time.timer(0))));
+        backgroundThread.runOnce();
+        Mockito.verify(coordinatorManager, times(1)).tryFindCoordinator();
+        Mockito.verify(networkClient, times(1)).poll();
     }
 
-    private DefaultBackgroundThread setupMockHandler() {
-        GroupRebalanceConfig groupConfig = new GroupRebalanceConfig(sessionTimeoutMs,
-                rebalanceTimeoutMs,
-                heartbeatIntervalMs,
-                groupId,
-                groupInstanceId,
-                retryBackoffMs,
-                true);
+    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(Timer timer) {
+        return new NetworkClientDelegate.UnsentRequest(
+                timer,
+                new FindCoordinatorRequest.Builder(
+                        new FindCoordinatorRequestData()
+                                .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
+                                .setKey("foobar")),
+                null);
+    }
+
+    private DefaultBackgroundThread mockBackgroundThread() {
         return new DefaultBackgroundThread(
                 this.time,
                 new ConsumerConfig(properties),
-                groupConfig,
                 new LogContext(),
                 applicationEventsQueue,
                 backgroundEventsQueue,
+                processor,
                 this.metadata,
-                this.networkClient);
+                this.networkClient,
+                this.coordinatorManager);
     }
 }
