@@ -26,9 +26,9 @@ import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.storage.Converter;
 
 /**
- * Fake plugin class for testing classloading isolation
- * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}
- * <p>Exfiltrates data via {@link ThingOne#fromConnectData(String, Schema, Object)}
+ * Fake plugin class for testing classloading isolation.
+ * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
+ * <p>Exfiltrates data via {@link ThingTwo#fromConnectData(String, Schema, Object)}.
  */
 public class ThingTwo implements Converter {
     @Override

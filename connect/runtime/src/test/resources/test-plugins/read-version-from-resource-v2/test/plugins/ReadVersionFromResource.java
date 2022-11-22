@@ -33,10 +33,11 @@ import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.storage.Converter;
 
 /**
- * Fake plugin class for testing classloading isolation
- * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}
- * <p>Load resource(s) from the isolated classloader instance
- * Exfiltrates data via {@link ThingOne#fromConnectData(String, Schema, Object)}
+ * Fake plugin class for testing classloading isolation.
+ * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
+ * <p>Load resource(s) from the isolated classloader instance.
+ * Exfiltrates data via {@link ReadVersionFromResource#fromConnectData(String, Schema, Object)}
+ * and {@link ReadVersionFromResource#toConnectData(String, byte[])}.
  */
 public class ReadVersionFromResource implements Converter {
     @Override

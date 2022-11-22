@@ -24,8 +24,8 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 import org.apache.kafka.connect.storage.Converter;
 
 /**
- * Fake plugin class for testing classloading isolation
- * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}
+ * Fake plugin class for testing classloading isolation.
+ * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
  * <p>Unconditionally throw an exception during static initialization.
  */
 public class AlwaysThrowException implements Converter {
