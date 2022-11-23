@@ -1584,9 +1584,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * The next Consumer Record which will be retrieved when poll() is invoked will have the offset specified, given that
      * a record with that offset exists (ie: it is a valid offset).
      *
-     * seek(0) is equivalent to seek to beginning for a topic with beginning offset 0,
+     * {@link KafkaConsumer#seekToBeginning(Collection)} will go to the first offset in the topic.
+     * seek(0) is equivalent to seekToBeginning for a topic with beginning offset 0,
      * assuming that there is a record at offset 0 still available.
-     * seekToEnd() is equivalent to seeking to the highest known offset + 1.
+     * {@link KafkaConsumer#seekToEnd(Collection)} is equivalent to seeking to the highest known offset + 1.
      *
      * Seeking to the offset smaller than the log start offset or larger than the log end offset
      * or high watermark means an invalid offset is reached.
@@ -1596,9 +1597,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If it is set to "latest", it will seek to the last known record (similar to seekToEnd()).
      * If it is set to "none", an {@link OffsetOutOfRangeException} will be thrown.
      *
-     * Note that,  the seek offset won't change to the in-flight fetch request, it will take effect in next fetch request.
-     * In order for the invalid offset behaviour to take effect immediately after seeking and polling,
-     * {@link ConsumerConfig FETCH_MAX_WAIT_MS_CONFIG} should be set to 0.
+     * Note that, the seek offset won't change to the in-flight fetch request, it will take effect in next fetch request.
+     * So, the consumer might wait for {@code fetch.max.wait.ms} before starting to fetch the records from desired offset.
      *
      * @param offset the next offset returned by poll() will be either this or greater.
      * @throws IllegalArgumentException if the provided offset is negative
