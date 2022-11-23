@@ -229,4 +229,15 @@ public interface RaftClient<T> extends AutoCloseable {
      *         or less than the log start offset.
      */
     Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
+
+
+    /**
+     * The snapshot id for the lastest snapshot.
+     *
+     * Returns the snapshot id of the latest snapshot, if it exists. If a snapshot doesn't exists, returns an
+     * {@link Optional#empty()}.
+     *
+     * @return the id of the latest snaphost, if it exists
+     */
+    Optional<OffsetAndEpoch> latestSnapshotId();
 }
