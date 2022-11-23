@@ -17,6 +17,7 @@
 
 package test.plugins;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -26,18 +27,9 @@ import org.apache.kafka.connect.storage.Converter;
 /**
  * Fake plugin class for testing classloading isolation.
  * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
- * <p>Unconditionally throw an exception during static initialization.
+ * <p>Exfiltrates data via {@link ThingOne#fromConnectData(String, Schema, Object)}.
  */
-public class AlwaysThrowException implements Converter {
-
-    static {
-        setup();
-    }
-
-    public static void setup() {
-        throw new RuntimeException("I always throw an exception");
-    }
-
+public class ThingOne implements Converter {
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
 
@@ -45,7 +37,7 @@ public class AlwaysThrowException implements Converter {
 
     @Override
     public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
-        return new byte[0];
+        return "Thing one".getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
