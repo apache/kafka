@@ -16,15 +16,20 @@
  */
 package kafka.coordinator.group
 
+import kafka.common.OffsetAndMetadata
 import kafka.server.RequestLocal
 import kafka.utils.Implicits.MapExtensionMethods
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.RequestContext
-import org.apache.kafka.common.utils.BufferSupplier
+import org.apache.kafka.common.utils.{BufferSupplier, Time}
 
 import java.util
+import java.util.Optional
 import java.util.concurrent.CompletableFuture
-import scala.collection.immutable
+import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
 
 /**
@@ -32,7 +37,8 @@ import scala.jdk.CollectionConverters._
  * that exposes the new org.apache.kafka.coordinator.group.GroupCoordinator interface.
  */
 class GroupCoordinatorAdapter(
-  val coordinator: GroupCoordinator
+  private val coordinator: GroupCoordinator,
+  private val time: Time
 ) extends org.apache.kafka.coordinator.group.GroupCoordinator {
 
   override def joinGroup(
@@ -233,5 +239,68 @@ class GroupCoordinatorAdapter(
         .setErrorCode(error.code))
     }
     CompletableFuture.completedFuture(results)
+  }
+
+  override def commitTransactionalOffsets(
+    context: RequestContext,
+    request: TxnOffsetCommitRequestData,
+    bufferSupplier: BufferSupplier
+  ): CompletableFuture[TxnOffsetCommitResponseData] = {
+    val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+
+    def callback(results: Map[TopicPartition, Errors]): Unit = {
+      val response = new TxnOffsetCommitResponseData()
+      val byTopics = new util.HashMap[String, TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic]()
+
+      results.forKeyValue { (tp, error) =>
+        var topic = byTopics.get(tp.topic)
+        if (topic == null) {
+          topic = new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setName(tp.topic)
+          byTopics.put(tp.topic, topic)
+          response.topics.add(topic)
+        }
+        topic.partitions.add(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+          .setPartitionIndex(tp.partition)
+          .setErrorCode(error.code))
+      }
+
+      future.complete(response)
+    }
+
+    val currentTimestamp = time.milliseconds
+    val partitions = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
+
+    request.topics.forEach { topic =>
+      topic.partitions.forEach { partition =>
+        val tp = new TopicPartition(topic.name, partition.partitionIndex)
+        partitions += tp -> new OffsetAndMetadata(
+          offset = partition.committedOffset,
+          leaderEpoch = partition.committedLeaderEpoch match {
+            case RecordBatch.NO_PARTITION_LEADER_EPOCH => Optional.empty[Integer]
+            case committedLeaderEpoch => Optional.of[Integer](committedLeaderEpoch)
+          },
+          metadata = partition.committedMetadata match {
+            case null => OffsetAndMetadata.NoMetadata
+            case metadata => metadata
+          },
+          commitTimestamp = currentTimestamp,
+          expireTimestamp = None
+        )
+      }
+    }
+
+    coordinator.handleTxnCommitOffsets(
+      request.groupId,
+      request.producerId,
+      request.producerEpoch,
+      request.memberId,
+      Option(request.groupInstanceId),
+      request.generationId,
+      partitions.toMap,
+      callback,
+      RequestLocal(bufferSupplier)
+    )
+
+    future
   }
 }
