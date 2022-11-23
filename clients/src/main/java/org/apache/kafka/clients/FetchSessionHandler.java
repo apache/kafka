@@ -602,4 +602,12 @@ public class FetchSessionHandler {
         log.info("Error sending fetch request {} to node {}:", nextMetadata, node, t);
         nextMetadata = nextMetadata.nextCloseExisting();
     }
+
+    /**
+     * Get the fetch request session's partitions.
+     * Should only be used for testing.
+     */
+    public Set<TopicPartition> sessionTopicPartitions() {
+        return sessionPartitions.keySet();
+    }
 }
