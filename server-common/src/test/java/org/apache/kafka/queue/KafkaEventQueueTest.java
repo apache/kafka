@@ -17,9 +17,12 @@
 
 package org.apache.kafka.queue;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalLong;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
@@ -30,6 +33,7 @@ import java.util.function.Supplier;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -239,5 +243,56 @@ public class KafkaEventQueueTest {
             });
         assertEquals(RejectedExecutionException.class, assertThrows(
             ExecutionException.class, () -> future.get()).getCause().getClass());
+    }
+
+    @Test
+    public void testEventQueueSize() throws InterruptedException, ExecutionException {
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(), "testEventQueueSize");
+        assertEquals(0, queue.size());
+
+        // SETUP
+        // Since the event queue processing removes the currently executed task before running it,
+        // instead of removing it from the queue after the execution of the task finishes,
+        // we'd have to artificially first block the event queue with a blocking task and then
+        // count its size.
+        CountDownLatch blockEventQueueWait = new CountDownLatch(1);
+        CompletableFuture<Void> blockEventQueue = new CompletableFuture<>();
+        queue.append(() -> {
+            blockEventQueueWait.countDown();
+            blockEventQueue.get();
+        });
+        blockEventQueueWait.await();
+        assertEquals(0, queue.size());
+
+        // TEST
+        Time time = new SystemTime();
+        int numIters = 10;
+        int numEventsPerIter = 4;
+        CountDownLatch queueFinished = new CountDownLatch(numIters * numEventsPerIter);
+        for (int i = 0; i < numIters; i++) {
+            queue.append(queueFinished::countDown);
+            queue.prepend(queueFinished::countDown);
+            queue.appendWithDeadline(time.nanoseconds() + Instant.now().plus(1, ChronoUnit.MINUTES).getNano(),
+                    queueFinished::countDown);
+            queue.scheduleDeferred("foo:N" + i, new EventQueue.DeadlineFunction(time.nanoseconds() + 1),
+                    queueFinished::countDown);
+
+            assertEquals((i + 1) * numEventsPerIter, queue.size());
+        }
+        assertEquals(numIters * numEventsPerIter, queue.size());
+
+        queue.scheduleDeferred("bar",
+                new EventQueue.DeadlineFunction(Instant.now().plus(10, ChronoUnit.MINUTES).getNano()),
+                () -> {
+                });
+        assertEquals(numIters * numEventsPerIter + 1, queue.size());
+        queue.cancelDeferred("bar");
+        assertEquals(numIters * numEventsPerIter, queue.size());
+
+        blockEventQueue.complete(null);
+        queueFinished.await();
+        assertEquals(0, queue.size());
+        queue.close();
+        assertEquals(0, queue.size());
     }
 }

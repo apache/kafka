@@ -167,6 +167,11 @@ public final class KafkaEventQueue implements EventQueue {
          */
         private final Condition cond = lock.newCondition();
 
+        /**
+         * Total number of enqueued events.
+         */
+        private int numEnqueuedEvents = 0;
+
         @Override
         public void run() {
             try {
@@ -187,6 +192,7 @@ public final class KafkaEventQueue implements EventQueue {
                 tagToEventContext.remove(eventContext.tag, eventContext);
                 eventContext.tag = null;
             }
+            numEnqueuedEvents -= 1;
         }
 
         private void handleEvents() throws InterruptedException {
@@ -314,6 +320,7 @@ public final class KafkaEventQueue implements EventQueue {
                 if (shouldSignal) {
                     cond.signal();
                 }
+                numEnqueuedEvents += 1;
             } finally {
                 lock.unlock();
             }
@@ -336,6 +343,15 @@ public final class KafkaEventQueue implements EventQueue {
             lock.lock();
             try {
                 eventHandler.cond.signal();
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        int size() {
+            lock.lock();
+            try {
+                return numEnqueuedEvents;
             } finally {
                 lock.unlock();
             }
@@ -415,6 +431,11 @@ public final class KafkaEventQueue implements EventQueue {
     @Override
     public void wakeup() {
         eventHandler.wakeUp();
+    }
+
+    @Override
+    public int size() {
+        return eventHandler.size();
     }
 
     @Override
