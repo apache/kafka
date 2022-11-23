@@ -247,6 +247,14 @@ public interface Herder {
     void restartConnectorAndTasks(RestartRequest request, Callback<ConnectorStateInfo> cb);
 
     /**
+     * Stop the conector. This call will asynchronously suspend processing by the connector and all
+     * of its tasks.
+     * @param connector name of the connector
+     * @param cb callback to invoke upon completion
+     */
+    void stopConnector(String connector, Callback<Void> cb);
+
+    /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
      * of its tasks.
      * @param connector name of the connector

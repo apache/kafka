@@ -303,7 +303,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.connect.runtime.WorkerConnector"/>
         <Or>
             <Method name="doStart"/>
-            <Method name="pause"/>
+            <Method name="stop"/>
         </Or>
         <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
     </Match>
