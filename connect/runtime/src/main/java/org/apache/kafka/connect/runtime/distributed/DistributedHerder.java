@@ -444,7 +444,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             } else if (now >= next.at) {
                 requests.pollFirst();
             } else {
-                scheduledTick = Math.min(scheduledTick, next.at);
+                scheduledTick = next.at;
                 break;
             }
 

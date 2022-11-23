@@ -2115,18 +2115,11 @@ public class DistributedHerderTest {
         Capture<Callback<TargetState>> onPause = newCapture();
         worker.setTargetState(EasyMock.eq(CONN1), EasyMock.eq(TargetState.PAUSED), capture(onPause));
         PowerMock.expectLastCall().andAnswer(() -> {
-            onPause.getValue().onCompletion(null, TargetState.STARTED);
+            onPause.getValue().onCompletion(null, TargetState.PAUSED);
             return null;
         });
-        expectQueueHerderOperation();
-
-        member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
-        expectExecuteTaskReconfiguration(true, conn1SinkConfig, () -> TASK_CONFIGS);
-
-        member.ensureActive();
-        PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -2135,7 +2128,6 @@ public class DistributedHerderTest {
         herder.tick(); // join
         configUpdateListener.onConnectorTargetStateChange(CONN1); // state changes to paused
         herder.tick(); // apply state change
-        herder.tick();
 
         PowerMock.verifyAll();
     }
