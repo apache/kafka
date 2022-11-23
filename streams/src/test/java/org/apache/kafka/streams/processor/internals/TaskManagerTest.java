@@ -110,8 +110,10 @@ import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -848,34 +850,35 @@ public class TaskManagerTest {
     @Test
     public void shouldHandleMultipleRemovedTasksFromStateUpdater() {
         final StreamTask taskToRecycle0 = statefulTask(taskId00, taskId00ChangelogPartitions)
-            .inState(State.RESTORING)
-            .withInputPartitions(taskId00Partitions).build();
+                .inState(State.RESTORING)
+                .withInputPartitions(taskId00Partitions).build();
         final StandbyTask taskToRecycle1 = standbyTask(taskId01, taskId01ChangelogPartitions)
-            .inState(State.RUNNING)
-            .withInputPartitions(taskId01Partitions).build();
+                .inState(State.RUNNING)
+                .withInputPartitions(taskId01Partitions).build();
         final StandbyTask convertedTask0 = standbyTask(taskId00, taskId00ChangelogPartitions).build();
         final StreamTask convertedTask1 = statefulTask(taskId01, taskId01ChangelogPartitions).build();
         final StreamTask taskToClose = statefulTask(taskId02, taskId02ChangelogPartitions)
-            .inState(State.RESTORING)
-            .withInputPartitions(taskId02Partitions).build();
+                .inState(State.RESTORING)
+                .withInputPartitions(taskId02Partitions).build();
         final StreamTask taskToUpdateInputPartitions = statefulTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.RESTORING)
-            .withInputPartitions(taskId03Partitions).build();
+                .inState(State.RESTORING)
+                .withInputPartitions(taskId03Partitions).build();
         when(stateUpdater.hasRemovedTasks()).thenReturn(true);
         when(stateUpdater.drainRemovedTasks())
-            .thenReturn(mkSet(taskToRecycle0, taskToRecycle1, taskToClose, taskToUpdateInputPartitions));
+                .thenReturn(mkSet(taskToRecycle0, taskToRecycle1, taskToClose, taskToUpdateInputPartitions));
         when(stateUpdater.restoresActiveTasks()).thenReturn(true);
-        when(activeTaskCreator.createActiveTaskFromStandby(eq(taskToRecycle1), eq(taskId01Partitions), eq(consumer)))
-            .thenReturn(convertedTask1);
-        when(standbyTaskCreator.createStandbyTaskFromActive(eq(taskToRecycle0), eq(taskId00Partitions)))
-            .thenReturn(convertedTask0);
+        when(activeTaskCreator.createActiveTaskFromStandby(taskToRecycle1, taskId01Partitions, consumer))
+                .thenReturn(convertedTask1);
+        when(standbyTaskCreator.createStandbyTaskFromActive(taskToRecycle0, taskId00Partitions))
+                .thenReturn(convertedTask0);
         when(consumer.assignment()).thenReturn(emptySet());
         final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.removePendingTaskToCloseClean(taskToClose.id())).thenReturn(true);
+        when(tasks.removePendingTaskToCloseClean(taskToUpdateInputPartitions.id())).thenReturn(false);
         when(tasks.removePendingTaskToRecycle(taskToRecycle0.id())).thenReturn(taskId00Partitions);
         when(tasks.removePendingTaskToRecycle(taskToRecycle1.id())).thenReturn(taskId01Partitions);
         when(tasks.removePendingTaskToRecycle(
-            argThat(taskId -> !taskId.equals(taskToRecycle0.id()) && !taskId.equals(taskToRecycle1.id())))
+                argThat(taskId -> !taskId.equals(taskToRecycle0.id()) && !taskId.equals(taskToRecycle1.id())))
         ).thenReturn(null);
         when(tasks.removePendingTaskToUpdateInputPartitions(taskToUpdateInputPartitions.id())).thenReturn(taskId04Partitions);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
@@ -885,12 +888,12 @@ public class TaskManagerTest {
 
         verify(convertedTask0).initializeIfNeeded();
         verify(convertedTask1).initializeIfNeeded();
+        verify(activeTaskCreator, times(2)).closeAndRemoveTaskProducerIfNeeded(any());
         verify(stateUpdater).add(convertedTask0);
         verify(stateUpdater).add(convertedTask1);
         verify(taskToClose).closeClean();
         verify(taskToUpdateInputPartitions).updateInputPartitions(eq(taskId04Partitions), anyMap());
         verify(stateUpdater).add(taskToUpdateInputPartitions);
-        verify(activeTaskCreator, times(2)).closeAndRemoveTaskProducerIfNeeded(any());
     }
 
     @Test
@@ -1376,7 +1379,6 @@ public class TaskManagerTest {
         assertEquals("Tasks [0_1, 0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
     }
 
-    /*
     @Test
     public void shouldRethrowTaskCorruptedExceptionFromInitialization() {
         final StreamTask statefulTask0 = statefulTask(taskId00, taskId00ChangelogPartitions)
@@ -1399,9 +1401,9 @@ public class TaskManagerTest {
                 () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter)
         );
 
-        Mockito.verify(tasks).addTask(statefulTask0);
-        Mockito.verify(tasks).addTask(statefulTask1);
-        Mockito.verify(stateUpdater).add(statefulTask2);
+        verify(tasks).addTask(statefulTask0);
+        verify(tasks).addTask(statefulTask1);
+        verify(stateUpdater).add(statefulTask2);
         assertEquals(mkSet(taskId00, taskId01), thrown.corruptedTasks());
         assertEquals("Tasks [0_1, 0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
     }
@@ -1411,27 +1413,20 @@ public class TaskManagerTest {
         final TopicPartition newTopicPartition = new TopicPartition("topic2", 1);
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1, newTopicPartition)));
 
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(emptyList());
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-
-        topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p1, newTopicPartition)), anyString());
-        expectLastCall();
-
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder);
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(emptyList());
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(assignment, emptyMap());
 
-        verify(activeTaskCreator, topologyBuilder);
+        verify(topologyBuilder).addSubscribedTopicsFromAssignment(eq(asList(t1p1, newTopicPartition)), anyString());
     }
 
     @Test
     public void shouldNotLockAnythingIfStateDirIsEmpty() {
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new ArrayList<>()).once();
+        when(stateDirectory.listNonEmptyTaskDirectories()).thenReturn(new ArrayList<>());
 
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
 
-        verify(stateDirectory);
         assertTrue(taskManager.lockedTaskDirectories().isEmpty());
     }
 
@@ -1445,23 +1440,19 @@ public class TaskManagerTest {
             taskId10.toString(),
             "dummy"
         );
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
 
-        verify(stateDirectory);
         assertThat(taskManager.lockedTaskDirectories(), is(singleton(taskId01)));
     }
 
     @Test
     public void shouldPauseAllTopicsWithoutStateUpdaterOnRebalanceComplete() {
         final Set<TopicPartition> assigned = mkSet(t1p0, t1p1);
-        expect(consumer.assignment()).andReturn(assigned);
-        consumer.pause(assigned);
-        replay(consumer);
+        when(consumer.assignment()).thenReturn(assigned);
 
         taskManager.handleRebalanceComplete();
 
-        verify(consumer);
+        verify(consumer).pause(assigned);
     }
 
     @Test
@@ -1469,42 +1460,41 @@ public class TaskManagerTest {
         final StreamTask statefulTask0 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions).build();
-        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(tasks.allTasks()).thenReturn(mkSet(statefulTask0));
         final Set<TopicPartition> assigned = mkSet(t1p0, t1p1);
-        expect(consumer.assignment()).andReturn(assigned);
-        consumer.pause(mkSet(t1p1));
-        replay(consumer);
+        when(consumer.assignment()).thenReturn(assigned);
 
         taskManager.handleRebalanceComplete();
 
-        verify(consumer);
+        verify(consumer).pause(mkSet(t1p1));
     }
 
     @Test
     public void shouldReleaseLockForUnassignedTasksAfterRebalance() throws Exception {
         expectLockObtainedFor(taskId00, taskId01, taskId02);
-        expectUnlockFor(taskId02);
 
         makeTaskFolders(
             taskId00.toString(),  // active task
             taskId01.toString(),  // standby task
             taskId02.toString()   // unassigned but able to lock
         );
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01, taskId02)));
 
         handleAssignment(taskId00Assignment, taskId01Assignment, emptyMap());
-        reset(consumer);
-        expectConsumerAssignmentPaused(consumer);
-        replay(consumer);
+
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(consumer.assignment()).thenReturn(assignment);
 
         taskManager.handleRebalanceComplete();
         assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01)));
-        verify(stateDirectory);
+        verify(consumer).pause(assignment);
+        verify(stateDirectory).unlock(taskId02);
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -1544,7 +1534,6 @@ public class TaskManagerTest {
                                            final Map<TaskId, Long> expectedOffsetSums) throws Exception {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
         final StateMachineTask restoringTask = handleAssignment(
@@ -1567,7 +1556,6 @@ public class TaskManagerTest {
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
         final StateMachineTask restoringTask = handleAssignment(
@@ -1578,6 +1566,8 @@ public class TaskManagerTest {
         restoringTask.setChangelogOffsets(changelogOffsets);
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -1592,7 +1582,6 @@ public class TaskManagerTest {
         makeTaskFolders(taskId00.toString());
         writeCheckpointFile(taskId00, changelogOffsets);
 
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
@@ -1609,13 +1598,11 @@ public class TaskManagerTest {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         writeCheckpointFile(taskId00, changelogOffsets);
-        replay(stateDirectory);
 
         taskManager.handleRebalanceStart(singleton("topic"));
         final StateMachineTask uninitializedTask = new StateMachineTask(taskId00, taskId00Partitions, true);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singleton(uninitializedTask));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singleton(uninitializedTask));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
 
         assertThat(uninitializedTask.state(), is(State.CREATED));
@@ -1634,14 +1621,12 @@ public class TaskManagerTest {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         writeCheckpointFile(taskId00, changelogOffsets);
-        replay(stateDirectory);
 
         final StateMachineTask closedTask = new StateMachineTask(taskId00, taskId00Partitions, true);
 
         taskManager.handleRebalanceStart(singleton("topic"));
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singleton(closedTask));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singleton(closedTask));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
 
         closedTask.suspend();
@@ -1655,7 +1640,6 @@ public class TaskManagerTest {
     public void shouldNotReportOffsetSumsForTaskWeCantLock() throws Exception {
         expectLockFailedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
         assertTrue(taskManager.lockedTaskDirectories().isEmpty());
 
@@ -1666,8 +1650,7 @@ public class TaskManagerTest {
     public void shouldNotReportOffsetSumsAndReleaseLockForUnassignedTaskWithoutCheckpoint() throws Exception {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        expect(stateDirectory.checkpointFileFor(taskId00)).andReturn(getCheckpointFile(taskId00));
-        replay(stateDirectory);
+        when(stateDirectory.checkpointFileFor(taskId00)).thenReturn(getCheckpointFile(taskId00));
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertTrue(taskManager.getTaskOffsetSums().isEmpty());
@@ -1687,7 +1670,6 @@ public class TaskManagerTest {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         writeCheckpointFile(taskId00, changelogOffsets);
-        replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
@@ -1701,23 +1683,9 @@ public class TaskManagerTest {
 
         // first `handleAssignment`
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andStubReturn(emptyList());
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
-        expectLastCall();
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(emptyList());
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
-
-        // `handleRevocation`
-        consumer.commitSync(offsets);
-        expectLastCall();
-
-        // second `handleAssignment`
-        consumer.commitSync(offsets);
-        expectLastCall();
-
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(activeTaskCreator.createTasks(any(), eq(emptyMap()))).thenReturn(emptyList());
+        when(standbyTaskCreator.createTasks(any())).thenReturn(emptyList());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -1743,30 +1711,26 @@ public class TaskManagerTest {
 
         // first `handleAssignment`
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(activeTaskCreator.createTasks(anyObject(), eq(emptyMap()))).andStubReturn(emptyList());
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
-        expectLastCall();
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(emptyList());
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
-
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(activeTaskCreator.createTasks(any(), eq(emptyMap()))).thenReturn(emptyList());
+        when(standbyTaskCreator.createTasks(any())).thenReturn(emptyList());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         taskManager.handleRevocation(taskId00Partitions);
 
         final RuntimeException thrown = assertThrows(
-            RuntimeException.class,
-            () -> taskManager.handleAssignment(emptyMap(), emptyMap())
+                RuntimeException.class,
+                () -> taskManager.handleAssignment(emptyMap(), emptyMap())
         );
 
         assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(
-            thrown.getMessage(),
-            is("Encounter unexpected fatal error for task 0_0")
+                thrown.getMessage(),
+                is("Encounter unexpected fatal error for task 0_0")
         );
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
+        verify(topologyBuilder, times(2)).addSubscribedTopicsFromAssignment(any(), anyString());
     }
 
     @Test
@@ -1776,27 +1740,15 @@ public class TaskManagerTest {
 
         // `handleAssignment`
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(eq(taskId01Assignment))).andStubReturn(singletonList(task01));
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(eq(taskId01Assignment))).thenReturn(singletonList(task01));
 
+        // The second attempt will return empty tasks.
         makeTaskFolders(taskId00.toString(), taskId01.toString());
         expectLockObtainedFor(taskId00, taskId01);
 
-        // The second attempt will return empty tasks.
-        makeTaskFolders();
-        expectLockObtainedFor();
-        replay(stateDirectory);
-
         taskManager.handleRebalanceStart(emptySet());
         assertThat(taskManager.lockedTaskDirectories(), Matchers.is(mkSet(taskId00, taskId01)));
-
-        // `handleLostAll`
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
-        expectLastCall();
-
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -1816,20 +1768,21 @@ public class TaskManagerTest {
         taskManager.handleRebalanceStart(emptySet());
 
         assertThat(taskManager.lockedTaskDirectories(), is(emptySet()));
+
+        verify(topologyBuilder).addSubscribedTopicsFromAssignment(any(), anyString());
+        // `handleLostAll`
+        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
     public void shouldReInitializeThreadProducerOnHandleLostAllIfEosV2Enabled() {
-        activeTaskCreator.reInitializeThreadProducer();
-        expectLastCall();
-
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
-
-        replay(activeTaskCreator);
 
         taskManager.handleLostAll();
 
-        verify(activeTaskCreator);
+        verify(activeTaskCreator).reInitializeThreadProducer();
     }
 
     @Test
@@ -1840,18 +1793,10 @@ public class TaskManagerTest {
 
         // `handleAssignment`
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(emptyList());
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(emptyList());
 
-        // `handleAssignment`
-        consumer.commitSync(offsets);
-        expectLastCall();
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
-        expectLastCall().andThrow(new RuntimeException("KABOOM!"));
-
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+        doThrow(new RuntimeException("KABOOM!")).when(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -1870,14 +1815,14 @@ public class TaskManagerTest {
         );
         assertThat(thrown.getCause(), instanceOf(RuntimeException.class));
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+        verify(topologyBuilder, times(2)).addSubscribedTopicsFromAssignment(any(), anyString());
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
     public void shouldReviveCorruptTasks() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        EasyMock.expectLastCall().once();
-        replay(stateManager);
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final AtomicBoolean enforcedCheckpoint = new AtomicBoolean(false);
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
@@ -1892,12 +1837,9 @@ public class TaskManagerTest {
 
         // `handleAssignment`
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
-        expect(consumer.assignment()).andReturn(taskId00Partitions);
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
+        when(consumer.assignment()).thenReturn(taskId00Partitions);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
@@ -1913,15 +1855,15 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 
-        verify(stateManager);
-        verify(consumer);
+        verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
+        verify(topologyBuilder).addSubscribedTopicsFromAssignment(any(), anyString());
+
+        verify(consumer).resume(taskId00Partitions);
     }
 
     @Test
     public void shouldReviveCorruptTasksEvenIfTheyCannotCloseClean() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
@@ -1932,12 +1874,9 @@ public class TaskManagerTest {
         };
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
-        expect(consumer.assignment()).andReturn(taskId00Partitions);
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
+        when(consumer.assignment()).thenReturn(taskId00Partitions);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
@@ -1951,15 +1890,15 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 
-        verify(stateManager);
-        verify(consumer);
+        verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
+        verify(topologyBuilder).addSubscribedTopicsFromAssignment(any(), anyString());
+
+        verify(consumer).resume(taskId00Partitions);
     }
 
     @Test
     public void shouldCommitNonCorruptedTasksOnTaskCorruptedException() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final StateMachineTask corruptedTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final StateMachineTask nonCorruptedTask = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
@@ -1968,18 +1907,14 @@ public class TaskManagerTest {
         assignment.putAll(taskId01Assignment);
 
         // `handleAssignment`
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
-            .andStubReturn(asList(corruptedTask, nonCorruptedTask));
-        expect(standbyTaskCreator.createTasks(anyObject()))
-            .andStubReturn(Collections.emptySet());
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
+        when(activeTaskCreator.createTasks(any(), eq(assignment)))
+                .thenReturn(asList(corruptedTask, nonCorruptedTask));
+        when(standbyTaskCreator.createTasks(any()))
+                .thenReturn(Collections.emptySet());
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(consumer.assignment()).andReturn(taskId00Partitions);
+        when(consumer.assignment()).thenReturn(taskId00Partitions);
         // check that we should not commit empty map either
-        consumer.commitSync(eq(emptyMap()));
-        expectLastCall().andStubThrow(new AssertionError("should not invoke commitSync when offset map is empty"));
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+        doThrow(new AssertionError("should not invoke commitSync when offset map is empty")).when(consumer).commitSync(eq(emptyMap()));
 
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
@@ -1994,14 +1929,15 @@ public class TaskManagerTest {
         assertThat(nonCorruptedTask.partitionsForOffsetReset, equalTo(Collections.emptySet()));
         assertThat(corruptedTask.partitionsForOffsetReset, equalTo(taskId00Partitions));
 
-        verify(consumer);
+        verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
+        verify(topologyBuilder).addSubscribedTopicsFromAssignment(any(), anyString());
+
+        verify(consumer).resume(taskId00Partitions);
     }
 
     @Test
     public void shouldNotCommitNonRunningNonCorruptedTasks() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final StateMachineTask corruptedTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final StateMachineTask nonRunningNonCorruptedTask = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
@@ -2012,14 +1948,12 @@ public class TaskManagerTest {
         assignment.putAll(taskId01Assignment);
 
         // `handleAssignment`
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
-            .andStubReturn(asList(corruptedTask, nonRunningNonCorruptedTask));
-        expect(standbyTaskCreator.createTasks(anyObject()))
-            .andStubReturn(Collections.emptySet());
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
-        expect(consumer.assignment()).andReturn(taskId00Partitions);
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(assignment)))
+                .thenReturn(asList(corruptedTask, nonRunningNonCorruptedTask));
+        when(standbyTaskCreator.createTasks(any()))
+                .thenReturn(Collections.emptySet());
+
+        when(consumer.assignment()).thenReturn(taskId00Partitions);
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -2030,16 +1964,14 @@ public class TaskManagerTest {
         assertThat(nonRunningNonCorruptedTask.partitionsForOffsetReset, equalTo(Collections.emptySet()));
         assertThat(corruptedTask.partitionsForOffsetReset, equalTo(taskId00Partitions));
 
-        verify(activeTaskCreator);
         assertFalse(nonRunningNonCorruptedTask.commitPrepared);
-        verify(consumer);
+        verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
+        verify(topologyBuilder).addSubscribedTopicsFromAssignment(any(), anyString());
     }
 
     @Test
     public void shouldCleanAndReviveCorruptedStandbyTasksBeforeCommittingNonCorruptedTasks() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final StateMachineTask corruptedStandby = new StateMachineTask(taskId00, taskId00Partitions, false, stateManager);
         final StateMachineTask runningNonCorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
@@ -2050,14 +1982,10 @@ public class TaskManagerTest {
         };
 
         // handleAssignment
-        expect(standbyTaskCreator.createTasks(eq(taskId00Assignment))).andStubReturn(singleton(corruptedStandby));
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId01Assignment))).andStubReturn(singleton(runningNonCorruptedActive));
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
+        when(standbyTaskCreator.createTasks(eq(taskId00Assignment))).thenReturn(singleton(corruptedStandby));
+        when(activeTaskCreator.createTasks(any(), eq(taskId01Assignment))).thenReturn(singleton(runningNonCorruptedActive));
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId01Assignment, taskId00Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2074,13 +2002,16 @@ public class TaskManagerTest {
 
         assertThat(corruptedStandby.commitPrepared, is(true));
         assertThat(corruptedStandby.state(), is(Task.State.CREATED));
-        verify(consumer);
+        verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
+        verify(topologyBuilder).addSubscribedTopicsFromAssignment(any(), anyString());
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
     public void shouldNotAttemptToCommitInHandleCorruptedDuringARebalance() {
-        final ProcessorStateManager stateManager = EasyMock.createNiceMock(ProcessorStateManager.class);
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andStubReturn(new ArrayList<>());
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
+        when(stateDirectory.listNonEmptyTaskDirectories()).thenReturn(new ArrayList<>());
 
         final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
 
@@ -2093,18 +2024,12 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
         assignment.putAll(taskId00Assignment);
         assignment.putAll(taskId01Assignment);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(corruptedActive, uncorruptedActive));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
-        topologyBuilder.addSubscribedTopicsFromMetadata(eq(singleton(topic1)), anyObject());
-        expectLastCall().anyTimes();
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(asList(corruptedActive, uncorruptedActive));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
-        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
-
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader, stateDirectory, stateManager);
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
         uncorruptedActive.setCommittableOffsetsAndMetadata(offsets);
 
@@ -2126,14 +2051,15 @@ public class TaskManagerTest {
         assertThat(uncorruptedActive.commitCompleted, is(false));
 
         assertThat(uncorruptedActive.state(), is(State.RUNNING));
-        verify(consumer);
+        verify(topologyBuilder).addSubscribedTopicsFromAssignment(any(), anyString());
+        verify(topologyBuilder).addSubscribedTopicsFromMetadata(eq(singleton(topic1)), any());
+
+        verify(consumer).resume(union(HashSet::new, taskId00Partitions, taskId01Partitions));
     }
 
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitWithALOS() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final StateMachineTask uncorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
@@ -2149,19 +2075,14 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
         assignment.putAll(taskId00Assignment);
         assignment.putAll(taskId01Assignment);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(corruptedActive, uncorruptedActive));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(asList(corruptedActive, uncorruptedActive));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
-        consumer.commitSync(offsets);
-        expectLastCall().andThrow(new TimeoutException());
+        doThrow(new TimeoutException()).when(consumer).commitSync(offsets);
 
-        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
-
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2191,15 +2112,18 @@ public class TaskManagerTest {
 
         assertThat(corruptedActive.state(), is(Task.State.CREATED));
         assertThat(uncorruptedActive.state(), is(Task.State.CREATED));
-        verify(consumer);
+        verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
+        verify(topologyBuilder).addSubscribedTopicsFromAssignment(any(), anyString());
+
+        verify(consumer).resume(union(HashSet::new, taskId00Partitions, taskId01Partitions));
     }
 
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringHandleCorruptedWithEOS() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
         final StreamsProducer producer = mock(StreamsProducer.class);
-        expect(activeTaskCreator.threadProducer()).andStubReturn(producer);
-        final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
+        when(activeTaskCreator.threadProducer()).thenReturn(producer);
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final AtomicBoolean corruptedTaskChangelogMarkedAsCorrupted = new AtomicBoolean(false);
         final StateMachineTask corruptedActiveTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
@@ -2227,21 +2151,17 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
         assignment.putAll(taskId00Assignment);
         assignment.putAll(taskId01Assignment);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(corruptedActiveTask, uncorruptedActiveTask));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(asList(corruptedActiveTask, uncorruptedActiveTask));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
         final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        expect(consumer.groupMetadata()).andReturn(groupMetadata);
+        when(consumer.groupMetadata()).thenReturn(groupMetadata);
 
         doThrow(new TimeoutException()).when(producer).commitTransaction(offsets, groupMetadata);
 
-        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
-
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader, stateManager);
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2277,7 +2197,9 @@ public class TaskManagerTest {
         assertThat(uncorruptedActiveTask.state(), is(Task.State.CREATED));
         assertThat(corruptedTaskChangelogMarkedAsCorrupted.get(), is(true));
         assertThat(uncorruptedTaskChangelogMarkedAsCorrupted.get(), is(true));
-        verify(consumer);
+        verify(topologyBuilder).addSubscribedTopicsFromAssignment(any(), anyString());
+
+        verify(consumer).resume(union(HashSet::new, taskId00Partitions, taskId01Partitions));
     }
 
     @Test
@@ -2304,22 +2226,17 @@ public class TaskManagerTest {
         expectedCommittedOffsets.putAll(offsets01);
 
         final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
-            mkEntry(taskId00, taskId00Partitions),
-            mkEntry(taskId01, taskId01Partitions),
-            mkEntry(taskId02, taskId02Partitions)
+                mkEntry(taskId00, taskId00Partitions),
+                mkEntry(taskId01, taskId01Partitions),
+                mkEntry(taskId02, taskId02Partitions)
         );
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive))).andReturn(asList(revokedActiveTask, unrevokedActiveTaskWithCommitNeeded, unrevokedActiveTaskWithoutCommitNeeded));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
-        expectLastCall();
-        consumer.commitSync(expectedCommittedOffsets);
-        expectLastCall().andThrow(new TimeoutException());
-        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(assignmentActive))).thenReturn(asList(revokedActiveTask, unrevokedActiveTaskWithCommitNeeded, unrevokedActiveTaskWithoutCommitNeeded));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
+        doThrow(new TimeoutException()).when(consumer).commitSync(expectedCommittedOffsets);
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
 
         taskManager.handleAssignment(assignmentActive, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2332,14 +2249,16 @@ public class TaskManagerTest {
         assertThat(revokedActiveTask.state(), is(State.SUSPENDED));
         assertThat(unrevokedActiveTaskWithCommitNeeded.state(), is(State.CREATED));
         assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
+
+        verify(consumer).resume(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
     }
 
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithEOS() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
         final StreamsProducer producer = mock(StreamsProducer.class);
-        expect(activeTaskCreator.threadProducer()).andStubReturn(producer);
-        final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
+        when(activeTaskCreator.threadProducer()).thenReturn(producer);
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final StateMachineTask revokedActiveTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final Map<TopicPartition, OffsetAndMetadata> revokedActiveTaskOffsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
@@ -2375,19 +2294,15 @@ public class TaskManagerTest {
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive))).andReturn(asList(revokedActiveTask, unrevokedActiveTask, unrevokedActiveTaskWithoutCommitNeeded));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
-        expectLastCall();
+        when(activeTaskCreator.createTasks(any(), eq(assignmentActive))).thenReturn(asList(revokedActiveTask, unrevokedActiveTask, unrevokedActiveTaskWithoutCommitNeeded));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        expect(consumer.groupMetadata()).andReturn(groupMetadata);
+        when(consumer.groupMetadata()).thenReturn(groupMetadata);
 
         doThrow(new TimeoutException()).when(producer).commitTransaction(expectedCommittedOffsets, groupMetadata);
 
-        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader, stateManager);
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
 
         taskManager.handleAssignment(assignmentActive, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2406,6 +2321,8 @@ public class TaskManagerTest {
         assertThat(revokedActiveTask.state(), is(State.SUSPENDED));
         assertThat(unrevokedActiveTask.state(), is(State.CREATED));
         assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
+
+        verify(consumer).resume(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
     }
 
     @Test
@@ -2413,12 +2330,9 @@ public class TaskManagerTest {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, false);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(standbyTaskCreator.createTasks(eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.emptySet());
-        expect(standbyTaskCreator.createTasks(eq(Collections.emptyMap()))).andStubReturn(Collections.emptySet());
-        consumer.commitSync(Collections.emptyMap());
-        expectLastCall();
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(standbyTaskCreator.createTasks(eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(activeTaskCreator.createTasks(any(), any())).thenReturn(Collections.emptySet());
+        when(standbyTaskCreator.createTasks(eq(Collections.emptyMap()))).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(emptyMap(), taskId00Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2428,6 +2342,8 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -2438,13 +2354,10 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer, changeLogReader);
         // expect these calls twice (because we're going to tryToCompleteRestoration twice)
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
-        expect(activeTaskCreator.createTasks(anyObject(), eq(Collections.emptyMap()))).andReturn(Collections.emptySet());
-        expect(standbyTaskCreator.createTasks(eq(taskId01Assignment))).andReturn(singletonList(task01)).anyTimes();
-        expect(standbyTaskCreator.createTasks(eq(Collections.emptyMap()))).andReturn(Collections.emptySet());
-        topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p0)), anyString());
-        expectLastCall().anyTimes();
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader, topologyBuilder);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(activeTaskCreator.createTasks(any(), eq(Collections.emptyMap()))).thenReturn(Collections.emptySet());
+        when(standbyTaskCreator.createTasks(eq(taskId01Assignment))).thenReturn(singletonList(task01));
+        when(standbyTaskCreator.createTasks(eq(Collections.emptyMap()))).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2456,7 +2369,9 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
 
-        verify(activeTaskCreator);
+        verify(topologyBuilder, times(2)).addSubscribedTopicsFromAssignment(eq(asList(t1p0)), anyString());
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -2464,12 +2379,9 @@ public class TaskManagerTest {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        // expect these calls twice (because we're going to tryToCompleteRestoration twice)
-        expectRestoreToBeCompleted(consumer, changeLogReader, false);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
-        expect(activeTaskCreator.createTasks(anyObject(), eq(Collections.emptyMap()))).andReturn(Collections.emptySet());
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(activeTaskCreator.createTasks(any(), eq(Collections.emptyMap()))).thenReturn(Collections.emptySet());
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2481,7 +2393,8 @@ public class TaskManagerTest {
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertEquals(newPartitionsSet, task00.inputPartitions());
-        verify(activeTaskCreator, consumer, changeLogReader);
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -2489,15 +2402,10 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = taskId00Assignment;
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        expect(consumer.assignment()).andReturn(emptySet());
-        consumer.resume(eq(emptySet()));
-        expectLastCall();
-        changeLogReader.enforceRestoreActive();
-        expectLastCall();
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
-        replay(consumer, activeTaskCreator, standbyTaskCreator, changeLogReader);
+        when(changeLogReader.completedChangelogs()).thenReturn(emptySet());
+        when(consumer.assignment()).thenReturn(emptySet());
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(eq(emptyMap()))).thenReturn(emptyList());
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -2508,14 +2416,14 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        verify(activeTaskCreator);
+        verify(consumer).resume(eq(emptySet()));
     }
 
     @Test
     public void shouldNotCompleteRestorationIfTasksCannotInitialize() {
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
-            mkEntry(taskId00, taskId00Partitions),
-            mkEntry(taskId01, taskId01Partitions)
+                mkEntry(taskId00, taskId00Partitions),
+                mkEntry(taskId01, taskId01Partitions)
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
@@ -2530,17 +2438,10 @@ public class TaskManagerTest {
             }
         };
 
-        consumer.commitSync(Collections.emptyMap());
-        expectLastCall();
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        expect(consumer.assignment()).andReturn(emptySet());
-        consumer.resume(eq(emptySet()));
-        expectLastCall();
-        changeLogReader.enforceRestoreActive();
-        expectLastCall();
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(task00, task01));
-        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
-        replay(consumer, activeTaskCreator, standbyTaskCreator, changeLogReader);
+        when(changeLogReader.completedChangelogs()).thenReturn(emptySet());
+        when(consumer.assignment()).thenReturn(emptySet());
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(asList(task00, task01));
+        when(standbyTaskCreator.createTasks(eq(emptyMap()))).thenReturn(emptyList());
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -2552,17 +2453,16 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CREATED));
         assertThat(task01.state(), is(Task.State.CREATED));
         assertThat(
-            taskManager.activeTaskMap(),
-            Matchers.equalTo(mkMap(mkEntry(taskId00, task00), mkEntry(taskId01, task01)))
+                taskManager.activeTaskMap(),
+                Matchers.equalTo(mkMap(mkEntry(taskId00, task00), mkEntry(taskId01, task01)))
         );
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        verify(activeTaskCreator);
     }
 
     @Test
     public void shouldNotCompleteRestorationIfTaskCannotCompleteRestoration() {
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
-            mkEntry(taskId00, taskId00Partitions)
+                mkEntry(taskId00, taskId00Partitions)
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
@@ -2571,17 +2471,10 @@ public class TaskManagerTest {
             }
         };
 
-        consumer.commitSync(Collections.emptyMap());
-        expectLastCall();
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        expect(consumer.assignment()).andReturn(emptySet());
-        consumer.resume(eq(emptySet()));
-        expectLastCall();
-        changeLogReader.enforceRestoreActive();
-        expectLastCall();
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
-        replay(consumer, activeTaskCreator, standbyTaskCreator, changeLogReader);
+        when(changeLogReader.completedChangelogs()).thenReturn(emptySet());
+        when(consumer.assignment()).thenReturn(emptySet());
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(eq(emptyMap()))).thenReturn(emptyList());
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -2591,11 +2484,10 @@ public class TaskManagerTest {
 
         assertThat(task00.state(), is(Task.State.RESTORING));
         assertThat(
-            taskManager.activeTaskMap(),
-            Matchers.equalTo(mkMap(mkEntry(taskId00, task00)))
+                taskManager.activeTaskMap(),
+                Matchers.equalTo(mkMap(mkEntry(taskId00, task00)))
         );
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        verify(activeTaskCreator);
     }
 
     @Test
@@ -2605,12 +2497,8 @@ public class TaskManagerTest {
         task00.setCommittableOffsetsAndMetadata(offsets);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        consumer.commitSync(offsets);
-        expectLastCall();
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2618,6 +2506,8 @@ public class TaskManagerTest {
 
         taskManager.handleRevocation(taskId00Partitions);
         assertThat(task00.state(), is(Task.State.SUSPENDED));
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -2646,39 +2536,26 @@ public class TaskManagerTest {
         expectedCommittedOffsets.putAll(offsets01);
 
         final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
-            mkEntry(taskId00, taskId00Partitions),
-            mkEntry(taskId01, taskId01Partitions),
-            mkEntry(taskId02, taskId02Partitions)
+                mkEntry(taskId00, taskId00Partitions),
+                mkEntry(taskId01, taskId01Partitions),
+                mkEntry(taskId02, taskId02Partitions)
         );
 
         final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
-            mkEntry(taskId10, taskId10Partitions)
+                mkEntry(taskId10, taskId10Partitions)
         );
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive)))
-            .andReturn(asList(task00, task01, task02));
+        when(activeTaskCreator.createTasks(any(), eq(assignmentActive)))
+                .thenReturn(asList(task00, task01, task02));
 
-        expect(activeTaskCreator.threadProducer()).andReturn(producer);
+        when(activeTaskCreator.threadProducer()).thenReturn(producer);
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
-        expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
-            .andReturn(singletonList(task10));
+        when(standbyTaskCreator.createTasks(eq(assignmentStandby)))
+                .thenReturn(singletonList(task10));
 
         final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        expect(consumer.groupMetadata()).andReturn(groupMetadata);
-        producer.commitTransaction(expectedCommittedOffsets, groupMetadata);
-        expectLastCall();
-
-        task00.committedOffsets();
-        EasyMock.expectLastCall();
-        task01.committedOffsets();
-        EasyMock.expectLastCall();
-        task02.committedOffsets();
-        EasyMock.expectLastCall();
-        task10.committedOffsets();
-        EasyMock.expectLastCall();
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(consumer.groupMetadata()).thenReturn(groupMetadata);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2693,6 +2570,9 @@ public class TaskManagerTest {
         assertThat(task01.commitNeeded, is(false));
         assertThat(task02.commitPrepared, is(false));
         assertThat(task10.commitPrepared, is(false));
+        verify(producer).commitTransaction(expectedCommittedOffsets, groupMetadata);
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -2728,16 +2608,10 @@ public class TaskManagerTest {
         );
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive)))
-            .andReturn(asList(task00, task01, task02));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
-        expectLastCall();
-        expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
-            .andReturn(singletonList(task10));
-        consumer.commitSync(expectedCommittedOffsets);
-        expectLastCall();
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(assignmentActive)))
+                .thenReturn(asList(task00, task01, task02));
+        when(standbyTaskCreator.createTasks(eq(assignmentStandby)))
+                .thenReturn(singletonList(task10));
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2754,6 +2628,9 @@ public class TaskManagerTest {
         assertThat(task01.commitPrepared, is(true));
         assertThat(task02.commitPrepared, is(false));
         assertThat(task10.commitPrepared, is(false));
+        verify(consumer).commitSync(expectedCommittedOffsets);
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -2770,14 +2647,10 @@ public class TaskManagerTest {
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive))).andReturn(singleton(task00));
-        expect(activeTaskCreator.createTasks(anyObject(), eq(Collections.emptyMap()))).andReturn(Collections.emptySet());
-        expect(standbyTaskCreator.createTasks(eq(assignmentStandby))).andReturn(singletonList(task10));
-        expect(standbyTaskCreator.createTasks(eq(Collections.emptyMap()))).andReturn(Collections.emptySet());
-        topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p0)), anyString());
-        expectLastCall().anyTimes();
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader, topologyBuilder);
+        when(activeTaskCreator.createTasks(any(), eq(assignmentActive))).thenReturn(singleton(task00));
+        when(activeTaskCreator.createTasks(any(), eq(Collections.emptyMap()))).thenReturn(Collections.emptySet());
+        when(standbyTaskCreator.createTasks(eq(assignmentStandby))).thenReturn(singletonList(task10));
+        when(standbyTaskCreator.createTasks(eq(Collections.emptyMap()))).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2788,6 +2661,9 @@ public class TaskManagerTest {
 
         assertThat(task00.commitNeeded, is(true));
         assertThat(task10.commitPrepared, is(false));
+        verify(topologyBuilder, times(2)).addSubscribedTopicsFromAssignment(eq(asList(t1p0)), anyString());
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -2804,12 +2680,10 @@ public class TaskManagerTest {
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive))).andReturn(singleton(task00));
-        expect(activeTaskCreator.createTasks(anyObject(), eq(Collections.emptyMap()))).andReturn(Collections.emptySet());
-        expect(standbyTaskCreator.createTasks(eq(assignmentStandby))).andReturn(singletonList(task10));
-        expect(standbyTaskCreator.createTasks(eq(Collections.emptyMap()))).andReturn(Collections.emptySet());
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(assignmentActive))).thenReturn(singleton(task00));
+        when(activeTaskCreator.createTasks(any(), eq(Collections.emptyMap()))).thenReturn(Collections.emptySet());
+        when(standbyTaskCreator.createTasks(eq(assignmentStandby))).thenReturn(singletonList(task10));
+        when(standbyTaskCreator.createTasks(eq(Collections.emptyMap()))).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2825,12 +2699,9 @@ public class TaskManagerTest {
     public void shouldNotCommitCreatedTasksOnRevocationOrClosure() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
-        expectLastCall().once();
-        expect(activeTaskCreator.createTasks(anyObject(), eq(Collections.emptyMap()))).andReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
+        when(activeTaskCreator.createTasks(any(), eq(Collections.emptyMap()))).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(task00.state(), is(Task.State.CREATED));
@@ -2840,6 +2711,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(emptyMap(), emptyMap());
         assertThat(task00.state(), is(Task.State.CLOSED));
+        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
     }
 
     @Test
@@ -2853,9 +2725,8 @@ public class TaskManagerTest {
         };
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -2863,7 +2734,7 @@ public class TaskManagerTest {
         assertThrows(RuntimeException.class, () -> taskManager.handleRevocation(taskId00Partitions));
         assertThat(task00.state(), is(Task.State.SUSPENDED));
 
-        verify(consumer);
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -2924,17 +2795,10 @@ public class TaskManagerTest {
             }
         };
 
-        resetToStrict(changeLogReader);
-        changeLogReader.enforceRestoreActive();
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment)))
-            .andStubReturn(asList(task00, task01, task02, task03));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(anyObject());
-        expectLastCall().times(4);
-        activeTaskCreator.closeThreadProducerIfNeeded();
-        expectLastCall();
-        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
-        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+        when(changeLogReader.completedChangelogs()).thenReturn(emptySet());
+        when(activeTaskCreator.createTasks(any(), eq(assignment)))
+                .thenReturn(asList(task00, task01, task02, task03));
+        when(standbyTaskCreator.createTasks(eq(emptyMap()))).thenReturn(emptyList());
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -2978,7 +2842,8 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        verify(activeTaskCreator, changeLogReader);
+        verify(activeTaskCreator, times(4)).closeAndRemoveTaskProducerIfNeeded(any());
+        verify(activeTaskCreator).closeThreadProducerIfNeeded();
     }
 
     @Test
@@ -2996,16 +2861,10 @@ public class TaskManagerTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task00.setCommittableOffsetsAndMetadata(offsets);
 
-        resetToStrict(changeLogReader);
-        changeLogReader.enforceRestoreActive();
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(singletonList(task00));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
-        expectLastCall().andThrow(new RuntimeException("whatever"));
-        activeTaskCreator.closeThreadProducerIfNeeded();
-        expectLastCall();
-        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
-        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+        when(changeLogReader.completedChangelogs()).thenReturn(emptySet());
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(singletonList(task00));
+        doThrow(new RuntimeException("whatever")).when(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
+        when(standbyTaskCreator.createTasks(eq(emptyMap()))).thenReturn(emptyList());
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -3031,7 +2890,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        verify(activeTaskCreator, changeLogReader);
+        verify(activeTaskCreator).closeThreadProducerIfNeeded();
     }
 
     @Test
@@ -3047,16 +2906,10 @@ public class TaskManagerTest {
             }
         };
 
-        resetToStrict(changeLogReader);
-        changeLogReader.enforceRestoreActive();
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(singletonList(task00));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
-        expectLastCall();
-        activeTaskCreator.closeThreadProducerIfNeeded();
-        expectLastCall().andThrow(new RuntimeException("whatever"));
-        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
-        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+        when(changeLogReader.completedChangelogs()).thenReturn(emptySet());
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(singletonList(task00));
+        doThrow(new RuntimeException("whatever")).when(activeTaskCreator).closeThreadProducerIfNeeded();
+        when(standbyTaskCreator.createTasks(eq(emptyMap()))).thenReturn(emptyList());
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -3082,7 +2935,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        verify(activeTaskCreator, changeLogReader);
+        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(eq(taskId00));
     }
 
     @Test
@@ -3134,8 +2987,6 @@ public class TaskManagerTest {
         taskManager.addTask(task01);
         taskManager.addTask(task02);
 
-        replay(activeTaskCreator);
-
         final RuntimeException thrown = assertThrows(RuntimeException.class,
             () -> taskManager.handleRevocation(union(HashSet::new, taskId01Partitions, taskId02Partitions)));
         assertThat(thrown.getCause().getMessage(), is("task 0_1 suspend boom!"));
@@ -3143,8 +2994,6 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CREATED));
         assertThat(task01.state(), is(Task.State.SUSPENDED));
         assertThat(task02.state(), is(Task.State.SUSPENDED));
-
-        verify(activeTaskCreator);
     }
 
     @Test
@@ -3176,16 +3025,11 @@ public class TaskManagerTest {
             }
         };
 
-        resetToStrict(changeLogReader);
-        changeLogReader.enforceRestoreActive();
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(task00, task01, task02));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(anyObject());
-        expectLastCall().andThrow(new RuntimeException("whatever")).times(3);
-        activeTaskCreator.closeThreadProducerIfNeeded();
-        expectLastCall().andThrow(new RuntimeException("whatever all"));
-        expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andStubReturn(emptyList());
-        replay(activeTaskCreator, standbyTaskCreator, changeLogReader);
+        when(changeLogReader.completedChangelogs()).thenReturn(emptySet());
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(asList(task00, task01, task02));
+        doThrow(new RuntimeException("whatever")).when(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(any());
+        doThrow(new RuntimeException("whatever all")).when(activeTaskCreator).closeThreadProducerIfNeeded();
+        when(standbyTaskCreator.createTasks(eq(emptyMap()))).thenReturn(emptyList());
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -3217,8 +3061,6 @@ public class TaskManagerTest {
         assertThat(task02.state(), is(Task.State.CLOSED));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        verify(activeTaskCreator, changeLogReader);
     }
 
     @Test
@@ -3227,22 +3069,12 @@ public class TaskManagerTest {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, false);
 
         // `handleAssignment`
-        expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.emptySet());
-        expect(standbyTaskCreator.createTasks(eq(assignment))).andStubReturn(singletonList(task00));
+        when(activeTaskCreator.createTasks(any(), any())).thenReturn(Collections.emptySet());
+        when(standbyTaskCreator.createTasks(eq(assignment))).thenReturn(singletonList(task00));
 
         // `tryToCompleteRestoration`
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        expect(consumer.assignment()).andReturn(emptySet());
-        consumer.resume(eq(emptySet()));
-        expectLastCall();
-
-        // `shutdown`
-        consumer.commitSync(Collections.emptyMap());
-        expectLastCall();
-        activeTaskCreator.closeThreadProducerIfNeeded();
-        expectLastCall();
-
-        replay(consumer, activeTaskCreator, standbyTaskCreator, changeLogReader);
+        when(changeLogReader.completedChangelogs()).thenReturn(emptySet());
+        when(consumer.assignment()).thenReturn(emptySet());
 
         taskManager.handleAssignment(emptyMap(), assignment);
         assertThat(task00.state(), is(Task.State.CREATED));
@@ -3256,8 +3088,9 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        verify(activeTaskCreator);
+        verify(consumer).resume(eq(emptySet()));
+        // `shutdown`
+        verify(activeTaskCreator).closeThreadProducerIfNeeded();
     }
 
     @Test
@@ -3272,18 +3105,16 @@ public class TaskManagerTest {
                 new ExceptionAndTasks(mkSet(failedStatefulTask), new RuntimeException()),
                 new ExceptionAndTasks(mkSet(failedStandbyTask), new RuntimeException()))
             );
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(failedStatefulTask.id());
-        activeTaskCreator.closeThreadProducerIfNeeded();
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        replay(activeTaskCreator);
 
         taskManager.shutdown(true);
 
-        verify(activeTaskCreator);
-        Mockito.verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        Mockito.verify(failedStatefulTask).prepareCommit();
-        Mockito.verify(failedStatefulTask).suspend();
-        Mockito.verify(failedStatefulTask).closeDirty();
+        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(failedStatefulTask.id());
+        verify(activeTaskCreator).closeThreadProducerIfNeeded();
+        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(failedStatefulTask).prepareCommit();
+        verify(failedStatefulTask).suspend();
+        verify(failedStatefulTask).closeDirty();
     }
 
     @Test
@@ -3297,19 +3128,17 @@ public class TaskManagerTest {
         final Set<Task> restoredTasks = restoredActiveTasks.stream().map(t -> (Task) t).collect(Collectors.toSet());
         when(stateUpdater.drainRestoredActiveTasks(Duration.ZERO)).thenReturn(restoredActiveTasks);
         when(tasks.activeTasks()).thenReturn(restoredTasks);
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(statefulTask1.id());
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(statefulTask2.id());
-        activeTaskCreator.closeThreadProducerIfNeeded();
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        replay(activeTaskCreator);
 
         taskManager.shutdown(true);
 
-        verify(activeTaskCreator);
-        Mockito.verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        Mockito.verify(tasks).addActiveTasks(restoredTasks);
-        Mockito.verify(statefulTask1).closeClean();
-        Mockito.verify(statefulTask2).closeClean();
+        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(statefulTask1.id());
+        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(statefulTask2.id());
+        verify(activeTaskCreator).closeThreadProducerIfNeeded();
+        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(tasks).addActiveTasks(restoredTasks);
+        verify(statefulTask1).closeClean();
+        verify(statefulTask2).closeClean();
     }
 
     @Test
@@ -3322,29 +3151,26 @@ public class TaskManagerTest {
         when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(removedStandbyTask, removedStatefulTask));
         when(tasks.activeTasks()).thenReturn(mkSet(removedStatefulTask));
         when(tasks.allTasks()).thenReturn(mkSet(removedStatefulTask, removedStandbyTask));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(removedStatefulTask.id());
-        activeTaskCreator.closeThreadProducerIfNeeded();
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        replay(activeTaskCreator);
 
         taskManager.shutdown(true);
 
-        verify(activeTaskCreator);
-        Mockito.verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        Mockito.verify(tasks).addActiveTasks(mkSet(removedStatefulTask));
-        Mockito.verify(tasks).addStandbyTasks(mkSet(removedStandbyTask));
-        Mockito.verify(removedStatefulTask).closeClean();
-        Mockito.verify(removedStandbyTask).closeClean();
+        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(removedStatefulTask.id());
+        verify(activeTaskCreator).closeThreadProducerIfNeeded();
+        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(tasks).addActiveTasks(mkSet(removedStatefulTask));
+        verify(tasks).addStandbyTasks(mkSet(removedStandbyTask));
+        verify(removedStatefulTask).closeClean();
+        verify(removedStandbyTask).closeClean();
     }
 
     @Test
     public void shouldInitializeNewActiveTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
-            .andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment)))
+                .thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3352,8 +3178,7 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        // verifies that we actually resume the assignment at the end of restoration.
-        verify(consumer);
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -3361,10 +3186,8 @@ public class TaskManagerTest {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.emptySet());
-        expect(standbyTaskCreator.createTasks(eq(taskId01Assignment))).andStubReturn(singletonList(task01));
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), any())).thenReturn(Collections.emptySet());
+        when(standbyTaskCreator.createTasks(eq(taskId01Assignment))).thenReturn(singletonList(task01));
 
         taskManager.handleAssignment(emptyMap(), taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3372,21 +3195,21 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.equalTo(singletonMap(taskId01, task01)));
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
     public void shouldHandleRebalanceEvents() {
         final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
-        expect(consumer.assignment()).andReturn(assignment);
-        consumer.pause(assignment);
-        expectLastCall();
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new ArrayList<>());
-        replay(consumer, stateDirectory);
+        when(consumer.assignment()).thenReturn(assignment);
+        when(stateDirectory.listNonEmptyTaskDirectories()).thenReturn(new ArrayList<>());
         assertThat(taskManager.rebalanceInProgress(), is(false));
         taskManager.handleRebalanceStart(emptySet());
         assertThat(taskManager.rebalanceInProgress(), is(true));
         taskManager.handleRebalanceComplete();
         assertThat(taskManager.rebalanceInProgress(), is(false));
+        verify(consumer).pause(assignment);
     }
 
     @Test
@@ -3397,14 +3220,10 @@ public class TaskManagerTest {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
-            .andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
-            .andStubReturn(singletonList(task01));
-        consumer.commitSync(offsets);
-        expectLastCall();
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment)))
+                .thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
+                .thenReturn(singletonList(task01));
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3418,6 +3237,9 @@ public class TaskManagerTest {
         assertThat(taskManager.commitAll(), equalTo(2));
         assertThat(task00.commitNeeded, is(false));
         assertThat(task01.commitNeeded, is(false));
+        verify(consumer).commitSync(offsets);
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -3441,14 +3263,12 @@ public class TaskManagerTest {
         );
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive)))
-            .andStubReturn(Arrays.asList(task00, task01, task02));
-        expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
-            .andStubReturn(Arrays.asList(task03, task04, task05));
+        when(activeTaskCreator.createTasks(any(), eq(assignmentActive)))
+                .thenReturn(Arrays.asList(task00, task01, task02));
+        when(standbyTaskCreator.createTasks(eq(assignmentStandby)))
+                .thenReturn(Arrays.asList(task03, task04, task05));
 
         consumer.commitSync(eq(emptyMap()));
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3468,6 +3288,8 @@ public class TaskManagerTest {
         assertThat(task03.commitNeeded, is(false));
         assertThat(task04.commitNeeded, is(true));
         assertThat(task05.commitNeeded, is(false));
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -3475,11 +3297,8 @@ public class TaskManagerTest {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, false);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.emptySet());
-        expect(standbyTaskCreator.createTasks(eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expectLastCall();
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), any())).thenReturn(Collections.emptySet());
+        when(standbyTaskCreator.createTasks(eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3490,6 +3309,8 @@ public class TaskManagerTest {
 
         assertThat(taskManager.commitAll(), equalTo(1));
         assertThat(task00.commitNeeded, is(false));
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -3500,12 +3321,10 @@ public class TaskManagerTest {
         makeTaskFolders(taskId00.toString(), task01.toString());
         expectLockObtainedFor(taskId00, taskId01);
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
-            .andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
-            .andStubReturn(singletonList(task01));
-
-        replay(activeTaskCreator, standbyTaskCreator, stateDirectory, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment)))
+                .thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(eq(taskId01Assignment)))
+                .thenReturn(singletonList(task01));
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3527,6 +3346,8 @@ public class TaskManagerTest {
             taskManager.maybeCommitActiveTasksPerUserRequested(),
             equalTo(-1) // sentinel indicating that nothing was done because a rebalance is in progress
         );
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -3537,37 +3358,28 @@ public class TaskManagerTest {
         task01.setCommitNeeded();
         taskManager.addTask(task01);
 
-        consumer.commitSync(offsets);
-        expectLastCall();
-        replay(consumer);
-
         taskManager.commitAll();
 
-        verify(consumer);
+        verify(consumer).commitSync(offsets);
     }
 
     @Test
     public void shouldCommitViaProducerIfEosAlphaEnabled() {
-        final StreamsProducer producer = EasyMock.mock(StreamsProducer.class);
-        expect(activeTaskCreator.streamsProducerForTask(anyObject(TaskId.class)))
-            .andReturn(producer)
-            .andReturn(producer);
+        final StreamsProducer producer = mock(StreamsProducer.class);
+        when(activeTaskCreator.streamsProducerForTask(any(TaskId.class))).thenReturn(producer);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
         final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
 
-        producer.commitTransaction(offsetsT01, new ConsumerGroupMetadata("appId"));
-        expectLastCall();
-        producer.commitTransaction(offsetsT02, new ConsumerGroupMetadata("appId"));
-        expectLastCall();
-
         shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_ALPHA, producer, offsetsT01, offsetsT02);
+        verify(producer).commitTransaction(offsetsT01, new ConsumerGroupMetadata("appId"));
+        verify(producer).commitTransaction(offsetsT02, new ConsumerGroupMetadata("appId"));
     }
 
     @Test
     public void shouldCommitViaProducerIfEosV2Enabled() {
-        final StreamsProducer producer = EasyMock.mock(StreamsProducer.class);
-        expect(activeTaskCreator.threadProducer()).andReturn(producer);
+        final StreamsProducer producer = mock(StreamsProducer.class);
+        when(activeTaskCreator.threadProducer()).thenReturn(producer);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
         final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
@@ -3575,10 +3387,9 @@ public class TaskManagerTest {
         allOffsets.putAll(offsetsT01);
         allOffsets.putAll(offsetsT02);
 
-        producer.commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
-        expectLastCall();
-
         shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_V2, producer, offsetsT01, offsetsT02);
+
+        verify(producer).commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
     }
 
     private void shouldCommitViaProducerIfEosEnabled(final ProcessingMode processingMode,
@@ -3596,13 +3407,9 @@ public class TaskManagerTest {
         task02.setCommitNeeded();
         taskManager.addTask(task02);
 
-        reset(consumer);
-        expect(consumer.groupMetadata()).andStubReturn(new ConsumerGroupMetadata("appId"));
-        replay(activeTaskCreator, consumer, producer);
+        when(consumer.groupMetadata()).thenReturn(new ConsumerGroupMetadata("appId"));
 
         taskManager.commitAll();
-
-        verify(producer, consumer);
     }
 
     @Test
@@ -3615,9 +3422,8 @@ public class TaskManagerTest {
         };
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3629,6 +3435,8 @@ public class TaskManagerTest {
         final RuntimeException thrown =
             assertThrows(RuntimeException.class, () -> taskManager.commitAll());
         assertThat(thrown.getMessage(), equalTo("opsh."));
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -3641,10 +3449,8 @@ public class TaskManagerTest {
         };
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.emptySet());
-        expect(standbyTaskCreator.createTasks(eq(taskId01Assignment))).andStubReturn(singletonList(task01));
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), any())).thenReturn(Collections.emptySet());
+        when(standbyTaskCreator.createTasks(eq(taskId01Assignment))).thenReturn(singletonList(task01));
 
         taskManager.handleAssignment(emptyMap(), taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3656,16 +3462,16 @@ public class TaskManagerTest {
         final RuntimeException thrown =
             assertThrows(RuntimeException.class, () -> taskManager.commitAll());
         assertThat(thrown.getMessage(), equalTo("opsh."));
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
     public void shouldSendPurgeData() {
-        resetToStrict(adminClient);
-        expect(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L))))
-            .andReturn(new DeleteRecordsResult(singletonMap(t1p1, completedFuture())));
-        expect(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(17L))))
-            .andReturn(new DeleteRecordsResult(singletonMap(t1p1, completedFuture())));
-        replay(adminClient);
+        when(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L))))
+                .thenReturn(new DeleteRecordsResult(singletonMap(t1p1, completedFuture())));
+        when(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(17L))))
+                .thenReturn(new DeleteRecordsResult(singletonMap(t1p1, completedFuture())));
 
         final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
@@ -3676,10 +3482,8 @@ public class TaskManagerTest {
         };
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3692,16 +3496,14 @@ public class TaskManagerTest {
         purgableOffsets.put(t1p1, 17L);
         taskManager.maybePurgeCommittedRecords();
 
-        verify(adminClient);
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
     public void shouldNotSendPurgeDataIfPreviousNotDone() {
-        resetToStrict(adminClient);
         final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
-        expect(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L))))
-            .andReturn(new DeleteRecordsResult(singletonMap(t1p1, futureDeletedRecords)));
-        replay(adminClient);
+        when(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L))))
+                .thenReturn(new DeleteRecordsResult(singletonMap(t1p1, futureDeletedRecords)));
 
         final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
@@ -3712,9 +3514,8 @@ public class TaskManagerTest {
         };
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3730,7 +3531,7 @@ public class TaskManagerTest {
         purgableOffsets.put(t1p1, 17L);
         taskManager.maybePurgeCommittedRecords();
 
-        verify(adminClient);
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -3742,9 +3543,7 @@ public class TaskManagerTest {
         final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
         final DeleteRecordsResult deleteRecordsResult = new DeleteRecordsResult(singletonMap(t1p1, futureDeletedRecords));
         futureDeletedRecords.completeExceptionally(new Exception("KABOOM!"));
-        expect(adminClient.deleteRecords(anyObject())).andReturn(deleteRecordsResult).times(2);
-
-        replay(activeTaskCreator, adminClient, consumer, changeLogReader);
+        when(adminClient.deleteRecords(any())).thenReturn(deleteRecordsResult);
 
         taskManager.addTask(task00);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3756,7 +3555,7 @@ public class TaskManagerTest {
         taskManager.maybePurgeCommittedRecords();
         taskManager.maybePurgeCommittedRecords();
 
-        verify(adminClient);
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -3789,14 +3588,10 @@ public class TaskManagerTest {
         );
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive)))
-            .andStubReturn(asList(task00, task01, task02, task03));
-        expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
-            .andStubReturn(singletonList(task04));
-        consumer.commitSync(expectedCommittedOffsets);
-        expectLastCall();
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(assignmentActive)))
+                .thenReturn(asList(task00, task01, task02, task03));
+        when(standbyTaskCreator.createTasks(eq(assignmentStandby)))
+                .thenReturn(singletonList(task04));
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3821,6 +3616,9 @@ public class TaskManagerTest {
         task04.setCommitRequested();
 
         assertThat(taskManager.maybeCommitActiveTasksPerUserRequested(), equalTo(3));
+        verify(consumer).commitSync(expectedCommittedOffsets);
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -3833,9 +3631,8 @@ public class TaskManagerTest {
         assignment.put(taskId01, taskId01Partitions);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(Arrays.asList(task00, task01));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(Arrays.asList(task00, task01));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3871,6 +3668,8 @@ public class TaskManagerTest {
         // check that if there's no records proccssible, we would stop early
         assertThat(taskManager.process(3, time), is(5));
         assertThat(taskManager.process(3, time), is(0));
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -3946,9 +3745,8 @@ public class TaskManagerTest {
         };
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3959,6 +3757,8 @@ public class TaskManagerTest {
         task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
         assertThrows(TaskMigratedException.class, () -> taskManager.process(1, time));
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -3971,10 +3771,9 @@ public class TaskManagerTest {
         };
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
-            .andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment)))
+                .thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3988,6 +3787,8 @@ public class TaskManagerTest {
         assertThat(exception.taskId().isPresent(), is(true));
         assertThat(exception.taskId().get(), is(taskId00));
         assertThat(exception.getCause().getMessage(), is("oops"));
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -4000,9 +3801,8 @@ public class TaskManagerTest {
         };
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4010,6 +3810,8 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         assertThrows(TaskMigratedException.class, () -> taskManager.punctuate());
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -4022,9 +3824,8 @@ public class TaskManagerTest {
         };
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4032,6 +3833,8 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         assertThrows(KafkaException.class, () -> taskManager.punctuate());
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -4049,11 +3852,10 @@ public class TaskManagerTest {
         };
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
-            .andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject()))
-            .andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment)))
+                .thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any()))
+                .thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4062,6 +3864,8 @@ public class TaskManagerTest {
 
         // one for stream and one for system time
         assertThat(taskManager.punctuate(), equalTo(2));
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -4073,17 +3877,16 @@ public class TaskManagerTest {
             }
         };
 
-        expect(changeLogReader.completedChangelogs()).andReturn(emptySet());
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        replay(activeTaskCreator, standbyTaskCreator, changeLogReader, consumer);
+        when(changeLogReader.completedChangelogs()).thenReturn(emptySet());
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(false));
         assertThat(task00.state(), is(Task.State.RESTORING));
         // this could be a bit mysterious; we're verifying _no_ interactions on the consumer,
         // since the taskManager should _not_ resume the assignment while we're still in RESTORING
-        verify(consumer);
+        verifyNoInteractions(consumer);
     }
 
     @Test
@@ -4093,12 +3896,8 @@ public class TaskManagerTest {
         task00.setCommittableOffsetsAndMetadata(offsets);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(task00));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        consumer.commitSync(offsets);
-        expectLastCall();
-
-        replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
             LogCaptureAppender.setClassLoggerToDebug(TaskManager.class);
@@ -4118,6 +3917,8 @@ public class TaskManagerTest {
                     "tasks have been cleaned up by the handleAssignment callback.")
             );
         }
+
+        verifyConsumerResumedWithAssignment(consumer);
     }
 
     @Test
@@ -4225,12 +4026,10 @@ public class TaskManagerTest {
             new MockTime());
         final Map<MetricName, Metric> dummyProducerMetrics = singletonMap(testMetricName, testMetric);
 
-        expect(activeTaskCreator.producerMetrics()).andReturn(dummyProducerMetrics);
-        replay(activeTaskCreator);
+        when(activeTaskCreator.producerMetrics()).thenReturn(dummyProducerMetrics);
 
         assertThat(taskManager.producerMetrics(), is(dummyProducerMetrics));
     }
-    */
 
     private Map<TaskId, StateMachineTask> handleAssignment(final Map<TaskId, Set<TopicPartition>> runningActiveAssignment,
                                                            final Map<TaskId, Set<TopicPartition>> standbyAssignment,
@@ -4492,35 +4291,27 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.SUSPENDED));
     }
 
-    /*
     @Test
     public void shouldConvertActiveTaskToStandbyTask() {
-        final StreamTask activeTask = EasyMock.mock(StreamTask.class);
-        expect(activeTask.id()).andStubReturn(taskId00);
-        expect(activeTask.inputPartitions()).andStubReturn(taskId00Partitions);
-        expect(activeTask.isActive()).andStubReturn(true);
-        expect(activeTask.prepareCommit()).andStubReturn(Collections.emptyMap());
+        final StreamTask activeTask = mock(StreamTask.class);
+        when(activeTask.id()).thenReturn(taskId00);
+        when(activeTask.inputPartitions()).thenReturn(taskId00Partitions);
+        when(activeTask.isActive()).thenReturn(true);
+        when(activeTask.prepareCommit()).thenReturn(Collections.emptyMap());
 
-        final StandbyTask standbyTask = EasyMock.mock(StandbyTask.class);
-        expect(standbyTask.id()).andStubReturn(taskId00);
+        final StandbyTask standbyTask = mock(StandbyTask.class);
+        when(standbyTask.id()).thenReturn(taskId00);
 
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andReturn(singletonList(activeTask));
-        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
-        activeTask.prepareRecycle();
-        expectLastCall().once();
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
-        expectLastCall().anyTimes();
-        expect(standbyTaskCreator.createStandbyTaskFromActive(anyObject(), eq(taskId00Partitions))).andReturn(standbyTask);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(Collections.emptyMap()))).andReturn(Collections.emptySet());
-
-        replay(activeTask, standbyTask, activeTaskCreator, standbyTaskCreator, consumer);
+        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(activeTask));
+        when(standbyTaskCreator.createTasks(any())).thenReturn(Collections.emptySet());
+        when(standbyTaskCreator.createStandbyTaskFromActive(any(), eq(taskId00Partitions))).thenReturn(standbyTask);
+        when(activeTaskCreator.createTasks(any(), eq(Collections.emptyMap()))).thenReturn(Collections.emptySet());
 
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
 
-        verify(activeTaskCreator, standbyTaskCreator);
+        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
     }
-    */
 
     @Test
     public void shouldConvertStandbyTaskToActiveTask() {
@@ -4556,19 +4347,16 @@ public class TaskManagerTest {
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
                                                    final ChangelogReader changeLogReader) {
-        expectRestoreToBeCompleted(consumer, changeLogReader, true);
-    }
-
-    private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
-                                                   final ChangelogReader changeLogReader,
-                                                   final boolean changeLogUpdateRequired) {
         final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
         when(consumer.assignment()).thenReturn(assignment);
-        doNothing().when(consumer).resume(assignment);
         when(changeLogReader.completedChangelogs()).thenReturn(emptySet());
     }
 
-    /*
+    private static void verifyConsumerResumedWithAssignment(final Consumer<byte[], byte[]> consumer) {
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        verify(consumer, atLeastOnce()).resume(assignment);
+    }
+
     private static KafkaFutureImpl<DeletedRecords> completedFuture() {
         final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
         futureDeletedRecords.complete(null);
@@ -4580,14 +4368,14 @@ public class TaskManagerTest {
         for (int i = 0; i < names.length; ++i) {
             taskFolders.add(new TaskDirectory(testFolder.newFolder(names[i]), null));
         }
-        expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(taskFolders).once();
+        when(stateDirectory.listNonEmptyTaskDirectories()).thenReturn(taskFolders).thenReturn(Collections.emptyList());
     }
 
     private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws Exception {
         final File checkpointFile = getCheckpointFile(task);
         Files.createFile(checkpointFile.toPath());
         new OffsetCheckpoint(checkpointFile).write(offsets);
-        expect(stateDirectory.checkpointFileFor(task)).andReturn(checkpointFile);
+        when(stateDirectory.checkpointFileFor(task)).thenReturn(checkpointFile);
     }
 
     private File getCheckpointFile(final TaskId task) {
@@ -4597,7 +4385,6 @@ public class TaskManagerTest {
     private static ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {
         return new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), offset, null, null);
     }
-    */
 
     private static class StateMachineTask extends AbstractTask implements Task {
         private final boolean active;
