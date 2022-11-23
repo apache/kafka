@@ -71,7 +71,6 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.group.GroupCoordinatorRequestContext
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
@@ -1655,18 +1654,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def makeGroupCoordinatorRequestContext(
-    request: RequestChannel.Request,
-    requestLocal: RequestLocal
-  ): GroupCoordinatorRequestContext = {
-    new GroupCoordinatorRequestContext(
-      request.context.header.data.requestApiVersion,
-      request.context.header.data.clientId,
-      request.context.clientAddress,
-      requestLocal.bufferSupplier
-    )
-  }
-
   def handleJoinGroupRequest(
     request: RequestChannel.Request,
     requestLocal: RequestLocal
@@ -1692,8 +1679,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponse(joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      val ctx = makeGroupCoordinatorRequestContext(request, requestLocal)
-      newGroupCoordinator.joinGroup(ctx, joinGroupRequest.data).handle[Unit] { (response, exception) =>
+      newGroupCoordinator.joinGroup(
+        request.context,
+        joinGroupRequest.data,
+        requestLocal.bufferSupplier
+      ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           sendResponse(joinGroupRequest.getErrorResponse(exception))
         } else {

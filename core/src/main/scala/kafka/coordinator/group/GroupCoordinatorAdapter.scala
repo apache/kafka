@@ -17,9 +17,9 @@
 package kafka.coordinator.group
 
 import kafka.server.RequestLocal
-
 import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData}
-import org.apache.kafka.coordinator.group.GroupCoordinatorRequestContext
+import org.apache.kafka.common.requests.RequestContext
+import org.apache.kafka.common.utils.BufferSupplier
 
 import java.util.concurrent.CompletableFuture
 import scala.jdk.CollectionConverters._
@@ -33,8 +33,9 @@ class GroupCoordinatorAdapter(
 ) extends org.apache.kafka.coordinator.group.GroupCoordinator {
 
   override def joinGroup(
-    context: GroupCoordinatorRequestContext,
-    request: JoinGroupRequestData
+    context: RequestContext,
+    request: JoinGroupRequestData,
+    bufferSupplier: BufferSupplier
   ): CompletableFuture[JoinGroupResponseData] = {
     val future = new CompletableFuture[JoinGroupResponseData]()
 
@@ -77,7 +78,7 @@ class GroupCoordinatorAdapter(
       protocols,
       callback,
       Option(request.reason),
-      RequestLocal(context.bufferSupplier)
+      RequestLocal(bufferSupplier)
     )
 
     future

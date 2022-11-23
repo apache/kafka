@@ -18,15 +18,15 @@ package kafka.coordinator.group
 
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.JoinGroupCallback
 import kafka.server.RequestLocal
-
 import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
+import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
-import org.apache.kafka.coordinator.group.GroupCoordinatorRequestContext
-
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -38,13 +38,18 @@ import scala.jdk.CollectionConverters._
 class GroupCoordinatorAdapterTest {
 
   private def makeContext(
+    apiKey: ApiKeys,
     apiVersion: Short
-  ): GroupCoordinatorRequestContext = {
-    new GroupCoordinatorRequestContext(
-      apiVersion,
-      "client",
+  ): RequestContext = {
+    new RequestContext(
+      new RequestHeader(apiKey, apiVersion, "client", 0),
+      "1",
       InetAddress.getLocalHost,
-      BufferSupplier.create()
+      KafkaPrincipal.ANONYMOUS,
+      ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+      SecurityProtocol.PLAINTEXT,
+      ClientInformation.EMPTY,
+      false
     )
   }
 
@@ -54,7 +59,7 @@ class GroupCoordinatorAdapterTest {
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator)
 
-    val ctx = makeContext(version)
+    val ctx = makeContext(ApiKeys.JOIN_GROUP, version)
     val request = new JoinGroupRequestData()
       .setGroupId("group")
       .setMemberId("member")
@@ -69,8 +74,9 @@ class GroupCoordinatorAdapterTest {
         new JoinGroupRequestProtocol()
           .setName("second")
           .setMetadata("second".getBytes())).iterator.asJava))
+    val bufferSupplier = BufferSupplier.create()
 
-    val future = adapter.joinGroup(ctx, request)
+    val future = adapter.joinGroup(ctx, request, bufferSupplier)
     assertFalse(future.isDone)
 
     val capturedProtocols: ArgumentCaptor[List[(String, Array[Byte])]] =
@@ -92,7 +98,7 @@ class GroupCoordinatorAdapterTest {
       capturedProtocols.capture(),
       capturedCallback.capture(),
       ArgumentMatchers.eq(Some("reason")),
-      ArgumentMatchers.eq(RequestLocal(ctx.bufferSupplier))
+      ArgumentMatchers.eq(RequestLocal(bufferSupplier))
     )
 
     assertEquals(List(

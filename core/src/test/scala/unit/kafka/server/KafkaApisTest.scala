@@ -27,7 +27,6 @@ import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.SyncGroupCallback
-import org.apache.kafka.coordinator.group.GroupCoordinatorRequestContext
 import kafka.coordinator.group._
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.AppendOrigin
@@ -2540,13 +2539,6 @@ class KafkaApisTest {
 
     val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build(version))
 
-    val expectedRequestContext = new GroupCoordinatorRequestContext(
-      version,
-      requestChannelRequest.context.clientId,
-      requestChannelRequest.context.clientAddress,
-      RequestLocal.NoCaching.bufferSupplier
-    )
-
     val expectedJoinGroupRequest = new JoinGroupRequestData()
       .setGroupId(joinGroupRequest.groupId)
       .setMemberId(joinGroupRequest.memberId)
@@ -2556,8 +2548,9 @@ class KafkaApisTest {
 
     val future = new CompletableFuture[JoinGroupResponseData]()
     when(newGroupCoordinator.joinGroup(
-      ArgumentMatchers.eq(expectedRequestContext),
-      ArgumentMatchers.eq(expectedJoinGroupRequest)
+      requestChannelRequest.context,
+      expectedJoinGroupRequest,
+      RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handleJoinGroupRequest(
@@ -2590,13 +2583,6 @@ class KafkaApisTest {
 
     val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build(version))
 
-    val expectedRequestContext = new GroupCoordinatorRequestContext(
-      version,
-      requestChannelRequest.context.clientId,
-      requestChannelRequest.context.clientAddress,
-      RequestLocal.NoCaching.bufferSupplier
-    )
-
     val expectedJoinGroupRequest = new JoinGroupRequestData()
       .setGroupId(joinGroupRequest.groupId)
       .setMemberId(joinGroupRequest.memberId)
@@ -2606,8 +2592,9 @@ class KafkaApisTest {
 
     val future = new CompletableFuture[JoinGroupResponseData]()
     when(newGroupCoordinator.joinGroup(
-      ArgumentMatchers.eq(expectedRequestContext),
-      ArgumentMatchers.eq(expectedJoinGroupRequest)
+      requestChannelRequest.context,
+      expectedJoinGroupRequest,
+      RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handleJoinGroupRequest(
@@ -2642,17 +2629,11 @@ class KafkaApisTest {
 
     val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build())
 
-    val expectedRequestContext = new GroupCoordinatorRequestContext(
-      ApiKeys.JOIN_GROUP.latestVersion,
-      requestChannelRequest.context.clientId,
-      requestChannelRequest.context.clientAddress,
-      RequestLocal.NoCaching.bufferSupplier
-    )
-
     val future = new CompletableFuture[JoinGroupResponseData]()
     when(newGroupCoordinator.joinGroup(
-      ArgumentMatchers.eq(expectedRequestContext),
-      ArgumentMatchers.eq(joinGroupRequest)
+      requestChannelRequest.context,
+      joinGroupRequest,
+      RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handleJoinGroupRequest(
@@ -2702,17 +2683,11 @@ class KafkaApisTest {
 
     val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build())
 
-    val expectedRequestContext = new GroupCoordinatorRequestContext(
-      ApiKeys.JOIN_GROUP.latestVersion,
-      requestChannelRequest.context.clientId,
-      requestChannelRequest.context.clientAddress,
-      RequestLocal.NoCaching.bufferSupplier
-    )
-
     val future = new CompletableFuture[JoinGroupResponseData]()
     when(newGroupCoordinator.joinGroup(
-      ArgumentMatchers.eq(expectedRequestContext),
-      ArgumentMatchers.eq(joinGroupRequest)
+      requestChannelRequest.context,
+      joinGroupRequest,
+      RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
 
     var response: JoinGroupResponse = null
