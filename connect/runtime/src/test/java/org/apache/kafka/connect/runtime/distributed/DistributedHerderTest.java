@@ -3551,8 +3551,8 @@ public class DistributedHerderTest {
         worker.startConnector(EasyMock.eq(CONN1), EasyMock.anyObject(), EasyMock.anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), capture(onFirstStart));
         PowerMock.expectLastCall().andAnswer(() -> {
-            onFirstStart.getValue().onCompletion(null, TargetState.STARTED);
             time.sleep(operationDelayMs);
+            onFirstStart.getValue().onCompletion(null, TargetState.STARTED);
             return true;
         });
         expectQueueHerderOperation();
@@ -3574,8 +3574,8 @@ public class DistributedHerderTest {
         worker.startConnector(EasyMock.eq(CONN1), EasyMock.anyObject(), EasyMock.anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), capture(onSecondStart));
         PowerMock.expectLastCall().andAnswer(() -> {
-            onSecondStart.getValue().onCompletion(null, TargetState.STARTED);
             time.sleep(operationDelayMs);
+            onSecondStart.getValue().onCompletion(null, TargetState.STARTED);
             return true;
         });
         expectQueueHerderOperation();
