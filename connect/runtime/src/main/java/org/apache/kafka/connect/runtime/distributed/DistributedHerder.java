@@ -436,7 +436,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         //       Another example: if multiple configurations are submitted for the same connector,
         //       the only one that actually has to be written to the config topic is the
         //       most-recently one.
-        long scheduledTick = Long.MAX_VALUE;
+        Long scheduledTick = null;
         while (true) {
             final DistributedHerderRequest next = peekWithoutException();
             if (next == null) {
@@ -455,13 +455,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         processRestartRequests();
 
         if (scheduledRebalance < Long.MAX_VALUE) {
-            scheduledTick = Math.min(scheduledTick, scheduledRebalance);
+            scheduledTick = scheduledTick != null ? Math.min(scheduledTick, scheduledRebalance) : scheduledRebalance;
             rebalanceResolved = false;
             log.debug("Scheduled rebalance at: {} (now: {} scheduledTick: {}) ",
                     scheduledRebalance, now, scheduledTick);
         }
         if (isLeader() && internalRequestValidationEnabled() && keyExpiration < Long.MAX_VALUE) {
-            scheduledTick = Math.min(scheduledTick, keyExpiration);
+            scheduledTick = scheduledTick != null ? Math.min(scheduledTick, keyExpiration) : keyExpiration;
             log.debug("Scheduled next key rotation at: {} (now: {} scheduledTick: {}) ",
                     keyExpiration, now, scheduledTick);
         }
@@ -511,7 +511,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         // Let the group take any actions it needs to
         try {
-            long nextRequestTimeoutMs = Math.max(scheduledTick - time.milliseconds(), 0L);
+            long nextRequestTimeoutMs = scheduledTick != null ? Math.max(scheduledTick - time.milliseconds(), 0L) : Long.MAX_VALUE;
             log.trace("Polling for group activity; will wait for {}ms or until poll is interrupted by "
                     + "either config backing store updates or a new external request",
                     nextRequestTimeoutMs);

@@ -118,7 +118,6 @@ import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CON
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.capture;
-import static org.easymock.EasyMock.geq;
 import static org.easymock.EasyMock.leq;
 import static org.easymock.EasyMock.newCapture;
 import static org.junit.Assert.assertEquals;
@@ -2640,7 +2639,7 @@ public class DistributedHerderTest {
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT);
         // First rebalance: poll indefinitely as no key has been read yet, so expiration doesn't come into play
-        member.poll(geq(rotationTtlDelay));
+        member.poll(Long.MAX_VALUE);
         EasyMock.expectLastCall();
 
         expectRebalance(2, Collections.emptyList(), Collections.emptyList());
@@ -2650,7 +2649,7 @@ public class DistributedHerderTest {
             TASK_CONFIGS_MAP, Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet(), Collections.emptySet());
         expectConfigRefreshAndSnapshot(snapshotWithKey);
         // Second rebalance: poll indefinitely as worker is follower, so expiration still doesn't come into play
-        member.poll(geq(rotationTtlDelay));
+        member.poll(Long.MAX_VALUE);
         EasyMock.expectLastCall();
 
         expectRebalance(2, Collections.emptyList(), Collections.emptyList(), "member", MEMBER_URL, true);
@@ -2696,7 +2695,7 @@ public class DistributedHerderTest {
 
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         // Second rebalance: poll indefinitely as worker is no longer leader, so key expiration doesn't come into play
-        member.poll(geq(rotationTtlDelay));
+        member.poll(Long.MAX_VALUE);
         EasyMock.expectLastCall();
 
         PowerMock.replayAll(initialSecretKey);
