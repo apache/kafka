@@ -771,6 +771,29 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldRetryInitializationWhenLockExceptionInStateUpdater() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(task00, task01));
+        final LockException lockException = new LockException("Where are my keys??");
+        doThrow(lockException)
+            .when(task00).initializeIfNeeded();
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        Mockito.verify(task00).initializeIfNeeded();
+        Mockito.verify(task01).initializeIfNeeded();
+        Mockito.verify(tasks).addPendingTaskToInit(Collections.singleton(task00));
+        Mockito.verify(stateUpdater).add(task01);
+    }
+
+    @Test
     public void shouldRecycleTasksRemovedFromStateUpdater() {
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)

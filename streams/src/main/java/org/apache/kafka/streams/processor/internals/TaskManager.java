@@ -833,6 +833,11 @@ public class TaskManager {
             try {
                 task.initializeIfNeeded();
                 stateUpdater.add(task);
+            } catch (final LockException lockException) {
+                // The state directory may still be locked by another thread, when the rebalance just happened.
+                // Retry in the next iteration.
+                log.info("Encountered lock exception. Reattempting locking the state in the next iteration.", lockException);
+                tasks.addPendingTaskToInit(Collections.singleton(task));
             } catch (final RuntimeException e) {
                 // need to add task back to the bookkeeping to be handled by the stream thread
                 tasks.addTask(task);
