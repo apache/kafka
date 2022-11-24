@@ -21,7 +21,7 @@ then
 fi
 
 # CYGWIN == 1 if Cygwin is detected, else 0.
-if [[ $(uname -a) =~ "CYGWIN" ]]; then
+if [[ $(uname -a) =~ "CYGWIN" ]] || [[ $(uname -a) =~ "MINGW64" ]]; then
   CYGWIN=1
 else
   CYGWIN=0
