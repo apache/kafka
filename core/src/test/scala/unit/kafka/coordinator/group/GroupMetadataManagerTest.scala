@@ -2134,6 +2134,8 @@ class GroupMetadataManagerTest {
     group.updateMember(
       member,
       List(("protocol", ConsumerProtocol.serializeSubscription(subscriptionTopic1).array())),
+      member.rebalanceTimeoutMs,
+      member.sessionTimeoutMs,
       null
     )
 

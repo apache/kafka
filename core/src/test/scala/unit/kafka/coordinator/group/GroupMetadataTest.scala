@@ -22,7 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.{Time, MockTime}
+import org.apache.kafka.common.utils.{MockTime, Time}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
@@ -556,6 +556,21 @@ class GroupMetadataTest {
     assertFalse(group.hasOffsets)
     assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
   }
+
+  @Test
+  def testUpdateMember(): Unit = {
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+    group.add(member)
+
+    val newRebalanceTimeout = 120000
+    val newSessionTimeout = 20000
+    group.updateMember(member, List(("roundrobin", Array[Byte]())), newRebalanceTimeout, newSessionTimeout, null)
+
+    assertEquals(group.rebalanceTimeoutMs, newRebalanceTimeout)
+    assertEquals(member.sessionTimeoutMs, newSessionTimeout)
+  }
+
 
   @Test
   def testReplaceGroupInstanceWithNonExistingMember(): Unit = {

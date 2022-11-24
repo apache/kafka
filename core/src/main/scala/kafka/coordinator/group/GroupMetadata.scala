@@ -526,10 +526,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def updateMember(member: MemberMetadata,
                    protocols: List[(String, Array[Byte])],
+                   rebalanceTimeoutMs: Int,
+                   sessionTimeoutMs: Int,
                    callback: JoinCallback): Unit = {
     decSupportedProtocols(member)
     member.supportedProtocols = protocols
     incSupportedProtocols(member)
+    member.rebalanceTimeoutMs = rebalanceTimeoutMs
+    member.sessionTimeoutMs = sessionTimeoutMs
 
     if (callback != null && !member.isAwaitingJoin) {
       numMembersAwaitingJoin += 1
