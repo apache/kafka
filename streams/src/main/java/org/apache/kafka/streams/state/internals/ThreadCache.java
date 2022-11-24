@@ -174,9 +174,8 @@ public class ThreadCache {
             final long oldSize = cache.sizeInBytes();
             cache.put(key, value);
             sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
+            maybeEvict(namespace, cache);
         }
-
-        maybeEvict(namespace);
     }
 
     public LRUCacheEntry putIfAbsent(final String namespace, final Bytes key, final LRUCacheEntry value) {
@@ -186,8 +185,8 @@ public class ThreadCache {
             final long oldSize = cache.sizeInBytes();
             result = cache.putIfAbsent(key, value);
             sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
+            maybeEvict(namespace, cache);
         }
-        maybeEvict(namespace);
 
         if (result == null) {
             numPuts++;
@@ -279,10 +278,9 @@ public class ThreadCache {
         }
     }
 
-    private void maybeEvict(final String namespace) {
+    private void maybeEvict(final String namespace, final NamedCache cache) {
         int numEvicted = 0;
         while (sizeInBytes.get() > maxCacheSizeBytes) {
-            final NamedCache cache = getOrCreateCache(namespace);
             // we abort here as the put on this cache may have triggered
             // a put on another cache. So even though the sizeInBytes() is
             // still > maxCacheSizeBytes there is nothing to evict from this
@@ -290,11 +288,9 @@ public class ThreadCache {
             if (cache.isEmpty()) {
                 return;
             }
-            synchronized (cache) {
-                final long oldSize = cache.sizeInBytes();
-                cache.evict();
-                sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
-            }
+            final long oldSize = cache.sizeInBytes();
+            cache.evict();
+            sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
             numEvicts++;
             numEvicted++;
         }
