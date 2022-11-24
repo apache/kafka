@@ -1036,6 +1036,52 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, syncGroupWithOldMemberIdResult.error)
   }
 
+ @Test
+ def staticMemberRejoinWithUpdatedSessionAndRebalanceTimeoutsButCannotPersistChange(): Unit = {
+   val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+   val joinGroupResult = staticJoinGroupWithPersistence(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1, 2 * DefaultSessionTimeout, 2 * DefaultRebalanceTimeout, appendRecordError = Errors.MESSAGE_TOO_LARGE)
+   checkJoinGroupResult(joinGroupResult,
+     Errors.UNKNOWN_SERVER_ERROR,
+     rebalanceResult.generation,
+     Set.empty,
+     Stable,
+     Some(protocolType))
+   assertTrue(groupCoordinator.groupManager.getGroup(groupId).isDefined)
+   val group = groupCoordinator.groupManager.getGroup(groupId).get
+   group.allMemberMetadata.foreach { member =>
+     assertEquals(member.sessionTimeoutMs, DefaultSessionTimeout)
+     assertEquals(member.rebalanceTimeoutMs, DefaultRebalanceTimeout)
+   }
+ }
+
+
+  @Test
+  def staticMemberRejoinWithUpdatedSessionAndRebalanceTimeoutsAndPersistChange(): Unit = {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    val followerJoinGroupResult = staticJoinGroupWithPersistence(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1, 2 * DefaultSessionTimeout, 2 * DefaultRebalanceTimeout)
+    checkJoinGroupResult(followerJoinGroupResult,
+      Errors.NONE,
+      rebalanceResult.generation,
+      Set.empty,
+      Stable,
+      Some(protocolType))
+    val leaderJoinGroupResult = staticJoinGroupWithPersistence(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, leaderInstanceId, protocolType, protocolSuperset, clockAdvance = 1, 2 * DefaultSessionTimeout, 2 * DefaultRebalanceTimeout)
+    checkJoinGroupResult(leaderJoinGroupResult,
+      Errors.NONE,
+      rebalanceResult.generation,
+      Set(leaderInstanceId, followerInstanceId),
+      Stable,
+      Some(protocolType),
+      leaderJoinGroupResult.leaderId,
+      leaderJoinGroupResult.memberId,
+      true)
+    assertTrue(groupCoordinator.groupManager.getGroup(groupId).isDefined)
+    val group = groupCoordinator.groupManager.getGroup(groupId).get
+    group.allMemberMetadata.foreach { member =>
+      assertEquals(member.sessionTimeoutMs, 2 * DefaultSessionTimeout)
+      assertEquals(member.rebalanceTimeoutMs, 2 * DefaultRebalanceTimeout)
+    }
+  }
   @Test
   def staticMemberRejoinWithUnknownMemberIdAndChangeOfProtocolWhileSelectProtocolUnchanged(): Unit = {
     val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
@@ -1519,12 +1565,13 @@ class GroupCoordinatorTest {
     */
   private def staticMembersJoinAndRebalance(leaderInstanceId: String,
                                             followerInstanceId: String,
-                                            sessionTimeout: Int = DefaultSessionTimeout): RebalanceResult = {
+                                            sessionTimeout: Int = DefaultSessionTimeout,
+                                            rebalanceTimeout: Int = DefaultRebalanceTimeout): RebalanceResult = {
     val leaderResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
-      protocolSuperset, Some(leaderInstanceId), sessionTimeout)
+      protocolSuperset, Some(leaderInstanceId), sessionTimeout, rebalanceTimeout)
 
     val followerResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
-      protocolSuperset, Some(followerInstanceId), sessionTimeout)
+      protocolSuperset, Some(followerInstanceId), sessionTimeout, rebalanceTimeout)
     // The goal for two timer advance is to let first group initial join complete and set newMemberAdded flag to false. Next advance is
     // to trigger the rebalance as needed for follower delayed join. One large time advance won't help because we could only populate one
     // delayed join from purgatory and the new delayed op is created at that time and never be triggered.
