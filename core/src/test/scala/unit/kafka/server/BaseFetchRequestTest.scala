@@ -53,10 +53,13 @@ class BaseFetchRequestTest extends BaseRequestTest {
     offsetMap: Map[TopicPartition, Long],
     version: Short,
     maxWaitMs: Int = Int.MaxValue,
-    minBytes: Int = 0
+    minBytes: Int = 0,
+    rackId: String = ""
   ): FetchRequest = {
     FetchRequest.Builder.forConsumer(version, maxWaitMs, minBytes, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
-      .setMaxBytes(maxResponseBytes).build()
+      .setMaxBytes(maxResponseBytes)
+      .rackId(rackId)
+      .build()
   }
 
   protected def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
