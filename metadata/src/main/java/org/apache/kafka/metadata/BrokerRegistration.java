@@ -79,6 +79,18 @@ public class BrokerRegistration {
                               Map<String, VersionRange> supportedFeatures,
                               Optional<String> rack,
                               boolean fenced,
+                              boolean inControlledShutdown) {
+        this(id, epoch, incarnationId, listeners, supportedFeatures, rack, fenced,
+            inControlledShutdown, null);
+    }
+
+    public BrokerRegistration(int id,
+                              long epoch,
+                              Uuid incarnationId,
+                              Map<String, Endpoint> listeners,
+                              Map<String, VersionRange> supportedFeatures,
+                              Optional<String> rack,
+                              boolean fenced,
                               boolean inControlledShutdown,
                               MetadataVersion ibp) {
         this.id = id;

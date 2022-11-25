@@ -186,10 +186,11 @@ public class PartitionRegistration {
 
     public LeaderAndIsrPartitionState toLeaderAndIsrPartitionState(TopicPartition tp,
                                                                    boolean isNew) {
+        // TODO: Verify if this is correct behavior to use controller epoch as -1.
         return new LeaderAndIsrPartitionState().
             setTopicName(tp.topic()).
             setPartitionIndex(tp.partition()).
-            setControllerEpoch(-1). // TODO: Verify if this is correct behavior
+            setControllerEpoch(-1).
             setLeader(leader).
             setLeaderEpoch(leaderEpoch).
             setIsr(Replicas.toList(isr)).

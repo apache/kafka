@@ -25,5 +25,7 @@ public interface KRaftMetadataListener {
 
     void handleRecord(long offset, int epoch, ApiMessage record);
 
-    MetadataImage image();
+    default MetadataImage image() {
+        return MetadataImage.EMPTY;
+    };
 }
