@@ -33,7 +33,7 @@ object CommandLineUtils extends Logging {
     * @return true on matching the help check condition
     */
   def isPrintHelpNeeded(commandOpts: CommandDefaultOptions): Boolean = {
-    commandOpts.args.length == 0 || commandOpts.options.has(commandOpts.helpOpt)
+    commandOpts.args.isEmpty || commandOpts.options.has(commandOpts.helpOpt)
   }
 
   def isPrintVersionNeeded(commandOpts: CommandDefaultOptions): Boolean = {
@@ -113,7 +113,7 @@ object CommandLineUtils extends Logging {
    * value may contain equals sign
    */
   def parseKeyValueArgs(args: Iterable[String], acceptMissingValue: Boolean = true): Properties = {
-    val splits = args.map(_.split("=", 2)).filterNot(_.length == 0)
+    val splits = args.map(_.split("=", 2)).filterNot(_.isEmpty)
 
     val props = new Properties
     for (a <- splits) {
