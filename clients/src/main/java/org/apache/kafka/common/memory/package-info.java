@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 /**
- * Mechanisms for explicitly managing memory used by an application
+ * Provides mechanisms for explicitly managing memory used by an application.
+ * <strong>This package is not a supported Kafka API; the implementation may change without warning between minor or patch releases.</strong>
  */
 package org.apache.kafka.common.memory;

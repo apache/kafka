@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Standard mechanisms for defining, parsing, validating, and documenting user-configurable parameters
+ * Provides common mechanisms for defining, parsing, validating, and documenting user-configurable parameters.
  */
 package org.apache.kafka.common.config;

@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Kafka Client for performing administrative operations on a Kafka cluster
+ * Provides a Kafka client for performing administrative operations (such as creating topics and configuring brokers) on a Kafka cluster.
  */
 package org.apache.kafka.clients.admin;

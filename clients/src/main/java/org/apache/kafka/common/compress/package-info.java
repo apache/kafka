@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 /**
- * Mechanisms for compressing data handled by Kafka
+ * Provides mechanisms for compressing data handled by Kafka.
+ * <strong>This package is not a supported Kafka API; the implementation may change without warning between minor or patch releases.</strong>
  */
 package org.apache.kafka.common.compress;

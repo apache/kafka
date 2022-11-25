@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * API for programmatically communicating support for logical features
+ * Provides classes for programmatically communicating support for logical features.
  */
 package org.apache.kafka.common.feature;

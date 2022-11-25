@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Default authentication mechanisms provided for securing Kafka clusters
+ * Provides some authentication mechanisms for securing Kafka clusters.
  */
 package org.apache.kafka.common.security.authenticator;

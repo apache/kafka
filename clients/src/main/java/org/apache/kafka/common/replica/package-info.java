@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * API for determining placement of log replicas at creation time
+ * Provides mechanism for determining placement of Kafka log replicas.
  */
 package org.apache.kafka.common.replica;

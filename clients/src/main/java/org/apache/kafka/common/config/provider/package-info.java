@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Pluggable interface and implementations for late-binding in configuration values
+ * Provides a pluggable interface and some implementations for late-binding in configuration values.
  */
 package org.apache.kafka.common.config.provider;

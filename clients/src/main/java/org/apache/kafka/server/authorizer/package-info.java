@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Pluggable interface for performing authorization on a Kafka Server
+ * Provides pluggable interface for performing authorization on a Kafka server.
  */
 package org.apache.kafka.server.authorizer;

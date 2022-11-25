@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Representation of a single event in a Kafka Log
+ * Provide classes representing a single record in a Kafka topic and/or partition.
  */
 package org.apache.kafka.common.record;

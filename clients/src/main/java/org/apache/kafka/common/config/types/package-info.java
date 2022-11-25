@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 /**
- * Custom non-primitive types of configuration properties
+ * Provides custom non-primitive types of configuration properties.
+ * <strong>This package is not a supported Kafka API; the implementation may change without warning between minor or patch releases.</strong>
  */
 package org.apache.kafka.common.config.types;

@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Mechanisms for enforcing resource quotas on Kafka Clients
+ * Provides mechanisms for enforcing resource quotas.
  */
 package org.apache.kafka.common.quota;

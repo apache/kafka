@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Kafka Client for consuming events from a Kafka Cluster
+ * Provides a Kafka client for consuming records from topics and/or partitions in a Kafka cluster.
  */
 package org.apache.kafka.clients.consumer;

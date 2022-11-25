@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Deprecated
+ * This package is deprecated.
  */
 package org.apache.kafka.common.security.oauthbearer.secured;

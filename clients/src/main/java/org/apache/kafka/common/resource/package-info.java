@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Client handles representing logical resources in a Kafka Cluster
+ * Provides client handles representing logical resources in a Kafka cluster.
  */
 package org.apache.kafka.common.resource;

@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Mechanisms for securing a Kafka Cluster and authenticating Kafka Clients.
+ * Provides mechanisms for securing a Kafka cluster and authenticating Kafka clients.
  */
 package org.apache.kafka.common.security;

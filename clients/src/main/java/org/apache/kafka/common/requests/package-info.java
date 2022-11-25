@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Request and Response types for RPCs executed via the Kafka Protocol
+ * Provide Request and Response class representations for RPCs executed via the Kafka Protocol.
  */
 package org.apache.kafka.common.requests;

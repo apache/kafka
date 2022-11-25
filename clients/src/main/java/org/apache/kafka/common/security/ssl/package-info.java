@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Utilities for using SSL encryption for networked connections to Kafka
+ * Provides utilities for using SSL encryption for networked connections.
  */
 package org.apache.kafka.common.security.ssl;

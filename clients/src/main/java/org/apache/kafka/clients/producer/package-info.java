@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Kafka Client for producing events to a Kafka Cluster
+ * Provides a Kafka client for producing records to topics and/or partitions in a Kafka cluster.
  */
 package org.apache.kafka.clients.producer;

@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Annotations for describing properties of Kafka API Classes
+ * Provides annotations used on Kafka APIs.
  */
 package org.apache.kafka.common.annotation;

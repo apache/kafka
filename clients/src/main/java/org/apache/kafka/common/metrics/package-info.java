@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Mechanisms for emitting monitoring metrics from Kafka Server and Clients
+ * Provides mechanisms for emitting monitoring metrics.
  */
 package org.apache.kafka.common.metrics;

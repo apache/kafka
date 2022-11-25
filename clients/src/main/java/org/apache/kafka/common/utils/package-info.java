@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Common utilities for Kafka Clients
+ * Provides common utilities for Kafka server and clients.
  */
 package org.apache.kafka.common.utils;

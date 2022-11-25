@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Implementation of the Kafka Wire Protocol
+ * Provides a common implementation of the Kafka Wire Protocol.
  */
 package org.apache.kafka.common.protocol;

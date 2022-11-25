@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Adaptor to use the Salted Challenge Response Authentication Mechanism to secure Kafka clusters
+ * Provides adaptor to use the Salted Challenge Response Authentication Mechanism for securing Kafka clusters.
  */
 package org.apache.kafka.common.security.scram;

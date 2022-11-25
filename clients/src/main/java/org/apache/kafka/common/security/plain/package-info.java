@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Implementation to use plaintext credentials authentication to secure a Kafka cluster
+ * Provides implementation to use plaintext credentials authentication for securing Kafka clusters.
  */
 package org.apache.kafka.common.security.plain;

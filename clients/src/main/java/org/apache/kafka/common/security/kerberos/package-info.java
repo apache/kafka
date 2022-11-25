@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Adaptor for using Kerberos to authenticate kafka clients
+ * Provides adaptor for using Kerberos for securing Kafka clusters.
  */
 package org.apache.kafka.common.security.kerberos;

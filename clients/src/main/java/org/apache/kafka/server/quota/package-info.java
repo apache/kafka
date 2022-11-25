@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Pluggable interface for enforcing client quotas from a Kafka Server
+ * Provides pluggable interface for enforcing client quotas from a Kafka server.
  */
 package org.apache.kafka.server.quota;

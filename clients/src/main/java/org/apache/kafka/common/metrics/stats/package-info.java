@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Methods of statistically aggregating metrics upon emission
+ * Provides methods of statistically aggregating metrics upon emission.
  */
 package org.apache.kafka.common.metrics.stats;

@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Interface and implementations of serialization/deserialization routines for various objects
+ * Provides interface and some implementations of serialization/deserialization routines for various objects.
  */
 package org.apache.kafka.common.serialization;

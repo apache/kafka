@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Shared functionality for Kafka Clients
+ * Provides shared functionality for Kafka clients and servers.
  */
 package org.apache.kafka.common;

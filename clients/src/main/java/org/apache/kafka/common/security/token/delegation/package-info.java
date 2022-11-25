@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * API for delegating authorization to a distinct Principal to secure a Kafka Cluster
+ * Provides mechanism for delegating authorization to a distinct Principal for securing Kafka clusters.
  */
 package org.apache.kafka.common.security.token.delegation;

@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Errors that are thrown by Kafka Clients
+ * Provides common exception classes.
  */
 package org.apache.kafka.common.errors;

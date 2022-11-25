@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Types of data which can be serialized in the Kafka Wire Protocol
+ * Provides types of data which can be serialized in the Kafka Wire Protocol.
  */
 package org.apache.kafka.common.protocol.types;

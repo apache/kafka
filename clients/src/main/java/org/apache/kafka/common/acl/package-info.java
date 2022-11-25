@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Access Control List API for Authorization of Kafka Clients
+ * Provides classes representing Access Control Lists for authorization of clients
  */
 package org.apache.kafka.common.acl;
