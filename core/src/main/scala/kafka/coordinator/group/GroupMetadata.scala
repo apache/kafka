@@ -384,7 +384,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def currentState: GroupState = state
 
-  def notYetRejoinedMembers: Map[String, MemberMetadata] = members.filter(!_._2.isAwaitingJoin).toMap
+  def notYetRejoinedMembers: Map[String, MemberMetadata] = members.filterNot(_._2.isAwaitingJoin).toMap
 
   def hasAllMembersJoined: Boolean = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
 

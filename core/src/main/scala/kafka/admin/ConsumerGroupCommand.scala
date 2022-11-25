@@ -298,7 +298,7 @@ object ConsumerGroupCommand extends Logging {
                 maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId.length)
                 maxHostLen = Math.max(maxHostLen, memberAssignment.host.length)
                 maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId.length)
-                includeGroupInstanceId = includeGroupInstanceId || memberAssignment.groupInstanceId.length > 0
+                includeGroupInstanceId = includeGroupInstanceId || memberAssignment.groupInstanceId.nonEmpty
               }
           }
 
@@ -563,8 +563,8 @@ object ConsumerGroupCommand extends Logging {
         // The admin client returns `null` as a value to indicate that there is not committed offset for a partition.
         def getPartitionOffset(tp: TopicPartition): Option[Long] = committedOffsets.get(tp).filter(_ != null).map(_.offset)
         var assignedTopicPartitions = ListBuffer[TopicPartition]()
-        val rowsWithConsumer = consumerGroup.members.asScala.filter(!_.assignment.topicPartitions.isEmpty).toSeq
-          .sortWith(_.assignment.topicPartitions.size > _.assignment.topicPartitions.size).flatMap { consumerSummary =>
+        val rowsWithConsumer = consumerGroup.members.asScala.filterNot(_.assignment.topicPartitions.isEmpty).toSeq
+          .sortBy(_.assignment.topicPartitions.size)(Ordering[Int].reverse).flatMap { consumerSummary =>
           val topicPartitions = consumerSummary.assignment.topicPartitions.asScala
           assignedTopicPartitions = assignedTopicPartitions ++ topicPartitions
           collectConsumerAssignment(groupId, Option(consumerGroup.coordinator), topicPartitions.toList,

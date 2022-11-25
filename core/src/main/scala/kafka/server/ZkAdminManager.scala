@@ -493,7 +493,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
         resource.`type` match {
           case ConfigResource.Type.TOPIC =>
-            if (resource.name.isEmpty()) {
+            if (resource.name.isEmpty) {
               throw new InvalidRequestException("Default topic resources are not allowed.")
             }
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
@@ -696,11 +696,11 @@ class ZkAdminManager(val config: KafkaConfig,
     def matches(nameComponent: Option[ClientQuotaFilterComponent], name: Option[String]): Boolean = nameComponent match {
       case Some(component) =>
         toOption(component.`match`) match {
-          case Some(n) => name.exists(_ == n)
+          case Some(n) => name.contains(n)
           case None => name.isDefined
         }
       case None =>
-        !name.isDefined || !strict
+        name.isEmpty || !strict
     }
 
     (userEntries ++ clientIdEntries ++ bothEntries).flatMap { case ((u, c), p) =>
