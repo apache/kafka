@@ -16,5 +16,6 @@
  */
 /**
  * Provide Request and Response class representations for RPCs executed via the Kafka Protocol.
+ * <strong>This package is not a supported Kafka API; the implementation may change without warning between minor or patch releases.</strong>
  */
 package org.apache.kafka.common.requests;

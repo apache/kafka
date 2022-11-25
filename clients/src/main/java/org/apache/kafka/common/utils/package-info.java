@@ -16,5 +16,6 @@
  */
 /**
  * Provides common utilities for Kafka server and clients.
+ * <strong>This package is not a supported Kafka API; the implementation may change without warning between minor or patch releases.</strong>
  */
 package org.apache.kafka.common.utils;

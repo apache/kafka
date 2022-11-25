@@ -16,5 +16,6 @@
  */
 /**
  * Provides utilities for using SSL encryption for networked connections.
+ * <strong>This package is not a supported Kafka API; the implementation may change without warning between minor or patch releases.</strong>
  */
 package org.apache.kafka.common.security.ssl;

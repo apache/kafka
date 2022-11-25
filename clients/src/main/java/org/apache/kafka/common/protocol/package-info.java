@@ -16,5 +16,6 @@
  */
 /**
  * Provides a common implementation of the Kafka Wire Protocol.
+ * <strong>This package is not a supported Kafka API; the implementation may change without warning between minor or patch releases.</strong>
  */
 package org.apache.kafka.common.protocol;

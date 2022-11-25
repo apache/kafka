@@ -16,5 +16,6 @@
  */
 /**
  * Provides mechanism for determining placement of Kafka log replicas.
+ * <strong>This package is not a supported Kafka API; the implementation may change without warning between minor or patch releases.</strong>
  */
 package org.apache.kafka.common.replica;
