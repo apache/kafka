@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -84,9 +84,63 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       TestUtils.generateAndProduceMessages(brokers, topic, numMessages = 1)
       val response = receive[FetchResponse](socket, ApiKeys.FETCH, version)
       assertEquals(Errors.NONE, response.error)
-      assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts())
+      assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts)
     } finally {
       socket.close()
+    }
+  }
+
+  @Test
+  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(): Unit = {
+    // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
+    val admin = createAdminClient()
+    TestUtils.createTopicWithAdmin(
+      admin,
+      topic,
+      brokers,
+      replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
+    )
+
+    TestUtils.generateAndProduceMessages(brokers, topic, numMessages = 10)
+
+    val topicPartition = new TopicPartition(topic, 0)
+    val offsetMap = Map(topicPartition -> 10L)
+
+    val request = createConsumerFetchRequest(
+      maxResponseBytes = 1000,
+      maxPartitionBytes = 1000,
+      Seq(topicPartition),
+      offsetMap,
+      ApiKeys.FETCH.latestVersion,
+      maxWaitMs = 20000,
+      minBytes = 1,
+      rackId = followerBrokerId.toString
+    )
+    var response = connectAndReceive[FetchResponse](request, brokers(leaderBrokerId).socketServer)
+    assertEquals(Errors.NONE, response.error)
+    assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts)
+    validatePreferredReadReplica(response, preferredReadReplica = 1)
+
+    // Shutdown follower broker. Consumer will reach out to leader after metadata.max.age.ms
+    brokers(followerBrokerId).shutdown()
+    TestUtils.waitUntilTrue(() => {
+      val endpoints = brokers(leaderBrokerId).metadataCache.getPartitionReplicaEndpoints(topicPartition, listenerName)
+      !endpoints.contains(followerBrokerId)
+    }, "follower is still reachable.")
+
+    response = connectAndReceive[FetchResponse](request, brokers(leaderBrokerId).socketServer)
+    assertEquals(Errors.NONE, response.error)
+    assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts)
+    validatePreferredReadReplica(response, preferredReadReplica = -1)
+  }
+
+  private def validatePreferredReadReplica(response: FetchResponse, preferredReadReplica: Int): Unit = {
+    assertEquals(1, response.data.responses.size)
+    response.data.responses.forEach { topicResponse =>
+      assertEquals(1, topicResponse.partitions.size)
+      topicResponse.partitions.forEach { partitionResponse =>
+        assertEquals(preferredReadReplica, partitionResponse.preferredReadReplica)
+      }
     }
   }
 }

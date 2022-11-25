@@ -346,6 +346,15 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             return Objects.requireNonNull(snapshots.lastEntry()).getValue();
         }
 
+        /**
+         * Returns the snapshot id of the latest snapshot if there is one.
+         *
+         * If a snapshot doesn't exists, it return an empty Optional.
+         */
+        synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
+            return Optional.ofNullable(snapshots.lastEntry()).map(entry -> entry.getValue().snapshotId());
+        }
+
         synchronized long appendedBytes() {
             ObjectSerializationCache objectCache = new ObjectSerializationCache();
 
@@ -787,6 +796,11 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 shared.addSnapshot(new MockRawSnapshotReader(snapshotId, buffer));
             })
         );
+    }
+
+    @Override
+    public synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
+        return shared.latestSnapshotId();
     }
 
     @Override
