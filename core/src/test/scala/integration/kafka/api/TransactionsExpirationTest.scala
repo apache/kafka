@@ -18,7 +18,6 @@
 package kafka.api
 
 import java.util.{Collections, Properties}
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
@@ -29,7 +28,7 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -120,6 +119,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
+  @Disabled
   def testTransactionAfterProducerIdExpires(quorum: String): Unit = {
     producer.initTransactions()
 
