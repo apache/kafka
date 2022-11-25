@@ -2,9 +2,9 @@ package kafka.migration
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import kafka.controller.{ControllerChannelManager, LeaderIsrAndControllerEpoch, ReplicaAssignment}
+import kafka.controller.{ControllerChannelManager, LeaderIsrAndControllerEpoch, ReplicaAssignment, StateChangeLogger}
 import kafka.migration.ZkMigrationClient.brokerToBrokerRegistration
-import kafka.server.{ConfigEntityName, ConfigType, ZkAdminManager}
+import kafka.server.{ConfigEntityName, ConfigType, KafkaConfig, ZkAdminManager}
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zk._
@@ -13,8 +13,8 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata._
-import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse}
-import org.apache.kafka.common.{Endpoint, TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.image.MetadataDelta
 import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, VersionRange}
 import org.apache.kafka.migration._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
@@ -32,14 +32,18 @@ object ZkMigrationClient {
   //  KRaft controller. KRaft controller will only accept such ZkBroker registrations.
   def brokerToBrokerRegistration(broker: Broker, epoch: Long): ZkBrokerRegistration = {
       val registration = new BrokerRegistration(broker.id, epoch, Uuid.ZERO_UUID,
-        Collections.emptyList[Endpoint], Collections.emptyMap[String, VersionRange],
+        Collections.emptyMap(), Collections.emptyMap[String, VersionRange],
         Optional.empty(), false, false, MetadataVersion.IBP_3_4_IV0)
       new ZkBrokerRegistration(registration, "3.4", null, true)
   }
 }
 
-class ZkMigrationClient(zkClient: KafkaZkClient,
-                        controllerChannelManager: ControllerChannelManager) extends MigrationClient with Logging {
+class ZkMigrationClient(config: KafkaConfig,
+                        zkClient: KafkaZkClient,
+                        controllerChannelManager: ControllerChannelManager,
+                        stateChangeLogger: StateChangeLogger) extends
+  MigrationClient with Logging {
+  var controllerToBrokerRequestBatch: KRaftControllerBrokerRequestBatch = _
 
   def claimControllerLeadership(kraftControllerId: Int, kraftControllerEpoch: Int): ZkControllerState = {
     val epochZkVersionOpt = zkClient.tryRegisterKRaftControllerAsActiveController(kraftControllerId, kraftControllerEpoch)
@@ -244,12 +248,6 @@ class ZkMigrationClient(zkClient: KafkaZkClient,
     zkClient.updateMigrationState(state)
   }
 
-  override def sendRequestToBroker(brokerId: Int,
-                                   request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
-                                   callback: Consumer[AbstractResponse]): Unit = {
-    controllerChannelManager.sendRequest(brokerId, request, callback.accept)
-  }
-
   override def createTopic(topicName: String, topicId: Uuid, partitions: util.Map[Integer, PartitionRegistration], state: MigrationRecoveryState): MigrationRecoveryState = {
     val assignments = partitions.asScala.map { case (partitionId, partition) =>
       new TopicPartition(topicName, partitionId) -> ReplicaAssignment(partition.replicas, partition.addingReplicas, partition.removingReplicas)
@@ -328,5 +326,103 @@ class ZkMigrationClient(zkClient: KafkaZkClient,
       responses.foreach(System.err.println)
       state.withZkVersion(migrationZkVersion)
     }
+  }
+
+  override def initializeForBrokerRpcs(driver: KRaftMigrationDriver): Unit  ={
+    this.controllerToBrokerRequestBatch = new KRaftControllerBrokerRequestBatch(
+      config,
+      () => new KRaftControllerBrokerRequestMetadata(driver.listener().image()),
+      controllerChannelManager,
+      stateChangeLogger)
+  }
+
+  override def sendRequestsForBrokersFromImage(controllerEpoch: Int): Unit = {
+    val metadata = controllerToBrokerRequestBatch.newBatch()
+    val image = metadata.getImage
+
+    // We need to send full ISR, updateMetadata requests from image.
+    val zkBrokers = image.cluster().zkBrokers().keySet().asScala.map(_.toInt).toSeq
+    val partitions = image.topics().partitions()
+
+    // For each partition with leader, add leaderAndIsr
+    partitions.asScala.foreach { case (tp, partitionRegistration) =>
+      // TODO: Add isFull field to leaderAndIsr.
+      val leaderIsrAndControllerEpochOpt = metadata.partitionLeadershipInfo(tp)
+      leaderIsrAndControllerEpochOpt match {
+        case Some(leaderIsrAndControllerEpoch) =>
+          val replicaAssignment = ReplicaAssignment(partitionRegistration.replicas,
+            partitionRegistration.addingReplicas, partitionRegistration.removingReplicas)
+          controllerToBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(
+            replicaAssignment.replicas, tp, leaderIsrAndControllerEpoch, replicaAssignment, isNew = true)
+          if (replicaAssignment.removingReplicas.nonEmpty) {
+            controllerToBrokerRequestBatch.addStopReplicaRequestForBrokers(replicaAssignment.removingReplicas, tp, deletePartition = false)
+          }
+        case None => None
+      }
+    }
+
+    // Add the metadata to all the brokers.
+    controllerToBrokerRequestBatch.addUpdateMetadataRequestForBrokers(zkBrokers)
+
+    controllerToBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch)
+  }
+
+  override def sendRequestsForBrokersFromDelta(delta: MetadataDelta, controllerEpoch: Int): Unit = {
+    val metadata = controllerToBrokerRequestBatch.newBatch()
+    val image = metadata.getImage
+
+    // Check for new Zk brokers.
+    val newZkBrokers = delta.clusterDelta().newZkBrokers().asScala.map(_.toInt).toSet
+    val zkBrokers = image.cluster().zkBrokers().keySet().asScala.map(_.toInt).toSet
+    val oldZkBrokers = zkBrokers -- newZkBrokers
+    val newBrokersFound = !delta.clusterDelta().newBrokers().isEmpty
+
+    // Send updateMetadata request to new Zk brokers.
+    if (newZkBrokers.nonEmpty) {
+      image.topics().partitions().asScala.keys
+      controllerToBrokerRequestBatch.addUpdateMetadataRequestForBrokers(
+        newZkBrokers.toSeq, image.topics().partitions().keySet().asScala)
+      controllerToBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch)
+    }
+
+    // Send leaderAndIsr requests to appropriate brokers and updateMetadata based on the changes
+    // to all the old Zk brokers.
+    controllerToBrokerRequestBatch.newBatch(Some(metadata))
+    if (newBrokersFound || !delta.topicsDelta().deletedTopicIds().isEmpty || !delta.topicsDelta().changedTopics().isEmpty) {
+      controllerToBrokerRequestBatch.addUpdateMetadataRequestForBrokers(oldZkBrokers.toSeq)
+    }
+
+    delta.topicsDelta().deletedTopicIds().asScala.foreach { deletedTopicId =>
+      val deletedTopic = delta.image().topics().getTopic(deletedTopicId)
+      deletedTopic.partitions().asScala.foreach { case (partition, partitionRegistration) =>
+        val tp = new TopicPartition(deletedTopic.name(), partition)
+        val offlineReplicas = partitionRegistration.replicas.filter(!metadata.isReplicaOnline(_, tp))
+        val deletedLeaderAndIsr = LeaderAndIsr.duringDelete(partitionRegistration.isr.toList)
+        controllerToBrokerRequestBatch.addStopReplicaRequestForBrokers(partitionRegistration.replicas, tp, deletePartition = true)
+        controllerToBrokerRequestBatch.addUpdateMetadataRequestForBrokers(
+          oldZkBrokers.toSeq, controllerEpoch, tp, deletedLeaderAndIsr.leader, deletedLeaderAndIsr.leaderEpoch,
+          deletedLeaderAndIsr.partitionEpoch, deletedLeaderAndIsr.isr, partitionRegistration.replicas, offlineReplicas)
+      }
+    }
+
+    delta.topicsDelta().changedTopics().asScala.foreach { case (_, topicDelta) =>
+      topicDelta.partitionChanges().asScala.foreach { case (partition, partitionRegistration) =>
+        val tp = new TopicPartition(topicDelta.name(), partition)
+        val leaderIsrAndControllerEpochOpt = metadata.partitionLeadershipInfo(tp)
+        leaderIsrAndControllerEpochOpt match {
+          case Some(leaderIsrAndControllerEpoch) =>
+            val replicaAssignment = ReplicaAssignment(partitionRegistration.replicas,
+              partitionRegistration.addingReplicas, partitionRegistration. removingReplicas)
+            controllerToBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(
+              replicaAssignment.replicas, tp, leaderIsrAndControllerEpoch, replicaAssignment, isNew = true)
+            if (replicaAssignment.removingReplicas.nonEmpty) {
+              controllerToBrokerRequestBatch.addStopReplicaRequestForBrokers(replicaAssignment.removingReplicas, tp, deletePartition = false)
+            }
+          case None => None
+        }
+      }
+    }
+
+    controllerToBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch)
   }
 }

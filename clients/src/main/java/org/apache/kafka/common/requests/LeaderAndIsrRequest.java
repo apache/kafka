@@ -51,7 +51,16 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
                        Collection<Node> liveLeaders) {
-            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch);
+            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch, false);
+            this.partitionStates = partitionStates;
+            this.topicIds = topicIds;
+            this.liveLeaders = liveLeaders;
+        }
+
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+                       List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
+                       Collection<Node> liveLeaders, boolean kraftController) {
+            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch, kraftController);
             this.partitionStates = partitionStates;
             this.topicIds = topicIds;
             this.liveLeaders = liveLeaders;
@@ -66,10 +75,14 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             ).collect(Collectors.toList());
 
             LeaderAndIsrRequestData data = new LeaderAndIsrRequestData()
-                .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
                 .setLiveLeaders(leaders);
+            if (kraftController) {
+                data.setKRaftControllerId(controllerId).setControllerId(-1);
+            } else {
+                data.setControllerId(controllerId).setKRaftControllerId(-1);
+            }
 
             if (version >= 2) {
                 Map<String, LeaderAndIsrTopicState> topicStatesMap = groupByTopic(partitionStates, topicIds);

@@ -67,10 +67,9 @@ public class BrokerRegistration {
                               Map<String, VersionRange> supportedFeatures,
                               Optional<String> rack,
                               boolean fenced,
-                              boolean inControlledShutdown,
-                              MetadataVersion ibp) {
+                              boolean inControlledShutdown) {
         this(id, epoch, incarnationId, listenersToMap(listeners), supportedFeatures, rack,
-            fenced, inControlledShutdown, ibp);
+            fenced, inControlledShutdown, null);
     }
 
     public BrokerRegistration(int id,

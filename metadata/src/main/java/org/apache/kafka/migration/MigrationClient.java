@@ -17,8 +17,7 @@
 package org.apache.kafka.migration;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.requests.AbstractControlRequest;
-import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -59,7 +58,9 @@ public interface MigrationClient {
 
     MigrationRecoveryState updateTopicPartitions(Map<String, Map<Integer, PartitionRegistration>> topicPartitions, MigrationRecoveryState state);
 
-    void sendRequestToBroker(int brokerId,
-                             AbstractControlRequest.Builder<? extends AbstractControlRequest> request,
-                             Consumer<AbstractResponse> callback);
+    void initializeForBrokerRpcs(KRaftMigrationDriver driver);
+
+    void sendRequestsForBrokersFromImage(int controllerEpoch);
+
+    void sendRequestsForBrokersFromDelta(MetadataDelta delta, int controllerEpoch);
 }

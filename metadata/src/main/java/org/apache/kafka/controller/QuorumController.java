@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.Uuid;
@@ -73,6 +74,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
@@ -339,6 +341,11 @@ public final class QuorumController implements Controller {
                     @Override
                     public void handleRecord(long offset, int epoch, ApiMessage record) {
 
+                    }
+
+                    @Override
+                    public MetadataImage image() {
+                        return MetadataImage.EMPTY;
                     }
                 };
             }

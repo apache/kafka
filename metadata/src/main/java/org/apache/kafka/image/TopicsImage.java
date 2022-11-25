@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
@@ -24,6 +25,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.util.TranslatedValueMapView;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -77,6 +79,16 @@ public final class TopicsImage {
         for (TopicImage topicImage : topicsById.values()) {
             topicImage.write(writer, options);
         }
+    }
+
+    public Map<TopicPartition, PartitionRegistration> partitions() {
+        Map<TopicPartition, PartitionRegistration> partitions = new HashMap<>();
+        topicsById.values().forEach(topic -> {
+            topic.partitions().entrySet().forEach(partition -> {
+                partitions.put(new TopicPartition(topic.name(), partition.getKey()), partition.getValue());
+            });
+        });
+        return partitions;
     }
 
     @Override

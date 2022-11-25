@@ -28,9 +28,11 @@ import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 
 /**
@@ -54,6 +56,23 @@ public final class ClusterDelta {
             return result.orElse(null);
         }
         return image.broker(nodeId);
+    }
+
+    public List<Integer> newBrokers() {
+        return changedBrokers.entrySet()
+            .stream()
+            .filter(entry -> !image.containsBroker(entry.getKey()) && entry.getValue().isPresent())
+            .map(Entry::getKey)
+            .collect(Collectors.toList());
+    }
+
+    public List<Integer> newZkBrokers() {
+        return changedBrokers.entrySet()
+            .stream()
+            .filter(entry -> !image.containsBroker(entry.getKey())
+                && entry.getValue().isPresent() && entry.getValue().get().isZkBroker())
+            .map(Entry::getKey)
+            .collect(Collectors.toList());
     }
 
     public void finishSnapshot() {

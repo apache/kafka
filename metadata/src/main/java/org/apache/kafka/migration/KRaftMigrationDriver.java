@@ -69,13 +69,13 @@ public class KRaftMigrationDriver {
 
             eventQueue.append(new EventQueue.Event() {
                 @Override
-                public void run() throws Exception {
+                public void run() {
                     if (delta == null) {
                         delta = new MetadataDelta(image);
                     }
                     delta.replay(offset, epoch, record);
                     image = delta.apply();
-                    eventQueue.append(new SendRPCsToBrokersEvent(delta, image));
+                    eventQueue.append(new SendRPCsToBrokersEvent(Optional.of(delta)));
                     delta = new MetadataDelta(image);
                 }
 
@@ -84,6 +84,10 @@ public class KRaftMigrationDriver {
                     log.error("Had an exception in " + this.getClass().getSimpleName(), e);
                 }
             });
+        }
+
+        public MetadataImage image() {
+            return image;
         }
 
         public boolean zkBrokersReadyForMigration(Set<Integer> expectedBrokers) {
@@ -136,35 +140,32 @@ public class KRaftMigrationDriver {
 
     class SendRPCsToBrokersEvent implements EventQueue.Event {
         private final MetadataDelta delta;
-        private final MetadataImage image;
 
-        SendRPCsToBrokersEvent(MetadataDelta delta, MetadataImage image) {
-            this.delta = delta;
-            this.image = image;
+        SendRPCsToBrokersEvent(Optional<MetadataDelta> deltaOpt) {
+            this.delta = deltaOpt.orElse(null);
         }
 
         @Override
         public void run() throws Exception {
             switch (migrationState) {
                 case DUAL_WRITE:
-                    // TODO: Stop replica implementation based on how we decide to deletion.
-                    if (delta.clusterDelta().changedBrokers().isEmpty() &&
-                        delta.topicsDelta().deletedTopicIds().isEmpty() && delta.topicsDelta().changedTopics().isEmpty()) {
-                        break;
+                    log.info("Generating RPCs to the brokers");
+                    if (delta == null) {
+                        client.sendRequestsForBrokersFromImage(recoveryState.kraftControllerEpoch());
                     } else {
-                        log.info("Generating RPCs to the brokers");
-                        // TODO
+                        client.sendRequestsForBrokersFromDelta(delta, recoveryState.kraftControllerEpoch());
                     }
                     break;
-                case ZK_MIGRATION:
-                    // TODO: Should we send any updates to brokers until migration is done?
                 default:
-                    // We shouldn't reach here?
+                    // In other migration states we don't send RPCs to the brokers yet as the
+                    // KRaft controller is not ready to handle the zkBrokers (dual-write) mode.
                     break;
             }
         }
+
     }
 
+    // TODO: Probably not required with periodic RPCs. Check and remove.
     abstract class RPCResponseEvent<T extends ApiMessage> implements EventQueue.Event {
         private final int brokerId;
         private final T data;
@@ -235,7 +236,7 @@ public class KRaftMigrationDriver {
             }
 
             // Poll again after some time
-            long deadline = time.nanoseconds() + NANOSECONDS.convert(10, SECONDS);
+            long deadline = time.nanoseconds() + NANOSECONDS.convert(1, SECONDS);
             eventQueue.scheduleDeferred(
                 "poll",
                 new EventQueue.DeadlineFunction(deadline),
@@ -462,6 +463,28 @@ public class KRaftMigrationDriver {
         }
     }
 
+    class PeriodicSendRequestsToBrokersEvent implements EventQueue.Event {
+        @Override
+        public void run() throws Exception {
+            try {
+                switch (migrationState) {
+                    case DUAL_WRITE:
+                        client.sendRequestsForBrokersFromImage(recoveryState.kraftControllerEpoch());
+                        break;
+                    default:
+                        break;
+                }
+            } finally {
+                // Poll again after some time
+                long deadline = time.nanoseconds() + NANOSECONDS.convert(30, SECONDS);
+                eventQueue.scheduleDeferred(
+                    "periodicRpcRequests",
+                    new EventQueue.DeadlineFunction(deadline),
+                    new PeriodicSendRequestsToBrokersEvent());
+            }
+        }
+    }
+
     private final Time time;
     private final Logger log;
     private final int nodeId;
@@ -483,6 +506,7 @@ public class KRaftMigrationDriver {
         this.client = client;
         this.brokerIdsFromTopicAssignments = null;
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, new LogContext("KRaftMigrationDriver"), "kraft-migration");
+        client.initializeForBrokerRpcs(this);
     }
 
     private void initializeMigrationState() {
@@ -535,6 +559,10 @@ public class KRaftMigrationDriver {
     private void transitionTo(MigrationState newState) {
         // TODO enforce a state machine
         // The next poll event will pick up the new state.
+        if (newState == MigrationState.DUAL_WRITE) {
+            // When being transitioned to DUAL_WRITE, first generate RPCs to the brokers.
+            eventQueue.prepend(new SendRPCsToBrokersEvent(Optional.empty()));
+        }
         migrationState = newState;
     }
 }

@@ -17,10 +17,13 @@
 package org.apache.kafka.migration;
 
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.image.MetadataImage;
 
 public interface KRaftMetadataListener {
 
     void handleLeaderChange(boolean isActive, int epoch);
 
     void handleRecord(long offset, int epoch, ApiMessage record);
+
+    MetadataImage image();
 }

@@ -115,7 +115,7 @@ class KafkaRaftServer(
     val zkClient = KafkaServer.zkClient("KRaft migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
     val stateChangeLogger = new StateChangeLogger(-1, inControllerContext = false, None)
     val channelManager = new ControllerChannelManager(() => -1, config, Time.SYSTEM, new Metrics(), stateChangeLogger)
-    val migrationClient = new ZkMigrationClient(zkClient, channelManager)
+    val migrationClient = new ZkMigrationClient(config, zkClient, channelManager, stateChangeLogger)
     val migrationDriver = new KRaftMigrationDriver(config.nodeId, migrationClient)
 
     val controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)

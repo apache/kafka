@@ -189,7 +189,7 @@ public class PartitionRegistration {
         return new LeaderAndIsrPartitionState().
             setTopicName(tp.topic()).
             setPartitionIndex(tp.partition()).
-            setControllerEpoch(-1).
+            setControllerEpoch(-1). // TODO: Verify if this is correct behavior
             setLeader(leader).
             setLeaderEpoch(leaderEpoch).
             setIsr(Replicas.toList(isr)).
