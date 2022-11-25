@@ -377,6 +377,15 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterForInternalTopics(quorum: String): Unit = {
+    // altering an internal topic is not allowed
+    val alterOpts = new TopicCommandOptions(Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME, "--partitions", "1"))
+    val topicService = TopicService(adminClient)
+    assertThrows(classOf[IllegalArgumentException], () => topicService.alterTopic(alterOpts))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAlterWhenTopicDoesntExistWithIfExists(quorum: String): Unit = {
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--partitions", "1", "--if-exists")))

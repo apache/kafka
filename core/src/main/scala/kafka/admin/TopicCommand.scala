@@ -265,7 +265,7 @@ object TopicCommand extends Logging {
 
       if (topics.nonEmpty) {
         val topicsInfo = adminClient.describeTopics(topics.asJavaCollection).topicNameValues()
-        val newPartitions = topics.map { topicName =>
+        val newPartitions = topics.filterNot(Topic.isInternal).map { topicName =>
           if (topic.hasReplicaAssignment) {
             val startPartitionId = topicsInfo.get(topicName).get().partitions().size()
             val newAssignment = {

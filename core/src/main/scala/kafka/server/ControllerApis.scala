@@ -30,7 +30,7 @@ import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException}
-import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
@@ -761,6 +761,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     getAlterAuthorizedTopics: Iterable[String] => Set[String]
   ): CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
     val responses = new util.ArrayList[CreatePartitionsTopicResult]()
+    var duplicateTopicNames = request.topics().toArray diff request.topics().toArray.distinct
     val duplicateTopicNames = new util.HashSet[String]()
     val topicNames = new util.HashSet[String]()
     request.topics().forEach {
@@ -769,6 +770,7 @@ class ControllerApis(val requestChannel: RequestChannel,
           duplicateTopicNames.add(topic.name())
         }
     }
+
     duplicateTopicNames.forEach { topicName =>
       responses.add(new CreatePartitionsTopicResult().
         setName(topicName).
@@ -776,6 +778,9 @@ class ControllerApis(val requestChannel: RequestChannel,
         setErrorMessage("Duplicate topic name."))
         topicNames.remove(topicName)
     }
+
+    topicNames.iterator.asScala.filterNot(Topic.isInternal)
+
     val authorizedTopicNames = getAlterAuthorizedTopics(topicNames.asScala)
     val topics = new util.ArrayList[CreatePartitionsTopic]
     topicNames.forEach { topicName =>
