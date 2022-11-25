@@ -304,6 +304,20 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     }
 
     @Test
+    public void testMemberDataFromSubscriptionWithEmptyPartitionsAndEqualGeneration() {
+        List<String> topics = topics(topic);
+        List<TopicPartition> ownedPartitions = partitions(tp(topic1, 0), tp(topic2, 1));
+
+        // subscription containing empty owned partitions and the same generation id, and non-empty owned partition in user data,
+        // member data should honor the one in user data
+        Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationId), Collections.emptyList(), generationId);
+
+        AbstractStickyAssignor.MemberData memberData = memberDataFromSubscription(subscription);
+        assertEquals(ownedPartitions, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
+        assertEquals(generationId, memberData.generation.orElse(-1), "subscription: " + subscription + " doesn't have expected generation id");
+    }
+
+    @Test
     public void testAssignorWithOldVersionSubscriptions() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 3);
