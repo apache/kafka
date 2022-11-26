@@ -813,7 +813,7 @@ public class QuorumControllerTest {
                         setBrokerId(i).
                         setRack(null).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV1)).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                         setListeners(new ListenerCollection(Arrays.asList(new Listener().
                             setName("PLAINTEXT").setHost("localhost").
