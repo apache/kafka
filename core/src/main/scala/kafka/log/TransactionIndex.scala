@@ -16,7 +16,7 @@
  */
 package kafka.log
 
-import java.io.{File, IOException}
+import java.io.{Closeable, File, IOException}
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
@@ -41,14 +41,13 @@ private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTx
  * order to find the start of the transactions.
  */
 @nonthreadsafe
-class TransactionIndex(val startOffset: Long, private val indexFile: File) extends BaseIndex(indexFile)
-  with Logging {
+class TransactionIndex(val startOffset: Long, @volatile private var _file: File) extends Closeable with Logging {
 
   // note that the file is not created until we need it
   @volatile private var maybeChannel: Option[FileChannel] = None
   private var lastOffset: Option[Long] = None
 
-  if (file.exists)
+  if (_file.exists)
     openChannel()
 
   def append(abortedTxn: AbortedTxn): Unit = {
@@ -62,6 +61,8 @@ class TransactionIndex(val startOffset: Long, private val indexFile: File) exten
   }
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
+
+  def file: File = _file
 
   def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
 
@@ -103,6 +104,13 @@ class TransactionIndex(val startOffset: Long, private val indexFile: File) exten
   def close(): Unit = {
     maybeChannel.foreach(_.close())
     maybeChannel = None
+  }
+
+  def renameTo(f: File): Unit = {
+    try {
+      if (file.exists)
+        Utils.atomicMoveWithFallback(file.toPath, f.toPath, false)
+    } finally _file = f
   }
 
   def truncateTo(offset: Long): Unit = {

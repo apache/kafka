@@ -20,7 +20,7 @@ package kafka.log
 import kafka.common.IndexOffsetOverflowException
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem}
+import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem, Utils}
 
 import java.io.{File, RandomAccessFile}
 import java.nio.channels.FileChannel
@@ -31,12 +31,12 @@ import java.util.concurrent.locks.{Lock, ReentrantLock}
 /**
  * The abstract index class which holds entry format agnostic methods.
  *
- * @param indexFile The index file
+ * @param _file The index file
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex(private val indexFile: File, val baseOffset: Long, val maxIndexSize: Int = -1,
-                             val writable: Boolean) extends BaseIndex(indexFile) {
+abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: Long, val maxIndexSize: Int = -1,
+                             val writable: Boolean) {
   import AbstractIndex._
 
   // Length of the index file
@@ -152,6 +152,8 @@ abstract class AbstractIndex(private val indexFile: File, val baseOffset: Long, 
    */
   def isFull: Boolean = _entries >= _maxEntries
 
+  def file: File = _file
+
   def maxEntries: Int = _maxEntries
 
   def entries: Int = _entries
@@ -197,6 +199,16 @@ abstract class AbstractIndex(private val indexFile: File, val baseOffset: Long, 
         }
       }
     }
+  }
+
+  /**
+   * Rename the file that backs this offset index
+   *
+   * @throws IOException if rename fails
+   */
+  def renameTo(f: File): Unit = {
+    try Utils.atomicMoveWithFallback(file.toPath, f.toPath, false)
+    finally _file = f
   }
 
   /**

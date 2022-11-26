@@ -168,7 +168,7 @@ public class RemoteLogInputStreamTest {
         int baseSequence = 234;
         int partitionLeaderEpoch = 9832;
 
-        Header[] headers = new Header[]{ new RecordHeader("header-key",
+        Header[] headers = new Header[]{new RecordHeader("header-key",
                 "header-value".getBytes(StandardCharsets.UTF_8))};
         SimpleRecord[] firstBatchRecords = new SimpleRecord[]{
             new SimpleRecord(3241324L, "a".getBytes(), "1".getBytes()),
