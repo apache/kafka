@@ -23,7 +23,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, RepeatedTest, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, reset, times, verify, verifyNoInteractions, when}
 import org.mockito.ArgumentMatchers
@@ -133,15 +133,43 @@ class RemoteIndexCacheTest {
     cache.getIndexEntry(metadataList.last)
     cache.getIndexEntry(metadataList(1))
     assertEquals(2, cache.entries.size())
-    assertTrue(cache.entries.containsKey(metadataList.last.remoteLogSegmentId()))
-    assertTrue(cache.entries.containsKey(metadataList(1).remoteLogSegmentId()))
+    assertTrue(cache.entries.containsKey(metadataList.last.remoteLogSegmentId().id()))
+    assertTrue(cache.entries.containsKey(metadataList(1).remoteLogSegmentId().id()))
     verifyFetchIndexInvocation(count = 3)
 
     cache.getIndexEntry(metadataList(1))
     cache.getIndexEntry(metadataList.head)
     assertEquals(2, cache.entries.size())
-    assertFalse(cache.entries.containsKey(metadataList.last.remoteLogSegmentId()))
+    assertFalse(cache.entries.containsKey(metadataList.last.remoteLogSegmentId().id()))
     verifyFetchIndexInvocation(count = 4)
+  }
+
+  @RepeatedTest(1)
+  def reloadCacheAfterClose(): Unit = {
+    val cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
+    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
+
+    cache.getIndexEntry(metadataList.head)
+    cache.getIndexEntry(metadataList.head)
+    assertEquals(1, cache.entries.size())
+    verifyFetchIndexInvocation(count = 1)
+
+    cache.getIndexEntry(metadataList(1))
+    cache.getIndexEntry(metadataList(1))
+    assertEquals(2, cache.entries.size())
+    verifyFetchIndexInvocation(count = 2)
+
+    cache.getIndexEntry(metadataList(2))
+    cache.getIndexEntry(metadataList(2))
+    assertEquals(2, cache.entries.size())
+    verifyFetchIndexInvocation(count = 3)
+
+    cache.close()
+
+    val reloadedCache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
+    assertEquals(2, reloadedCache.entries.size())
+    reloadedCache.close()
   }
 
   private def verifyFetchIndexInvocation(count: Int,

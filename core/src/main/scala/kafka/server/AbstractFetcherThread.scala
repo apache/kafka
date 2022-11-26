@@ -401,7 +401,8 @@ abstract class AbstractFetcherThread(name: String,
                   if (!handleOutOfRangeError(topicPartition, currentFetchState, fetchPartitionData.currentLeaderEpoch))
                     partitionsWithError += topicPartition
                 case Errors.OFFSET_MOVED_TO_TIERED_STORAGE =>
-                  debug(s"Received error related to offset moved to tiered storage, fetch offset: ${currentFetchState.fetchOffset}")
+                  debug(s"Received error ${Errors.OFFSET_MOVED_TO_TIERED_STORAGE}, " +
+                    s"fetch offset: ${currentFetchState.fetchOffset}, " + s"topic-partition: $topicPartition")
                   if (!handleOffsetsMovedToTieredStorage(topicPartition, currentFetchState,
                     fetchPartitionData.currentLeaderEpoch, partitionData.logStartOffset()))
                     partitionsWithError += topicPartition
@@ -693,6 +694,7 @@ abstract class AbstractFetcherThread(name: String,
        * Putting the two cases together, the follower should fetch from the higher one of its replica log end offset
        * and the current leader's (local-log-start-offset or) log start offset.
        */
+        // todo-pr: Update the comment as suggested
       val (epoch, leaderStartOffset) = if (fetchFromLocalLogStartOffset)
         leader.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch) else
         leader.fetchEarliestOffset(topicPartition, currentLeaderEpoch)

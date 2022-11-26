@@ -16,13 +16,14 @@
  */
 package kafka.log.remote
 
-import kafka.log._
+import kafka.log.{LazyIndex, _}
 import kafka.log.remote.RemoteIndexCache.DirName
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
-import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageManager}
 
 import java.io.{File, InputStream}
 import java.nio.file.{Files, Path}
@@ -99,9 +100,9 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
   val expiredIndexes = new LinkedBlockingQueue[Entry]()
   val lock = new Object()
 
-  val entries: util.Map[RemoteLogSegmentId, Entry] = new java.util.LinkedHashMap[RemoteLogSegmentId, Entry](maxSize / 2,
+  val entries: util.Map[Uuid, Entry] = new java.util.LinkedHashMap[Uuid, Entry](maxSize / 2,
     0.75f, true) {
-    override def removeEldestEntry(eldest: util.Map.Entry[RemoteLogSegmentId, Entry]): Boolean = {
+    override def removeEldestEntry(eldest: util.Map.Entry[Uuid, Entry]): Boolean = {
       if (this.size() > maxSize) {
         val entry = eldest.getValue
         // Mark the entries for cleanup, background thread will clean them later.
@@ -125,7 +126,50 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
       }
     })
 
-    // Load the indexes.
+    Files.list(cacheDir.toPath).forEach((path:Path) => {
+      val pathStr = path.getFileName.toString
+      val name = pathStr.substring(0, pathStr.lastIndexOf("_") + 1)
+
+      // Create entries for each path if all the index files exist.
+      val firstIndex = name.indexOf('_')
+      val offset = name.substring(0, firstIndex).toInt
+      val uuid = Uuid.fromString(name.substring(firstIndex + 1, name.lastIndexOf('_')))
+
+      if(!entries.containsKey(uuid)) {
+        val offsetIndexFile = new File(cacheDir, name + UnifiedLog.IndexFileSuffix)
+        val timestampIndexFile = new File(cacheDir, name + UnifiedLog.TimeIndexFileSuffix)
+        val txnIndexFile = new File(cacheDir, name + UnifiedLog.TxnIndexFileSuffix)
+
+        if (offsetIndexFile.exists() && timestampIndexFile.exists() && txnIndexFile.exists()) {
+
+          val offsetIndex: LazyIndex[OffsetIndex] = {
+            val index = LazyIndex.forOffset(offsetIndexFile, offset, Int.MaxValue, writable = false)
+            index.get.sanityCheck()
+            index
+          }
+
+          val timeIndex: LazyIndex[TimeIndex] = {
+            val index = LazyIndex.forTime(timestampIndexFile, offset, Int.MaxValue, writable = false)
+            index.get.sanityCheck()
+            index
+          }
+
+          val txnIndex: TransactionIndex = {
+            val index = new TransactionIndex(offset, txnIndexFile)
+            index.sanityCheck()
+            index
+          }
+
+          val entry = new Entry(offsetIndex, timeIndex, txnIndex)
+          entries.put(uuid, entry)
+        } else {
+          // Delete all of them if any one of those indexes is not available for a specific segment id
+          Files.deleteIfExists(offsetIndexFile.toPath)
+          Files.deleteIfExists(timestampIndexFile.toPath)
+          Files.deleteIfExists(txnIndexFile.toPath)
+        }
+      }
+    })
   }
 
   init()
@@ -141,6 +185,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
           info(s"Cleaning up index entry $entry")
           entry.cleanup()
         } catch {
+          case ex: InterruptedException => info("Cleaner thread was interrupted", ex)
           case ex: Exception => error("Error occurred while fetching/cleaning up expired entry", ex)
         }
       }
@@ -185,9 +230,10 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     }
 
     lock synchronized {
-      entries.computeIfAbsent(remoteLogSegmentMetadata.remoteLogSegmentId(), (key: RemoteLogSegmentId) => {
+      entries.computeIfAbsent(remoteLogSegmentMetadata.remoteLogSegmentId().id(), (uuid: Uuid) => {
         val startOffset = remoteLogSegmentMetadata.startOffset()
-        val fileName = startOffset.toString + "_" + key.id().toString
+        // uuid.toString uses URL encoding which is safe for filenames and URLs.
+        val fileName = startOffset.toString + "_" + uuid.toString + "_"
 
         val offsetIndex: LazyIndex[OffsetIndex] = loadIndexFile(fileName, UnifiedLog.IndexFileSuffix,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET),

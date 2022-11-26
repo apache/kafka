@@ -297,8 +297,9 @@ class ReplicaFetcherThread(name: String,
             s"with size: ${epochs.size} for $partition")
 
           // Restore producer snapshot
+          // This has to be done for empty brokers, right?
           val snapshotFile = UnifiedLog.producerSnapshotFile(log.dir, nextOffset)
-          val tmpSnapshotFile = new File(snapshotFile.getAbsolutePath + ".tmp");
+          val tmpSnapshotFile = new File(snapshotFile.getAbsolutePath + ".tmp")
           // Copy it to snapshot file in atomic manner.
           Files.copy(rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
             tmpSnapshotFile.toPath, StandardCopyOption.REPLACE_EXISTING)
@@ -321,6 +322,8 @@ class ReplicaFetcherThread(name: String,
         }
 
       } else {
+        //todo-pr Jun earleir suggested to truncate it until local log start offset.
+
         // Truncate the existing local log and start from leader's localLogStartOffset.
         truncateFullyAndStartAt(partition, leaderLocalLogStartOffset)
         leaderLocalLogStartOffset

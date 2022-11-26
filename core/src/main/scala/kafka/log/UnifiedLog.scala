@@ -309,10 +309,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   def remoteLogEnabled(): Boolean = {
-    // Remote logging is enabled only for non-compact and non-internal topics
+    // Remote log is enabled only for non-compact and non-internal topics
     remoteStorageSystemEnable &&
       !(config.compact || Topic.isInternal(topicPartition.topic())
-        || TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME.equals(topicPartition.topic())) &&
+        || TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME.equals(topicPartition.topic())
+        || Topic.METADATA_TOPIC_NAME.equals(topicPartition.topic())) &&
       config.remoteLogConfig.remoteStorageEnable
   }
 
