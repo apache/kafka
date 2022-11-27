@@ -42,9 +42,9 @@ import scala.jdk.CollectionConverters._
  *  - receives any leader and follower replica events and partition stop events and act on them
  *  - also provides APIs to fetch indexes, metadata about remote log segments.
  *
- * @param rlmConfig
- * @param brokerId
- * @param logDir
+ * @param rlmConfig Configuration required for remote logging subsystem(tiered storage) at the broker level.
+ * @param brokerId  id of the current broker.
+ * @param logDir    directory of Kafka log segments.
  */
 class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
                        brokerId: Int,
@@ -230,7 +230,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
 
   /**
    * Search the message offset in the remote storage based on timestamp and offset.
-   * 
+   *
    * This method returns an option of TimestampOffset. The returned value is determined using the following ordered list of rules:
    *
    * - If there are no messages in the remote storage, return None

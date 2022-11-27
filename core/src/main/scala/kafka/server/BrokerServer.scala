@@ -589,7 +589,7 @@ class BrokerServer(
       if (logManager != null)
         CoreUtils.swallow(logManager.shutdown(), this)
 
-      // Close remote log manager before stopping processing requests, to give a change to any
+      // Close remote log manager before stopping processing requests, to give a chance to any
       // of its underlying clients (especially in RemoteStorageManager and RemoteLogMetadataManager)
       // to close gracefully.
       CoreUtils.swallow(remoteLogManager.foreach(_.close()), this)

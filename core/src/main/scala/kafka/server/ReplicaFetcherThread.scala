@@ -214,16 +214,16 @@ class ReplicaFetcherThread(name: String,
                                                 epochForLeaderLocalLogStartOffset: Int,
                                                 leaderLogStartOffset: Long): Long = {
 
-    def fetchEarlierEpochEndOffset(epoch:Int): EpochEndOffset = {
-        val previousEpoch = epoch - 1
-        // Find the end-offset for the epoch earlier to the given epoch from the leader
-        val partitionsWithEpochs = Map(partition -> new EpochData().setPartition(partition.partition())
-          .setCurrentLeaderEpoch(currentLeaderEpoch)
-          .setLeaderEpoch(previousEpoch))
-        val maybeEpochEndOffset = leader.fetchEpochEndOffsets(partitionsWithEpochs).get(partition)
-        if (maybeEpochEndOffset.isEmpty) {
-          throw new KafkaException("No response received for partition: " + partition);
-        }
+    def fetchEarlierEpochEndOffset(epoch: Int): EpochEndOffset = {
+      val previousEpoch = epoch - 1
+      // Find the end-offset for the epoch earlier to the given epoch from the leader
+      val partitionsWithEpochs = Map(partition -> new EpochData().setPartition(partition.partition())
+        .setCurrentLeaderEpoch(currentLeaderEpoch)
+        .setLeaderEpoch(previousEpoch))
+      val maybeEpochEndOffset = leader.fetchEpochEndOffsets(partitionsWithEpochs).get(partition)
+      if (maybeEpochEndOffset.isEmpty) {
+        throw new KafkaException("No response received for partition: " + partition);
+      }
 
       val epochEndOffset = maybeEpochEndOffset.get
       if (epochEndOffset.errorCode() != Errors.NONE.code()) {

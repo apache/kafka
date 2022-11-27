@@ -635,7 +635,7 @@ class AbstractFetcherThreadTest {
 
 
     val leaderState = PartitionState(leaderLog, leaderEpoch = 5, highWatermark = 8L, rlmEnabled = true)
-    // Overriding the log start offset to zero to mock the segment 0-4 moved to remote store.
+    // Overriding the log start offset to zero for mocking the scenario of segment 0-4 moved to remote store.
     leaderState.logStartOffset = 0
     fetcher.mockLeader.setLeaderState(partition, leaderState)
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
@@ -686,7 +686,7 @@ class AbstractFetcherThreadTest {
       mkBatch(baseOffset = 5, leaderEpoch = 5, new SimpleRecord("b".getBytes)),
       mkBatch(baseOffset = 6, leaderEpoch = 5, new SimpleRecord("c".getBytes)))
     val leaderState = PartitionState(leaderLog, leaderEpoch = 5, highWatermark = 6L, rlmEnabled = true)
-    // Overriding the log start offset to zero to mock the segment 0-4 moved to remote store.
+    // Overriding the log start offset to zero for mocking the scenario of segment 0-4 moved to remote store.
     leaderState.logStartOffset = 0
     fetcher.mockLeader.setLeaderState(partition, leaderState)
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
