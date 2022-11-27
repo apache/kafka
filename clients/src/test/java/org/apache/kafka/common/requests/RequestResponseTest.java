@@ -312,6 +312,16 @@ public class RequestResponseTest {
         assertEquals("", deserialized.clientId()); // null is defaulted to ""
     }
 
+    @Test
+    public void testOffsetFetchRequestBuilderToString() {
+        String allTopicPartitionsString = OffsetFetchRequest.Builder.allTopicPartitions("testGroup").toString();
+        assertTrue(allTopicPartitionsString.contains("<ALL>"));
+        String offsetFetchRequestStr = new OffsetFetchRequest.Builder("group1",
+                singletonList(new TopicPartition("test11", 1))).toString();
+        assertTrue(offsetFetchRequestStr.contains("test11"));
+        assertTrue(offsetFetchRequestStr.contains("group1"));
+    }
+
     @Test(expected = UnsupportedVersionException.class)
     public void testCreateTopicRequestV0FailsIfValidateOnly() {
         createCreateTopicRequest(0, true);
