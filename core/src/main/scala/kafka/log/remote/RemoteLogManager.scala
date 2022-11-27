@@ -230,7 +230,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
 
   /**
    * Search the message offset in the remote storage based on timestamp and offset.
-   * todo-pr relook at the javadoc
+   * 
    * This method returns an option of TimestampOffset. The returned value is determined using the following ordered list of rules:
    *
    * - If there are no messages in the remote storage, return None

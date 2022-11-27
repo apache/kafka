@@ -694,7 +694,6 @@ abstract class AbstractFetcherThread(name: String,
        * Putting the two cases together, the follower should fetch from the higher one of its replica log end offset
        * and the current leader's (local-log-start-offset or) log start offset.
        */
-        // todo-pr: Update the comment as suggested
       val (epoch, leaderStartOffset) = if (fetchFromLocalLogStartOffset)
         leader.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch) else
         leader.fetchEarliestOffset(topicPartition, currentLeaderEpoch)
@@ -703,7 +702,7 @@ abstract class AbstractFetcherThread(name: String,
         s"leader's start offset $leaderStartOffset")
       val offsetToFetch =
         if (leaderStartOffset > replicaEndOffset) {
-          // Only truncate log when current leader's log start offset (local log start offset if >= 3.2 version incaseof
+          // Only truncate log when current leader's log start offset (local log start offset if >= 3.4 version incaseof
           // OffsetMovedToTieredStorage error) is greater than follower's log end offset.
           // truncateAndBuild returns offset value from which it needs to start fetching.
           truncateAndBuild(epoch, leaderStartOffset)

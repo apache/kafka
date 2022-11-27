@@ -285,12 +285,7 @@ class ReplicaFetcherThread(name: String,
 
           log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
           log.leaderEpochCache.foreach { cache =>
-            epochs.foreach(epochEntry =>
-              // Do not flush to file for each entry.
-              cache.assign(epochEntry.epoch, epochEntry.startOffset, flushToFile = false)
-            )
-            // Flush the cache to the file.
-            cache.flush()
+            cache.assign(epochs)
           }
 
           debug(s"Updated the epoch cache from remote tier till offset: $leaderLocalLogStartOffset " +
@@ -322,8 +317,6 @@ class ReplicaFetcherThread(name: String,
         }
 
       } else {
-        //todo-pr Jun earleir suggested to truncate it until local log start offset.
-
         // Truncate the existing local log and start from leader's localLogStartOffset.
         truncateFullyAndStartAt(partition, leaderLocalLogStartOffset)
         leaderLocalLogStartOffset

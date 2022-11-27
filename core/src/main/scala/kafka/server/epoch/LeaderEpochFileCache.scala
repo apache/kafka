@@ -60,6 +60,14 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
+  def assign(entries: Seq[EpochEntry]): Unit = {
+    entries.foreach(entry =>
+      if (assign(entry)) {
+        debug(s"Appended new epoch entry $entry. Cache now contains ${epochs.size} entries.")
+      })
+    flush()
+  }
+
   private def assign(entry: EpochEntry): Boolean = {
     if (entry.epoch < 0 || entry.startOffset < 0) {
       throw new IllegalArgumentException(s"Received invalid partition leader epoch entry $entry")
