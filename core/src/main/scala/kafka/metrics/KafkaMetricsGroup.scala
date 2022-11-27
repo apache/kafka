@@ -97,7 +97,7 @@ trait KafkaMetricsGroup extends Logging {
     if (filteredTags.nonEmpty) {
       // convert dot to _ since reporters like Graphite typically use dot to represent hierarchy
       val tagsString = filteredTags
-        .toList.sortWith((t1, t2) => t1._1 < t2._1)
+        .toList.sortBy(_._1)
         .map { case (key, value) => "%s.%s".format(key, value.replaceAll("\\.", "_"))}
         .mkString(".")
 
