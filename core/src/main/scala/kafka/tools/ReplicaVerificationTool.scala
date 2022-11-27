@@ -114,7 +114,7 @@ object ReplicaVerificationTool extends Logging {
 
     val options = parser.parse(args: _*)
 
-    if (args.length == 0 || options.has(helpOpt)) {
+    if (args.isEmpty || options.has(helpOpt)) {
       CommandLineUtils.printUsageAndDie(parser, "Validate that all replicas for a set of topics have the same data.")
     }
 
