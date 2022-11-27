@@ -337,6 +337,7 @@ class ConnectionQuotasTest {
     verifyConnectionCountOnEveryListener(connectionQuotas, connectionsPerListener)
   }
 
+  @Disabled
   @Test
   def testBrokerConnectionRateLimitWhenActualRateAboveLimit(): Unit = {
     val brokerRateLimit = 90

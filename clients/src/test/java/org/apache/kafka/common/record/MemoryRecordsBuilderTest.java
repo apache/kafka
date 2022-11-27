@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -725,6 +726,7 @@ public class MemoryRecordsBuilderTest {
         assertThrows(IllegalStateException.class, () -> builder.append(0L, "a".getBytes(), "1".getBytes()), "Should have thrown IllegalStateException");
     }
 
+    @Disabled
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsBuilderArgumentsProvider.class)
     public void testBuffersDereferencedOnClose(Args args) {
