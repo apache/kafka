@@ -2003,21 +2003,27 @@ class KafkaApis(val requestChannel: RequestChannel,
       }.toMap
       sendResponseCallback(result)
     } else {
-      // Special handling to add duplicate topics to the response
       val topics = createPartitionsRequest.data.topics.asScala.toSeq
-      val dupes = topics.groupBy(_.name)
-        .filter { _._2.size > 1 }
-        .keySet
-      val notDuped = topics.filterNot(topic => dupes.contains(topic.name))
+
+      /*
+       * We start by associating every element with false (map phase), and as soon as a duplicate is found, we associate
+       * it with true (reduce phase). We leverage the fact that for each element reduce phase is done only if that
+       * element is a duplicate. Then we filter keeping only elements associated with true (filter phase).
+       */
+      val duplicateTopicNames = CoreUtils.groupMapReduce(topics)(_.name())(_ => false)((_, _) => true).filter(_._2).keySet
+      val requestsWithoutDuplicateTopics = topics.filterNot(t => duplicateTopicNames.contains(t.name()))
+      val (requestsWithInternalTopics, requestsWithoutInternalTopics) = requestsWithoutDuplicateTopics.partition(topic => Topic.isInternal(topic.name()))
+
       val (authorized, unauthorized) = authHelper.partitionSeqByAuthorized(request.context, ALTER, TOPIC,
-        notDuped)(_.name)
+        requestsWithoutInternalTopics)(_.name)
 
       val (queuedForDeletion, valid) = authorized.partition { topic =>
         zkSupport.controller.isTopicQueuedForDeletion(topic.name)
       }
 
-      val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
+      val errors = duplicateTopicNames.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
         unauthorized.map(_.name -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "The topic authorization is failed.")) ++
+        requestsWithInternalTopics.map(_.name -> new ApiError(Errors.INVALID_REQUEST, "Partitions for internal topics cannot be modified via this command.")) ++
         queuedForDeletion.map(_.name -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
 
       zkSupport.adminManager.createPartitions(

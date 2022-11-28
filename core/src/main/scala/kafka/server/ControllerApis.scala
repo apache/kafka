@@ -24,7 +24,7 @@ import java.util.concurrent.CompletableFuture
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.utils.Logging
+import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
@@ -32,7 +32,6 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException}
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
-import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
@@ -760,39 +759,43 @@ class ControllerApis(val requestChannel: RequestChannel,
     request: CreatePartitionsRequestData,
     getAlterAuthorizedTopics: Iterable[String] => Set[String]
   ): CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
+    val requests = request.topics().asScala.toIndexedSeq
     val responses = new util.ArrayList[CreatePartitionsTopicResult]()
-    var duplicateTopicNames = request.topics().toArray diff request.topics().toArray.distinct
-    val duplicateTopicNames = new util.HashSet[String]()
-    val topicNames = new util.HashSet[String]()
-    request.topics().forEach {
-      topic =>
-        if (!topicNames.add(topic.name())) {
-          duplicateTopicNames.add(topic.name())
-        }
-    }
 
-    duplicateTopicNames.forEach { topicName =>
+    /*
+     * We start by associating every element with false (map phase), and as soon as a duplicate is found, we associate
+     * it with true (reduce phase). We leverage the fact that for each element reduce phase is done only if that
+     * element is a duplicate. Then we filter keeping only elements associated with true (filter phase).
+     */
+    val duplicateTopicNames = CoreUtils.groupMapReduce(requests)(_.name())(_ => false)((_, _) => true).filter(_._2).keySet
+
+    duplicateTopicNames.foreach { topicName =>
       responses.add(new CreatePartitionsTopicResult().
         setName(topicName).
         setErrorCode(INVALID_REQUEST.code).
         setErrorMessage("Duplicate topic name."))
-        topicNames.remove(topicName)
     }
 
-    topicNames.iterator.asScala.filterNot(Topic.isInternal)
+    val requestsWithoutDuplicateTopics = requests.filterNot(t => duplicateTopicNames.contains(t.name()))
 
-    val authorizedTopicNames = getAlterAuthorizedTopics(topicNames.asScala)
-    val topics = new util.ArrayList[CreatePartitionsTopic]
-    topicNames.forEach { topicName =>
-      if (authorizedTopicNames.contains(topicName)) {
-        topics.add(request.topics().find(topicName))
-      } else {
-        responses.add(new CreatePartitionsTopicResult().
-          setName(topicName).
-          setErrorCode(TOPIC_AUTHORIZATION_FAILED.code))
-      }
+    val (requestsWithInternalTopics, requestsWithoutInternalTopics) = requestsWithoutDuplicateTopics.partition(topic => Topic.isInternal(topic.name()))
+    requestsWithInternalTopics.map(_.name()).foreach { topicName =>
+      responses.add(new CreatePartitionsTopicResult().
+        setName(topicName).
+        setErrorCode(INVALID_REQUEST.code).
+        setErrorMessage("Partitions for internal topics cannot be modified via this command."))
     }
-    controller.createPartitions(context, topics, request.validateOnly).thenApply { results =>
+
+    val authorizedTopicNames = getAlterAuthorizedTopics(requestsWithoutInternalTopics.map(_.name()))
+
+    val (authorizedRequests, unauthorizedRequests) = requestsWithoutInternalTopics.partition(topic => authorizedTopicNames.contains(topic.name()))
+    unauthorizedRequests.map(_.name()).foreach(topicName =>
+      responses.add(new CreatePartitionsTopicResult().
+        setName(topicName).
+        setErrorCode(TOPIC_AUTHORIZATION_FAILED.code))
+    )
+
+    controller.createPartitions(context, authorizedRequests.asJava, request.validateOnly).thenApply { results =>
       results.forEach(response => responses.add(response))
       responses
     }

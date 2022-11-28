@@ -27,6 +27,7 @@ import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => OldAlterConfigsResource, AlterConfigsResourceCollection => OldAlterConfigsResourceCollection, AlterableConfig => OldAlterableConfig, AlterableConfigCollection => OldAlterableConfigCollection}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
@@ -765,6 +766,8 @@ class ControllerApisTest {
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("baz").setAssignments(null).setCount(5))
+    request.topics().add(new CreatePartitionsTopic().setName(Topic.GROUP_METADATA_TOPIC_NAME).setAssignments(null).setCount(60))
+    request.topics().add(new CreatePartitionsTopic().setName(Topic.TRANSACTION_STATE_TOPIC_NAME).setAssignments(null).setCount(60))
     request.setValidateOnly(validateOnly)
 
     // Check if the controller is called correctly with the 'validateOnly' field set appropriately.
@@ -787,8 +790,14 @@ class ControllerApisTest {
         setErrorMessage("Duplicate topic name."),
       new CreatePartitionsTopicResult().setName("baz").
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
-        setErrorMessage(null)),
-      controllerApis.createPartitions(ANONYMOUS_CONTEXT, request,
+        setErrorMessage(null),
+      new CreatePartitionsTopicResult().setName(Topic.GROUP_METADATA_TOPIC_NAME).
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage("Partitions for internal topics cannot be modified via this command."),
+      new CreatePartitionsTopicResult().setName(Topic.TRANSACTION_STATE_TOPIC_NAME).
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage("Partitions for internal topics cannot be modified via this command.")),
+        controllerApis.createPartitions(ANONYMOUS_CONTEXT, request,
         _ => Set("foo", "bar")).get().asScala.toSet)
   }
 

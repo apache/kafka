@@ -378,8 +378,14 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterForInternalTopics(quorum: String): Unit = {
+    // create the offset topic
+    val createOffsetTopicOpts = new TopicCommandOptions(Array("--partitions", "3",
+      "--replication-factor", "1",
+      "--topic", Topic.GROUP_METADATA_TOPIC_NAME))
+    createAndWaitTopic(createOffsetTopicOpts)
+
     // altering an internal topic is not allowed
-    val alterOpts = new TopicCommandOptions(Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME, "--partitions", "1"))
+    val alterOpts = new TopicCommandOptions(Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME, "--partitions", "5"))
     val topicService = TopicService(adminClient)
     assertThrows(classOf[IllegalArgumentException], () => topicService.alterTopic(alterOpts))
   }
