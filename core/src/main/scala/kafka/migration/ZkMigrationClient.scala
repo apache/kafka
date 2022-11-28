@@ -1,9 +1,7 @@
 package kafka.migration
 
 import kafka.api.LeaderAndIsr
-import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.migration.ZkMigrationClient.brokerToBrokerRegistration
 import kafka.server.{ConfigEntityName, ConfigType, ZkAdminManager}
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
@@ -14,27 +12,17 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse}
-import org.apache.kafka.common.{Endpoint, TopicPartition, Uuid}
-import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, VersionRange}
+import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.migration._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.zookeeper.CreateMode
 
 import java.util
 import java.util.function.Consumer
-import java.util.{Collections, Optional}
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
-
-object ZkMigrationClient {
-  def brokerToBrokerRegistration(broker: Broker, epoch: Long): ZkBrokerRegistration = {
-      val registration = new BrokerRegistration(broker.id, epoch, Uuid.ZERO_UUID,
-        Collections.emptyList[Endpoint], Collections.emptyMap[String, VersionRange],
-        Optional.empty(), false, false)
-      new ZkBrokerRegistration(registration, null, null, false)
-  }
-}
 
 class ZkMigrationClient(zkClient: KafkaZkClient,
                         controllerChannelManager: ControllerChannelManager) extends MigrationClient with Logging {
@@ -176,41 +164,6 @@ class ZkMigrationClient(zkClient: KafkaZkClient,
     migrateBrokerConfigs(MetadataVersion.latest(), batchConsumer)
     migrateClientQuotas(MetadataVersion.latest(), batchConsumer)
     migrateProducerId(MetadataVersion.latest(), batchConsumer)
-  }
-
-  override def watchZkBrokerRegistrations(listener: MigrationClient.BrokerRegistrationListener): Unit = {
-    val brokersHandler = new ZNodeChildChangeHandler() {
-      override val path: String = BrokerIdsZNode.path
-
-      override def handleChildChange(): Unit = listener.onBrokersChange()
-    }
-    System.err.println("Adding /brokers watch")
-    zkClient.registerZNodeChildChangeHandler(brokersHandler)
-
-    def brokerHandler(brokerId: Int): ZNodeChangeHandler = {
-      new ZNodeChangeHandler() {
-        override val path: String = BrokerIdZNode.path(brokerId)
-
-        override def handleDataChange(): Unit = listener.onBrokerChange(brokerId)
-      }
-    }
-
-    val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster()
-    curBrokerAndEpochs.foreach { case (broker, _) =>
-      System.err.println(s"Adding /brokers/${broker.id} watch")
-      zkClient.registerZNodeChangeHandlerAndCheckExistence(brokerHandler(broker.id))
-    }
-
-    listener.onBrokersChange()
-  }
-
-  override def readBrokerRegistration(brokerId: Int): Optional[ZkBrokerRegistration] = {
-    val brokerAndEpoch = zkClient.getAllBrokerAndEpochsInCluster(Seq(brokerId))
-    if (brokerAndEpoch.isEmpty) {
-      Optional.empty()
-    } else {
-      Optional.of(brokerToBrokerRegistration(brokerAndEpoch.head._1, brokerAndEpoch.head._2))
-    }
   }
 
   override def readBrokerIds(): util.Set[Integer] = {
