@@ -15,12 +15,18 @@ package kafka.api
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
+import java.util.concurrent.{Executors, TimeUnit}
+import java.util.concurrent.locks.ReentrantLock
 import java.util.regex.Pattern
-import java.util.{Locale, Optional, Properties}
+import java.util.{Collections, Locale, Optional, Properties}
+
+import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{MetricName, TopicPartition}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
@@ -29,23 +35,20 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Buffer
-import kafka.server.QuotaType
-import kafka.server.KafkaServer
-import org.apache.kafka.clients.admin.NewPartitions
-import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.common.config.TopicConfig
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
 import scala.collection.mutable
+import scala.collection.mutable.Buffer
+import scala.jdk.CollectionConverters._
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
+
+  override def modifyConfigs(props: collection.Seq[Properties]): Unit = {
+    super.modifyConfigs(props)
+    props.zipWithIndex.foreach{ case (p, i) => p.setProperty(KafkaConfig.RackProp, i.toString) }
+  }
 
   @Test
   def testHeaders(): Unit = {
@@ -1951,20 +1954,47 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
-  def testConsumerRackIdPropagatedToPartitionAssignor(): Unit = {
-    consumerConfig.setProperty(ConsumerConfig.CLIENT_RACK_CONFIG, "rack-a")
-    consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RackAwareAssignor].getName)
-    val consumer = createConsumer()
-    consumer.subscribe(Set(topic).asJava)
-    awaitAssignment(consumer, Set(tp, tp2))
+  def testRackAwareRangeAssignor(): Unit = {
+    val partitionList = servers.indices.toList
+
+    val topicWithAllPartitionsOnAllRacks = "topicWithAllPartitionsOnAllRacks"
+    createTopic(topicWithAllPartitionsOnAllRacks, servers.size, servers.size)
+
+    // Racks are in order of broker ids, assign leaders in reverse order
+    val topicWithSingleRackPartitions = "topicWithSingleRackPartitions"
+    createTopicWithAssignment(topicWithSingleRackPartitions, partitionList.map(i => (i, Seq(servers.size - i - 1))).toMap)
+
+    // Create consumers with instance ids in ascending order, with racks in the same order.
+    consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RangeAssignor].getName)
+    val consumers = servers.map { server =>
+      consumerConfig.setProperty(ConsumerConfig.CLIENT_RACK_CONFIG, server.config.rack.orNull)
+      consumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, s"instance-${server.config.brokerId}")
+      createConsumer()
+    }
+
+    val executor = Executors.newFixedThreadPool(consumers.size)
+    def waitForAssignments(assignments: List[Set[TopicPartition]]): Unit = {
+      val futures = consumers.zipWithIndex.map { case (consumer, i) =>
+        executor.submit(() => awaitAssignment(consumer, assignments(i)), 0)
+      }
+      futures.foreach(future => assertEquals(0, future.get(20, TimeUnit.SECONDS)))
+    }
+
+    try {
+      // Rack-based assignment results in partitions assigned in reverse order since partition racks are in the reverse order.
+      consumers.foreach(_.subscribe(Collections.singleton(topicWithSingleRackPartitions)))
+      waitForAssignments(partitionList.reverse.map(p => Set(new TopicPartition(topicWithSingleRackPartitions, p))))
+
+      // Non-rack-aware assignment results in ordered partitions.
+      consumers.foreach(_.subscribe(Collections.singleton(topicWithAllPartitionsOnAllRacks)))
+      waitForAssignments(partitionList.map(p => Set(new TopicPartition(topicWithAllPartitionsOnAllRacks, p))))
+
+      // Rack-aware assignment with co-partitioning results in reverse assignment for both topics.
+      consumers.foreach(_.subscribe(Set(topicWithSingleRackPartitions, topicWithAllPartitionsOnAllRacks).asJava))
+      waitForAssignments(partitionList.reverse.map(p => Set(new TopicPartition(topicWithAllPartitionsOnAllRacks, p), new TopicPartition(topicWithSingleRackPartitions, p))))
+
+    } finally {
+      executor.shutdownNow()
+    }
   }
 }
-
-class RackAwareAssignor extends RoundRobinAssignor {
-  override def assign(partitionsPerTopic: util.Map[String, Integer], subscriptions: util.Map[String, ConsumerPartitionAssignor.Subscription]): util.Map[String, util.List[TopicPartition]] = {
-    assertEquals(1, subscriptions.size())
-    assertEquals(Optional.of("rack-a"), subscriptions.values.asScala.head.rackId)
-    super.assign(partitionsPerTopic, subscriptions)
-  }
-}
-
