@@ -461,7 +461,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return verificationResult;
     }
 
-    private static Map<String, Set<Number>> parseRecordsForEchoTopic(final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events) {
+    private static Map<String, Set<Number>> parseRecordsForEchoTopic(
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events) {
         return events.containsKey("echo") ?
             events.get("echo")
                 .entrySet()
