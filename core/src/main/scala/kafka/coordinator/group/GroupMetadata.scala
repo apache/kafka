@@ -550,7 +550,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         member.awaitingJoinCallback(joinGroupResult)
       } catch {
         case t: Throwable =>
-          error(s"Failed to invoke join callback for $member due to ${t.getMessage}.")
+          error(s"Failed to invoke join callback for $member due to ${t.getMessage}.", t)
           member.awaitingJoinCallback(JoinGroupResult(member.memberId, Errors.UNKNOWN_SERVER_ERROR))
       } finally {
         member.awaitingJoinCallback = null
@@ -569,7 +569,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         member.awaitingSyncCallback(syncGroupResult)
       } catch {
         case t: Throwable =>
-          error(s"Failed to invoke sync callback for $member due to ${t.getMessage}.")
+          error(s"Failed to invoke sync callback for $member due to ${t.getMessage}.", t)
           member.awaitingSyncCallback(SyncGroupResult(Errors.UNKNOWN_SERVER_ERROR))
       } finally {
         member.awaitingSyncCallback = null
