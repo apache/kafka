@@ -68,7 +68,7 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testReplicaManagerBrokerEpochMatchesWithZk(): Unit = {
-    val brokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
+    val brokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster()
     assertEquals(brokerAndEpochs.size, servers.size)
     brokerAndEpochs.foreach {
       case (broker, epoch) =>
@@ -131,9 +131,9 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
     val controllerContext = new ControllerContext
     controllerContext.setLiveBrokers(brokerAndEpochs)
     val metrics = new Metrics
-    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
+    val controllerChannelManager = new ControllerChannelManager(() => controllerContext.epoch, controllerConfig, Time.SYSTEM,
       metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
-    controllerChannelManager.startup()
+    controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
 
     val broker2 = servers(brokerId2)
     val epochInRequest = broker2.kafkaController.brokerEpoch + epochInRequestDiffFromCurrentEpoch
@@ -249,7 +249,7 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
   }
 
   private def checkControllerBrokerEpochsCacheMatchesWithZk(controllerContext: ControllerContext): Unit = {
-    val brokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
+    val brokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster()
     TestUtils.waitUntilTrue(() => {
       val brokerEpochsInControllerContext = controllerContext.liveBrokerIdAndEpochs
       if (brokerAndEpochs.size != brokerEpochsInControllerContext.size) false
