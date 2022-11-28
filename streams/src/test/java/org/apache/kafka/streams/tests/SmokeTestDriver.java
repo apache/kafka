@@ -436,15 +436,19 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         boolean success;
 
-        final Map<String, Set<Number>> received =
-            events.get("echo")
-                  .entrySet()
-                  .stream()
-                  .map(entry -> mkEntry(
-                      entry.getKey(),
-                      entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
-                  )
-                  .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Map<String, Set<Number>> received;
+        if (events.containsKey("echo")) {
+            received = events.get("echo")
+                .entrySet()
+                .stream()
+                .map(entry -> mkEntry(
+                    entry.getKey(),
+                    entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
+                )
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        } else {
+            received = Collections.emptyMap();
+        }
 
         success = inputs.equals(received);
 
