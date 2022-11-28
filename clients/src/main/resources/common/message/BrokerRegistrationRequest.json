@@ -23,6 +23,8 @@
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker ID." },
+    { "name": "IsZkBroker", "type": "bool", "versions": "1+", "default": false,
+      "about": "True if the registering broker is a ZK broker." },
     { "name": "ClusterId", "type": "string", "versions": "0+",
       "about": "The cluster id of the broker process." },
     { "name": "IncarnationId", "type": "uuid", "versions": "0+",
@@ -50,8 +52,6 @@
     ]
     },
     { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+",
-      "about": "The rack which this broker is in." },
-    { "name": "InterBrokerProtocolVersion", "type": "string", "versions": "1+", "taggedVersions": "1+", "tag": 0, "ignorable": true,
-      "about": "The static IBP that the broker was started with. This is only used by ZK brokers during a migration."}
+      "about": "The rack which this broker is in." }
   ]
 }

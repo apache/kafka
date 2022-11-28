@@ -341,7 +341,9 @@ public class ClusterControlManager {
             }
         }
 
-        RegisterBrokerRecord record = new RegisterBrokerRecord().setBrokerId(brokerId).
+        RegisterBrokerRecord record = new RegisterBrokerRecord().
+            setBrokerId(brokerId).
+            setIsZkBroker(request.isZkBroker()).
             setIncarnationId(request.incarnationId()).
             setBrokerEpoch(brokerEpoch).
             setRack(request.rack());
@@ -423,7 +425,7 @@ public class ClusterControlManager {
                 new BrokerRegistration(brokerId, record.brokerEpoch(),
                     record.incarnationId(), listeners, features,
                     Optional.ofNullable(record.rack()), record.fenced(),
-                    record.inControlledShutdown()));
+                    record.inControlledShutdown(), record.isZkBroker()));
         updateMetrics(prevRegistration, brokerRegistrations.get(brokerId));
         if (heartbeatManager != null) {
             if (prevRegistration != null) heartbeatManager.remove(brokerId);
@@ -673,7 +675,8 @@ public class ClusterControlManager {
                 setEndPoints(endpoints).
                 setFeatures(features).
                 setRack(registration.rack().orElse(null)).
-                setFenced(registration.fenced());
+                setFenced(registration.fenced()).
+                setIsZkBroker(registration.zkBroker());
             if (metadataVersion.isInControlledShutdownStateSupported()) {
                 record.setInControlledShutdown(registration.inControlledShutdown());
             }
