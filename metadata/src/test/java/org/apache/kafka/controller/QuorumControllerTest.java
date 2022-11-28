@@ -160,6 +160,7 @@ public class QuorumControllerTest {
     /**
      * Test setting some configuration values and reading them back.
      */
+    @Disabled
     @Test
     public void testConfigurationOperations() throws Throwable {
         try (
