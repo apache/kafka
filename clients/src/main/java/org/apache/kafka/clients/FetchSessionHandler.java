@@ -605,7 +605,6 @@ public class FetchSessionHandler {
 
     /**
      * Get the fetch request session's partitions.
-     * Should only be used for testing.
      */
     public Set<TopicPartition> sessionTopicPartitions() {
         return sessionPartitions.keySet();

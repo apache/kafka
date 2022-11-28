@@ -5257,39 +5257,6 @@ public class FetcherTest {
                 apiVersions);
     }
 
-    private <K, V> void buildFetcher(MetricConfig metricConfig,
-                                     Deserializer<K> keyDeserializer,
-                                     Deserializer<V> valueDeserializer,
-                                     int maxPollRecords,
-                                     IsolationLevel isolationLevel,
-                                     long metadataExpireMs,
-                                     SubscriptionState subscriptionState,
-                                     LogContext logContext,
-                                     String clientRack) {
-        buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        fetcher = new Fetcher<>(
-                new LogContext(),
-                consumerClient,
-                minBytes,
-                maxBytes,
-                maxWaitMs,
-                fetchSize,
-                maxPollRecords,
-                true, // check crc
-                clientRack,
-                keyDeserializer,
-                valueDeserializer,
-                metadata,
-                subscriptions,
-                metrics,
-                metricsRegistry,
-                time,
-                retryBackoffMs,
-                requestTimeoutMs,
-                isolationLevel,
-                apiVersions);
-    }
-
     private void buildDependencies(MetricConfig metricConfig,
                                    long metadataExpireMs,
                                    SubscriptionState subscriptionState,
