@@ -675,7 +675,8 @@ public class ClusterControlManager {
                 setEndPoints(endpoints).
                 setFeatures(features).
                 setRack(registration.rack().orElse(null)).
-                setFenced(registration.fenced());
+                setFenced(registration.fenced()).
+                setIsZkBroker(registration.zkBroker());
             if (metadataVersion.isInControlledShutdownStateSupported()) {
                 record.setInControlledShutdown(registration.inControlledShutdown());
             }

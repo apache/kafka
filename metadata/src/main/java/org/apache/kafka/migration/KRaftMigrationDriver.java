@@ -36,11 +36,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -68,14 +66,11 @@ public class KRaftMigrationDriver {
 
             eventQueue.append(new EventQueue.Event() {
                 @Override
-                public void run() throws Exception {
+                public void run() {
                     if (delta == null) {
                         delta = new MetadataDelta(image);
                     }
                     delta.replay(offset, epoch, record);
-                    if (delta.clusterDelta() != null) {
-                        eventQueue.append(new BrokerRegistrationEvent(delta.clusterDelta().changedBrokers()));
-                    }
                 }
 
                 @Override
@@ -83,6 +78,43 @@ public class KRaftMigrationDriver {
                     log.error("Had an exception in " + this.getClass().getSimpleName(), e);
                 }
             });
+        }
+
+        // Should only be called from the event queue
+        void checkZkBrokerRegistrations() {
+            if (delta == null || delta.clusterDelta() == null) {
+                return;
+            }
+            try {
+                delta.clusterDelta().changedBrokers().forEach((brokerId, registrationOpt) -> {
+                    if (registrationOpt.isPresent()) {
+                        // Added
+                        if (registrationOpt.get().zkBroker()) {
+                            log.debug("ZK Broker {} registered with KRaft controller", brokerId);
+                            zkBrokerRegistrations.put(brokerId, registrationOpt.get());
+                            client.addZkBroker(brokerId);
+                        }
+                    } else {
+                        // Removed
+                        if (zkBrokerRegistrations.remove(brokerId) != null) {
+                            log.debug("ZK Broker {} unregistered from KRaft controller", brokerId);
+                            client.removeZkBroker(brokerId);
+                        }
+                    }
+                });
+
+                if (zkBrokerRegistrations.keySet().containsAll(knownZkBrokers)) {
+                    log.info("All ZK brokers have registered, ZK data migration will now begin.");
+                    transitionTo(MigrationState.ZK_MIGRATION);
+                } else {
+                    Set<Integer> waitingBrokers = new HashSet<>(knownZkBrokers);
+                    waitingBrokers.removeAll(zkBrokerRegistrations.keySet());
+                    log.info("Not all ZK brokers have registered. Still waiting on brokers {}", waitingBrokers);
+                }
+            } finally {
+                image = delta.apply();
+                delta = null;
+            }
         }
 
         ZkWriteEvent syncMetadataToZkEvent() {
@@ -180,12 +212,16 @@ public class KRaftMigrationDriver {
                     transitionTo(MigrationState.INACTIVE);
                     break;
                 case INACTIVE:
+                    // Not the KRaft controller, nothing to do
                     break;
-                case NEW_LEADER:
-                    // This probably means we are retrying
+                case WAIT_FOR_CONTROLLER_QUORUM:
+                    break;
+                case BECOME_CONTROLLER:
                     eventQueue.append(new BecomeZkLeaderEvent());
                     break;
-                case NOT_READY:
+                case WAIT_FOR_BROKERS:
+                    log.info("Checking on ZK broker registrations");
+                    listener.checkZkBrokerRegistrations();
                     break;
                 case ZK_MIGRATION:
                     eventQueue.append(new MigrateMetadataEvent());
@@ -252,52 +288,6 @@ public class KRaftMigrationDriver {
         }
     }
 
-    class BrokerRegistrationEvent implements EventQueue.Event {
-
-        private final Map<Integer, Optional<BrokerRegistration>> changedBrokers;
-
-        BrokerRegistrationEvent(Map<Integer, Optional<BrokerRegistration>> changedBrokers) {
-            this.changedBrokers = changedBrokers;
-        }
-
-        @Override
-        public void run() throws Exception {
-            changedBrokers.forEach((brokerId, registrationOpt) -> {
-                if (registrationOpt.isPresent()) {
-                    // Added
-                    if (registrationOpt.get().zkBroker()) {
-                        log.debug("ZK Broker {} registered with KRaft controller", brokerId);
-                        zkBrokerRegistrations.put(brokerId, registrationOpt.get());
-                        client.addZkBroker(brokerId);
-                    }
-                } else {
-                    // Removed
-                    if (zkBrokerRegistrations.remove(brokerId) != null) {
-                        log.debug("ZK Broker {} unregistered from KRaft controller", brokerId);
-                        client.removeZkBroker(brokerId);
-                    }
-                }
-            });
-
-            if (zkBrokerRegistrations.keySet().containsAll(knownZkBrokers)) {
-                log.info("All ZK brokers have registered, ZK data migration will now begin.");
-                // TODO state transition
-            } else {
-                Set<Integer> waitingBrokers = new HashSet<>(knownZkBrokers);
-                waitingBrokers.removeAll(zkBrokerRegistrations.keySet());
-                String waiting = waitingBrokers.stream()
-                    .map(Object::toString)
-                    .collect(Collectors.joining(","));
-                log.info("Not all ZK brokers have registered. Still waiting on brokers {}", waiting);
-            }
-        }
-
-        @Override
-        public void handleException(Throwable e) {
-            log.error("Had an exception in " + this.getClass().getSimpleName(), e);
-        }
-    }
-
     class KRaftLeaderEvent implements EventQueue.Event {
         private final boolean isActive;
         private final int kraftControllerId;
@@ -320,14 +310,13 @@ public class KRaftMigrationDriver {
             }
 
             if (!isActive) {
-                apply("KRaftLeaderEvent is active", state -> state.mergeWithControllerState(ZkControllerState.EMPTY));
+                apply("KRaftLeaderEvent inactive", state -> state.mergeWithControllerState(ZkControllerState.EMPTY));
                 transitionTo(MigrationState.INACTIVE);
             } else {
                 // Apply the new KRaft state
-                apply("KRaftLeaderEvent not active", state -> state.withNewKRaftController(kraftControllerId, kraftControllerEpoch));
+                apply("KRaftLeaderEvent active", state -> state.withNewKRaftController(kraftControllerId, kraftControllerEpoch));
                 // Instead of doing the ZK write directly, schedule as an event so that we can easily retry ZK failures
-                transitionTo(MigrationState.NEW_LEADER);
-                eventQueue.append(new BecomeZkLeaderEvent());
+                transitionTo(MigrationState.BECOME_CONTROLLER);
             }
         }
 
@@ -349,7 +338,7 @@ public class KRaftMigrationDriver {
             if (!recoveryState.zkMigrationComplete()) {
                 transitionTo(MigrationState.ZK_MIGRATION);
             } else {
-                transitionTo(MigrationState.DUAL_WRITE);
+                transitionTo(MigrationState.WAIT_FOR_BROKERS);
             }
         }
     }

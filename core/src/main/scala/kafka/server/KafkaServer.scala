@@ -220,7 +220,8 @@ class KafkaServer(
 
         lifecycleManager = new BrokerLifecycleManager(config,
           time,
-          threadNamePrefix)
+          threadNamePrefix,
+          isZkBroker = true)
 
         /* setup zookeeper */
         initZkClient(time)
