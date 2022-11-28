@@ -23,6 +23,7 @@
   // that new versions cannot remove or reorder any of the existing fields.
   //
   // Version 2 is to support a new field "GenerationId" in ConsumerProtocolSubscription.
+  // Version 3 adds rack id to ConsumerProtocolSubscription.
   "validVersions": "0-2",
   "flexibleVersions": "none",
   "fields": [

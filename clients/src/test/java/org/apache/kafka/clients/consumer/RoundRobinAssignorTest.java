@@ -19,6 +19,8 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor.MemberInfo;
+import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
@@ -28,9 +30,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.consumer.RangeAssignorTest.checkStaticAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -334,5 +337,13 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic1, numberOfPartitions1);
         partitionsPerTopic.put(topic2, numberOfPartitions2);
         return partitionsPerTopic;
+    }
+
+    static Map<String, List<TopicPartition>> checkStaticAssignment(AbstractPartitionAssignor assignor,
+                                                                   Map<String, Integer> partitionsPerTopic,
+                                                                   Map<String, Subscription> consumers) {
+        Map<String, List<PartitionInfo>> partitionInfos = partitionsPerTopic.entrySet().stream()
+                .collect(Collectors.toMap(Entry::getKey, e -> AbstractPartitionAssignorTest.partitionsPerTopic(e.getKey(), e.getValue(), 1, 0, 0)));
+        return RangeAssignorTest.checkStaticAssignment(assignor, partitionInfos, consumers);
     }
 }

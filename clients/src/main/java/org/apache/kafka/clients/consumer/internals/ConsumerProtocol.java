@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * ConsumerProtocol contains the schemas for consumer subscriptions and assignments for use with
@@ -89,6 +90,7 @@ public class ConsumerProtocol {
             }
             partition.partitions().add(tp.partition());
         }
+        subscription.rackId().ifPresent(data::setRackId);
 
         data.setGenerationId(subscription.generationId().orElse(-1));
         return MessageUtil.toVersionPrefixedByteBuffer(version, data);
@@ -112,7 +114,8 @@ public class ConsumerProtocol {
                 data.topics(),
                 data.userData() != null ? data.userData().duplicate() : null,
                 ownedPartitions,
-                data.generationId());
+                data.generationId(),
+                data.rackId() == null || data.rackId().isEmpty() ? Optional.empty() : Optional.of(data.rackId()));
         } catch (BufferUnderflowException e) {
             throw new SchemaException("Buffer underflow while parsing consumer protocol's subscription", e);
         }

@@ -3514,7 +3514,8 @@ public abstract class ConsumerCoordinatorTest {
             false,
             autoCommitIntervalMs,
             null,
-            true);
+            true,
+            null);
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.OFFSET_FETCH.id, (short) 0, upperVersion));
@@ -3675,7 +3676,8 @@ public abstract class ConsumerCoordinatorTest {
                 autoCommitEnabled,
                 autoCommitIntervalMs,
                 null,
-                false);
+                false,
+                null);
     }
 
     private Collection<TopicPartition> getRevoked(final List<TopicPartition> owned,
