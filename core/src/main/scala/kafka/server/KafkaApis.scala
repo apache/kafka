@@ -1926,12 +1926,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         logIfDenied = false)
       val topics = createTopicsRequest.data.topics.asScala.map(_.name)
       val authorizedTopics = if (hasClusterAuthorization) {
-        // The cluster metatdata topic is an internal topic with a different implementation. The user should not be
-        // allowed to create it as a regular topic
+        /* The cluster metatdata topic is an internal topic with a different implementation. The user should not be
+         * allowed to create it as a regular topic.
+         */
         topics.toSet.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
       } else {
-        // The cluster metatdata topic is an internal topic with a different implementation. The user should not be
-        // allowed to create it as a regular topic
+        /* The cluster metatdata topic is an internal topic with a different implementation. The user should not be
+         * allowed to create it as a regular topic.
+         */
         val topicToAuthorize = topics.filter(_ !=  Topic.CLUSTER_METADATA_TOPIC_NAME)
         authHelper.filterByAuthorized(request.context, CREATE, TOPIC, topicToAuthorize)(identity)
       }
