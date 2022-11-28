@@ -2334,9 +2334,9 @@ class PartitionTest extends AbstractPartitionTest {
       "AtMinIsr")
 
     def getMetric(metric: String): Option[Metric] = {
-      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.filter { case (metricName, _) =>
+      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.find { case (metricName, _) =>
         metricName.getName == metric && metricName.getType == "Partition"
-      }.headOption.map(_._2)
+      }.map(_._2)
     }
 
     assertTrue(metricsToCheck.forall(getMetric(_).isDefined))

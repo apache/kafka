@@ -546,7 +546,6 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleProduceRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     val produceRequest = request.body[ProduceRequest]
-    val requestSize = request.sizeInBytes
 
     if (RequestUtils.hasTransactionalRecords(produceRequest)) {
       val isAuthorizedTransactional = produceRequest.transactionalId != null &&
@@ -609,6 +608,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // have been violated. If both quotas have been violated, use the max throttle time between the two quotas. Note
       // that the request quota is not enforced if acks == 0.
       val timeMs = time.milliseconds()
+      val requestSize = request.sizeInBytes
       val bandwidthThrottleTimeMs = quotas.produce.maybeRecordAndGetThrottleTimeMs(request, requestSize, timeMs)
       val requestThrottleTimeMs =
         if (produceRequest.acks == 0) 0

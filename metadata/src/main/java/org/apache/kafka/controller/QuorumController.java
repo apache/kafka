@@ -107,6 +107,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -168,6 +169,7 @@ public final class QuorumController implements Controller {
         private int defaultNumPartitions = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private long snapshotMaxNewRecordBytes = Long.MAX_VALUE;
+        private long snapshotMaxIntervalMs = 0;
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
         private long sessionTimeoutNs = ClusterControlManager.DEFAULT_SESSION_TIMEOUT_NS;
@@ -241,6 +243,11 @@ public final class QuorumController implements Controller {
 
         public Builder setSnapshotMaxNewRecordBytes(long value) {
             this.snapshotMaxNewRecordBytes = value;
+            return this;
+        }
+
+        public Builder setSnapshotMaxIntervalMs(long value) {
+            this.snapshotMaxIntervalMs = value;
             return this;
         }
 
@@ -339,6 +346,7 @@ public final class QuorumController implements Controller {
                     defaultNumPartitions,
                     replicaPlacer,
                     snapshotMaxNewRecordBytes,
+                    snapshotMaxIntervalMs,
                     leaderImbalanceCheckIntervalNs,
                     maxIdleIntervalNs,
                     sessionTimeoutNs,
@@ -468,13 +476,13 @@ public final class QuorumController implements Controller {
     /**
      * A controller event for handling internal state changes, such as Raft inputs.
      */
-    class ControlEvent implements EventQueue.Event {
+    class ControllerEvent implements EventQueue.Event {
         private final String name;
         private final Runnable handler;
         private final long eventCreatedTimeNs = time.nanoseconds();
         private OptionalLong startProcessingTimeNs = OptionalLong.empty();
 
-        ControlEvent(String name, Runnable handler) {
+        ControllerEvent(String name, Runnable handler) {
             this.name = name;
             this.handler = handler;
         }
@@ -501,7 +509,7 @@ public final class QuorumController implements Controller {
     }
 
     private void appendControlEvent(String name, Runnable handler) {
-        ControlEvent event = new ControlEvent(name, handler);
+        ControllerEvent event = new ControllerEvent(name, handler);
         queue.append(event);
     }
 
@@ -513,11 +521,11 @@ public final class QuorumController implements Controller {
         private SnapshotGenerator generator = null;
 
         void createSnapshotGenerator(long committedOffset, int committedEpoch, long committedTimestamp) {
-            if (generator != null) {
-                throw new RuntimeException("Snapshot generator already exists.");
+            if (snapshotInProgress()) {
+                throw new IllegalStateException("Snapshot generator already exists");
             }
             if (!snapshotRegistry.hasSnapshot(committedOffset)) {
-                throw new RuntimeException(
+                throw new IllegalStateException(
                     String.format(
                         "Cannot generate a snapshot at committed offset %d because it does not exists in the snapshot registry.",
                         committedOffset
@@ -555,7 +563,7 @@ public final class QuorumController implements Controller {
         }
 
         void cancel() {
-            if (generator == null) return;
+            if (!snapshotInProgress()) return;
             log.error("Cancelling snapshot {}", generator.lastContainedLogOffset());
             generator.writer().close();
             generator = null;
@@ -568,44 +576,61 @@ public final class QuorumController implements Controller {
         }
 
         void reschedule(long delayNs) {
-            ControlEvent event = new ControlEvent(GENERATE_SNAPSHOT, this);
+            ControllerEvent event = new ControllerEvent(GENERATE_SNAPSHOT, this);
             queue.scheduleDeferred(event.name,
                 new EarliestDeadlineFunction(time.nanoseconds() + delayNs), event);
         }
 
+        void handleSnapshotFinished(Optional<Exception> exception) {
+            if (exception.isPresent()) {
+                log.error("Error while generating snapshot {}", generator.lastContainedLogOffset(), exception.get());
+            } else {
+                log.info("Finished generating snapshot {}.", generator.lastContainedLogOffset());
+            }
+
+            generator.writer().close();
+            generator = null;
+
+            // Delete every in-memory snapshot up to the committed offset. They are not needed since this
+            // snapshot generation finished.
+            snapshotRegistry.deleteSnapshotsUpTo(lastCommittedOffset);
+
+            // The snapshot counters for size-based and time-based snapshots could have changed to cause a new
+            // snapshot to get generated.
+            maybeGenerateSnapshot();
+        }
+
         @Override
         public void run() {
-            if (generator == null) {
-                log.debug("No snapshot is in progress.");
+            if (!snapshotInProgress()) {
+                log.debug("No snapshot is in progress because it was previously canceled");
                 return;
             }
+
             OptionalLong nextDelay;
             try {
                 nextDelay = generator.generateBatches();
             } catch (Exception e) {
-                log.error("Error while generating snapshot {}", generator.lastContainedLogOffset(), e);
-                generator.writer().close();
-                generator = null;
+                handleSnapshotFinished(Optional.of(e));
                 return;
             }
-            if (!nextDelay.isPresent()) {
-                log.info("Finished generating snapshot {}.", generator.lastContainedLogOffset());
-                generator.writer().close();
-                generator = null;
 
-                // Delete every in-memory snapshot up to the committed offset. They are not needed since this
-                // snapshot generation finished.
-                snapshotRegistry.deleteSnapshotsUpTo(lastCommittedOffset);
-                return;
+            if (nextDelay.isPresent()) {
+                reschedule(nextDelay.getAsLong());
+            } else {
+                handleSnapshotFinished(Optional.empty());
             }
-            reschedule(nextDelay.getAsLong());
         }
 
         OptionalLong snapshotLastOffsetFromLog() {
-            if (generator == null) {
+            if (!snapshotInProgress()) {
                 return OptionalLong.empty();
             }
             return OptionalLong.of(generator.lastContainedLogOffset());
+        }
+
+        public boolean snapshotInProgress() {
+            return generator != null;
         }
     }
 
@@ -947,9 +972,10 @@ public final class QuorumController implements Controller {
                             // Complete any events in the purgatory that were waiting for this offset.
                             purgatory.completeUpTo(offset);
 
-                            // Delete all the in-memory snapshots that we no longer need.
-                            // If we are writing a new snapshot, then we need to keep that around;
-                            // otherwise, we should delete up to the current committed offset.
+                            // Delete all the in-memory snapshots that are no longer needed.
+                            //
+                            // If the active controller has a snapshot in progress, it needs to keep that in-memory
+                            // snapshot. Otherwise, the active controller can delete up to the current committed offset.
                             snapshotRegistry.deleteSnapshotsUpTo(
                                 snapshotGeneratorManager.snapshotLastOffsetFromLog().orElse(offset));
                         } else {
@@ -986,6 +1012,13 @@ public final class QuorumController implements Controller {
                             batch.appendTimestamp(),
                             committedBytesSinceLastSnapshot + batch.sizeInBytes()
                         );
+
+                        if (offset >= raftClient.latestSnapshotId().map(OffsetAndEpoch::offset).orElse(0L)) {
+                            oldestNonSnapshottedTimestamp = Math.min(
+                                oldestNonSnapshottedTimestamp,
+                                batch.appendTimestamp()
+                            );
+                        }
                     }
 
                     maybeGenerateSnapshot();
@@ -1355,15 +1388,19 @@ public final class QuorumController implements Controller {
                 featureControl.metadataVersion()
             );
 
-            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>(WRITE_NO_OP_RECORD, () -> {
-                noOpRecordScheduled = false;
-                maybeScheduleNextWriteNoOpRecord();
+            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>(
+                WRITE_NO_OP_RECORD,
+                () -> {
+                    noOpRecordScheduled = false;
+                    maybeScheduleNextWriteNoOpRecord();
 
-                return ControllerResult.of(
-                    Arrays.asList(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)),
-                    null
-                );
-            }, true);
+                    return ControllerResult.of(
+                        Arrays.asList(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)),
+                        null
+                    );
+                },
+                true
+            );
 
             long delayNs = time.nanoseconds() + maxIdleIntervalNs.getAsLong();
             queue.scheduleDeferred(WRITE_NO_OP_RECORD, new EarliestDeadlineFunction(delayNs), event);
@@ -1374,6 +1411,38 @@ public final class QuorumController implements Controller {
     private void cancelNextWriteNoOpRecord() {
         noOpRecordScheduled = false;
         queue.cancelDeferred(WRITE_NO_OP_RECORD);
+    }
+
+    private static final String MAYBE_GENERATE_SNAPSHOT = "maybeGenerateSnapshot";
+
+    private void maybeScheduleNextGenerateSnapshot() {
+        if (!generateSnapshotScheduled) {
+            long now = time.milliseconds();
+            long delayMs = Math.min(
+                0,
+                snapshotMaxIntervalMs + oldestNonSnapshottedTimestamp - now
+            );
+
+            log.debug(
+                "Scheduling write event for {} because snapshotMaxIntervalMs ({}), " +
+                "oldestNonSnapshottedTimestamp ({}) and now ({})",
+                MAYBE_GENERATE_SNAPSHOT,
+                snapshotMaxIntervalMs,
+                oldestNonSnapshottedTimestamp,
+                now
+            );
+
+            ControllerEvent event = new ControllerEvent(MAYBE_GENERATE_SNAPSHOT, this::maybeGenerateSnapshot);
+
+            long scheduleNs = time.nanoseconds() + TimeUnit.MILLISECONDS.toNanos(delayMs);
+            queue.scheduleDeferred(MAYBE_GENERATE_SNAPSHOT, new EarliestDeadlineFunction(scheduleNs), event);
+            generateSnapshotScheduled = true;
+        }
+    }
+
+    private void cancelNextGenerateSnapshot() {
+        queue.cancelDeferred(MAYBE_GENERATE_SNAPSHOT);
+        generateSnapshotScheduled = false;
     }
 
     private void handleFeatureControlChange() {
@@ -1455,30 +1524,60 @@ public final class QuorumController implements Controller {
     }
 
     private void maybeGenerateSnapshot() {
-        if (committedBytesSinceLastSnapshot >= snapshotMaxNewRecordBytes &&
-            snapshotGeneratorManager.generator == null
-        ) {
-            if (!isActiveController()) {
-                // The active controller creates in-memory snapshot every time an uncommitted
-                // batch gets appended. The in-active controller can be more efficient and only
-                // create an in-memory snapshot when needed.
-                snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
+        if (snapshotGeneratorManager.snapshotInProgress()) {
+            /* Skip snapshot generation if there is a snaphshot in progress.
+             *
+             * When the in-progress snapshot completes it will call this method to check if the controller should
+             * generate another snapshot due to any of the reasons supported by this method.
+             */
+        } else {
+            Set<SnapshotReason> snapshotReasons = new HashSet<>();
+            // Check if a snapshot should be generated because of committed bytes
+            if (committedBytesSinceLastSnapshot >= snapshotMaxNewRecordBytes) {
+                snapshotReasons.add(
+                    SnapshotReason.maxBytesExceeded(committedBytesSinceLastSnapshot, snapshotMaxNewRecordBytes)
+                );
             }
 
-            log.info(
-                "Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because, {}.",
-                lastCommittedEpoch,
-                lastCommittedOffset,
-                committedBytesSinceLastSnapshot,
-                SnapshotReason.MaxBytesExceeded
-            );
+            // Check if a snapshot should be generated because of committed append times
+            if (snapshotMaxIntervalMs > 0) {
+                // Time base snasphots are enabled
+                long snapshotIntervalMs = time.milliseconds() - oldestNonSnapshottedTimestamp;
+                if (snapshotIntervalMs >= snapshotMaxIntervalMs) {
+                    snapshotReasons.add(SnapshotReason.maxIntervalExceeded(snapshotIntervalMs, snapshotMaxIntervalMs));
+                } else {
+                    maybeScheduleNextGenerateSnapshot();
+                }
+            }
 
-            snapshotGeneratorManager.createSnapshotGenerator(
-                lastCommittedOffset,
-                lastCommittedEpoch,
-                lastCommittedTimestamp
-            );
-            committedBytesSinceLastSnapshot = 0;
+            if (!snapshotReasons.isEmpty()) {
+                if (!isActiveController()) {
+                    // The inactive controllers only create an in-memory snapshot when generating a snapshot. This is
+                    // unlike the active controller which creates in-memory snapshots every time an uncommitted batch
+                    // gets replayed.
+                    snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
+                }
+
+                log.info(
+                    "Generating a snapshot that includes (epoch={}, offset={}) because: {}",
+                    lastCommittedEpoch,
+                    lastCommittedOffset,
+                    SnapshotReason.stringFromReasons(snapshotReasons)
+                );
+
+                snapshotGeneratorManager.createSnapshotGenerator(
+                    lastCommittedOffset,
+                    lastCommittedEpoch,
+                    lastCommittedTimestamp
+                );
+
+                // Reset all of the snapshot counters
+                committedBytesSinceLastSnapshot = 0;
+                oldestNonSnapshottedTimestamp = Long.MAX_VALUE;
+
+                // Starting a snapshot invalidates any scheduled snapshot generation
+                cancelNextGenerateSnapshot();
+            }
         }
     }
 
@@ -1665,6 +1764,16 @@ public final class QuorumController implements Controller {
     private long committedBytesSinceLastSnapshot = 0;
 
     /**
+     * Maximum amount of to wait for a record in the log to get included in a snapshot.
+     */
+    private final long snapshotMaxIntervalMs;
+
+    /**
+     * Timestamp for the oldest record that was committed but not included in a snapshot.
+     */
+    private long oldestNonSnapshottedTimestamp = Long.MAX_VALUE;
+
+    /**
      * How long to delay partition leader balancing operations.
      */
     private final OptionalLong leaderImbalanceCheckIntervalNs;
@@ -1694,6 +1803,11 @@ public final class QuorumController implements Controller {
     private boolean noOpRecordScheduled = false;
 
     /**
+     * Tracks if a snapshot generate was scheduled.
+     */
+    private boolean generateSnapshotScheduled = false;
+
+    /**
      * The bootstrap metadata to use for initialization if needed.
      */
     private final BootstrapMetadata bootstrapMetadata;
@@ -1717,6 +1831,7 @@ public final class QuorumController implements Controller {
         int defaultNumPartitions,
         ReplicaPlacer replicaPlacer,
         long snapshotMaxNewRecordBytes,
+        long snapshotMaxIntervalMs,
         OptionalLong leaderImbalanceCheckIntervalNs,
         OptionalLong maxIdleIntervalNs,
         long sessionTimeoutNs,
@@ -1774,6 +1889,7 @@ public final class QuorumController implements Controller {
             build();
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
+        this.snapshotMaxIntervalMs = snapshotMaxIntervalMs;
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
         this.maxIdleIntervalNs = maxIdleIntervalNs;
         this.replicationControl = new ReplicationControlManager.Builder().
@@ -2116,13 +2232,12 @@ public final class QuorumController implements Controller {
     public CompletableFuture<Long> beginWritingSnapshot() {
         CompletableFuture<Long> future = new CompletableFuture<>();
         appendControlEvent("beginWritingSnapshot", () -> {
-            if (snapshotGeneratorManager.generator == null) {
+            if (!snapshotGeneratorManager.snapshotInProgress()) {
                 log.info(
-                    "Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because, {}.",
+                    "Generating a snapshot that includes (epoch={}, offset={}) because, {}.",
                     lastCommittedEpoch,
                     lastCommittedOffset,
-                    committedBytesSinceLastSnapshot,
-                    SnapshotReason.UnknownReason
+                    SnapshotReason.UNKNOWN
                 );
                 snapshotGeneratorManager.createSnapshotGenerator(
                     lastCommittedOffset,
