@@ -28,11 +28,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 
-/**
- * Interface for reading and writing ZK metadata during a migration. The implementation exists in "core" where
- * we have a reference to the ZK client. This interface is used by the migration driver to orchestrate the ZK
- * to KRaft data conversion and manage the metadata state in ZK during the migration.
- */
 public interface MigrationClient {
 
     interface BrokerRegistrationListener {
@@ -53,6 +48,8 @@ public interface MigrationClient {
     Optional<ZkBrokerRegistration> readBrokerRegistration(int brokerId);
 
     Set<Integer> readBrokerIds();
+
+    Set<Integer> readBrokerIdsFromTopicAssignments();
 
     MigrationRecoveryState getOrCreateMigrationRecoveryState(MigrationRecoveryState initialState);
 
