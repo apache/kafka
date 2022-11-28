@@ -24,10 +24,7 @@ import kafka.common.AdminCommandFailedException
 import kafka.log.LogConfig
 import kafka.utils._
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.CreatePartitionsOptions
-import org.apache.kafka.clients.admin.CreateTopicsOptions
-import org.apache.kafka.clients.admin.DeleteTopicsOptions
-import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, Config => JConfig}
+import org.apache.kafka.clients.admin.{Admin, CreatePartitionsOptions, CreateTopicsOptions, DeleteTopicsOptions, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, Config => JConfig}
 import org.apache.kafka.common.{TopicCollection, TopicPartition, TopicPartitionInfo, Uuid}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -265,7 +262,7 @@ object TopicCommand extends Logging {
 
       if (topics.nonEmpty) {
         val topicsInfo = adminClient.describeTopics(topics.asJavaCollection).topicNameValues()
-        val newPartitions = topics.filterNot(Topic.isInternal).map { topicName =>
+        val newPartitions = topics.map { topicName =>
           if (topic.hasReplicaAssignment) {
             val startPartitionId = topicsInfo.get(topicName).get().partitions().size()
             val newAssignment = {

@@ -659,6 +659,9 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is not transactional so it may succeed for some topics while fail for others.
      * <p>
+     * Partitions for internal topics such as __consumer_offsets cannot be modified using this API. Use
+     * configuration `offsets.topic.num.partitions` and restart the cluster if you wish to modify the internal topics.
+     * <p>
      * It may take several seconds after this method returns
      * success for all the brokers to become aware that the partitions have been created.
      * During this time, {@link #describeTopics(Collection)}
