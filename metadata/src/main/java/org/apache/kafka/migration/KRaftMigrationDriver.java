@@ -147,18 +147,6 @@ public class KRaftMigrationDriver {
         }
     }
 
-    class ZkBrokerListener implements MigrationClient.BrokerRegistrationListener {
-        @Override
-        public void onBrokerChange(Integer brokerId) {
-            log.info("ZK /broker/{} change", brokerId);
-        }
-
-        @Override
-        public void onBrokersChange() {
-            log.info("ZK /brokers change");
-        }
-    }
-
     abstract class RPCResponseEvent<T extends ApiMessage> implements EventQueue.Event {
         private final int brokerId;
         private final T data;
@@ -206,7 +194,6 @@ public class KRaftMigrationDriver {
                 case UNINITIALIZED:
                     log.info("Recovering migration state");
                     apply("Recovery", client::getOrCreateMigrationRecoveryState);
-                    client.watchZkBrokerRegistrations(new ZkBrokerListener());
                     String maybeDone = recoveryState.zkMigrationComplete() ? "done" : "not done";
                     log.info("Recovered migration state {}. ZK migration is {}.", recoveryState, maybeDone);
                     transitionTo(MigrationState.INACTIVE);
