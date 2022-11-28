@@ -214,7 +214,6 @@ public class DistributedHerderTest {
     private DistributedHerder herder;
     private MockConnectMetrics metrics;
     @Mock private Worker worker;
-    @Mock private WorkerConfigTransformer transformer;
     @Mock private Callback<Herder.Created<ConnectorInfo>> putConnectorCallback;
     @Mock private Plugins plugins;
     @Mock private RestClient restClient;
@@ -2138,7 +2137,6 @@ public class DistributedHerderTest {
             onPause.getValue().onCompletion(null, TargetState.PAUSED);
             return null;
         });
-        PowerMock.expectLastCall();
 
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
@@ -2718,7 +2716,6 @@ public class DistributedHerderTest {
             TASK_CONFIGS_MAP, Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet(), Collections.emptySet());
         expectConfigRefreshAndSnapshot(snapshotWithKey);
         // First rebalance: poll for a limited time as worker is leader and must wake up for key expiration
-        Capture<Long> firstPollTimeout = EasyMock.newCapture();
         member.poll(leq(rotationTtlDelay));
         EasyMock.expectLastCall();
 
