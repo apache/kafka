@@ -38,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
@@ -59,7 +60,7 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testReplicatesHeartbeatsByDefault() {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"), 
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
             new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
@@ -139,7 +140,7 @@ public class MirrorSourceConnectorTest {
         assertEquals(processedDenyAllAclBinding.entry().operation(), AclOperation.ALL, "should not change ALL");
         assertEquals(processedDenyAllAclBinding.entry().permissionType(), AclPermissionType.DENY, "should not change DENY");
     }
-    
+
     @Test
     public void testConfigPropertyFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
@@ -318,5 +319,18 @@ public class MirrorSourceConnectorTest {
         // when partitions are added to the source cluster, reconfiguration is triggered
         connector.refreshTopicPartitions();
         verify(connector, times(1)).computeAndCreateTopicPartitions();
+    }
+
+    @Test
+    public void testIsCycleWithNullUpstreamTopic() {
+        class CustomReplicationPolicy extends DefaultReplicationPolicy {
+            @Override
+            public String upstreamTopic(String topic) {
+                return null;
+            }
+        }
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new CustomReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+        assertDoesNotThrow(() -> connector.isCycle(".b"));
     }
 }

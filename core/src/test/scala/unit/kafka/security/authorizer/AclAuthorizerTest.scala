@@ -41,7 +41,6 @@ import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
-import java.io.File
 import java.net.InetAddress
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
@@ -1074,8 +1073,7 @@ class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     prepareConfig(Array("broker.id=1", "zookeeper.connect=somewhere"))
 
   private def prepareConfig(lines : Array[String]): String = {
-    val file = File.createTempFile("kafkatest", ".properties")
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("kafkatest", ".properties")
 
     val writer = Files.newOutputStream(file.toPath)
     try {

@@ -36,8 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class InsertFieldTest {
-    private InsertField<SourceRecord> xformKey = new InsertField.Key<>();
-    private InsertField<SourceRecord> xformValue = new InsertField.Value<>();
+    private final InsertField<SourceRecord> xformKey = new InsertField.Key<>();
+    private final InsertField<SourceRecord> xformValue = new InsertField.Value<>();
 
     @AfterEach
     public void teardown() {

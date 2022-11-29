@@ -76,7 +76,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
                               private val time: Time) extends Logging with ReplicaQuota {
   private val lock = new ReentrantReadWriteLock()
   private val throttledPartitions = new ConcurrentHashMap[String, Seq[Int]]()
-  private var quota: Quota = null
+  private var quota: Quota = _
   private val sensorAccess = new SensorAccess(lock, metrics)
   private val rateMetricName = metrics.metricName("byte-rate", replicationType.toString,
     s"Tracking byte-rate for $replicationType")

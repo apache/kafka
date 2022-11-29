@@ -24,7 +24,6 @@ import java.util.concurrent.CompletableFuture
 import kafka.log.UnifiedLog
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
-import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
@@ -123,6 +122,8 @@ class KafkaRaftManager[T](
   private val dataDir = createDataDir()
   override val replicatedLog: ReplicatedLog = buildMetadataLog()
   private val netChannel = buildNetworkChannel()
+  private val expirationTimer = new SystemTimer("raft-expiration-executor")
+  private val expirationService = new TimingWheelExpirationService(expirationTimer)
   override val client: KafkaRaftClient[T] = buildRaftClient()
   private val raftIoThread = new RaftIoThread(client, threadNamePrefix)
 
@@ -134,10 +135,10 @@ class KafkaRaftManager[T](
         case spec: InetAddressSpec =>
           netChannel.updateEndpoint(voterAddressEntry.getKey, spec)
         case _: UnknownAddressSpec =>
-          logger.info(s"Skipping channel update for destination ID: ${voterAddressEntry.getKey} " +
+          info(s"Skipping channel update for destination ID: ${voterAddressEntry.getKey} " +
             s"because of non-routable endpoint: ${NON_ROUTABLE_ADDRESS.toString}")
         case invalid: AddressSpec =>
-          logger.warn(s"Unexpected address spec (type: ${invalid.getClass}) for channel update for " +
+          warn(s"Unexpected address spec (type: ${invalid.getClass}) for channel update for " +
             s"destination ID: ${voterAddressEntry.getKey}")
       }
     }
@@ -146,6 +147,8 @@ class KafkaRaftManager[T](
   }
 
   def shutdown(): Unit = {
+    expirationService.shutdown()
+    expirationTimer.shutdown()
     raftIoThread.shutdown()
     client.close()
     scheduler.shutdown()
@@ -178,15 +181,8 @@ class KafkaRaftManager[T](
   }
 
   private def buildRaftClient(): KafkaRaftClient[T] = {
-    val expirationTimer = new SystemTimer("raft-expiration-executor")
-    val expirationService = new TimingWheelExpirationService(expirationTimer)
     val quorumStateStore = new FileBasedStateStore(new File(dataDir, "quorum-state"))
-
-    val nodeId = if (config.processRoles.contains(ControllerRole)) {
-      OptionalInt.of(config.nodeId)
-    } else {
-      OptionalInt.empty()
-    }
+    val nodeId = OptionalInt.of(config.nodeId)
 
     val client = new KafkaRaftClient(
       recordSerde,

@@ -52,10 +52,10 @@ object StateChangeLogMerger extends Logging {
   val dateRegex = new Regex("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3}")
   val dateFormat = new SimpleDateFormat(dateFormatString)
   var files: List[String] = List()
-  var topic: String = null
+  var topic: String = _
   var partitions: List[Int] = List()
-  var startDate: Date = null
-  var endDate: Date = null
+  var startDate: Date = _
+  var endDate: Date = _
 
   def main(args: Array[String]): Unit = {
 
@@ -88,7 +88,7 @@ object StateChangeLogMerger extends Logging {
                               .ofType(classOf[String])
                               .defaultsTo("9999-12-31 23:59:59,999")
                               
-    if(args.length == 0)
+    if(args.isEmpty)
       CommandLineUtils.printUsageAndDie(parser, "A tool for merging the log files from several brokers to reconnstruct a unified history of what happened.")
 
 

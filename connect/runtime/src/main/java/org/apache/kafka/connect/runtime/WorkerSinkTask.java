@@ -42,6 +42,7 @@ import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -107,6 +108,7 @@ class WorkerSinkTask extends WorkerTask {
                           ConnectMetrics connectMetrics,
                           Converter keyConverter,
                           Converter valueConverter,
+                          ErrorHandlingMetrics errorMetrics,
                           HeaderConverter headerConverter,
                           TransformationChain<SinkRecord> transformationChain,
                           KafkaConsumer<byte[], byte[]> consumer,
@@ -115,7 +117,7 @@ class WorkerSinkTask extends WorkerTask {
                           RetryWithToleranceOperator retryWithToleranceOperator,
                           WorkerErrantRecordReporter workerErrantRecordReporter,
                           StatusBackingStore statusBackingStore) {
-        super(id, statusListener, initialState, loader, connectMetrics,
+        super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
 
         this.workerConfig = workerConfig;
@@ -484,7 +486,6 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
-        origOffsets.clear();
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
@@ -589,6 +590,7 @@ class WorkerSinkTask extends WorkerTask {
             recordBatch(messageBatch.size());
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);
+            origOffsets.clear();
             messageBatch.clear();
             // If we had paused all consumer topic partitions to try to redeliver data, then we should resume any that
             // the task had not explicitly paused
@@ -653,6 +655,7 @@ class WorkerSinkTask extends WorkerTask {
                 workerErrantRecordReporter.cancelFutures(topicPartitions);
                 log.trace("Cancelled all reported errors for {}", topicPartitions);
             }
+            origOffsets.keySet().removeAll(topicPartitions);
             currentOffsets.keySet().removeAll(topicPartitions);
         }
         updatePartitionCount();

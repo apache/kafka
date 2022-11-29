@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.IdentityHashMap;
+import java.util.Properties;
 import java.util.TreeMap;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -31,7 +34,9 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
+import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -270,17 +275,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     // use this method for testing only
     public void buildAndOptimizeTopology() {
-        buildAndOptimizeTopology(false);
+        buildAndOptimizeTopology(null);
     }
 
-    public void buildAndOptimizeTopology(final boolean optimizeTopology) {
-
+    public void buildAndOptimizeTopology(final Properties props) {
         mergeDuplicateSourceNodes();
-        if (optimizeTopology) {
-            LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
-            optimizeKTableSourceTopics();
-            maybeOptimizeRepartitionOperations();
-        }
+        optimizeTopology(props);
 
         final PriorityQueue<GraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, Comparator.comparing(GraphNode::buildPriority));
 
@@ -303,6 +303,32 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
         }
         internalTopologyBuilder.validateCopartition();
+    }
+
+    /**
+     * A user can provide either the config OPTIMIZE which means all optimizations rules will be
+     * applied or they can provide a list of optimization rules.
+     */
+    private void optimizeTopology(final Properties props) {
+        final Set<String> optimizationConfigs;
+        if (props == null || !props.containsKey(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG)) {
+            optimizationConfigs = Collections.emptySet();
+        } else {
+            optimizationConfigs = StreamsConfig.verifyTopologyOptimizationConfigs(
+                (String) props.get(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG));
+        }
+        if (optimizationConfigs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
+            LOG.debug("Optimizing the Kafka Streams graph for ktable source nodes");
+            reuseKTableSourceTopics();
+        }
+        if (optimizationConfigs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS)) {
+            LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
+            mergeRepartitionTopics();
+        }
+        if (optimizationConfigs.contains(StreamsConfig.SINGLE_STORE_SELF_JOIN)) {
+            LOG.debug("Optimizing the Kafka Streams graph for self-joins");
+            rewriteSingleStoreSelfJoin(root, new IdentityHashMap<>());
+        }
     }
 
     private void mergeDuplicateSourceNodes() {
@@ -356,12 +382,54 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     }
 
-    private void optimizeKTableSourceTopics() {
+
+    /**
+     * The self-join rewriting can be applied if the StreamStreamJoinNode has a single parent.
+     * If the join is a self-join, remove the node KStreamJoinWindow corresponding to the
+     * right argument of the join (the "other"). The join node may have multiple siblings but for
+     * this rewriting we only care about the ThisKStreamJoinWindow and the OtherKStreamJoinWindow.
+     * We iterate over all the siblings to identify these two nodes so that we can remove the
+     * latter.
+     */
+    @SuppressWarnings("unchecked")
+    private void rewriteSingleStoreSelfJoin(
+        final GraphNode currentNode, final Map<GraphNode, Boolean> visited) {
+        visited.put(currentNode, true);
+        if (currentNode instanceof StreamStreamJoinNode && currentNode.parentNodes().size() == 1) {
+            final StreamStreamJoinNode joinNode = (StreamStreamJoinNode) currentNode;
+            // Remove JoinOtherWindowed node
+            final GraphNode parent = joinNode.parentNodes().stream().findFirst().get();
+            GraphNode left = null, right = null;
+            for (final GraphNode child: parent.children()) {
+                if (child instanceof WindowedStreamProcessorNode && child.buildPriority() < joinNode.buildPriority()) {
+                    if (child.nodeName().equals(joinNode.getThisWindowedStreamProcessorParameters().processorName())) {
+                        left = child;
+                    } else if (child.nodeName().equals(joinNode.getOtherWindowedStreamProcessorParameters().processorName())) {
+                        right = child;
+                    }
+                }
+            }
+            // Sanity check
+            if (left != null && right != null && left.buildPriority() < right.buildPriority()) {
+                parent.removeChild(right);
+                joinNode.setSelfJoin();
+            } else {
+                throw new IllegalStateException(String.format("Expected the left node %s to have smaller build priority than the right node %s.", left, right));
+            }
+        }
+        for (final GraphNode child: currentNode.children()) {
+            if (!visited.containsKey(child)) {
+                rewriteSingleStoreSelfJoin(child, visited);
+            }
+        }
+    }
+
+    private void reuseKTableSourceTopics() {
         LOG.debug("Marking KTable source nodes to optimize using source topic for changelogs ");
         tableSourceNodes.forEach(node -> ((TableSourceNode<?, ?>) node).reuseSourceTopicForChangeLog(true));
     }
 
-    private void maybeOptimizeRepartitionOperations() {
+    private void mergeRepartitionTopics() {
         maybeUpdateKeyChangingRepartitionNodeMap();
         final Iterator<Entry<GraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>>> entryIterator =
             keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();

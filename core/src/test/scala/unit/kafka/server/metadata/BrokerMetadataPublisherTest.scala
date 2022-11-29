@@ -15,19 +15,20 @@
  * limitations under the License.
  */
 
-package unit.kafka.server.metadata
+package kafka.server.metadata
 
-import java.util.Collections.{singleton, singletonMap}
+import kafka.coordinator.group.GroupCoordinator
+import kafka.coordinator.transaction.TransactionCoordinator
+
+import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-
-import kafka.log.UnifiedLog
-import kafka.server.KafkaConfig
-import kafka.server.metadata.BrokerMetadataPublisher
+import kafka.log.{LogManager, UnifiedLog}
+import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, NewTopic}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.BROKER
 import org.apache.kafka.common.utils.Exit
@@ -35,10 +36,12 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
+import org.mockito.Mockito.doThrow
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 
@@ -176,6 +179,31 @@ class BrokerMetadataPublisherTest {
     new TopicsImage(idsMap.asJava, namesMap.asJava)
   }
 
+  private def newMockPublisher(
+    broker: BrokerServer,
+    logManager: LogManager,
+    replicaManager: ReplicaManager,
+    groupCoordinator: GroupCoordinator,
+    txnCoordinator: TransactionCoordinator,
+    errorHandler: FaultHandler = new MockFaultHandler("publisher")
+  ): BrokerMetadataPublisher = {
+    val mockLogManager = Mockito.mock(classOf[LogManager])
+    Mockito.when(mockLogManager.allLogs).thenReturn(Iterable.empty[UnifiedLog])
+    Mockito.spy(new BrokerMetadataPublisher(
+      conf = broker.config,
+      metadataCache = broker.metadataCache,
+      logManager,
+      replicaManager,
+      groupCoordinator,
+      txnCoordinator,
+      clientQuotaMetadataManager = broker.clientQuotaMetadataManager,
+      dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap,
+      _authorizer = Option.empty,
+      errorHandler,
+      errorHandler
+    ))
+  }
+
   @Test
   def testReloadUpdatedFilesWithoutConfigChange(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
@@ -187,17 +215,14 @@ class BrokerMetadataPublisherTest {
       cluster.startup()
       cluster.waitForReadyBrokers()
       val broker = cluster.brokers().values().iterator().next()
-      val publisher = Mockito.spy(new BrokerMetadataPublisher(
-        conf = broker.config,
-        metadataCache = broker.metadataCache,
-        logManager = broker.logManager,
-        replicaManager = broker.replicaManager,
-        groupCoordinator = broker.groupCoordinator,
-        txnCoordinator = broker.transactionCoordinator,
-        clientQuotaMetadataManager = broker.clientQuotaMetadataManager,
-        dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap,
-        _authorizer = Option.empty
-      ))
+      val mockLogManager = Mockito.mock(classOf[LogManager])
+      Mockito.when(mockLogManager.allLogs).thenReturn(Iterable.empty[UnifiedLog])
+      val mockReplicaManager = Mockito.mock(classOf[ReplicaManager])
+      val mockGroupCoordinator = Mockito.mock(classOf[GroupCoordinator])
+      val mockTxnCoordinator = Mockito.mock(classOf[TransactionCoordinator])
+
+      val publisher = newMockPublisher(broker, mockLogManager, mockReplicaManager, mockGroupCoordinator, mockTxnCoordinator)
+
       val numTimesReloadCalled = new AtomicInteger(0)
       Mockito.when(publisher.reloadUpdatedFilesWithoutConfigChange(any[Properties]())).
         thenAnswer(new Answer[Unit]() {
@@ -224,6 +249,41 @@ class BrokerMetadataPublisherTest {
         admin.close()
       }
     } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testExceptionInUpdateCoordinator(): Unit = {
+    val errorHandler = new MockFaultHandler("publisher")
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).
+      setMetadataFaultHandler(errorHandler).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val broker = cluster.brokers().values().iterator().next()
+      TestUtils.retry(60000) {
+        assertNotNull(broker.metadataPublisher)
+      }
+      val publisher = Mockito.spy(broker.metadataPublisher)
+      doThrow(new RuntimeException("injected failure")).when(publisher).updateCoordinator(any(), any(), any(), any(), any())
+      broker.metadataListener.alterPublisher(publisher).get()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        admin.createTopics(singletonList(new NewTopic("foo", 1, 1.toShort))).all().get()
+      } finally {
+        admin.close()
+      }
+      TestUtils.retry(60000) {
+        assertTrue(Option(errorHandler.firstException()).
+          flatMap(e => Option(e.getMessage())).getOrElse("(none)").contains("injected failure"))
+      }
+    } finally {
+      errorHandler.setIgnore(true)
       cluster.close()
     }
   }

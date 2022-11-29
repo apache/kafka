@@ -20,12 +20,12 @@ package kstream
 import org.apache.kafka.streams.kstream.internals.KTableImpl
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.kstream.{
+  KGroupedStream => KGroupedStreamJ,
+  KTable => KTableJ,
   SessionWindows,
   SlidingWindows,
   Window,
-  Windows,
-  KGroupedStream => KGroupedStreamJ,
-  KTable => KTableJ
+  Windows
 }
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   AggregatorFromFunction,

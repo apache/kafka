@@ -17,8 +17,14 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map.Entry;
+
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -33,6 +39,7 @@ import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins.TestPlugin;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
@@ -172,10 +179,8 @@ public class PluginsTest {
 
     @Test
     public void shouldThrowIfPluginThrows() {
-        TestPlugins.assertAvailable();
-
         assertThrows(ConnectException.class, () -> plugins.newPlugin(
-            TestPlugins.ALWAYS_THROW_EXCEPTION,
+            TestPlugin.ALWAYS_THROW_EXCEPTION.className(),
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         ));
@@ -184,9 +189,8 @@ public class PluginsTest {
     @Test
     public void shouldShareStaticValuesBetweenSamePlugin() {
         // Plugins are not isolated from other instances of their own class.
-        TestPlugins.assertAvailable();
         Converter firstPlugin = plugins.newPlugin(
-            TestPlugins.ALIASED_STATIC_FIELD,
+            TestPlugin.ALIASED_STATIC_FIELD.className(),
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
@@ -194,7 +198,7 @@ public class PluginsTest {
         assertInstanceOf(SamplingTestPlugin.class, firstPlugin, "Cannot collect samples");
 
         Converter secondPlugin = plugins.newPlugin(
-            TestPlugins.ALIASED_STATIC_FIELD,
+            TestPlugin.ALIASED_STATIC_FIELD.className(),
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
@@ -208,9 +212,8 @@ public class PluginsTest {
 
     @Test
     public void newPluginShouldServiceLoadWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
         Converter plugin = plugins.newPlugin(
-            TestPlugins.SERVICE_LOADER,
+            TestPlugin.SERVICE_LOADER.className(),
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
@@ -225,9 +228,8 @@ public class PluginsTest {
 
     @Test
     public void newPluginShouldInstantiateWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
         Converter plugin = plugins.newPlugin(
-            TestPlugins.ALIASED_STATIC_FIELD,
+            TestPlugin.ALIASED_STATIC_FIELD.className(),
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
@@ -239,19 +241,17 @@ public class PluginsTest {
 
     @Test
     public void shouldFailToFindConverterInCurrentClassloader() {
-        TestPlugins.assertAvailable();
-        props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_CONVERTER);
+        props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_CONVERTER.className());
         assertThrows(ConfigException.class, this::createConfig);
     }
 
     @Test
     public void newConverterShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
-        props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_CONVERTER);
-        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugins.SAMPLING_CONVERTER);
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(classLoader);
-        createConfig();
-        Plugins.compareAndSwapLoaders(savedLoader);
+        props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_CONVERTER.className());
+        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONVERTER.className());
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
+            createConfig();
+        }
 
         Converter plugin = plugins.newConverter(
             config,
@@ -267,15 +267,14 @@ public class PluginsTest {
 
     @Test
     public void newConfigProviderShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
         String providerPrefix = "some.provider";
-        props.put(providerPrefix + ".class", TestPlugins.SAMPLING_CONFIG_PROVIDER);
+        props.put(providerPrefix + ".class", TestPlugin.SAMPLING_CONFIG_PROVIDER.className());
 
-        PluginClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugins.SAMPLING_CONFIG_PROVIDER);
+        PluginClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONFIG_PROVIDER.className());
         assertNotNull(classLoader);
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(classLoader);
-        createConfig();
-        Plugins.compareAndSwapLoaders(savedLoader);
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
+            createConfig();
+        }
 
         ConfigProvider plugin = plugins.newConfigProvider(
             config,
@@ -291,12 +290,11 @@ public class PluginsTest {
 
     @Test
     public void newHeaderConverterShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
-        props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_HEADER_CONVERTER);
-        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugins.SAMPLING_HEADER_CONVERTER);
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(classLoader);
-        createConfig();
-        Plugins.compareAndSwapLoaders(savedLoader);
+        props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_HEADER_CONVERTER.className());
+        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_HEADER_CONVERTER.className());
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
+            createConfig();
+        }
 
         HeaderConverter plugin = plugins.newHeaderConverter(
             config,
@@ -312,9 +310,8 @@ public class PluginsTest {
 
     @Test
     public void newPluginsShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
         List<Configurable> configurables = plugins.newPlugins(
-            Collections.singletonList(TestPlugins.SAMPLING_CONFIGURABLE),
+            Collections.singletonList(TestPlugin.SAMPLING_CONFIGURABLE.className()),
             config,
             Configurable.class
         );
@@ -325,6 +322,70 @@ public class PluginsTest {
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertTrue(samples.containsKey("configure")); // Configurable::configure was called
         assertPluginClassLoaderAlwaysActive(samples);
+    }
+
+    @Test
+    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInChild() throws Exception {
+        assertClassLoaderReadsVersionFromResource(
+                TestPlugin.ALIASED_STATIC_FIELD,
+                TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
+                TestPlugin.READ_VERSION_FROM_RESOURCE_V1.className(),
+                "1.0.0");
+    }
+
+    @Test
+    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInParent() throws Exception {
+        assertClassLoaderReadsVersionFromResource(
+                TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
+                TestPlugin.ALIASED_STATIC_FIELD,
+                TestPlugin.READ_VERSION_FROM_RESOURCE_V1.className(),
+                "1.0.0");
+    }
+
+    @Test
+    public void pluginClassLoaderReadVersionFromResourceExistingInParentAndChild() throws Exception {
+        assertClassLoaderReadsVersionFromResource(
+                TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
+                TestPlugin.READ_VERSION_FROM_RESOURCE_V2,
+                TestPlugin.READ_VERSION_FROM_RESOURCE_V2.className(),
+                "2.0.0", "1.0.0");
+    }
+
+    private void assertClassLoaderReadsVersionFromResource(
+            TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) throws MalformedURLException {
+        URL[] systemPath = TestPlugins.pluginPath(parentResource)
+                .stream()
+                .map(File::new)
+                .map(File::toURI)
+                .map(uri -> {
+                    try {
+                        return uri.toURL();
+                    } catch (MalformedURLException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .toArray(URL[]::new);
+        URLClassLoader parent = new URLClassLoader(systemPath);
+
+        // Initialize Plugins object with parent class loader in the class loader tree. This is
+        // to simulate the situation where jars exist on both system classpath and plugin path.
+        Map<String, String> pluginProps = Collections.singletonMap(
+                WorkerConfig.PLUGIN_PATH_CONFIG,
+                String.join(",", TestPlugins.pluginPath(childResource))
+        );
+        plugins = new Plugins(pluginProps, parent);
+
+        Converter converter = plugins.newPlugin(
+                className,
+                new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
+                Converter.class
+        );
+        // Verify the version was read from the correct resource
+        assertEquals(expectedVersions[0],
+                new String(converter.fromConnectData(null, null, null)));
+        // When requesting multiple resources, they should be listed in the correct order
+        assertEquals(Arrays.asList(expectedVersions),
+                converter.toConnectData(null, null).value());
     }
 
     public static void assertPluginClassLoaderAlwaysActive(Map<String, SamplingTestPlugin> samples) {

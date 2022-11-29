@@ -51,7 +51,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   var executor: ExecutorService = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.NumQuotaSamplesProp, "2".toString)
+    properties.put(KafkaConfig.NumQuotaSamplesProp, "2")
     properties.put("listener.name.plaintext.max.connection.creation.rate", plaintextListenerDefaultQuota.toString)
   }
 

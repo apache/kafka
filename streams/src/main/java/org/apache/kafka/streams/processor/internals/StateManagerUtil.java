@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -74,6 +75,7 @@ final class StateManagerUtil {
     }
 
     /**
+     * @throws TaskCorruptedException if the state cannot be reused (with EOS) and needs to be reset
      * @throws StreamsException If the store's changelog does not contain the partition
      */
     static void registerStateStores(final Logger log,
@@ -140,6 +142,8 @@ final class StateManagerUtil {
                         stateDirectory.unlock(id);
                     }
                 }
+            } else {
+                log.error("Failed to acquire lock while closing the state store for {} task {}", taskType, id);
             }
         } catch (final IOException e) {
             final ProcessorStateException exception = new ProcessorStateException(

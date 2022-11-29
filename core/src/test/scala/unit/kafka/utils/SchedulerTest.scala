@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@ package kafka.utils
 import java.util.Properties
 import java.util.concurrent.atomic._
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
-import kafka.log.{LocalLog, UnifiedLog, LogConfig, LogLoader, LogManager, LogSegments, ProducerStateManager}
+import kafka.log.{LocalLog, LogConfig, LogLoader, LogSegments, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.TestUtils.retry
 import org.junit.jupiter.api.Assertions._
@@ -31,12 +31,12 @@ class SchedulerTest {
   val mockTime = new MockTime
   val counter1 = new AtomicInteger(0)
   val counter2 = new AtomicInteger(0)
-  
+
   @BeforeEach
   def setup(): Unit = {
     scheduler.startup()
   }
-  
+
   @AfterEach
   def teardown(): Unit = {
     scheduler.shutdown()
@@ -88,6 +88,16 @@ class SchedulerTest {
   }
 
   @Test
+  def testNonPeriodicTaskWhenPeriodIsZero(): Unit = {
+    scheduler.schedule("test", counter1.getAndIncrement _, delay = 0, period = 0)
+    retry(30000) {
+      assertEquals(counter1.get, 1)
+    }
+    Thread.sleep(5)
+    assertEquals(1, counter1.get, "Should only run once")
+  }
+
+  @Test
   def testPeriodicTask(): Unit = {
     scheduler.schedule("test", counter1.getAndIncrement _, delay = 0, period = 5)
     retry(30000){
@@ -119,13 +129,14 @@ class SchedulerTest {
     val logConfig = LogConfig(new Properties())
     val brokerTopicStats = new BrokerTopicStats
     val maxTransactionTimeoutMs = 5 * 60 * 1000
-    val maxProducerIdExpirationMs = 60 * 60 * 1000
+    val maxProducerIdExpirationMs = kafka.server.Defaults.ProducerIdExpirationMs
+    val producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, logDir,
-      maxTransactionTimeoutMs, maxProducerIdExpirationMs, mockTime)
+      maxTransactionTimeoutMs, new ProducerStateManagerConfig(maxProducerIdExpirationMs), mockTime)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -144,7 +155,7 @@ class SchedulerTest {
       offsets.nextOffsetMetadata, scheduler, mockTime, topicPartition, logDirFailureChannel)
     val log = new UnifiedLog(logStartOffset = offsets.logStartOffset,
       localLog = localLog,
-      brokerTopicStats, LogManager.ProducerIdExpirationCheckIntervalMs,
+      brokerTopicStats, producerIdExpirationCheckIntervalMs,
       leaderEpochCache, producerStateManager,
       _topicId = None, keepPartitionMetadataFile = true)
     assertTrue(scheduler.taskRunning(log.producerExpireCheck))

@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.FakeForwardingAdmin;
+import org.apache.kafka.clients.admin.ForwardingAdmin;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.config.provider.ConfigProvider;
@@ -77,20 +79,23 @@ public class MirrorMakerConfigTest {
 
     @Test
     public void testClientConfigProperties() {
+        String clusterABootstrap = "127.0.0.1:9092, 127.0.0.2:9092";
+        String clusterBBootstrap = "127.0.0.3:9092, 127.0.0.4:9092";
         MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
             "clusters", "a, b",
             "config.providers", "fake",
             "config.providers.fake.class", FakeConfigProvider.class.getName(),
             "replication.policy.separator", "__",
-            "ssl.truststore.password", "secret1",
             "ssl.key.password", "${fake:secret:password}",  // resolves to "secret2"
-            "security.protocol", "SSL", 
-            "a.security.protocol", "PLAINTEXT", 
+            "security.protocol", "SSL",
+            "a.security.protocol", "PLAINTEXT",
             "a.producer.security.protocol", "SSL",
-            "a.bootstrap.servers", "one:9092, two:9092",
+            "a.bootstrap.servers", clusterABootstrap,
+            "b.bootstrap.servers", clusterBBootstrap,
             "metrics.reporter", FakeMetricsReporter.class.getName(),
             "a.metrics.reporter", FakeMetricsReporter.class.getName(),
             "b->a.metrics.reporter", FakeMetricsReporter.class.getName(),
+            "b.forwarding.admin.class", FakeForwardingAdmin.class.getName(),
             "a.xxx", "yyy",
             "xxx", "zzz"));
         MirrorClientConfig aClientConfig = mirrorConfig.clientConfig("a");
@@ -99,8 +104,10 @@ public class MirrorMakerConfigTest {
             "replication.policy.separator is picked up in MirrorClientConfig");
         assertEquals("b__topic1", aClientConfig.replicationPolicy().formatRemoteTopic("b", "topic1"),
             "replication.policy.separator is honored");
-        assertEquals("one:9092, two:9092", aClientConfig.adminConfig().get("bootstrap.servers"),
+        assertEquals(clusterABootstrap, aClientConfig.adminConfig().get("bootstrap.servers"),
             "client configs include boostrap.servers");
+        assertEquals(ForwardingAdmin.class.getName(), aClientConfig.forwardingAdmin(aClientConfig.adminConfig()).getClass().getName(),
+                "Cluster a uses the default ForwardingAdmin");
         assertEquals("PLAINTEXT", aClientConfig.adminConfig().get("security.protocol"),
             "client configs include security.protocol");
         assertEquals("SSL", aClientConfig.producerConfig().get("security.protocol"),
@@ -109,10 +116,6 @@ public class MirrorMakerConfigTest {
             "unknown properties aren't included in client configs");
         assertFalse(aClientConfig.adminConfig().containsKey("metric.reporters"),
             "top-leve metrics reporters aren't included in client configs");
-        assertEquals("secret1", aClientConfig.getPassword("ssl.truststore.password").value(),
-            "security properties are picked up in MirrorClientConfig");
-        assertEquals("secret1", ((Password) aClientConfig.adminConfig().get("ssl.truststore.password")).value(),
-            "client configs include top-level security properties");
         assertEquals("secret2", aClientConfig.getPassword("ssl.key.password").value(),
             "security properties are translated from external sources");
         assertEquals("secret2", ((Password) aClientConfig.adminConfig().get("ssl.key.password")).value(),
@@ -121,6 +124,8 @@ public class MirrorMakerConfigTest {
             "client configs should not include metrics reporter");
         assertFalse(bClientConfig.adminConfig().containsKey("metrics.reporter"),
             "client configs should not include metrics reporter");
+        assertEquals(FakeForwardingAdmin.class.getName(), bClientConfig.forwardingAdmin(bClientConfig.adminConfig()).getClass().getName(),
+                "Cluster b should use the FakeForwardingAdmin");
     }
 
     @Test

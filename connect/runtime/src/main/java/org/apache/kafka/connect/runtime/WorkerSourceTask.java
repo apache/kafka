@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -66,6 +67,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             TargetState initialState,
                             Converter keyConverter,
                             Converter valueConverter,
+                            ErrorHandlingMetrics errorMetrics,
                             HeaderConverter headerConverter,
                             TransformationChain<SourceRecord> transformationChain,
                             Producer<byte[], byte[]> producer,
@@ -85,7 +87,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
 
         super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
                 new WorkerSourceTaskContext(offsetReader, id, configState, null), producer,
-                admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, loader,
+                admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics, loader,
                 time, retryWithToleranceOperator, statusBackingStore, closeExecutor);
 
         this.committableOffsets = CommittableOffsets.EMPTY;
@@ -190,6 +192,14 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         );
         updateCommittableOffsets();
         commitOffsets();
+    }
+
+    /**
+     * @return whether an attempt to commit offsets should be made for the task (i.e., there are pending uncommitted
+     * offsets and the task's producer has not already failed to send a record with a non-retriable error).
+     */
+    public boolean shouldCommitOffsets() {
+        return !isFailed();
     }
 
     public boolean commitOffsets() {

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
@@ -26,6 +28,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.util.MockRandom;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -54,26 +57,39 @@ public class RecordTestUtils {
      */
     public static void replayAll(Object target,
                                  List<ApiMessageAndVersion> recordsAndVersions) {
+        if (target instanceof MetadataDelta) {
+            MetadataDelta delta = (MetadataDelta) target;
+            replayAll(delta,
+                    delta.image().highestOffsetAndEpoch().offset(),
+                    delta.image().highestOffsetAndEpoch().epoch(),
+                    recordsAndVersions);
+            return;
+        }
         for (ApiMessageAndVersion recordAndVersion : recordsAndVersions) {
             ApiMessage record = recordAndVersion.message();
             try {
-                Method method = target.getClass().getMethod("replay", record.getClass());
-                method.invoke(target, record);
-            } catch (NoSuchMethodException e) {
                 try {
-                    Method method = target.getClass().getMethod("replay",
-                        record.getClass(),
-                        Optional.class);
-                    method.invoke(target, record, Optional.empty());
-                } catch (NoSuchMethodException t) {
-                    // ignore
-                } catch (InvocationTargetException t) {
-                    throw new RuntimeException(t);
-                } catch (IllegalAccessException t) {
-                    throw new RuntimeException(t);
+                    Method method = target.getClass().getMethod("replay", record.getClass());
+                    method.invoke(target, record);
+                } catch (NoSuchMethodException e) {
+                    try {
+                        Method method = target.getClass().getMethod("replay",
+                            record.getClass(),
+                            Optional.class);
+                        method.invoke(target, record, Optional.empty());
+                    } catch (NoSuchMethodException t) {
+                        try {
+                            Method method = target.getClass().getMethod("replay",
+                                record.getClass(),
+                                long.class);
+                            method.invoke(target, record, 0L);
+                        } catch (NoSuchMethodException i) {
+                            // ignore
+                        }
+                    }
                 }
             } catch (InvocationTargetException e) {
-                throw new RuntimeException(e);
+                throw new RuntimeException(e.getCause());
             } catch (IllegalAccessException e) {
                 throw new RuntimeException(e);
             }
@@ -119,7 +135,7 @@ public class RecordTestUtils {
      * @param delta the metadata delta on which to replay the records
      * @param highestOffset highest offset from the list of record batches
      * @param highestEpoch highest epoch from the list of record batches
-     * @param recordsAndVersions list of batches of records
+     * @param batches list of batches of records
      */
     public static void replayAllBatches(
         MetadataDelta delta,
@@ -242,5 +258,12 @@ public class RecordTestUtils {
             size += MetadataRecordSerde.INSTANCE.recordSize(record, cache);
         }
         return size;
+    }
+
+    public static ApiMessageAndVersion testRecord(int index) {
+        MockRandom random = new MockRandom(index);
+        return new ApiMessageAndVersion(
+            new TopicRecord().setName("test" + index).
+            setTopicId(new Uuid(random.nextLong(), random.nextLong())), (short) 0);
     }
 }

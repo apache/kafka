@@ -48,7 +48,7 @@ object KafkaMetricsReporterTest {
     }
 
     private def contextLabelOrNull(name: String, metricsContext: MetricsContext): String = {
-      Option(metricsContext.contextLabels().get(name)).flatMap(v => Option(v.toString())).getOrElse(null)
+      Option(metricsContext.contextLabels().get(name)).flatMap(v => Option(v.toString())).orNull
     }
 
     override def configure(configs: util.Map[String, _]): Unit = {}
@@ -63,8 +63,8 @@ object KafkaMetricsReporterTest {
 }
 
 class KafkaMetricsReporterTest extends QuorumTestHarness {
-  var broker: KafkaBroker = null
-  var config: KafkaConfig = null
+  var broker: KafkaBroker = _
+  var config: KafkaConfig = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {

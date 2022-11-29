@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -60,13 +61,14 @@ public class DefaultStateUpdater implements StateUpdater {
         private final ChangelogReader changelogReader;
         private final AtomicBoolean isRunning = new AtomicBoolean(true);
         private final Map<TaskId, Task> updatingTasks = new ConcurrentHashMap<>();
+        private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
         private final Logger log;
 
         public StateUpdaterThread(final String name, final ChangelogReader changelogReader) {
             super(name);
             this.changelogReader = changelogReader;
 
-            final String logPrefix = String.format("%s ", name);
+            final String logPrefix = String.format("state-updater [%s] ", name);
             final LogContext logContext = new LogContext(logPrefix);
             log = logContext.logger(DefaultStateUpdater.class);
         }
@@ -82,8 +84,12 @@ public class DefaultStateUpdater implements StateUpdater {
                 .collect(Collectors.toList());
         }
 
-        public boolean onlyStandbyTasksLeft() {
+        private boolean onlyStandbyTasksUpdating() {
             return !updatingTasks.isEmpty() && updatingTasks.values().stream().noneMatch(Task::isActive);
+        }
+
+        public Collection<Task> getPausedTasks() {
+            return pausedTasks.values();
         }
 
         @Override
@@ -93,14 +99,15 @@ public class DefaultStateUpdater implements StateUpdater {
                 while (isRunning.get()) {
                     try {
                         runOnce();
-                    } catch (final InterruptedException interruptedException) {
+                    } catch (final InterruptedException | InterruptException interruptedException) {
                         return;
                     }
                 }
             } catch (final RuntimeException anyOtherException) {
                 handleRuntimeException(anyOtherException);
             } finally {
-                clear();
+                removeAddedTasksFromInputQueue();
+                removeUpdatingAndPausedTasks();
                 shutdownGate.countDown();
                 log.info("State updater thread shutdown");
             }
@@ -109,7 +116,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private void runOnce() throws InterruptedException {
             performActionsOnTasks();
             restoreTasks();
-            maybeCheckpointUpdatingTasks(time.milliseconds());
+            checkAllUpdatingTaskStates(time.milliseconds());
             waitIfAllChangelogsCompletelyRead();
         }
 
@@ -124,12 +131,6 @@ public class DefaultStateUpdater implements StateUpdater {
                             break;
                         case REMOVE:
                             removeTask(taskAndAction.getTaskId());
-                            break;
-                        case PAUSE:
-                            pauseTask(taskAndAction.getTaskId());
-                            break;
-                        case RESUME:
-                            resumeTask(taskAndAction.getTaskId());
                             break;
                     }
                 }
@@ -169,8 +170,18 @@ public class DefaultStateUpdater implements StateUpdater {
                     throw new IllegalStateException("Task " + taskId + " is corrupted but is not updating. " + BUG_ERROR_MESSAGE);
                 }
                 corruptedTasks.add(corruptedTask);
+                removeCheckpointForCorruptedTask(corruptedTask);
             }
             addToExceptionsAndFailedTasksThenRemoveFromUpdatingTasks(new ExceptionAndTasks(corruptedTasks, taskCorruptedException));
+        }
+
+        // TODO: we can let the exception encode the actual corrupted changelog partitions and only
+        //       mark those instead of marking all changelogs
+        private void removeCheckpointForCorruptedTask(final Task task) {
+            task.markChangelogAsCorrupted(task.changelogPartitions());
+
+            // we need to enforce a checkpoint that removes the corrupted partitions
+            task.maybeCheckpoint(true);
         }
 
         private void handleStreamsException(final StreamsException streamsException) {
@@ -203,7 +214,9 @@ public class DefaultStateUpdater implements StateUpdater {
         private void addToExceptionsAndFailedTasksThenRemoveFromUpdatingTasks(final ExceptionAndTasks exceptionAndTasks) {
             exceptionsAndFailedTasks.add(exceptionAndTasks);
             exceptionAndTasks.getTasks().stream().map(Task::id).forEach(updatingTasks::remove);
-            transitToUpdateStandbysIfOnlyStandbysLeft();
+            if (exceptionAndTasks.getTasks().stream().anyMatch(Task::isActive)) {
+                transitToUpdateStandbysIfOnlyStandbysLeft();
+            }
         }
 
         private void addToExceptionsAndFailedTasksThenClearUpdatingTasks(final ExceptionAndTasks exceptionAndTasks) {
@@ -224,18 +237,17 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void clear() {
-            tasksAndActionsLock.lock();
-            restoredActiveTasksLock.lock();
-            try {
-                tasksAndActions.clear();
-                restoredActiveTasks.clear();
-            } finally {
-                restoredActiveTasksLock.unlock();
-                tasksAndActionsLock.unlock();
-            }
+        private void removeUpdatingAndPausedTasks() {
             changelogReader.clear();
+            updatingTasks.forEach((id, task) -> {
+                task.maybeCheckpoint(true);
+                removedTasks.add(task);
+            });
             updatingTasks.clear();
+            pausedTasks.forEach((id, task) -> {
+                removedTasks.add(task);
+            });
+            pausedTasks.clear();
         }
 
         private List<TaskAndAction> getTasksAndActions() {
@@ -247,19 +259,19 @@ public class DefaultStateUpdater implements StateUpdater {
         private void addTask(final Task task) {
             if (isStateless(task)) {
                 addToRestoredTasks((StreamTask) task);
-                log.debug("Stateless active task " + task.id() + " was added to the restored tasks of the state updater");
+                log.info("Stateless active task " + task.id() + " was added to the restored tasks of the state updater");
             } else {
                 final Task existingTask = updatingTasks.putIfAbsent(task.id(), task);
                 if (existingTask != null) {
                     throw new IllegalStateException((existingTask.isActive() ? "Active" : "Standby") + " task " + task.id() + " already exist, " +
                         "should not try to add another " + (task.isActive() ? "active" : "standby") + " task with the same id. " + BUG_ERROR_MESSAGE);
                 }
-
+                changelogReader.register(task.changelogPartitions(), task.stateManager());
                 if (task.isActive()) {
-                    log.debug("Stateful active task " + task.id() + " was added to the updating tasks of the state updater");
+                    log.info("Stateful active task " + task.id() + " was added to the state updater");
                     changelogReader.enforceRestoreActive();
                 } else {
-                    log.debug("Standby task " + task.id() + " was added to the updating tasks of the state updater");
+                    log.info("Standby task " + task.id() + " was added to the state updater");
                     if (updatingTasks.size() == 1) {
                         changelogReader.transitToUpdateStandby();
                     }
@@ -276,8 +288,10 @@ public class DefaultStateUpdater implements StateUpdater {
                 changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
                 updatingTasks.remove(taskId);
-                transitToUpdateStandbysIfOnlyStandbysLeft();
-                log.debug((task.isActive() ? "Active" : "Standby")
+                if (task.isActive()) {
+                    transitToUpdateStandbysIfOnlyStandbysLeft();
+                }
+                log.info((task.isActive() ? "Active" : "Standby")
                     + " task " + task.id() + " was removed from the updating tasks and added to the removed tasks.");
             } else if (pausedTasks.containsKey(taskId)) {
                 task = pausedTasks.get(taskId);
@@ -285,45 +299,39 @@ public class DefaultStateUpdater implements StateUpdater {
                 changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
                 pausedTasks.remove(taskId);
-                log.debug((task.isActive() ? "Active" : "Standby")
+                log.info((task.isActive() ? "Active" : "Standby")
                     + " task " + task.id() + " was removed from the paused tasks and added to the removed tasks.");
             } else {
-                log.debug("Task " + taskId + " was not removed since it is not updating or paused.");
+                log.info("Task " + taskId + " was not removed since it is not updating or paused.");
             }
         }
 
-        private void pauseTask(final TaskId taskId) {
-            final Task task = updatingTasks.get(taskId);
-            if (task != null) {
-                // do not need to unregister changelog partitions for paused tasks
-                task.maybeCheckpoint(true);
-                pausedTasks.put(taskId, task);
-                updatingTasks.remove(taskId);
+        private void pauseTask(final Task task) {
+            final TaskId taskId = task.id();
+            // do not need to unregister changelog partitions for paused tasks
+            task.maybeCheckpoint(true);
+            pausedTasks.put(taskId, task);
+            updatingTasks.remove(taskId);
+            if (task.isActive()) {
                 transitToUpdateStandbysIfOnlyStandbysLeft();
-                log.debug((task.isActive() ? "Active" : "Standby")
-                    + " task " + task.id() + " was paused from the updating tasks and added to the paused tasks.");
-            } else {
-                log.debug("Task " + taskId + " was not paused since it is not updating.");
             }
+            log.debug((task.isActive() ? "Active" : "Standby")
+                + " task " + task.id() + " was paused from the updating tasks and added to the paused tasks.");
         }
 
-        private void resumeTask(final TaskId taskId) {
-            final Task task = pausedTasks.get(taskId);
-            if (task != null) {
-                updatingTasks.put(taskId, task);
-                pausedTasks.remove(taskId);
+        private void resumeTask(final Task task) {
+            final TaskId taskId = task.id();
+            updatingTasks.put(taskId, task);
+            pausedTasks.remove(taskId);
 
-                if (task.isActive()) {
-                    log.debug("Stateful active task " + task.id() + " was resumed to the updating tasks of the state updater");
-                    changelogReader.enforceRestoreActive();
-                } else {
-                    log.debug("Standby task " + task.id() + " was resumed to the updating tasks of the state updater");
-                    if (updatingTasks.size() == 1) {
-                        changelogReader.transitToUpdateStandby();
-                    }
-                }
+            if (task.isActive()) {
+                log.debug("Stateful active task " + task.id() + " was resumed to the updating tasks of the state updater");
+                changelogReader.enforceRestoreActive();
             } else {
-                log.debug("Task " + taskId + " was not resumed since it is not paused.");
+                log.debug("Standby task " + task.id() + " was resumed to the updating tasks of the state updater");
+                if (updatingTasks.size() == 1) {
+                    changelogReader.transitToUpdateStandby();
+                }
             }
         }
 
@@ -333,18 +341,19 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void maybeCompleteRestoration(final StreamTask task,
                                               final Set<TopicPartition> restoredChangelogs) {
-            final Collection<TopicPartition> taskChangelogPartitions = task.changelogPartitions();
-            if (restoredChangelogs.containsAll(taskChangelogPartitions)) {
+            final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
+            if (restoredChangelogs.containsAll(changelogPartitions)) {
                 task.maybeCheckpoint(true);
+                changelogReader.unregister(changelogPartitions);
                 addToRestoredTasks(task);
                 updatingTasks.remove(task.id());
-                log.debug("Stateful active task " + task.id() + " completed restoration");
+                log.info("Stateful active task " + task.id() + " completed restoration");
                 transitToUpdateStandbysIfOnlyStandbysLeft();
             }
         }
 
         private void transitToUpdateStandbysIfOnlyStandbysLeft() {
-            if (onlyStandbyTasksLeft()) {
+            if (onlyStandbyTasksUpdating()) {
                 changelogReader.transitToUpdateStandby();
             }
         }
@@ -360,17 +369,28 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void maybeCheckpointUpdatingTasks(final long now) {
+        private void checkAllUpdatingTaskStates(final long now) {
             final long elapsedMsSinceLastCommit = now - lastCommitMs;
             if (elapsedMsSinceLastCommit > commitIntervalMs) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Checkpointing all restoring tasks since {}ms has elapsed (commit interval is {}ms)",
+                    log.debug("Checking all restoring task states since {}ms has elapsed (commit interval is {}ms)",
                         elapsedMsSinceLastCommit, commitIntervalMs);
                 }
 
                 for (final Task task : updatingTasks.values()) {
-                    // do not enforce checkpointing during restoration if its position has not advanced much
-                    task.maybeCheckpoint(false);
+                    if (topologyMetadata.isPaused(task.id().topologyName())) {
+                        pauseTask(task);
+                    } else {
+                        log.debug("Try to checkpoint current restoring progress for task {}", task.id());
+                        // do not enforce checkpointing during restoration if its position has not advanced much
+                        task.maybeCheckpoint(false);
+                    }
+                }
+
+                for (final Task task : pausedTasks.values()) {
+                    if (!topologyMetadata.isPaused(task.id().topologyName())) {
+                        resumeTask(task);
+                    }
                 }
 
                 lastCommitMs = now;
@@ -379,7 +399,9 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     private final Time time;
+    private final String name;
     private final ChangelogReader changelogReader;
+    private final TopologyMetadata topologyMetadata;
     private final Queue<TaskAndAction> tasksAndActions = new LinkedList<>();
     private final Lock tasksAndActionsLock = new ReentrantLock();
     private final Condition tasksAndActionsCondition = tasksAndActionsLock.newCondition();
@@ -388,7 +410,6 @@ public class DefaultStateUpdater implements StateUpdater {
     private final Condition restoredActiveTasksCondition = restoredActiveTasksLock.newCondition();
     private final BlockingQueue<ExceptionAndTasks> exceptionsAndFailedTasks = new LinkedBlockingQueue<>();
     private final BlockingQueue<Task> removedTasks = new LinkedBlockingQueue<>();
-    private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
 
     private final long commitIntervalMs;
     private long lastCommitMs;
@@ -396,17 +417,21 @@ public class DefaultStateUpdater implements StateUpdater {
     private StateUpdaterThread stateUpdaterThread = null;
     private CountDownLatch shutdownGate;
 
-    public DefaultStateUpdater(final StreamsConfig config,
+    public DefaultStateUpdater(final String name,
+                               final StreamsConfig config,
                                final ChangelogReader changelogReader,
+                               final TopologyMetadata topologyMetadata,
                                final Time time) {
-        this.changelogReader = changelogReader;
         this.time = time;
+        this.name = name;
+        this.changelogReader = changelogReader;
+        this.topologyMetadata = topologyMetadata;
         this.commitIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
     }
 
     public void start() {
         if (stateUpdaterThread == null) {
-            stateUpdaterThread = new StateUpdaterThread("state-updater", changelogReader);
+            stateUpdaterThread = new StateUpdaterThread(name, changelogReader);
             stateUpdaterThread.start();
             shutdownGate = new CountDownLatch(1);
 
@@ -427,6 +452,23 @@ public class DefaultStateUpdater implements StateUpdater {
                 stateUpdaterThread = null;
             } catch (final InterruptedException ignored) {
             }
+        } else {
+            removeAddedTasksFromInputQueue();
+        }
+    }
+
+    private void removeAddedTasksFromInputQueue() {
+        tasksAndActionsLock.lock();
+        try {
+            TaskAndAction taskAndAction;
+            while ((taskAndAction = tasksAndActions.peek()) != null) {
+                if (taskAndAction.getAction() == Action.ADD) {
+                    removedTasks.add(taskAndAction.getTask());
+                }
+                tasksAndActions.poll();
+            }
+        } finally {
+            tasksAndActionsLock.unlock();
         }
     }
 
@@ -457,28 +499,6 @@ public class DefaultStateUpdater implements StateUpdater {
         tasksAndActionsLock.lock();
         try {
             tasksAndActions.add(TaskAndAction.createRemoveTask(taskId));
-            tasksAndActionsCondition.signalAll();
-        } finally {
-            tasksAndActionsLock.unlock();
-        }
-    }
-
-    @Override
-    public void pause(final TaskId taskId) {
-        tasksAndActionsLock.lock();
-        try {
-            tasksAndActions.add(TaskAndAction.createPauseTask(taskId));
-            tasksAndActionsCondition.signalAll();
-        } finally {
-            tasksAndActionsLock.unlock();
-        }
-    }
-
-    @Override
-    public void resume(final TaskId taskId) {
-        tasksAndActionsLock.lock();
-        try {
-            tasksAndActions.add(TaskAndAction.createResumeTask(taskId));
             tasksAndActionsCondition.signalAll();
         } finally {
             tasksAndActionsLock.unlock();
@@ -520,11 +540,20 @@ public class DefaultStateUpdater implements StateUpdater {
         return new HashSet<>(result);
     }
 
+    public boolean hasRemovedTasks() {
+        return !removedTasks.isEmpty();
+    }
+
     @Override
     public List<ExceptionAndTasks> drainExceptionsAndFailedTasks() {
         final List<ExceptionAndTasks> result = new ArrayList<>();
         exceptionsAndFailedTasks.drainTo(result);
         return result;
+    }
+
+    @Override
+    public boolean hasExceptionsAndFailedTasks() {
+        return !exceptionsAndFailedTasks.isEmpty();
     }
 
     public Set<StandbyTask> getUpdatingStandbyTasks() {
@@ -533,6 +562,7 @@ public class DefaultStateUpdater implements StateUpdater {
             : Collections.emptySet();
     }
 
+    @Override
     public Set<Task> getUpdatingTasks() {
         return stateUpdaterThread != null
             ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getUpdatingTasks()))
@@ -557,15 +587,23 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     public Set<Task> getPausedTasks() {
-        return Collections.unmodifiableSet(new HashSet<>(pausedTasks.values()));
+        return stateUpdaterThread != null
+            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getPausedTasks()))
+            : Collections.emptySet();
     }
 
     @Override
     public Set<Task> getTasks() {
-        return executeWithQueuesLocked(() -> getStreamOfTasks().collect(Collectors.toSet()));
+        return executeWithQueuesLocked(() -> getStreamOfTasks().map(ReadOnlyTask::new).collect(Collectors.toSet()));
     }
 
     @Override
+    public boolean restoresActiveTasks() {
+        return !executeWithQueuesLocked(
+            () -> getStreamOfNonPausedTasks().filter(Task::isActive).collect(Collectors.toSet())
+        ).isEmpty();
+    }
+
     public Set<StreamTask> getActiveTasks() {
         return executeWithQueuesLocked(
             () -> getStreamOfTasks().filter(Task::isActive).map(t -> (StreamTask) t).collect(Collectors.toSet())
@@ -593,6 +631,14 @@ public class DefaultStateUpdater implements StateUpdater {
     private Stream<Task> getStreamOfTasks() {
         return
             Stream.concat(
+                getStreamOfNonPausedTasks(),
+                getPausedTasks().stream()
+            );
+    }
+
+    private Stream<Task> getStreamOfNonPausedTasks() {
+        return
+            Stream.concat(
                 tasksAndActions.stream()
                     .filter(taskAndAction -> taskAndAction.getAction() == Action.ADD)
                     .map(TaskAndAction::getTask),
@@ -602,8 +648,6 @@ public class DefaultStateUpdater implements StateUpdater {
                         restoredActiveTasks.stream(),
                         Stream.concat(
                             exceptionsAndFailedTasks.stream().flatMap(exceptionAndTasks -> exceptionAndTasks.getTasks().stream()),
-                            Stream.concat(
-                                getPausedTasks().stream(),
-                                removedTasks.stream())))));
+                            removedTasks.stream()))));
     }
 }

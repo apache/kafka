@@ -231,14 +231,27 @@ public abstract class AbstractCoordinator implements Closeable {
     protected void onLeavePrepare() {}
 
     /**
-     * Visible for testing.
-     *
      * Ensure that the coordinator is ready to receive requests.
      *
      * @param timer Timer bounding how long this method can block
      * @return true If coordinator discovery and initial connection succeeded, false otherwise
      */
     protected synchronized boolean ensureCoordinatorReady(final Timer timer) {
+        return ensureCoordinatorReady(timer, false);
+    }
+
+    /**
+     * Ensure that the coordinator is ready to receive requests. This will return
+     * immediately without blocking. It is intended to be called in an asynchronous
+     * context when wakeups are not expected.
+     *
+     * @return true If coordinator discovery and initial connection succeeded, false otherwise
+     */
+    protected synchronized boolean ensureCoordinatorReadyAsync() {
+        return ensureCoordinatorReady(time.timer(0), true);
+    }
+
+    private synchronized boolean ensureCoordinatorReady(final Timer timer, boolean disableWakeup) {
         if (!coordinatorUnknown())
             return true;
 
@@ -249,7 +262,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 throw fatalException;
             }
             final RequestFuture<Void> future = lookupCoordinator();
-            client.poll(future, timer);
+            client.poll(future, timer, disableWakeup);
 
             if (!future.isDone()) {
                 // ran out of time
@@ -812,9 +825,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.info("SyncGroup failed: The group began another rebalance. Need to re-join the group. " +
                                  "Sent generation was {}", sentGeneration);
-                    // consumer didn't get assignment in this generation, so we need to reset generation
-                    // to avoid joinGroup with out-of-data ownedPartitions in cooperative rebalance
-                    resetStateOnResponseError(ApiKeys.SYNC_GROUP, error, false);
                     future.raise(error);
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
                     // for sync-group request, even if the generation has changed we would not expect the instance id
@@ -846,12 +856,11 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Discover the current coordinator for the group. Sends a GroupMetadata request to
-     * one of the brokers. The returned future should be polled to get the result of the request.
+     * Discover the current coordinator for the group. Sends a FindCoordinator request to
+     * the given broker node. The returned future should be polled to get the result of the request.
      * @return A request future which indicates the completion of the metadata request
      */
     private RequestFuture<Void> sendFindCoordinatorRequest(Node node) {
-        // initiate the group metadata request
         log.debug("Sending FindCoordinator request to broker {}", node);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(CoordinatorType.GROUP.id())

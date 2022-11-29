@@ -17,8 +17,6 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.connector.Connector;
@@ -35,10 +33,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 
 public final class ConnectUtils {
     private static final Logger log = LoggerFactory.getLogger(ConnectUtils.class);
@@ -50,33 +49,6 @@ public final class ConnectUtils {
             return null;
         else
             throw new InvalidRecordException(String.format("Invalid record timestamp %d", timestamp));
-    }
-
-    public static String lookupKafkaClusterId(WorkerConfig config) {
-        log.info("Creating Kafka admin client");
-        try (Admin adminClient = Admin.create(config.originals())) {
-            return lookupKafkaClusterId(adminClient);
-        }
-    }
-
-    static String lookupKafkaClusterId(Admin adminClient) {
-        log.debug("Looking up Kafka cluster ID");
-        try {
-            KafkaFuture<String> clusterIdFuture = adminClient.describeCluster().clusterId();
-            if (clusterIdFuture == null) {
-                log.info("Kafka cluster version is too old to return cluster ID");
-                return null;
-            }
-            log.debug("Fetching Kafka cluster ID");
-            String kafkaClusterId = clusterIdFuture.get();
-            log.info("Kafka cluster ID: {}", kafkaClusterId);
-            return kafkaClusterId;
-        } catch (InterruptedException e) {
-            throw new ConnectException("Unexpectedly interrupted when looking up Kafka cluster info", e);
-        } catch (ExecutionException e) {
-            throw new ConnectException("Failed to connect to and describe Kafka cluster. "
-                                       + "Check worker's broker connection and security properties.", e);
-        }
     }
 
     /**
@@ -201,4 +173,23 @@ public final class ConnectUtils {
         return new ConnectException(message, t);
     }
 
+    /**
+     * Create the base of a {@link CommonClientConfigs#CLIENT_ID_DOC client ID} that can be
+     * used for Kafka clients instantiated by this worker. Workers should append an extra identifier
+     * to the end of this base ID to include extra information on what they are using it for; for example,
+     * {@code clientIdBase(config) + "configs"} could be used as the client ID for a consumer, producer,
+     * or admin client used to interact with a worker's config topic.
+     * @param config the worker config; may not be null
+     * @return the base client ID for this worker; never null, never empty, and will always end in a
+     * hyphen ('-')
+     */
+    public static String clientIdBase(WorkerConfig config) {
+        String result = Optional.ofNullable(config.groupId())
+                .orElse("connect");
+        String userSpecifiedClientId = config.getString(CLIENT_ID_CONFIG);
+        if (userSpecifiedClientId != null) {
+            result += "-" + userSpecifiedClientId;
+        }
+        return result + "-";
+    }
 }

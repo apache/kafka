@@ -76,6 +76,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+
 import static java.util.UUID.randomUUID;
 
 import static org.apache.kafka.common.utils.Utils.filterMap;
@@ -956,8 +957,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.info("Requesting followup rebalance be scheduled by {} for {} ms to probe for caught-up replica tasks.",
-                        consumer, nextRebalanceTimeMs);
+                log.info("Requesting followup rebalance be scheduled by {} for {} to probe for caught-up replica tasks.",
+                        consumer, Utils.toLogDateTimeFormat(nextRebalanceTimeMs));
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalance = false;
             }
@@ -1355,7 +1356,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             log.info("Requested to schedule immediate rebalance for new tasks to be safely revoked from current owner.");
             nextScheduledRebalanceMs.set(0L);
         } else if (encodedNextScheduledRebalanceMs < Long.MAX_VALUE) {
-            log.info("Requested to schedule probing rebalance for {} ms.", encodedNextScheduledRebalanceMs);
+            log.info(
+                "Requested to schedule next probing rebalance at {} to try for a more balanced assignment.",
+                Utils.toLogDateTimeFormat(encodedNextScheduledRebalanceMs)
+            );
             nextScheduledRebalanceMs.set(encodedNextScheduledRebalanceMs);
         } else {
             log.info("No followup rebalance was requested, resetting the rebalance schedule.");

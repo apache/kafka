@@ -213,7 +213,7 @@ public class OptimizedKTableIntegrationTest {
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-        config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        config.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);

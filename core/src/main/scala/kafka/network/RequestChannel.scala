@@ -33,7 +33,7 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.EnvelopeResponseData
 import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, ObjectSerializationCache}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
@@ -110,7 +110,7 @@ object RequestChannel extends Logging {
 
     def sizeOfBodyInBytes: Int = bodyAndSize.size
 
-    def sizeInBytes: Int = header.size(new ObjectSerializationCache) + sizeOfBodyInBytes
+    def sizeInBytes: Int = header.size + sizeOfBodyInBytes
 
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
@@ -121,10 +121,17 @@ object RequestChannel extends Logging {
 
     def isForwarded: Boolean = envelope.isDefined
 
+    private def shouldReturnNotController(response: AbstractResponse): Boolean = {
+      response match {
+        case describeQuorumResponse: DescribeQuorumResponse => response.errorCounts.containsKey(Errors.NOT_LEADER_OR_FOLLOWER)
+        case _ => response.errorCounts.containsKey(Errors.NOT_CONTROLLER)
+      }
+    }
+
     def buildResponseSend(abstractResponse: AbstractResponse): Send = {
       envelope match {
         case Some(request) =>
-          val envelopeResponse = if (abstractResponse.errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
+          val envelopeResponse = if (shouldReturnNotController(abstractResponse)) {
             // Since it's a NOT_CONTROLLER error response, we need to make envelope response with NOT_CONTROLLER error
             // to notify the requester (i.e. BrokerToControllerRequestThread) to update active controller
             new EnvelopeResponse(new EnvelopeResponseData()
@@ -536,7 +543,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   class ErrorMeter(name: String, error: Errors) {
     private val tags = Map("request" -> name, "error" -> error.name)
 
-    @volatile private var meter: Meter = null
+    @volatile private var meter: Meter = _
 
     def getOrCreateMeter(): Meter = {
       if (meter != null)

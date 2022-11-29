@@ -31,7 +31,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
@@ -210,7 +210,8 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            mkSet(persistentStorePartition, nonPersistentStorePartition));
+            mkSet(persistentStorePartition, nonPersistentStorePartition),
+            false);
 
         assertTrue(stateMgr.changelogAsSource(persistentStorePartition));
         assertTrue(stateMgr.changelogAsSource(nonPersistentStorePartition));
@@ -229,7 +230,8 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(persistentStoreTwoName, persistentStoreTopicName)
             ),
-            Collections.emptySet());
+            Collections.emptySet(),
+            false);
 
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
         stateMgr.registerStore(persistentStoreTwo, persistentStore.stateRestoreCallback, null);
@@ -403,7 +405,8 @@ public class ProcessorStateManagerTest {
             stateDirectory,
             changelogReader,
             emptyMap(),
-            emptySet());
+            emptySet(),
+            false);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
@@ -675,7 +678,8 @@ public class ProcessorStateManagerTest {
             stateDirectory,
             changelogReader,
             emptyMap(),
-            emptySet());
+            emptySet(),
+            false);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
@@ -1179,7 +1183,8 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            emptySet());
+            emptySet(),
+            false);
     }
 
     private ProcessorStateManager getStateManager(final Task.TaskType taskType) {

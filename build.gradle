@@ -30,15 +30,15 @@ buildscript {
 }
 
 plugins {
-  id 'com.diffplug.spotless' version '5.12.5'
+  id 'com.diffplug.spotless' version '6.10.0'
   id 'com.github.ben-manes.versions' version '0.42.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '7.0.3'
-  id 'org.nosphere.apache.rat' version "0.7.0"
+  id 'org.owasp.dependencycheck' version '7.1.1'
+  id 'org.nosphere.apache.rat' version "0.7.1"
 
-  id "com.github.spotbugs" version '5.0.6' apply false
-  id 'org.gradle.test-retry' version '1.3.1' apply false
+  id "com.github.spotbugs" version '5.0.9' apply false
+  id 'org.gradle.test-retry' version '1.4.0' apply false
   id 'org.scoverage' version '7.0.0' apply false
   id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
   id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.0"
@@ -47,7 +47,7 @@ plugins {
 spotless {
   scala {
     target 'streams/**/*.scala'
-    scalafmt("$versions.scalafmt").configFile('checkstyle/.scalafmt.conf')
+    scalafmt("$versions.scalafmt").configFile('checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
     licenseHeaderFile 'checkstyle/java.header', 'package'
   }
 }
@@ -178,7 +178,7 @@ apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
   rat {
-    verbose = true
+    verbose.set(true)
     reportDir.set(project.file('build/rat'))
     stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
 
@@ -221,7 +221,7 @@ subprojects {
   task allDeps(type: DependencyReportTask) {}
   // enable running :dependencyInsight task recursively on all subprojects
   // eg: ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
-  task allDepInsight(type: DependencyInsightReportTask) doLast {}
+  task allDepInsight(type: DependencyInsightReportTask) {showingAllVariants = false} doLast {}
 
   apply plugin: 'java-library'
   apply plugin: 'checkstyle'
@@ -404,16 +404,14 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/AbstractHerderTest.*", "**/ConnectorPluginsResourceTest.*",
-      "**/ConnectorsResourceTest.*", "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
-      "**/ErrorHandlingTaskTest.*", "**/KafkaConfigBackingStoreTest.*", "**/KafkaOffsetBackingStoreTest.*",
+      "**/ConnectorPluginsResourceTest.*",
+      "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
+      "**/ErrorHandlingTaskTest.*", "**/KafkaConfigBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
-      "**/SourceTaskOffsetCommitterTest.*", "**/WorkerGroupMemberTest.*",
-      "**/WorkerTest.*", "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*", "**/ExactlyOnceWorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*",
-      // streams tests
-      "**/KafkaStreamsTest.*"
+      "**/SourceTaskOffsetCommitterTest.*",
+      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
+      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*",
+      "**/WorkerTaskTest.*"
     ])
   }
 
@@ -428,6 +426,7 @@ subprojects {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
+      displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
@@ -460,6 +459,7 @@ subprojects {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
+      displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
@@ -507,6 +507,7 @@ subprojects {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
+      displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
@@ -864,9 +865,11 @@ project(':core') {
     api libs.scalaLibrary
 
     implementation project(':server-common')
+    implementation project(':group-coordinator')
     implementation project(':metadata')
     implementation project(':raft')
     implementation project(':storage')
+
 
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
@@ -895,8 +898,10 @@ project(':core') {
     compileOnly libs.log4j
 
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':group-coordinator').sourceSets.test.output
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1173,12 +1178,14 @@ project(':metadata') {
     implementation libs.metrics
     compileOnly libs.log4j
     testImplementation libs.junitJupiter
+    testImplementation libs.jqwik
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoInline
     testImplementation libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     generator project(':generator')
   }
 
@@ -1199,6 +1206,40 @@ project(':metadata') {
   }
 
   compileJava.dependsOn 'processMessages'
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
+project(':group-coordinator') {
+  archivesBaseName = "kafka-group-coordinator"
+
+  dependencies {
+    implementation project(':server-common')
+    implementation project(':clients')
+    implementation libs.slf4jApi
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jlog4j
+  }
 
   sourceSets {
     main {
@@ -1267,14 +1308,15 @@ project(':clients') {
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
     testImplementation libs.bcpkix
+    testImplementation libs.jacksonJaxrsJsonProvider
+    testImplementation libs.jose4j
     testImplementation libs.junitJupiter
+    testImplementation libs.log4j
     testImplementation libs.mockitoInline
 
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
-    testImplementation libs.jose4j
-    testImplementation libs.jacksonJaxrsJsonProvider
 
     generator project(':generator')
   }
@@ -1347,7 +1389,7 @@ project(':clients') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/generated-test/java", "src/test/java"]
+        srcDirs = ["src/generated-test/java", "src/test/java"]
       }
     }
   }
@@ -1490,6 +1532,7 @@ project(':server-common') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jlog4j
   }
@@ -1617,6 +1660,8 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
@@ -1701,6 +1746,7 @@ project(':tools') {
 
   dependencies {
     implementation project(':clients')
+    implementation project(':server-common')
     implementation project(':log4j-appender')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
@@ -1918,7 +1964,7 @@ project(':streams') {
   }
 
   task createStreamsVersionFile() {
-    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildStreamsVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
@@ -2530,6 +2576,10 @@ project(':connect:json') {
 }
 
 project(':connect:runtime') {
+  configurations {
+    swagger
+  }
+
   archivesBaseName = "connect-runtime"
 
   dependencies {
@@ -2557,8 +2607,11 @@ project(':connect:runtime') {
     implementation libs.jettyClient
     implementation libs.reflections
     implementation libs.mavenArtifact
-    implementation libs.swaggerJaxrs2
     implementation libs.swaggerAnnotations
+
+    // We use this library to generate OpenAPI docs for the REST API, but we don't want or need it at compile
+    // or run time. So, we add it to a separate configuration, which we use later on during docs generation
+    swagger libs.swaggerJaxrs2
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
@@ -2574,6 +2627,7 @@ project(':connect:runtime') {
     testImplementation libs.httpclient
 
     testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.bcpkix
   }
 
   javadoc {
@@ -2648,7 +2702,8 @@ project(':connect:runtime') {
 
   task genConnectOpenAPIDocs(type: io.swagger.v3.plugins.gradle.tasks.ResolveTask, dependsOn: setVersionInOpenAPISpec) {
     classpath = sourceSets.main.runtimeClasspath
-    buildClasspath = classpath
+
+    buildClasspath = classpath + configurations.swagger.asCollection()
     outputFileName = 'connect_rest'
     outputFormat = 'YAML'
     prettyPrint = 'TRUE'

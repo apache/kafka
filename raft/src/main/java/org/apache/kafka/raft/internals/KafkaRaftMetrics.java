@@ -102,12 +102,13 @@ public class KafkaRaftMetrics implements AutoCloseable {
         metrics.addMetric(this.highWatermarkMetricName, (mConfig, currentTimeMs) -> state.highWatermark().map(hw -> hw.offset).orElse(-1L));
 
         this.logEndOffsetMetricName = metrics.metricName("log-end-offset", metricGroupName, "The current raft log end offset.");
-        metrics.addMetric(this.logEndOffsetMetricName, (mConfig, currentTimeMs) -> logEndOffset.offset);
+        metrics.addMetric(this.logEndOffsetMetricName, (mConfig, currentTimeMs) -> logEndOffset.offset());
 
         this.logEndEpochMetricName = metrics.metricName("log-end-epoch", metricGroupName, "The current raft log end epoch.");
-        metrics.addMetric(this.logEndEpochMetricName, (mConfig, currentTimeMs) -> logEndOffset.epoch);
+        metrics.addMetric(this.logEndEpochMetricName, (mConfig, currentTimeMs) -> logEndOffset.epoch());
 
-        this.numUnknownVoterConnectionsMetricName = metrics.metricName("number-unknown-voter-connections", metricGroupName, "The number of voter connections recognized at this member.");
+        this.numUnknownVoterConnectionsMetricName = metrics.metricName("number-unknown-voter-connections", metricGroupName,
+                "Number of unknown voters whose connection information is not cached; would never be larger than quorum-size.");
         metrics.addMetric(this.numUnknownVoterConnectionsMetricName, (mConfig, currentTimeMs) -> numUnknownVoterConnections);
 
         this.commitTimeSensor = metrics.sensor("commit-latency");
@@ -118,9 +119,9 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
         this.electionTimeSensor = metrics.sensor("election-latency");
         this.electionTimeSensor.add(metrics.metricName("election-latency-avg", metricGroupName,
-                "The average time in milliseconds to elect a new leader."), new Avg());
+                "The average time in milliseconds spent on electing a new leader."), new Avg());
         this.electionTimeSensor.add(metrics.metricName("election-latency-max", metricGroupName,
-                "The maximum time in milliseconds to elect a new leader."), new Max());
+                "The maximum time in milliseconds spent on electing a new leader."), new Max());
 
         this.fetchRecordsSensor = metrics.sensor("fetch-records");
         this.fetchRecordsSensor.add(metrics.metricName("fetch-records-rate", metricGroupName,

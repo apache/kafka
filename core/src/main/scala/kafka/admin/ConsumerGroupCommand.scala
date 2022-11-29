@@ -298,7 +298,7 @@ object ConsumerGroupCommand extends Logging {
                 maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId.length)
                 maxHostLen = Math.max(maxHostLen, memberAssignment.host.length)
                 maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId.length)
-                includeGroupInstanceId = includeGroupInstanceId || memberAssignment.groupInstanceId.length > 0
+                includeGroupInstanceId = includeGroupInstanceId || memberAssignment.groupInstanceId.nonEmpty
               }
           }
 
@@ -563,8 +563,8 @@ object ConsumerGroupCommand extends Logging {
         // The admin client returns `null` as a value to indicate that there is not committed offset for a partition.
         def getPartitionOffset(tp: TopicPartition): Option[Long] = committedOffsets.get(tp).filter(_ != null).map(_.offset)
         var assignedTopicPartitions = ListBuffer[TopicPartition]()
-        val rowsWithConsumer = consumerGroup.members.asScala.filter(!_.assignment.topicPartitions.isEmpty).toSeq
-          .sortWith(_.assignment.topicPartitions.size > _.assignment.topicPartitions.size).flatMap { consumerSummary =>
+        val rowsWithConsumer = consumerGroup.members.asScala.filterNot(_.assignment.topicPartitions.isEmpty).toSeq
+          .sortBy(_.assignment.topicPartitions.size)(Ordering[Int].reverse).flatMap { consumerSummary =>
           val topicPartitions = consumerSummary.assignment.topicPartitions.asScala
           assignedTopicPartitions = assignedTopicPartitions ++ topicPartitions
           collectConsumerAssignment(groupId, Option(consumerGroup.coordinator), topicPartitions.toList,
@@ -988,8 +988,8 @@ object ConsumerGroupCommand extends Logging {
     val ResetOffsetsDoc = "Reset offsets of consumer group. Supports one consumer group at the time, and instances should be inactive" + nl +
       "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets. " +
       "Additionally, the --export option is used to export the results to a CSV format." + nl +
-      "You must choose one of the following reset specifications: --to-datetime, --by-period, --to-earliest, " +
-      "--to-latest, --shift-by, --from-file, --to-current." + nl +
+      "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
+      "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + nl +
       "To define the scope use --all-topics or --topic. One scope must be specified unless you use '--from-file'."
     val DryRunDoc = "Only show results without executing changes on Consumer Groups. Supported operations: reset-offsets."
     val ExecuteDoc = "Execute operation. Supported operations: reset-offsets."

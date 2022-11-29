@@ -198,7 +198,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         public SharedLogData(Optional<RawSnapshotReader> snapshot) {
             if (snapshot.isPresent()) {
                 RawSnapshotReader initialSnapshot = snapshot.get();
-                prevOffset = initialSnapshot.snapshotId().offset - 1;
+                prevOffset = initialSnapshot.snapshotId().offset() - 1;
                 snapshots.put(prevOffset, initialSnapshot);
             } else {
                 prevOffset = -1;
@@ -305,14 +305,14 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
          * Stores a new snapshot and notifies all threads waiting for a snapshot.
          */
         synchronized void addSnapshot(RawSnapshotReader newSnapshot) {
-            if (newSnapshot.snapshotId().offset - 1 > prevOffset) {
+            if (newSnapshot.snapshotId().offset() - 1 > prevOffset) {
                 log.error(
                     "Ignored attempt to add a snapshot {} that is greater than the latest offset {}",
                     newSnapshot,
                     prevOffset
                 );
             } else {
-                snapshots.put(newSnapshot.snapshotId().offset - 1, newSnapshot);
+                snapshots.put(newSnapshot.snapshotId().offset() - 1, newSnapshot);
                 this.notifyAll();
             }
         }
@@ -344,6 +344,15 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
 
             return Objects.requireNonNull(snapshots.lastEntry()).getValue();
+        }
+
+        /**
+         * Returns the snapshot id of the latest snapshot if there is one.
+         *
+         * If a snapshot doesn't exists, it return an empty Optional.
+         */
+        synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
+            return Optional.ofNullable(snapshots.lastEntry()).map(entry -> entry.getValue().snapshotId());
         }
 
         synchronized long appendedBytes() {
@@ -406,7 +415,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         void handleLeaderChange(long offset, LeaderAndEpoch leader) {
+            // Simulate KRaft implementation by first bumping the epoch before assigning a leader
+            listener.handleLeaderChange(new LeaderAndEpoch(OptionalInt.empty(), leader.epoch()));
             listener.handleLeaderChange(leader);
+
             notifiedLeader = leader;
             this.offset = offset;
         }
@@ -496,7 +508,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                                         snapshot.get(),
                                         new  MetadataRecordSerde(),
                                         BufferSupplier.create(),
-                                        Integer.MAX_VALUE
+                                        Integer.MAX_VALUE,
+                                        true
                                     )
                                 );
                             }
@@ -783,6 +796,11 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 shared.addSnapshot(new MockRawSnapshotReader(snapshotId, buffer));
             })
         );
+    }
+
+    @Override
+    public synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
+        return shared.latestSnapshotId();
     }
 
     @Override

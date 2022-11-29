@@ -1347,8 +1347,7 @@ public abstract class ConsumerCoordinatorTest {
             int generationId = 42;
             String memberId = "consumer-42";
 
-            Timer pollTimer = time.timer(100L);
-            time.sleep(150);
+            Timer pollTimer = time.timer(0L);
             boolean res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
             assertFalse(res);
 
@@ -2822,6 +2821,32 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testCommitOffsetShouldNotSetInstanceIdIfMemberIdIsUnknown() {
+        rebalanceConfig = buildRebalanceConfig(groupInstanceId);
+        ConsumerCoordinator coordinator = buildCoordinator(
+            rebalanceConfig,
+            new Metrics(),
+            assignors,
+            false,
+            subscriptions
+        );
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(5000));
+
+        client.prepareResponse(body -> {
+            OffsetCommitRequestData data = ((OffsetCommitRequest) body).data();
+            return data.groupInstanceId() == null && data.memberId().isEmpty();
+        }, offsetCommitResponse(Collections.emptyMap()));
+
+        RequestFuture<Void> future = coordinator.sendOffsetCommitRequest(singletonMap(t1p,
+            new OffsetAndMetadata(100L, "metadata")));
+
+        assertTrue(consumerClient.poll(future, time.timer(5000)));
+        assertFalse(future.failed());
+    }
+
+    @Test
     public void testCommitOffsetRebalanceInProgress() {
         // we cannot retry if a rebalance occurs before the commit completed
         final String consumerId = "leader";
@@ -3733,7 +3758,8 @@ public abstract class ConsumerCoordinatorTest {
                         .setLeader(memberId)
                         .setSkipAssignment(skipAssignment)
                         .setMemberId(memberId)
-                        .setMembers(metadata)
+                        .setMembers(metadata),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 
@@ -3745,7 +3771,8 @@ public abstract class ConsumerCoordinatorTest {
                         .setProtocolName(partitionAssignor.name())
                         .setLeader(leaderId)
                         .setMemberId(memberId)
-                        .setMembers(Collections.emptyList())
+                        .setMembers(Collections.emptyList()),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 

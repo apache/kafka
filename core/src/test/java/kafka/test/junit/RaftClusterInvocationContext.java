@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -182,6 +183,10 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             ));
         }
 
+        public Collection<ControllerServer> controllerServers() {
+            return controllers().collect(Collectors.toList());
+        }
+
         @Override
         public ClusterType clusterType() {
             return ClusterType.RAFT;
@@ -190,6 +195,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public ClusterConfig config() {
             return clusterConfig;
+        }
+
+        @Override
+        public Set<Integer> controllerIds() {
+            return controllers()
+                .map(controllerServer -> controllerServer.config().nodeId())
+                .collect(Collectors.toSet());
+        }
+
+        @Override
+        public Set<Integer> brokerIds() {
+            return brokers()
+                .map(brokerServer -> brokerServer.config().nodeId())
+                .collect(Collectors.toSet());
         }
 
         @Override
@@ -252,11 +271,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
         }
 
-        private Stream<BrokerServer> brokers() {
+        public Stream<BrokerServer> brokers() {
             return clusterReference.get().brokers().values().stream();
         }
 
-        private Stream<ControllerServer> controllers() {
+        public Stream<ControllerServer> controllers() {
             return clusterReference.get().controllers().values().stream();
         }
 

@@ -21,12 +21,15 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -36,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CommonClientConfigsTest {
+    @SuppressWarnings("deprecation")
     private static class TestConfig extends AbstractConfig {
         private static final ConfigDef CONFIG;
         static {
@@ -62,7 +66,18 @@ public class CommonClientConfigsTest {
                     ConfigDef.Type.STRING,
                     SaslConfigs.DEFAULT_SASL_MECHANISM,
                     ConfigDef.Importance.MEDIUM,
-                    SaslConfigs.SASL_MECHANISM_DOC);
+                    SaslConfigs.SASL_MECHANISM_DOC)
+                .define(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
+                    ConfigDef.Type.LIST,
+                    Collections.emptyList(),
+                    new ConfigDef.NonNullValidator(),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                .define(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG,
+                    ConfigDef.Type.BOOLEAN,
+                    true,
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC);
         }
 
         @Override
@@ -113,5 +128,33 @@ public class CommonClientConfigsTest {
         configs.put(SaslConfigs.SASL_MECHANISM, "");
         ce = assertThrows(ConfigException.class, () -> new TestConfig(configs));
         assertTrue(ce.getMessage().contains(SaslConfigs.SASL_MECHANISM));
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testMetricsReporters() {
+        TestConfig config = new TestConfig(Collections.emptyMap());
+        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters("clientId", config);
+        assertEquals(1, reporters.size());
+        assertTrue(reporters.get(0) instanceof JmxReporter);
+
+        config = new TestConfig(Collections.singletonMap(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false"));
+        reporters = CommonClientConfigs.metricsReporters("clientId", config);
+        assertTrue(reporters.isEmpty());
+
+        config = new TestConfig(Collections.singletonMap(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, JmxReporter.class.getName()));
+        reporters = CommonClientConfigs.metricsReporters("clientId", config);
+        assertEquals(1, reporters.size());
+        assertTrue(reporters.get(0) instanceof JmxReporter);
+
+        Map<String, String> props = new HashMap<>();
+        props.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, JmxReporter.class.getName() + "," + MyJmxReporter.class.getName());
+        config = new TestConfig(props);
+        reporters = CommonClientConfigs.metricsReporters("clientId", config);
+        assertEquals(2, reporters.size());
+    }
+
+    public static class MyJmxReporter extends JmxReporter {
+        public MyJmxReporter() {}
     }
 }

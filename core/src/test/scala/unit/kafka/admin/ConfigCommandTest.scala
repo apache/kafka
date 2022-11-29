@@ -441,14 +441,14 @@ class ConfigCommandTest extends Logging {
   @Test
   def shouldFailIfUnresolvableHost(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-      "--entity-name", "admin", "--entity-type", "ips", "--describe"))
+      "--entity-name", "RFC2606.invalid", "--entity-type", "ips", "--describe"))
     assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
   @Test
   def shouldFailIfUnresolvableHostUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "admin", "--entity-type", "ips", "--describe"))
+      "--entity-name", "RFC2606.invalid", "--entity-type", "ips", "--describe"))
     assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 

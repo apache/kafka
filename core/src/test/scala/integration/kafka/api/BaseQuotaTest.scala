@@ -173,7 +173,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     consumer.subscribe(Collections.singleton(topic1))
     val endTimeMs = System.currentTimeMillis + 10000
     var throttled = false
-    while ((!throttled || quotaTestClients.exemptRequestMetric == null) && System.currentTimeMillis < endTimeMs) {
+    while ((!throttled || quotaTestClients.exemptRequestMetric == null || metricValue(quotaTestClients.exemptRequestMetric) <= 0)
+      && System.currentTimeMillis < endTimeMs) {
       consumer.poll(Duration.ofMillis(100L))
       val throttleMetric = quotaTestClients.throttleMetric(QuotaType.Request, consumerClientId)
       throttled = throttleMetric != null && metricValue(throttleMetric) > 0
@@ -385,9 +386,9 @@ abstract class QuotaTestClients(topic: String,
         s"ClientId $producerClientId of user $userPrincipal must have producer quota")
       assertEquals(Quota.upperBound(consumerQuota.toDouble), overrideConsumerQuota,
         s"ClientId $consumerClientId of user $userPrincipal must have consumer quota")
-      assertEquals(Quota.upperBound(requestQuota.toDouble), overrideProducerRequestQuota,
+      assertEquals(Quota.upperBound(requestQuota), overrideProducerRequestQuota,
         s"ClientId $producerClientId of user $userPrincipal must have request quota")
-      assertEquals(Quota.upperBound(requestQuota.toDouble), overrideConsumerRequestQuota,
+      assertEquals(Quota.upperBound(requestQuota), overrideConsumerRequestQuota,
         s"ClientId $consumerClientId of user $userPrincipal must have request quota")
     }
   }

@@ -41,8 +41,6 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.Slf4jRequestLogWriter;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
-import org.eclipse.jetty.server.handler.DefaultHandler;
-import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.server.handler.StatisticsHandler;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -87,6 +85,8 @@ public class RestServer {
     private static final String PROTOCOL_HTTPS = "https";
 
     private final WorkerConfig config;
+
+    private final RestClient restClient;
     private final ContextHandlerCollection handlers;
     private final Server jettyServer;
 
@@ -96,8 +96,9 @@ public class RestServer {
     /**
      * Create a REST server for this herder using the specified configs.
      */
-    public RestServer(WorkerConfig config) {
+    public RestServer(WorkerConfig config, RestClient restClient) {
         this.config = config;
+        this.restClient = restClient;
 
         List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
         List<String> adminListeners = config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG);
@@ -190,6 +191,11 @@ public class RestServer {
     public void initializeServer() {
         log.info("Initializing REST server");
 
+        Slf4jRequestLogWriter slf4jRequestLogWriter = new Slf4jRequestLogWriter();
+        slf4jRequestLogWriter.setLoggerName(RestServer.class.getCanonicalName());
+        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %{ms}T");
+        jettyServer.setRequestLog(requestLog);
+
         /* Needed for graceful shutdown as per `setStopTimeout` documentation */
         StatisticsHandler statsHandler = new StatisticsHandler();
         statsHandler.setHandler(handlers);
@@ -215,7 +221,7 @@ public class RestServer {
 
         this.resources = new ArrayList<>();
         resources.add(new RootResource(herder));
-        resources.add(new ConnectorsResource(herder, config));
+        resources.add(new ConnectorsResource(herder, config, restClient));
         resources.add(new ConnectorPluginsResource(herder));
         resources.forEach(resourceConfig::register);
 
@@ -284,15 +290,6 @@ public class RestServer {
             configureHttpResponsHeaderFilter(context);
         }
 
-        RequestLogHandler requestLogHandler = new RequestLogHandler();
-        Slf4jRequestLogWriter slf4jRequestLogWriter = new Slf4jRequestLogWriter();
-        slf4jRequestLogWriter.setLoggerName(RestServer.class.getCanonicalName());
-        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %{ms}T");
-        requestLogHandler.setRequestLog(requestLog);
-
-        contextHandlers.add(new DefaultHandler());
-        contextHandlers.add(requestLogHandler);
-
         handlers.setHandlers(contextHandlers.toArray(new Handler[0]));
         try {
             context.start();
@@ -360,6 +357,8 @@ public class RestServer {
             builder.port(advertisedPort);
         else if (serverConnector != null && serverConnector.getPort() > 0)
             builder.port(serverConnector.getPort());
+        else if (serverConnector != null && serverConnector.getLocalPort() > 0)
+            builder.port(serverConnector.getLocalPort());
 
         log.info("Advertised URI: {}", builder.build());
 

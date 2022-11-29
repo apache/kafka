@@ -21,11 +21,11 @@ import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   GlobalKTable,
   JoinWindows,
+  KStream => KStreamJ,
   Printed,
   TransformerSupplier,
   ValueTransformerSupplier,
-  ValueTransformerWithKeySupplier,
-  KStream => KStreamJ
+  ValueTransformerWithKeySupplier
 }
 import org.apache.kafka.streams.processor.TopicNameExtractor
 import org.apache.kafka.streams.processor.api.{FixedKeyProcessorSupplier, ProcessorSupplier}
@@ -334,7 +334,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#branch`
    * @deprecated since 2.8. Use `split` instead.
    */
-  //noinspection ScalaUnnecessaryParentheses
+  // noinspection ScalaUnnecessaryParentheses
   @deprecated("use `split()` instead", "2.8")
   def branch(predicates: ((K, V) => Boolean)*): Array[KStream[K, V]] =
     inner.branch(predicates.map(_.asPredicate): _*).map(kstream => new KStream(kstream))

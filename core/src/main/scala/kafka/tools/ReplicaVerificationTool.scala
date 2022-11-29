@@ -114,7 +114,7 @@ object ReplicaVerificationTool extends Logging {
 
     val options = parser.parse(args: _*)
 
-    if (args.length == 0 || options.has(helpOpt)) {
+    if (args.isEmpty || options.has(helpOpt)) {
       CommandLineUtils.printUsageAndDie(parser, "Validate that all replicas for a set of topics have the same data.")
     }
 
@@ -277,7 +277,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
   @volatile private var lastReportTime = Time.SYSTEM.milliseconds
   private var maxLag: Long = -1L
   private var offsetWithMaxLag: Long = -1L
-  private var maxLagTopicAndPartition: TopicPartition = null
+  private var maxLagTopicAndPartition: TopicPartition = _
   initialize()
 
   def createNewFetcherBarrier(): Unit = {

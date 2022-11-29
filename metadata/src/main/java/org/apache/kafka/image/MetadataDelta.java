@@ -71,8 +71,8 @@ public final class MetadataDelta {
 
     public MetadataDelta(MetadataImage image) {
         this.image = image;
-        this.highestOffset = image.highestOffsetAndEpoch().offset;
-        this.highestEpoch = image.highestOffsetAndEpoch().epoch;
+        this.highestOffset = image.highestOffsetAndEpoch().offset();
+        this.highestEpoch = image.highestOffsetAndEpoch().epoch();
     }
 
     public MetadataImage image() {
@@ -257,8 +257,7 @@ public final class MetadataDelta {
     }
 
     public void replay(RemoveTopicRecord record) {
-        getOrCreateTopicsDelta().replay(record);
-        String topicName = topicsDelta.replay(record);
+        String topicName = getOrCreateTopicsDelta().replay(record);
         getOrCreateConfigsDelta().replay(record, topicName);
     }
 

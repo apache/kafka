@@ -28,9 +28,15 @@ public class JoinGroupResponse extends AbstractResponse {
 
     private final JoinGroupResponseData data;
 
-    public JoinGroupResponse(JoinGroupResponseData data) {
+    public JoinGroupResponse(JoinGroupResponseData data, short version) {
         super(ApiKeys.JOIN_GROUP);
         this.data = data;
+
+        // All versions prior to version 7 do not support nullable
+        // string for the protocol name. Empty string should be used.
+        if (version < 7 && data.protocolName() == null) {
+            data.setProtocolName("");
+        }
     }
 
     @Override
@@ -47,6 +53,11 @@ public class JoinGroupResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }
@@ -57,7 +68,7 @@ public class JoinGroupResponse extends AbstractResponse {
     }
 
     public static JoinGroupResponse parse(ByteBuffer buffer, short version) {
-        return new JoinGroupResponse(new JoinGroupResponseData(new ByteBufferAccessor(buffer), version));
+        return new JoinGroupResponse(new JoinGroupResponseData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override

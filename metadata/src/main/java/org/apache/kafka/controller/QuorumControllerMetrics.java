@@ -26,6 +26,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class QuorumControllerMetrics implements ControllerMetrics {
@@ -47,6 +48,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "KafkaController", "OfflinePartitionsCount");
     private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
         "KafkaController", "PreferredReplicaImbalanceCount");
+    private final static MetricName METADATA_ERROR_COUNT = getMetricName(
+            "KafkaController", "MetadataErrorCount");
     private final static MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastAppliedRecordOffset");
     private final static MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
@@ -64,6 +67,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private volatile int globalPartitionCount;
     private volatile int offlinePartitionCount;
     private volatile int preferredReplicaImbalanceCount;
+    private volatile AtomicInteger metadataErrorCount;
     private final AtomicLong lastAppliedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastCommittedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
@@ -74,6 +78,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final Gauge<Integer> globalTopicCountGauge;
     private final Gauge<Integer> offlinePartitionCountGauge;
     private final Gauge<Integer> preferredReplicaImbalanceCountGauge;
+    private final Gauge<Integer> metadataErrorCountGauge;
     private final Gauge<Long> lastAppliedRecordOffsetGauge;
     private final Gauge<Long> lastCommittedRecordOffsetGauge;
     private final Gauge<Long> lastAppliedRecordTimestampGauge;
@@ -93,6 +98,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         this.globalPartitionCount = 0;
         this.offlinePartitionCount = 0;
         this.preferredReplicaImbalanceCount = 0;
+        this.metadataErrorCount = new AtomicInteger(0);
         this.activeControllerCount = registry.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -135,6 +141,12 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             @Override
             public Integer value() {
                 return preferredReplicaImbalanceCount;
+            }
+        });
+        this.metadataErrorCountGauge = registry.newGauge(METADATA_ERROR_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return metadataErrorCount.get();
             }
         });
         lastAppliedRecordOffsetGauge = registry.newGauge(LAST_APPLIED_RECORD_OFFSET, new Gauge<Long>() {
@@ -243,6 +255,15 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     }
 
     @Override
+    public void incrementMetadataErrorCount() {
+        this.metadataErrorCount.getAndIncrement();
+    }
+
+    @Override
+    public int metadataErrorCount() {
+        return this.metadataErrorCount.get();
+    }
+    @Override
     public void setLastAppliedRecordOffset(long offset) {
         lastAppliedRecordOffset.set(offset);
     }
@@ -276,12 +297,15 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     public void close() {
         Arrays.asList(
             ACTIVE_CONTROLLER_COUNT,
+            FENCED_BROKER_COUNT,
+            ACTIVE_BROKER_COUNT,
             EVENT_QUEUE_TIME_MS,
             EVENT_QUEUE_PROCESSING_TIME_MS,
             GLOBAL_TOPIC_COUNT,
             GLOBAL_PARTITION_COUNT,
             OFFLINE_PARTITION_COUNT,
             PREFERRED_REPLICA_IMBALANCE_COUNT,
+            METADATA_ERROR_COUNT,
             LAST_APPLIED_RECORD_OFFSET,
             LAST_COMMITTED_RECORD_OFFSET,
             LAST_APPLIED_RECORD_TIMESTAMP,

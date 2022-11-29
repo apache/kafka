@@ -1878,8 +1878,46 @@ class SocketServerTest {
     }, false)
   }
 
+  /**
+   * Test to ensure "Selector.poll()" does not block at "select(timeout)" when there is no data in the socket but there
+   * is data in the buffer. This only happens when SSL protocol is used.
+   */
+  @Test
+  def testLatencyWithBufferedDataAndNoSocketData(): Unit = {
+    shutdownServerAndMetrics(server)
+
+    props ++= sslServerProps
+    val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props))
+    testableServer.enableRequestProcessing(Map.empty)
+    val testableSelector = testableServer.testableSelector
+    val proxyServer = new ProxyServer(testableServer)
+    val selectTimeoutMs = 5000
+    // set pollTimeoutOverride to "selectTimeoutMs" to ensure poll() timeout is distinct and can be identified
+    testableSelector.pollTimeoutOverride = Some(selectTimeoutMs)
+
+    try {
+      // initiate SSL connection by sending 1 request via socket, then send 2 requests directly into the netReadBuffer
+      val (sslSocket, req1) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
+
+      // force all data to be transferred to the kafka broker by closing the client connection to proxy server
+      sslSocket.close()
+      TestUtils.waitUntilTrue(() => proxyServer.clientConnSocket.isClosed, "proxyServer.clientConnSocket is still not closed after 60000 ms", 60000)
+
+      // process the request and send the response
+      processRequest(testableServer.dataPlaneRequestChannel, req1)
+
+      // process the requests in the netReadBuffer, this should not block
+      val req2 = receiveRequest(testableServer.dataPlaneRequestChannel)
+      processRequest(testableServer.dataPlaneRequestChannel, req2)
+
+    } finally {
+      proxyServer.close()
+      shutdownServerAndMetrics(testableServer)
+    }
+  }
+
   private def sslServerProps: Properties = {
-    val trustStoreFile = File.createTempFile("truststore", ".jks")
+    val trustStoreFile = TestUtils.tempFile("truststore", ".jks")
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
     sslProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
@@ -2044,10 +2082,12 @@ class SocketServerTest {
     }
 
     def testableSelector: TestableSelector =
-      dataPlaneAcceptors.get(endpoint).processors(0).selector.asInstanceOf[TestableSelector]
+      testableProcessor.selector.asInstanceOf[TestableSelector]
 
-    def testableProcessor: TestableProcessor =
+    def testableProcessor: TestableProcessor = {
+      val endpoint = this.config.dataPlaneListeners.head
       dataPlaneAcceptors.get(endpoint).processors(0).asInstanceOf[TestableProcessor]
+    }
 
     def waitForChannelClose(connectionId: String, locallyClosed: Boolean): Unit = {
       val selector = testableSelector

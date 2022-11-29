@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
  * Unit test for time index.
  */
 class TimeIndexTest {
-  var idx: TimeIndex = null
+  var idx: TimeIndex = _
   val maxEntries = 30
   val baseOffset = 45L
 

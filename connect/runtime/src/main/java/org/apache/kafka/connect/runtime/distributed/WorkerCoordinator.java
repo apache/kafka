@@ -37,9 +37,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
@@ -373,10 +375,10 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
             metrics.addMetric(metrics.metricName("assigned-connectors",
                               this.metricGrpName,
-                              "The number of connector instances currently assigned to this consumer"), numConnectors);
+                              "The number of connector instances currently assigned to this worker"), numConnectors);
             metrics.addMetric(metrics.metricName("assigned-tasks",
                               this.metricGrpName,
-                              "The number of tasks currently assigned to this consumer"), numTasks);
+                              "The number of tasks currently assigned to this worker"), numTasks);
         }
     }
 
@@ -455,30 +457,31 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         }
 
         public static class Builder {
-            private Collection<String> withConnectors;
-            private Collection<ConnectorTaskId> withTasks;
+            private Set<String> withConnectors = new LinkedHashSet<>();
+            private Set<ConnectorTaskId> withTasks = new LinkedHashSet<>();
 
             public Builder() {
             }
 
-            public ConnectorsAndTasks.Builder withCopies(Collection<String> connectors,
-                                                         Collection<ConnectorTaskId> tasks) {
-                withConnectors = new ArrayList<>(connectors);
-                withTasks = new ArrayList<>(tasks);
+            public ConnectorsAndTasks.Builder with(Collection<String> connectors,
+                                                   Collection<ConnectorTaskId> tasks) {
+                withConnectors = new LinkedHashSet<>(connectors);
+                withTasks = new LinkedHashSet<>(tasks);
                 return this;
             }
 
-            public ConnectorsAndTasks.Builder with(Collection<String> connectors,
-                                                   Collection<ConnectorTaskId> tasks) {
-                withConnectors = new ArrayList<>(connectors);
-                withTasks = new ArrayList<>(tasks);
+            public ConnectorsAndTasks.Builder addConnectors(Collection<String> connectors) {
+                this.withConnectors.addAll(connectors);
+                return this;
+            }
+
+            public ConnectorsAndTasks.Builder addTasks(Collection<ConnectorTaskId> tasks) {
+                this.withTasks.addAll(tasks);
                 return this;
             }
 
             public ConnectorsAndTasks build() {
-                return new ConnectorsAndTasks(
-                        withConnectors != null ? withConnectors : new ArrayList<>(),
-                        withTasks != null ? withTasks : new ArrayList<>());
+                return new ConnectorsAndTasks(withConnectors, withTasks);
             }
         }
 

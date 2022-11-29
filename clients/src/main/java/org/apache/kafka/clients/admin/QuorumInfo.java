@@ -24,18 +24,36 @@ import java.util.OptionalLong;
  * This class is used to describe the state of the quorum received in DescribeQuorumResponse.
  */
 public class QuorumInfo {
-    private final Integer leaderId;
+    private final int leaderId;
+    private final long leaderEpoch;
+    private final long highWatermark;
     private final List<ReplicaState> voters;
     private final List<ReplicaState> observers;
 
-    QuorumInfo(Integer leaderId, List<ReplicaState> voters, List<ReplicaState> observers) {
+    QuorumInfo(
+        int leaderId,
+        long leaderEpoch,
+        long highWatermark,
+        List<ReplicaState> voters,
+        List<ReplicaState> observers
+    ) {
         this.leaderId = leaderId;
+        this.leaderEpoch = leaderEpoch;
+        this.highWatermark = highWatermark;
         this.voters = voters;
         this.observers = observers;
     }
 
-    public Integer leaderId() {
+    public int leaderId() {
         return leaderId;
+    }
+
+    public long leaderEpoch() {
+        return leaderEpoch;
+    }
+
+    public long highWatermark() {
+        return highWatermark;
     }
 
     public List<ReplicaState> voters() {
@@ -51,20 +69,24 @@ public class QuorumInfo {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         QuorumInfo that = (QuorumInfo) o;
-        return leaderId.equals(that.leaderId)
-            && voters.equals(that.voters)
-            && observers.equals(that.observers);
+        return leaderId == that.leaderId
+            && leaderEpoch == that.leaderEpoch
+            && highWatermark == that.highWatermark
+            && Objects.equals(voters, that.voters)
+            && Objects.equals(observers, that.observers);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(leaderId, voters, observers);
+        return Objects.hash(leaderId, leaderEpoch, highWatermark, voters, observers);
     }
 
     @Override
     public String toString() {
         return "QuorumInfo(" +
             "leaderId=" + leaderId +
+            ", leaderEpoch=" + leaderEpoch +
+            ", highWatermark=" + highWatermark +
             ", voters=" + voters +
             ", observers=" + observers +
             ')';
@@ -73,8 +95,8 @@ public class QuorumInfo {
     public static class ReplicaState {
         private final int replicaId;
         private final long logEndOffset;
-        private final OptionalLong lastFetchTimeMs;
-        private final OptionalLong lastCaughtUpTimeMs;
+        private final OptionalLong lastFetchTimestamp;
+        private final OptionalLong lastCaughtUpTimestamp;
 
         ReplicaState() {
             this(0, 0, OptionalLong.empty(), OptionalLong.empty());
@@ -83,13 +105,13 @@ public class QuorumInfo {
         ReplicaState(
             int replicaId,
             long logEndOffset,
-            OptionalLong lastFetchTimeMs,
-            OptionalLong lastCaughtUpTimeMs
+            OptionalLong lastFetchTimestamp,
+            OptionalLong lastCaughtUpTimestamp
         ) {
             this.replicaId = replicaId;
             this.logEndOffset = logEndOffset;
-            this.lastFetchTimeMs = lastFetchTimeMs;
-            this.lastCaughtUpTimeMs = lastCaughtUpTimeMs;
+            this.lastFetchTimestamp = lastFetchTimestamp;
+            this.lastCaughtUpTimestamp = lastCaughtUpTimestamp;
         }
 
         /**
@@ -109,19 +131,21 @@ public class QuorumInfo {
         }
 
         /**
-         * Return the lastFetchTime in milliseconds for this replica.
+         * Return the last millisecond timestamp that the leader received a
+         * fetch from this replica.
          * @return The value of the lastFetchTime if known, empty otherwise
          */
-        public OptionalLong lastFetchTimeMs() {
-            return lastFetchTimeMs;
+        public OptionalLong lastFetchTimestamp() {
+            return lastFetchTimestamp;
         }
 
         /**
-         * Return the lastCaughtUpTime in milliseconds for this replica.
+         * Return the last millisecond timestamp at which this replica was known to be
+         * caught up with the leader.
          * @return The value of the lastCaughtUpTime if known, empty otherwise
          */
-        public OptionalLong lastCaughtUpTimeMs() {
-            return lastCaughtUpTimeMs;
+        public OptionalLong lastCaughtUpTimestamp() {
+            return lastCaughtUpTimestamp;
         }
 
         @Override
@@ -131,13 +155,13 @@ public class QuorumInfo {
             ReplicaState that = (ReplicaState) o;
             return replicaId == that.replicaId
                 && logEndOffset == that.logEndOffset
-                && lastFetchTimeMs.equals(that.lastFetchTimeMs)
-                && lastCaughtUpTimeMs.equals(that.lastCaughtUpTimeMs);
+                && lastFetchTimestamp.equals(that.lastFetchTimestamp)
+                && lastCaughtUpTimestamp.equals(that.lastCaughtUpTimestamp);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(replicaId, logEndOffset, lastFetchTimeMs, lastCaughtUpTimeMs);
+            return Objects.hash(replicaId, logEndOffset, lastFetchTimestamp, lastCaughtUpTimestamp);
         }
 
         @Override
@@ -145,8 +169,8 @@ public class QuorumInfo {
             return "ReplicaState(" +
                 "replicaId=" + replicaId +
                 ", logEndOffset=" + logEndOffset +
-                ", lastFetchTimeMs=" + lastFetchTimeMs +
-                ", lastCaughtUpTimeMs=" + lastCaughtUpTimeMs +
+                ", lastFetchTimestamp=" + lastFetchTimestamp +
+                ", lastCaughtUpTimestamp=" + lastCaughtUpTimestamp +
                 ')';
         }
     }

@@ -155,7 +155,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  *
  * <p> Note that the {@code TopologyTestDriver} processes input records synchronously.
  * This implies that {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit.interval.ms} and
- * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache.max.bytes.buffering} configuration have no effect.
+ * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache.max.bytes.buffering} configuration have no effect.
  * The driver behaves as if both configs would be set to zero, i.e., as if a "commit" (and thus "flush") would happen
  * after each input record.
  *
@@ -329,7 +329,7 @@ public class TopologyTestDriver implements Closeable {
 
         final ThreadCache cache = new ThreadCache(
             logContext,
-            Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
+            Math.max(0, streamsConfig.getLong(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG)),
             streamsMetrics
         );
 
@@ -489,8 +489,8 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 new MockChangelogRegister(),
                 processorTopology.storeToChangelogTopic(),
-                new HashSet<>(partitionsByInputTopic.values())
-            );
+                new HashSet<>(partitionsByInputTopic.values()),
+                false);
             final RecordCollector recordCollector = new RecordCollectorImpl(
                 logContext,
                 TASK_ID,
@@ -1126,6 +1126,13 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public void register(final TopicPartition partition, final ProcessorStateManager stateManager) {
             restoringPartitions.add(partition);
+        }
+
+        @Override
+        public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) {
+            for (final TopicPartition changelogPartition : changelogPartitions) {
+                register(changelogPartition, stateManager);
+            }
         }
 
         @Override

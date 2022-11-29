@@ -22,7 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.{Time, MockTime}
+import org.apache.kafka.common.utils.{MockTime, Time}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
@@ -40,7 +40,7 @@ class GroupMetadataTest {
   private val rebalanceTimeoutMs = 60000
   private val sessionTimeoutMs = 10000
 
-  private var group: GroupMetadata = null
+  private var group: GroupMetadata = _
 
   @BeforeEach
   def setUp(): Unit = {
@@ -558,6 +558,21 @@ class GroupMetadataTest {
   }
 
   @Test
+  def testUpdateMember(): Unit = {
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+    group.add(member)
+
+    val newRebalanceTimeout = 120000
+    val newSessionTimeout = 20000
+    group.updateMember(member, List(("roundrobin", Array[Byte]())), newRebalanceTimeout, newSessionTimeout, null)
+
+    assertEquals(group.rebalanceTimeoutMs, newRebalanceTimeout)
+    assertEquals(member.sessionTimeoutMs, newSessionTimeout)
+  }
+
+
+  @Test
   def testReplaceGroupInstanceWithNonExistingMember(): Unit = {
     val newMemberId = "newMemberId"
     assertThrows(classOf[IllegalArgumentException], () => group.replaceStaticMember(groupInstanceId, memberId, newMemberId))
@@ -606,6 +621,30 @@ class GroupMetadataTest {
   }
 
   @Test
+  def testInvokeJoinCallbackFails(): Unit = {
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+
+    var shouldFail = true
+    var result: Option[JoinGroupResult] = None
+    def joinCallback(joinGroupResult: JoinGroupResult): Unit = {
+      if (shouldFail) {
+        shouldFail = false
+        throw new Exception("Something went wrong!")
+      } else {
+        result = Some(joinGroupResult)
+      }
+    }
+
+    group.add(member, joinCallback)
+
+    group.maybeInvokeJoinCallback(member, JoinGroupResult(member.memberId, Errors.NONE))
+
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, result.get.error)
+    assertFalse(member.isAwaitingJoin)
+  }
+
+  @Test
   def testNotInvokeJoinCallback(): Unit = {
     val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
@@ -614,6 +653,31 @@ class GroupMetadataTest {
     assertFalse(member.isAwaitingJoin)
     group.maybeInvokeJoinCallback(member, JoinGroupResult(member.memberId, Errors.NONE))
     assertFalse(member.isAwaitingJoin)
+  }
+
+  @Test
+  def testInvokeSyncCallbackFails(): Unit = {
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+
+    var shouldFail = true
+    var result: Option[SyncGroupResult] = None
+    def syncCallback(syncGroupResult: SyncGroupResult): Unit = {
+      if (shouldFail) {
+        shouldFail = false
+        throw new Exception("Something went wrong!")
+      } else {
+        result = Some(syncGroupResult)
+      }
+    }
+
+    group.add(member)
+    member.awaitingSyncCallback = syncCallback
+
+    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Errors.NONE))
+    assertTrue(invoked)
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, result.get.error)
+    assertFalse(member.isAwaitingSync)
   }
 
   @Test

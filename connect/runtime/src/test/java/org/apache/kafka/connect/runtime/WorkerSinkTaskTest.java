@@ -42,6 +42,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.WorkerSinkTask.SinkTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -155,6 +156,8 @@ public class WorkerSinkTaskTest {
     private StatusBackingStore statusBackingStore;
     @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
+    @Mock
+    private ErrorHandlingMetrics errorHandlingMetrics;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     private Capture<Pattern> topicsRegex = EasyMock.newCapture();
 
@@ -182,7 +185,7 @@ public class WorkerSinkTaskTest {
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
         workerTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
-            keyConverter, valueConverter, headerConverter,
+            keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
             transformationChain, consumer, pluginLoader, time,
             RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore);
     }
@@ -394,6 +397,24 @@ public class WorkerSinkTaskTest {
             PowerMock.expectLastCall();
         });
 
+        // Expect commit
+        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(2);
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        // Commit advance by one
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        // Nothing polled for this partition
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        EasyMock.expect(sinkTask.preCommit(workerCurrentOffsets)).andReturn(workerCurrentOffsets);
+        final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
+        consumer.commitAsync(EasyMock.eq(workerCurrentOffsets), EasyMock.capture(callback));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            callback.getValue().onComplete(workerCurrentOffsets, null);
+            return null;
+        });
+        expectConsumerPoll(0);
+        sinkTask.put(EasyMock.eq(Collections.emptyList()));
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -434,6 +455,11 @@ public class WorkerSinkTaskTest {
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("batch-size-max", 1.0);
         assertTaskMetricValue("batch-size-avg", 0.5);
+        
+        sinkTaskContext.getValue().requestCommit();
+        time.sleep(10000L);
+        workerTask.iteration();
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
 
         PowerMock.verifyAll();
     }

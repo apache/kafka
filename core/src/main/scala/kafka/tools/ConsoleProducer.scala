@@ -286,8 +286,8 @@ object ConsoleProducer {
   }
 
   class LineMessageReader extends MessageReader {
-    var topic: String = null
-    var reader: BufferedReader = null
+    var topic: String = _
+    var reader: BufferedReader = _
     var parseKey = false
     var keySeparator = "\t"
     var parseHeaders = false

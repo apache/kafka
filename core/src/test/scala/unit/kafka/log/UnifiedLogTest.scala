@@ -46,11 +46,12 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 
 class UnifiedLogTest {
-  var config: KafkaConfig = null
+  var config: KafkaConfig = _
   val brokerTopicStats = new BrokerTopicStats
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val mockTime = new MockTime()
+  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
   def metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
   @BeforeEach
@@ -477,7 +478,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L)
 
     // create a log
-    val log = createLog(logDir, logConfig, maxProducerIdExpirationMs = 24 * 60)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = new ProducerStateManagerConfig(24 * 60))
     assertEquals(1, log.numberOfSegments, "Log begins with a single empty segment.")
     // Test the segment rolling behavior when messages do not have a timestamp.
     mockTime.sleep(log.config.segmentMs + 1)
@@ -1167,12 +1168,12 @@ class UnifiedLogTest {
 
   @Test
   def testPeriodicProducerIdExpiration(): Unit = {
-    val maxProducerIdExpirationMs = 200
+    val producerStateManagerConfig = new ProducerStateManagerConfig(200)
     val producerIdExpirationCheckIntervalMs = 100
 
     val pid = 23L
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
-    val log = createLog(logDir, logConfig, maxProducerIdExpirationMs = maxProducerIdExpirationMs,
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig,
       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs)
     val records = Seq(new SimpleRecord(mockTime.milliseconds(), "foo".getBytes))
     log.appendAsLeader(TestUtils.records(records, producerId = pid, producerEpoch = 0, sequence = 0), leaderEpoch = 0)
@@ -3454,6 +3455,26 @@ class UnifiedLogTest {
     assertFalse(newDir.exists())
   }
 
+  @Test
+  def testMaybeUpdateHighWatermarkAsFollower(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = createLog(logDir, logConfig)
+
+    for (i <- 0 until 100) {
+      val records = TestUtils.singletonRecords(value = s"test$i".getBytes)
+      log.appendAsLeader(records, leaderEpoch = 0)
+    }
+
+    assertEquals(Some(99L), log.maybeUpdateHighWatermark(99L))
+    assertEquals(None, log.maybeUpdateHighWatermark(99L))
+
+    assertEquals(Some(100L), log.maybeUpdateHighWatermark(100L))
+    assertEquals(None, log.maybeUpdateHighWatermark(100L))
+
+    // bound by the log end offset
+    assertEquals(None, log.maybeUpdateHighWatermark(101L))
+  }
+
   private def appendTransactionalToBuffer(buffer: ByteBuffer,
                                           producerId: Long,
                                           producerEpoch: Short,
@@ -3504,13 +3525,13 @@ class UnifiedLogTest {
                         scheduler: Scheduler = mockTime.scheduler,
                         time: Time = mockTime,
                         maxTransactionTimeoutMs: Int = 60 * 60 * 1000,
-                        maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
-                        producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
+                        producerStateManagerConfig: ProducerStateManagerConfig = producerStateManagerConfig,
+                        producerIdExpirationCheckIntervalMs: Int = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
                         lastShutdownClean: Boolean = true,
                         topicId: Option[Uuid] = None,
                         keepPartitionMetadataFile: Boolean = true): UnifiedLog = {
     LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
-      maxTransactionTimeoutMs, maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs,
+      maxTransactionTimeoutMs, producerStateManagerConfig, producerIdExpirationCheckIntervalMs,
       lastShutdownClean, topicId, keepPartitionMetadataFile)
   }
 

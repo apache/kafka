@@ -107,6 +107,7 @@ public class BatchAccumulator<T> implements Closeable {
      * @throws NotLeaderException if the epoch is less than the leader epoch
      * @throws IllegalArgumentException if the epoch is invalid (greater than the leader epoch)
      * @throws BufferAllocationException if we failed to allocate memory for the records
+     * @throws IllegalStateException if we tried to append new records after the batch has been built
      */
     public long append(int epoch, List<T> records) {
         return append(epoch, records, false);
@@ -127,6 +128,7 @@ public class BatchAccumulator<T> implements Closeable {
      * @throws NotLeaderException if the epoch is less than the leader epoch
      * @throws IllegalArgumentException if the epoch is invalid (greater than the leader epoch)
      * @throws BufferAllocationException if we failed to allocate memory for the records
+     * @throws IllegalStateException if we tried to append new records after the batch has been built
      */
     public long appendAtomic(int epoch, List<T> records) {
         return append(epoch, records, true);
@@ -260,18 +262,18 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Append a {@link LeaderChangeMessage} record to the batch
      *
-     * @param @LeaderChangeMessage The message to append
-     * @param @currentTimeMs The timestamp of message generation
+     * @param leaderChangeMessage The message to append
+     * @param currentTimestamp The current time in milliseconds
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
     public void appendLeaderChangeMessage(
         LeaderChangeMessage leaderChangeMessage,
-        long currentTimeMs
+        long currentTimestamp
     ) {
         appendControlMessage(buffer -> {
             return MemoryRecords.withLeaderChangeMessage(
                 this.nextOffset,
-                currentTimeMs,
+                currentTimestamp,
                 this.epoch,
                 buffer,
                 leaderChangeMessage
@@ -283,17 +285,18 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Append a {@link SnapshotHeaderRecord} record to the batch
      *
-     * @param snapshotHeaderRecord The message to append
+     * @param snapshotHeaderRecord The record to append
+     * @param currentTimestamp The current time in milliseconds
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
-    public void appendSnapshotHeaderMessage(
+    public void appendSnapshotHeaderRecord(
         SnapshotHeaderRecord snapshotHeaderRecord,
-        long currentTimeMs
+        long currentTimestamp
     ) {
         appendControlMessage(buffer -> {
             return MemoryRecords.withSnapshotHeaderRecord(
                 this.nextOffset,
-                currentTimeMs,
+                currentTimestamp,
                 this.epoch,
                 buffer,
                 snapshotHeaderRecord
@@ -304,18 +307,18 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Append a {@link SnapshotFooterRecord} record to the batch
      *
-     * @param snapshotFooterRecord The message to append
-     * @param currentTimeMs
+     * @param snapshotFooterRecord The record to append
+     * @param currentTimestamp The current time in milliseconds
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
-    public void appendSnapshotFooterMessage(
+    public void appendSnapshotFooterRecord(
         SnapshotFooterRecord snapshotFooterRecord,
-        long currentTimeMs
+        long currentTimestamp
     ) {
         appendControlMessage(buffer -> {
             return MemoryRecords.withSnapshotFooterRecord(
                 this.nextOffset,
-                currentTimeMs,
+                currentTimestamp,
                 this.epoch,
                 buffer,
                 snapshotFooterRecord

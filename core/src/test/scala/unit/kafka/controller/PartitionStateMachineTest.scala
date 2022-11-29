@@ -35,10 +35,10 @@ import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, verify, when}
 
 class PartitionStateMachineTest {
-  private var controllerContext: ControllerContext = null
-  private var mockZkClient: KafkaZkClient = null
-  private var mockControllerBrokerRequestBatch: ControllerBrokerRequestBatch = null
-  private var partitionStateMachine: PartitionStateMachine = null
+  private var controllerContext: ControllerContext = _
+  private var mockZkClient: KafkaZkClient = _
+  private var mockControllerBrokerRequestBatch: ControllerBrokerRequestBatch = _
+  private var partitionStateMachine: PartitionStateMachine = _
 
   private val brokerId = 5
   private val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId, "zkConnect"))

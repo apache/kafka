@@ -20,6 +20,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
+import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpOptions;
@@ -29,6 +30,7 @@ import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -44,8 +46,11 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.core.MediaType;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -60,10 +65,12 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 public class RestServerTest {
-    
+
     private Herder herder;
     private Plugins plugins;
     private RestServer server;
+    private CloseableHttpClient httpClient;
+    private Collection<CloseableHttpResponse> responses = new ArrayList<>();
 
     protected static final String KAFKA_CLUSTER_ID = "Xbafgnagvar";
 
@@ -71,10 +78,17 @@ public class RestServerTest {
     public void setUp() {
         herder = mock(Herder.class);
         plugins = mock(Plugins.class);
+        httpClient = HttpClients.createMinimal();
     }
 
     @After
-    public void tearDown() {
+    public void tearDown() throws IOException {
+        for (CloseableHttpResponse response: responses) {
+            response.close();
+        }
+        if (httpClient != null) {
+            httpClient.close();
+        }
         if (server != null) {
             server.stop();
         }
@@ -111,8 +125,9 @@ public class RestServerTest {
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
         DistributedConfig config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, null);
         Assert.assertEquals("http://localhost:8080/", server.advertisedUrl().toString());
+        server.stop();
 
         // Advertised URI from listeners with protocol
         configMap = new HashMap<>(baseWorkerProps());
@@ -120,16 +135,18 @@ public class RestServerTest {
         configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "https");
         config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, null);
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
+        server.stop();
 
         // Advertised URI from listeners with only SSL available
         configMap = new HashMap<>(baseWorkerProps());
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://localhost:8443");
         config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, null);
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
+        server.stop();
 
         // Listener is overriden by advertised values
         configMap = new HashMap<>(baseWorkerProps());
@@ -139,16 +156,18 @@ public class RestServerTest {
         configMap.put(WorkerConfig.REST_ADVERTISED_PORT_CONFIG, "10000");
         config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, null);
         Assert.assertEquals("http://somehost:10000/", server.advertisedUrl().toString());
+        server.stop();
 
         // correct listener is chosen when https listener is configured before http listener and advertised listener is http
         configMap = new HashMap<>(baseWorkerProps());
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://encrypted-localhost:42069,http://plaintext-localhost:4761");
         configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");
         config = new DistributedConfig(configMap);
-        server = new RestServer(config);
+        server = new RestServer(config, null);
         Assert.assertEquals("http://plaintext-localhost:4761/", server.advertisedUrl().toString());
+        server.stop();
     }
 
     @Test
@@ -160,18 +179,13 @@ public class RestServerTest {
         doReturn(plugins).when(herder).plugins();
         doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
 
         HttpOptions request = new HttpOptions("/connectors");
         request.addHeader("Content-Type", MediaType.WILDCARD);
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(
-            server.advertisedUrl().getHost(),
-            server.advertisedUrl().getPort()
-        );
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
         Assert.assertEquals(MediaType.TEXT_PLAIN, response.getEntity().getContentType().getValue());
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         response.getEntity().writeTo(baos);
@@ -193,18 +207,15 @@ public class RestServerTest {
         doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
         doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
+        URI serverUrl = server.advertisedUrl();
+
         HttpRequest request = new HttpGet("/connectors");
         request.addHeader("Referer", origin + "/page");
         request.addHeader("Origin", origin);
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(
-            server.advertisedUrl().getHost(),
-            server.advertisedUrl().getPort()
-        );
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(serverUrl, request);
 
         Assert.assertEquals(200, response.getStatusLine().getStatusCode());
 
@@ -217,7 +228,7 @@ public class RestServerTest {
         request.addHeader("Referer", origin + "/page");
         request.addHeader("Origin", origin);
         request.addHeader("Access-Control-Request-Method", method);
-        response = httpClient.execute(httpHost, request);
+        response = executeRequest(serverUrl, request);
         Assert.assertEquals(404, response.getStatusLine().getStatusCode());
         if (expectedHeader != null) {
             Assert.assertEquals(expectedHeader,
@@ -240,13 +251,11 @@ public class RestServerTest {
         doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
         doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
         HttpRequest request = new HttpGet("/connectors");
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
 
         Assert.assertEquals(200, response.getStatusLine().getStatusCode());
     }
@@ -263,18 +272,17 @@ public class RestServerTest {
         // create some loggers in the process
         LoggerFactory.getLogger("a.b.c.s.W");
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
 
         ObjectMapper mapper = new ObjectMapper();
 
-        String host = server.advertisedUrl().getHost();
-        int port = server.advertisedUrl().getPort();
+        URI serverUrl = server.advertisedUrl();
 
-        executePut(host, port, "/admin/loggers/a.b.c.s.W", "{\"level\": \"INFO\"}");
+        executePut(serverUrl, "/admin/loggers/a.b.c.s.W", "{\"level\": \"INFO\"}");
 
-        String responseStr = executeGet(host, port, "/admin/loggers");
+        String responseStr = executeGet(serverUrl, "/admin/loggers");
         Map<String, Map<String, ?>> loggers = mapper.readValue(responseStr, new TypeReference<Map<String, Map<String, ?>>>() {
         });
         assertNotNull("expected non null response for /admin/loggers" + prettyPrint(loggers), loggers);
@@ -299,18 +307,16 @@ public class RestServerTest {
         LoggerFactory.getLogger("a.b.c.p.Y");
         LoggerFactory.getLogger("a.b.c.p.Z");
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
 
         assertNotEquals(server.advertisedUrl(), server.adminUrl());
 
-        executeGet(server.adminUrl().getHost(), server.adminUrl().getPort(), "/admin/loggers");
+        executeGet(server.adminUrl(), "/admin/loggers");
 
         HttpRequest request = new HttpGet("/admin/loggers");
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
         Assert.assertEquals(404, response.getStatusLine().getStatusCode());
     }
 
@@ -325,17 +331,42 @@ public class RestServerTest {
         doReturn(plugins).when(herder).plugins();
         doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
 
         assertNull(server.adminUrl());
 
         HttpRequest request = new HttpGet("/admin/loggers");
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
         Assert.assertEquals(404, response.getStatusLine().getStatusCode());
+    }
+
+    @Test
+    public void testRequestLogs() throws IOException, InterruptedException {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        DistributedConfig workerConfig = new DistributedConfig(configMap);
+
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
+
+        server = new RestServer(workerConfig, null);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        LogCaptureAppender restServerAppender = LogCaptureAppender.createAndRegister();
+        HttpRequest request = new HttpGet("/");
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
+
+        // Stop the server to flush all logs
+        server.stop();
+
+        Collection<String> logMessages = restServerAppender.getMessages();
+        LogCaptureAppender.unregister(restServerAppender);
+        restServerAppender.close();
+        String expectedlogContent = "\"GET / HTTP/1.1\" " + response.getStatusLine().getStatusCode();
+        assertTrue(logMessages.stream().anyMatch(logMessage -> logMessage.contains(expectedlogContent)));
     }
 
     @Test
@@ -367,50 +398,44 @@ public class RestServerTest {
         doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
         doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
-        server = new RestServer(workerConfig);
-        try {
-            server.initializeServer();
-            server.initializeResources(herder);
-            HttpRequest request = new HttpGet("/connectors");
-            try (CloseableHttpClient httpClient = HttpClients.createMinimal()) {
-                HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
-                try (CloseableHttpResponse response = httpClient.execute(httpHost, request)) {
-                    Assert.assertEquals(200, response.getStatusLine().getStatusCode());
-                    if (!headerConfig.isEmpty()) {
-                        expectedHeaders.forEach((k, v) ->
-                                Assert.assertEquals(response.getFirstHeader(k).getValue(), v));
-                    } else {
-                        Assert.assertNull(response.getFirstHeader("X-Frame-Options"));
-                    }
-                }
-            }
-        } finally {
-            server.stop();
-            server = null;
+        server = new RestServer(workerConfig, null);
+        server.initializeServer();
+        server.initializeResources(herder);
+        HttpRequest request = new HttpGet("/connectors");
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
+        Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+        if (!headerConfig.isEmpty()) {
+            expectedHeaders.forEach((k, v) ->
+                    Assert.assertEquals(response.getFirstHeader(k).getValue(), v));
+        } else {
+            Assert.assertNull(response.getFirstHeader("X-Frame-Options"));
         }
     }
 
-    private String executeGet(String host, int port, String endpoint) throws IOException {
+    private String executeGet(URI serverUrl, String endpoint) throws IOException {
         HttpRequest request = new HttpGet(endpoint);
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(host, port);
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(serverUrl, request);
 
         Assert.assertEquals(200, response.getStatusLine().getStatusCode());
         return new BasicResponseHandler().handleResponse(response);
     }
 
-    private String executePut(String host, int port, String endpoint, String jsonBody) throws IOException {
+    private String executePut(URI serverUrl, String endpoint, String jsonBody) throws IOException {
         HttpPut request = new HttpPut(endpoint);
         StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8.name());
         entity.setContentType("application/json");
         request.setEntity(entity);
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(host, port);
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(serverUrl, request);
 
         Assert.assertEquals(200, response.getStatusLine().getStatusCode());
         return new BasicResponseHandler().handleResponse(response);
+    }
+
+    private HttpResponse executeRequest(URI serverUrl, HttpRequest request) throws IOException {
+        HttpHost httpHost = new HttpHost(serverUrl.getHost(), serverUrl.getPort());
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        responses.add(response);
+        return response;
     }
 
     private static String prettyPrint(Map<String, ?> map) throws IOException {

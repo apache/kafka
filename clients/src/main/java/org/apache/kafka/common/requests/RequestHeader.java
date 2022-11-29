@@ -24,13 +24,16 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /**
  * The header for a request in the Kafka protocol
  */
 public class RequestHeader implements AbstractRequestResponse {
+    private final static int SIZE_NOT_INITIALIZED = -1;
     private final RequestHeaderData data;
     private final short headerVersion;
+    private int size = SIZE_NOT_INITIALIZED;
 
     public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId) {
         this(new RequestHeaderData().
@@ -70,12 +73,39 @@ public class RequestHeader implements AbstractRequestResponse {
         return data;
     }
 
-    public void write(ByteBuffer buffer, ObjectSerializationCache serializationCache) {
+    // Visible for testing.
+    void write(ByteBuffer buffer, ObjectSerializationCache serializationCache) {
         data.write(new ByteBufferAccessor(buffer), serializationCache, headerVersion);
     }
 
-    public int size(ObjectSerializationCache serializationCache) {
-        return data.size(serializationCache, headerVersion);
+    /**
+     * Calculates the size of {@link RequestHeader} in bytes.
+     *
+     * This method to calculate size should be only when it is immediately followed by
+     * {@link #write(ByteBuffer, ObjectSerializationCache)} method call. In such cases, ObjectSerializationCache
+     * helps to avoid the serialization twice. In all other cases, {@link #size()} should be preferred instead.
+     *
+     * Calls to this method leads to calculation of size every time it is invoked. {@link #size()} should be preferred
+     * instead.
+     *
+     * Visible for testing.
+     */
+    int size(ObjectSerializationCache serializationCache) {
+        this.size = data.size(serializationCache, headerVersion);
+        return size;
+    }
+
+    /**
+     * Returns the size of {@link RequestHeader} in bytes.
+     *
+     * Calls to this method are idempotent and inexpensive since it returns the cached value of size after the first
+     * invocation.
+     */
+    public int size() {
+        if (this.size == SIZE_NOT_INITIALIZED) {
+            this.size = size(new ObjectSerializationCache());
+        }
+        return size;
     }
 
     public ResponseHeader toResponseHeader() {
@@ -88,18 +118,23 @@ public class RequestHeader implements AbstractRequestResponse {
             // We derive the header version from the request api version, so we read that first.
             // The request api version is part of `RequestHeaderData`, so we reset the buffer position after the read.
             int position = buffer.position();
+            int requestHeaderSize = buffer.remaining();
             apiKey = buffer.getShort();
             short apiVersion = buffer.getShort();
             short headerVersion = ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion);
             buffer.position(position);
-            RequestHeaderData headerData = new RequestHeaderData(
-                new ByteBufferAccessor(buffer), headerVersion);
+            RequestHeaderData headerData = new RequestHeaderData(new ByteBufferAccessor(buffer), headerVersion);
             // Due to a quirk in the protocol, client ID is marked as nullable.
             // However, we treat a null client ID as equivalent to an empty client ID.
             if (headerData.clientId() == null) {
                 headerData.setClientId("");
             }
-            return new RequestHeader(headerData, headerVersion);
+            final RequestHeader header = new RequestHeader(headerData, headerVersion);
+            // Size of a buffer required to serialize the information in this header is already known and would not
+            // change since the RequestHeader object is immutable. Instead of computing it again whenever
+            // RequestHeader#size() is called, we choose to cache the size value when available.
+            header.size = requestHeaderSize;
+            return header;
         } catch (UnsupportedVersionException e) {
             throw new InvalidRequestException("Unknown API key " + apiKey, e);
         } catch (Throwable ex) {
@@ -114,6 +149,7 @@ public class RequestHeader implements AbstractRequestResponse {
                 ", apiVersion=" + apiVersion() +
                 ", clientId=" + clientId() +
                 ", correlationId=" + correlationId() +
+                ", headerVersion=" + headerVersion +
                 ")";
     }
 
@@ -122,11 +158,12 @@ public class RequestHeader implements AbstractRequestResponse {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         RequestHeader that = (RequestHeader) o;
-        return this.data.equals(that.data);
+        return headerVersion == that.headerVersion &&
+            Objects.equals(data, that.data);
     }
 
     @Override
     public int hashCode() {
-        return this.data.hashCode();
+        return Objects.hash(data, headerVersion);
     }
 }

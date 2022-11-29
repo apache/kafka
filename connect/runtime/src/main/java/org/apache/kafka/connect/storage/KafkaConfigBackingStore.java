@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -65,6 +66,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
@@ -261,6 +263,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     final Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
     private final Supplier<TopicAdmin> topicAdminSupplier;
     private SharedTopicAdmin ownTopicAdmin;
+    private final String clientId;
 
     // Set of connectors where we saw a task commit with an incomplete set of task config updates, indicating the data
     // is in an inconsistent state and we cannot safely use them until they have been refreshed.
@@ -272,7 +275,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     private volatile SessionKey sessionKey;
 
     // Connector -> Map[ConnectorTaskId -> Configs]
-    private final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
+    // visible for testing
+    final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
 
     final Map<String, TargetState> connectorTargetStates = new HashMap<>();
 
@@ -288,15 +292,16 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     @Deprecated
     public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer) {
-        this(converter, config, configTransformer, null);
+        this(converter, config, configTransformer, null, "connect-distributed-");
     }
 
-    public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier) {
+    public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier, String clientIdBase) {
         this.lock = new Object();
         this.started = false;
         this.converter = converter;
         this.offset = -1;
         this.topicAdminSupplier = adminSupplier;
+        this.clientId = Objects.requireNonNull(clientIdBase) + "configs";
 
         this.baseProducerProps = baseProducerProps(config);
         // By default, Connect disables idempotent behavior for all producers, even though idempotence became
@@ -377,7 +382,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     private Map<String, Object> baseProducerProps(WorkerConfig workerConfig) {
         Map<String, Object> producerProps = new HashMap<>(workerConfig.originals());
-        String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(workerConfig);
+        String kafkaClusterId = workerConfig.kafkaClusterId();
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
@@ -389,6 +394,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     Map<String, Object> fencableProducerProps(DistributedConfig workerConfig) {
         Map<String, Object> result = new HashMap<>(baseProducerProps(workerConfig));
 
+        result.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-leader");
         // Always require producer acks to all to ensure durable writes
         result.put(ProducerConfig.ACKS_CONFIG, "all");
         // We can set this to 5 instead of 1 without risking reordering because we are using an idempotent producer
@@ -662,14 +668,16 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
-        Map<String, Object> producerProps = new HashMap<>(baseProducerProps);
-
-        String clusterId = ConnectUtils.lookupKafkaClusterId(config);
+        String clusterId = config.kafkaClusterId();
         Map<String, Object> originals = config.originals();
+
+        Map<String, Object> producerProps = new HashMap<>(baseProducerProps);
+        producerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
         if (config.exactlyOnceSourceEnabled()) {
             ConnectUtils.ensureProperty(
@@ -681,6 +689,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         Map<String, Object> adminProps = new HashMap<>(originals);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
+        adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         Supplier<TopicAdmin> adminSupplier;
         if (topicAdminSupplier != null) {
             adminSupplier = topicAdminSupplier;
@@ -853,6 +862,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 connectorConfigs.remove(connectorName);
                 connectorTaskCounts.remove(connectorName);
                 taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
+                deferredTaskUpdates.remove(connectorName);
                 removed = true;
             } else {
                 // Connector configs can be applied and callbacks invoked immediately

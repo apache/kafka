@@ -27,5 +27,5 @@ public enum ExactlyOnceSupport {
     /**
      * Signals that a connector does not support exactly-once delivery.
      */
-    UNSUPPORTED;
+    UNSUPPORTED
 }

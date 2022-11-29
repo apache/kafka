@@ -38,7 +38,7 @@ should_include_file() {
     return 0
   fi
   file=$1
-  if [ -z "$(echo "$file" | egrep "$regex")" ] ; then
+  if [ -z "$(echo "$file" | grep -E "$regex")" ] ; then
     return 0
   else
     return 1
@@ -48,7 +48,7 @@ should_include_file() {
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-  SCALA_VERSION=2.13.6
+  SCALA_VERSION=2.13.8
   if [[ -f "$base_dir/gradle.properties" ]]; then
     SCALA_VERSION=`grep "^scalaVersion=" "$base_dir/gradle.properties" | cut -d= -f 2`
   fi

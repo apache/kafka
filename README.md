@@ -83,14 +83,16 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
+### Running a Kafka broker in KRaft mode
+
+    KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
+    ./bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties
+    ./bin/kafka-server-start.sh config/kraft/server.properties
+
 ### Running a Kafka broker in ZooKeeper mode
 
     ./bin/zookeeper-server-start.sh config/zookeeper.properties
     ./bin/kafka-server-start.sh config/server.properties
-
-### Running a Kafka broker in KRaft (Kafka Raft metadata) mode
-
-See [config/kraft/README.md](https://github.com/apache/kafka/blob/trunk/config/kraft/README.md).
 
 ### Cleaning the build ###
     ./gradlew clean
@@ -194,18 +196,12 @@ For backwards compatibility, the following also works:
 
 ### Installing specific projects to the local Maven repository ###
 
-    ./gradlew -PskipSigning :streams:publishToMavenLocal
+    ./gradlew -PskipSigning=true :streams:publishToMavenLocal
     
 If needed, you can specify the Scala version with `-PscalaVersion=2.13`.
 
 ### Building the test jar ###
     ./gradlew testJar
-
-### Determining how transitive dependencies are added ###
-    ./gradlew core:dependencies --configuration runtime
-
-### Determining if any dependencies could be updated ###
-    ./gradlew dependencyUpdates
 
 ### Running code quality checks ###
 There are two code quality analysis tools that we regularly run, spotbugs and checkstyle.
@@ -233,6 +229,21 @@ We use [JMH](https://openjdk.java.net/projects/code-tools/jmh/) to write microbe
     
 See [jmh-benchmarks/README.md](https://github.com/apache/kafka/blob/trunk/jmh-benchmarks/README.md) for details on how to run the microbenchmarks.
 
+### Dependency Analysis ###
+
+The gradle [dependency debugging documentation](https://docs.gradle.org/current/userguide/viewing_debugging_dependencies.html) mentions using the `dependencies` or `dependencyInsight` tasks to debug dependencies for the root project or individual subprojects.
+
+Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterating through all subprojects:
+
+    ./gradlew allDeps
+
+    ./gradlew allDepInsight --configuration runtimeClasspath --dependency com.fasterxml.jackson.core:jackson-databind
+
+These take the same arguments as the builtin variants.
+
+### Determining if any dependencies could be updated ###
+    ./gradlew dependencyUpdates
+
 ### Common build options ###
 
 The following options should be set with a `-P` switch, for example `./gradlew -PmaxParallelForks=1 test`.
@@ -259,18 +270,6 @@ includes inlining of methods within the scala library (which avoids lambda alloc
 only safe if the Scala library version is the same at compile time and runtime. Since we cannot guarantee this for all cases (for example, users
 may depend on the kafka jar for integration tests where they may include a scala library with a different version), we don't enable it by
 default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more details.
-
-### Dependency Analysis ###
-
-The gradle [dependency debugging documentation](https://docs.gradle.org/current/userguide/viewing_debugging_dependencies.html) mentions using the `dependencies` or `dependencyInsight` tasks to debug dependencies for the root project or individual subprojects.
-
-Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterating through all subprojects:
-
-    ./gradlew allDeps
-
-    ./gradlew allDepInsight --configuration runtimeClasspath --dependency com.fasterxml.jackson.core:jackson-databind
-
-These take the same arguments as the builtin variants.
 
 ### Running system tests ###
 

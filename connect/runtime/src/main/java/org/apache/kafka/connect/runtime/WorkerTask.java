@@ -24,10 +24,11 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.AbstractStatus.State;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
@@ -61,8 +62,10 @@ abstract class WorkerTask implements Runnable {
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private final TaskMetricsGroup taskMetricsGroup;
     private volatile TargetState targetState;
+    private volatile boolean failed;
     private volatile boolean stopping;   // indicates whether the Worker has asked the task to stop
     private volatile boolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
+    private final ErrorHandlingMetrics errorMetrics;
 
     protected final RetryWithToleranceOperator retryWithToleranceOperator;
 
@@ -71,14 +74,17 @@ abstract class WorkerTask implements Runnable {
                       TargetState initialState,
                       ClassLoader loader,
                       ConnectMetrics connectMetrics,
+                      ErrorHandlingMetrics errorMetrics,
                       RetryWithToleranceOperator retryWithToleranceOperator,
                       Time time,
                       StatusBackingStore statusBackingStore) {
         this.id = id;
         this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
+        this.errorMetrics = errorMetrics;
         this.statusListener = taskMetricsGroup;
         this.loader = loader;
         this.targetState = initialState;
+        this.failed = false;
         this.stopping = false;
         this.cancelled = false;
         this.taskMetricsGroup.recordState(this.targetState);
@@ -126,6 +132,7 @@ abstract class WorkerTask implements Runnable {
      */
     public void cancel() {
         cancelled = true;
+        retryWithToleranceOperator.triggerStop();
     }
 
     /**
@@ -146,7 +153,9 @@ abstract class WorkerTask implements Runnable {
      * Remove all metrics published by this task.
      */
     public void removeMetrics() {
-        taskMetricsGroup.close();
+        // Close quietly here so that we can be sure to close everything even if one attempt fails
+        Utils.closeQuietly(taskMetricsGroup::close, "Task metrics group");
+        Utils.closeQuietly(errorMetrics, "Error handling metrics");
     }
 
     protected abstract void initializeAndStart();
@@ -154,6 +163,10 @@ abstract class WorkerTask implements Runnable {
     protected abstract void execute();
 
     protected abstract void close();
+
+    protected boolean isFailed() {
+        return failed;
+    }
 
     protected boolean isStopping() {
         return stopping;
@@ -188,6 +201,7 @@ abstract class WorkerTask implements Runnable {
             statusListener.onStartup(id);
             execute();
         } catch (Throwable t) {
+            failed = true;
             if (cancelled) {
                 log.warn("{} After being scheduled for shutdown, the orphan task threw an uncaught exception. A newer instance of this task might be already running", this, t);
             } else if (stopping) {
@@ -237,7 +251,6 @@ abstract class WorkerTask implements Runnable {
         LoggingContext.clear();
 
         try (LoggingContext loggingContext = LoggingContext.forTask(id())) {
-            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
             String savedName = Thread.currentThread().getName();
             try {
                 Thread.currentThread().setName(THREAD_NAME_PREFIX + id);
@@ -250,7 +263,6 @@ abstract class WorkerTask implements Runnable {
                     throw (Error) t;
             } finally {
                 Thread.currentThread().setName(savedName);
-                Plugins.compareAndSwapLoaders(savedLoader);
                 shutdownLatch.countDown();
             }
         }

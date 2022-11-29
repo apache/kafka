@@ -233,29 +233,32 @@ public class MirrorMaker {
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
         DistributedConfig distributedConfig = new DistributedConfig(workerProps);
-        String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(distributedConfig);
+        String kafkaClusterId = distributedConfig.kafkaClusterId();
+        String clientIdBase = ConnectUtils.clientIdBase(distributedConfig);
         // Create the admin client to be shared by all backing stores for this herder
         Map<String, Object> adminProps = new HashMap<>(distributedConfig.originals());
         ConnectUtils.addMetricsContextProperties(adminProps, distributedConfig, kafkaClusterId);
         SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
-        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin);
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase);
         offsetBackingStore.configure(distributedConfig);
         Worker worker = new Worker(workerId, time, plugins, distributedConfig, offsetBackingStore, CLIENT_CONFIG_OVERRIDE_POLICY);
         WorkerConfigTransformer configTransformer = worker.configTransformer();
         Converter internalValueConverter = worker.getInternalValueConverter();
-        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter, sharedAdmin);
+        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter, sharedAdmin, clientIdBase);
         statusBackingStore.configure(distributedConfig);
         ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
                 internalValueConverter,
                 distributedConfig,
                 configTransformer,
-                sharedAdmin);
+                sharedAdmin,
+                clientIdBase);
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
         // tracking the various shared admin objects in this class.
+        // Do not provide a restClient to the DistributedHerder to indicate that request forwarding is disabled
         Herder herder = new DistributedHerder(distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                advertisedUrl, CLIENT_CONFIG_OVERRIDE_POLICY, sharedAdmin);
+                advertisedUrl, null, CLIENT_CONFIG_OVERRIDE_POLICY, sharedAdmin);
         herders.put(sourceAndTarget, herder);
     }
 

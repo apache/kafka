@@ -294,12 +294,12 @@ class PartitionLockTest extends Logging {
         val segments = new LogSegments(log.topicPartition)
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxTransactionTimeout = 5 * 60 * 1000
-        val maxProducerIdExpirationMs = 60 * 60 * 1000
+        val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
         val producerStateManager = new ProducerStateManager(
           log.topicPartition,
           log.dir,
           maxTransactionTimeout,
-          maxProducerIdExpirationMs,
+          producerStateManagerConfig,
           mockTime
         )
         val offsets = new LogLoader(

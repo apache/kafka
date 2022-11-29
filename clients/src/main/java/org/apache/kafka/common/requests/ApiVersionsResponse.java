@@ -75,6 +75,11 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 2;
     }
@@ -107,17 +112,25 @@ public class ApiVersionsResponse extends AbstractResponse {
         int throttleTimeMs,
         ApiMessageType.ListenerType listenerType
     ) {
-        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType));
+        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType), Features.emptySupportedFeatures());
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
         int throttleTimeMs,
         ApiVersionCollection apiVersions
     ) {
+        return createApiVersionsResponse(throttleTimeMs, apiVersions, Features.emptySupportedFeatures());
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse(
+        int throttleTimeMs,
+        ApiVersionCollection apiVersions,
+        Features<SupportedVersionRange> latestSupportedFeatures
+    ) {
         return createApiVersionsResponse(
             throttleTimeMs,
             apiVersions,
-            Features.emptySupportedFeatures(),
+            latestSupportedFeatures,
             Collections.emptyMap(),
             UNKNOWN_FINALIZED_FEATURES_EPOCH);
     }

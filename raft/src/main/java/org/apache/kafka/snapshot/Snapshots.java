@@ -32,7 +32,7 @@ public final class Snapshots {
     private static final Logger log = LoggerFactory.getLogger(Snapshots.class);
     public static final String SUFFIX = ".checkpoint";
     private static final String PARTIAL_SUFFIX = String.format("%s.part", SUFFIX);
-    private static final String DELETE_SUFFIX = String.format("%s.deleted", SUFFIX);
+    public static final String DELETE_SUFFIX = String.format("%s.deleted", SUFFIX);
 
     private static final NumberFormat OFFSET_FORMATTER = NumberFormat.getInstance();
     private static final NumberFormat EPOCH_FORMATTER = NumberFormat.getInstance();
@@ -53,14 +53,14 @@ public final class Snapshots {
     }
 
     static String filenameFromSnapshotId(OffsetAndEpoch snapshotId) {
-        return String.format("%s-%s", OFFSET_FORMATTER.format(snapshotId.offset), EPOCH_FORMATTER.format(snapshotId.epoch));
+        return String.format("%s-%s", OFFSET_FORMATTER.format(snapshotId.offset()), EPOCH_FORMATTER.format(snapshotId.epoch()));
     }
 
     static Path moveRename(Path source, OffsetAndEpoch snapshotId) {
         return source.resolveSibling(filenameFromSnapshotId(snapshotId) + SUFFIX);
     }
 
-    static Path deleteRename(Path source, OffsetAndEpoch snapshotId) {
+    static Path deleteRenamePath(Path source, OffsetAndEpoch snapshotId) {
         return source.resolveSibling(filenameFromSnapshotId(snapshotId) + DELETE_SUFFIX);
     }
 
@@ -114,7 +114,7 @@ public final class Snapshots {
      */
     public static boolean deleteIfExists(Path logDir, OffsetAndEpoch snapshotId) {
         Path immutablePath = snapshotPath(logDir, snapshotId);
-        Path deletedPath = deleteRename(immutablePath, snapshotId);
+        Path deletedPath = deleteRenamePath(immutablePath, snapshotId);
         try {
             boolean deleted = Files.deleteIfExists(immutablePath) | Files.deleteIfExists(deletedPath);
             if (deleted) {
@@ -130,13 +130,16 @@ public final class Snapshots {
     }
 
     /**
-     * Mark a snapshot for deletion by renaming with the deleted suffix
+     * Mark a snapshot for deletion by renaming with the deleted suffix.
+     *
+     * @return the path of the snapshot marked for deletion (i.e. with .delete suffix)
      */
-    public static void markForDelete(Path logDir, OffsetAndEpoch snapshotId) {
+    public static Path markForDelete(Path logDir, OffsetAndEpoch snapshotId) {
         Path immutablePath = snapshotPath(logDir, snapshotId);
-        Path deletedPath = deleteRename(immutablePath, snapshotId);
+        Path deletedPath = deleteRenamePath(immutablePath, snapshotId);
         try {
             Utils.atomicMoveWithFallback(immutablePath, deletedPath, false);
+            return deletedPath;
         } catch (IOException e) {
             throw new UncheckedIOException(
                 String.format(

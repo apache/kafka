@@ -209,6 +209,28 @@ public class KafkaConsumerTest {
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metrics.reporters().get(0);
 
         assertEquals(consumer.getClientId(), mockMetricsReporter.clientId);
+        assertEquals(2, consumer.metrics.reporters().size());
+        consumer.close();
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testDisableJmxReporter() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
+        assertTrue(consumer.metrics.reporters().isEmpty());
+        consumer.close();
+    }
+
+    @Test
+    public void testExplicitlyEnableJmxReporter() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
+        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
+        assertEquals(1, consumer.metrics.reporters().size());
         consumer.close();
     }
 
@@ -1703,7 +1725,8 @@ public class KafkaConsumerTest {
                                         .setMemberId(memberId)
                                         .setMetadata(byteBuffer.array())
                                 )
-                        )
+                        ),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
 
         client.prepareResponseFrom(leaderResponse, coordinator);
@@ -2416,7 +2439,8 @@ public class KafkaConsumerTest {
                         .setProtocolName(assignor.name())
                         .setLeader(leaderId)
                         .setMemberId(memberId)
-                        .setMembers(Collections.emptyList())
+                        .setMembers(Collections.emptyList()),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 

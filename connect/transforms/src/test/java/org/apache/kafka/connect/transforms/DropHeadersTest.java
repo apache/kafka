@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DropHeadersTest {
 
-    private DropHeaders<SourceRecord> xform = new DropHeaders<>();
+    private final DropHeaders<SourceRecord> xform = new DropHeaders<>();
 
     private Map<String, ?> config(String... headers) {
         Map<String, Object> result = new HashMap<>();
@@ -109,9 +109,8 @@ public class DropHeadersTest {
         Object value = "value";
         Long timestamp = 0L;
 
-        SourceRecord record = new SourceRecord(sourcePartition, sourceOffset, topic, partition,
+        return new SourceRecord(sourcePartition, sourceOffset, topic, partition,
                 keySchema, key, valueSchema, value, timestamp, headers);
-        return record;
     }
 }
 
