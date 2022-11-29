@@ -326,6 +326,13 @@
     </subpackage>
   </subpackage>
 
+  <subpackage name="coordinator">
+    <subpackage name="group">
+      <allow pkg="org.apache.kafka.common.message" />
+      <allow pkg="org.apache.kafka.common.requests" />
+    </subpackage>
+  </subpackage>
+
   <subpackage name="server">
     <allow pkg="org.apache.kafka.common" />
 
