@@ -794,8 +794,13 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testCommitFlushCallbackFailure() throws Exception {
-        testCommitFailure(FlushOutcome.FAIL_FLUSH_CALLBACK);
+    public void testCommitFlushCallbackSyncFailure() throws Exception {
+        testCommitFailure(FlushOutcome.SYNC_FAIL_FLUSH_CALLBACK);
+    }
+
+    @Test
+    public void testCommitFlushCallbackAsyncFailure() throws Exception {
+        testCommitFailure(FlushOutcome.ASYNC_FAIL_FLUSH_CALLBACK);
     }
 
     @Test
@@ -1152,7 +1157,8 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
     private enum FlushOutcome {
         SUCCEED,
         SUCCEED_ANY_TIMES,
-        FAIL_FLUSH_CALLBACK,
+        SYNC_FAIL_FLUSH_CALLBACK,
+        ASYNC_FAIL_FLUSH_CALLBACK,
         FAIL_TRANSACTION_COMMIT
     }
 
@@ -1187,10 +1193,20 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
                 expectCall(() -> sourceTask.commitRecord(EasyMock.anyObject(), EasyMock.anyObject())).anyTimes();
                 expectCall(sourceTask::commit).anyTimes();
                 break;
-            case FAIL_FLUSH_CALLBACK:
+            case SYNC_FAIL_FLUSH_CALLBACK:
                 offsetFlush.andAnswer(() -> {
                     flushCallback.getValue().onCompletion(new RecordTooLargeException(), null);
                     return null;
+                });
+                expectCall(offsetWriter::cancelFlush);
+                break;
+            case ASYNC_FAIL_FLUSH_CALLBACK:
+                // flush does not execute the callback immediately, simulating offsets being sent to the producer
+                offsetFlush.andReturn(null);
+                // the flush callback is completed asynchronously during commitTransaction, also propagating the error
+                expectCall(producer::commitTransaction).andAnswer(() -> {
+                    flushCallback.getValue().onCompletion(new RecordTooLargeException(), null);
+                    throw new RecordTooLargeException();
                 });
                 expectCall(offsetWriter::cancelFlush);
                 break;
