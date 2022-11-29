@@ -81,7 +81,7 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         for (String topic : allSubscribedTopics) {
             List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
-            if (partitions != null) {
+            if (partitions != null && !partitions.isEmpty()) {
                 partitions = new ArrayList<>(partitions);
                 partitions.sort(Comparator.comparing(PartitionInfo::partition));
                 partitionsPerTopic.put(topic, partitions);
