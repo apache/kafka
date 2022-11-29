@@ -414,8 +414,6 @@ class KafkaServer(
            )
 
           raftManager.startup()
-          //lifecycleManager.initialCatchUpFuture.get()
-          //lifecycleManager.setReadyToUnfence().get()
         }
 
         /* start token manager */
@@ -534,6 +532,8 @@ class KafkaServer(
         dynamicConfigManager.startup()
 
         if (lifecycleManager != null) {
+          // TODO this needs to be able to happen after startup as well so we can deal with controllers that come up
+          // after the brokers have started.
           lifecycleManager.initialCatchUpFuture.get
           lifecycleManager.setReadyToUnfence().get
         }
@@ -767,7 +767,10 @@ class KafkaServer(
       // the shutdown.
       _brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
 
-      val shutdownSucceeded = if (lifecycleManager != null) {
+      val shutdownSucceeded = if (lifecycleManager != null &&
+                                  lifecycleManager.state == BrokerState.RUNNING) {
+        // TODO see if RUNNING is a sufficient check here. Probably need to check if we have a ZK/KRaft controller
+        // as well
         lifecycleManager.beginControlledShutdown()
         try {
           info("Starting controlled shutdown via BrokerLifecycleManager")

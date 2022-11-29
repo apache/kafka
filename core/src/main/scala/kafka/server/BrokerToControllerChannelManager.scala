@@ -367,7 +367,7 @@ class BrokerToControllerRequestThread(
     if (activeControllerAddress().isDefined) {
       super.pollOnce(Long.MaxValue)
     } else {
-      debug("Controller isn't cached, looking for local metadata changes")
+      debug("Controller isn't known, checking with controller provider")
       controllerNodeProvider.get() match {
         case Some(controllerNode) =>
           info(s"Recorded new controller, from now on will use node $controllerNode")
@@ -375,7 +375,7 @@ class BrokerToControllerRequestThread(
           metadataUpdater.setNodes(Seq(controllerNode).asJava)
         case None =>
           // need to backoff to avoid tight loops
-          debug("No controller defined in metadata cache, retrying after backoff")
+          debug("No controller provided, retrying after backoff")
           super.pollOnce(maxTimeoutMs = 100)
       }
     }
