@@ -23,12 +23,18 @@ import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
+import org.apache.kafka.common.errors.StaleBrokerEpochException
+import org.apache.kafka.common.{Node, Uuid}
+import org.apache.kafka.common.message.LiCombinedControlRequestData
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.LiCombinedControlRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import java.util.Properties
+import java.util
 import scala.jdk.CollectionConverters.mapAsScalaMapConverter
 
 /**
@@ -82,6 +88,51 @@ class LiCombinedControlRequestTest extends KafkaServerTestHarness  with Logging 
     val combinedRequestsSent3 = createTopicAndGetCombinedRequestCount(Set(8, 9).map("topic" + _))
     assertTrue(combinedRequestsSent2 > 0 && combinedRequestsSent3 > 0)
     assertEquals(combinedRequestsSent2, combinedRequestsSent3)
+  }
+
+  @Test
+  def testLiCombinedControlResponseV1(): Unit = {
+    val topic1Uuid = Uuid.randomUuid()
+    val leaderAndIsrPartitionStates = new util.ArrayList[LiCombinedControlRequestData.LeaderAndIsrPartitionState]()
+    leaderAndIsrPartitionStates.add(new LiCombinedControlRequestData.LeaderAndIsrPartitionState().setTopicName("topic1")
+      .setPartitionIndex(1))
+
+    val topic2Uuid = Uuid.randomUuid()
+    val updateMetadataPartitionStates = new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataPartitionState]()
+    updateMetadataPartitionStates.add(new LiCombinedControlRequestData.UpdateMetadataPartitionState().setTopicName("topic2")
+      .setPartitionIndex(2))
+
+    val topic3Uuid = Uuid.randomUuid()
+    val stopReplicaPartitionStates = new util.ArrayList[LiCombinedControlRequestData.StopReplicaPartitionState]()
+    stopReplicaPartitionStates.add(new LiCombinedControlRequestData.StopReplicaPartitionState().setTopicName("topic3")
+      .setPartitionIndex(3))
+    val topicIds = new util.HashMap[String, Uuid]()
+    topicIds.put("topic1", topic1Uuid)
+    topicIds.put("topic2", topic2Uuid)
+    topicIds.put("topic3", topic3Uuid)
+
+    val liCombinedControlRequest = new LiCombinedControlRequest.Builder(1, 0, 0, leaderAndIsrPartitionStates,
+      new util.ArrayList[Node](), updateMetadataPartitionStates, new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataBroker](),
+      stopReplicaPartitionStates, topicIds).build()
+
+    val errorResponse = liCombinedControlRequest.getErrorResponse(0, new StaleBrokerEpochException("stale broker"))
+
+    val expectedError = Errors.STALE_BROKER_EPOCH.code
+    // the per partition error should only be used for version 0, which means it should be empty for in the v1 case
+    assertTrue(errorResponse.leaderAndIsrPartitionErrors().isEmpty)
+    // check the topic level error is set
+    assertEquals(expectedError, errorResponse.leaderAndIsrErrorCode())
+    assertEquals(1, errorResponse.leaderAndIsrTopicErrors().size())
+    assertEquals(1, errorResponse.leaderAndIsrTopicErrors().find(topic1Uuid).partitionErrors().get(0).partitionIndex())
+
+    assertEquals(expectedError, errorResponse.updateMetadataErrorCode())
+
+    assertEquals(expectedError, errorResponse.stopReplicaErrorCode())
+    assertEquals(1, errorResponse.stopReplicaPartitionErrors().size())
+    val stopReplicaPartitionError = errorResponse.stopReplicaPartitionErrors().get(0)
+    assertEquals(expectedError, stopReplicaPartitionError.errorCode())
+    assertEquals("topic3", stopReplicaPartitionError.topicName())
+    assertEquals(3, stopReplicaPartitionError.partitionIndex())
   }
 
   private def createAdminClient(): Admin = {

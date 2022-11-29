@@ -254,14 +254,29 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
         // below we populate the error code to all the error fields and the partition error fields
         // 1. populate LeaderAndIsr error code
         responseData.setLeaderAndIsrErrorCode(error.code());
-        List<LiCombinedControlResponseData.LeaderAndIsrPartitionError> leaderAndIsrPartitionErrors = new ArrayList<>();
-        for (LiCombinedControlRequestData.LeaderAndIsrPartitionState partition : leaderAndIsrPartitionStates()) {
-            leaderAndIsrPartitionErrors.add(new LiCombinedControlResponseData.LeaderAndIsrPartitionError()
-                .setTopicName(partition.topicName())
-                .setPartitionIndex(partition.partitionIndex())
-                .setErrorCode(error.code()));
+        if (version() < 1) {
+            List<LiCombinedControlResponseData.LeaderAndIsrPartitionError> leaderAndIsrPartitionErrors = new ArrayList<>();
+            for (LiCombinedControlRequestData.LeaderAndIsrPartitionState partition : leaderAndIsrPartitionStates()) {
+                leaderAndIsrPartitionErrors.add(new LiCombinedControlResponseData.LeaderAndIsrPartitionError()
+                    .setTopicName(partition.topicName())
+                    .setPartitionIndex(partition.partitionIndex())
+                    .setErrorCode(error.code()));
+            }
+            responseData.setLeaderAndIsrPartitionErrors(leaderAndIsrPartitionErrors);
+        } else {
+            for (LiCombinedControlRequestData.LeaderAndIsrTopicState topicState : data.leaderAndIsrTopicStates()) {
+                List<LiCombinedControlResponseData.LeaderAndIsrPartitionError> partitions = new ArrayList<>(topicState.partitionStates().size());
+                for (LiCombinedControlRequestData.LeaderAndIsrPartitionState partition: topicState.partitionStates()) {
+                    partitions.add(new LiCombinedControlResponseData.LeaderAndIsrPartitionError()
+                        .setPartitionIndex(partition.partitionIndex())
+                        .setErrorCode(error.code()));
+                }
+
+                responseData.leaderAndIsrTopics().add(new LiCombinedControlResponseData.LeaderAndIsrTopicError()
+                    .setTopicId(topicState.topicId())
+                    .setPartitionErrors(partitions));
+            }
         }
-        responseData.setLeaderAndIsrPartitionErrors(leaderAndIsrPartitionErrors);
 
         // 2. populate the UpdateMetadata error code
         responseData.setUpdateMetadataErrorCode(error.code());
@@ -269,11 +284,22 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
         // 3. populate the StopReplica error code
         responseData.setStopReplicaErrorCode(error.code());
         List<LiCombinedControlResponseData.StopReplicaPartitionError> stopReplicaPartitions = new ArrayList<>();
-        for (LiCombinedControlRequestData.StopReplicaPartitionState tp : stopReplicaPartitions()) {
-            stopReplicaPartitions.add(new LiCombinedControlResponseData.StopReplicaPartitionError()
-                .setTopicName(tp.topicName())
-                .setPartitionIndex(tp.partitionIndex())
-                .setErrorCode(error.code()));
+        if (version() < 1) {
+            for (LiCombinedControlRequestData.StopReplicaPartitionState tp : stopReplicaPartitions()) {
+                stopReplicaPartitions.add(new LiCombinedControlResponseData.StopReplicaPartitionError()
+                    .setTopicName(tp.topicName())
+                    .setPartitionIndex(tp.partitionIndex())
+                    .setErrorCode(error.code()));
+            }
+        } else {
+            for (LiCombinedControlRequestData.StopReplicaTopicState topicState : stopReplicaTopicStates()) {
+                for (LiCombinedControlRequestData.StopReplicaPartitionState partition : topicState.partitionStates()) {
+                    stopReplicaPartitions.add(new LiCombinedControlResponseData.StopReplicaPartitionError()
+                        .setTopicName(topicState.topicName())
+                        .setPartitionIndex(partition.partitionIndex())
+                        .setErrorCode(error.code()));
+                }
+            }
         }
         responseData.setStopReplicaPartitionErrors(stopReplicaPartitions);
 
