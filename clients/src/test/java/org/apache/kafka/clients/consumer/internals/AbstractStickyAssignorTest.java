@@ -87,7 +87,7 @@ public abstract class AbstractStickyAssignorTest {
     }
 
     @Test
-    public void testMemberDataFromSubscription() {
+    public void testMemberData() {
         List<String> topics = topics(topic);
         List<TopicPartition> ownedPartitions = partitions(tp(topic1, 0), tp(topic2, 1));
         List<Subscription> subscriptions = new ArrayList<>();
@@ -97,25 +97,11 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.add(buildSubscriptionV2Above(topics, ownedPartitions, generationId));
         for (Subscription subscription : subscriptions) {
             if (subscription != null) {
-                AbstractStickyAssignor.MemberData memberData = assignor.memberDataFromSubscription(subscription);
+                AbstractStickyAssignor.MemberData memberData = assignor.memberData(subscription);
                 assertEquals(ownedPartitions, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
                 assertEquals(generationId, memberData.generation.orElse(-1), "subscription: " + subscription + " doesn't have expected generation id");
             }
         }
-    }
-
-    @Test
-    public void testMemberDataFromSubscriptionWithEmptyPartitionsAndHigherGeneration() {
-        List<String> topics = topics(topic);
-        List<TopicPartition> ownedPartitions = partitions(tp(topic1, 0), tp(topic2, 1));
-
-        // subscription containing empty owned partitions and a higher generation id, and non-empty owned partition in user data,
-        // member data should honor the one in subscription since generation id is higher
-        Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationId - 1), Collections.emptyList(), generationId);
-
-        AbstractStickyAssignor.MemberData memberData = assignor.memberDataFromSubscription(subscription);
-        assertEquals(Collections.emptyList(), memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
-        assertEquals(generationId, memberData.generation.orElse(-1), "subscription: " + subscription + " doesn't have expected generation id");
     }
 
     @Test
@@ -1082,7 +1068,7 @@ public abstract class AbstractStickyAssignorTest {
         }
     }
 
-    protected AbstractStickyAssignor.MemberData memberDataFromSubscription(Subscription subscription) {
-        return assignor.memberDataFromSubscription(subscription);
+    protected AbstractStickyAssignor.MemberData memberData(Subscription subscription) {
+        return assignor.memberData(subscription);
     }
 }

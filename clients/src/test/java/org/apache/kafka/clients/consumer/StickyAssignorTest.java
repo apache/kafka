@@ -64,7 +64,8 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
 
     @Override
     public Subscription buildSubscriptionV2Above(List<String> topics, List<TopicPartition> partitions, int generationId) {
-        return new Subscription(topics, null, partitions, generationId);
+        return new Subscription(topics, serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generationId))),
+            partitions, generationId);
     }
 
     @Override
@@ -284,7 +285,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     }
 
     @Test
-    public void testMemberDataFromSubscriptionWithInconsistentData() {
+    public void testMemberDataWithInconsistentData() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 2);
         List<TopicPartition> ownedPartitionsInUserdata = partitions(tp1);
@@ -296,7 +297,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         // If subscription provides no generation id, we'll honor the generation id in userData and owned partitions in subscription
         Subscription subscription = new Subscription(topics(topic), userDataWithHigherGenerationId, ownedPartitionsInSubscription);
 
-        AbstractStickyAssignor.MemberData memberData = memberDataFromSubscription(subscription);
+        AbstractStickyAssignor.MemberData memberData = memberData(subscription);
 
         // In StickyAssignor, we'll serialize owned partition in assignment into userData
         assertEquals(ownedPartitionsInUserdata, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
@@ -304,7 +305,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     }
 
     @Test
-    public void testMemberDataFromSubscriptionWithEmptyPartitionsAndEqualGeneration() {
+    public void testMemberDataWithEmptyPartitionsAndEqualGeneration() {
         List<String> topics = topics(topic);
         List<TopicPartition> ownedPartitions = partitions(tp(topic1, 0), tp(topic2, 1));
 
@@ -312,9 +313,22 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         // member data should honor the one in user data
         Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationId), Collections.emptyList(), generationId);
 
-        AbstractStickyAssignor.MemberData memberData = memberDataFromSubscription(subscription);
+        AbstractStickyAssignor.MemberData memberData = memberData(subscription);
         assertEquals(ownedPartitions, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
         assertEquals(generationId, memberData.generation.orElse(-1), "subscription: " + subscription + " doesn't have expected generation id");
+    }
+
+    @Test
+    public void testMemberDataWithEmptyPartitionsAndHigherGeneration() {
+        List<String> topics = topics(topic);
+        List<TopicPartition> ownedPartitions = partitions(tp(topic1, 0), tp(topic2, 1));
+        int generationIdInUserData = generationId - 1;
+
+        Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationId - 1), Collections.emptyList(), generationId);
+        AbstractStickyAssignor.MemberData memberData = memberData(subscription);
+        // in StickyAssignor with eager rebalance protocol, we'll always honor data in user data
+        assertEquals(ownedPartitions, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
+        assertEquals(generationIdInUserData, memberData.generation.orElse(-1), "subscription: " + subscription + " doesn't have expected generation id");
     }
 
     @Test

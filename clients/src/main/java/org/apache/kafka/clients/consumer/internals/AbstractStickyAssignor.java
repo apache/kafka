@@ -117,7 +117,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 isAllSubscriptionsEqual = false;
             }
 
-            MemberData memberData = memberDataFromSubscription(subscription);
+            MemberData memberData = memberData(subscription);
 
             List<TopicPartition> ownedPartitions = new ArrayList<>();
             consumerToOwnedPartitions.put(consumer, ownedPartitions);
@@ -160,28 +160,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         }
 
         return isAllSubscriptionsEqual;
-    }
-
-    // visible for testing
-    MemberData memberDataFromSubscription(Subscription subscription) {
-        // In ConsumerProtocolSubscription v0/v1, deserialize the user data in subscription to get member data
-        if (!subscription.generationId().isPresent()) {
-            return memberData(subscription);
-        }
-
-        // In ConsumerProtocolSubscription v2 or higher, we can take member data from fields directly if owned partition is not empty,
-        // otherwise, consumer might use assignor with eager rebalance protocol.
-        if (subscription.ownedPartitions().isEmpty()) {
-            MemberData memberData = memberData(subscription);
-            if (subscription.generationId().equals(memberData.generation) && !memberData.partitions.isEmpty()) {
-                // For cooperativeStickyAssignor, we won't serialize owned partition into user data, so it'll always be empty and honor subscription data
-                // For StickyAssignor with eager rebalance protocol, when joining group, all the existing owned partitions will get revoked,
-                // so we still need to retrieve member data by deserializing the user data in subscription
-                return memberData;
-            }
-        }
-
-        return new MemberData(subscription.ownedPartitions(), subscription.generationId());
     }
 
     /**
@@ -652,7 +630,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 subscription.userData().rewind();
             }
 
-            MemberData memberData = memberDataFromSubscription(subscription);
+            MemberData memberData = memberData(subscription);
 
             // we already have the maxGeneration info, so just compare the current generation of memberData, and put into prevAssignment
             if (memberData.generation.isPresent() && memberData.generation.get() < maxGeneration) {
