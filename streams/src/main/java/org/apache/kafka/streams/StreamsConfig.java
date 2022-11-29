@@ -481,7 +481,7 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
     private static final String CLIENT_ID_DOC = "An ID prefix string used for the client IDs of internal consumer, producer and restore-consumer," +
-        " with pattern "<code>" + <client.id>-StreamThread-<threadSequenceNumber>-<consumer|producer|restore-consumer> + "</code>.";
+        " with pattern <code>&lt;client.id&gt;-StreamThread-&lt;threadSequenceNumber$gt;-&lt;consumer|producer|restore-consumer&gt;</code>.";
 
     /** {@code commit.interval.ms} */
     @SuppressWarnings("WeakerAccess")
