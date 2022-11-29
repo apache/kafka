@@ -708,6 +708,7 @@ public class RequestResponseTest {
         ByteBuffer serializedRequest = createTopicsRequest.serializeWithHeader(requestHeader);
 
         RequestHeader parsedHeader = RequestHeader.parse(serializedRequest);
+        assertEquals(requestHeader.size(), parsedHeader.size());
         assertEquals(requestHeader, parsedHeader);
 
         RequestAndSize parsedRequest = AbstractRequest.parseRequest(

@@ -136,7 +136,9 @@ public class RequestHeaderTest {
         RequestHeader parsed = spy(RequestHeader.parse(buffer));
 
         // verify that the result of cached value is same as actual calculation of size
-        assertEquals(parsed.size(), parsed.size(new ObjectSerializationCache()));
+        int size = parsed.size(new ObjectSerializationCache());
+        int sizeFromCache = parsed.size();
+        assertEquals(sizeFromCache, size);
 
         // verify that size(ObjectSerializationCache) is only called once, i.e. during assertEquals call. This validates
         // that size() method does not calculate the size instead it uses the cached value

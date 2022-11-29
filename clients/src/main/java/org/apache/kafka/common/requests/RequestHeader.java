@@ -118,7 +118,6 @@ public class RequestHeader implements AbstractRequestResponse {
             // We derive the header version from the request api version, so we read that first.
             // The request api version is part of `RequestHeaderData`, so we reset the buffer position after the read.
             int position = buffer.position();
-            int requestHeaderSize = buffer.remaining();
             apiKey = buffer.getShort();
             short apiVersion = buffer.getShort();
             short headerVersion = ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion);
@@ -129,12 +128,7 @@ public class RequestHeader implements AbstractRequestResponse {
             if (headerData.clientId() == null) {
                 headerData.setClientId("");
             }
-            final RequestHeader header = new RequestHeader(headerData, headerVersion);
-            // Size of a buffer required to serialize the information in this header is already known and would not
-            // change since the RequestHeader object is immutable. Instead of computing it again whenever
-            // RequestHeader#size() is called, we choose to cache the size value when available.
-            header.size = requestHeaderSize;
-            return header;
+            return new RequestHeader(headerData, headerVersion);
         } catch (UnsupportedVersionException e) {
             throw new InvalidRequestException("Unknown API key " + apiKey, e);
         } catch (Throwable ex) {
