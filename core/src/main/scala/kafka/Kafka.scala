@@ -40,7 +40,7 @@ object Kafka extends Logging {
     // This is a bit of an ugly crutch till we get a chance to rework the entire command line parsing
     optionParser.accepts("version", "Print version information and exit.")
 
-    if (args.length == 0 || args.contains("--help")) {
+    if (args.isEmpty || args.contains("--help")) {
       CommandLineUtils.printUsageAndDie(optionParser,
         "USAGE: java [options] %s server.properties [--override property=value]*".format(this.getClass.getCanonicalName.split('$').head))
     }
