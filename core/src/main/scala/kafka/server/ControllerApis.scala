@@ -375,18 +375,21 @@ class ControllerApis(val requestChannel: RequestChannel,
         }
       }
     }
-    val authorizedTopicNames = {
-      /* The cluster metatdata topic is an internal topic with a different implementation. The user should not be
-       * allowed to create it as a regular topic.
-       */
-      val allowedTopicNames = topicNames.asScala.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
-      if (hasClusterAuth) {
-        allowedTopicNames
-      } else {
-        getCreatableTopics.apply(allowedTopicNames)
-      }
+
+    /* The cluster metatdata topic is an internal topic with a different implementation. The user should not be
+     * allowed to create it as a regular topic.
+     */
+    if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {
+      info(s"Rejecting creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME}")
     }
-    val describableTopicNames = getDescribableTopics.apply(topicNames.asScala).asJava
+    val allowedTopicNames = topicNames.asScala.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
+
+    val authorizedTopicNames = if (hasClusterAuth) {
+      allowedTopicNames
+    } else {
+      getCreatableTopics.apply(allowedTopicNames)
+    }
+    val describableTopicNames = getDescribableTopics.apply(allowedTopicNames).asJava
     val effectiveRequest = request.duplicate()
     val iterator = effectiveRequest.topics().iterator()
     while (iterator.hasNext) {
