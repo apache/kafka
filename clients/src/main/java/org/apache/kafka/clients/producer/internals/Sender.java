@@ -636,10 +636,12 @@ public class Sender implements Runnable {
                 // The only thing we can do is to return success to the user and not return a valid offset and timestamp.
                 completeBatch(batch, response);
             } else {
-                // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
-                // its retries -- if it did, we don't know whether the sequence number was accepted or not, and
-                // thus it is not safe to reassign the sequence.
-                failBatch(batch, response, batch.attempts() < this.retries);
+                // Tell the user the result of their request. We do not adjust sequence numbers if the
+                // batch reached the retry limit or the delivery timeout. In this case, we would not know
+                // whether batch was written to the log, and thus it is not safe to reassign the sequence.
+                boolean adjustSequenceNumbers = batch.attempts() < this.retries &&
+                    !batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs(), now);
+                failBatch(batch, response, adjustSequenceNumbers);
             }
             if (error.exception() instanceof InvalidMetadataException) {
                 if (error.exception() instanceof UnknownTopicOrPartitionException) {
