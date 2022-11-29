@@ -28,17 +28,17 @@
 # [2021-10-19T17:25:07.234Z]   Lock file: /home/jenkins/.gradle/caches/7.0.2/zinc-1.3.5_2.13.6_8/zinc-1.3.5_2.13.6_8.lock
 
 set -uf -o pipefail
-
+mkdir -p ./build
 retryable=1
 while [[ "$retryable" != 0 ]]; do
 	retryable=0
-	rm -f buildoutput.log
+	rm -f ./build/buildoutput.log
 
-	"$@" 2>&1 | tee buildoutput.log
+	"$@" 2>&1 | tee ./build/buildoutput.log
 	commandReturnCode=$?
 
 	if [ $commandReturnCode -ne 0 ]; then
-		if grep "Timeout waiting to lock zinc" buildoutput.log; then
+		if grep "Timeout waiting to lock zinc" ./build/buildoutput.log; then
 			retryable=1
 			echo 'Retrying due to zinc lock timeout'
 			continue
