@@ -678,7 +678,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @Test
-    public void testCommitFlushCallbackFailure() throws Exception {
+    public void testCommitFlushSyncCallbackFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.willFlush()).thenReturn(true);
         when(offsetWriter.beginFlush()).thenReturn(true);
@@ -695,7 +695,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.willFlush()).thenReturn(true);
         when(offsetWriter.beginFlush()).thenReturn(true);
-        // doFlush delegates it's callback to the producer,
+        // doFlush delegates its callback to the producer,
         // which delays completing the callback until commitTransaction
         AtomicReference<Callback<Void>> callback = new AtomicReference<>();
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
@@ -704,7 +704,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         });
         doAnswer(invocation -> {
             callback.get().onCompletion(failure, null);
-            throw failure;
+            return null;
         }).when(producer).commitTransaction();
         testCommitFailure(failure, true);
     }
