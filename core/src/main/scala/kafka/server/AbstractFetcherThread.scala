@@ -644,7 +644,7 @@ abstract class AbstractFetcherThread(name: String,
    *                                     requests the local-log-start-offset from the leader, else it requests
    *                                     log-start-offset from the leader. This is used in sending the value to the
    *                                     given `truncateAndBuild` function.
-   * @return
+   * @return next PartitionFetchState
    */
   private def fetchOffsetAndApplyTruncateAndBuild(topicPartition: TopicPartition,
                                                   topicId: Option[Uuid],
@@ -683,9 +683,10 @@ abstract class AbstractFetcherThread(name: String,
        * produced to the new leader. While the old leader is trying to handle the OffsetOutOfRangeException and query
        * the log end offset of the new leader, the new leader's log end offset becomes higher than the follower's log end offset.
        *
-       * In the first case, the follower's current log end offset is smaller than the leader's log start offset. So the
-       * follower should truncate all its logs, roll out a new segment and start to fetch from the current leader's log
-       * start offset.
+       * In the first case, the follower's current log end offset is smaller than the leader's log start offset
+       * (or leader's local log start offset).
+       * So the follower should truncate all its logs, roll out a new segment and start to fetch from the current
+       * leader's log start offset(or leader's local log start offset).
        * In the second case, the follower should just keep the current log segments and retry the fetch. In the second
        * case, there will be some inconsistency of data between old and new leader. We are not solving it here.
        * If users want to have strong consistency guarantees, appropriate configurations needs to be set for both

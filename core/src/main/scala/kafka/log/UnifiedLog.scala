@@ -296,7 +296,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   @volatile var partitionMetadataFile: Option[PartitionMetadataFile] = None
 
-  //todo-tier it needs to be updated.
   private[kafka] var _localLogStartOffset: Long = logStartOffset
 
   def localLogStartOffset(): Long = _localLogStartOffset

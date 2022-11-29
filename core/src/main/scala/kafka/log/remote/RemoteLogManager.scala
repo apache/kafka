@@ -166,8 +166,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
   }
 
   /**
-   * Stops partitions for copying segments, building indexes and deletes the partition in remote storage if delete flag
-   * is set as true.
+   * Deletes the internal topic partition info if delete flag is set as true.
    *
    * @param topicPartition topic partition to be stopped.
    * @param delete         flag to indicate whether the given topic partitions to be deleted or not.

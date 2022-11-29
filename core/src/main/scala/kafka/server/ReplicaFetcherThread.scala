@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.log.remote.RemoteLogManager
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo, UnifiedLog}
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.EpochEntry
@@ -28,14 +29,13 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.common.CheckpointFile.CheckpointReadBuffer
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.remote.storage.{RemoteStorageException, RemoteStorageManager}
+import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
 
-import java.io.{BufferedReader, File, InputStream, InputStreamReader}
+import java.io.{BufferedReader, File, InputStreamReader}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, StandardCopyOption}
-import scala.jdk.CollectionConverters._
-
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 class ReplicaFetcherThread(name: String,
                            leader: LeaderEndPoint,
@@ -204,6 +204,14 @@ class ReplicaFetcherThread(name: String,
     partition.truncateFullyAndStartAt(offset, isFuture = false)
   }
 
+  def buildProducerSnapshotFile(snapshotFile: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata, rlm: RemoteLogManager): Unit = {
+    val tmpSnapshotFile = new File(snapshotFile.getAbsolutePath + ".tmp")
+    // Copy it to snapshot file in atomic manner.
+    Files.copy(rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
+      tmpSnapshotFile.toPath, StandardCopyOption.REPLACE_EXISTING)
+    Utils.atomicMoveWithFallback(tmpSnapshotFile.toPath, snapshotFile.toPath, false)
+  }
+
   /**
    * It tries to build the required state for this partition from leader and remote storage so that it can start
    * fetching records from the leader.
@@ -277,13 +285,13 @@ class ReplicaFetcherThread(name: String,
           // Build leader epoch cache, producer snapshots until remoteLogSegmentMetadata.endOffset() and start
           // segments from (remoteLogSegmentMetadata.endOffset() + 1)
           val nextOffset = remoteLogSegmentMetadata.endOffset() + 1
-          val epochStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.LEADER_EPOCH)
-          val epochs = readLeaderEpochCheckpoint(epochStream)
 
           // Truncate the existing local log before restoring the leader epoch cache and producer snapshots.
           truncateFullyAndStartAt(partition, nextOffset)
 
+          // Build leader epoch cache.
           log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
+          val epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata)
           log.leaderEpochCache.foreach { cache =>
             cache.assign(epochs)
           }
@@ -292,13 +300,8 @@ class ReplicaFetcherThread(name: String,
             s"with size: ${epochs.size} for $partition")
 
           // Restore producer snapshot
-          // This has to be done for empty brokers, right?
           val snapshotFile = UnifiedLog.producerSnapshotFile(log.dir, nextOffset)
-          val tmpSnapshotFile = new File(snapshotFile.getAbsolutePath + ".tmp")
-          // Copy it to snapshot file in atomic manner.
-          Files.copy(rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
-            tmpSnapshotFile.toPath, StandardCopyOption.REPLACE_EXISTING)
-          Utils.atomicMoveWithFallback(tmpSnapshotFile.toPath, snapshotFile.toPath, false)
+          buildProducerSnapshotFile(snapshotFile, remoteLogSegmentMetadata, rlm)
 
           // Reload producer snapshots.
           log.producerStateManager.reloadSnapshots()
@@ -326,8 +329,9 @@ class ReplicaFetcherThread(name: String,
     nextOffset
   }
 
-  private def readLeaderEpochCheckpoint(stream: InputStream): collection.Seq[EpochEntry] = {
-    val bufferedReader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))
+  private def readLeaderEpochCheckpoint(rlm: RemoteLogManager, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): collection.Seq[EpochEntry] = {
+    val inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.LEADER_EPOCH)
+    val bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     try {
       val readBuffer = new CheckpointReadBuffer[EpochEntry]("", bufferedReader,  0, LeaderEpochCheckpointFile.Formatter)
       readBuffer.read().asScala.toSeq
