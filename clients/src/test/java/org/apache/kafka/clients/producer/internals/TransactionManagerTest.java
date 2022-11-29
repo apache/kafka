@@ -1679,6 +1679,19 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testInitPidReenquest() {
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.REQUEST_TIMED_OUT, false, producerId, epoch);
+
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(transactionManager::hasProducerId);
+    }
+
+    @Test
     public void testProducerFencedExceptionInInitProducerId() {
         verifyProducerFencedForInitProducerId(Errors.PRODUCER_FENCED);
     }
