@@ -338,21 +338,14 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Deprecated
+    @Override
     public void setBaseBackgroundCompactions(final int baseBackgroundCompactions) {
-        final String message = "This method has been removed from the underlying RocksDB. " +
-                "It was not affecting compaction even in earlier versions. " +
-                "It is currently a no-op method. " +
-                "RocksDB decides the number of background compactions based on the maxBackgroundJobs(...) method";
-        log.warn(message);
-        // no-op
+        dbOptions.setBaseBackgroundCompactions(baseBackgroundCompactions);
     }
 
-    @Deprecated
+    @Override
     public int baseBackgroundCompactions() {
-        final String message = "This method has been removed from the underlying RocksDB. " +
-                "It is currently a no-op method which returns a default value of -1.";
-        log.warn(message);
-        return -1;
+        return dbOptions.baseBackgroundCompactions();
     }
 
     @Deprecated
@@ -617,21 +610,15 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return dbOptions.accessHintOnCompactionStart();
     }
 
-    @Deprecated
+    @Override
     public Options setNewTableReaderForCompactionInputs(final boolean newTableReaderForCompactionInputs) {
-        final String message = "This method has been removed from the underlying RocksDB. " +
-                "It was not affecting compaction even in earlier versions. " +
-                "It is currently a no-op method.";
-        log.warn(message);
+        dbOptions.setNewTableReaderForCompactionInputs(newTableReaderForCompactionInputs);
         return this;
     }
 
-    @Deprecated
+    @Override
     public boolean newTableReaderForCompactionInputs() {
-        final String message = "This method has been removed from the underlying RocksDB. " +
-                "It is now a method which always returns false.";
-        log.warn(message);
-        return false;
+        return dbOptions.newTableReaderForCompactionInputs();
     }
 
     @Override
@@ -1499,24 +1486,15 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return dbOptions.allowIngestBehind();
     }
 
-    @Deprecated
+    @Override
     public Options setPreserveDeletes(final boolean preserveDeletes) {
-        final String message = "This method has been removed from the underlying RocksDB. " +
-                "It was marked for deprecation in earlier versions. " +
-                "The behaviour can be replicated by using user-defined timestamps. " +
-                "It is currently a no-op method.";
-        log.warn(message);
-        // no-op
+        dbOptions.setPreserveDeletes(preserveDeletes);
         return this;
     }
 
-    @Deprecated
+    @Override
     public boolean preserveDeletes() {
-        final String message = "This method has been removed from the underlying RocksDB. " +
-                "It was marked for deprecation in earlier versions. " +
-                "It is currently a no-op method with a default value of false.";
-        log.warn(message);
-        return false;
+        return dbOptions.preserveDeletes();
     }
 
     @Override
@@ -1705,28 +1683,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     public Options setCompactionFilterFactory(final AbstractCompactionFilterFactory<? extends AbstractCompactionFilter<?>> compactionFilterFactory) {
         columnFamilyOptions.setCompactionFilterFactory(compactionFilterFactory);
         return this;
-    }
-
-    @Override
-    public Options setBlobCompactionReadaheadSize(final long blobCompactionReadaheadSize) {
-        columnFamilyOptions.setBlobCompactionReadaheadSize(blobCompactionReadaheadSize);
-        return this;
-    }
-
-    @Override
-    public long blobCompactionReadaheadSize() {
-        return columnFamilyOptions.blobCompactionReadaheadSize();
-    }
-
-    @Override
-    public Options setMemtableWholeKeyFiltering(final boolean memtableWholeKeyFiltering) {
-        columnFamilyOptions.setMemtableWholeKeyFiltering(memtableWholeKeyFiltering);
-        return this;
-    }
-
-    @Override
-    public boolean memtableWholeKeyFiltering() {
-        return columnFamilyOptions.memtableWholeKeyFiltering();
     }
 
     //
