@@ -1615,12 +1615,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    CompletableFuture.allOf(futures.toArray: _*).handle[Unit] { (_, _) =>
-      val describeGroupsResponseData = new DescribeGroupsResponseData()
-      futures.foreach { future =>
-        describeGroupsResponseData.groups.add(future.get())
+    CompletableFuture.allOf(futures.toArray: _*).handle[Unit] { (_, exception) =>
+      if (exception != null) {
+        sendResponse(describeRequest.getErrorResponse(exception))
+      } else {
+        val describeGroupsResponseData = new DescribeGroupsResponseData()
+        futures.foreach { future =>
+          describeGroupsResponseData.groups.add(future.get())
+        }
+        sendResponse(new DescribeGroupsResponse(describeGroupsResponseData))
       }
-      sendResponse(new DescribeGroupsResponse(describeGroupsResponseData))
     }
   }
 
