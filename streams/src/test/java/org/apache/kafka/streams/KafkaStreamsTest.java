@@ -113,6 +113,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mockStatic;
@@ -1086,6 +1087,28 @@ public class KafkaStreamsTest {
                 eq(0L), eq(1L), eq(TimeUnit.MINUTES));
             verify(rocksDBMetricsRecordingTriggerThread).shutdownNow();
         }
+    }
+
+    @Test
+    public void shouldGetClientSupplierFromConfigForConstructor() {
+        final StreamsConfig config = new StreamsConfig(props);
+        final StreamsConfig mockConfig = spy(config);
+        when(mockConfig.getKafkaClientSupplier()).thenReturn(supplier);
+
+        new KafkaStreams(getBuilderWithSource().build(), mockConfig);
+        // It's called once in above when mock
+        verify(mockConfig, times(2)).getKafkaClientSupplier();
+    }
+
+    @Test
+    public void shouldGetClientSupplierFromConfigForConstructorWithTime() {
+        final StreamsConfig config = new StreamsConfig(props);
+        final StreamsConfig mockConfig = spy(config);
+        when(mockConfig.getKafkaClientSupplier()).thenReturn(supplier);
+
+        new KafkaStreams(getBuilderWithSource().build(), mockConfig, time);
+        // It's called once in above when mock
+        verify(mockConfig, times(2)).getKafkaClientSupplier();
     }
 
     @Test
