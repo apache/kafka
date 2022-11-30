@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class RequestTestUtils {
 
@@ -208,10 +209,10 @@ public class RequestTestUtils {
             for (int i = 0; i < numPartitions; i++) {
                 TopicPartition tp = new TopicPartition(topic, i);
                 Node leader = nodes.get(i % nodes.size());
-                List<Integer> replicaIds = Collections.singletonList(leader.id());
+                List<Integer> replicaIds = nodes.stream().map(Node::id).collect(Collectors.toList());
                 partitionMetadata.add(partitionSupplier.supply(
                         Errors.NONE, tp, Optional.of(leader.id()), Optional.ofNullable(epochSupplier.apply(tp)),
-                        replicaIds, replicaIds, replicaIds));
+                        replicaIds, replicaIds, Collections.emptyList()));
             }
 
             topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic, topicIds.getOrDefault(topic, Uuid.ZERO_UUID),
