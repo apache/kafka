@@ -59,7 +59,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
     @Override
     public Subscription buildSubscriptionV2Above(List<String> topics, List<TopicPartition> partitions, int generationId) {
-        return new Subscription(topics, null, partitions, generationId);
+        return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions, generationId);
     }
 
     @Override
@@ -144,7 +144,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         Subscription subscription = new Subscription(topics(topic), userDataWithHigherGenerationId, ownedPartitionsInSubscription);
 
         AbstractStickyAssignor.MemberData memberData = memberData(subscription);
-        // In CooperativeStickyAssignor, we'll serialize owned partition in subscription into userData
+        // In CooperativeStickyAssignor, we only serialize generation id into userData
         assertEquals(ownedPartitionsInSubscription, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
         assertEquals(generationId, memberData.generation.orElse(-1), "subscription: " + subscription + " doesn't have expected generation id");
     }
