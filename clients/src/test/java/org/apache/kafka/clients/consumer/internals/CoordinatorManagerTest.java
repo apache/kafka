@@ -20,7 +20,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
@@ -35,7 +34,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.LinkedBlockingDeque;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
@@ -43,6 +41,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class CoordinatorManagerTest {
     private MockTime time;
@@ -50,7 +49,7 @@ public class CoordinatorManagerTest {
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private LogContext logContext;
-    private LinkedBlockingDeque<BackgroundEvent> eventQueue;
+    private ErrorEventHandler errorEventHandler;
     private Node node;
     private final Properties properties = new Properties();
     private Optional<String> groupId;
@@ -67,7 +66,7 @@ public class CoordinatorManagerTest {
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
-        this.eventQueue = new LinkedBlockingDeque<>();
+        this.errorEventHandler = mock(ErrorEventHandler.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, "100");
         this.groupId = Optional.of("");
         this.rebalanceTimeoutMs = 60 * 1000;
@@ -129,7 +128,7 @@ public class CoordinatorManagerTest {
                 this.time,
                 this.logContext,
                 new ConsumerConfig(properties),
-                this.eventQueue,
+                this.errorEventHandler,
                 this.groupId,
                 this.rebalanceTimeoutMs);
     }

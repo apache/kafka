@@ -55,6 +55,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final CoordinatorManager coordinatorManager;
     private final ApplicationEventProcessor applicationEventProcessor;
     private final NetworkClientDelegate networkClientDelegate;
+    private final ErrorEventHandler errorEventHandler;
 
     private boolean running;
     private Optional<ApplicationEvent> inflightEvent;
@@ -65,6 +66,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final LogContext logContext,
                             final BlockingQueue<ApplicationEvent> applicationEventQueue,
                             final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                            final ErrorEventHandler errorEventHandler,
                             final ApplicationEventProcessor processor,
                             final ConsumerMetadata metadata,
                             final NetworkClientDelegate networkClient,
@@ -81,6 +83,7 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.metadata = metadata;
         this.networkClientDelegate = networkClient;
         this.coordinatorManager = coordinatorManager;
+        this.errorEventHandler = errorEventHandler;
     }
     public DefaultBackgroundThread(final Time time,
                                    final ConsumerConfig config,
@@ -105,10 +108,11 @@ public class DefaultBackgroundThread extends KafkaThread {
                     logContext,
                     networkClient);
             this.running = true;
+            this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             this.coordinatorManager = new CoordinatorManager(time,
                     logContext,
                     config,
-                    backgroundEventQueue,
+                    errorEventHandler,
                     Optional.ofNullable(rebalanceConfig.groupId),
                     rebalanceConfig.rebalanceTimeoutMs);
             this.applicationEventProcessor = new ApplicationEventProcessor(

@@ -55,6 +55,7 @@ public class DefaultBackgroundThreadTest {
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private ApplicationEventProcessor processor;
     private CoordinatorManager coordinatorManager;
+    private ErrorEventHandler errorEventHandler;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -66,6 +67,7 @@ public class DefaultBackgroundThreadTest {
         this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
         this.processor = mock(ApplicationEventProcessor.class);
         this.coordinatorManager = mock(CoordinatorManager.class);
+        this.errorEventHandler = mock(ErrorEventHandler.class);
     }
 
     @Test
@@ -119,6 +121,7 @@ public class DefaultBackgroundThreadTest {
                 new LogContext(),
                 applicationEventsQueue,
                 backgroundEventsQueue,
+                this.errorEventHandler,
                 processor,
                 this.metadata,
                 this.networkClient,

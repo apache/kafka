@@ -19,8 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -36,7 +34,6 @@ import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
 
 public class CoordinatorManager {
     final static int RECONNECT_BACKOFF_EXP_BASE = 2;
@@ -45,7 +42,7 @@ public class CoordinatorManager {
     private final Logger log;
     private final Time time;
     private final long requestTimeoutMs;
-    private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
+    private final ErrorEventHandler errorHandler;
     private final ExponentialBackoff exponentialBackoff;
     private final long rebalanceTimeoutMs;
     private final Optional<String> groupId;
@@ -58,12 +55,12 @@ public class CoordinatorManager {
     public CoordinatorManager(final Time time,
                               final LogContext logContext,
                               final ConsumerConfig config,
-                              final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                              final ErrorEventHandler errorHandler,
                               final Optional<String> groupId,
                               final long rebalanceTimeoutMs) {
         this.time = time;
         this.log = logContext.logger(this.getClass());
-        this.backgroundEventQueue = backgroundEventQueue;
+        this.errorHandler = errorHandler;
         this.exponentialBackoff = new ExponentialBackoff(
                 config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                 RECONNECT_BACKOFF_EXP_BASE,
@@ -146,7 +143,7 @@ public class CoordinatorManager {
         if (coordinators.size() != 1) {
             log.error(
                     "Group coordinator lookup failed: Invalid response containing more than a single coordinator");
-            enqueueErrorEvent(new IllegalStateException(
+            errorHandler.handle(new IllegalStateException(
                     "Group coordinator lookup failed: Invalid response containing more than a single coordinator"));
         }
         FindCoordinatorResponseData.Coordinator coordinatorData = coordinators.get(0);
@@ -166,12 +163,12 @@ public class CoordinatorManager {
         }
 
         if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-            enqueueErrorEvent(GroupAuthorizationException.forGroupId(this.groupId.orElse(null)));
+            errorHandler.handle(GroupAuthorizationException.forGroupId(this.groupId.orElse(null)));
             return;
         }
 
         log.debug("Group coordinator lookup failed: {}", coordinatorData.errorMessage());
-        enqueueErrorEvent(error.exception());
+        errorHandler.handle(error.exception());
     }
 
     void handleFailedCoordinatorResponse(FindCoordinatorResponse response) {
@@ -181,7 +178,7 @@ public class CoordinatorManager {
             log.info("FindCoordinator request hit fatal exception", response.error().exception());
             // Remember the exception if fatal so we can ensure
             // it gets thrown by the main thread
-            enqueueErrorEvent(response.error().exception());
+            errorHandler.handle(response.error().exception());
         }
 
         log.debug("Coordinator discovery failed, refreshing metadata", response.error().exception());
@@ -199,10 +196,6 @@ public class CoordinatorManager {
             return;
         }
         handleSuccessFindCoordinatorResponse(response);
-    }
-
-    private void enqueueErrorEvent(Exception e) {
-        backgroundEventQueue.add(new ErrorBackgroundEvent(e));
     }
 
     public Node coordinator() {
