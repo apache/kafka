@@ -47,7 +47,7 @@ public class CoordinatorManager {
     private final long rebalanceTimeoutMs;
     private final Optional<String> groupId;
 
-    private CoordinatorRequestState coordinatorRequestState;
+    private CoordinatorRequestState coordinatorRequestState = new CoordinatorRequestState();
     private long lastTimeOfConnectionMs = -1L; // starting logging a warning only after unable to connect for a while
     private Node coordinator;
 
@@ -78,10 +78,6 @@ public class CoordinatorManager {
      * @return Optional UnsentRequest.  Empty if we are not allowed to send a request.
      */
     public Optional<NetworkClientDelegate.UnsentRequest> tryFindCoordinator() {
-        if (this.coordinatorRequestState == null) {
-            this.coordinatorRequestState = new CoordinatorRequestState();
-        }
-
         if (coordinatorRequestState.lastSentMs == -1) {
             // no request has been sent
             return makeFindCoordinatorRequest();
