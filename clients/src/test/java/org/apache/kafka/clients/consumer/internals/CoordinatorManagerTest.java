@@ -109,7 +109,7 @@ public class CoordinatorManagerTest {
 
     @Test
     public void testRequestFutureCompletionHandlerBase() {
-        NetworkClientDelegate.RequestFutureCompletionHandlerBase h = new MockRequestFutureCompletionHandlerBase();
+        NetworkClientDelegate.AbstractRequestFutureCompletionHandler h = new MockRequestFutureCompletionHandlerBase();
         try {
             h.onFailure(new RuntimeException());
         } catch (Exception e) {
@@ -117,7 +117,7 @@ public class CoordinatorManagerTest {
         }
     }
 
-    private static class MockRequestFutureCompletionHandlerBase extends NetworkClientDelegate.RequestFutureCompletionHandlerBase {
+    private static class MockRequestFutureCompletionHandlerBase extends NetworkClientDelegate.AbstractRequestFutureCompletionHandler {
         @Override
         public void handleResponse(ClientResponse r, Throwable t) {
             throw new RuntimeException("MockRequestFutureCompletionHandlerBase should throw an exception");

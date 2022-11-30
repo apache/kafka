@@ -239,7 +239,7 @@ public class CoordinatorManager {
         }
     }
 
-    private class FindCoordinatorRequestHandler extends NetworkClientDelegate.RequestFutureCompletionHandlerBase {
+    private class FindCoordinatorRequestHandler extends NetworkClientDelegate.AbstractRequestFutureCompletionHandler {
 
         @Override
         public void handleResponse(ClientResponse r, Throwable t) {

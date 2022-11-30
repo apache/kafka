@@ -113,7 +113,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                 time.milliseconds(),
                 true,
                 (int) unsent.timer.remainingMs(),
-                unsent.callback.orElse(new RequestFutureCompletionHandlerBase()));
+                unsent.callback.orElse(new DefaultRequestFutureCompletionHandler()));
     }
 
     public List<ClientResponse> poll() {
@@ -161,20 +161,20 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public static class UnsentRequest {
-        private final Optional<RequestFutureCompletionHandlerBase> callback;
+        private final Optional<AbstractRequestFutureCompletionHandler> callback;
         private final AbstractRequest.Builder abstractBuilder;
         private final Optional<Node> node; // empty if random node can be choosen
         private final Timer timer;
 
         public UnsentRequest(final Timer timer,
                              final AbstractRequest.Builder abstractBuilder,
-                             final RequestFutureCompletionHandlerBase callback) {
+                             final AbstractRequestFutureCompletionHandler callback) {
             this(timer, abstractBuilder, callback, null);
         }
 
         public UnsentRequest(final Timer timer,
                              final AbstractRequest.Builder abstractBuilder,
-                             final RequestFutureCompletionHandlerBase callback,
+                             final AbstractRequestFutureCompletionHandler callback,
                              final Node node) {
             Objects.requireNonNull(abstractBuilder);
             this.abstractBuilder = abstractBuilder;
@@ -186,7 +186,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         public static Optional<UnsentRequest> makeUnsentRequest(
                 final Timer timeoutTimer,
                 final AbstractRequest.Builder<?> requestBuilder,
-                final RequestFutureCompletionHandlerBase callback) {
+                final AbstractRequestFutureCompletionHandler callback) {
             return Optional.of(
                     new UnsentRequest(
                             timeoutTimer,
@@ -200,12 +200,17 @@ public class NetworkClientDelegate implements AutoCloseable {
         }
     }
 
-    public static class RequestFutureCompletionHandlerBase implements RequestCompletionHandler {
+    public static class DefaultRequestFutureCompletionHandler extends AbstractRequestFutureCompletionHandler {
+        @Override
+        public void handleResponse(ClientResponse r, Throwable t) {}
+    }
+
+    public abstract static class AbstractRequestFutureCompletionHandler implements RequestCompletionHandler {
         private final RequestFuture<ClientResponse> future;
         private ClientResponse response;
         private RuntimeException e;
 
-        RequestFutureCompletionHandlerBase() {
+        AbstractRequestFutureCompletionHandler() {
             this.future = new RequestFuture<>();
         }
 
@@ -215,8 +220,6 @@ public class NetworkClientDelegate implements AutoCloseable {
             } else if (response.authenticationException() != null) {
                 future.raise(response.authenticationException());
             } else if (response.wasDisconnected()) {
-                //log.debug("Cancelled request with header {} due to node {} being disconnected", response
-                // .requestHeader(), response.destination());
                 future.raise(DisconnectException.INSTANCE);
             } else if (response.versionMismatch() != null) {
                 future.raise(response.versionMismatch());
@@ -231,7 +234,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             handleResponse(response, e);
         }
 
-        public void handleResponse(ClientResponse r, Throwable t) {}
+        abstract public void handleResponse(ClientResponse r, Throwable t);
 
         @Override
         public void onComplete(ClientResponse response) {
