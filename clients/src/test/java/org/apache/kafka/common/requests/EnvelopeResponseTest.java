@@ -41,7 +41,9 @@ class EnvelopeResponseTest {
             Send send = response.toSend(header, version);
             ByteBuffer buffer = TestUtils.toBuffer(send);
             assertEquals(send.size() - 4, buffer.getInt());
-            assertEquals(header, ResponseHeader.parse(buffer, headerVersion));
+            ResponseHeader parsedHeader = ResponseHeader.parse(buffer, headerVersion);
+            assertEquals(header.size(), parsedHeader.size());
+            assertEquals(header, parsedHeader);
 
             EnvelopeResponseData parsedResponseData = new EnvelopeResponseData();
             parsedResponseData.read(new ByteBufferAccessor(buffer), version);
