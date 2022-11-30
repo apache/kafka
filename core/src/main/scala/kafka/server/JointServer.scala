@@ -32,6 +32,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import java.util
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 /**
@@ -87,6 +88,7 @@ class JointServer(
 ) extends Logging {
   private val logContext: LogContext = new LogContext(s"[JointServer id=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix
+  val stopped = new AtomicBoolean(false)
 
   var usedByBroker: Boolean = false
   var usedByController: Boolean = false
@@ -178,6 +180,9 @@ class JointServer(
 
   private def start(): Unit = synchronized {
     info("Starting JointServer")
+    if (stopped.get()) {
+      throw new RuntimeException("Cannot restart stopped JointServer.")
+    }
     try {
       config.dynamicConfig.initialize(zkClientOpt = None)
 
@@ -217,22 +222,25 @@ class JointServer(
   }
 
   private def stop(): Unit = {
-    info("Stopping JointServer")
-
-    if (raftManager != null) {
-      CoreUtils.swallow(raftManager.shutdown(), this)
-      raftManager = null
+    if (stopped.getAndSet(true)) {
+      debug("JointServer is already stopped")
+    } else {
+      info("Stopping JointServer")
+      if (raftManager != null) {
+        CoreUtils.swallow(raftManager.shutdown(), this)
+        raftManager = null
+      }
+      if (controllerMetrics != null) {
+        CoreUtils.swallow(controllerMetrics.close(), this)
+        controllerMetrics = null
+      }
+      if (brokerMetrics != null) {
+        CoreUtils.swallow(brokerMetrics.close(), this)
+        brokerMetrics = null
+      }
+      CoreUtils.swallow(metrics.close(), this)
+      // Clear all reconfigurable instances stored in DynamicBrokerConfig
+      config.dynamicConfig.clear()
     }
-    if (controllerMetrics != null) {
-      CoreUtils.swallow(controllerMetrics.close(), this)
-      controllerMetrics = null
-    }
-    if (brokerMetrics != null) {
-      CoreUtils.swallow(brokerMetrics.close(), this)
-      brokerMetrics = null
-    }
-    CoreUtils.swallow(metrics.close(), this)
-    // Clear all reconfigurable instances stored in DynamicBrokerConfig
-    config.dynamicConfig.clear()
   }
 }

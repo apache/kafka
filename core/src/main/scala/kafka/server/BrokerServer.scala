@@ -74,7 +74,7 @@ class BrokerServer(
   val config = jointServer.config
   val time = jointServer.time
   val metrics = jointServer.metrics
-  def raftManager: KafkaRaftManager[ApiMessageAndVersion] = jointServer.raftManager
+  val raftManager = jointServer.raftManager
 
   override def brokerState: BrokerState = Option(lifecycleManager).
     flatMap(m => Some(m.state)).getOrElse(BrokerState.NOT_RUNNING)

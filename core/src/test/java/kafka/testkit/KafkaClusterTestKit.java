@@ -238,6 +238,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 bootstrapMetadata);
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
+                        Utils.swallow(log, "jointServer.stopForController", () -> jointServer.stopForController());
                         if (controller != null) controller.shutdown();
                         throw e;
                     }
@@ -252,17 +253,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     jointServers.put(node.id(), jointServer);
                 }
                 for (BrokerNode node : nodes.brokerNodes().values()) {
-                    JointServer jointServer = jointServers.get(node.id());
-                    if (jointServer == null) {
-                        jointServer = new JointServer(createNodeConfig(node),
-                                MetaProperties.apply(nodes.clusterId().toString(), node.id()),
-                                Time.SYSTEM,
-                                new Metrics(),
-                                Option.apply(String.format("broker%d_", node.id())),
-                                connectFutureManager.future,
-                                faultHandlerFactory);
-                        jointServers.put(node.id(), jointServer);
-                    }
+                    JointServer jointServer = jointServers.computeIfAbsent(node.id(),
+                        id -> new JointServer(createNodeConfig(node),
+                            MetaProperties.apply(nodes.clusterId().toString(), id),
+                            Time.SYSTEM,
+                            new Metrics(),
+                            Option.apply(String.format("broker%d_", id)),
+                            connectFutureManager.future,
+                            faultHandlerFactory));
                     BrokerServer broker = null;
                     try {
                         broker = new BrokerServer(
@@ -270,6 +268,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq());
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
+                        Utils.swallow(log, "jointServer.stopForBroker", () -> jointServer.stopForBroker());
                         if (broker != null) broker.shutdown();
                         throw e;
                     }
