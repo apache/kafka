@@ -21,11 +21,10 @@ import java.util.Random
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
-
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Time
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
@@ -116,6 +115,7 @@ class DelayedOperationTest {
     assertTrue(elapsed >= expiration, s"Time for expiration $elapsed should at least $expiration")
   }
 
+  @Disabled
   @Test
   def testDelayedFuture(): Unit = {
     val purgatoryName = "testDelayedFuture"
