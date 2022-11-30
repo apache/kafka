@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides pluggable interface for authorization policies.
+ * Provides pluggable interfaces for expressing policies on topics and configs.
  */
 package org.apache.kafka.server.policy;

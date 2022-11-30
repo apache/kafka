@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides pluggable interface for implementing Kafka authentication mechanisms.
+ * Provides pluggable interfaces for implementing Kafka authentication mechanisms.
  */
 package org.apache.kafka.common.security.auth;

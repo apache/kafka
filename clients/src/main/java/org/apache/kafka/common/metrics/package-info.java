@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides mechanisms for emitting monitoring metrics.
+ * Provides the API used by Kafka clients to emit metrics which are then exposed using the * {@link org.apache.kafka.common.metrics.MetricsReporter} interface.
  */
 package org.apache.kafka.common.metrics;

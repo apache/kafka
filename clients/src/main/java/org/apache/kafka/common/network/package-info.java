@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 /**
- * Provides mechanism for sending to and receiving data from remote machines.
+ * Provides the network API used by the Kafka clients
  * <strong>This package is not a supported Kafka API; the implementation may change without warning between minor or patch releases.</strong>
  */
 package org.apache.kafka.common.network;

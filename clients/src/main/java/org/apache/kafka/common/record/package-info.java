@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 /**
- * Provide classes representing a single record in a Kafka topic and/or partition.
+ * Provides the low-level representation of records and record batches used by clients and servers.
  * <strong>This package is not a supported Kafka API; the implementation may change without warning between minor or patch releases.</strong>
  */
 package org.apache.kafka.common.record;

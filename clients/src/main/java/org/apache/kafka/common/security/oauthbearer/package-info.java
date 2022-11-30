@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides adaptor for using OAuth Bearer Token Authentication for securing Kafka clusters.
+ * Provides a {@link javax.security.auth.spi.LoginModule} for using OAuth Bearer Token authentication with Kafka clusters.
  */
 package org.apache.kafka.common.security.oauthbearer;

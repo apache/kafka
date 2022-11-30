@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides API for application defined metadata attached to Kafka records.
+ * Provides API for application-defined metadata attached to Kafka records.
  */
 package org.apache.kafka.common.header;
