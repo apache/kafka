@@ -147,39 +147,43 @@ class GroupCoordinatorAdapterTest {
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator)
 
-    when(groupCoordinator.handleDescribeGroup("group")).thenReturn {
-      (Errors.INVALID_GROUP_ID, GroupSummary(
-        "Stable",
-        "consumer",
-        "roundrobin",
-        List(MemberSummary(
-          "memberid",
-          Some("instanceid"),
-          "clientid",
-          "clienthost",
-          "metadata".getBytes(),
-          "assignment".getBytes()
-        ))
-      ))
+    val groupId = "group"
+    val memberSummary = MemberSummary(
+      "memberid",
+      Some("instanceid"),
+      "clientid",
+      "clienthost",
+      "metadata".getBytes(),
+      "assignment".getBytes()
+    )
+    val groupSummary = GroupSummary(
+      "Stable",
+      "consumer",
+      "roundrobin",
+      List(memberSummary)
+    )
+
+    when(groupCoordinator.handleDescribeGroup(groupId)).thenReturn {
+      (Errors.INVALID_GROUP_ID, groupSummary)
     }
 
     val ctx = makeContext(ApiKeys.DESCRIBE_GROUPS, ApiKeys.DESCRIBE_GROUPS.latestVersion)
-    val future = adapter.describeGroup(ctx, "group")
+    val future = adapter.describeGroup(ctx, groupId)
     assertTrue(future.isDone)
 
     val expectedDescribedGroup = new DescribeGroupsResponseData.DescribedGroup()
       .setErrorCode(Errors.INVALID_GROUP_ID.code)
-      .setGroupId("group")
-      .setProtocolType("consumer")
-      .setProtocolData("roundrobin")
-      .setGroupState("Stable")
+      .setGroupId(groupId)
+      .setProtocolType(groupSummary.protocolType)
+      .setProtocolData(groupSummary.protocol)
+      .setGroupState(groupSummary.state)
       .setMembers(List(new DescribeGroupsResponseData.DescribedGroupMember()
-        .setMemberId("memberid")
-        .setGroupInstanceId("instanceid")
-        .setClientId("clientid")
-        .setClientHost("clienthost")
-        .setMemberMetadata("metadata".getBytes())
-        .setMemberAssignment("assignment".getBytes())
+        .setMemberId(memberSummary.memberId)
+        .setGroupInstanceId(memberSummary.groupInstanceId.orNull)
+        .setClientId(memberSummary.clientId)
+        .setClientHost(memberSummary.clientHost)
+        .setMemberMetadata(memberSummary.metadata)
+        .setMemberAssignment(memberSummary.assignment)
       ).asJava)
 
     assertEquals(expectedDescribedGroup, future.get())

@@ -1577,6 +1577,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val includeAuthorizedOperations = describeRequest.data.includeAuthorizedOperations
 
     def sendResponse(response: AbstractResponse): Unit = {
+      trace("Sending describe groups response %s for correlation id %d to client %s."
+        .format(response, request.header.correlationId, request.header.clientId))
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
         response.maybeSetThrottleTimeMs(requestThrottleMs)
         response
@@ -1601,9 +1603,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               Errors.forException(exception)
             )
           } else {
-            if (request.header.apiVersion >= 3 &&
-              response.errorCode == Errors.NONE.code &&
-              includeAuthorizedOperations) {
+            if (request.header.apiVersion >= 3 && response.errorCode == Errors.NONE.code && includeAuthorizedOperations) {
               response.setAuthorizedOperations(authHelper.authorizedOperations(
                 request,
                 new Resource(ResourceType.GROUP, groupId)
