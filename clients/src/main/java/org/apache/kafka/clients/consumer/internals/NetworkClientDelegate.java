@@ -78,7 +78,11 @@ public class NetworkClientDelegate implements AutoCloseable {
                 continue;
             }
 
-            doSend(unsent);
+            if (!doSend(unsent)) {
+                log.debug("No broker available to send the request: {}", unsent);
+                unsent.callback.ifPresent(v -> v.onFailure(
+                        new IllegalThreadStateException("No node available in the kafka cluster to send the request")));
+            }
         }
     }
 
@@ -87,15 +91,19 @@ public class NetworkClientDelegate implements AutoCloseable {
         return client.isReady(node, currentTime);
     }
 
-    public void doSend(UnsentRequest r) {
+    public boolean doSend(UnsentRequest r) {
         long now = time.milliseconds();
         Node node = r.node.orElse(client.leastLoadedNode(now));
+        if (node == null) {
+            return false;
+        }
         ClientRequest request = makeClientRequest(r, node);
         // TODO: Sounds like we need to check disconnections for each node and complete the request with
         //  authentication error
         if (isReady(client, node, now)) {
             client.send(request, now);
         }
+        return true;
     }
 
     private ClientRequest makeClientRequest(UnsentRequest unsent, Node node) {
@@ -173,6 +181,22 @@ public class NetworkClientDelegate implements AutoCloseable {
             this.node = Optional.ofNullable(node);
             this.callback = Optional.ofNullable(callback);
             this.timer = timer;
+        }
+
+        public static Optional<UnsentRequest> makeUnsentRequest(
+                final Timer timeoutTimer,
+                final AbstractRequest.Builder<?> requestBuilder,
+                final RequestFutureCompletionHandlerBase callback) {
+            return Optional.of(
+                    new UnsentRequest(
+                            timeoutTimer,
+                            requestBuilder,
+                            callback));
+        }
+
+        @Override
+        public String toString() {
+            return abstractBuilder.toString();
         }
     }
 

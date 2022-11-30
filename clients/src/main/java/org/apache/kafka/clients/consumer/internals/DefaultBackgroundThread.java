@@ -162,9 +162,9 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.inflightEvent = Optional.empty();
         }
 
-
-
-        if (shouldFindCoordinator() && coordinatorUnknown()) {
+        // TODO: Add a condition here, like shouldFindCoordinator in the future.  Since we don't always need to find
+        //  the coordinator.
+        if (coordinatorUnknown()) {
             coordinatorManager.tryFindCoordinator().ifPresent(networkClientDelegate::add);
         }
 
@@ -199,12 +199,6 @@ public class DefaultBackgroundThread extends KafkaThread {
 
     public boolean coordinatorUnknown() {
         return !checkAndGetCoordinator(coordinatorManager.coordinator()).isPresent();
-    }
-
-    private boolean shouldFindCoordinator() {
-        // TODO: add conditions for coordinator discovery. Example: when there are pending commits, or we have
-        //  rebalance in progress.
-        return true;
     }
 
     private long timeToNextHeartbeatMs() {

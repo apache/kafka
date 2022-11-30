@@ -27,7 +27,6 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.ExponentialBackoff;
@@ -42,17 +41,19 @@ import java.util.concurrent.BlockingQueue;
 public class CoordinatorManager {
     final static int RECONNECT_BACKOFF_EXP_BASE = 2;
     final static double RECONNECT_BACKOFF_JITTER = 0.0;
+
     private final Logger log;
     private final Time time;
     private final long requestTimeoutMs;
-    private Node coordinator;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final ExponentialBackoff exponentialBackoff;
-    private long lastTimeOfConnectionMs = -1L; // starting logging a warning only after unable to connect for a while
-    private final CoordinatorRequestState coordinatorRequestState;
-
     private final long rebalanceTimeoutMs;
     private final Optional<String> groupId;
+
+    private CoordinatorRequestState coordinatorRequestState;
+    private long lastTimeOfConnectionMs = -1L; // starting logging a warning only after unable to connect for a while
+    private Node coordinator;
+
 
     public CoordinatorManager(final Time time,
                               final LogContext logContext,
@@ -68,7 +69,6 @@ public class CoordinatorManager {
                 RECONNECT_BACKOFF_EXP_BASE,
                 config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
                 RECONNECT_BACKOFF_JITTER);
-        this.coordinatorRequestState = new CoordinatorRequestState();
         this.groupId = groupId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -81,13 +81,13 @@ public class CoordinatorManager {
      * @return Optional UnsentRequest.  Empty if we are not allowed to send a request.
      */
     public Optional<NetworkClientDelegate.UnsentRequest> tryFindCoordinator() {
+        if (this.coordinatorRequestState == null) {
+            this.coordinatorRequestState = new CoordinatorRequestState();
+        }
+
         if (coordinatorRequestState.lastSentMs == -1) {
             // no request has been sent
-            return Optional.of(
-                    new NetworkClientDelegate.UnsentRequest(
-                            this.time.timer(requestTimeoutMs),
-                            getFindCoordinatorRequest(),
-                            new FindCoordinatorRequestHandler()));
+            return makeFindCoordinatorRequest();
         }
 
         if (coordinatorRequestState.lastReceivedMs == -1 ||
@@ -101,11 +101,14 @@ public class CoordinatorManager {
             return Optional.empty();
         }
 
-        return Optional.of(
-                new NetworkClientDelegate.UnsentRequest(
-                        this.time.timer(requestTimeoutMs),
-                        getFindCoordinatorRequest(),
-                        new FindCoordinatorRequestHandler()));
+        return makeFindCoordinatorRequest();
+    }
+
+    private Optional<NetworkClientDelegate.UnsentRequest> makeFindCoordinatorRequest() {
+        return NetworkClientDelegate.UnsentRequest.makeUnsentRequest(
+                this.time.timer(requestTimeoutMs),
+                newFindCoordinatorRequest(),
+                new FindCoordinatorRequestHandler());
     }
 
     /**
@@ -122,14 +125,15 @@ public class CoordinatorManager {
             this.coordinator = null;
             lastTimeOfConnectionMs = time.milliseconds();
         } else {
-            long durationOfOngoingDisconnect = time.milliseconds() - lastTimeOfConnectionMs;
+            long durationOfOngoingDisconnect = Math.max(0, time.milliseconds() - lastTimeOfConnectionMs);
             if (durationOfOngoingDisconnect > this.rebalanceTimeoutMs)
-                log.warn("Consumer has been disconnected from the group coordinator for {}ms", durationOfOngoingDisconnect);
+                log.debug("Consumer has been disconnected from the group coordinator for {}ms",
+                        durationOfOngoingDisconnect);
         }
         return Optional.ofNullable(oldCoordinator);
     }
 
-    private AbstractRequest.Builder<?> getFindCoordinatorRequest() {
+    private FindCoordinatorRequest.Builder newFindCoordinatorRequest() {
         coordinatorRequestState.updateLastSend();
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
