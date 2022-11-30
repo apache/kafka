@@ -33,7 +33,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Disabled, Test, Timeout}
 
 import scala.collection.{Map, Seq, mutable}
@@ -369,6 +369,34 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     waitForBrokerLevelThrottles(unthrottledBrokerConfigs)
     // Verify that there are no ongoing reassignments.
     assertFalse(runVerifyAssignment(cluster.adminClient, assignment, false).partsOngoing)
+  }
+
+  @Test
+  def testInvalidCancellation(): Unit = {
+    cluster = new ReassignPartitionsTestCluster(zkConnect)
+    cluster.setup()
+    cluster.produceMessages("foo", 0, 200)
+    val assignment = """{"version":1,"partitions":""" +
+      """[{"topic":"foo","partition":0,"replicas":[0,1,3],"log_dirs":["any","any","any"]}""" +
+      """]}"""
+    assertEquals(unthrottledBrokerConfigs,
+      describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
+    val interBrokerThrottle = 1L
+    runExecuteAssignment(cluster.adminClient, false, assignment, interBrokerThrottle, -1L)
+    waitForInterBrokerThrottle(Set(0, 1, 2, 3), interBrokerThrottle)
+
+    // Verify that the reassignment is running.  The very low throttle should keep it
+    // from completing before this runs.
+    waitForVerifyAssignment(cluster.adminClient, assignment, true,
+      VerifyAssignmentResult(Map(
+        new TopicPartition("foo", 0) -> PartitionReassignmentState(Seq(0, 1, 3, 2), Seq(0, 1, 3), false)),
+        true, Map(), false))
+
+    // shutdown one of the original replicas
+    cluster.servers.find(_.config.brokerId == 2).get.shutdown()
+
+    // Cancel the reassignment should result in an exception
+    assertThrows(classOf[TerseReassignmentFailureException], () => runCancelAssignment(cluster.adminClient, assignment, true))
   }
 
   private def waitForLogDirThrottle(throttledBrokers: Set[Int], logDirThrottle: Long): Unit = {

@@ -2279,7 +2279,7 @@ class KafkaController(val config: KafkaConfig,
       val partitionsToReassign = mutable.Map.empty[TopicPartition, ReplicaAssignment]
 
       reassignments.forKeyValue { (tp, targetReplicas) =>
-        val maybeApiError = targetReplicas.flatMap(validateReplicas(tp, _))
+        val maybeApiError = validateReplicas(tp, targetReplicas)
         maybeApiError match {
           case None =>
             maybeBuildReassignment(tp, targetReplicas) match {
@@ -2300,7 +2300,27 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def validateReplicas(topicPartition: TopicPartition, replicas: Seq[Int]): Option[ApiError] = {
+  private def validateReplicas(topicPartition: TopicPartition, replicas: Option[Seq[Int]]): Option[ApiError] = {
+    replicas match {
+      case Some(targetReplicas) => validateTargetReplicas(topicPartition, targetReplicas)
+      case None => {
+        // this is trying to cancel an existing replica reassignment
+        val replicaAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
+        if (replicaAssignment.isBeingReassigned) {
+          val originalReplicasAlive = replicaAssignment.originReplicas.toSet.subsetOf(controllerContext.liveBrokerIds)
+          if (!originalReplicasAlive)
+            Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+              s"Replica assignment cancellation has original brokers that are not alive. " +
+                "Replica list: " + s"${replicaAssignment.originReplicas}, live broker list: ${controllerContext.liveBrokerIds}"))
+          else None
+        } else {
+          Some(new ApiError(Errors.NO_REASSIGNMENT_IN_PROGRESS))
+        }
+      }
+    }
+  }
+
+  private def validateTargetReplicas(topicPartition: TopicPartition, replicas: Seq[Int]): Option[ApiError] = {
     val replicaSet = replicas.toSet
     if (replicas.isEmpty)
       Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
