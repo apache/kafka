@@ -101,10 +101,10 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 @PowerMockIgnore({"javax.management.*",
         "org.apache.log4j.*"})
@@ -660,9 +660,9 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         final CountDownLatch thirdPollLatch = new CountDownLatch(2);
 
         AtomicInteger flushes = new AtomicInteger();
-        expectFlush(FlushOutcome.SUCCEED, flushes);
-        expectFlush(FlushOutcome.SUCCEED, flushes);
-        expectFlush(FlushOutcome.SUCCEED, flushes);
+        expectFlush(false, flushes);
+        expectFlush(false, flushes);
+        expectFlush(false, flushes);
 
         expectTopicCreation(TOPIC);
 
@@ -717,20 +717,20 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
 
         AtomicInteger flushes = new AtomicInteger();
         // First flush: triggered by TransactionContext::commitTransaction (batch)
-        expectFlush(FlushOutcome.SUCCEED, flushes);
+        expectFlush(false, flushes);
 
         // Second flush: triggered by TransactionContext::commitTransaction (record)
-        expectFlush(FlushOutcome.SUCCEED, flushes);
+        expectFlush(false, flushes);
 
         // Third flush: triggered by TransactionContext::abortTransaction (batch)
         expectCall(producer::abortTransaction);
         EasyMock.expect(offsetWriter.willFlush()).andReturn(true);
-        expectFlush(FlushOutcome.SUCCEED, flushes);
+        expectFlush(false, flushes);
 
         // Third flush: triggered by TransactionContext::abortTransaction (record)
         EasyMock.expect(offsetWriter.willFlush()).andReturn(true);
         expectCall(producer::abortTransaction);
-        expectFlush(FlushOutcome.SUCCEED, flushes);
+        expectFlush(false, flushes);
 
         expectTopicCreation(TOPIC);
 
@@ -794,30 +794,57 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testCommitFlushCallbackFailure() throws Exception {
-        testCommitFailure(FlushOutcome.FAIL_FLUSH_CALLBACK);
+    public void testCommitFlushSyncCallbackFailure() throws Exception {
+        Exception failure = new RecordTooLargeException();
+        Capture<Callback<Void>> flushCallback = EasyMock.newCapture();
+        EasyMock.expect(offsetWriter.doFlush(EasyMock.capture(flushCallback))).andAnswer(() -> {
+            flushCallback.getValue().onCompletion(failure, null);
+            return null;
+        });
+        testCommitFailure(failure);
+    }
+
+    @Test
+    public void testCommitFlushAsyncCallbackFailure() throws Exception {
+        Exception failure = new RecordTooLargeException();
+        // doFlush delegates its callback to the producer,
+        // which delays completing the callback until commitTransaction
+        Capture<Callback<Void>> flushCallback = EasyMock.newCapture();
+        EasyMock.expect(offsetWriter.doFlush(EasyMock.capture(flushCallback))).andReturn(null);
+        expectCall(producer::commitTransaction).andAnswer(() -> {
+            flushCallback.getValue().onCompletion(failure, null);
+            return null;
+        });
+        testCommitFailure(failure);
     }
 
     @Test
     public void testCommitTransactionFailure() throws Exception {
-        testCommitFailure(FlushOutcome.FAIL_TRANSACTION_COMMIT);
+        Exception failure = new RecordTooLargeException();
+        EasyMock.expect(offsetWriter.doFlush(EasyMock.anyObject())).andReturn(null);
+        expectCall(producer::commitTransaction).andThrow(failure);
+        testCommitFailure(failure);
     }
 
-    private void testCommitFailure(FlushOutcome causeOfFailure) throws Exception {
+    private void testCommitFailure(Throwable expectedFailure) throws Exception {
         createWorkerTask();
 
         expectPreflight();
         expectStartup();
 
         expectPolls();
-        expectFlush(causeOfFailure);
+
+        EasyMock.expect(offsetWriter.willFlush()).andReturn(true).anyTimes();
+        EasyMock.expect(offsetWriter.beginFlush()).andReturn(true);
+        expectCall(offsetWriter::cancelFlush);
 
         expectTopicCreation(TOPIC);
 
         expectCall(sourceTask::stop);
         // Unlike the standard WorkerSourceTask class, this one fails permanently when offset commits don't succeed
         final CountDownLatch taskFailure = new CountDownLatch(1);
-        expectCall(() -> statusListener.onFailure(EasyMock.eq(taskId), EasyMock.anyObject()))
+        Capture<Throwable> failure = EasyMock.newCapture();
+        expectCall(() -> statusListener.onFailure(EasyMock.eq(taskId), EasyMock.capture(failure)))
                 .andAnswer(() -> {
                     taskFailure.countDown();
                     return null;
@@ -833,6 +860,8 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         assertTrue(awaitLatch(taskFailure));
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+        assertNotNull(failure.getValue());
+        assertEquals(expectedFailure, failure.getValue().getCause());
 
         taskFuture.get();
         assertPollMetrics(1);
@@ -1156,7 +1185,7 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         FAIL_TRANSACTION_COMMIT
     }
 
-    private CountDownLatch expectFlush(FlushOutcome outcome, AtomicInteger flushCount) {
+    private CountDownLatch expectFlush(boolean anyTimes, AtomicInteger flushCount) {
         CountDownLatch result = new CountDownLatch(1);
         org.easymock.IExpectationSetters<Boolean> flushBegin = EasyMock
                 .expect(offsetWriter.beginFlush())
@@ -1165,55 +1194,32 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
                     result.countDown();
                     return true;
                 });
-        if (FlushOutcome.SUCCEED_ANY_TIMES.equals(outcome)) {
+        if (anyTimes) {
             flushBegin.anyTimes();
         }
 
         Capture<Callback<Void>> flushCallback = EasyMock.newCapture();
         org.easymock.IExpectationSetters<Future<Void>> offsetFlush =
                 EasyMock.expect(offsetWriter.doFlush(EasyMock.capture(flushCallback)));
-        switch (outcome) {
-            case SUCCEED:
-                // The worker task doesn't actually use the returned future
-                offsetFlush.andReturn(null);
-                expectCall(producer::commitTransaction);
-                expectCall(() -> sourceTask.commitRecord(EasyMock.anyObject(), EasyMock.anyObject()));
-                expectCall(sourceTask::commit);
-                break;
-            case SUCCEED_ANY_TIMES:
-                // The worker task doesn't actually use the returned future
-                offsetFlush.andReturn(null).anyTimes();
-                expectCall(producer::commitTransaction).anyTimes();
-                expectCall(() -> sourceTask.commitRecord(EasyMock.anyObject(), EasyMock.anyObject())).anyTimes();
-                expectCall(sourceTask::commit).anyTimes();
-                break;
-            case FAIL_FLUSH_CALLBACK:
-                expectCall(producer::commitTransaction);
-                offsetFlush.andAnswer(() -> {
-                    flushCallback.getValue().onCompletion(new RecordTooLargeException(), null);
-                    return null;
-                });
-                expectCall(offsetWriter::cancelFlush);
-                break;
-            case FAIL_TRANSACTION_COMMIT:
-                offsetFlush.andReturn(null);
-                expectCall(producer::commitTransaction)
-                        .andThrow(new RecordTooLargeException());
-                expectCall(offsetWriter::cancelFlush);
-                break;
-            default:
-                fail("Unexpected flush outcome: " + outcome);
+        if (anyTimes) {
+            // The worker task doesn't actually use the returned future
+            offsetFlush.andReturn(null).anyTimes();
+            expectCall(producer::commitTransaction).anyTimes();
+            expectCall(() -> sourceTask.commitRecord(EasyMock.anyObject(), EasyMock.anyObject())).anyTimes();
+            expectCall(sourceTask::commit).anyTimes();
+        } else {
+            // The worker task doesn't actually use the returned future
+            offsetFlush.andReturn(null);
+            expectCall(producer::commitTransaction);
+            expectCall(() -> sourceTask.commitRecord(EasyMock.anyObject(), EasyMock.anyObject()));
+            expectCall(sourceTask::commit);
         }
         return result;
     }
 
-    private CountDownLatch expectFlush(FlushOutcome outcome) {
-        return expectFlush(outcome, new AtomicInteger());
-    }
-
     private CountDownLatch expectAnyFlushes(AtomicInteger flushCount) {
         EasyMock.expect(offsetWriter.willFlush()).andReturn(true).anyTimes();
-        return expectFlush(FlushOutcome.SUCCEED_ANY_TIMES, flushCount);
+        return expectFlush(true, flushCount);
     }
 
     private void assertTransactionMetrics(int minimumMaxSizeExpected) {
