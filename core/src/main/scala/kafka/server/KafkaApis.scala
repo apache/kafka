@@ -198,7 +198,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
         case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request, requestLocal)
         case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
-        case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
+        case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request).exceptionally(handleError)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.CREATE_TOPICS => maybeForwardToController(request, handleCreateTopicsRequest)
@@ -1621,10 +1621,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     sendResponseCallback(describeGroupsResponseData)
   }
 
-  def handleListGroupsRequest(request: RequestChannel.Request): Unit = {
+  def handleListGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val listGroupsRequest = request.body[ListGroupsRequest]
 
     def sendResponse(response: AbstractResponse): Unit = {
+      trace("Sending list groups response %s for correlation id %d to client %s."
+        .format(response, request.header.correlationId, request.header.clientId))
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
         response.maybeSetThrottleTimeMs(requestThrottleMs)
         response
@@ -1644,14 +1646,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           new ListGroupsResponse(response)
         } else {
           // Otherwise, only groups with described group are returned.
-          val iterator = response.groups.iterator()
-          while (iterator.hasNext()) {
-            val listedGroup = iterator.next()
-            if (!authHelper.authorize(request.context, DESCRIBE, GROUP, listedGroup.groupId, logIfDenied = false)) {
-              iterator.remove()
-            }
+          val authorizedGroups = response.groups.asScala.filter { group =>
+            authHelper.authorize(request.context, DESCRIBE, GROUP, group.groupId, logIfDenied = false)
           }
-          new ListGroupsResponse(response)
+          new ListGroupsResponse(response.setGroups(authorizedGroups.asJava))
         }
         sendResponse(listGroupsResponse)
       }
