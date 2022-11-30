@@ -22,16 +22,14 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Map;
 import java.util.Set;
 import java.util.List;
-import java.util.HashSet;
 import java.util.Collections;
 import java.util.stream.Collectors;
 
-public class MirrorTaskConfig extends MirrorConnectorConfig {
+public class MirrorSourceTaskConfig extends MirrorSourceConfig {
 
     private static final String TASK_TOPIC_PARTITIONS_DOC = "Topic-partitions assigned to this task to replicate.";
-    private static final String TASK_CONSUMER_GROUPS_DOC = "Consumer groups assigned to this task to replicate.";
 
-    public MirrorTaskConfig(Map<String, String> props) {
+    public MirrorSourceTaskConfig(Map<String, String> props) {
         super(TASK_CONFIG_DEF, props);
     }
 
@@ -45,16 +43,8 @@ public class MirrorTaskConfig extends MirrorConnectorConfig {
             .collect(Collectors.toSet());
     }
 
-    Set<String> taskConsumerGroups() {
-        List<String> fields = getList(TASK_CONSUMER_GROUPS);
-        if (fields == null || fields.isEmpty()) {
-            return Collections.emptySet();
-        }
-        return new HashSet<>(fields);
-    } 
-
-    MirrorMetrics metrics() {
-        MirrorMetrics metrics = new MirrorMetrics(this);
+    MirrorSourceMetrics metrics() {
+        MirrorSourceMetrics metrics = new MirrorSourceMetrics(this);
         metricsReporters().forEach(metrics::addReporter);
         return metrics;
     }
@@ -65,11 +55,5 @@ public class MirrorTaskConfig extends MirrorConnectorConfig {
             ConfigDef.Type.LIST,
             null,
             ConfigDef.Importance.LOW,
-            TASK_TOPIC_PARTITIONS_DOC)
-        .define(
-            TASK_CONSUMER_GROUPS,
-            ConfigDef.Type.LIST,
-            null,
-            ConfigDef.Importance.LOW,
-            TASK_CONSUMER_GROUPS_DOC);
+            TASK_TOPIC_PARTITIONS_DOC);
 }
