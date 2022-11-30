@@ -39,6 +39,7 @@ import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
+import org.apache.kafka.common.errors.FencedMemberEpoch;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionTopicIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -121,7 +122,9 @@ import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.UnreleasedInstanceId;
 import org.apache.kafka.common.errors.UnstableOffsetCommitException;
+import org.apache.kafka.common.errors.UnsupportedAssignor;
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
@@ -370,7 +373,10 @@ public enum Errors {
     TRANSACTIONAL_ID_NOT_FOUND(105, "The transactionalId could not be found", TransactionalIdNotFoundException::new),
     FETCH_SESSION_TOPIC_ID_ERROR(106, "The fetch session encountered inconsistent topic ID usage", FetchSessionTopicIdException::new),
     INELIGIBLE_REPLICA(107, "The new ISR contains at least one ineligible replica.", IneligibleReplicaException::new),
-    NEW_LEADER_ELECTED(108, "The AlterPartition request successfully updated the partition state but the leader has changed.", NewLeaderElectedException::new);
+    NEW_LEADER_ELECTED(108, "The AlterPartition request successfully updated the partition state but the leader has changed.", NewLeaderElectedException::new),
+    FENCED_MEMBER_EPOCH(109, "The member epoch is fenced by the group coordinator. The member must abandon all its partitions and rejoins.", FencedMemberEpoch::new),
+    UNRELEASED_INSTANCE_ID(110, "The instance ID is still used by another member in the consumer group. That member must leave first.", UnreleasedInstanceId::new),
+    UNSUPPORTED_ASSIGNOR(111, "The assignor used by the member or its version range are not supported by the consumer group.", UnsupportedAssignor::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

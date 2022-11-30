@@ -41,8 +41,17 @@ object ApiVersionManager {
     supportedFeatures: BrokerFeatures,
     metadataCache: MetadataCache
   ): ApiVersionManager = {
+    val apisForListener = ApiKeys.apisForListener(listenerType).clone()
+
+    // While KIP-848 is in development, we don't expose new APIs (from the KIP)
+    // unless enabled.
+    if (!config.newGroupCoordinatorEnabled) {
+      apisForListener.remove(ApiKeys.CONSUMER_GROUP_HEARTBEAT)
+    }
+
     new DefaultApiVersionManager(
       listenerType,
+      apisForListener.asScala,
       forwardingManager,
       supportedFeatures,
       metadataCache
@@ -69,6 +78,7 @@ class SimpleApiVersionManager(
 
 class DefaultApiVersionManager(
   val listenerType: ListenerType,
+  val enabledApis: collection.Set[ApiKeys],
   forwardingManager: Option[ForwardingManager],
   features: BrokerFeatures,
   metadataCache: MetadataCache
@@ -86,14 +96,7 @@ class DefaultApiVersionManager(
         finalizedFeatures.features.map(kv => (kv._1, kv._2.asInstanceOf[java.lang.Short])).asJava,
         finalizedFeatures.epoch,
         controllerApiVersions.orNull,
-        listenerType)
-  }
-
-  override def enabledApis: collection.Set[ApiKeys] = {
-    ApiKeys.apisForListener(listenerType).asScala
-  }
-
-  override def isApiEnabled(apiKey: ApiKeys): Boolean = {
-    apiKey.inScope(listenerType)
+        enabledApis.asJava
+    )
   }
 }

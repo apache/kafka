@@ -62,6 +62,8 @@ import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerHeartbeatResponseData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationResponseData;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
@@ -1047,6 +1049,7 @@ public class RequestResponseTest {
             case DESCRIBE_TRANSACTIONS: return createDescribeTransactionsRequest(version);
             case LIST_TRANSACTIONS: return createListTransactionsRequest(version);
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsRequest(version);
+            case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1121,8 +1124,49 @@ public class RequestResponseTest {
             case DESCRIBE_TRANSACTIONS: return createDescribeTransactionsResponse();
             case LIST_TRANSACTIONS: return createListTransactionsResponse();
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsResponse();
+            case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
+    }
+
+    private ConsumerGroupHeartbeatRequest createConsumerGroupHeartbeatRequest(short version) {
+        ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData()
+            .setGroupId("group")
+            .setMemberId("memberid")
+            .setMemberEpoch(10)
+            .setRebalanceTimeoutMs(60000)
+            .setServerAssignor("range")
+            .setRackId("rackid")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setTopicPartitions(Arrays.asList(
+                new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                    .setTopicId(Uuid.randomUuid())
+                    .setPartitions(Arrays.asList(0, 1, 2)),
+                new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                    .setTopicId(Uuid.randomUuid())
+                    .setPartitions(Arrays.asList(3, 4, 5))
+            ));
+        return new ConsumerGroupHeartbeatRequest.Builder(data).build(version);
+    }
+
+    private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponse() {
+        ConsumerGroupHeartbeatResponseData data = new ConsumerGroupHeartbeatResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setThrottleTimeMs(1000)
+            .setMemberId("memberid")
+            .setMemberEpoch(11)
+            .setShouldComputeAssignment(false)
+            .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                .setAssignedTopicPartitions(Arrays.asList(
+                    new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                        .setTopicId(Uuid.randomUuid())
+                        .setPartitions(Arrays.asList(0, 1, 2)),
+                    new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                        .setTopicId(Uuid.randomUuid())
+                        .setPartitions(Arrays.asList(3, 4, 5))
+                ))
+            );
+        return new ConsumerGroupHeartbeatResponse(data);
     }
 
     private FetchSnapshotRequest createFetchSnapshotRequest(short version) {

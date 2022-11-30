@@ -632,7 +632,7 @@ public class KafkaAdminClientTest {
         if (error == Errors.NONE) {
             return ApiVersionsResponse.createApiVersionsResponse(
                 0,
-                ApiVersionsResponse.filterApis(RecordVersion.current(), ApiMessageType.ListenerType.ZK_BROKER),
+                ApiVersionsResponse.filterApis(ApiKeys.apisForListener(ApiMessageType.ListenerType.ZK_BROKER), RecordVersion.current()),
                 convertSupportedFeaturesMap(defaultFeatureMetadata().supportedFeatures()),
                 Collections.singletonMap("test_feature_1", (short) 2),
                 defaultFeatureMetadata().finalizedFeaturesEpoch().get()

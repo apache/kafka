@@ -243,6 +243,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
         case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
+        case ApiKeys.CONSUMER_GROUP_HEARTBEAT => handleConsumerGroupHeartbeat(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3493,6 +3494,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs =>
           new AllocateProducerIdsResponse(producerIdsResponse.setThrottleTimeMs(throttleTimeMs)))
       )
+  }
+
+  def handleConsumerGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val consumerGroupHeartbeatRequest = request.body[ConsumerGroupHeartbeatRequest]
+    // KIP-848 is not implemented yet so return UNSUPPORTED_VERSION.
+    requestHelper.sendMaybeThrottle(request, consumerGroupHeartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
