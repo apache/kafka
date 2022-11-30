@@ -326,6 +326,13 @@
     </subpackage>
   </subpackage>
 
+  <subpackage name="coordinator">
+    <subpackage name="group">
+      <allow pkg="org.apache.kafka.common.message" />
+      <allow pkg="org.apache.kafka.common.requests" />
+    </subpackage>
+  </subpackage>
+
   <subpackage name="server">
     <allow pkg="org.apache.kafka.common" />
 
@@ -630,6 +637,8 @@
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.tools" />
       <allow pkg="javax.ws.rs" />
+      <allow pkg="org.apache.http"/>
+      <allow pkg="org.eclipse.jetty.util"/>
     </subpackage>
 
     <subpackage name="json">

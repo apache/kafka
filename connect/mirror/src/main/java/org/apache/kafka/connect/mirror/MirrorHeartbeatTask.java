@@ -39,7 +39,7 @@ public class MirrorHeartbeatTask extends SourceTask {
     @Override
     public void start(Map<String, String> props) {
         stopped = new CountDownLatch(1);
-        MirrorTaskConfig config = new MirrorTaskConfig(props);
+        MirrorHeartbeatConfig config = new MirrorHeartbeatConfig(props);
         sourceClusterAlias = config.sourceClusterAlias();
         targetClusterAlias = config.targetClusterAlias();
         heartbeatsTopic = config.heartbeatsTopic();

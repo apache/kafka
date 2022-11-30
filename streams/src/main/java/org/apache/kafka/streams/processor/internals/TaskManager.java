@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
@@ -148,8 +149,12 @@ public class TaskManager {
         return topologyMetadata;
     }
 
-    Consumer<byte[], byte[]> mainConsumer() {
-        return mainConsumer;
+    ConsumerGroupMetadata consumerGroupMetadata() {
+        return mainConsumer.groupMetadata();
+    }
+
+    void consumerCommitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        mainConsumer.commitSync(offsets);
     }
 
     StreamsProducer streamsProducerForTask(final TaskId taskId) {
@@ -160,7 +165,7 @@ public class TaskManager {
         return activeTaskCreator.threadProducer();
     }
 
-    boolean isRebalanceInProgress() {
+    boolean rebalanceInProgress() {
         return rebalanceInProgress;
     }
 
@@ -456,8 +461,17 @@ public class TaskManager {
                                              final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                              final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                              final Set<Task> tasksToCloseClean) {
+        handleTasksPendingInitialization();
         handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
         handleTasksInStateUpdater(activeTasksToCreate, standbyTasksToCreate);
+    }
+
+    private void handleTasksPendingInitialization() {
+        // All tasks pending initialization are not part of the usual bookkeeping
+        for (final Task task : tasks.drainPendingTaskToInit()) {
+            task.suspend();
+            task.closeClean();
+        }
     }
 
     private void handleRunningAndSuspendedTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
@@ -819,6 +833,11 @@ public class TaskManager {
             try {
                 task.initializeIfNeeded();
                 stateUpdater.add(task);
+            } catch (final LockException lockException) {
+                // The state directory may still be locked by another thread, when the rebalance just happened.
+                // Retry in the next iteration.
+                log.info("Encountered lock exception. Reattempting locking the state in the next iteration.", lockException);
+                tasks.addPendingTaskToInit(Collections.singleton(task));
             } catch (final RuntimeException e) {
                 // need to add task back to the bookkeeping to be handled by the stream thread
                 tasks.addTask(task);

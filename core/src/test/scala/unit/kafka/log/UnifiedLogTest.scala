@@ -3455,6 +3455,26 @@ class UnifiedLogTest {
     assertFalse(newDir.exists())
   }
 
+  @Test
+  def testMaybeUpdateHighWatermarkAsFollower(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = createLog(logDir, logConfig)
+
+    for (i <- 0 until 100) {
+      val records = TestUtils.singletonRecords(value = s"test$i".getBytes)
+      log.appendAsLeader(records, leaderEpoch = 0)
+    }
+
+    assertEquals(Some(99L), log.maybeUpdateHighWatermark(99L))
+    assertEquals(None, log.maybeUpdateHighWatermark(99L))
+
+    assertEquals(Some(100L), log.maybeUpdateHighWatermark(100L))
+    assertEquals(None, log.maybeUpdateHighWatermark(100L))
+
+    // bound by the log end offset
+    assertEquals(None, log.maybeUpdateHighWatermark(101L))
+  }
+
   private def appendTransactionalToBuffer(buffer: ByteBuffer,
                                           producerId: Long,
                                           producerEpoch: Short,

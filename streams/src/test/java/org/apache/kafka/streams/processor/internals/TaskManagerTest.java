@@ -771,6 +771,29 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldRetryInitializationWhenLockExceptionInStateUpdater() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(task00, task01));
+        final LockException lockException = new LockException("Where are my keys??");
+        doThrow(lockException)
+            .when(task00).initializeIfNeeded();
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        Mockito.verify(task00).initializeIfNeeded();
+        Mockito.verify(task01).initializeIfNeeded();
+        Mockito.verify(tasks).addPendingTaskToInit(Collections.singleton(task00));
+        Mockito.verify(stateUpdater).add(task01);
+    }
+
+    @Test
     public void shouldRecycleTasksRemovedFromStateUpdater() {
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
@@ -2184,7 +2207,7 @@ public class TaskManagerTest {
         assertThat(uncorruptedActive.commitCompleted, is(false));
 
         taskManager.handleRebalanceStart(singleton(topic1));
-        assertThat(taskManager.isRebalanceInProgress(), is(true));
+        assertThat(taskManager.rebalanceInProgress(), is(true));
         taskManager.handleCorruption(singleton(taskId00));
 
         assertThat(uncorruptedActive.commitPrepared, is(false));
@@ -3448,11 +3471,11 @@ public class TaskManagerTest {
         expectLastCall();
         expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new ArrayList<>());
         replay(consumer, stateDirectory);
-        assertThat(taskManager.isRebalanceInProgress(), is(false));
+        assertThat(taskManager.rebalanceInProgress(), is(false));
         taskManager.handleRebalanceStart(emptySet());
-        assertThat(taskManager.isRebalanceInProgress(), is(true));
+        assertThat(taskManager.rebalanceInProgress(), is(true));
         taskManager.handleRebalanceComplete();
-        assertThat(taskManager.isRebalanceInProgress(), is(false));
+        assertThat(taskManager.rebalanceInProgress(), is(false));
     }
 
     @Test
@@ -4424,7 +4447,8 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotFailForTimeoutExceptionOnCommitWithEosAlpha() {
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA, false);
+        final Tasks tasks = mock(Tasks.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA, tasks, false);
 
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.streamsProducerForTask(anyObject(TaskId.class)))
@@ -4449,7 +4473,8 @@ public class TaskManagerTest {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
         task01.setCommittableOffsetsAndMetadata(offsetsT01);
         final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
-
+        when(tasks.allTasks()).thenReturn(mkSet(task00, task01, task02));
+        
         expect(consumer.groupMetadata()).andStubReturn(null);
         replay(activeTaskCreator, consumer);
 
