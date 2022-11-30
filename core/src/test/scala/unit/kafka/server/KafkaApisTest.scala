@@ -2092,28 +2092,21 @@ class KafkaApisTest {
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
 
-    def makeDeleteAction(groupId: String): Action = {
-      new Action(
-        AclOperation.DELETE,
-        new ResourcePattern(ResourceType.GROUP, groupId, PatternType.LITERAL),
-        1,
-        true,
-        true
-      )
-    }
+    val acls = Map(
+      "group-1" -> AuthorizationResult.DENIED,
+      "group-2" -> AuthorizationResult.ALLOWED,
+      "group-3" -> AuthorizationResult.ALLOWED
+    )
 
     when(authorizer.authorize(
       any[RequestContext],
-      ArgumentMatchers.eq(Seq(
-        makeDeleteAction("group-3"),
-        makeDeleteAction("group-2"),
-        makeDeleteAction("group-1"),
-      ).asJava)
-    )).thenReturn(Seq(
-      AuthorizationResult.ALLOWED,
-      AuthorizationResult.ALLOWED,
-      AuthorizationResult.DENIED
-    ).asJava)
+      any[util.List[Action]]
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument(1, classOf[util.List[Action]])
+      actions.asScala.map { action =>
+        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
+      }.asJava
+    }
 
     val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
     when(newGroupCoordinator.deleteGroups(
