@@ -61,7 +61,7 @@ import org.slf4j.LoggerFactory;
 
 /** Replicate data, configuration, and ACLs between clusters.
  *
- *  @see MirrorConnectorConfig for supported config properties.
+ *  @see MirrorSourceConfig for supported config properties.
  */
 public class MirrorSourceConnector extends SourceConnector {
 
@@ -71,7 +71,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private static final AclBindingFilter ANY_TOPIC_ACL = new AclBindingFilter(ANY_TOPIC, AccessControlEntryFilter.ANY);
 
     private Scheduler scheduler;
-    private MirrorConnectorConfig config;
+    private MirrorSourceConfig config;
     private SourceAndTarget sourceAndTarget;
     private String connectorName;
     private TopicFilter topicFilter;
@@ -88,7 +88,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     // visible for testing
-    MirrorSourceConnector(List<TopicPartition> knownSourceTopicPartitions, MirrorConnectorConfig config) {
+    MirrorSourceConnector(List<TopicPartition> knownSourceTopicPartitions, MirrorSourceConfig config) {
         this.knownSourceTopicPartitions = knownSourceTopicPartitions;
         this.config = config;
     }
@@ -105,7 +105,7 @@ public class MirrorSourceConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         long start = System.currentTimeMillis();
-        config = new MirrorConnectorConfig(props);
+        config = new MirrorSourceConfig(props);
         if (!config.enabled()) {
             return;
         }
@@ -182,7 +182,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     @Override
     public ConfigDef config() {
-        return MirrorConnectorConfig.CONNECTOR_CONFIG_DEF;
+        return MirrorSourceConfig.CONNECTOR_CONFIG_DEF;
     }
 
     @Override

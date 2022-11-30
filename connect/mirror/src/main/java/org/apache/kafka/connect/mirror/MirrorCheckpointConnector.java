@@ -38,14 +38,14 @@ import java.util.stream.Collectors;
 
 /** Replicate consumer group state between clusters. Emits checkpoint records.
  *
- *  @see MirrorConnectorConfig for supported config properties.
+ *  @see MirrorCheckpointConfig for supported config properties.
  */
 public class MirrorCheckpointConnector extends SourceConnector {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorCheckpointConnector.class);
 
     private Scheduler scheduler;
-    private MirrorConnectorConfig config;
+    private MirrorCheckpointConfig config;
     private GroupFilter groupFilter;
     private Admin sourceAdminClient;
     private SourceAndTarget sourceAndTarget;
@@ -56,14 +56,14 @@ public class MirrorCheckpointConnector extends SourceConnector {
     }
 
     // visible for testing
-    MirrorCheckpointConnector(List<String> knownConsumerGroups, MirrorConnectorConfig config) {
+    MirrorCheckpointConnector(List<String> knownConsumerGroups, MirrorCheckpointConfig config) {
         this.knownConsumerGroups = knownConsumerGroups;
         this.config = config;
     }
 
     @Override
     public void start(Map<String, String> props) {
-        config = new MirrorConnectorConfig(props);
+        config = new MirrorCheckpointConfig(props);
         if (!config.enabled()) {
             return;
         }
@@ -113,7 +113,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     @Override
     public ConfigDef config() {
-        return MirrorConnectorConfig.CONNECTOR_CONFIG_DEF;
+        return MirrorCheckpointConfig.CONNECTOR_CONFIG_DEF;
     }
 
     @Override

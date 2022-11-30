@@ -117,7 +117,7 @@ object DynamicConfig {
     val names = configDef.names()
     val propKeys = props.keySet.asScala.map(_.asInstanceOf[String])
     if (!customPropsAllowed) {
-      val unknownKeys = propKeys.filter(!names.contains(_))
+      val unknownKeys = propKeys.filterNot(names.contains(_))
       require(unknownKeys.isEmpty, s"Unknown Dynamic Configuration: $unknownKeys.")
     }
     val propResolved = DynamicBrokerConfig.resolveVariableConfigs(props)

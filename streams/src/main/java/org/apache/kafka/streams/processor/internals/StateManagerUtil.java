@@ -142,6 +142,8 @@ final class StateManagerUtil {
                         stateDirectory.unlock(id);
                     }
                 }
+            } else {
+                log.error("Failed to acquire lock while closing the state store for {} task {}", taskType, id);
             }
         } catch (final IOException e) {
             final ProcessorStateException exception = new ProcessorStateException(

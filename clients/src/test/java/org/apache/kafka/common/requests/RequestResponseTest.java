@@ -406,6 +406,7 @@ public class RequestResponseTest {
         header.write(buffer, serializationCache);
         buffer.flip();
         ResponseHeader deserialized = ResponseHeader.parse(buffer, header.headerVersion());
+        assertEquals(header.size(), deserialized.size());
         assertEquals(header.correlationId(), deserialized.correlationId());
     }
 
@@ -606,7 +607,7 @@ public class RequestResponseTest {
         assertEquals(fetchResponse.serialize(version), buf);
         FetchResponseData deserialized = new FetchResponseData(new ByteBufferAccessor(buf), version);
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        assertEquals(size, responseHeader.size(serializationCache) + deserialized.size(serializationCache, version));
+        assertEquals(size, responseHeader.size() + deserialized.size(serializationCache, version));
     }
 
     @Test
@@ -708,6 +709,7 @@ public class RequestResponseTest {
         ByteBuffer serializedRequest = createTopicsRequest.serializeWithHeader(requestHeader);
 
         RequestHeader parsedHeader = RequestHeader.parse(serializedRequest);
+        assertEquals(requestHeader.size(), parsedHeader.size());
         assertEquals(requestHeader, parsedHeader);
 
         RequestAndSize parsedRequest = AbstractRequest.parseRequest(
@@ -1756,10 +1758,8 @@ public class RequestResponseTest {
         for (int i = 0; i < 2; i++) {
             JoinGroupResponseMember member = new JoinGroupResponseData.JoinGroupResponseMember()
                 .setMemberId("consumer" + i)
-                .setMetadata(new byte[0]);
-
-            if (version >= 5)
-                member.setGroupInstanceId("instance" + i);
+                .setMetadata(new byte[0])
+                .setGroupInstanceId("instance" + i);
 
             members.add(member);
         }
