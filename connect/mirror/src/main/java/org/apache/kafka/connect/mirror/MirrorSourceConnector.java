@@ -61,7 +61,7 @@ import org.slf4j.LoggerFactory;
 
 /** Replicate data, configuration, and ACLs between clusters.
  *
- *  @see MirrorConnectorConfig for supported config properties.
+ *  @see MirrorSourceConfig for supported config properties.
  */
 public class MirrorSourceConnector extends SourceConnector {
 

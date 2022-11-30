@@ -100,6 +100,14 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     protected static final String CONSUMER_CLIENT_PREFIX = "consumer.";
     protected static final String ADMIN_CLIENT_PREFIX = "admin.";
 
+    public static final String TOPIC_FILTER_CLASS = "topic.filter.class";
+    public static final String TOPIC_FILTER_CLASS_DOC = "TopicFilter to use. Selects topics to replicate.";
+    public static final Class<?> TOPIC_FILTER_CLASS_DEFAULT = DefaultTopicFilter.class;
+
+    public static final String OFFSET_SYNCS_TOPIC_LOCATION = "offset-syncs.topic.location";
+    public static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
+    public static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
+
     protected MirrorConnectorConfig(ConfigDef configDef, Map<String, String> props) {
         super(configDef, props, true);
     }

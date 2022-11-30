@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 
 /** Replicate consumer group state between clusters. Emits checkpoint records.
  *
- *  @see MirrorConnectorConfig for supported config properties.
+ *  @see MirrorCheckpointConfig for supported config properties.
  */
 public class MirrorCheckpointConnector extends SourceConnector {
 

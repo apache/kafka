@@ -81,9 +81,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     private static final String SYNC_TOPIC_ACLS_INTERVAL_SECONDS_DOC = "Frequency of topic ACL sync.";
     public static final long SYNC_TOPIC_ACLS_INTERVAL_SECONDS_DEFAULT = 10 * 60;
 
-    public static final String TOPIC_FILTER_CLASS = "topic.filter.class";
-    private static final String TOPIC_FILTER_CLASS_DOC = "TopicFilter to use. Selects topics to replicate.";
-    public static final Class<?> TOPIC_FILTER_CLASS_DEFAULT = DefaultTopicFilter.class;
     public static final String CONFIG_PROPERTY_FILTER_CLASS = "config.property.filter.class";
     private static final String CONFIG_PROPERTY_FILTER_CLASS_DOC = "ConfigPropertyFilter to use. Selects topic config "
             + " properties to replicate.";
@@ -92,10 +89,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final String OFFSET_LAG_MAX = "offset.lag.max";
     private static final String OFFSET_LAG_MAX_DOC = "How out-of-sync a remote partition can be before it is resynced.";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
-
-    private static final String OFFSET_SYNCS_TOPIC_LOCATION = "offset-syncs.topic.location";
-    private static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
-    private static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
 
     public MirrorSourceConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{

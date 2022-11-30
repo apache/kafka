@@ -25,10 +25,6 @@ import java.util.Map;
 
 public class MirrorCheckpointConfig extends MirrorConnectorConfig {
 
-    public static final String TOPIC_FILTER_CLASS = "topic.filter.class";
-    private static final String TOPIC_FILTER_CLASS_DOC = "TopicFilter to use. Selects topics to replicate.";
-    public static final Class<?> TOPIC_FILTER_CLASS_DEFAULT = DefaultTopicFilter.class;
-
     protected static final String REFRESH_GROUPS = "refresh.groups";
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
     protected static final String SYNC_GROUP_OFFSETS = "sync.group.offsets";
@@ -77,10 +73,6 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String GROUP_FILTER_CLASS = "group.filter.class";
     private static final String GROUP_FILTER_CLASS_DOC = "GroupFilter to use. Selects consumer groups to replicate.";
     public static final Class<?> GROUP_FILTER_CLASS_DEFAULT = DefaultGroupFilter.class;
-
-    private static final String OFFSET_SYNCS_TOPIC_LOCATION = "offset-syncs.topic.location";
-    private static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
-    private static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
 
     public MirrorCheckpointConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{

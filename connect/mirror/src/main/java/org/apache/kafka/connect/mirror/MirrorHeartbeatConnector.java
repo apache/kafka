@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Collections;
 
 /** Emits heartbeats to Kafka.
+ *
+ *  @see MirrorHeartbeatConfig for supported config properties.
  */
 public class MirrorHeartbeatConnector extends SourceConnector {
     private MirrorHeartbeatConfig config;
