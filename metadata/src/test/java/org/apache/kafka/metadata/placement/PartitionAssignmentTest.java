@@ -37,10 +37,10 @@ public class PartitionAssignmentTest {
     public void testConsistentEqualsAndHashCode() {
         List<PartitionAssignment> partitionAssignments = Arrays.asList(
             new PartitionAssignment(
-                    Arrays.asList(0, 1, 2)
+                Arrays.asList(0, 1, 2)
             ),
             new PartitionAssignment(
-                    Arrays.asList(1, 2, 0)
+                Arrays.asList(1, 2, 0)
             )
         );
 
