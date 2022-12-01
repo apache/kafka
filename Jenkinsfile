@@ -21,7 +21,7 @@ def doValidation() {
   sh """
     ./retry_zinc ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
         spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
-        --profile --no-daemon --continue -PxmlSpotBugsReport=true
+        --profile --continue -PxmlSpotBugsReport=true -PkeepAliveMode="session"
   """
 }
 
@@ -31,7 +31,7 @@ def isChangeRequest(env) {
 
 def doTest(env, target = "unitTest integrationTest") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
-      --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
+      --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
 }

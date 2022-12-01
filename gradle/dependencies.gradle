@@ -62,7 +62,7 @@ versions += [
   checkstyle: "8.36.2",
   commonsCli: "1.4",
   dropwizardMetrics: "4.1.12.1",
-  gradle: "7.5.1",
+  gradle: "7.6",
   grgit: "4.1.1",
   httpclient: "4.5.13",
   easymock: "4.3",

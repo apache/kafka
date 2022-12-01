@@ -2825,6 +2825,86 @@ class KafkaApisTest {
     }
   }
 
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.HEARTBEAT)
+  def testHandleHeartbeatRequest(version: Short): Unit = {
+    val heartbeatRequest = new HeartbeatRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(0)
+
+    val requestChannelRequest = buildRequest(new HeartbeatRequest.Builder(heartbeatRequest).build(version))
+
+    val expectedHeartbeatRequest = new HeartbeatRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(0)
+
+    val future = new CompletableFuture[HeartbeatResponseData]()
+    when(newGroupCoordinator.heartbeat(
+      requestChannelRequest.context,
+      expectedHeartbeatRequest
+    )).thenReturn(future)
+
+    createKafkaApis().handleHeartbeatRequest(requestChannelRequest)
+
+    val expectedHeartbeatResponse = new HeartbeatResponseData()
+    future.complete(expectedHeartbeatResponse)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[HeartbeatResponse]
+    assertEquals(expectedHeartbeatResponse, response.data)
+  }
+
+  @Test
+  def testHandleHeartbeatRequestFutureFailed(): Unit = {
+    val heartbeatRequest = new HeartbeatRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(0)
+
+    val requestChannelRequest = buildRequest(new HeartbeatRequest.Builder(heartbeatRequest).build())
+
+    val expectedHeartbeatRequest = new HeartbeatRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(0)
+
+    val future = new CompletableFuture[HeartbeatResponseData]()
+    when(newGroupCoordinator.heartbeat(
+      requestChannelRequest.context,
+      expectedHeartbeatRequest
+    )).thenReturn(future)
+
+    createKafkaApis().handleHeartbeatRequest(requestChannelRequest)
+
+    future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[HeartbeatResponse]
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
+  }
+
+  @Test
+  def testHandleHeartbeatRequestAuthenticationFailed(): Unit = {
+    val heartbeatRequest = new HeartbeatRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(0)
+
+    val requestChannelRequest = buildRequest(new HeartbeatRequest.Builder(heartbeatRequest).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleHeartbeatRequest(
+      requestChannelRequest
+    )
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[HeartbeatResponse]
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
+  }
+
   @Test
   def rejectJoinGroupRequestWhenStaticMembershipNotSupported(): Unit = {
     val joinGroupRequest = new JoinGroupRequest.Builder(
