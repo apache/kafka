@@ -21,10 +21,17 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
@@ -45,11 +52,14 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.time.Duration;
 
 import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
@@ -63,11 +73,13 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.doThrow;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KafkaOffsetBackingStoreTest {
@@ -107,6 +119,7 @@ public class KafkaOffsetBackingStoreTest {
     @Mock
     KafkaBasedLog<byte[], byte[]> storeLog;
     private KafkaOffsetBackingStore store;
+    private boolean storeLogOverridden;
 
     @Captor
     private ArgumentCaptor<String> capturedTopic;
@@ -133,6 +146,7 @@ public class KafkaOffsetBackingStoreTest {
         Supplier<String> clientIdBase = () -> CLIENT_ID_BASE;
 
         store = spy(new KafkaOffsetBackingStore(adminSupplier, clientIdBase));
+        storeLogOverridden = false;
 
         doReturn(storeLog).when(store).createKafkaBasedLog(capturedTopic.capture(), capturedProducerProps.capture(),
                 capturedConsumerProps.capture(), capturedConsumedCallback.capture(),
@@ -141,7 +155,9 @@ public class KafkaOffsetBackingStoreTest {
 
     @After
     public void tearDown() {
-        verifyNoMoreInteractions(storeLog);
+        if (!storeLogOverridden) {
+            verifyNoMoreInteractions(storeLog);
+        }
     }
 
     private DistributedConfig mockConfig(Map<String, String> props) {
@@ -458,6 +474,66 @@ public class KafkaOffsetBackingStoreTest {
         final String expectedClientId = CLIENT_ID_BASE + "offsets";
         assertEquals(expectedClientId, capturedProducerProps.getValue().get(CLIENT_ID_CONFIG));
         assertEquals(expectedClientId, capturedConsumerProps.getValue().get(CLIENT_ID_CONFIG));
+    }
+
+
+    @Test(expected = KafkaException.class)
+    public void testReadToEndShouldNotPollForeverWhenConsumerPollFails() {
+
+        Consumer<byte[], byte[]> consumer = spy(new MockConsumer<>(OffsetResetStrategy.EARLIEST));
+
+        class MockedKafkaBasedLog<K, V> extends KafkaBasedLog<byte[], byte[]> {
+
+            public MockedKafkaBasedLog(String topic, Map<String, Object> producerConfigs,
+                                       Map<String, Object> consumerConfigs,
+                                       Supplier<TopicAdmin> topicAdminSupplier,
+                                       Callback<ConsumerRecord<byte[], byte[]>> consumedCallback,
+                                       Time time,
+                                       java.util.function.Consumer<TopicAdmin> initializer) {
+                super(topic, producerConfigs, consumerConfigs, topicAdminSupplier, consumedCallback, time, initializer);
+            }
+
+            @Override
+            protected Producer<byte[], byte[]> createProducer() {
+                return null;
+            }
+
+            @Override
+            protected Consumer<byte[], byte[]> createConsumer() {
+                return consumer;
+            }
+        }
+
+        storeLog = spy(new MockedKafkaBasedLog<>(TOPIC, new HashMap<>(), new HashMap<>(), () -> null,
+                null, Time.SYSTEM, admin -> { }));
+        storeLogOverridden = true;
+
+        doReturn(storeLog).when(store).createKafkaBasedLog(capturedTopic.capture(), capturedProducerProps.capture(),
+                capturedConsumerProps.capture(), capturedConsumedCallback.capture(),
+                capturedNewTopic.capture(), capturedAdminSupplier.capture());
+
+        PartitionInfo partitionInfo = new PartitionInfo(TOPIC, 0, null, null, null);
+
+        TopicPartition offsetTopicPartition = new TopicPartition(TOPIC, 0);
+        Set<TopicPartition> assignment = Collections.singleton(offsetTopicPartition);
+
+        doReturn(Collections.singleton(offsetTopicPartition)).when(consumer).assignment();
+        doReturn(10L).when(consumer).position(offsetTopicPartition);
+        doReturn(Collections.singletonList(partitionInfo)).when(consumer).partitionsFor(TOPIC);
+
+        final Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(offsetTopicPartition, 100L);
+
+        doReturn(endOffsets).when(consumer).endOffsets(assignment);
+        doThrow(KafkaException.class).when(consumer).poll(Duration.ofMillis(Integer.MAX_VALUE));
+
+        doCallRealMethod().when(storeLog).start();
+
+        store.configure(mockConfig(props));
+        store.start();
+
+        store.stop();
+        verify(storeLog).stop();
     }
 
     private static ByteBuffer buffer(String v) {
