@@ -61,7 +61,7 @@ class ControllerServer(
 
   val config = sharedServer.config
   val time = sharedServer.time
-  val metrics = sharedServer.metrics
+  def metrics = sharedServer.metrics
   val threadNamePrefix = sharedServer.threadNamePrefix.getOrElse("")
   def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
 

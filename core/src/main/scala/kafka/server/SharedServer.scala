@@ -32,7 +32,6 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import java.util
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.atomic.AtomicBoolean
 
 
 /**
@@ -81,20 +80,20 @@ class SharedServer(
   val config: KafkaConfig,
   val metaProps: MetaProperties,
   val time: Time,
-  val metrics: Metrics,
+  private val _metrics: Metrics,
   val threadNamePrefix: Option[String],
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
   val faultHandlerFactory: FaultHandlerFactory
 ) extends Logging {
   private val logContext: LogContext = new LogContext(s"[SharedServer id=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix
-  val stopped = new AtomicBoolean(false)
-
-  var usedByBroker: Boolean = false
-  var usedByController: Boolean = false
-  var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
-  var brokerMetrics: BrokerServerMetrics = _
-  var controllerMetrics: QuorumControllerMetrics = _
+  private var started = false
+  private var usedByBroker: Boolean = false
+  private var usedByController: Boolean = false
+  @volatile var metrics: Metrics = _metrics
+  @volatile var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
+  @volatile var brokerMetrics: BrokerServerMetrics = _
+  @volatile var controllerMetrics: QuorumControllerMetrics = _
 
   def isUsed(): Boolean = synchronized {
     usedByController || usedByBroker
@@ -145,7 +144,7 @@ class SharedServer(
    */
   def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build("metadata loading",
     fatal = config.processRoles.contains(ControllerRole),
-    action = () => {
+    action = () => SharedServer.this.synchronized {
       if (brokerMetrics != null) brokerMetrics.metadataLoadErrorCount.getAndIncrement()
       if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
     })
@@ -155,7 +154,7 @@ class SharedServer(
    */
   def initialBrokerMetadataLoadFaultHandler: FaultHandler = faultHandlerFactory.build("initial metadata loading",
     fatal = true,
-    action = () => {
+    action = () => SharedServer.this.synchronized {
       if (brokerMetrics != null) brokerMetrics.metadataApplyErrorCount.getAndIncrement()
       if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
     })
@@ -173,46 +172,53 @@ class SharedServer(
    */
   def metadataPublishingFaultHandler: FaultHandler = faultHandlerFactory.build("metadata publishing",
     fatal = false,
-    action = () => {
+    action = () => SharedServer.this.synchronized {
       if (brokerMetrics != null) brokerMetrics.metadataApplyErrorCount.getAndIncrement()
       if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
     })
 
   private def start(): Unit = synchronized {
-    info("Starting SharedServer")
-    if (stopped.get()) {
-      throw new RuntimeException("Cannot restart stopped SharedServer.")
-    }
-    try {
-      config.dynamicConfig.initialize(zkClientOpt = None)
+    if (started) {
+      debug("SharedServer has already been started.")
+    } else {
+      info("Starting SharedServer")
+      try {
+        if (metrics == null) {
+          // Recreate the metrics object if we're restarting a stopped SharedServer object.
+          // This is only done in tests.
+          metrics = new Metrics()
+        }
+        config.dynamicConfig.initialize(zkClientOpt = None)
 
-      if (config.processRoles.contains(BrokerRole)) {
-        brokerMetrics = BrokerServerMetrics(metrics)
-      }
-      if (config.processRoles.contains(ControllerRole)) {
-        controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)
-      }
-      raftManager = new KafkaRaftManager[ApiMessageAndVersion](
-        metaProps,
-        config,
-        new MetadataRecordSerde,
-        KafkaRaftServer.MetadataPartition,
-        KafkaRaftServer.MetadataTopicId,
-        time,
-        metrics,
-        threadNamePrefix,
-        controllerQuorumVotersFuture)
-      raftManager.startup()
-      debug("Completed SharedServer startup.")
-    } catch {
-      case e: Throwable => {
-        error("Got exception while starting SharedServer", e)
-        stop()
+        if (config.processRoles.contains(BrokerRole)) {
+          brokerMetrics = BrokerServerMetrics(metrics)
+        }
+        if (config.processRoles.contains(ControllerRole)) {
+          controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)
+        }
+        raftManager = new KafkaRaftManager[ApiMessageAndVersion](
+          metaProps,
+          config,
+          new MetadataRecordSerde,
+          KafkaRaftServer.MetadataPartition,
+          KafkaRaftServer.MetadataTopicId,
+          time,
+          metrics,
+          threadNamePrefix,
+          controllerQuorumVotersFuture)
+        raftManager.startup()
+        debug("Completed SharedServer startup.")
+        started = true
+      } catch {
+        case e: Throwable => {
+          error("Got exception while starting SharedServer", e)
+          stop()
+        }
       }
     }
   }
 
-  def ensureNotRaftLeader(): Unit = {
+  def ensureNotRaftLeader(): Unit = synchronized {
     // Ideally, this would just resign our leadership, if we had it. But we don't have an API in
     // RaftManager for that yet, so shut down the RaftManager.
     if (raftManager != null) {
@@ -221,9 +227,9 @@ class SharedServer(
     }
   }
 
-  private def stop(): Unit = {
-    if (stopped.getAndSet(true)) {
-      debug("SharedServer is already stopped")
+  private def stop(): Unit = synchronized {
+    if (!started) {
+      debug("SharedServer is not running.")
     } else {
       info("Stopping SharedServer")
       if (raftManager != null) {
@@ -238,9 +244,13 @@ class SharedServer(
         CoreUtils.swallow(brokerMetrics.close(), this)
         brokerMetrics = null
       }
-      CoreUtils.swallow(metrics.close(), this)
+      if (metrics != null) {
+        CoreUtils.swallow(metrics.close(), this)
+        metrics = null
+      }
       // Clear all reconfigurable instances stored in DynamicBrokerConfig
-      config.dynamicConfig.clear()
+      CoreUtils.swallow(config.dynamicConfig.clear(), this)
+      started = false
     }
   }
 }

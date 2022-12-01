@@ -73,7 +73,7 @@ class BrokerServer(
   val threadNamePrefix = sharedServer.threadNamePrefix
   val config = sharedServer.config
   val time = sharedServer.time
-  val metrics = sharedServer.metrics
+  def metrics = sharedServer.metrics
   def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
 
   override def brokerState: BrokerState = Option(lifecycleManager).
