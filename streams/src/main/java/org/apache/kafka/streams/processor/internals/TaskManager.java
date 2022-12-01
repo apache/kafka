@@ -65,6 +65,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.union;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 
@@ -386,7 +387,7 @@ public class TaskManager {
         } else {
             activeTasksNeedCommit = newActiveTasks.stream().filter(Task::commitNeeded).collect(Collectors.toSet());
         }
-        if (processingMode == EXACTLY_ONCE_V2 && !activeTasksNeedCommit.isEmpty()) {
+        if ((processingMode == EXACTLY_ONCE_V2 || processingMode == EXACTLY_ONCE_ALPHA) && !activeTasksNeedCommit.isEmpty()) {
             final AtomicReference<RuntimeException> activeTasksCommitException = new AtomicReference<>(null);
             commitActiveTasks(activeTasksNeedCommit, activeTasksCommitException);
         }
@@ -754,7 +755,6 @@ public class TaskManager {
             }
         }
 
-        final Set<Task> restoringTasks = new HashSet<>();
         if (allRunning && !activeTasks.isEmpty()) {
 
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
@@ -779,7 +779,6 @@ public class TaskManager {
                     // we found a restoring task that isn't done restoring, which is evidence that
                     // not all tasks are running
                     allRunning = false;
-                    restoringTasks.add(task);
                 }
             }
         }
@@ -787,14 +786,6 @@ public class TaskManager {
             // we can call resume multiple times since it is idempotent.
             mainConsumer.resume(mainConsumer.assignment());
             changelogReader.transitToUpdateStandby();
-        } else {
-            // There are still some tasks in RESTORING phase.
-            final AtomicReference<RuntimeException> activeTasksCommitException = new AtomicReference<>(null);
-            commitActiveTasks(restoringTasks, activeTasksCommitException);
-
-            if (activeTasksCommitException.get() != null) {
-                throw activeTasksCommitException.get();
-            }
         }
 
         return allRunning;

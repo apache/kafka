@@ -2795,7 +2795,7 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive)))
             .andReturn(asList(task00, task01, task02));
 
-        expect(activeTaskCreator.threadProducer()).andReturn(producer);
+        expect(activeTaskCreator.threadProducer()).andReturn(producer).times(2);
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
         expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
             .andReturn(singletonList(task10));
