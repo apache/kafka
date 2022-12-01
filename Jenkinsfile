@@ -236,9 +236,9 @@ pipeline {
   
   post {
     always {
-      if (!isChangeRequest(env)) {
-        node('ubuntu') {
-          script {
+      script {
+        if (!isChangeRequest(env)) {
+          node('ubuntu') {
             step([$class: 'Mailer',
                  notifyEveryUnstableBuild: true,
                  recipients: "dev@kafka.apache.org",
