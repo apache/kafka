@@ -98,7 +98,7 @@ public class StateManagerUtilTest {
         final MockKeyValueStore store2 = new MockKeyValueStore("store2", false);
         final List<StateStore> stateStores = Arrays.asList(store1, store2);
 
-        InOrder inOrder = inOrder(stateManager);
+        final InOrder inOrder = inOrder(stateManager);
 
         when(topology.stateStores()).thenReturn(stateStores);
 
@@ -119,7 +119,7 @@ public class StateManagerUtilTest {
 
     @Test
     public void testCloseStateManagerClean() {
-        InOrder inOrder = inOrder(stateManager, stateDirectory);
+        final InOrder inOrder = inOrder(stateManager, stateDirectory);
 
         when(stateManager.taskId()).thenReturn(taskId);
 
@@ -170,7 +170,7 @@ public class StateManagerUtilTest {
 
     @Test
     public void testCloseStateManagerWithStateStoreWipeOut() {
-        InOrder inOrder = inOrder(stateManager, stateDirectory);
+        final InOrder inOrder = inOrder(stateManager, stateDirectory);
 
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(true);
@@ -209,7 +209,7 @@ public class StateManagerUtilTest {
     public void testCloseStateManagerWithStateStoreWipeOutRethrowWrappedIOException() {
         final File unknownFile = new File("/unknown/path");
 
-        InOrder inOrder = inOrder(stateManager, stateDirectory);
+        final InOrder inOrder = inOrder(stateManager, stateDirectory);
 
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(true);
@@ -232,7 +232,7 @@ public class StateManagerUtilTest {
 
     @Test
     public void shouldNotWipeStateStoresIfUnableToLockTaskDirectory() {
-        InOrder inOrder = inOrder(stateManager, stateDirectory);
+        final InOrder inOrder = inOrder(stateManager, stateDirectory);
 
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(false);
