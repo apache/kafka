@@ -196,7 +196,7 @@ MM2 configuration file.
 
 ### Exactly-once
 Exactly-once delivery is not currently supported for dedicated MM2 clusters. In order to run MM2 with exactly-once, deploy it onto a
-Connect cluster that is configured with exactly-once support enabled. 
+Connect distributed cluster that is configured with exactly-once support enabled.
 
 ## Remote topics
 

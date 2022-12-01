@@ -214,7 +214,7 @@ public class MirrorSourceConnector extends SourceConnector {
                 // We add a second error message here to give users more insight into why this specific connector can't support exactly-once
                 // guarantees with the given configuration
                 exactlyOnceSupport.addErrorMessage(
-                        "Mirror Maker 2 can only provide exactly-once guarantees when its source consumer is configured with "
+                        "MirrorSourceConnector can only provide exactly-once guarantees when its source consumer is configured with "
                                 + ConsumerConfig.ISOLATION_LEVEL_CONFIG + " set to '" + READ_COMMITTED + "'; "
                                 + "otherwise, records from aborted and uncommitted transactions will be replicated from the "
                                 + "source cluster to the target cluster."
