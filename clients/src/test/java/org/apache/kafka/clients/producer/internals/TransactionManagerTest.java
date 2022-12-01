@@ -77,6 +77,8 @@ import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -1678,26 +1680,33 @@ public class TransactionManagerTest {
         assertTrue(secondResponseFuture.isDone());
     }
 
-    @Test
-    public void testRetriableErrors() {
+    @ParameterizedTest
+    @ValueSource(ints = {3, 7, 14, 51})
+    public void testRetriableErrors(int errorCode) {
+        // Tests Errors.CONCURRENT_TRANSACTIONS, Errors.COORDINATOR_LOAD_IN_PROGRESS,
+        // Errors.REQUEST_TIMED_OUT, Errors.UNKNOWN_TOPIC_OR_PARTITION
+        // We skip COORDINATOR_NOT_AVAILABLE since it breaks the logic.
+        Errors error = Errors.forCode((short) errorCode);
+
         // Ensure FindCoordinator retries.
         TransactionalRequestResult result = transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.REQUEST_TIMED_OUT, false, CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(error, false, CoordinatorType.TRANSACTION, transactionalId);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
         // Ensure InitPid retries.
-        prepareInitPidResponse(Errors.REQUEST_TIMED_OUT, false, producerId, epoch);
+        prepareInitPidResponse(error, false, producerId, epoch);
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
 
         result.await();
         transactionManager.beginTransaction();
 
-        // Ensure AddPartitionsToTxn retries.
+        // Ensure AddPartitionsToTxn retries. Since CONCURRENT_TRANSACTIONS is handled differently here, we substitute.
+        Errors addPartitionsToTxnError = errorCode == 51 ? Errors.COORDINATOR_LOAD_IN_PROGRESS : error;
         transactionManager.maybeAddPartition(tp0);
-        prepareAddPartitionsToTxnResponse(Errors.REQUEST_TIMED_OUT, tp0, epoch, producerId);
+        prepareAddPartitionsToTxnResponse(addPartitionsToTxnError, tp0, epoch, producerId);
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
         runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
@@ -1705,11 +1714,27 @@ public class TransactionManagerTest {
 
         // Ensure EndTxn retries.
         TransactionalRequestResult abortResult = transactionManager.beginCommit();
-        prepareEndTxnResponse(Errors.REQUEST_TIMED_OUT, TransactionResult.COMMIT, producerId, epoch);
+        prepareEndTxnResponse(error, TransactionResult.COMMIT, producerId, epoch);
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
         runUntil(abortResult::isCompleted);
         assertTrue(abortResult.isSuccessful());
     }
+
+    @Test
+    public void testCoordinatorNotAvailable() {
+        // Ensure FindCoordinator with COORDINATOR_NOT_AVAILABLE error retries.
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, false, CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(transactionManager::hasProducerId);
+
+        result.await();
+    }
+
 
     @Test
     public void testProducerFencedExceptionInInitProducerId() {
