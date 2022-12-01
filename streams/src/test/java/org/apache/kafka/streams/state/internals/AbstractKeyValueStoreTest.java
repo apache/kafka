@@ -55,7 +55,6 @@ import static org.junit.Assert.fail;
 public abstract class AbstractKeyValueStoreTest {
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context);
-
     protected InternalMockProcessorContext context;
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;
@@ -648,4 +647,19 @@ public abstract class AbstractKeyValueStoreTest {
             );
         }
     }
+
+    @Test
+    public void prefixScanShouldNotThrowConcurrentModificationException() {
+        final Serializer<String> serializer = new StringSerializer();
+
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+        store.put(3, "three");
+        store.prefixScan("prefix", serializer);
+        store.delete(2);
+        store.range(0, 3);
+        
+    }
 }
+
