@@ -94,7 +94,7 @@ class KRaftQuorumImplementation(
     startup: Boolean,
     threadNamePrefix: Option[String],
   ): KafkaBroker = {
-    val jointServer = new JointServer(config,
+    val sharedServer = new SharedServer(config,
       new MetaProperties(clusterId, config.nodeId),
       Time.SYSTEM,
       new Metrics(),
@@ -103,14 +103,14 @@ class KRaftQuorumImplementation(
       faultHandlerFactory)
     var broker: BrokerServer = null
     try {
-      broker = new BrokerServer(jointServer,
+      broker = new BrokerServer(sharedServer,
         initialOfflineDirs = Seq())
       if (startup) broker.startup()
       broker
     } catch {
       case e: Throwable => {
         if (broker != null) CoreUtils.swallow(broker.shutdown(), log)
-        jointServer.stopForBroker()
+        CoreUtils.swallow(sharedServer.stopForBroker(), log)
         throw e
       }
     }
@@ -307,7 +307,7 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
     val config = new KafkaConfig(props)
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
-    val jointServer = new JointServer(config,
+    val sharedServer = new SharedServer(config,
       metaProperties,
       Time.SYSTEM,
       new Metrics(),
@@ -317,7 +317,7 @@ abstract class QuorumTestHarness extends Logging {
     var controllerServer: ControllerServer = null
     try {
       controllerServer = new ControllerServer(
-        jointServer,
+        sharedServer,
         KafkaRaftServer.configSchema,
         BootstrapMetadata.fromVersion(metadataVersion, "test harness")
       )
@@ -334,6 +334,7 @@ abstract class QuorumTestHarness extends Logging {
     } catch {
       case e: Throwable =>
         if (controllerServer != null) CoreUtils.swallow(controllerServer.shutdown(), this)
+        CoreUtils.swallow(sharedServer.stopForController(), this)
         throw e
     }
     new KRaftQuorumImplementation(controllerServer,

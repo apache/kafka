@@ -64,12 +64,12 @@ class StandardFaultHandlerFactory extends FaultHandlerFactory {
 }
 
 /**
- * The JointServer manages the components which are shared between the BrokerServer and
+ * The SharedServer manages the components which are shared between the BrokerServer and
  * ControllerServer. These shared components include the Raft manager, snapshot generator,
  * and metadata loader. A KRaft server running in combined mode as both a broker and a controller
- * will still contain only a single JointServer instance.
+ * will still contain only a single SharedServer instance.
  *
- * The JointServer will be started as soon as either the broker or the controller needs it,
+ * The SharedServer will be started as soon as either the broker or the controller needs it,
  * via the appropriate function (startForBroker or startForController). Similarly, it will be
  * stopped as soon as neither the broker nor the controller need it, via stopForBroker or
  * stopForController. One way of thinking about this is that both the broker and the controller
@@ -77,7 +77,7 @@ class StandardFaultHandlerFactory extends FaultHandlerFactory {
  * their reference. We opted to use two booleans here rather than a reference count in order to
  * make debugging easier and reduce the chance of resource leaks.
  */
-class JointServer(
+class SharedServer(
   val config: KafkaConfig,
   val metaProps: MetaProperties,
   val time: Time,
@@ -86,7 +86,7 @@ class JointServer(
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
   val faultHandlerFactory: FaultHandlerFactory
 ) extends Logging {
-  private val logContext: LogContext = new LogContext(s"[JointServer id=${config.nodeId}] ")
+  private val logContext: LogContext = new LogContext(s"[SharedServer id=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix
   val stopped = new AtomicBoolean(false)
 
@@ -179,9 +179,9 @@ class JointServer(
     })
 
   private def start(): Unit = synchronized {
-    info("Starting JointServer")
+    info("Starting SharedServer")
     if (stopped.get()) {
-      throw new RuntimeException("Cannot restart stopped JointServer.")
+      throw new RuntimeException("Cannot restart stopped SharedServer.")
     }
     try {
       config.dynamicConfig.initialize(zkClientOpt = None)
@@ -203,10 +203,10 @@ class JointServer(
         threadNamePrefix,
         controllerQuorumVotersFuture)
       raftManager.startup()
-      debug("Completed JointServer startup.")
+      debug("Completed SharedServer startup.")
     } catch {
       case e: Throwable => {
-        error("Got exception while starting JointServer", e)
+        error("Got exception while starting SharedServer", e)
         stop()
       }
     }
@@ -223,9 +223,9 @@ class JointServer(
 
   private def stop(): Unit = {
     if (stopped.getAndSet(true)) {
-      debug("JointServer is already stopped")
+      debug("SharedServer is already stopped")
     } else {
-      info("Stopping JointServer")
+      info("Stopping SharedServer")
       if (raftManager != null) {
         CoreUtils.swallow(raftManager.shutdown(), this)
         raftManager = null

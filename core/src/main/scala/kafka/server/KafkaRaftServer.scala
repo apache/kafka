@@ -64,7 +64,7 @@ class KafkaRaftServer(
   private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
     RaftConfig.parseVoterConnections(config.quorumVoters))
 
-  private val jointServer = new JointServer(
+  private val sharedServer = new SharedServer(
     config,
     metaProps,
     time,
@@ -76,7 +76,7 @@ class KafkaRaftServer(
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
     Some(new BrokerServer(
-      jointServer,
+      sharedServer,
       offlineDirs
     ))
   } else {
@@ -85,7 +85,7 @@ class KafkaRaftServer(
 
   private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
     Some(new ControllerServer(
-      jointServer,
+      sharedServer,
       KafkaRaftServer.configSchema,
       bootstrapMetadata,
     ))

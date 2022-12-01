@@ -27,6 +27,7 @@ import kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorAdapter}
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
+import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
@@ -66,14 +67,14 @@ class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
-  val jointServer: JointServer,
+  val sharedServer: SharedServer,
   val initialOfflineDirs: Seq[String],
 ) extends KafkaBroker {
-  val threadNamePrefix = jointServer.threadNamePrefix
-  val config = jointServer.config
-  val time = jointServer.time
-  val metrics = jointServer.metrics
-  val raftManager = jointServer.raftManager
+  val threadNamePrefix = sharedServer.threadNamePrefix
+  val config = sharedServer.config
+  val time = sharedServer.time
+  val metrics = sharedServer.metrics
+  def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
 
   override def brokerState: BrokerState = Option(lifecycleManager).
     flatMap(m => Some(m.state)).getOrElse(BrokerState.NOT_RUNNING)
@@ -133,7 +134,7 @@ class BrokerServer(
 
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
-  val clusterId: String = jointServer.metaProps.clusterId
+  val clusterId: String = sharedServer.metaProps.clusterId
 
   var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
 
@@ -169,7 +170,7 @@ class BrokerServer(
   override def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     try {
-      jointServer.startForBroker()
+      sharedServer.startForBroker()
 
       info("Starting broker")
 
@@ -202,7 +203,7 @@ class BrokerServer(
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(jointServer.controllerQuorumVotersFuture.get()).asScala
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(sharedServer.controllerQuorumVotersFuture.get()).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(
@@ -311,8 +312,8 @@ class BrokerServer(
         threadNamePrefix,
         config.metadataSnapshotMaxNewRecordBytes,
         metadataSnapshotter,
-        jointServer.brokerMetrics,
-        jointServer.metadataLoaderFaultHandler)
+        sharedServer.brokerMetrics,
+        sharedServer.metadataLoaderFaultHandler)
 
       val networkListeners = new ListenerCollection()
       config.effectiveAdvertisedListeners.foreach { ep =>
@@ -340,7 +341,7 @@ class BrokerServer(
       lifecycleManager.start(
         () => metadataListener.highestMetadataOffset,
         brokerLifecycleChannelManager,
-        jointServer.metaProps.clusterId,
+        sharedServer.metaProps.clusterId,
         networkListeners,
         featuresRemapped
       )
@@ -430,8 +431,8 @@ class BrokerServer(
         clientQuotaMetadataManager,
         dynamicConfigHandlers.toMap,
         authorizer,
-        jointServer.initialBrokerMetadataLoadFaultHandler,
-        jointServer.metadataPublishingFaultHandler)
+        sharedServer.initialBrokerMetadataLoadFaultHandler,
+        sharedServer.metadataPublishingFaultHandler)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,
@@ -564,7 +565,7 @@ class BrokerServer(
       isShuttingDown.set(false)
 
       CoreUtils.swallow(lifecycleManager.close(), this)
-      jointServer.stopForBroker()
+      sharedServer.stopForBroker()
 
       CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, config.nodeId.toString, metrics), this)
       info("shut down completed")

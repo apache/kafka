@@ -52,18 +52,18 @@ import scala.compat.java8.OptionConverters._
  * A Kafka controller that runs in KRaft (Kafka Raft) mode.
  */
 class ControllerServer(
-  val jointServer: JointServer,
+  val sharedServer: SharedServer,
   val configSchema: KafkaConfigSchema,
   val bootstrapMetadata: BootstrapMetadata,
 ) extends Logging with KafkaMetricsGroup {
 
   import kafka.server.Server._
 
-  val config = jointServer.config
-  val time = jointServer.time
-  val metrics = jointServer.metrics
-  val threadNamePrefix = jointServer.threadNamePrefix.getOrElse("")
-  def raftManager: KafkaRaftManager[ApiMessageAndVersion] = jointServer.raftManager
+  val config = sharedServer.config
+  val time = sharedServer.time
+  val metrics = sharedServer.metrics
+  val threadNamePrefix = sharedServer.threadNamePrefix.getOrElse("")
+  def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
 
   config.dynamicConfig.initialize(zkClientOpt = None)
 
@@ -103,7 +103,7 @@ class ControllerServer(
     new DynamicMetricReporterState(config.nodeId, config, metrics, clusterId)
   }
 
-  def clusterId: String = jointServer.metaProps.clusterId
+  def clusterId: String = sharedServer.metaProps.clusterId
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
@@ -163,16 +163,16 @@ class ControllerServer(
         throw new ConfigException("No controller.listener.names defined for controller")
       }
 
-      jointServer.startForController()
+      sharedServer.startForController()
 
       createTopicPolicy = Option(config.
         getConfiguredInstance(CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(jointServer.controllerQuorumVotersFuture.get())
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(sharedServer.controllerQuorumVotersFuture.get())
       val quorumFeatures = QuorumFeatures.create(config.nodeId,
-        jointServer.raftManager.apiVersions,
+        sharedServer.raftManager.apiVersions,
         QuorumFeatures.defaultFeatureMap(),
         controllerNodes)
 
@@ -185,7 +185,7 @@ class ControllerServer(
 
         val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
 
-        new QuorumController.Builder(config.nodeId, jointServer.metaProps.clusterId).
+        new QuorumController.Builder(config.nodeId, sharedServer.metaProps.clusterId).
           setTime(time).
           setThreadNamePrefix(threadNamePrefix).
           setConfigSchema(configSchema).
@@ -199,13 +199,13 @@ class ControllerServer(
           setSnapshotMaxIntervalMs(config.metadataSnapshotMaxIntervalMs).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
           setMaxIdleIntervalNs(maxIdleIntervalNs).
-          setMetrics(jointServer.controllerMetrics).
+          setMetrics(sharedServer.controllerMetrics).
           setCreateTopicPolicy(createTopicPolicy.asJava).
           setAlterConfigPolicy(alterConfigPolicy.asJava).
           setConfigurationValidator(new ControllerConfigurationValidator()).
           setStaticConfig(config.originals).
           setBootstrapMetadata(bootstrapMetadata).
-          setFatalFaultHandler(jointServer.quorumControllerFaultHandler)
+          setFatalFaultHandler(sharedServer.quorumControllerFaultHandler)
       }
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)
@@ -229,7 +229,7 @@ class ControllerServer(
         controller,
         raftManager,
         config,
-        jointServer.metaProps,
+        sharedServer.metaProps,
         controllerNodes.asScala.toSeq,
         apiVersionManager)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
@@ -265,7 +265,7 @@ class ControllerServer(
       info("shutting down")
       // Ensure that we're not the Raft leader prior to shutting down our socket server, for a
       // smoother transition.
-      jointServer.ensureNotRaftLeader()
+      sharedServer.ensureNotRaftLeader()
       if (socketServer != null)
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
       if (controller != null)
@@ -284,7 +284,7 @@ class ControllerServer(
       createTopicPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       alterConfigPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
-      jointServer.stopForController()
+      sharedServer.stopForController()
     } catch {
       case e: Throwable =>
         fatal("Fatal error during controller shutdown.", e)

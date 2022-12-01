@@ -21,7 +21,7 @@ import kafka.raft.KafkaRaftManager;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.FaultHandlerFactory;
-import kafka.server.JointServer;
+import kafka.server.SharedServer;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaRaftServer;
@@ -199,7 +199,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         public KafkaClusterTestKit build() throws Exception {
             Map<Integer, ControllerServer> controllers = new HashMap<>();
             Map<Integer, BrokerServer> brokers = new HashMap<>();
-            Map<Integer, JointServer> jointServers = new HashMap<>();
+            Map<Integer, SharedServer> jointServers = new HashMap<>();
             /*
               Number of threads = Total number of brokers + Total number of controllers + Total number of Raft Managers
                                 = Total number of brokers + Total number of controllers * 2
@@ -223,7 +223,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     String threadNamePrefix = (nodes.brokerNodes().containsKey(node.id())) ?
                             String.format("colocated%d", node.id()) :
                             String.format("controller%d", node.id());
-                    JointServer jointServer = new JointServer(createNodeConfig(node),
+                    SharedServer sharedServer = new SharedServer(createNodeConfig(node),
                             MetaProperties.apply(nodes.clusterId().toString(), node.id()),
                             Time.SYSTEM,
                             new Metrics(),
@@ -233,12 +233,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     ControllerServer controller = null;
                     try {
                         controller = new ControllerServer(
-                                jointServer,
+                                sharedServer,
                                 KafkaRaftServer.configSchema(),
                                 bootstrapMetadata);
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
-                        Utils.swallow(log, "jointServer.stopForController", () -> jointServer.stopForController());
+                        Utils.swallow(log, "sharedServer.stopForController", () -> sharedServer.stopForController());
                         if (controller != null) controller.shutdown();
                         throw e;
                     }
@@ -250,11 +250,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             connectFutureManager.registerPort(node.id(), port);
                         }
                     });
-                    jointServers.put(node.id(), jointServer);
+                    jointServers.put(node.id(), sharedServer);
                 }
                 for (BrokerNode node : nodes.brokerNodes().values()) {
-                    JointServer jointServer = jointServers.computeIfAbsent(node.id(),
-                        id -> new JointServer(createNodeConfig(node),
+                    SharedServer sharedServer = jointServers.computeIfAbsent(node.id(),
+                        id -> new SharedServer(createNodeConfig(node),
                             MetaProperties.apply(nodes.clusterId().toString(), id),
                             Time.SYSTEM,
                             new Metrics(),
@@ -264,11 +264,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     BrokerServer broker = null;
                     try {
                         broker = new BrokerServer(
-                                jointServer,
+                                sharedServer,
                                 JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq());
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
-                        Utils.swallow(log, "jointServer.stopForBroker", () -> jointServer.stopForBroker());
+                        Utils.swallow(log, "sharedServer.stopForBroker", () -> sharedServer.stopForBroker());
                         if (broker != null) broker.shutdown();
                         throw e;
                     }
@@ -503,11 +503,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
     public Map<Integer, KafkaRaftManager<ApiMessageAndVersion>> raftManagers() {
         Map<Integer, KafkaRaftManager<ApiMessageAndVersion>> results = new HashMap<>();
         for (BrokerServer brokerServer : brokers().values()) {
-            results.put(brokerServer.config().brokerId(), brokerServer.jointServer().raftManager());
+            results.put(brokerServer.config().brokerId(), brokerServer.sharedServer().raftManager());
         }
         for (ControllerServer controllerServer : controllers().values()) {
             if (!results.containsKey(controllerServer.config().nodeId())) {
-                results.put(controllerServer.config().nodeId(), controllerServer.jointServer().raftManager());
+                results.put(controllerServer.config().nodeId(), controllerServer.sharedServer().raftManager());
             }
         }
         return results;
