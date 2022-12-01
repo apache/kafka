@@ -1768,8 +1768,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     val heartbeatRequest = request.body[HeartbeatRequest]
 
     def sendResponse(response: AbstractResponse): Unit = {
-      trace("Sending heartbeat response %s for correlation id %d to client %s."
-        .format(response, request.header.correlationId, request.header.clientId))
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
         response.maybeSetThrottleTimeMs(requestThrottleMs)
         response
