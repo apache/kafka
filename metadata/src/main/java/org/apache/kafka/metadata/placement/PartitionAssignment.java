@@ -18,16 +18,17 @@
 package org.apache.kafka.metadata.placement;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
- * The KRaft partition assignment.
+ * The partition assignment.
  *
  * The assignment is represented as a list of integers where each integer is the replica ID.
  */
 public class PartitionAssignment {
-    private List<Integer> replicas;
+    private final List<Integer> replicas;
 
-    public PartitionAssignment(List<Integer> replicas) {
+    public PartitionAssignment(final List<Integer> replicas) {
         this.replicas = replicas;
     }
 
@@ -36,5 +37,17 @@ public class PartitionAssignment {
      */
     public List<Integer> replicas() {
         return replicas;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof PartitionAssignment)) return false;
+        PartitionAssignment other = (PartitionAssignment) o;
+        return replicas.equals(other.replicas);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(replicas);
     }
 }

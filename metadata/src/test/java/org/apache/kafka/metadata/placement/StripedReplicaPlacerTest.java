@@ -27,11 +27,9 @@ import org.junit.jupiter.api.Timeout;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -86,7 +84,7 @@ public class StripedReplicaPlacerTest {
         assertEquals(Arrays.asList(0, 4, 3, 2), rackList.place(4));
     }
 
-    private List<List<Integer>> place(
+    private TopicAssignment place(
         ReplicaPlacer placer,
         int startPartition,
         int numPartitions,
@@ -96,13 +94,8 @@ public class StripedReplicaPlacerTest {
         PlacementSpec placementSpec = new PlacementSpec(startPartition,
             numPartitions,
             replicationFactor);
-        ClusterDescriber cluster = new ClusterDescriber() {
-            @Override
-            public Iterator<UsableBroker> usableBrokers() {
-                return brokers.iterator();
-            }
-        };
-        return placer.place(placementSpec, cluster).assignments().stream().map(x -> x.replicas()).collect(Collectors.toList());
+        ClusterDescriber cluster = () -> brokers.iterator();
+        return placer.place(placementSpec, cluster);
     }
 
     /**
@@ -113,9 +106,9 @@ public class StripedReplicaPlacerTest {
     public void testMultiPartitionTopicPlacementOnSingleUnfencedBroker() {
         MockRandom random = new MockRandom();
         StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
-        assertEquals(Arrays.asList(Arrays.asList(0),
-                Arrays.asList(0),
-                Arrays.asList(0)),
+        assertEquals(new TopicAssignment(Arrays.asList(new PartitionAssignment(Arrays.asList(0)),
+                new PartitionAssignment(Arrays.asList(0)),
+                new PartitionAssignment(Arrays.asList(0)))),
                 place(placer, 0, 3, (short) 1, Arrays.asList(
                         new UsableBroker(0, Optional.empty(), false),
                         new UsableBroker(1, Optional.empty(), true))));
@@ -219,11 +212,11 @@ public class StripedReplicaPlacerTest {
     public void testSuccessfulPlacement() {
         MockRandom random = new MockRandom();
         StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
-        assertEquals(Arrays.asList(Arrays.asList(2, 3, 0),
-                Arrays.asList(3, 0, 1),
-                Arrays.asList(0, 1, 2),
-                Arrays.asList(1, 2, 3),
-                Arrays.asList(1, 0, 2)),
+        assertEquals(new TopicAssignment(Arrays.asList(new PartitionAssignment(Arrays.asList(2, 3, 0)),
+                new PartitionAssignment(Arrays.asList(3, 0, 1)),
+                new PartitionAssignment(Arrays.asList(0, 1, 2)),
+                new PartitionAssignment(Arrays.asList(1, 2, 3)),
+                new PartitionAssignment(Arrays.asList(1, 0, 2)))),
             place(placer, 0, 5, (short) 3, Arrays.asList(
                 new UsableBroker(0, Optional.empty(), false),
                 new UsableBroker(3, Optional.empty(), false),
@@ -235,14 +228,14 @@ public class StripedReplicaPlacerTest {
     public void testEvenDistribution() {
         MockRandom random = new MockRandom();
         StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
-        List<List<Integer>> replicas = place(placer, 0, 200, (short) 2, Arrays.asList(
+        TopicAssignment topicAssignment = place(placer, 0, 200, (short) 2, Arrays.asList(
             new UsableBroker(0, Optional.empty(), false),
             new UsableBroker(1, Optional.empty(), false),
             new UsableBroker(2, Optional.empty(), false),
             new UsableBroker(3, Optional.empty(), false)));
         Map<List<Integer>, Integer> counts = new HashMap<>();
-        for (List<Integer> partitionReplicas : replicas) {
-            counts.put(partitionReplicas, counts.getOrDefault(partitionReplicas, 0) + 1);
+        for (PartitionAssignment partitionAssignment : topicAssignment.assignments()) {
+            counts.put(partitionAssignment.replicas(), counts.getOrDefault(partitionAssignment.replicas(), 0) + 1);
         }
         assertEquals(14, counts.get(Arrays.asList(0, 1)));
         assertEquals(22, counts.get(Arrays.asList(0, 2)));

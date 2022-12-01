@@ -441,6 +441,8 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
         for (int partition = 0; partition < placement.numPartitions(); partition++) {
             placements.add(rackList.place(placement.numReplicas()));
         }
-        return new TopicAssignment(placements.stream().map(x -> new PartitionAssignment(x)).collect(Collectors.toList()));
+        return new TopicAssignment(
+            placements.stream().map(PartitionAssignment::new).collect(Collectors.toList())
+        );
     }
 }

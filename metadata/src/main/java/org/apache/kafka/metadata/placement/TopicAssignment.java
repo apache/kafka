@@ -18,14 +18,15 @@
 package org.apache.kafka.metadata.placement;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
- * The KRaft topic assignment.
+ * The topic assignment.
  */
 public class TopicAssignment {
-    private List<PartitionAssignment> assignments;
+    private final List<PartitionAssignment> assignments;
 
-    public TopicAssignment(List<PartitionAssignment> assignments) {
+    public TopicAssignment(final List<PartitionAssignment> assignments) {
         this.assignments = assignments;
     }
 
@@ -36,4 +37,15 @@ public class TopicAssignment {
         return assignments;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof TopicAssignment)) return false;
+        TopicAssignment other = (TopicAssignment) o;
+        return assignments.equals(other.assignments);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(assignments);
+    }
 }

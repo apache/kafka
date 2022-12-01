@@ -1567,12 +1567,11 @@ public class ReplicationControlManager {
                 isrs.add(isr);
             }
         } else {
-            partitionAssignments = clusterControl.replicaPlacer().place(new PlacementSpec(
-                startPartitionId,
-                additional,
-                replicationFactor
-            ), clusterDescriber).assignments();
-            isrs = partitionAssignments.stream().map(x -> x.replicas()).collect(Collectors.toList());
+            partitionAssignments = clusterControl.replicaPlacer().place(
+                new PlacementSpec(startPartitionId, additional, replicationFactor),
+                clusterDescriber
+            ).assignments();
+            isrs = partitionAssignments.stream().map(PartitionAssignment::replicas).collect(Collectors.toList());
         }
         int partitionId = startPartitionId;
         for (int i = 0; i < partitionAssignments.size(); i++) {
