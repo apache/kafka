@@ -51,7 +51,7 @@
     },
     { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The rack which this broker is in." },
-    { "name": "ZkMigrationReady", "type": "int8", "versions": "0+", "taggedVersions": "0+", "tag": 0, "ignorable": true,
+    { "name": "IsMigratingZkBroker", "type": "int8", "versions": "0+", "taggedVersions": "0+", "tag": 0, "ignorable": true,
       "about": "Set by a ZK broker if the required configurations for ZK migration are present." }
   ]
 }

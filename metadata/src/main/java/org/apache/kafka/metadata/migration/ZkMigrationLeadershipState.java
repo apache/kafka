@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.migration;
+package org.apache.kafka.metadata.migration;
 
 import java.util.Objects;
 
@@ -23,9 +23,9 @@ import java.util.Objects;
  * ZNode and is recovered by the active KRaft controller following an election. The absence of this data in ZK indicates
  * that no migration has been started.
  */
-public class MigrationRecoveryState {
+public class ZkMigrationLeadershipState {
 
-    public static final MigrationRecoveryState EMPTY = new MigrationRecoveryState(-1, -1, -1, -1, -1, -1, -1);
+    public static final ZkMigrationLeadershipState EMPTY = new ZkMigrationLeadershipState(-1, -1, -1, -1, -1, -1, -1);
 
     private final int kraftControllerId;
 
@@ -33,7 +33,7 @@ public class MigrationRecoveryState {
 
     private final long kraftMetadataOffset;
 
-    private final long kraftMetadataEpoch;
+    private final int kraftMetadataEpoch;
 
     private final long lastUpdatedTimeMs;
 
@@ -41,9 +41,9 @@ public class MigrationRecoveryState {
 
     private final int controllerZkVersion;
 
-    public MigrationRecoveryState(int kraftControllerId, int kraftControllerEpoch,
-                                  long kraftMetadataOffset, long kraftMetadataEpoch,
-                                  long lastUpdatedTimeMs, int migrationZkVersion, int controllerZkVersion) {
+    public ZkMigrationLeadershipState(int kraftControllerId, int kraftControllerEpoch,
+                                      long kraftMetadataOffset, int kraftMetadataEpoch,
+                                      long lastUpdatedTimeMs, int migrationZkVersion, int controllerZkVersion) {
         this.kraftControllerId = kraftControllerId;
         this.kraftControllerEpoch = kraftControllerEpoch;
         this.kraftMetadataOffset = kraftMetadataOffset;
@@ -53,20 +53,14 @@ public class MigrationRecoveryState {
         this.controllerZkVersion = controllerZkVersion;
     }
 
-    public MigrationRecoveryState mergeWithControllerState(ZkControllerState state) {
-        return new MigrationRecoveryState(
-            this.kraftControllerId, this.kraftControllerEpoch, this.kraftMetadataOffset,
-            this.kraftMetadataEpoch, this.lastUpdatedTimeMs, this.migrationZkVersion, state.zkVersion());
-    }
-
-    public MigrationRecoveryState withZkVersion(int zkVersion) {
-        return new MigrationRecoveryState(
+    public ZkMigrationLeadershipState withZkVersion(int zkVersion) {
+        return new ZkMigrationLeadershipState(
                 this.kraftControllerId, this.kraftControllerEpoch, this.kraftMetadataOffset,
                 this.kraftMetadataEpoch, this.lastUpdatedTimeMs, zkVersion, this.controllerZkVersion);
     }
 
-    public MigrationRecoveryState withNewKRaftController(int controllerId, int controllerEpoch) {
-        return new MigrationRecoveryState(
+    public ZkMigrationLeadershipState withNewKRaftController(int controllerId, int controllerEpoch) {
+        return new ZkMigrationLeadershipState(
                 controllerId, controllerEpoch, this.kraftMetadataOffset,
                 this.kraftMetadataEpoch, this.lastUpdatedTimeMs, this.migrationZkVersion, this.controllerZkVersion);
     }
@@ -105,7 +99,7 @@ public class MigrationRecoveryState {
 
     @Override
     public String toString() {
-        return "MigrationRecoveryState{" +
+        return "ZkMigrationLeadershipState{" +
                 "kraftControllerId=" + kraftControllerId +
                 ", kraftControllerEpoch=" + kraftControllerEpoch +
                 ", kraftMetadataOffset=" + kraftMetadataOffset +
@@ -120,7 +114,7 @@ public class MigrationRecoveryState {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        MigrationRecoveryState that = (MigrationRecoveryState) o;
+        ZkMigrationLeadershipState that = (ZkMigrationLeadershipState) o;
         return kraftControllerId == that.kraftControllerId && kraftControllerEpoch == that.kraftControllerEpoch && kraftMetadataOffset == that.kraftMetadataOffset && kraftMetadataEpoch == that.kraftMetadataEpoch && lastUpdatedTimeMs == that.lastUpdatedTimeMs && migrationZkVersion == that.migrationZkVersion && controllerZkVersion == that.controllerZkVersion;
     }
 

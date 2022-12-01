@@ -1,9 +1,9 @@
 {
   "apiKey": 21,
   "type": "metadata",
-  "name": "ZkMigrationRecord",
+  "name": "ZkMigrationStateRecord",
   // Version 0 adds ZkMigrationState which is used by the KRaft controller to mark the beginning and end
-  // of the ZK to KRaft migration. Possible values are 0 (MigrationStarted) and 1 (MigrationFinished)
+  // of the ZK to KRaft migration. Possible values are 1 (PreMigration), 2 (Migration), 3 (PostMigration).
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
