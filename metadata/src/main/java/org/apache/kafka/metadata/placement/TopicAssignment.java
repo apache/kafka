@@ -20,17 +20,17 @@ package org.apache.kafka.metadata.placement;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * The topic assignment.
+ *
+ * This class is immutable. It's internal state does not change.
  */
 public class TopicAssignment {
     private final List<PartitionAssignment> assignments;
 
     public TopicAssignment(final List<PartitionAssignment> assignments) {
-        this.assignments = Collections.unmodifiableList(
-            assignments.stream().map(p -> new PartitionAssignment(Collections.unmodifiableList(p.replicas()))).collect(Collectors.toList()));
+        this.assignments = Collections.unmodifiableList(assignments);
     }
 
     /**

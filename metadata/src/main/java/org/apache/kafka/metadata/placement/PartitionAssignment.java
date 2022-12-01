@@ -24,7 +24,8 @@ import java.util.Objects;
 /**
  * The partition assignment.
  *
- * The assignment is represented as a list of integers where each integer is the replica ID.
+ * The assignment is represented as a list of integers where each integer is the replica ID. This class is immutable.
+ * It's internal state does not change.
  */
 public class PartitionAssignment {
     private final List<Integer> replicas;
