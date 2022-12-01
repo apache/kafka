@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata.placement;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -29,7 +30,7 @@ public class PartitionAssignment {
     private final List<Integer> replicas;
 
     public PartitionAssignment(final List<Integer> replicas) {
-        this.replicas = replicas;
+        this.replicas = Collections.unmodifiableList(replicas);
     }
 
     /**

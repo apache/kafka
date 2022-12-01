@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata.placement;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -27,7 +28,7 @@ public class TopicAssignment {
     private final List<PartitionAssignment> assignments;
 
     public TopicAssignment(final List<PartitionAssignment> assignments) {
-        this.assignments = assignments;
+        this.assignments = Collections.unmodifiableList(assignments);
     }
 
     /**
