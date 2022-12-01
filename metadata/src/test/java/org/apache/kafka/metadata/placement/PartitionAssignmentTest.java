@@ -48,6 +48,7 @@ public class PartitionAssignmentTest {
             for (int j = 0; j < partitionAssignments.size(); j++) {
                 if (i == j) {
                     assertEquals(partitionAssignments.get(i), partitionAssignments.get(j));
+                    assertEquals(partitionAssignments.get(i), new PartitionAssignment(partitionAssignments.get(i).replicas()));
                     assertEquals(partitionAssignments.get(i).hashCode(), partitionAssignments.get(j).hashCode());
                 } else {
                     assertNotEquals(partitionAssignments.get(i), partitionAssignments.get(j));

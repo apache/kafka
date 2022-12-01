@@ -61,6 +61,7 @@ public class TopicAssignmentTest {
             for (int j = 0; j < topicAssignments.size(); j++) {
                 if (i == j) {
                     assertEquals(topicAssignments.get(i), topicAssignments.get(j));
+                    assertEquals(topicAssignments.get(i), new TopicAssignment(topicAssignments.get(i).assignments()));
                     assertEquals(topicAssignments.get(i).hashCode(), topicAssignments.get(j).hashCode());
                 } else {
                     assertNotEquals(topicAssignments.get(i), topicAssignments.get(j));
