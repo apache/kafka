@@ -405,7 +405,7 @@ public class ClusterControlManagerTest {
                 new PlacementSpec(0,
                     1,
                     (short) 3),
-                    () -> clusterControl.usableBrokers()
+                    clusterControl::usableBrokers
             ).assignments();
             HashSet<Integer> seen = new HashSet<>();
             for (Integer result : results.get(0).replicas()) {
