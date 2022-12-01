@@ -378,7 +378,7 @@ public class Metrics implements Closeable {
      * @param parents The parent sensors
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, Sensor... parents) {
+    public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
         return this.sensor(name, config, Sensor.RecordingLevel.INFO, parents);
     }
 
@@ -392,7 +392,7 @@ public class Metrics implements Closeable {
      * @param parents The parent sensors
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+    public Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
         return sensor(name, config, Long.MAX_VALUE, recordingLevel, parents);
     }
 
@@ -407,20 +407,19 @@ public class Metrics implements Closeable {
      * @param recordingLevel The recording level.
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
-        Sensor s = getSensor(name);
-        if (s == null) {
-            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, recordingLevel);
-            this.sensors.put(name, s);
+    public Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+        return sensors.computeIfAbsent(name, (ignored) -> {
+            Sensor newSensor = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, recordingLevel);
+            log.trace("Added sensor with name {}", name);
+
             if (parents != null) {
                 for (Sensor parent : parents) {
-                    List<Sensor> children = childrenSensors.computeIfAbsent(parent, k -> new ArrayList<>());
-                    children.add(s);
+                    childrenSensors.computeIfAbsent(parent, k -> new ArrayList<>()).add(newSensor);
                 }
             }
-            log.trace("Added sensor with name {}", name);
-        }
-        return s;
+
+            return newSensor;
+        });
     }
 
     /**
@@ -433,7 +432,7 @@ public class Metrics implements Closeable {
      * @param parents The parent sensors
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
+    public Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
         return this.sensor(name, config, inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO, parents);
     }
 
