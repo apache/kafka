@@ -711,7 +711,7 @@ public class DistributedHerderTest {
             herder.halt();
             assertTrue(appender.getEvents().stream().anyMatch(
                     event -> event.getLevel().equals("ERROR")
-                    && event.getMessage().contains("startAndStopExecutor already shutdown or full. Not invoking explicit connector/task shutdown")));
+                    && event.getMessage().contains("startAndStopExecutor already shutdown or full. Not invoking explicit connector/task start/stop")));
             PowerMock.verifyAll();
         }
     }
