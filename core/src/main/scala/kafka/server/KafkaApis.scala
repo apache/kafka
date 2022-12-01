@@ -1800,8 +1800,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     val leaveGroupRequest = request.body[LeaveGroupRequest]
 
     def sendResponse(response: AbstractResponse): Unit = {
-      trace("Sending leave group response %s for correlation id %d to client %s."
-        .format(response, request.header.correlationId, request.header.clientId))
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
         response.maybeSetThrottleTimeMs(requestThrottleMs)
         response
