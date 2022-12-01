@@ -386,6 +386,7 @@ abstract class QuorumTestHarness extends Logging {
   def tearDown(): Unit = {
     Exit.resetExitProcedure()
     Exit.resetHaltProcedure()
+    TestUtils.clearYammerMetrics()
     if (implementation != null) {
       implementation.shutdown()
     }
