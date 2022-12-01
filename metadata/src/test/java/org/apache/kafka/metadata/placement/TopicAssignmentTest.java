@@ -51,7 +51,7 @@ public class TopicAssignmentTest {
             new TopicAssignment(
                 Arrays.asList(
                     new PartitionAssignment(
-                            Arrays.asList(1, 2, 0)
+                        Arrays.asList(1, 2, 0)
                     )
                  )
             )
