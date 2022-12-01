@@ -2720,6 +2720,16 @@ All of the following metrics have a recording level of <code>info</code>:
         <td>The total number of tasks closed.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>blocked-time-ns-total</td>
+        <td>The total time the thread spent blocked on kafka.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>thread-start-time</td>
+        <td>The time that the thread was started.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
  </tbody>
 </table>
 
