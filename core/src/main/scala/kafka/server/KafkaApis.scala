@@ -1660,20 +1660,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   ): CompletableFuture[Unit] = {
     val joinGroupRequest = request.body[JoinGroupRequest]
 
-    def sendResponse(response: AbstractResponse): Unit = {
-      trace("Sending join group response %s for correlation id %d to client %s."
-        .format(response, request.header.correlationId, request.header.clientId))
-      requestHelper.sendResponse(request, response)
-    }
-
     if (joinGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponse(joinGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      requestHelper.sendResponse(request, joinGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, joinGroupRequest.data.groupId)) {
-      sendResponse(joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      requestHelper.sendResponse(request, joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
       newGroupCoordinator.joinGroup(
@@ -1682,9 +1676,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestLocal.bufferSupplier
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
-          sendResponse(joinGroupRequest.getErrorResponse(exception))
+          requestHelper.sendResponse(request, joinGroupRequest.getErrorResponse(exception))
         } else {
-          sendResponse(new JoinGroupResponse(response, request.context.apiVersion))
+          requestHelper.sendResponse(request, new JoinGroupResponse(response, request.context.apiVersion))
         }
       }
     }
@@ -1696,24 +1690,18 @@ class KafkaApis(val requestChannel: RequestChannel,
   ): CompletableFuture[Unit] = {
     val syncGroupRequest = request.body[SyncGroupRequest]
 
-    def sendResponse(response: AbstractResponse): Unit = {
-      trace("Sending sync group response %s for correlation id %d to client %s."
-        .format(response, request.header.correlationId, request.header.clientId))
-      requestHelper.sendResponse(request, response)
-    }
-
     if (syncGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponse(syncGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      requestHelper.sendResponse(request, syncGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else if (!syncGroupRequest.areMandatoryProtocolTypeAndNamePresent()) {
       // Starting from version 5, ProtocolType and ProtocolName fields are mandatory.
-      sendResponse(syncGroupRequest.getErrorResponse(Errors.INCONSISTENT_GROUP_PROTOCOL.exception))
+      requestHelper.sendResponse(request, syncGroupRequest.getErrorResponse(Errors.INCONSISTENT_GROUP_PROTOCOL.exception))
       CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, syncGroupRequest.data.groupId)) {
-      sendResponse(syncGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      requestHelper.sendResponse(request, syncGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
       newGroupCoordinator.syncGroup(
@@ -1722,9 +1710,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestLocal.bufferSupplier
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
-          sendResponse(syncGroupRequest.getErrorResponse(exception))
+          requestHelper.sendResponse(request, syncGroupRequest.getErrorResponse(exception))
         } else {
-          sendResponse(new SyncGroupResponse(response))
+          requestHelper.sendResponse(request, new SyncGroupResponse(response))
         }
       }
     }
