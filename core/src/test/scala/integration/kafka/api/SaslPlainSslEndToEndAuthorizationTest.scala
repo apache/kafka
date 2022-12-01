@@ -38,10 +38,9 @@ import org.junit.jupiter.api.Test
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
-  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
-    // The superuser principal needs to be the same on brokers and controllers.
-    import EndToEndAuthorizationTest.controllerPrincipalName
+  val controllerPrincipalName = "admin"
 
+  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       val saslContext = context.asInstanceOf[SaslAuthenticationContext]
 
@@ -110,7 +109,6 @@ object SaslPlainSslEndToEndAuthorizationTest {
 // static JAAS configuration with default callback handlers to test those code paths as well.
 class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   import SaslPlainSslEndToEndAuthorizationTest._
-  import EndToEndAuthorizationTest.controllerPrincipalName
 
   this.serverConfig.setProperty(s"${listenerName.configPrefix}${KafkaConfig.SslClientAuthProp}", "required")
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)

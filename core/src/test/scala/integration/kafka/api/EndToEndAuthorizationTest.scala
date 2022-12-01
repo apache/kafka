@@ -38,31 +38,13 @@ import org.apache.kafka.common.resource._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth._
-import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
-import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{ValueSource, CsvSource}
 
 import scala.jdk.CollectionConverters._
-
-/**
-  * All broker to controller communications is authenticated as PLAINTEXT in these tests.
-  * We make a PrincipalBuilder here to set all authenticated controller connections to the
-  * same principal as what we set the superuser to on the controller.
-  */
-object EndToEndAuthorizationTest {
-  val controllerPrincipalName = "server"
-  val controllerPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, controllerPrincipalName)
-  class TestControllerPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
-    override def build(context: AuthenticationContext): KafkaPrincipal = {
-      new KafkaPrincipal(KafkaPrincipal.USER_TYPE, controllerPrincipalName)
-    }
-  }
-}
-
 
 /**
   * The test cases here verify that a producer authorized to publish to a topic
@@ -82,15 +64,8 @@ object EndToEndAuthorizationTest {
   * SaslTestHarness here directly because it extends QuorumTestHarness, and we
   * would end up with QuorumTestHarness twice.
   */
-@Timeout(30)
+@Timeout(60)
 abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
-  import EndToEndAuthorizationTest._
-
-  // The controller and server superuser principal must be the same. 
-  // Override this setting with a differeent Plaintext principal builder for the controller
-  // if you change the kafkaPrincipal
-  this.controllerConfig.setProperty("listener.name.controller." + BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
-    classOf[TestControllerPrincipalBuilder].getName)
 
   override val brokerCount = 3
 
@@ -175,7 +150,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     if (TestInfoUtils.isKRaft(testInfo)) {
       this.serverConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
-      this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
+      this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString + ";" + "User:ANONYMOUS")
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
       this.controllerConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
     } else {
@@ -360,8 +335,16 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Also verifies that subsequent publish, consume and describe to authorized topic succeeds.
     */
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(isIdempotenceEnabled: Boolean): Unit = {
+  @CsvSource(value = Array(
+    "kraft, true",
+    "kraft, false",
+    "zk, true",
+    "zk, false"
+  ))
+  def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(quorum:String, isIdempotenceEnabled:Boolean): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
     // Set consumer group acls since we are testing topic authorization
     setConsumerGroupAcls()
 
@@ -424,11 +407,20 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).topicNameValues
     assertEquals(1, describeResults2.get(topic).get().partitions().size())
     assertEquals(1, describeResults2.get(topic2).get().partitions().size())
+    }
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testNoProduceWithDescribeAcl(isIdempotenceEnabled: Boolean): Unit = {
+  @CsvSource(value = Array(
+    "kraft, true",
+    "kraft, false",
+    "zk, true",
+    "zk, false"
+  ))
+  def testNoProduceWithDescribeAcl(quorum:String, isIdempotenceEnabled:Boolean): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
     val superuserAdminClient = createSuperuserAdminClient()
     superuserAdminClient.createAcls(List(AclTopicDescribe()).asJava).values
 
@@ -448,6 +440,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
     confirmReauthenticationMetrics()
+    }
   }
 
    /**
