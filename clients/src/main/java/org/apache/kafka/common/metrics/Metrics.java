@@ -408,7 +408,7 @@ public class Metrics implements Closeable {
      * @return The sensor that is created
      */
     public Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
-        return sensors.computeIfAbsent(name, (ignored) -> {
+        return sensors.computeIfAbsent(name, ignored -> {
             Sensor newSensor = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, recordingLevel);
             log.trace("Added sensor with name {}", name);
 
