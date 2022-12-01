@@ -27,26 +27,26 @@ public enum ZkMigrationState {
     /**
      * No migration has been started by the controller. The controller is in regular KRaft mode
      */
-    NONE ((byte) 0),
+    NONE((byte) 0),
 
     /**
      * A KRaft controller has been elected with "zookeeper.metadata.migration.enable" set to "true".
      * The controller is now awaiting the pre-conditions for starting the migration.
      */
-    PRE_MIGRATION ((byte) 1),
+    PRE_MIGRATION((byte) 1),
 
     /**
      * The ZK data has been migrated and the KRaft controller is now writing metadata to both ZK and the
      * metadata log. The controller will remain in this state until all of the brokers have been restarted
      * in KRaft mode
      */
-    MIGRATION ((byte) 2),
+    MIGRATION((byte) 2),
 
     /**
      * The migration has been fully completed. The cluster is running in KRaft mode. This state will persist
      * indefinitely after the migration.
      */
-    POST_MIGRATION ((byte) 3);
+    POST_MIGRATION((byte) 3);
 
     private final byte value;
 
@@ -71,4 +71,4 @@ public enum ZkMigrationState {
         }
         return Optional.empty();
     }
- }
+}
