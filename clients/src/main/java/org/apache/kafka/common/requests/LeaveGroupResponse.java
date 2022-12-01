@@ -67,8 +67,9 @@ public class LeaveGroupResponse extends AbstractResponse {
                     " can only contain one member, got " + data.members().size() + " members.");
             }
 
-            this.data = new LeaveGroupResponseData()
-                .setErrorCode(getError(Errors.forCode(data.errorCode()), data.members()).code());
+            Errors topLevelError = Errors.forCode(data.errorCode());
+            short errorCode = getError(topLevelError, data.members()).code();
+            this.data = new LeaveGroupResponseData().setErrorCode(errorCode);
         }
     }
 

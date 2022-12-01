@@ -2923,7 +2923,7 @@ class KafkaApisTest {
 
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
-  def testHandleLeaveGroupWithMultipleGroups(version: Short): Unit = {
+  def testHandleLeaveGroupWithMultipleMembers(version: Short): Unit = {
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(new LeaveGroupRequest.Builder(
         "group",
@@ -2983,7 +2983,7 @@ class KafkaApisTest {
 
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
-  def testHandleLeaveGroupWithSingleGroup(version: Short): Unit = {
+  def testHandleLeaveGroupWithSingleMember(version: Short): Unit = {
     val requestChannelRequest = buildRequest(new LeaveGroupRequest.Builder(
       "group",
       List(
