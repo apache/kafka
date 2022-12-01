@@ -17,7 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData}
+import org.apache.kafka.common.message.{HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData}
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
@@ -79,6 +79,24 @@ class GroupCoordinatorAdapter(
       callback,
       Option(request.reason),
       RequestLocal(bufferSupplier)
+    )
+
+    future
+  }
+
+  override def heartbeat(
+    context: RequestContext,
+    request: HeartbeatRequestData
+  ): CompletableFuture[HeartbeatResponseData] = {
+    val future = new CompletableFuture[HeartbeatResponseData]()
+
+    coordinator.handleHeartbeat(
+      request.groupId,
+      request.memberId,
+      Option(request.groupInstanceId),
+      request.generationId,
+      error => future.complete(new HeartbeatResponseData()
+        .setErrorCode(error.code))
     )
 
     future

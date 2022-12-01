@@ -18,7 +18,7 @@ package kafka.coordinator.group
 
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.JoinGroupCallback
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData}
+import org.apache.kafka.common.message.{HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -28,6 +28,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify}
@@ -139,6 +140,38 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertEquals(expectedData, future.get())
+  }
+
+  @Test
+  def testHeartbeat(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    val ctx = makeContext(ApiKeys.HEARTBEAT, ApiKeys.HEARTBEAT.latestVersion)
+    val data = new HeartbeatRequestData()
+      .setGroupId("group")
+      .setMemberId("member1")
+      .setGenerationId(0)
+
+    val future = adapter.heartbeat(ctx, data)
+
+    val capturedCallback: ArgumentCaptor[Errors => Unit] =
+      ArgumentCaptor.forClass(classOf[Errors => Unit])
+
+    verify(groupCoordinator).handleHeartbeat(
+      ArgumentMatchers.eq(data.groupId),
+      ArgumentMatchers.eq(data.memberId),
+      ArgumentMatchers.eq(None),
+      ArgumentMatchers.eq(data.generationId),
+      capturedCallback.capture(),
+    )
+
+    assertFalse(future.isDone)
+
+    capturedCallback.getValue.apply(Errors.NONE)
+
+    assertTrue(future.isDone)
+    assertEquals(new HeartbeatResponseData(), future.get())
   }
 
 }

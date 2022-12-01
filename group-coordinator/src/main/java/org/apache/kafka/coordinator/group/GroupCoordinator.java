@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.requests.RequestContext;
@@ -40,5 +42,17 @@ public interface GroupCoordinator {
         BufferSupplier bufferSupplier
     );
 
+    /**
+     * Heartbeat to a Generic Group.
+     *
+     * @param context           The coordinator request context.
+     * @param request           The HeartbeatRequest data.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<HeartbeatResponseData> heartbeat(
+        RequestContext context,
+        HeartbeatRequestData request
+    );
 }
 
