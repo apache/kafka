@@ -2333,6 +2333,36 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
         <td>The total time an appender waits for space allocation in nanoseconds.</td>
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>flush-time-ns-total</td>
+        <td>The total time the Producer spent in Producer.flush in nanoseconds.</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>txn-init-time-ns-total</td>
+        <td>The total time the Producer spent initializing transactions in nanoseconds (for EOS).</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>txn-begin-time-ns-total</td>
+        <td>The total time the Producer spent in beginTransaction in nanoseconds (for EOS).</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>txn-send-offsets-time-ns-total</td>
+        <td>The total time the Producer spent sending offsets to transactions in nanoseconds (for EOS).</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>txn-commit-time-ns-total</td>
+        <td>The total time the Producer spent committing transactions in nanoseconds (for EOS).</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>txn-abort-time-ns-total</td>
+        <td>The total time the Producer spent aborting transactions in nanoseconds (for EOS).</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
 
   </tbody></table>
 
@@ -2370,6 +2400,16 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
       <tr>
         <td>poll-idle-ratio-avg</td>
         <td>The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records.</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>commited-time-ns-total</td>
+        <td>The total time the Consumer spent in committed in nanoseconds.</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>commit-sync-time-ns-total</td>
+        <td>The total time the Consumer spent committing offsets in nanoseconds (for AOS).</td>
         <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
       </tr>
     </tbody>
