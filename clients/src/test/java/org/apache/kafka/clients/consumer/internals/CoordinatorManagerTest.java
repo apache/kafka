@@ -93,8 +93,7 @@ public class CoordinatorManagerTest {
 
         when(coordinatorRequestState.canSendRequest(time.milliseconds())).thenReturn(false);
         NetworkClientDelegate.PollResult res2 = coordinatorManager.poll(time.milliseconds());
-        assertTrue(res.unsentRequests.isEmpty());
-        assertEquals(100, res2.timeMsTillNextPoll);
+        assertTrue(res2.unsentRequests.isEmpty());
     }
 
     @Test
@@ -153,7 +152,6 @@ public class CoordinatorManagerTest {
         res = coordinatorManager.poll(time.milliseconds());
         assertTrue(res.unsentRequests.isEmpty());
         this.time.sleep(50);
-        // Wait for 100ms to expire before sending the next request
         res = coordinatorManager.poll(time.milliseconds());
         assertTrue(res.unsentRequests.isEmpty());
         this.time.sleep(50);
@@ -163,9 +161,7 @@ public class CoordinatorManagerTest {
         coordinatorManager.onResponse(
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "key",
                         this.node));
-        // Need to wait for 100ms for the next request to send
-        res = coordinatorManager.poll(time.milliseconds());
-        assertTrue(res.unsentRequests.isEmpty());    }
+    }
 
     @Test
     public void testRequestFutureCompletionHandler() {

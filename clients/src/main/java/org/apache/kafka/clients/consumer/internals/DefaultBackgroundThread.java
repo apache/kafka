@@ -181,6 +181,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     long handlePollResult(NetworkClientDelegate.PollResult res) {
+        Objects.requireNonNull(res);
         if (!res.unsentRequests.isEmpty()) {
             networkClientDelegate.addAll(res.unsentRequests);
             return Long.MAX_VALUE;
@@ -189,24 +190,21 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     /**
-     * Get the coordinator if its connection is still active. Otherwise, mark it unknown and
-     * return an empty optional node.
+     * Check the coordinator if its connection is still active. Otherwise, mark it unknown and
+     * return false.
      *
-     * @return coordinator node. Empty if it is unknown.
+     * @return true if coordinator is active.
      */
-    protected Optional<Node> checkAndGetCoordinator(Node coordinator) {
+    protected boolean coordinatorUnknown() {
         // If the current coordinator is unavailable, mark it unknown and disconnect it
+        Node coordinator = coordinatorManager.coordinator();
         if (coordinator != null && networkClientDelegate.nodeUnavailable(coordinator)) {
             log.info("Requesting disconnect from last known coordinator {}", coordinator);
             networkClientDelegate.tryDisconnect(
                     this.coordinatorManager.markCoordinatorUnknown("coordinator unavailable"));
-            return Optional.empty();
+            return false;
         }
-        return Optional.ofNullable(coordinator);
-    }
-
-    public boolean coordinatorUnknown() {
-        return !checkAndGetCoordinator(coordinatorManager.coordinator()).isPresent();
+        return true;
     }
 
     private long timeToNextHeartbeatMs() {
