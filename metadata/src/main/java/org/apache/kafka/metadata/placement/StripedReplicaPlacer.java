@@ -30,7 +30,6 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.metadata.OptionalStringComparator;
 
-
 /**
  * The striped replica placer.
  *
@@ -160,6 +159,13 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
             }
         }
 
+        void initialize(int previousOffset) {
+            if (!brokers.isEmpty()) {
+                brokers.sort(Integer::compareTo);
+                this.offset = (previousOffset + 1) % brokers.size();
+            }
+        }
+
         /**
          * Randomly shuffle the brokers in this list.
          */
@@ -212,6 +218,11 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
         void initialize(Random random) {
             fenced.initialize(random);
             unfenced.initialize(random);
+        }
+
+        void initialize(Random random, int unfencedPreviousOffset) {
+            fenced.initialize(random);
+            unfenced.initialize(unfencedPreviousOffset);
         }
 
         void shuffle(Random random) {
@@ -298,11 +309,13 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
          */
         private int offset;
 
-        RackList(Random random, Iterator<UsableBroker> iterator) {
+        RackList(Random random, List<PartitionAssignment> existingPartitionAssignments, Iterator<UsableBroker> iterator) {
             this.random = random;
             int numTotalBrokersCount = 0, numUnfencedBrokersCount = 0;
+            Map<Integer, Optional<String>> brokerIdToRack = new HashMap<>();
             while (iterator.hasNext()) {
                 UsableBroker broker = iterator.next();
+                brokerIdToRack.put(broker.id(), broker.rack());
                 Rack rack = racks.get(broker.rack());
                 if (rack == null) {
                     rackNames.add(broker.rack());
@@ -317,13 +330,71 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
                 }
                 numTotalBrokersCount++;
             }
-            for (Rack rack : racks.values()) {
-                rack.initialize(random);
+
+            // Initialize each rack.
+            for (Map.Entry<Optional<String>, Rack> entry : racks.entrySet()) {
+                Optional<String> rackName = entry.getKey();
+                Rack rack = entry.getValue();
+                Optional<Integer> previousUnfencedBrokerOffset = tryGetPreviousBrokerOffset(brokerIdToRack, existingPartitionAssignments, rackName, rack.unfenced.brokers);
+                if (previousUnfencedBrokerOffset.isPresent()) {
+                    rack.initialize(random, previousUnfencedBrokerOffset.get());
+                } else {
+                    rack.initialize(random);
+                }
             }
             this.rackNames.sort(OptionalStringComparator.INSTANCE);
             this.numTotalBrokers = numTotalBrokersCount;
             this.numUnfencedBrokers = numUnfencedBrokersCount;
-            this.offset = rackNames.isEmpty() ? 0 : random.nextInt(rackNames.size());
+            Optional<Integer> previousRackOffset = tryGetPreviousRackOffset(brokerIdToRack, existingPartitionAssignments, rackNames);
+            if (previousRackOffset.isPresent()) {
+                this.offset = (previousRackOffset.get() + 1) % rackNames.size();
+            } else {
+                this.offset = rackNames.isEmpty() ? 0 : random.nextInt(rackNames.size());
+            }
+        }
+
+        protected static Optional<Integer> tryGetPreviousRackOffset(Map<Integer, Optional<String>> brokerIdToRack,
+                                                           List<PartitionAssignment> existingPartitionAssignments,
+                                                           List<Optional<String>> racks) {
+            if (existingPartitionAssignments.isEmpty()) {
+                return Optional.empty();
+            }
+            int lastPartitionLeaderBrokerId = existingPartitionAssignments.get(existingPartitionAssignments.size() - 1).replicas().get(0);
+            Optional<String> lastPartitionLeaderRack = brokerIdToRack.get(lastPartitionLeaderBrokerId);
+            if (lastPartitionLeaderRack == null) {
+                return Optional.empty();
+            }
+            for (int i = 0; i < racks.size(); i++) {
+                if (racks.get(i).equals(lastPartitionLeaderRack)) {
+                    return Optional.of(i);
+                }
+            }
+            return Optional.empty();
+        }
+
+        protected static Optional<Integer> tryGetPreviousBrokerOffset(Map<Integer, Optional<String>> brokerIdToRack,
+                                                             List<PartitionAssignment> existingPartitionAssignments,
+                                                             Optional<String> rack,
+                                                             List<Integer> unfencedBrokers) {
+            for (int i = existingPartitionAssignments.size() - 1; i >= 0; i--) {
+                List<Integer> partitionAssignment = existingPartitionAssignments.get(i).replicas();
+                for (int j = 0; j < partitionAssignment.size(); j++) {
+                    Integer brokerId = partitionAssignment.get(j);
+                    Optional<String> brokerRack = brokerIdToRack.get(brokerId);
+                    if (brokerRack == null) {
+                        continue;
+                    }
+                    if (brokerRack.equals(rack)) {
+                        int index = unfencedBrokers.indexOf(brokerId);
+                        return index == -1 ? Optional.empty() : Optional.of(index);
+                    }
+                }
+            }
+            return Optional.empty();
+        }
+
+        RackList(Random random, Iterator<UsableBroker> iterator) {
+            this(random, new ArrayList<>(), iterator);
         }
 
         int numTotalBrokers() {
@@ -432,7 +503,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
         PlacementSpec placement,
         ClusterDescriber cluster
     ) throws InvalidReplicationFactorException {
-        RackList rackList = new RackList(random, cluster.usableBrokers());
+        RackList rackList = new RackList(random, cluster.replicasForTopicName(placement.topic()), cluster.usableBrokers());
         throwInvalidReplicationFactorIfNonPositive(placement.numReplicas());
         throwInvalidReplicationFactorIfZero(rackList.numUnfencedBrokers());
         throwInvalidReplicationFactorIfTooFewBrokers(placement.numReplicas(),

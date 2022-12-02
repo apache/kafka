@@ -27,6 +27,8 @@ import java.util.Objects;
  */
 @InterfaceStability.Unstable
 public class PlacementSpec {
+    private final String topic;
+
     private final int startPartition;
 
     private final int numPartitions;
@@ -34,10 +36,12 @@ public class PlacementSpec {
     private final short numReplicas;
 
     public PlacementSpec(
+        String topic,
         int startPartition,
         int numPartitions,
         short numReplicas
     ) {
+        this.topic = topic;
         this.startPartition = startPartition;
         this.numPartitions = numPartitions;
         this.numReplicas = numReplicas;
@@ -55,19 +59,25 @@ public class PlacementSpec {
         return numReplicas;
     }
 
+    public String topic() {
+        return topic;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (o == null) return false;
         if (!(o.getClass().equals(this.getClass()))) return false;
         PlacementSpec other = (PlacementSpec) o;
-        return startPartition == other.startPartition &&
+        return topic.equals(other.topic) &&
+            startPartition == other.startPartition &&
             numPartitions == other.numPartitions &&
             numReplicas == other.numReplicas;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(startPartition,
+        return Objects.hash(topic,
+            startPartition,
             numPartitions,
             numReplicas);
     }
@@ -75,7 +85,8 @@ public class PlacementSpec {
     @Override
     public String toString() {
         return "PlacementSpec" +
-            "(startPartition=" + startPartition +
+            "(topic=" + topic +
+            ", startPartition=" + startPartition +
             ", numPartitions=" + numPartitions +
             ", numReplicas=" + numReplicas +
             ")";

@@ -41,8 +41,10 @@ import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.metadata.placement.PlacementSpec;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -55,6 +57,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
@@ -395,10 +398,20 @@ public class ClusterControlManagerTest {
         }
         for (int i = 0; i < 100; i++) {
             List<PartitionAssignment> results = clusterControl.replicaPlacer().place(
-                new PlacementSpec(0,
+                new PlacementSpec("topic",
+                    0,
                     1,
                     (short) 3),
-                    clusterControl::usableBrokers
+                new ClusterDescriber() {
+                    @Override
+                    public Iterator<UsableBroker> usableBrokers() {
+                        return clusterControl.usableBrokers();
+                    }
+                    @Override
+                    public List<PartitionAssignment> replicasForTopicName(String topicName) {
+                        throw new RuntimeException("not implemented");
+                    }
+                }
             ).assignments();
             HashSet<Integer> seen = new HashSet<>();
             for (Integer result : results.get(0).replicas()) {

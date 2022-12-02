@@ -20,6 +20,7 @@ package org.apache.kafka.metadata.placement;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Iterator;
+import java.util.List;
 
 
 /**
@@ -31,4 +32,6 @@ public interface ClusterDescriber {
      * Get an iterator through the usable brokers.
      */
     Iterator<UsableBroker> usableBrokers();
+
+    List<PartitionAssignment> replicasForTopicName(String topicName);
 }
