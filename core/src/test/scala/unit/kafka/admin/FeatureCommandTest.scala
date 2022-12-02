@@ -84,7 +84,7 @@ class FeatureCommandTest extends IntegrationTestHarness {
         Array("--bootstrap-server", bootstrapServers(), "describe"), env.out))
       assertEquals(String.format(
         "Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-          "SupportedMaxVersion: 3.3-IV3\tFinalizedVersionLevel: 3.3-IV1\t"),
+          "SupportedMaxVersion: 3.4-IV0\tFinalizedVersionLevel: 3.3-IV1\t"),
             env.outputWithoutEpoch())
     }
   }
@@ -145,7 +145,7 @@ class FeatureCommandTest extends IntegrationTestHarness {
       assertEquals(1, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
         "disable", "--feature", "metadata.version"), env.out))
       assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
-        "metadata.version. Local controller 1000 only supports versions 1-7", env.outputWithoutEpoch())
+        "metadata.version. Local controller 1000 only supports versions 1-8", env.outputWithoutEpoch())
     }
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
       assertEquals(1, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
