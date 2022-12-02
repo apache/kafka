@@ -1,22 +1,24 @@
-package kafka.migration
+package kafka.zk
 
 import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.server.{ConfigEntityName, ConfigType, ZkAdminManager}
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
-import kafka.zk._
 import kafka.zookeeper._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata._
+import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.migration.{MigrationClient, ZkMigrationLeadershipState}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.zookeeper.CreateMode
+import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.{CreateMode, KeeperException}
 
 import java.util
+import java.util.Properties
 import java.util.function.Consumer
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -32,7 +34,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     zkClient.updateMigrationState(state)
   }
 
-  def claimControllerLeadership(state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+  override def claimControllerLeadership(state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     val epochZkVersionOpt = zkClient.tryRegisterKRaftControllerAsActiveController(
       state.kraftControllerId(), state.kraftControllerEpoch())
     if (epochZkVersionOpt.isDefined) {
@@ -236,6 +238,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
       partitionRegistration.partitionEpoch), controllerEpoch))
     (path, data)
   }
+
   private def createTopicPartitionState(topicPartition: TopicPartition, partitionRegistration: PartitionRegistration, controllerEpoch: Int): CreateRequest = {
     val (path, data) = partitionStatePathAndData(topicPartition, partitionRegistration, controllerEpoch)
     CreateRequest(path, data, zkClient.defaultAcls(path), CreateMode.PERSISTENT, Some(topicPartition))
@@ -259,6 +262,70 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     } else {
       val (migrationZkVersion, _) = zkClient.retryMigrationRequestsUntilConnected(requests.toSeq, state.controllerZkVersion(), state)
       state.withMigrationZkVersion(migrationZkVersion)
+    }
+  }
+
+  def updateClientQuotas(entity: ClientQuotaEntity, quotas: util.Map[String, Double], state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+    val entityMap = entity.entries().asScala
+    val hasUser = entityMap.contains(ConfigType.User)
+    val hasClient = entityMap.contains(ConfigType.Client)
+    val hasIp = entityMap.contains(ConfigType.Ip)
+    val props = new Properties()
+    // We store client quota values as strings in the ZK JSON
+    quotas.forEach { case (key, value) => props.put(key, value.toString) }
+    val (configType, path) = if (hasUser && !hasClient) {
+      (Some(ConfigType.User), Some(entityMap(ConfigType.User)))
+    } else if (hasUser && hasClient) {
+      (Some(ConfigType.User), Some(s"${entityMap(ConfigType.User)}/clients/${entityMap(ConfigType.Client)}"))
+    } else if (hasClient) {
+      (Some(ConfigType.Client), Some(entityMap(ConfigType.Client)))
+    } else if (hasIp) {
+      (Some(ConfigType.Ip), Some(entityMap(ConfigType.Ip)))
+    } else {
+      (None, None)
+    }
+
+    if (path.isEmpty) {
+      error(s"Skipping unknown client quota entity $entity")
+      return state
+    }
+
+    val configData = ConfigEntityZNode.encode(props)
+
+    // Try to update the client quota and migration state. If NoNode is encountered, return None. Otherwise return
+    // the new migration state.
+    def tryWriteClientQuotas(entityType: String, path: String, create: Boolean, state: ZkMigrationLeadershipState): Option[ZkMigrationLeadershipState] = {
+      val requests = if (create) {
+        Seq(CreateRequest(ConfigEntityZNode.path(entityType, path), configData, zkClient.defaultAcls(path), CreateMode.PERSISTENT))
+      } else {
+        Seq(SetDataRequest(ConfigEntityZNode.path(entityType, path), configData, ZkVersion.MatchAnyVersion))
+      }
+      val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state.controllerZkVersion(), state)
+      if (!create && responses.head.resultCode.equals(Code.NONODE)) {
+        // Not fatal. Just means we need to Create this node instead of SetData
+        None
+      } else if (responses.head.resultCode.equals(Code.OK)) {
+        Some(state.withMigrationZkVersion(migrationZkVersion))
+      } else {
+        throw KeeperException.create(responses.head.resultCode, path)
+      }
+    }
+
+    tryWriteClientQuotas(configType.get, path.get, create=false, state) match {
+      case Some(newState) =>
+        newState
+      case None =>
+        // If we didn't update the migration state, we failed to write the client quota. Try again
+        // after recursively create its parent znodes
+        if (hasUser && hasClient) {
+          zkClient.createRecursive(s"${ConfigEntityTypeZNode.path(configType.get)}/${entityMap(ConfigType.User)}/clients", throwIfPathExists=false)
+        } else {
+          zkClient.createRecursive(ConfigEntityTypeZNode.path(configType.get), throwIfPathExists=false)
+        }
+        tryWriteClientQuotas(configType.get, path.get, create = true, state) match {
+          case Some(newStateSecondTry) => newStateSecondTry
+          case None => throw new RuntimeException("Could not write client quotas")
+        }
     }
   }
 }
