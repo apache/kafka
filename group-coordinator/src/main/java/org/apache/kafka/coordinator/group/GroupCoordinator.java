@@ -22,6 +22,8 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.SyncGroupRequestData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.BufferSupplier;
 
@@ -41,6 +43,21 @@ public interface GroupCoordinator {
     CompletableFuture<JoinGroupResponseData> joinGroup(
         RequestContext context,
         JoinGroupRequestData request,
+        BufferSupplier bufferSupplier
+    );
+
+    /**
+     * Sync a Generic Group.
+     *
+     * @param context           The coordinator request context.
+     * @param request           The SyncGroupRequest data.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<SyncGroupResponseData> syncGroup(
+        RequestContext context,
+        SyncGroupRequestData request,
         BufferSupplier bufferSupplier
     );
 

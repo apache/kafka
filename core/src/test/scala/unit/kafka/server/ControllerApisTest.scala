@@ -554,7 +554,8 @@ class ControllerApisTest {
         setTopicId(new Uuid(0L, 2L)).
         setTopicConfigErrorCode(TOPIC_AUTHORIZATION_FAILED.code()),
       new CreatableTopicResult().setName("quux").
-        setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()))
+        setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
+        setErrorMessage("Authorization failed."))
     assertEquals(expectedResponse, controllerApis.createTopics(ANONYMOUS_CONTEXT, request,
       false,
       _ => Set("baz", "indescribable"),

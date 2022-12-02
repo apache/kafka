@@ -35,6 +35,8 @@ import java.util.Optional;
 
 import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QuorumFeaturesTest {
     private final static Map<String, VersionRange> LOCAL;
@@ -88,5 +90,14 @@ public class QuorumFeaturesTest {
                     setMaxVersion(entry.getValue().max()));
         });
         return new NodeApiVersions(Collections.emptyList(), features);
+    }
+
+    @Test
+    public void testIsControllerId() {
+        QuorumFeatures quorumFeatures = new QuorumFeatures(0, new ApiVersions(), LOCAL, Arrays.asList(0, 1, 2));
+        assertTrue(quorumFeatures.isControllerId(0));
+        assertTrue(quorumFeatures.isControllerId(1));
+        assertTrue(quorumFeatures.isControllerId(2));
+        assertFalse(quorumFeatures.isControllerId(3));
     }
 }
