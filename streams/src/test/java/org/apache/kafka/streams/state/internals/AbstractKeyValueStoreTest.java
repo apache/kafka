@@ -656,10 +656,13 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(1, "one");
         store.put(2, "two");
         store.put(3, "three");
-        final Iterator iterator = store.prefixScan("prefix", serializer);
-        store.delete(2);
-        iterator.next();
+        final Iterator iter = store.prefixScan("prefix", serializer);
+        store.delete(2);  
 
-    }
+        while (iter.hasNext()) {
+            iter.next();
+        }
+
+    }                  
 }
 
