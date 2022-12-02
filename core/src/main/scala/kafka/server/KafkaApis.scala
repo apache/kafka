@@ -1779,15 +1779,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleLeaveGroupRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val leaveGroupRequest = request.body[LeaveGroupRequest]
 
-    def sendResponse(response: AbstractResponse): Unit = {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        response.maybeSetThrottleTimeMs(requestThrottleMs)
-        response
-      })
-    }
-
     if (!authHelper.authorize(request.context, READ, GROUP, leaveGroupRequest.data.groupId)) {
-      sendResponse(leaveGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      requestHelper.sendMaybeThrottle(request, leaveGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
       newGroupCoordinator.leaveGroup(
@@ -1795,9 +1788,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         leaveGroupRequest.normalizedData()
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
-          sendResponse(leaveGroupRequest.getErrorResponse(exception))
+          requestHelper.sendMaybeThrottle(request, leaveGroupRequest.getErrorResponse(exception))
         } else {
-          sendResponse(new LeaveGroupResponse(response, leaveGroupRequest.version))
+          requestHelper.sendMaybeThrottle(request, new LeaveGroupResponse(response, leaveGroupRequest.version))
         }
       }
     }
