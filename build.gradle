@@ -99,11 +99,18 @@ ext {
 
   userEnableTestCoverage = project.hasProperty("enableTestCoverage") ? enableTestCoverage : false
 
+  userKeepAliveModeString = project.hasProperty("keepAliveMode") ? keepAliveMode : "daemon"
+  userKeepAliveMode = KeepAliveMode.values().find(m -> m.name().toLowerCase().equals(userKeepAliveModeString))
+  if (userKeepAliveMode == null) {
+    def keepAliveValues = KeepAliveMode.values().collect(m -> m.name.toLowerCase())
+    throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
+  }
+
   // See README.md for details on this option and the reasoning for the default
   userScalaOptimizerMode = project.hasProperty("scalaOptimizerMode") ? scalaOptimizerMode : "inline-kafka"
   def scalaOptimizerValues = ["none", "method", "inline-kafka", "inline-scala"]
   if (!scalaOptimizerValues.contains(userScalaOptimizerMode))
-    throw new GradleException("Unexpected value for scalaOptimizerMode property. Expected one of $scalaOptimizerValues), but received: $userScalaOptimizerMode")
+    throw new GradleException("Unexpected value for scalaOptimizerMode property. Expected one of $scalaOptimizerValues, but received: $userScalaOptimizerMode")
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 
@@ -619,6 +626,8 @@ subprojects {
   }
 
   tasks.withType(ScalaCompile) {
+
+    scalaCompileOptions.keepAliveMode = userKeepAliveMode
 
     scalaCompileOptions.additionalParameters = [
       "-deprecation",

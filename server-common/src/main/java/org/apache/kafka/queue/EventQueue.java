@@ -249,6 +249,19 @@ public interface EventQueue extends AutoCloseable {
     void beginShutdown(String source, Event cleanupEvent, long timeSpan, TimeUnit timeUnit);
 
     /**
+     * @return The number of pending and running events. If this is 0, there is no running event and
+     * no events queued.
+     */
+    int size();
+
+    /**
+     * @return True if there are no pending or running events.
+     */
+    default boolean isEmpty() {
+        return size() == 0;
+    }
+
+    /**
      * This method is used during unit tests where MockTime is in use.
      * It is used to alert the queue that the mock time has changed.
      */

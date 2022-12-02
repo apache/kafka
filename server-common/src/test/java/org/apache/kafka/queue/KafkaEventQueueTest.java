@@ -31,12 +31,14 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 60)
@@ -239,5 +241,33 @@ public class KafkaEventQueueTest {
             });
         assertEquals(RejectedExecutionException.class, assertThrows(
             ExecutionException.class, () -> future.get()).getCause().getClass());
+    }
+
+    @Test
+    public void testSize() throws Exception {
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+                "testEmpty");
+        assertTrue(queue.isEmpty());
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        queue.append(() -> future.get());
+        assertFalse(queue.isEmpty());
+        assertEquals(1, queue.size());
+        queue.append(() -> future.get());
+        assertEquals(2, queue.size());
+        future.complete(null);
+        TestUtils.waitForCondition(() -> queue.isEmpty(), "Failed to see the queue become empty.");
+        queue.scheduleDeferred("later",
+                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + TimeUnit.HOURS.toNanos(1)),
+                () -> { });
+        assertFalse(queue.isEmpty());
+        queue.scheduleDeferred("soon",
+                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + TimeUnit.MILLISECONDS.toNanos(1)),
+                () -> { });
+        assertFalse(queue.isEmpty());
+        queue.cancelDeferred("later");
+        queue.cancelDeferred("soon");
+        assertTrue(queue.isEmpty());
+        queue.close();
+        assertTrue(queue.isEmpty());
     }
 }
