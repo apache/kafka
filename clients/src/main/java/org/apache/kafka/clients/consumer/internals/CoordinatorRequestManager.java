@@ -82,7 +82,7 @@ public class CoordinatorRequestManager implements RequestManager {
     }
 
     @Override
-    public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
+    public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
             NetworkClientDelegate.UnsentRequest request = makeFindCoordinatorRequest(currentTimeMs);
             return new NetworkClientDelegate.PollResult(-1, Collections.singletonList(request));
@@ -175,11 +175,6 @@ public class CoordinatorRequestManager implements RequestManager {
         log.debug("Coordinator discovery failed, refreshing metadata", response.error().exception());
     }
 
-    /**
-     * Handle 3 cases of FindCoordinatorResponse: success, failure, timedout
-     *
-     * @param response FindCoordinator response
-     */
     public void onResponse(final FindCoordinatorResponse response) {
         if (response.hasError()) {
             coordinatorRequestState.updateLastFailedAttempt(time.milliseconds());
@@ -190,18 +185,18 @@ public class CoordinatorRequestManager implements RequestManager {
     }
 
     public Node coordinator() {
-        return coordinator;
+        return this.coordinator;
     }
 
     // Visible for testing
     static class CoordinatorRequestState {
         final static int RECONNECT_BACKOFF_EXP_BASE = 2;
         final static double RECONNECT_BACKOFF_JITTER = 0.2;
+        private final ExponentialBackoff exponentialBackoff;
         private long lastSentMs = -1;
         private long lastReceivedMs = -1;
         private int numAttempts = 0;
         private long backoffMs = 0;
-        private final ExponentialBackoff exponentialBackoff;
 
         public CoordinatorRequestState(ConsumerConfig config) {
             this.exponentialBackoff = new ExponentialBackoff(
