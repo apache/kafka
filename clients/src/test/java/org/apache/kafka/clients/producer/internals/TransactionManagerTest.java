@@ -78,7 +78,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -1085,8 +1085,12 @@ public class TransactionManagerTest {
         assertEquals(epoch, transactionManager.producerIdAndEpoch().epoch);
     }
 
-    @Test
-    public void testLookupCoordinatorOnNotCoordinatorError() {
+    @ParameterizedTest
+    @EnumSource(names = {
+            "NOT_COORDINATOR",
+            "COORDINATOR_NOT_AVAILABLE"
+    })
+    public void testLookupCoordinatorOnNotCoordinatorError(Errors error) {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
         TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
@@ -1094,7 +1098,7 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
-        prepareInitPidResponse(Errors.NOT_COORDINATOR, false, producerId, epoch);
+        prepareInitPidResponse(error, false, producerId, epoch);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
 
         assertFalse(initPidResult.isCompleted());
@@ -1681,13 +1685,13 @@ public class TransactionManagerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {3, 7, 14, 51})
-    public void testRetriableErrors(int errorCode) {
-        // Tests Errors.CONCURRENT_TRANSACTIONS, Errors.COORDINATOR_LOAD_IN_PROGRESS,
-        // Errors.REQUEST_TIMED_OUT, Errors.UNKNOWN_TOPIC_OR_PARTITION
-        // We skip COORDINATOR_NOT_AVAILABLE since it breaks the logic.
-        Errors error = Errors.forCode((short) errorCode);
-
+    @EnumSource(names = {
+            "UNKNOWN_TOPIC_OR_PARTITION",
+            "REQUEST_TIMED_OUT",
+            "COORDINATOR_LOAD_IN_PROGRESS",
+            "CONCURRENT_TRANSACTIONS"
+    })
+    public void testRetriableErrors2(Errors error) {
         // Ensure FindCoordinator retries.
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(error, false, CoordinatorType.TRANSACTION, transactionalId);
@@ -1704,7 +1708,7 @@ public class TransactionManagerTest {
         transactionManager.beginTransaction();
 
         // Ensure AddPartitionsToTxn retries. Since CONCURRENT_TRANSACTIONS is handled differently here, we substitute.
-        Errors addPartitionsToTxnError = errorCode == 51 ? Errors.COORDINATOR_LOAD_IN_PROGRESS : error;
+        Errors addPartitionsToTxnError = error.equals(Errors.CONCURRENT_TRANSACTIONS) ? Errors.COORDINATOR_LOAD_IN_PROGRESS : error;
         transactionManager.maybeAddPartition(tp0);
         prepareAddPartitionsToTxnResponse(addPartitionsToTxnError, tp0, epoch, producerId);
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
@@ -1719,22 +1723,6 @@ public class TransactionManagerTest {
         runUntil(abortResult::isCompleted);
         assertTrue(abortResult.isSuccessful());
     }
-
-    @Test
-    public void testCoordinatorNotAvailable() {
-        // Ensure FindCoordinator with COORDINATOR_NOT_AVAILABLE error retries.
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, false, CoordinatorType.TRANSACTION, transactionalId);
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
-
-        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
-        runUntil(transactionManager::hasProducerId);
-
-        result.await();
-    }
-
 
     @Test
     public void testProducerFencedExceptionInInitProducerId() {
