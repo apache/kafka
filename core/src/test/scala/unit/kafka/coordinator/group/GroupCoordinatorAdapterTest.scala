@@ -16,9 +16,9 @@
  */
 package kafka.coordinator.group
 
-import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.JoinGroupCallback
+import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData}
+import org.apache.kafka.common.message.{HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -140,6 +140,74 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertEquals(expectedData, future.get())
+  }
+
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.SYNC_GROUP)
+  def testSyncGroup(version: Short): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    val ctx = makeContext(ApiKeys.SYNC_GROUP, version)
+    val data = new SyncGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member1")
+      .setGroupInstanceId("instance")
+      .setProtocolType("consumer")
+      .setProtocolName("range")
+      .setGenerationId(10)
+      .setAssignments(List(
+        new SyncGroupRequestData.SyncGroupRequestAssignment()
+          .setMemberId("member1")
+          .setAssignment("member1".getBytes()),
+        new SyncGroupRequestData.SyncGroupRequestAssignment()
+          .setMemberId("member2")
+          .setAssignment("member2".getBytes())
+      ).asJava)
+    val bufferSupplier = BufferSupplier.create()
+
+    val future = adapter.syncGroup(ctx, data, bufferSupplier)
+    assertFalse(future.isDone)
+
+    val capturedAssignment: ArgumentCaptor[Map[String, Array[Byte]]] =
+      ArgumentCaptor.forClass(classOf[Map[String, Array[Byte]]])
+    val capturedCallback: ArgumentCaptor[SyncGroupCallback] =
+      ArgumentCaptor.forClass(classOf[SyncGroupCallback])
+
+    verify(groupCoordinator).handleSyncGroup(
+      ArgumentMatchers.eq(data.groupId),
+      ArgumentMatchers.eq(data.generationId),
+      ArgumentMatchers.eq(data.memberId),
+      ArgumentMatchers.eq(Some(data.protocolType)),
+      ArgumentMatchers.eq(Some(data.protocolName)),
+      ArgumentMatchers.eq(Some(data.groupInstanceId)),
+      capturedAssignment.capture(),
+      capturedCallback.capture(),
+      ArgumentMatchers.eq(RequestLocal(bufferSupplier))
+    )
+
+    assertEquals(Map(
+      "member1" -> "member1",
+      "member2" -> "member2",
+    ), capturedAssignment.getValue.map { case (member, metadata) =>
+      (member, new String(metadata))
+    })
+
+    capturedCallback.getValue.apply(SyncGroupResult(
+      error = Errors.NONE,
+      protocolType = Some("consumer"),
+      protocolName = Some("range"),
+      memberAssignment = "member1".getBytes()
+    ))
+
+    val expectedResponseData = new SyncGroupResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setProtocolType("consumer")
+      .setProtocolName("range")
+      .setAssignment("member1".getBytes())
+
+    assertTrue(future.isDone)
+    assertEquals(expectedResponseData, future.get())
   }
 
   @Test
