@@ -661,7 +661,9 @@ public abstract class AbstractKeyValueStoreTest {
 
         while (iter.hasNext()) {
             iter.next();
-        }
+        } 
+        iter.close()
+
 
     }                  
 }
