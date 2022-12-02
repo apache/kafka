@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -58,6 +59,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public List<ClientResponse> poll(Timer timer, boolean disableWakeup) {
+        client.wakeup();
         if (!disableWakeup) {
             // trigger wakeups after checking for disconnects so that the callbacks will be ready
             // to be fired on the next call to poll()
@@ -112,12 +114,9 @@ public class NetworkClientDelegate implements AutoCloseable {
                 unsent.abstractBuilder,
                 time.milliseconds(),
                 true,
+                // TODO: Determine if we want the actual request timeout here to be requestTimeoutMs - timeInUnsentQueue
                 (int) unsent.timer.remainingMs(),
                 unsent.callback.orElse(new DefaultRequestFutureCompletionHandler()));
-    }
-
-    public List<ClientResponse> poll() {
-        return this.poll(time.timer(0), false);
     }
 
     public void maybeTriggerWakeup() {
@@ -160,6 +159,20 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.client.close();
     }
 
+    public void addAll(List<UnsentRequest> unsentRequests) {
+        unsentRequests.forEach(this::add);
+    }
+
+    public static class PollResult {
+        public final long timeMsTillNextPoll;
+        public final List<UnsentRequest> unsentRequests;
+
+        public PollResult(final long timeMsTillNextPoll, final List<UnsentRequest> unsentRequests) {
+            this.timeMsTillNextPoll = timeMsTillNextPoll;
+            this.unsentRequests = Collections.unmodifiableList(unsentRequests);
+        }
+    }
+
     public static class UnsentRequest {
         private final Optional<AbstractRequestFutureCompletionHandler> callback;
         private final AbstractRequest.Builder abstractBuilder;
@@ -183,15 +196,14 @@ public class NetworkClientDelegate implements AutoCloseable {
             this.timer = timer;
         }
 
-        public static Optional<UnsentRequest> makeUnsentRequest(
+        public static UnsentRequest makeUnsentRequest(
                 final Timer timeoutTimer,
                 final AbstractRequest.Builder<?> requestBuilder,
                 final AbstractRequestFutureCompletionHandler callback) {
-            return Optional.of(
-                    new UnsentRequest(
-                            timeoutTimer,
-                            requestBuilder,
-                            callback));
+            return new UnsentRequest(
+                    timeoutTimer,
+                    requestBuilder,
+                    callback);
         }
 
         @Override

@@ -52,13 +52,12 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final ConsumerMetadata metadata;
     private final ConsumerConfig config;
-    private final CoordinatorManager coordinatorManager;
+    private final CoordinatorRequestManager coordinatorManager;
     private final ApplicationEventProcessor applicationEventProcessor;
     private final NetworkClientDelegate networkClientDelegate;
     private final ErrorEventHandler errorEventHandler;
 
     private boolean running;
-    private Optional<ApplicationEvent> inflightEvent;
 
     // Visible for testing
     DefaultBackgroundThread(final Time time,
@@ -70,11 +69,10 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final ApplicationEventProcessor processor,
                             final ConsumerMetadata metadata,
                             final NetworkClientDelegate networkClient,
-                            final CoordinatorManager coordinatorManager) {
+                            final CoordinatorRequestManager coordinatorManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.running = true;
-        this.inflightEvent = Optional.empty();
         this.log = logContext.logger(getClass());
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
@@ -100,7 +98,6 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.applicationEventQueue = applicationEventQueue;
             this.backgroundEventQueue = backgroundEventQueue;
             this.config = config;
-            this.inflightEvent = Optional.empty();
             // subscriptionState is initialized by the polling thread
             this.metadata = metadata;
             this.networkClientDelegate = new NetworkClientDelegate(
@@ -109,7 +106,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                     networkClient);
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
-            this.coordinatorManager = new CoordinatorManager(time,
+            this.coordinatorManager = new CoordinatorRequestManager(time,
                     logContext,
                     config,
                     errorEventHandler,
@@ -155,33 +152,40 @@ public class DefaultBackgroundThread extends KafkaThread {
      *  iteration.
      */
     void runOnce() {
-        // TODO: we might not need the inflightEvent here
-        this.inflightEvent = maybePollEvent();
+        Optional<ApplicationEvent> event = maybePollEvent();
 
-        if (this.inflightEvent.isPresent()) {
-            log.debug("processing application event: {}", this.inflightEvent);
+        if (event.isPresent()) {
+            log.debug("processing application event: {}", event);
+            consumeApplicationEvent(event.get());
         }
-        if (this.inflightEvent.isPresent() && maybeConsumeInflightEvent(this.inflightEvent.get())) {
-            // clear inflight event upon successful consumption
-            this.inflightEvent = Optional.empty();
-        }
+
+        final long currentTimeMs = time.milliseconds();
+        long pollWaitTimeMs = timeToNextHeartbeatMs();
 
         // TODO: Add a condition here, like shouldFindCoordinator in the future.  Since we don't always need to find
         //  the coordinator.
         if (coordinatorUnknown()) {
-            coordinatorManager.tryFindCoordinator().ifPresent(networkClientDelegate::add);
+            pollWaitTimeMs = Math.min(pollWaitTimeMs, handlePollResult(coordinatorManager.poll(currentTimeMs)));
         }
 
         // if there are pending events to process, poll then continue without
         // blocking.
-        if (!applicationEventQueue.isEmpty() || inflightEvent.isPresent()) {
-            networkClientDelegate.poll();
+        if (!applicationEventQueue.isEmpty()) {
+            networkClientDelegate.poll(time.timer(0), false);
             return;
         }
         // if there are no events to process, poll until timeout. The timeout
         // will be the minimum of the requestTimeoutMs, nextHeartBeatMs, and
         // nextMetadataUpdate. See NetworkClient.poll impl.
-        networkClientDelegate.poll(time.timer(timeToNextHeartbeatMs()), false);
+        networkClientDelegate.poll(time.timer(pollWaitTimeMs), false);
+    }
+
+    long handlePollResult(NetworkClientDelegate.PollResult res) {
+        if (!res.unsentRequests.isEmpty()) {
+            networkClientDelegate.addAll(res.unsentRequests);
+            return Long.MAX_VALUE;
+        }
+        return res.timeMsTillNextPoll;
     }
 
     /**
@@ -211,9 +215,10 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     private Optional<ApplicationEvent> maybePollEvent() {
-        if (this.inflightEvent.isPresent() || this.applicationEventQueue.isEmpty()) {
-            return this.inflightEvent;
+        if (this.applicationEventQueue.isEmpty()) {
+            return Optional.empty();
         }
+
         return Optional.ofNullable(this.applicationEventQueue.poll());
     }
 
@@ -223,7 +228,7 @@ public class DefaultBackgroundThread extends KafkaThread {
      * @param event an {@link ApplicationEvent}
      * @return true when successfully consumed the event.
      */
-    private boolean maybeConsumeInflightEvent(final ApplicationEvent event) {
+    private boolean consumeApplicationEvent(final ApplicationEvent event) {
         log.debug("try consuming event: {}", Optional.ofNullable(event));
         Objects.requireNonNull(event);
         return applicationEventProcessor.process(event);

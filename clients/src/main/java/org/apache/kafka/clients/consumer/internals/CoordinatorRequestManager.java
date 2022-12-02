@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -32,75 +31,76 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-public class CoordinatorManager {
-    final static int RECONNECT_BACKOFF_EXP_BASE = 2;
-    final static double RECONNECT_BACKOFF_JITTER = 0.0;
+public class CoordinatorRequestManager implements RequestManager {
 
     private final Logger log;
     private final Time time;
     private final long requestTimeoutMs;
     private final ErrorEventHandler errorHandler;
-    private final ExponentialBackoff exponentialBackoff;
     private final long rebalanceTimeoutMs;
     private final Optional<String> groupId;
 
-    private CoordinatorRequestState coordinatorRequestState = new CoordinatorRequestState();
-    private long lastTimeOfConnectionMs = -1L; // starting logging a warning only after unable to connect for a while
+    private final CoordinatorRequestState coordinatorRequestState;
+    private long timeMarkedUnknownMs = -1L; // starting logging a warning only after unable to connect for a while
     private Node coordinator;
 
 
-    public CoordinatorManager(final Time time,
-                              final LogContext logContext,
-                              final ConsumerConfig config,
-                              final ErrorEventHandler errorHandler,
-                              final Optional<String> groupId,
-                              final long rebalanceTimeoutMs) {
+    public CoordinatorRequestManager(final Time time,
+                                     final LogContext logContext,
+                                     final ConsumerConfig config,
+                                     final ErrorEventHandler errorHandler,
+                                     final Optional<String> groupId,
+                                     final long rebalanceTimeoutMs) {
         this.time = time;
         this.log = logContext.logger(this.getClass());
         this.errorHandler = errorHandler;
-        this.exponentialBackoff = new ExponentialBackoff(
-                config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                RECONNECT_BACKOFF_EXP_BASE,
-                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                RECONNECT_BACKOFF_JITTER);
         this.groupId = groupId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        this.coordinatorRequestState = new CoordinatorRequestState(config);
     }
 
-    /**
-     * Returns a non-empty UnsentRequest we need send a FindCoordinatorRequest. These conditions are:
-     * 1. The request has not been sent
-     * 2. If the previous request failed, and the retryBackoff has expired
-     * @return Optional UnsentRequest.  Empty if we are not allowed to send a request.
-     */
-    public Optional<NetworkClientDelegate.UnsentRequest> tryFindCoordinator() {
-        if (coordinatorRequestState.lastSentMs == -1) {
-            // no request has been sent
-            return makeFindCoordinatorRequest();
-        }
-
-        if (coordinatorRequestState.lastReceivedMs == -1 ||
-                coordinatorRequestState.lastReceivedMs < coordinatorRequestState.lastSentMs) {
-            // there is an inflight request
-            return Optional.empty();
-        }
-
-        if (!coordinatorRequestState.requestBackoffExpired()) {
-            // retryBackoff
-            return Optional.empty();
-        }
-
-        return makeFindCoordinatorRequest();
+    CoordinatorRequestManager(final Time time,
+                              final LogContext logContext,
+                              final ErrorEventHandler errorHandler,
+                              final Optional<String> groupId,
+                              final long rebalanceTimeoutMs,
+                              final long requestTimeoutMs,
+                              final CoordinatorRequestState coordinatorRequestState) {
+        this.time = time;
+        this.log = logContext.logger(this.getClass());
+        this.errorHandler = errorHandler;
+        this.groupId = groupId;
+        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
+        this.requestTimeoutMs = requestTimeoutMs;
+        this.coordinatorRequestState = coordinatorRequestState;
     }
 
-    private Optional<NetworkClientDelegate.UnsentRequest> makeFindCoordinatorRequest() {
+    @Override
+    public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
+        if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
+            NetworkClientDelegate.UnsentRequest request = makeFindCoordinatorRequest(currentTimeMs);
+            return new NetworkClientDelegate.PollResult(-1, Collections.singletonList(request));
+        }
+
+        return new NetworkClientDelegate.PollResult(
+                coordinatorRequestState.remainingBackoffMs(currentTimeMs),
+                new ArrayList<>());
+    }
+
+    private NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
+        coordinatorRequestState.updateLastSend(currentTimeMs);
+        FindCoordinatorRequestData data = new FindCoordinatorRequestData()
+                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
+                .setKey(this.groupId.orElse(null));
         return NetworkClientDelegate.UnsentRequest.makeUnsentRequest(
                 this.time.timer(requestTimeoutMs),
-                newFindCoordinatorRequest(),
+                new FindCoordinatorRequest.Builder(data),
                 new FindCoordinatorRequestHandler());
     }
 
@@ -110,15 +110,15 @@ public class CoordinatorManager {
      * @param cause why the coordinator is marked unknown
      * @return Optional coordinator node that can be null.
      */
-    protected Optional<Node> markCoordinatorUnknown(String cause) {
+    protected Optional<Node> markCoordinatorUnknown(final String cause) {
         Node oldCoordinator = this.coordinator;
         if (this.coordinator != null) {
             log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
                             + "Rediscovery will be attempted.", this.coordinator, cause);
             this.coordinator = null;
-            lastTimeOfConnectionMs = time.milliseconds();
+            timeMarkedUnknownMs = time.milliseconds();
         } else {
-            long durationOfOngoingDisconnect = Math.max(0, time.milliseconds() - lastTimeOfConnectionMs);
+            long durationOfOngoingDisconnect = Math.max(0, time.milliseconds() - timeMarkedUnknownMs);
             if (durationOfOngoingDisconnect > this.rebalanceTimeoutMs)
                 log.debug("Consumer has been disconnected from the group coordinator for {}ms",
                         durationOfOngoingDisconnect);
@@ -126,17 +126,11 @@ public class CoordinatorManager {
         return Optional.ofNullable(oldCoordinator);
     }
 
-    private FindCoordinatorRequest.Builder newFindCoordinatorRequest() {
-        coordinatorRequestState.updateLastSend();
-        FindCoordinatorRequestData data = new FindCoordinatorRequestData()
-                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
-                .setKey(this.groupId.orElse(null));
-        return new FindCoordinatorRequest.Builder(data);
-    }
-
-    void handleSuccessFindCoordinatorResponse(FindCoordinatorResponse response) {
+    private void handleSuccessFindCoordinatorResponse(final FindCoordinatorResponse response) {
+        final long currentTimeMS = time.milliseconds();
         List<FindCoordinatorResponseData.Coordinator> coordinators = response.coordinators();
         if (coordinators.size() != 1) {
+            coordinatorRequestState.updateLastFailedAttempt(currentTimeMS);
             log.error(
                     "Group coordinator lookup failed: Invalid response containing more than a single coordinator");
             errorHandler.handle(new IllegalStateException(
@@ -158,6 +152,7 @@ public class CoordinatorManager {
             return;
         }
 
+        coordinatorRequestState.updateLastFailedAttempt(currentTimeMS);
         if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
             errorHandler.handle(GroupAuthorizationException.forGroupId(this.groupId.orElse(null)));
             return;
@@ -167,7 +162,7 @@ public class CoordinatorManager {
         errorHandler.handle(error.exception());
     }
 
-    void handleFailedCoordinatorResponse(FindCoordinatorResponse response) {
+    private void handleFailedCoordinatorResponse(final FindCoordinatorResponse response) {
         log.debug("FindCoordinator request failed due to {}", response.error().toString());
 
         if (!(response.error().exception() instanceof RetriableException)) {
@@ -185,9 +180,9 @@ public class CoordinatorManager {
      *
      * @param response FindCoordinator response
      */
-    public void onResponse(FindCoordinatorResponse response) {
-        coordinatorRequestState.updateLastReceived();
+    public void onResponse(final FindCoordinatorResponse response) {
         if (response.hasError()) {
+            coordinatorRequestState.updateLastFailedAttempt(time.milliseconds());
             handleFailedCoordinatorResponse(response);
             return;
         }
@@ -198,33 +193,77 @@ public class CoordinatorManager {
         return coordinator;
     }
 
-    private class CoordinatorRequestState {
-        private long lastSentMs;
-        private long lastReceivedMs;
-        private int numAttempts;
-        public CoordinatorRequestState() {
-            this.lastSentMs = -1;
-            this.lastReceivedMs = -1;
-            this.numAttempts = 0;
+    // Visible for testing
+    static class CoordinatorRequestState {
+        final static int RECONNECT_BACKOFF_EXP_BASE = 2;
+        final static double RECONNECT_BACKOFF_JITTER = 0.2;
+        private long lastSentMs = -1;
+        private long lastReceivedMs = -1;
+        private int numAttempts = 0;
+        private long backoffMs = 0;
+        private final ExponentialBackoff exponentialBackoff;
+
+        public CoordinatorRequestState(ConsumerConfig config) {
+            this.exponentialBackoff = new ExponentialBackoff(
+                    config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
+                    RECONNECT_BACKOFF_EXP_BASE,
+                    config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                    RECONNECT_BACKOFF_JITTER);
+        }
+
+        // Visible for testing
+        CoordinatorRequestState(final int reconnectBackoffMs,
+                                final int reconnectBackoffExpBase,
+                                final int reconnectBackoffMaxMs,
+                                final int jitter) {
+            this.exponentialBackoff = new ExponentialBackoff(
+                    reconnectBackoffMs,
+                    reconnectBackoffExpBase,
+                    reconnectBackoffMaxMs,
+                    jitter);
         }
 
         public void reset() {
             this.lastSentMs = -1;
             this.lastReceivedMs = -1;
+            this.numAttempts = 0;
+            this.backoffMs = exponentialBackoff.backoff(0);
         }
 
-        public void updateLastSend() {
+        public boolean canSendRequest(final long currentTimeMs) {
+            if (this.lastSentMs == -1) {
+                // no request has been sent
+                return true;
+            }
+
+            // TODO: I think there's a case when we want to resend the FindCoordinator when we haven't received
+            //  anything yet.
+            if (this.lastReceivedMs == -1 ||
+                    this.lastReceivedMs < this.lastSentMs) {
+                // there is an inflight request
+                return false;
+            }
+
+            return requestBackoffExpired(currentTimeMs);
+        }
+
+        public void updateLastSend(final long currentTimeMs) {
             // Here we update the timer everytime we try to send a request. Also increment number of attempts.
+            this.lastSentMs = currentTimeMs;
+        }
+
+        public void updateLastFailedAttempt(final long currentTimeMs) {
+            this.lastReceivedMs = currentTimeMs;
+            this.backoffMs = exponentialBackoff.backoff(numAttempts);
             this.numAttempts++;
-            this.lastSentMs = time.milliseconds();
         }
 
-        public void updateLastReceived() {
-            this.lastReceivedMs = time.milliseconds();
+        private boolean requestBackoffExpired(final long currentTimeMs) {
+            return (currentTimeMs - this.lastReceivedMs) >= this.backoffMs;
         }
 
-        private boolean requestBackoffExpired() {
-            return (time.milliseconds() - this.lastReceivedMs) >= (exponentialBackoff.backoff(numAttempts));
+        private long remainingBackoffMs(final long currentTimeMs) {
+            return Math.max(0, this.backoffMs - (currentTimeMs - this.lastReceivedMs));
         }
     }
 
@@ -232,7 +271,7 @@ public class CoordinatorManager {
 
         @Override
         public void handleResponse(ClientResponse r, Throwable t) {
-            CoordinatorManager.this.onResponse((FindCoordinatorResponse) r.responseBody());
+            CoordinatorRequestManager.this.onResponse((FindCoordinatorResponse) r.responseBody());
         }
     }
 }

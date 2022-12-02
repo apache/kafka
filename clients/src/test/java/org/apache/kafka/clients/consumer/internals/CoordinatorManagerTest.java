@@ -41,7 +41,12 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class CoordinatorManagerTest {
     private MockTime time;
@@ -54,12 +59,14 @@ public class CoordinatorManagerTest {
     private final Properties properties = new Properties();
     private Optional<String> groupId;
     private int rebalanceTimeoutMs;
+    private int requestTimeoutMs;
+    private CoordinatorRequestManager.CoordinatorRequestState coordinatorRequestState;
 
 
     @BeforeEach
     public void setup() {
         this.logContext = new LogContext();
-        this.time = new MockTime();
+        this.time = new MockTime(0);
         this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST);
         this.metadata = new ConsumerMetadata(0, Long.MAX_VALUE, false,
                 false, subscriptions, logContext, new ClusterResourceListeners());
@@ -70,44 +77,98 @@ public class CoordinatorManagerTest {
         properties.put(RETRY_BACKOFF_MS_CONFIG, "100");
         this.groupId = Optional.of("");
         this.rebalanceTimeoutMs = 60 * 1000;
+        this.requestTimeoutMs = 500;
+        this.coordinatorRequestState = mock(CoordinatorRequestManager.CoordinatorRequestState.class);
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, 100);
     }
     
     @Test
-    public void testTryFindCoordinator() {
-        CoordinatorManager coordinatorManager = setupCoordinatorManager();
-        assertTrue(coordinatorManager.tryFindCoordinator().isPresent());
-        // Prevent sending successive FindCoordinator requests w/o a response
-        assertFalse(coordinatorManager.tryFindCoordinator().isPresent());
+    public void testPoll() {
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
+        when(coordinatorRequestState.canSendRequest(time.milliseconds())).thenReturn(true);
+        NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
 
-        coordinatorManager.handleSuccessFindCoordinatorResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE,
-                "key", this.node));
-        assertTrue(coordinatorManager.tryFindCoordinator().isPresent());
+        when(coordinatorRequestState.canSendRequest(time.milliseconds())).thenReturn(false);
+        NetworkClientDelegate.PollResult res2 = coordinatorManager.poll(time.milliseconds());
+        assertTrue(res.unsentRequests.isEmpty());
+        assertEquals(100, res2.timeMsTillNextPoll);
     }
 
     @Test
-    public void testTestFindCoordinatorError() {
-        CoordinatorManager coordinatorManager = setupCoordinatorManager();
-        assertTrue(coordinatorManager.tryFindCoordinator().isPresent());
+    public void testOnResponse() {
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
+        FindCoordinatorResponse resp = FindCoordinatorResponse.prepareResponse(Errors.NONE, "key", node);
+        coordinatorManager.onResponse(resp);
+        verify(errorEventHandler, never()).handle(any());
+
+        FindCoordinatorResponse errResp = FindCoordinatorResponse.prepareResponse(Errors.COORDINATOR_NOT_AVAILABLE,
+                "key-1", node);
+        coordinatorManager.onResponse(errResp);
+        verify(errorEventHandler, times(1)).handle(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+    }
+
+    @Test
+    public void testCoordinatorRequestState() {
+        ConsumerConfig config = new ConsumerConfig(properties);
+        CoordinatorRequestManager.CoordinatorRequestState state = new CoordinatorRequestManager.CoordinatorRequestState(
+                100,
+                2,
+                1000,
+                0);
+
+        // ensure not permitting consecutive requests
+        assertTrue(state.canSendRequest(0));
+        state.updateLastSend(0);
+        assertFalse(state.canSendRequest(0));
+        state.updateLastFailedAttempt(35);
+        assertTrue(state.canSendRequest(135));
+        state.updateLastFailedAttempt(140);
+        assertFalse(state.canSendRequest(200));
+        // exponential backoff
+        assertTrue(state.canSendRequest(340));
+
+        // test reset
+        state.reset();
+        assertTrue(state.canSendRequest(200));
+    }
+
+    @Test
+    public void testFindCoordinatorBackoff() {
+        this.coordinatorRequestState = new CoordinatorRequestManager.CoordinatorRequestState(
+                100,
+                2,
+                1000,
+                0);
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
+
+        NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
         coordinatorManager.onResponse(
                 FindCoordinatorResponse.prepareResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, "key",
                 this.node));
-        // Testing exp. backoff.
-        assertFalse(coordinatorManager.tryFindCoordinator().isPresent());
-        // First backoff should be 100ms
-        this.time.sleep(100);
-        assertTrue(coordinatorManager.tryFindCoordinator().isPresent());
+        // Need to wait for 100ms until the next send
+        res = coordinatorManager.poll(time.milliseconds());
+        assertTrue(res.unsentRequests.isEmpty());
+        this.time.sleep(50);
+        // Wait for 100ms to expire before sending the next request
+        res = coordinatorManager.poll(time.milliseconds());
+        assertTrue(res.unsentRequests.isEmpty());
+        this.time.sleep(50);
+        // should be able to send after 100ms
+        res = coordinatorManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
         coordinatorManager.onResponse(
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "key",
                         this.node));
-        // It is permitted to rediscover coordinator again.
-        assertTrue(coordinatorManager.tryFindCoordinator().isPresent());
-    }
+        // Need to wait for 100ms for the next request to send
+        res = coordinatorManager.poll(time.milliseconds());
+        assertTrue(res.unsentRequests.isEmpty());    }
 
     @Test
-    public void testRequestFutureCompletionHandlerBase() {
+    public void testRequestFutureCompletionHandler() {
         NetworkClientDelegate.AbstractRequestFutureCompletionHandler h = new MockRequestFutureCompletionHandlerBase();
         try {
             h.onFailure(new RuntimeException());
@@ -123,14 +184,20 @@ public class CoordinatorManagerTest {
         }
     }
     
-    private CoordinatorManager setupCoordinatorManager() {
-        return new CoordinatorManager(
+    private CoordinatorRequestManager setupCoordinatorManager() {
+        return new CoordinatorRequestManager(
                 this.time,
                 this.logContext,
-                new ConsumerConfig(properties),
                 this.errorEventHandler,
                 this.groupId,
-                this.rebalanceTimeoutMs);
+                this.rebalanceTimeoutMs,
+                this.requestTimeoutMs,
+                this.coordinatorRequestState);
     }
 
+    private NetworkClientDelegate.PollResult mockPollResult(long time, NetworkClientDelegate.UnsentRequest req) {
+        return new NetworkClientDelegate.PollResult(
+                time,
+                Collections.singletonList(req));
+    }
 }

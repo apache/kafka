@@ -31,7 +31,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -39,7 +40,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -54,7 +57,7 @@ public class DefaultBackgroundThreadTest {
     private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private ApplicationEventProcessor processor;
-    private CoordinatorManager coordinatorManager;
+    private CoordinatorRequestManager coordinatorManager;
     private ErrorEventHandler errorEventHandler;
 
     @BeforeEach
@@ -66,7 +69,7 @@ public class DefaultBackgroundThreadTest {
         this.applicationEventsQueue = (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
         this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
         this.processor = mock(ApplicationEventProcessor.class);
-        this.coordinatorManager = mock(CoordinatorManager.class);
+        this.coordinatorManager = mock(CoordinatorRequestManager.class);
         this.errorEventHandler = mock(ErrorEventHandler.class);
     }
 
@@ -93,11 +96,27 @@ public class DefaultBackgroundThreadTest {
     @Test
     void testFindCoordinator() {
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
-        when(this.coordinatorManager.tryFindCoordinator()).thenReturn(Optional.of(findCoordinatorUnsentRequest(this.time.timer(0))));
+        when(this.coordinatorManager.poll(time.milliseconds())).thenReturn(mockPollResult());
         backgroundThread.runOnce();
-        Mockito.verify(coordinatorManager, times(1)).tryFindCoordinator();
-        Mockito.verify(networkClient, times(1)).poll();
+        Mockito.verify(coordinatorManager, times(1)).poll(anyLong());
+        Mockito.verify(networkClient, times(1)).poll(time.timer(0), false);
         backgroundThread.close();
+    }
+
+    @Test
+    void testPollResultTimer() {
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+        // purposedly setting a non MAX time to ensure it is returning Long.MAX_VALUE upon success
+        NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
+                10,
+                Collections.singletonList(findCoordinatorUnsentRequest(time.timer(0))));
+
+        assertEquals(Long.MAX_VALUE, backgroundThread.handlePollResult(success));
+
+        NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
+                10,
+                new ArrayList<>());
+        assertEquals(10, backgroundThread.handlePollResult(failure));
     }
 
     private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(Timer timer) {
@@ -126,5 +145,11 @@ public class DefaultBackgroundThreadTest {
                 this.metadata,
                 this.networkClient,
                 this.coordinatorManager);
+    }
+
+    private NetworkClientDelegate.PollResult mockPollResult() {
+        return new NetworkClientDelegate.PollResult(
+                0,
+                Collections.singletonList(findCoordinatorUnsentRequest(this.time.timer(0))));
     }
 }
