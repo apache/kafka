@@ -28,7 +28,7 @@ import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerGroupMetadata, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -665,28 +665,30 @@ class TransactionsTest extends IntegrationTestHarness {
       restartDeadBrokers()
 
       org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
-      producer.abortTransaction()
-
-      producer.beginTransaction()
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "4", "4", willBeCommitted = true))
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "1", "1", willBeCommitted = true))
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = true))
-      producer.commitTransaction()
+      assertThrows(classOf[KafkaException], () => producer.abortTransaction())
+      // Close the producer and allow flushing any pending requests
+      producer.close(Duration.ofSeconds(20))
 
       consumer.subscribe(List(topic1, topic2, testTopic).asJava)
 
-      val records = consumeRecords(consumer, 5)
+      val records = consumeRecords(consumer, 1)
       records.foreach { record =>
         TestUtils.assertCommittedAndGetValue(record)
       }
 
-      // Producers can safely abort and continue after the last record of a transaction timing out, so it's possible to
-      // get here without having bumped the epoch. If bumping the epoch is possible, the producer will attempt to, so
-      // check there that the epoch has actually increased
-      producerStateEntry =
-        brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers(producerId)
-      assertTrue(producerStateEntry.producerEpoch > initialProducerEpoch)
+      // Need to make sure that the fencing completes and bumps the epoch, so keep retrying
+      TestUtils.waitUntilTrue(
+        () => {
+          // Producers cannot safely abort and continue after a record of a transaction timing out
+          // If bumping the epoch is possible, the producer will attempt to, so check there that the epoch has actually increased
+          producerStateEntry =
+            brokers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers(producerId)
+          producerStateEntry.producerEpoch > initialProducerEpoch
+        },
+        "Epoch did not get bumped",
+        60*1000,
+        500
+      )
     } finally {
       producer.close(Duration.ZERO)
     }

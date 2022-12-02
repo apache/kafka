@@ -260,8 +260,9 @@ public class Sender implements Runnable {
         }
 
         // Abort the transaction if any commit or abort didn't go through the transaction manager's queue
-        while (!forceClose && transactionManager != null && transactionManager.hasOngoingTransaction()) {
-            if (!transactionManager.isCompleting()) {
+        // Alternatively, send a final fencing init if there was a client side timeout
+        while (!forceClose && transactionManagerNeedsFlush()) {
+            if (transactionManager.hasOngoingTransaction() && !transactionManager.isCompleting()) {
                 log.info("Aborting incomplete transaction due to shutdown");
                 transactionManager.beginAbort();
             }
@@ -300,18 +301,22 @@ public class Sender implements Runnable {
             try {
                 transactionManager.maybeResolveSequences();
 
-                // do not continue sending if the transaction manager is in a failed state
-                if (transactionManager.hasFatalError()) {
+                if (transactionManager.hasFatalError() || transactionManager.hasFatalBumpableError()) {
+                    // abort batches if the transaction manager is in a failed state
                     RuntimeException lastError = transactionManager.lastError();
                     if (lastError != null)
                         maybeAbortBatches(lastError);
-                    client.poll(retryBackoffMs, time.milliseconds());
-                    return;
-                }
 
-                // Check whether we need a new producerId. If so, we will enqueue an InitProducerId
-                // request which will be sent below
-                transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
+                    // do not continue sending if the transaction manager is in fatal state
+                    if (transactionManager.hasFatalError()) {
+                        client.poll(retryBackoffMs, time.milliseconds());
+                        return;
+                    }
+                } else {
+                    // Check whether we need a new producerId. If so, we will enqueue an InitProducerId
+                    // request which will be sent below
+                    transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
+                }
 
                 if (maybeSendAndPollTransactionalRequest()) {
                     return;
@@ -326,6 +331,11 @@ public class Sender implements Runnable {
         long currentTimeMs = time.milliseconds();
         long pollTimeout = sendProducerData(currentTimeMs);
         client.poll(pollTimeout, currentTimeMs);
+    }
+
+    private boolean transactionManagerNeedsFlush() {
+        return transactionManager != null
+                && (transactionManager.hasOngoingTransaction() || transactionManager.hasFatalBumpableError());
     }
 
     private long sendProducerData(long now) {
