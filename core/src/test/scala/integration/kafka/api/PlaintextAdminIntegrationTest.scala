@@ -44,12 +44,14 @@ import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
+import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
 
+import java.util.AbstractMap.SimpleImmutableEntry
 import scala.annotation.nowarn
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
@@ -2500,7 +2502,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * Test that createTopics returns the dynamic configurations of the topics that were created.
    *
    * Note: this test requires some custom static broker and controller configurations, which are set up in
-   * BaseAdminIntegrationTest.modifyConfigs and BaseAdminIntegrationTest.kraftControllerConfigs.
+   * BaseAdminIntegrationTest.modifyConfigs.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
@@ -2518,18 +2520,26 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       .all().get(15, TimeUnit.SECONDS)
 
     if (isKRaftTest()) {
+      // In KRaft mode, we don't yet support altering configs on controller nodes, except by setting
+      // default node configs. Therefore, we have to set the dynamic config directly to test this.
+      val controllerNodeResource = new ConfigResource(ConfigResource.Type.BROKER,
+        controllerServer.config.nodeId.toString)
+      controllerServer.controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT,
+        Collections.singletonMap(controllerNodeResource,
+          Collections.singletonMap(KafkaConfig.LogCleanerDeleteRetentionMsProp,
+            new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false).get()
       ensureConsistentKRaftMetadata()
-    } else {
-      waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
-        KafkaConfig.LogCleanerDeleteRetentionMsProp, "").toString.equals("34")),
-        s"Timed out waiting for change to ${KafkaConfig.LogCleanerDeleteRetentionMsProp}",
-        waitTimeMs = 60000L)
-
-      waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
-        KafkaConfig.LogRetentionTimeMillisProp, "").toString.equals("10800000")),
-        s"Timed out waiting for change to ${KafkaConfig.LogRetentionTimeMillisProp}",
-        waitTimeMs = 60000L)
     }
+
+    waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
+      KafkaConfig.LogCleanerDeleteRetentionMsProp, "").toString.equals("34")),
+      s"Timed out waiting for change to ${KafkaConfig.LogCleanerDeleteRetentionMsProp}",
+      waitTimeMs = 60000L)
+
+    waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
+      KafkaConfig.LogRetentionTimeMillisProp, "").toString.equals("10800000")),
+      s"Timed out waiting for change to ${KafkaConfig.LogRetentionTimeMillisProp}",
+      waitTimeMs = 60000L)
 
     val newTopics = Seq(new NewTopic("foo", Map((0: Integer) -> Seq[Integer](1, 2).asJava,
       (1: Integer) -> Seq[Integer](2, 0).asJava).asJava).
