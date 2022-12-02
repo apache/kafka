@@ -62,7 +62,6 @@ public class CoordinatorManagerTest {
     private int requestTimeoutMs;
     private CoordinatorRequestManager.CoordinatorRequestState coordinatorRequestState;
 
-
     @BeforeEach
     public void setup() {
         this.logContext = new LogContext();
@@ -189,11 +188,5 @@ public class CoordinatorManagerTest {
                 this.rebalanceTimeoutMs,
                 this.requestTimeoutMs,
                 this.coordinatorRequestState);
-    }
-
-    private NetworkClientDelegate.PollResult mockPollResult(long time, NetworkClientDelegate.UnsentRequest req) {
-        return new NetworkClientDelegate.PollResult(
-                time,
-                Collections.singletonList(req));
     }
 }
