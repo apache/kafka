@@ -71,7 +71,10 @@ object ConsoleProducer {
   }
 
   def getReaderProps(config: ProducerConfig): Properties = {
-    val props = new Properties
+    val props =
+      if (config.options.has(config.readerConfigOpt))
+        Utils.loadProps(config.options.valueOf(config.readerConfigOpt))
+      else new Properties
     props.put("topic", config.topic)
     props ++= config.cmdLineProps
     props
@@ -240,6 +243,10 @@ object ConsoleProducer {
       )
       .withRequiredArg
       .describedAs("prop")
+      .ofType(classOf[String])
+    val readerConfigOpt = parser.accepts("reader-config", s"Config properties file for the message reader. Note that $propertyOpt takes precedence over this config.")
+      .withRequiredArg
+      .describedAs("config file")
       .ofType(classOf[String])
     val producerPropertyOpt = parser.accepts("producer-property", "A mechanism to pass user-defined properties in the form key=value to the producer. ")
             .withRequiredArg

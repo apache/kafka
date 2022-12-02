@@ -483,9 +483,36 @@ class ConsoleConsumerTest {
     assertTrue(config.formatterArgs.containsKey("key.deserializer.my-props"))
     val formatter = config.formatter.asInstanceOf[DefaultMessageFormatter]
     assertTrue(formatter.keyDeserializer.get.isInstanceOf[MockDeserializer])
-    assertEquals(1, formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.size)
-    assertEquals("abc", formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.get("my-props"))
-    assertTrue(formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].isKey)
+    val keyDeserializer = formatter.keyDeserializer.get.asInstanceOf[MockDeserializer]
+    assertEquals(1, keyDeserializer.configs.size)
+    assertEquals("abc", keyDeserializer.configs.get("my-props"))
+    assertTrue(keyDeserializer.isKey)
+  }
+
+  @Test
+  def testCustomConfigShouldBePassedToConfigureMethod(): Unit = {
+    val propsFile = TestUtils.tempFile()
+    val propsStream = Files.newOutputStream(propsFile.toPath)
+    propsStream.write("key.deserializer.my-props=abc\n".getBytes())
+    propsStream.write("print.key=false".getBytes())
+    propsStream.close()
+
+    val args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--property", "print.key=true",
+      "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
+      "--formatter-config", propsFile.getAbsolutePath
+    )
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    assertTrue(config.formatter.isInstanceOf[DefaultMessageFormatter])
+    assertTrue(config.formatterArgs.containsKey("key.deserializer.my-props"))
+    val formatter = config.formatter.asInstanceOf[DefaultMessageFormatter]
+    assertTrue(formatter.keyDeserializer.get.isInstanceOf[MockDeserializer])
+    val keyDeserializer = formatter.keyDeserializer.get.asInstanceOf[MockDeserializer]
+    assertEquals(1, keyDeserializer.configs.size)
+    assertEquals("abc", keyDeserializer.configs.get("my-props"))
+    assertTrue(keyDeserializer.isKey)
   }
 
   @Test
