@@ -74,6 +74,8 @@ class BrokerServer(
   val config = sharedServer.config
   val time = sharedServer.time
   def metrics = sharedServer.metrics
+
+  // Get raftManager from SharedServer. It will be initialized during startup.
   def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
 
   override def brokerState: BrokerState = Option(lifecycleManager).
