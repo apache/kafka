@@ -1085,12 +1085,8 @@ public class TransactionManagerTest {
         assertEquals(epoch, transactionManager.producerIdAndEpoch().epoch);
     }
 
-    @ParameterizedTest
-    @EnumSource(names = {
-            "NOT_COORDINATOR",
-            "COORDINATOR_NOT_AVAILABLE"
-    })
-    public void testLookupCoordinatorOnNotCoordinatorError(Errors error) {
+    @Test
+    public void testLookupCoordinatorOnNotCoordinatorError() {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
         TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
@@ -1098,7 +1094,7 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
-        prepareInitPidResponse(error, false, producerId, epoch);
+        prepareInitPidResponse(Errors.NOT_COORDINATOR, false, producerId, epoch);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
 
         assertFalse(initPidResult.isCompleted());
@@ -1722,6 +1718,21 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
         runUntil(abortResult::isCompleted);
         assertTrue(abortResult.isSuccessful());
+    }
+
+    @Test
+    public void testCoordinatorNotAvailable() {
+        // Ensure FindCoordinator with COORDINATOR_NOT_AVAILABLE error retries.
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, false, CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(transactionManager::hasProducerId);
+
+        result.await();
     }
 
     @Test
