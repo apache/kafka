@@ -194,9 +194,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
         case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
         case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request, requestLocal).exceptionally(handleError)
-        case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
+        case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request).exceptionally(handleError)
         case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
-        case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request, requestLocal)
+        case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request, requestLocal).exceptionally(handleError)
         case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
         case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
@@ -1660,23 +1660,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   ): CompletableFuture[Unit] = {
     val joinGroupRequest = request.body[JoinGroupRequest]
 
-    def sendResponse(response: AbstractResponse): Unit = {
-      trace("Sending join group response %s for correlation id %d to client %s."
-        .format(response, request.header.correlationId, request.header.clientId))
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        response.maybeSetThrottleTimeMs(requestThrottleMs)
-        response
-      })
-    }
-
     if (joinGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponse(joinGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, joinGroupRequest.data.groupId)) {
-      sendResponse(joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
       newGroupCoordinator.joinGroup(
@@ -1685,56 +1676,45 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestLocal.bufferSupplier
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
-          sendResponse(joinGroupRequest.getErrorResponse(exception))
+          requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(exception))
         } else {
-          sendResponse(new JoinGroupResponse(response, request.context.apiVersion))
+          requestHelper.sendMaybeThrottle(request, new JoinGroupResponse(response, request.context.apiVersion))
         }
       }
     }
   }
 
-  def handleSyncGroupRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+  def handleSyncGroupRequest(
+    request: RequestChannel.Request,
+    requestLocal: RequestLocal
+  ): CompletableFuture[Unit] = {
     val syncGroupRequest = request.body[SyncGroupRequest]
-
-    def sendResponseCallback(syncGroupResult: SyncGroupResult): Unit = {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new SyncGroupResponse(
-          new SyncGroupResponseData()
-            .setErrorCode(syncGroupResult.error.code)
-            .setProtocolType(syncGroupResult.protocolType.orNull)
-            .setProtocolName(syncGroupResult.protocolName.orNull)
-            .setAssignment(syncGroupResult.memberAssignment)
-            .setThrottleTimeMs(requestThrottleMs)
-        ))
-    }
 
     if (syncGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponseCallback(SyncGroupResult(Errors.UNSUPPORTED_VERSION))
+      requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else if (!syncGroupRequest.areMandatoryProtocolTypeAndNamePresent()) {
       // Starting from version 5, ProtocolType and ProtocolName fields are mandatory.
-      sendResponseCallback(SyncGroupResult(Errors.INCONSISTENT_GROUP_PROTOCOL))
+      requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.INCONSISTENT_GROUP_PROTOCOL.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, syncGroupRequest.data.groupId)) {
-      sendResponseCallback(SyncGroupResult(Errors.GROUP_AUTHORIZATION_FAILED))
+      requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else {
-      val assignmentMap = immutable.Map.newBuilder[String, Array[Byte]]
-      syncGroupRequest.data.assignments.forEach { assignment =>
-        assignmentMap += (assignment.memberId -> assignment.assignment)
+      newGroupCoordinator.syncGroup(
+        request.context,
+        syncGroupRequest.data,
+        requestLocal.bufferSupplier
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new SyncGroupResponse(response))
+        }
       }
-
-      groupCoordinator.handleSyncGroup(
-        syncGroupRequest.data.groupId,
-        syncGroupRequest.data.generationId,
-        syncGroupRequest.data.memberId,
-        Option(syncGroupRequest.data.protocolType),
-        Option(syncGroupRequest.data.protocolName),
-        Option(syncGroupRequest.data.groupInstanceId),
-        assignmentMap.result(),
-        sendResponseCallback,
-        requestLocal
-      )
     }
   }
 
@@ -1764,42 +1744,36 @@ class KafkaApis(val requestChannel: RequestChannel,
     })
   }
 
-  def handleHeartbeatRequest(request: RequestChannel.Request): Unit = {
+  def handleHeartbeatRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val heartbeatRequest = request.body[HeartbeatRequest]
 
-    // the callback for sending a heartbeat response
-    def sendResponseCallback(error: Errors): Unit = {
-      def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val response = new HeartbeatResponse(
-          new HeartbeatResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-            .setErrorCode(error.code))
-        trace("Sending heartbeat response %s for correlation id %d to client %s."
-          .format(response, request.header.correlationId, request.header.clientId))
+    def sendResponse(response: AbstractResponse): Unit = {
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        response.maybeSetThrottleTimeMs(requestThrottleMs)
         response
-      }
-      requestHelper.sendResponseMaybeThrottle(request, createResponse)
+      })
     }
 
     if (heartbeatRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponseCallback(Errors.UNSUPPORTED_VERSION)
+      sendResponse(heartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, heartbeatRequest.data.groupId)) {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new HeartbeatResponse(
-            new HeartbeatResponseData()
-              .setThrottleTimeMs(requestThrottleMs)
-              .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)))
+      sendResponse(heartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else {
-      // let the coordinator to handle heartbeat
-      groupCoordinator.handleHeartbeat(
-        heartbeatRequest.data.groupId,
-        heartbeatRequest.data.memberId,
-        Option(heartbeatRequest.data.groupInstanceId),
-        heartbeatRequest.data.generationId,
-        sendResponseCallback)
+      newGroupCoordinator.heartbeat(
+        request.context,
+        heartbeatRequest.data
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          sendResponse(heartbeatRequest.getErrorResponse(exception))
+        } else {
+          sendResponse(new HeartbeatResponse(response))
+        }
+      }
     }
   }
 
@@ -1904,12 +1878,36 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       val hasClusterAuthorization = authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
         logIfDenied = false)
-      val topics = createTopicsRequest.data.topics.asScala.map(_.name)
-      val authorizedTopics =
-        if (hasClusterAuthorization) topics.toSet
-        else authHelper.filterByAuthorized(request.context, CREATE, TOPIC, topics)(identity)
-      val authorizedForDescribeConfigs = authHelper.filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
-        topics, logIfDenied = false)(identity).map(name => name -> results.find(name)).toMap
+
+      val allowedTopicNames = {
+        val topicNames = createTopicsRequest
+          .data
+          .topics
+          .asScala
+          .map(_.name)
+          .toSet
+
+          /* The cluster metatdata topic is an internal topic with a different implementation. The user should not be
+           * allowed to create it as a regular topic.
+           */
+          if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {
+            info(s"Rejecting creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME}")
+          }
+          topicNames.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
+      }
+
+      val authorizedTopics = if (hasClusterAuthorization) {
+        allowedTopicNames.toSet
+      } else {
+        authHelper.filterByAuthorized(request.context, CREATE, TOPIC, allowedTopicNames)(identity)
+      }
+      val authorizedForDescribeConfigs = authHelper.filterByAuthorized(
+        request.context,
+        DESCRIBE_CONFIGS,
+        TOPIC,
+        allowedTopicNames,
+        logIfDenied = false
+      )(identity).map(name => name -> results.find(name)).toMap
 
       results.forEach { topic =>
         if (results.findAll(topic.name).size > 1) {
@@ -2749,13 +2747,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       )
     }
 
-    val partitionsOpt = listPartitionReassignmentsRequest.data.topics match {
-      case topics: Any =>
-        Some(topics.iterator().asScala.flatMap { topic =>
-          topic.partitionIndexes.iterator().asScala
-            .map { tp => new TopicPartition(topic.name(), tp) }
-        }.toSet)
-      case _ => None
+    val partitionsOpt = Option(listPartitionReassignmentsRequest.data.topics).map { topics =>
+      topics.iterator().asScala.flatMap { topic =>
+        topic.partitionIndexes.iterator().asScala.map { partitionIndex =>
+          new TopicPartition(topic.name(), partitionIndex)
+        }
+      }.toSet
     }
 
     zkSupport.controller.listPartitionReassignments(partitionsOpt, sendResponseCallback)

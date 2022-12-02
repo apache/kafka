@@ -678,7 +678,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @Test
-    public void testCommitFlushCallbackFailure() throws Exception {
+    public void testCommitFlushSyncCallbackFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.willFlush()).thenReturn(true);
         when(offsetWriter.beginFlush()).thenReturn(true);
@@ -687,7 +687,26 @@ public class ExactlyOnceWorkerSourceTaskTest {
             callback.onCompletion(failure, null);
             return null;
         });
-        testCommitFailure(failure);
+        testCommitFailure(failure, false);
+    }
+
+    @Test
+    public void testCommitFlushAsyncCallbackFailure() throws Exception {
+        Exception failure = new RecordTooLargeException();
+        when(offsetWriter.willFlush()).thenReturn(true);
+        when(offsetWriter.beginFlush()).thenReturn(true);
+        // doFlush delegates its callback to the producer,
+        // which delays completing the callback until commitTransaction
+        AtomicReference<Callback<Void>> callback = new AtomicReference<>();
+        when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
+            callback.set(invocation.getArgument(0));
+            return null;
+        });
+        doAnswer(invocation -> {
+            callback.get().onCompletion(failure, null);
+            return null;
+        }).when(producer).commitTransaction();
+        testCommitFailure(failure, true);
     }
 
     @Test
@@ -696,10 +715,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
         when(offsetWriter.willFlush()).thenReturn(true);
         when(offsetWriter.beginFlush()).thenReturn(true);
         doThrow(failure).when(producer).commitTransaction();
-        testCommitFailure(failure);
+        testCommitFailure(failure, true);
     }
 
-    private void testCommitFailure(Exception commitException) throws Exception {
+    private void testCommitFailure(Exception commitException, boolean executeCommit) throws Exception {
         createWorkerTask();
 
         // Unlike the standard WorkerSourceTask class, this one fails permanently when offset commits don't succeed
@@ -723,7 +742,9 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verifySends();
         verifyPossibleTopicCreation();
         verify(producer).beginTransaction();
-        verify(producer).commitTransaction();
+        if (executeCommit) {
+            verify(producer).commitTransaction();
+        }
         verify(offsetWriter).cancelFlush();
 
         verifyPreflight();

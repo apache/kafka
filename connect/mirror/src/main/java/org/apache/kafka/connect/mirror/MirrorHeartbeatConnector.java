@@ -27,9 +27,11 @@ import java.util.List;
 import java.util.Collections;
 
 /** Emits heartbeats to Kafka.
+ *
+ *  @see MirrorHeartbeatConfig for supported config properties.
  */
 public class MirrorHeartbeatConnector extends SourceConnector {
-    private MirrorConnectorConfig config;
+    private MirrorHeartbeatConfig config;
     private Scheduler scheduler;
     
     public MirrorHeartbeatConnector() {
@@ -37,13 +39,13 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     }
 
     // visible for testing
-    MirrorHeartbeatConnector(MirrorConnectorConfig config) {
+    MirrorHeartbeatConnector(MirrorHeartbeatConfig config) {
         this.config = config;
     }
 
     @Override
     public void start(Map<String, String> props) {
-        config = new MirrorConnectorConfig(props);
+        config = new MirrorHeartbeatConfig(props);
         scheduler = new Scheduler(MirrorHeartbeatConnector.class, config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
     }
@@ -71,7 +73,7 @@ public class MirrorHeartbeatConnector extends SourceConnector {
 
     @Override
     public ConfigDef config() {
-        return MirrorConnectorConfig.CONNECTOR_CONFIG_DEF;
+        return MirrorHeartbeatConfig.CONNECTOR_CONFIG_DEF;
     }
 
     @Override

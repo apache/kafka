@@ -64,7 +64,7 @@ public class MirrorCheckpointTask extends SourceTask {
     private ReplicationPolicy replicationPolicy;
     private OffsetSyncStore offsetSyncStore;
     private boolean stopping;
-    private MirrorMetrics metrics;
+    private MirrorCheckpointMetrics metrics;
     private Scheduler scheduler;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
     private Map<String, List<Checkpoint>> checkpointsPerConsumerGroup;
@@ -85,7 +85,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> props) {
-        MirrorTaskConfig config = new MirrorTaskConfig(props);
+        MirrorCheckpointTaskConfig config = new MirrorCheckpointTaskConfig(props);
         stopping = false;
         sourceClusterAlias = config.sourceClusterAlias();
         targetClusterAlias = config.targetClusterAlias();
