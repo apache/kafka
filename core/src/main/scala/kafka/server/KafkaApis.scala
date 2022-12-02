@@ -1664,10 +1664,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      requestHelper.sendResponse(request, joinGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, joinGroupRequest.data.groupId)) {
-      requestHelper.sendResponse(request, joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
       newGroupCoordinator.joinGroup(
@@ -1676,9 +1676,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestLocal.bufferSupplier
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
-          requestHelper.sendResponse(request, joinGroupRequest.getErrorResponse(exception))
+          requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(exception))
         } else {
-          requestHelper.sendResponse(request, new JoinGroupResponse(response, request.context.apiVersion))
+          requestHelper.sendMaybeThrottle(request, new JoinGroupResponse(response, request.context.apiVersion))
         }
       }
     }
@@ -1694,14 +1694,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      requestHelper.sendResponse(request, syncGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else if (!syncGroupRequest.areMandatoryProtocolTypeAndNamePresent()) {
       // Starting from version 5, ProtocolType and ProtocolName fields are mandatory.
-      requestHelper.sendResponse(request, syncGroupRequest.getErrorResponse(Errors.INCONSISTENT_GROUP_PROTOCOL.exception))
+      requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.INCONSISTENT_GROUP_PROTOCOL.exception))
       CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, syncGroupRequest.data.groupId)) {
-      requestHelper.sendResponse(request, syncGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
       newGroupCoordinator.syncGroup(
@@ -1710,9 +1710,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestLocal.bufferSupplier
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
-          requestHelper.sendResponse(request, syncGroupRequest.getErrorResponse(exception))
+          requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(exception))
         } else {
-          requestHelper.sendResponse(request, new SyncGroupResponse(response))
+          requestHelper.sendMaybeThrottle(request, new SyncGroupResponse(response))
         }
       }
     }

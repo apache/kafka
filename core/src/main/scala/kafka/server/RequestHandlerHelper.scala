@@ -107,7 +107,7 @@ class RequestHandlerHelper(
 
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
   // response immediately.
-  def sendResponse(
+  def sendMaybeThrottle(
     request: RequestChannel.Request,
     response: AbstractResponse
   ): Unit = {
