@@ -986,6 +986,18 @@ public final class Utils {
             throw exception;
     }
 
+    public static void swallow(
+        Logger log,
+        String what,
+        Runnable runnable
+    ) {
+        try {
+            runnable.run();
+        } catch (Throwable e) {
+            log.warn("{} error", what, e);
+        }
+    }
+
     /**
      * An {@link AutoCloseable} interface without a throws clause in the signature
      *

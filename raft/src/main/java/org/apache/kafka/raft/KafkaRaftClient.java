@@ -2368,6 +2368,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (kafkaRaftMetrics != null) {
             kafkaRaftMetrics.close();
         }
+        if (memoryPool instanceof BatchMemoryPool) {
+            BatchMemoryPool batchMemoryPool = (BatchMemoryPool) memoryPool;
+            batchMemoryPool.releaseRetained();
+        }
     }
 
     QuorumState quorum() {

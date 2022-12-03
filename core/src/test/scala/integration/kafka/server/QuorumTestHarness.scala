@@ -23,23 +23,18 @@ import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.CompletableFuture
 import javax.security.auth.login.Configuration
-import kafka.raft.KafkaRaftManager
-import kafka.server.metadata.BrokerServerMetrics
 import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
-import org.apache.kafka.controller.QuorumControllerMetrics
-import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
@@ -85,8 +80,8 @@ class ZooKeeperQuorumImplementation(
 }
 
 class KRaftQuorumImplementation(
-  val raftManager: KafkaRaftManager[ApiMessageAndVersion],
   val controllerServer: ControllerServer,
+  val faultHandlerFactory: FaultHandlerFactory,
   val metadataDir: File,
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
   val clusterId: String,
@@ -99,27 +94,41 @@ class KRaftQuorumImplementation(
     startup: Boolean,
     threadNamePrefix: Option[String],
   ): KafkaBroker = {
-    val metrics = new Metrics()
-    val broker = new BrokerServer(config = config,
-      metaProps = new MetaProperties(clusterId, config.nodeId),
-      raftManager = raftManager,
-      time = time,
-      metrics = metrics,
-      brokerMetrics = BrokerServerMetrics(metrics),
-      threadNamePrefix = Some("Broker%02d_".format(config.nodeId)),
-      initialOfflineDirs = Seq(),
-      controllerQuorumVotersFuture = controllerQuorumVotersFuture,
-      fatalFaultHandler = faultHandler,
-      metadataLoadingFaultHandler = faultHandler,
-      metadataPublishingFaultHandler = faultHandler)
-    if (startup) broker.startup()
-    broker
+    val sharedServer = new SharedServer(config,
+      new MetaProperties(clusterId, config.nodeId),
+      Time.SYSTEM,
+      new Metrics(),
+      Option("Broker%02d_".format(config.nodeId)),
+      controllerQuorumVotersFuture,
+      faultHandlerFactory)
+    var broker: BrokerServer = null
+    try {
+      broker = new BrokerServer(sharedServer,
+        initialOfflineDirs = Seq())
+      if (startup) broker.startup()
+      broker
+    } catch {
+      case e: Throwable => {
+        if (broker != null) CoreUtils.swallow(broker.shutdown(), log)
+        CoreUtils.swallow(sharedServer.stopForBroker(), log)
+        throw e
+      }
+    }
   }
 
   override def shutdown(): Unit = {
-    CoreUtils.swallow(raftManager.shutdown(), log)
     CoreUtils.swallow(controllerServer.shutdown(), log)
   }
+}
+
+class QuorumTestHarnessFaultHandlerFactory(
+  val faultHandler: MockFaultHandler
+) extends FaultHandlerFactory {
+  override def build(
+    name: String,
+    fatal: Boolean,
+    action: Runnable
+  ): FaultHandler = faultHandler
 }
 
 @Tag("integration")
@@ -199,7 +208,9 @@ abstract class QuorumTestHarness extends Logging {
     }
   }
 
-  val faultHandler = new MockFaultHandler("quorumTestHarnessFaultHandler")
+  val faultHandlerFactory = new QuorumTestHarnessFaultHandlerFactory(new MockFaultHandler("quorumTestHarnessFaultHandler"))
+
+  val faultHandler = faultHandlerFactory.faultHandler
 
   // Note: according to the junit documentation: "JUnit Jupiter does not guarantee the execution
   // order of multiple @BeforeEach methods that are declared within a single test class or test
@@ -288,7 +299,6 @@ abstract class QuorumTestHarness extends Logging {
     val metadataDir = TestUtils.tempDir()
     val metaProperties = new MetaProperties(Uuid.randomUuid().toString, nodeId)
     formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties)
-    val controllerMetrics = new Metrics()
     props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
@@ -296,34 +306,20 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
     props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
     val config = new KafkaConfig(props)
-    val threadNamePrefix = "Controller_" + testInfo.getDisplayName
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
-    val raftManager = new KafkaRaftManager(
-      metaProperties = metaProperties,
-      config = config,
-      recordSerde = MetadataRecordSerde.INSTANCE,
-      topicPartition = new TopicPartition(KafkaRaftServer.MetadataTopic, 0),
-      topicId = KafkaRaftServer.MetadataTopicId,
-      time = Time.SYSTEM,
-      metrics = controllerMetrics,
-      threadNamePrefixOpt = Option(threadNamePrefix),
-      controllerQuorumVotersFuture = controllerQuorumVotersFuture)
+    val sharedServer = new SharedServer(config,
+      metaProperties,
+      Time.SYSTEM,
+      new Metrics(),
+      Option("Controller_" + testInfo.getDisplayName),
+      controllerQuorumVotersFuture,
+      faultHandlerFactory)
     var controllerServer: ControllerServer = null
     try {
       controllerServer = new ControllerServer(
-        metaProperties = metaProperties,
-        config = config,
-        raftManager = raftManager,
-        time = Time.SYSTEM,
-        metrics = controllerMetrics,
-        controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), Time.SYSTEM),
-        threadNamePrefix = Option(threadNamePrefix),
-        controllerQuorumVotersFuture = controllerQuorumVotersFuture,
-        configSchema = KafkaRaftServer.configSchema,
-        raftApiVersions = raftManager.apiVersions,
-        bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "test harness"),
-        metadataFaultHandler = faultHandler,
-        fatalFaultHandler = faultHandler
+        sharedServer,
+        KafkaRaftServer.configSchema,
+        BootstrapMetadata.fromVersion(metadataVersion, "test harness")
       )
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {
         if (e != null) {
@@ -335,15 +331,14 @@ abstract class QuorumTestHarness extends Logging {
         }
       })
       controllerServer.startup()
-      raftManager.startup()
     } catch {
       case e: Throwable =>
-        CoreUtils.swallow(raftManager.shutdown(), this)
         if (controllerServer != null) CoreUtils.swallow(controllerServer.shutdown(), this)
+        CoreUtils.swallow(sharedServer.stopForController(), this)
         throw e
     }
-    new KRaftQuorumImplementation(raftManager,
-      controllerServer,
+    new KRaftQuorumImplementation(controllerServer,
+      faultHandlerFactory,
       metadataDir,
       controllerQuorumVotersFuture,
       metaProperties.clusterId,
@@ -389,6 +384,7 @@ abstract class QuorumTestHarness extends Logging {
     if (implementation != null) {
       implementation.shutdown()
     }
+    TestUtils.clearYammerMetrics()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
     faultHandler.maybeRethrowFirstException()
