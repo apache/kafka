@@ -20,10 +20,12 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -33,10 +35,13 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Set;
 
 /**
  * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle poll and send operations.
@@ -45,67 +50,100 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final KafkaClient client;
     private final Time time;
     private final Logger log;
+    private final int requestTimeoutMs;
     private boolean wakeup = false;
     private final Queue<UnsentRequest> unsentRequests;
+    private final Set<Node> activeNodes;
+    private final Queue<UnsentRequest> unsentAndUnreadyRequests;
 
     public NetworkClientDelegate(
             final Time time,
+            final ConsumerConfig config,
             final LogContext logContext,
             final KafkaClient client) {
         this.time = time;
         this.client = client;
         this.log = logContext.logger(getClass());
         this.unsentRequests = new ArrayDeque<>();
+        this.unsentAndUnreadyRequests = new ArrayDeque<>();
+        this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        this.activeNodes = new HashSet<>();
     }
 
     public List<ClientResponse> poll(Timer timer, boolean disableWakeup) {
+        final long currentTimeMs = time.milliseconds();
+        // 1. Try to send request in the unsentRequests queue. It is either caused by timeout or network error (node
+        // not available)
+        // 2. poll for the results if there's any.
+        // 3. Check connection status for each node, disconnect ones that are not reachable.
         client.wakeup();
-        if (!disableWakeup) {
-            // trigger wakeups after checking for disconnects so that the callbacks will be ready
-            // to be fired on the next call to poll()
-            maybeTriggerWakeup();
-        }
-
-        trySend();
-        return this.client.poll(timer.timeoutMs(), time.milliseconds());
+        trySend(currentTimeMs);
+        List<ClientResponse> res = this.client.poll(timer.timeoutMs(), currentTimeMs);
+        checkDisconnects();
+        maybeTriggerWakeup(disableWakeup);
+        return res;
     }
 
-    private void trySend() {
-        while (unsentRequests.size() > 0) {
+    /**
+     * Walk through the unsentRequests queue and try to perform a client.send() for each unsent request. If the
+     * request doesn't have an assigned node, we will find the leastLoadedOne.
+     * Here we also register all the nodes to the {@code activeNodes} set, which will then be used to check the
+     * connection.
+     */
+    void trySend(final long currentTimeMs) {
+        while (!unsentRequests.isEmpty()) {
             UnsentRequest unsent = unsentRequests.poll();
+            unsent.timer.update(currentTimeMs);
             if (unsent.timer.isExpired()) {
-                // TODO: expired request should be marked
                 unsent.callback.ifPresent(c -> c.onFailure(new TimeoutException(
                         "Failed to send request after " + unsent.timer.timeoutMs() + " " + "ms.")));
                 continue;
             }
 
-            if (!doSend(unsent)) {
+            if (!doSend(unsent, currentTimeMs)) {
                 log.debug("No broker available to send the request: {}", unsent);
-                unsent.callback.ifPresent(v -> v.onFailure(
-                        new IllegalThreadStateException("No node available in the kafka cluster to send the request")));
+                unsent.callback.ifPresent(v -> v.onFailure(Errors.NETWORK_EXCEPTION.exception(
+                        "No node available in the kafka cluster to send the request")));
             }
+        }
+
+        if (!unsentAndUnreadyRequests.isEmpty()) {
+            // Handle the unready requests in the next event loop
+            unsentRequests.addAll(unsentAndUnreadyRequests);
+            unsentAndUnreadyRequests.clear();
         }
     }
 
-    static boolean isReady(KafkaClient client, Node node, long currentTime) {
-        client.poll(0, currentTime);
-        return client.isReady(node, currentTime);
-    }
-
-    public boolean doSend(UnsentRequest r) {
-        long now = time.milliseconds();
-        Node node = r.node.orElse(client.leastLoadedNode(now));
-        if (node == null) {
+    // Visible for testing
+    boolean doSend(final UnsentRequest r, final long currentTimeMs) {
+        Node node = r.node.orElse(client.leastLoadedNode(currentTimeMs));
+        if (node == null || nodeUnavailable(node)) {
             return false;
         }
         ClientRequest request = makeClientRequest(r, node);
-        // TODO: Sounds like we need to check disconnections for each node and complete the request with
-        //  authentication error
-        if (isReady(client, node, now)) {
-            client.send(request, now);
+        if (client.isReady(node, currentTimeMs)) {
+            activeNodes.add(node);
+            client.send(request, currentTimeMs);
+        } else {
+            // enqueue the request again if the node isn't ready yet. The request will be handled in the next iteration
+            // of the event loop
+            log.debug("Node is not ready, handle the request in the next event loop: node={}, request={}", node, r);
+            unsentAndUnreadyRequests.add(r);
         }
         return true;
+    }
+
+    private void checkDisconnects() {
+        // Check the connection status by all the nodes that are active. Disconnect the disconnected node if it is
+        // unable to be connected.
+        Iterator<Node> iter = activeNodes.iterator();
+        while (iter.hasNext()) {
+            Node node = iter.next();
+            iter.remove();
+            if (client.connectionFailed(node)) {
+                client.disconnect(node.idString());
+            }
+        }
     }
 
     private ClientRequest makeClientRequest(UnsentRequest unsent, Node node) {
@@ -114,12 +152,12 @@ public class NetworkClientDelegate implements AutoCloseable {
                 unsent.abstractBuilder,
                 time.milliseconds(),
                 true,
-                // TODO: Determine if we want the actual request timeout here to be requestTimeoutMs - timeInUnsentQueue
                 (int) unsent.timer.remainingMs(),
                 unsent.callback.orElse(new DefaultRequestFutureCompletionHandler()));
     }
 
-    public void maybeTriggerWakeup() {
+    public void maybeTriggerWakeup(boolean disableWakeup) {
+        if (disableWakeup) return;
         if (this.wakeup) {
             this.wakeup = false;
             throw new WakeupException();
@@ -136,6 +174,8 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public void add(UnsentRequest r) {
+        if (r.timer == null)
+            r.timer = time.timer(requestTimeoutMs);
         unsentRequests.add(r);
     }
 
@@ -149,10 +189,6 @@ public class NetworkClientDelegate implements AutoCloseable {
      */
     public boolean nodeUnavailable(Node node) {
         return client.connectionFailed(node) && client.connectionDelay(node, time.milliseconds()) > 0;
-    }
-
-    public void tryDisconnect(Optional<Node> coordinator) {
-        coordinator.ifPresent(node -> client.disconnect(node.idString()));
     }
 
     public void close() throws IOException {
@@ -176,18 +212,18 @@ public class NetworkClientDelegate implements AutoCloseable {
     public static class UnsentRequest {
         private final Optional<AbstractRequestFutureCompletionHandler> callback;
         private final AbstractRequest.Builder abstractBuilder;
-        private final Optional<Node> node; // empty if random node can be choosen
-        private final Timer timer;
+        private Optional<Node> node; // empty if random node can be choosen
+        private Timer timer;
 
-        public UnsentRequest(final Timer timer,
-                             final AbstractRequest.Builder abstractBuilder,
-                             final AbstractRequestFutureCompletionHandler callback) {
-            this(timer, abstractBuilder, callback, null);
+        public UnsentRequest(final AbstractRequest.Builder abstractBuilder,
+                             final AbstractRequestFutureCompletionHandler callback,
+                             final Timer timer) {
+            this(abstractBuilder, callback, timer, null);
         }
 
-        public UnsentRequest(final Timer timer,
-                             final AbstractRequest.Builder abstractBuilder,
+        public UnsentRequest(final AbstractRequest.Builder abstractBuilder,
                              final AbstractRequestFutureCompletionHandler callback,
+                             final Timer timer,
                              final Node node) {
             Objects.requireNonNull(abstractBuilder);
             this.abstractBuilder = abstractBuilder;
@@ -201,9 +237,9 @@ public class NetworkClientDelegate implements AutoCloseable {
                 final AbstractRequest.Builder<?> requestBuilder,
                 final AbstractRequestFutureCompletionHandler callback) {
             return new UnsentRequest(
-                    timeoutTimer,
                     requestBuilder,
-                    callback);
+                    callback,
+                    timeoutTimer);
         }
 
         @Override
@@ -219,17 +255,27 @@ public class NetworkClientDelegate implements AutoCloseable {
 
     public abstract static class AbstractRequestFutureCompletionHandler implements RequestCompletionHandler {
         private final RequestFuture<ClientResponse> future;
-        private ClientResponse response;
-        private RuntimeException e;
 
         AbstractRequestFutureCompletionHandler() {
             this.future = new RequestFuture<>();
         }
 
-        public void fireCompletion() {
-            if (e != null) {
-                future.raise(e);
-            } else if (response.authenticationException() != null) {
+        abstract public void handleResponse(ClientResponse r, Throwable t);
+
+        public void onFailure(RuntimeException e) {
+            future.raise(e);
+            handleResponse(null, e);
+        }
+
+        @Override
+        public void onComplete(ClientResponse response) {
+            // TODO: pendingCompletion in the orignal implementation: why did we batch it?
+            fireCompletion(response);
+            handleResponse(response, null);
+        }
+
+        private void fireCompletion(ClientResponse response) {
+            if (response.authenticationException() != null) {
                 future.raise(response.authenticationException());
             } else if (response.wasDisconnected()) {
                 future.raise(DisconnectException.INSTANCE);
@@ -238,22 +284,6 @@ public class NetworkClientDelegate implements AutoCloseable {
             } else {
                 future.complete(response);
             }
-        }
-
-        public void onFailure(RuntimeException e) {
-            this.e = e;
-            fireCompletion();
-            handleResponse(response, e);
-        }
-
-        abstract public void handleResponse(ClientResponse r, Throwable t);
-
-        @Override
-        public void onComplete(ClientResponse response) {
-            this.response = response;
-            // TODO: pendingCompletion in the orignal implementation: why did we batch it?
-            fireCompletion();
-            handleResponse(response, null);
         }
     }
 

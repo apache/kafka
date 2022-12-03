@@ -61,6 +61,7 @@ public class DefaultBackgroundThreadTest {
     private ApplicationEventProcessor processor;
     private CoordinatorRequestManager coordinatorManager;
     private ErrorEventHandler errorEventHandler;
+    private int requestTimeoutMs = 500;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -112,7 +113,7 @@ public class DefaultBackgroundThreadTest {
         // purposedly setting a non MAX time to ensure it is returning Long.MAX_VALUE upon success
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
                 10,
-                Collections.singletonList(findCoordinatorUnsentRequest(time.timer(0))));
+                Collections.singletonList(findCoordinatorUnsentRequest(this.time.timer(requestTimeoutMs))));
 
         assertEquals(Long.MAX_VALUE, backgroundThread.handlePollResult(success));
 
@@ -124,12 +125,12 @@ public class DefaultBackgroundThreadTest {
 
     private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(Timer timer) {
         return new NetworkClientDelegate.UnsentRequest(
-                timer,
                 new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
                                 .setKey("foobar")),
-                null);
+                null,
+                timer);
     }
 
     private DefaultBackgroundThread mockBackgroundThread() {
@@ -153,6 +154,6 @@ public class DefaultBackgroundThreadTest {
     private NetworkClientDelegate.PollResult mockPollResult() {
         return new NetworkClientDelegate.PollResult(
                 0,
-                Collections.singletonList(findCoordinatorUnsentRequest(this.time.timer(0))));
+                Collections.singletonList(findCoordinatorUnsentRequest(this.time.timer(requestTimeoutMs))));
     }
 }

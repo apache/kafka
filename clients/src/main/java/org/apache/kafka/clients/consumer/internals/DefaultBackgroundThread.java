@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
@@ -52,7 +51,8 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final ConsumerMetadata metadata;
     private final ConsumerConfig config;
-    private final CoordinatorRequestManager coordinatorManager;
+    // empty if groupId is null
+    private final Optional<CoordinatorRequestManager> coordinatorManager;
     private final ApplicationEventProcessor applicationEventProcessor;
     private final NetworkClientDelegate networkClientDelegate;
     private final ErrorEventHandler errorEventHandler;
@@ -80,7 +80,7 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.config = config;
         this.metadata = metadata;
         this.networkClientDelegate = networkClient;
-        this.coordinatorManager = coordinatorManager;
+        this.coordinatorManager = Optional.ofNullable(coordinatorManager);
         this.errorEventHandler = errorEventHandler;
     }
     public DefaultBackgroundThread(final Time time,
@@ -102,24 +102,28 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.metadata = metadata;
             this.networkClientDelegate = new NetworkClientDelegate(
                     this.time,
+                    this.config,
                     logContext,
                     networkClient);
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
-            this.coordinatorManager = new CoordinatorRequestManager(time,
-                    logContext,
-                    config,
-                    errorEventHandler,
-                    Optional.ofNullable(rebalanceConfig.groupId),
-                    rebalanceConfig.rebalanceTimeoutMs);
+            String groupId = rebalanceConfig.groupId;
+            this.coordinatorManager = groupId == null ?
+                    Optional.empty() :
+                    Optional.of(new CoordinatorRequestManager(
+                            time,
+                            logContext,
+                            config,
+                            errorEventHandler,
+                            groupId,
+                            rebalanceConfig.rebalanceTimeoutMs));
             this.applicationEventProcessor = new ApplicationEventProcessor(
-                    coordinatorManager,
+                    this.coordinatorManager,
                     backgroundEventQueue);
         } catch (final Exception e) {
             close();
             throw new KafkaException("Failed to construct background processor", e.getCause());
         }
-
     }
 
     @Override
@@ -164,8 +168,9 @@ public class DefaultBackgroundThread extends KafkaThread {
 
         // TODO: Add a condition here, like shouldFindCoordinator in the future.  Since we don't always need to find
         //  the coordinator.
-        if (coordinatorUnknown()) {
-            pollWaitTimeMs = Math.min(pollWaitTimeMs, handlePollResult(coordinatorManager.poll(currentTimeMs)));
+        if (coordinatorManager.isPresent()) {
+            pollWaitTimeMs = Math.min(pollWaitTimeMs,
+                    handlePollResult(coordinatorManager.get().poll(currentTimeMs)));
         }
 
         // if there are pending events to process, poll then continue without
@@ -189,24 +194,6 @@ public class DefaultBackgroundThread extends KafkaThread {
         return res.timeMsTillNextPoll;
     }
 
-    /**
-     * Check the coordinator if its connection is still active. Otherwise, mark it unknown and
-     * return false.
-     *
-     * @return true if coordinator is active.
-     */
-    protected boolean coordinatorUnknown() {
-        // If the current coordinator is unavailable, mark it unknown and disconnect it
-        Node coordinator = coordinatorManager.coordinator();
-        if (coordinator != null && networkClientDelegate.nodeUnavailable(coordinator)) {
-            log.info("Requesting disconnect from last known coordinator {}", coordinator);
-            networkClientDelegate.tryDisconnect(
-                    this.coordinatorManager.markCoordinatorUnknown("coordinator unavailable"));
-            return false;
-        }
-        return true;
-    }
-
     private long timeToNextHeartbeatMs() {
         // TODO: implemented when heartbeat is added to the impl
         return 100;
@@ -224,12 +211,11 @@ public class DefaultBackgroundThread extends KafkaThread {
      * ApplicationEvent are consumed here.
      *
      * @param event an {@link ApplicationEvent}
-     * @return true when successfully consumed the event.
      */
-    private boolean consumeApplicationEvent(final ApplicationEvent event) {
+    private void consumeApplicationEvent(final ApplicationEvent event) {
         log.debug("try consuming event: {}", Optional.ofNullable(event));
         Objects.requireNonNull(event);
-        return applicationEventProcessor.process(event);
+        applicationEventProcessor.process(event);
     }
 
     public boolean isRunning() {

@@ -32,7 +32,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
-import java.util.Optional;
 import java.util.Properties;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -40,6 +39,9 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -48,7 +50,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-public class CoordinatorManagerTest {
+public class CoordinatorRequestManagerTest {
     private MockTime time;
     private MockClient client;
     private SubscriptionState subscriptions;
@@ -57,7 +59,7 @@ public class CoordinatorManagerTest {
     private ErrorEventHandler errorEventHandler;
     private Node node;
     private final Properties properties = new Properties();
-    private Optional<String> groupId;
+    private String groupId;
     private int rebalanceTimeoutMs;
     private int requestTimeoutMs;
     private CoordinatorRequestManager.CoordinatorRequestState coordinatorRequestState;
@@ -74,7 +76,7 @@ public class CoordinatorManagerTest {
         this.node = metadata.fetch().nodes().get(0);
         this.errorEventHandler = mock(ErrorEventHandler.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, "100");
-        this.groupId = Optional.of("");
+        this.groupId = "group-1";
         this.rebalanceTimeoutMs = 60 * 1000;
         this.requestTimeoutMs = 500;
         this.coordinatorRequestState = mock(CoordinatorRequestManager.CoordinatorRequestState.class);
@@ -98,14 +100,19 @@ public class CoordinatorManagerTest {
     @Test
     public void testOnResponse() {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
-        FindCoordinatorResponse resp = FindCoordinatorResponse.prepareResponse(Errors.NONE, "key", node);
-        coordinatorManager.onResponse(resp);
+        FindCoordinatorResponse resp = FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node);
+        coordinatorManager.onResponse(resp, null);
         verify(errorEventHandler, never()).handle(any());
+        assertNotNull(coordinatorManager.coordinator());
 
         FindCoordinatorResponse errResp = FindCoordinatorResponse.prepareResponse(Errors.COORDINATOR_NOT_AVAILABLE,
-                "key-1", node);
-        coordinatorManager.onResponse(errResp);
+                groupId, node);
+        coordinatorManager.onResponse(errResp, null);
         verify(errorEventHandler, times(1)).handle(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+        assertNull(coordinatorManager.coordinator());
+
+        coordinatorManager.onResponse(null, new RuntimeException("some error"));
+        assertNull(coordinatorManager.coordinator());
     }
 
     @Test
@@ -146,7 +153,7 @@ public class CoordinatorManagerTest {
         assertEquals(1, res.unsentRequests.size());
         coordinatorManager.onResponse(
                 FindCoordinatorResponse.prepareResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, "key",
-                this.node));
+                this.node), null);
         // Need to wait for 100ms until the next send
         res = coordinatorManager.poll(time.milliseconds());
         assertTrue(res.unsentRequests.isEmpty());
@@ -159,7 +166,7 @@ public class CoordinatorManagerTest {
         assertEquals(1, res.unsentRequests.size());
         coordinatorManager.onResponse(
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "key",
-                        this.node));
+                        this.node), null);
     }
 
     @Test
@@ -170,6 +177,12 @@ public class CoordinatorManagerTest {
         } catch (Exception e) {
             assertEquals("MockRequestFutureCompletionHandlerBase should throw an exception", e.getMessage());
         }
+    }
+
+    @Test
+    public void testNullGroupIdShouldThrow() {
+        this.groupId = null;
+        assertThrows(RuntimeException.class, this::setupCoordinatorManager);
     }
 
     private static class MockRequestFutureCompletionHandlerBase extends NetworkClientDelegate.AbstractRequestFutureCompletionHandler {
