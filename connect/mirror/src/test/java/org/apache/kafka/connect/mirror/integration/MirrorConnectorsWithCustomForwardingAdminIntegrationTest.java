@@ -33,10 +33,7 @@ import org.apache.kafka.connect.mirror.MirrorMakerConfig;
 import org.apache.kafka.connect.mirror.clients.admin.FakeForwardingAdminWithLocalMetadata;
 import org.apache.kafka.connect.mirror.clients.admin.FakeLocalMetadataStore;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -187,6 +184,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         super.shutdownClusters();
     }
 
+    @Disabled
     @Test
     public void testReplicationIsCreatingTopicsUsingProvidedForwardingAdmin() throws Exception {
         produceMessages(primary, "test-topic-1");
