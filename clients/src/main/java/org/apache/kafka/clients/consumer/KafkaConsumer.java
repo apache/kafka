@@ -31,6 +31,7 @@ import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.OffsetsFinder;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -575,6 +576,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
     private final Fetcher<K, V> fetcher;
+    private final OffsetsFinder offsetsFinder;
     private final ConsumerInterceptors<K, V> interceptors;
     private final IsolationLevel isolationLevel;
 
@@ -809,6 +811,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metrics,
                     metricsRegistry,
                     this.time,
+                    isolationLevel,
+                    apiVersions);
+            this.offsetsFinder = new OffsetsFinder(
+                    logContext,
+                    this.client,
+                    this.metadata,
+                    this.subscriptions,
+                    this.time,
                     this.retryBackoffMs,
                     this.requestTimeoutMs,
                     isolationLevel,
@@ -837,6 +847,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   Deserializer<K> keyDeserializer,
                   Deserializer<V> valueDeserializer,
                   Fetcher<K, V> fetcher,
+                  OffsetsFinder offsetsFinder,
                   ConsumerInterceptors<K, V> interceptors,
                   Time time,
                   ConsumerNetworkClient client,
@@ -854,6 +865,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
         this.fetcher = fetcher;
+        this.offsetsFinder = offsetsFinder;
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
@@ -1960,7 +1972,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 return parts;
 
             Timer timer = time.timer(timeout);
-            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
+            Map<String, List<PartitionInfo>> topicMetadata = offsetsFinder.getTopicMetadata(
                     new MetadataRequest.Builder(Collections.singletonList(topic), metadata.allowAutoTopicCreation()), timer);
             return topicMetadata.getOrDefault(topic, Collections.emptyList());
         } finally {
@@ -2006,7 +2018,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<String, List<PartitionInfo>> listTopics(Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.getAllTopicMetadata(time.timer(timeout));
+            return offsetsFinder.getAllTopicMetadata(time.timer(timeout));
         } finally {
             release();
         }
@@ -2129,7 +2141,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
                             entry.getValue() + ". The target time cannot be negative.");
             }
-            return fetcher.offsetsForTimes(timestampsToSearch, time.timer(timeout));
+            return offsetsFinder.offsetsForTimes(timestampsToSearch, time.timer(timeout));
         } finally {
             release();
         }
@@ -2174,7 +2186,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.beginningOffsets(partitions, time.timer(timeout));
+            return offsetsFinder.beginningOffsets(partitions, time.timer(timeout));
         } finally {
             release();
         }
@@ -2229,7 +2241,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.endOffsets(partitions, time.timer(timeout));
+            return offsetsFinder.endOffsets(partitions, time.timer(timeout));
         } finally {
             release();
         }
@@ -2264,7 +2276,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     !subscriptions.partitionEndOffsetRequested(topicPartition)) {
                     log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
                     subscriptions.requestPartitionEndOffset(topicPartition);
-                    fetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
+                    offsetsFinder.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
                 }
 
                 return OptionalLong.empty();
@@ -2442,7 +2454,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     private boolean updateFetchPositions(final Timer timer) {
         // If any partitions have been truncated due to a leader change, we need to validate the offsets
-        fetcher.validateOffsetsIfNeeded();
+        offsetsFinder.validateOffsetsIfNeeded();
 
         cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
         if (cachedSubscriptionHasAllFetchPositions) return true;
@@ -2461,7 +2473,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         // Finally send an asynchronous request to lookup and update the positions of any
         // partitions which are awaiting reset.
-        fetcher.resetOffsetsIfNeeded();
+        offsetsFinder.resetOffsetsIfNeeded();
 
         return true;
     }

@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.OffsetsFinder;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -2633,6 +2634,15 @@ public class KafkaConsumerTest {
                 metrics,
                 metricsRegistry.fetcherMetrics,
                 time,
+                IsolationLevel.READ_UNCOMMITTED,
+                new ApiVersions());
+
+        OffsetsFinder offsetsFinder = new OffsetsFinder(
+                loggerFactory,
+                consumerClient,
+                metadata,
+                subscription,
+                time,
                 retryBackoffMs,
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED,
@@ -2645,6 +2655,7 @@ public class KafkaConsumerTest {
                 keyDeserializer,
                 deserializer,
                 fetcher,
+                offsetsFinder,
                 interceptors,
                 time,
                 consumerClient,
