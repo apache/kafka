@@ -14,14 +14,15 @@
 // limitations under the License.
 
 {
-  "apiKey": 6,
-  "type": "response",
-  "name": "UpdateMetadataResponse",
-  // Versions 1, 2, 3, 4, and 5 are the same as version 0
-  "validVersions": "0-8",
-  "flexibleVersions": "6+",
+  "apiKey": 21,
+  "type": "metadata",
+  "name": "ZkMigrationStateRecord",
+  // Version 0 adds ZkMigrationState which is used by the KRaft controller to mark the beginning and end
+  // of the ZK to KRaft migration. Possible values are 1 (PreMigration), 2 (Migration), 3 (PostMigration).
+  "validVersions": "0",
+  "flexibleVersions": "0+",
   "fields": [
-      { "name": "ErrorCode", "type": "int16", "versions": "0+",
-        "about": "The error code, or 0 if there was no error." }
+    { "name": "ZkMigrationState", "type": "int8", "versions": "0+",
+      "about": "One of the possible migration states." }
   ]
 }
