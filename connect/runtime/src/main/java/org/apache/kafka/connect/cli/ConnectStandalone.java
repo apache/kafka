@@ -21,40 +21,50 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.Connect;
-import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
-import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.connect.runtime.WorkerInfo;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.connect.storage.FileOffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
-import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 
 /**
  * <p>
- * Command line utility that runs Kafka Connect as a standalone process. In this mode, work is not
- * distributed. Instead, all the normal Connect machinery works within a single process. This is
- * useful for ad hoc, small, or experimental jobs.
- * </p>
- * <p>
- * By default, no job configs or offset data is persistent. You can make jobs persistent and
- * fault tolerant by overriding the settings to use file storage for both.
+ * Command line utility that runs Kafka Connect as a standalone process. In this mode, work (connectors and tasks) is not
+ * distributed. Instead, all the normal Connect machinery works within a single process. This is useful for for development
+ * and testing Kafka Connect on a local machine.
  * </p>
  */
-public class ConnectStandalone {
+public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
     private static final Logger log = LoggerFactory.getLogger(ConnectStandalone.class);
+
+    @Override
+    protected Herder createHerder(StandaloneConfig config, String workerId, Plugins plugins,
+                                  ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                                  RestServer restServer, RestClient restClient) {
+
+        OffsetBackingStore offsetBackingStore = new FileOffsetBackingStore();
+        offsetBackingStore.configure(config);
+
+        Worker worker = new Worker(workerId, Time.SYSTEM, plugins, config, offsetBackingStore,
+                connectorClientConfigOverridePolicy);
+
+        return new StandaloneHerder(worker, config.kafkaClusterId(), connectorClientConfigOverridePolicy);
+    }
+
+    @Override
+    protected StandaloneConfig createConfig(Map<String, String> workerProps) {
+        return new StandaloneConfig(workerProps);
+    }
 
     public static void main(String[] args) {
 
@@ -64,64 +74,11 @@ public class ConnectStandalone {
         }
 
         try {
-            Time time = Time.SYSTEM;
-            log.info("Kafka Connect standalone worker initializing ...");
-            long initStart = time.hiResClockMs();
-            WorkerInfo initInfo = new WorkerInfo();
-            initInfo.logAll();
-
             String workerPropsFile = args[0];
             Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
                     Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.emptyMap();
-
-            log.info("Scanning for plugin classes. This might take a moment ...");
-            Plugins plugins = new Plugins(workerProps);
-            plugins.compareAndSwapWithDelegatingLoader();
-            StandaloneConfig config = new StandaloneConfig(workerProps);
-
-            String kafkaClusterId = config.kafkaClusterId();
-            log.debug("Kafka cluster ID: {}", kafkaClusterId);
-
-            // Do not initialize a RestClient because the ConnectorsResource will not use it in standalone mode.
-            RestServer rest = new RestServer(config, null);
-            rest.initializeServer();
-
-            URI advertisedUrl = rest.advertisedUrl();
-            String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
-
-            OffsetBackingStore offsetBackingStore = new FileOffsetBackingStore();
-            offsetBackingStore.configure(config);
-
-            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy = plugins.newPlugin(
-                config.getString(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG),
-                config, ConnectorClientConfigOverridePolicy.class);
-            Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore,
-                                       connectorClientConfigOverridePolicy);
-
-            Herder herder = new StandaloneHerder(worker, kafkaClusterId, connectorClientConfigOverridePolicy);
-            final Connect connect = new Connect(herder, rest);
-            log.info("Kafka Connect standalone worker initialization took {}ms", time.hiResClockMs() - initStart);
-
-            try {
-                connect.start();
-                for (final String connectorPropsFile : Arrays.copyOfRange(args, 1, args.length)) {
-                    Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
-                    FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>((error, info) -> {
-                        if (error != null)
-                            log.error("Failed to create job for {}", connectorPropsFile);
-                        else
-                            log.info("Created connector {}", info.result().name());
-                    });
-                    herder.putConnectorConfig(
-                            connectorProps.get(ConnectorConfig.NAME_CONFIG),
-                            connectorProps, false, cb);
-                    cb.get();
-                }
-            } catch (Throwable t) {
-                log.error("Stopping after connector error", t);
-                connect.stop();
-                Exit.exit(3);
-            }
+            ConnectStandalone connectStandalone = new ConnectStandalone();
+            Connect connect = connectStandalone.startConnect(workerProps, Arrays.copyOfRange(args, 1, args.length));
 
             // Shutdown will be triggered by Ctrl-C or via HTTP shutdown request
             connect.awaitStop();
