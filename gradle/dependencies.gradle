@@ -28,7 +28,7 @@ ext {
 
 // Add Scala version
 def defaultScala212Version = '2.12.15'
-def defaultScala213Version = '2.13.8'
+def defaultScala213Version = '2.13.10'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -106,7 +106,7 @@ versions += [
   mavenArtifact: "3.8.4",
   metrics: "2.2.0",
   mockito: "4.6.1",
-  netty: "4.1.78.Final",
+  netty: "4.1.79.Final",
   powermock: "2.0.9",
   reflections: "0.9.12",
   reload4j: "1.2.19",
@@ -123,7 +123,7 @@ versions += [
   spotbugs: "4.7.3",
   swaggerAnnotations: "2.2.0",
   swaggerJaxrs2: "2.2.0",
-  zinc: "1.6.1",
+  zinc: "1.7.2",
   zookeeper: "3.6.3",
   zstd: "1.5.2-1"
 ]
@@ -141,6 +141,7 @@ libs += [
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
+  commonsCodec: "commons-codec:commons-codec:$versions.commonsCodec",
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
@@ -213,5 +214,5 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
 ]
