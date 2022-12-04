@@ -111,6 +111,8 @@ public class KStreamRepartitionIntegrationTest {
     private String outputTopic;
     private String applicationId;
 
+    private String safeTestName;
+
     private Properties streamsConfiguration;
     private List<KafkaStreams> kafkaStreamsInstances;
 
@@ -128,26 +130,12 @@ public class KStreamRepartitionIntegrationTest {
     @Rule
     public TestName testName = new TestName();
 
-    static class BroadcastingPartitioner implements StreamPartitioner<Integer, String> {
-
-        @Override
-        @Deprecated
-        public Integer partition(final String topic, final Integer key, final String value, final int numPartitions) {
-            return null;
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final int numPartitions) {
-            return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
-        }
-    }
-
     @Before
     public void before() throws InterruptedException {
         streamsConfiguration = new Properties();
         kafkaStreamsInstances = new ArrayList<>();
 
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        safeTestName = safeUniqueTestName(getClass(), testName);
 
         topicB = "topic-b-" + safeTestName;
         inputTopic = "input-topic-" + safeTestName;
@@ -313,35 +301,71 @@ public class KStreamRepartitionIntegrationTest {
 
     @Test
     public void shouldRepartitionToMultiplePartitions() throws Exception {
-        final String repartitionName = "partitioner-test";
+        final String repartitionName = "broadcasting-partitioner-test";
         final long timestamp = System.currentTimeMillis();
         final AtomicInteger partitionerInvocation = new AtomicInteger(0);
 
-        final List<KeyValue<Integer, String>> expectedRecords = Arrays.asList(
-                new KeyValue<>(1, "A"),
-                new KeyValue<>(2, "B")
+        // This test needs to write to an output topic with 4 partitions. Hence, creating a new one
+        final String broadcastingOutputTopic = "broadcast-output-topic-" + safeTestName;
+        CLUSTER.createTopic(broadcastingOutputTopic, 4, 1);
+
+        final List<KeyValue<Integer, String>> expectedRecordsOnRepartition = Arrays.asList(
+            new KeyValue<>(1, "A"),
+            new KeyValue<>(1, "A"),
+            new KeyValue<>(1, "A"),
+            new KeyValue<>(1, "A"),
+            new KeyValue<>(2, "B"),
+            new KeyValue<>(2, "B"),
+            new KeyValue<>(2, "B"),
+            new KeyValue<>(2, "B")
         );
+
+        final List<KeyValue<Integer, String>> expectedRecords = expectedRecordsOnRepartition.subList(3, 5);
+
+        class BroadcastingPartitioner implements StreamPartitioner<Integer, String> {
+            @Override
+            @Deprecated
+            public Integer partition(final String topic, final Integer key, final String value, final int numPartitions) {
+                return null;
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final int numPartitions) {
+                partitionerInvocation.incrementAndGet();
+                return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
+            }
+        }
 
         sendEvents(timestamp, expectedRecords);
 
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Repartitioned<Integer, String> repartitioned = Repartitioned
-                .<Integer, String>as(repartitionName)
-                .withStreamPartitioner(new BroadcastingPartitioner());
+            .<Integer, String>as(repartitionName)
+            .withStreamPartitioner(new BroadcastingPartitioner());
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-                .repartition(repartitioned)
-                .to(outputTopic);
+            .repartition(repartitioned)
+            .to(broadcastingOutputTopic);
 
         startStreams(builder);
 
         final String topic = toRepartitionTopicName(repartitionName);
 
+        // Both records should be there on all 4 partitions of repartition and output topic
         validateReceivedMessages(
-                new IntegerDeserializer(),
-                new StringDeserializer(),
-                expectedRecords
+            new IntegerDeserializer(),
+            new StringDeserializer(),
+            expectedRecordsOnRepartition,
+            topic
+        );
+
+
+        validateReceivedMessages(
+            new IntegerDeserializer(),
+            new StringDeserializer(),
+            expectedRecordsOnRepartition,
+            broadcastingOutputTopic
         );
 
         assertTrue(topicExists(topic));
@@ -855,24 +879,33 @@ public class KStreamRepartitionIntegrationTest {
                                                  final Deserializer<V> valueSerializer,
                                                  final List<KeyValue<K, V>> expectedRecords) throws Exception {
 
+        validateReceivedMessages(keySerializer, valueSerializer, expectedRecords, outputTopic);
+    }
+
+    private <K, V> void validateReceivedMessages(final Deserializer<K> keySerializer,
+                                                 final Deserializer<V> valueSerializer,
+                                                 final List<KeyValue<K, V>> expectedRecords,
+                                                 final String outputTopic) throws Exception {
+
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(
-            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-            keySerializer.getClass().getName()
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                keySerializer.getClass().getName()
         );
         consumerProperties.setProperty(
-            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-            valueSerializer.getClass().getName()
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                valueSerializer.getClass().getName()
         );
 
         IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
-            consumerProperties,
-            outputTopic,
-            expectedRecords
+                consumerProperties,
+                outputTopic,
+                expectedRecords
         );
     }
+
 }

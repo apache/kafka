@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.*;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStoreQueryParameters;
+import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -67,10 +68,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.Set;
-import java.util.HashSet;
 import java.util.Collections;
 
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStore;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
@@ -121,23 +122,23 @@ public class StoreQueryIntegrationTest {
         cluster.stop();
     }
 
-    static class MultiPartitioner implements StreamPartitioner<Integer, Object> {
-
-        @Override
-        @Deprecated
-        public Integer partition(final String topic, final Integer key, final Object value, final int numPartitions) {
-            return null;
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final Integer key, final Object value, final int numPartitions) {
-            return Optional.of(new HashSet<>(Arrays.asList(0, 1, 2)));
-        }
-    }
-
     @Test
-    public void shouldFailWithIllegalArgumentExceptionWhenIQPartitionerReturnsMultiplePartitions() throws Exception {
-        final int batch1NumMessages = 100;
+    public void shouldReturnAllPartitionsWhenRecordIsBroadcasted() throws Exception {
+
+        class BroadcastingPartitioner implements StreamPartitioner<Integer, String> {
+            @Override
+            @Deprecated
+            public Integer partition(final String topic, final Integer key, final String value, final int numPartitions) {
+                return null;
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final int numPartitions) {
+                return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
+            }
+        }
+
+        final int batch1NumMessages = 1;
         final int key = 1;
         final Semaphore semaphore = new Semaphore(0);
 
@@ -147,11 +148,23 @@ public class StoreQueryIntegrationTest {
         final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration());
 
         startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams1), Duration.ofSeconds(60));
-        produceValueRange(key, 0, batch1NumMessages);
+
+        final Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
+
+        final List<KeyValueTimestamp<Integer, Integer>> records = Collections.singletonList(new KeyValueTimestamp<>(key, 0, mockTime.milliseconds()));
+
+        // Send the record to both partitions of INPUT_TOPIC_NAME.
+        IntegrationTestUtils.produceSynchronously(producerProps, false, INPUT_TOPIC_NAME, Optional.of(0), records);
+        IntegrationTestUtils.produceSynchronously(producerProps, false, INPUT_TOPIC_NAME, Optional.of(1), records);
 
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
-        assertThrows(IllegalArgumentException.class, () -> kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new MultiPartitioner()));
+        final KeyQueryMetadata keyQueryMetadataFetched = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new BroadcastingPartitioner());
+        assertThat(keyQueryMetadataFetched.activeHost(), is(new HostInfo("localhost", 1)));
+        assertThat(keyQueryMetadataFetched.partitions(), is(mkSet(0, 1)));
     }
 
     @Test

@@ -132,66 +132,6 @@ public class RecordCollectorTest {
     private final StreamPartitioner<String, Object> streamPartitioner =
         (topic, key, value, numPartitions) -> Integer.parseInt(key) % numPartitions;
 
-    static class EvenPartitioner implements StreamPartitioner<String, Object> {
-
-        @Override
-        @Deprecated
-        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
-            return null;
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
-            final Set<Integer> partitions = new HashSet<>();
-            for (int i = 0; i < numPartitions; i += 2) {
-                partitions.add(i);
-            }
-            return Optional.of(partitions);
-        }
-    }
-
-    static class BroadcastingPartitioner implements StreamPartitioner<String, Object> {
-
-        @Override
-        @Deprecated
-        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
-            return null;
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
-            return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
-        }
-    }
-
-    static class DroppingPartitioner implements StreamPartitioner<String, Object> {
-
-        @Override
-        @Deprecated
-        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
-            return null;
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
-            return Optional.of(Collections.emptySet());
-        }
-    }
-
-    static class DefaultPartitioner implements StreamPartitioner<String, Object> {
-
-        @Override
-        @Deprecated
-        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
-            return null;
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
-            return Optional.empty();
-        }
-    }
-
     private MockProducer<byte[], byte[]> mockProducer;
     private StreamsProducer streamsProducer;
     private ProcessorTopology topology;
@@ -358,6 +298,23 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldSendOnlyToEvenPartitions() {
+        class EvenPartitioner implements StreamPartitioner<String, Object> {
+
+            @Override
+            @Deprecated
+            public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
+                return null;
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                final Set<Integer> partitions = new HashSet<>();
+                for (int i = 0; i < numPartitions; i += 2) {
+                    partitions.add(i);
+                }
+                return Optional.of(partitions);
+            }
+        }
 
         final EvenPartitioner evenPartitioner = new EvenPartitioner();
 
@@ -387,15 +344,15 @@ public class RecordCollectorTest {
 
         final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
-        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
-        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
-        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
-        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
-        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
-        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
-        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
-        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, evenPartitioner);
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
@@ -411,6 +368,20 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldBroadcastToAllPartitions() {
+
+        class BroadcastingPartitioner implements StreamPartitioner<String, Object> {
+
+            @Override
+            @Deprecated
+            public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
+                return null;
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
+            }
+        }
 
         final BroadcastingPartitioner broadcastingPartitioner = new BroadcastingPartitioner();
 
@@ -440,15 +411,15 @@ public class RecordCollectorTest {
 
         final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
-        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
-        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
-        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
-        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
-        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
-        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
-        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
-        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, broadcastingPartitioner);
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
@@ -464,6 +435,20 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldDropAllRecords() {
+
+        class DroppingPartitioner implements StreamPartitioner<String, Object> {
+
+            @Override
+            @Deprecated
+            public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
+                return null;
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                return Optional.of(Collections.emptySet());
+            }
+        }
 
         final DroppingPartitioner droppingPartitioner = new DroppingPartitioner();
 
@@ -506,15 +491,15 @@ public class RecordCollectorTest {
 
         final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
-        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
-        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
-        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
-        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
-        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
-        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
-        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
-        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
         assertTrue(offsets.isEmpty());
@@ -529,6 +514,20 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldUseDefaultPartitionerViaPartitions() {
+
+        class DefaultPartitioner implements StreamPartitioner<String, Object> {
+
+            @Override
+            @Deprecated
+            public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
+                return null;
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                return Optional.empty();
+            }
+        }
 
         final DefaultPartitioner defaultPartitioner = new DefaultPartitioner();
 
@@ -560,15 +559,15 @@ public class RecordCollectorTest {
 
         final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, defaultPartitioner);
-        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, null, defaultPartitioner);
-        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, null, defaultPartitioner);
-        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, null, defaultPartitioner);
-        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, null, defaultPartitioner);
-        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, null, defaultPartitioner);
-        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, null, defaultPartitioner);
-        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, null, defaultPartitioner);
-        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, null, defaultPartitioner);
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, defaultPartitioner);
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
@@ -613,15 +612,65 @@ public class RecordCollectorTest {
 
         final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        // with mock producer without specific partition, we would use default producer partitioner with murmur hash
+        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(9, mockProducer.history().size());
+    }
+
+    @Test
+    public void shouldUseDefaultPartitionerAsStreamPartitionerIsNull() {
+
+        final SinkNode<?, ?> sinkNode = new SinkNode<>(
+                sinkNodeName,
+                new StaticTopicNameExtractor<>(topic),
+                stringSerializer,
+                byteArraySerializer,
+                streamPartitioner);
+        topology = new ProcessorTopology(
+                emptyList(),
+                emptyMap(),
+                singletonMap(topic, sinkNode),
+                emptyList(),
+                emptyList(),
+                emptyMap(),
+                emptySet()
+        );
+        collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+        );
+
+        final String topic = "topic";
+
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, null);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, null);
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 

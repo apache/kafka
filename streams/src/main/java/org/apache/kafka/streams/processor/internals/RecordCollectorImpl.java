@@ -132,7 +132,6 @@ public class RecordCollectorImpl implements RecordCollector {
                             final String processorNodeId,
                             final InternalProcessorContext<Void, Void> context,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
-        final Integer partition;
 
         if (partitioner != null) {
             final List<PartitionInfo> partitions;
@@ -228,6 +227,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
             if (exception == null) {
                 final TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
+                log.info("Produced key:{}, value:{} successfully to tp:{}", key, value, tp);
                 if (metadata.offset() >= 0L) {
                     offsets.put(tp, metadata.offset());
                 } else {
