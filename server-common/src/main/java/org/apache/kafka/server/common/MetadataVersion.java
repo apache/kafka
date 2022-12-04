@@ -168,7 +168,7 @@ public enum MetadataVersion {
     IBP_3_4_IV0(8, "3.4", "IV0", true),
 
     // Support for tiered storage (KIP-405)
-    IBP_3_4_IV1(9, "3.4", "IV1");
+    IBP_3_4_IV1(9, "3.4", "IV1", true);
 
     // NOTE: update the default version in @ClusterTest annotation to point to the latest version
     public static final String FEATURE_NAME = "metadata.version";
