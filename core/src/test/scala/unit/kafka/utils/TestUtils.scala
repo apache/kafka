@@ -179,7 +179,7 @@ object TestUtils extends Logging {
   }
 
   def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], startup: Boolean): KafkaServer = {
-    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding = config.enableApiForwarding)
+    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding = config.enableZkApiForwarding)
     if (startup) server.startup()
     server
   }
