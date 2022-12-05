@@ -87,7 +87,7 @@ public class CoordinatorRequestManager implements RequestManager {
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
             NetworkClientDelegate.UnsentRequest request = makeFindCoordinatorRequest(currentTimeMs);
-            return new NetworkClientDelegate.PollResult(-1, Collections.singletonList(request));
+            return new NetworkClientDelegate.PollResult(0, Collections.singletonList(request));
         }
 
         return new NetworkClientDelegate.PollResult(
