@@ -74,6 +74,7 @@ import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
+import org.apache.kafka.server.util.CompletableFutureUtils
 
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
@@ -81,7 +82,6 @@ import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
-
 import scala.annotation.nowarn
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
@@ -1585,7 +1585,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       })
     }
 
-    val futures = mutable.ArrayBuffer.empty[CompletableFuture[DescribeGroupsResponseData.DescribedGroup]]
+    val futures = new mutable.ArrayBuffer[CompletableFuture[DescribeGroupsResponseData.DescribedGroup]](
+      describeRequest.data.groups.size
+    )
     describeRequest.data.groups.forEach { groupId =>
       if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupId)) {
         futures += CompletableFuture.completedFuture(DescribeGroupsResponse.forError(
@@ -1598,10 +1600,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           groupId
         ).handle[DescribeGroupsResponseData.DescribedGroup] { (response, exception) =>
           if (exception != null) {
-            DescribeGroupsResponse.forError(
-              groupId,
-              Errors.forException(exception)
-            )
+            DescribeGroupsResponse.forError(groupId, Errors.forException(exception))
           } else {
             if (request.header.apiVersion >= 3 && response.errorCode == Errors.NONE.code && includeAuthorizedOperations) {
               response.setAuthorizedOperations(authHelper.authorizedOperations(
@@ -1615,15 +1614,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    CompletableFuture.allOf(futures.toArray: _*).handle[Unit] { (_, exception) =>
+    CompletableFutureUtils.allAsList(futures.asJava).handle[Unit] { (results, exception) =>
       if (exception != null) {
-        sendResponse(describeRequest.getErrorResponse(exception))
+        // Have to unwrap the CompletionException which allAsList() introduced.
+        sendResponse(describeRequest.getErrorResponse(exception.getCause))
       } else {
-        val describeGroupsResponseData = new DescribeGroupsResponseData()
-        futures.foreach { future =>
-          describeGroupsResponseData.groups.add(future.get())
-        }
-        sendResponse(new DescribeGroupsResponse(describeGroupsResponseData))
+        sendResponse(new DescribeGroupsResponse(new DescribeGroupsResponseData().setGroups(results)))
       }
     }
   }
