@@ -18,7 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import java.util.Map.Entry;
 
-import org.apache.kafka.clients.admin.ForwardingAdmin;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
@@ -80,8 +80,8 @@ public class MirrorSourceConnector extends SourceConnector {
     private List<TopicPartition> knownTargetTopicPartitions = Collections.emptyList();
     private ReplicationPolicy replicationPolicy;
     private int replicationFactor;
-    private ForwardingAdmin sourceAdminClient;
-    private ForwardingAdmin targetAdminClient;
+    private Admin sourceAdminClient;
+    private Admin targetAdminClient;
 
     public MirrorSourceConnector() {
         // nop
@@ -393,7 +393,7 @@ public class MirrorSourceConnector extends SourceConnector {
         }));
     }
 
-    private Set<String> listTopics(ForwardingAdmin adminClient)
+    private Set<String> listTopics(Admin adminClient)
             throws InterruptedException, ExecutionException {
         return adminClient.listTopics().names().get();
     }
@@ -403,7 +403,7 @@ public class MirrorSourceConnector extends SourceConnector {
         return sourceAdminClient.describeAcls(ANY_TOPIC_ACL).values().get();
     }
 
-    private static Collection<TopicDescription> describeTopics(ForwardingAdmin adminClient, Collection<String> topics)
+    private static Collection<TopicDescription> describeTopics(Admin adminClient, Collection<String> topics)
             throws InterruptedException, ExecutionException {
         return adminClient.describeTopics(topics).allTopicNames().get().values();
     }
