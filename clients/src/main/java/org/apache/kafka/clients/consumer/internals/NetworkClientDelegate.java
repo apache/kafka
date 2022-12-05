@@ -37,6 +37,7 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -54,7 +55,6 @@ public class NetworkClientDelegate implements AutoCloseable {
     private boolean wakeup = false;
     private final Queue<UnsentRequest> unsentRequests;
     private final Set<Node> activeNodes;
-    private final Queue<UnsentRequest> unsentAndUnreadyRequests;
 
     public NetworkClientDelegate(
             final Time time,
@@ -65,7 +65,6 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.client = client;
         this.log = logContext.logger(getClass());
         this.unsentRequests = new ArrayDeque<>();
-        this.unsentAndUnreadyRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.activeNodes = new HashSet<>();
     }
@@ -91,6 +90,7 @@ public class NetworkClientDelegate implements AutoCloseable {
      * connection.
      */
     void trySend(final long currentTimeMs) {
+        Queue<UnsentRequest> unsentAndUnreadyRequests = new LinkedList<>();
         while (!unsentRequests.isEmpty()) {
             UnsentRequest unsent = unsentRequests.poll();
             unsent.timer.update(currentTimeMs);
@@ -100,7 +100,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                 continue;
             }
 
-            if (!doSend(unsent, currentTimeMs)) {
+            if (!doSend(unsent, currentTimeMs, unsentAndUnreadyRequests)) {
                 log.debug("No broker available to send the request: {}", unsent);
                 unsent.callback.ifPresent(v -> v.onFailure(Errors.NETWORK_EXCEPTION.exception(
                         "No node available in the kafka cluster to send the request")));
@@ -110,12 +110,13 @@ public class NetworkClientDelegate implements AutoCloseable {
         if (!unsentAndUnreadyRequests.isEmpty()) {
             // Handle the unready requests in the next event loop
             unsentRequests.addAll(unsentAndUnreadyRequests);
-            unsentAndUnreadyRequests.clear();
         }
     }
 
     // Visible for testing
-    boolean doSend(final UnsentRequest r, final long currentTimeMs) {
+    boolean doSend(final UnsentRequest r,
+                   final long currentTimeMs,
+                   final Queue<UnsentRequest> unsentAndUnreadyRequests) {
         Node node = r.node.orElse(client.leastLoadedNode(currentTimeMs));
         if (node == null || nodeUnavailable(node)) {
             return false;

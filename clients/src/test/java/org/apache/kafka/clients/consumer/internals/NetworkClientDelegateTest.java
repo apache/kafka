@@ -28,8 +28,10 @@ import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Queue;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
@@ -72,15 +74,17 @@ public class NetworkClientDelegateTest {
     public void testDoSendFindCoordinatorRequest() {
         long timeNowMs = time.milliseconds();
         NetworkClientDelegate ncd = mockNetworkClientDelegate();
+        Queue<NetworkClientDelegate.UnsentRequest> buffer = new LinkedList<>();
         NetworkClientDelegate.DefaultRequestFutureCompletionHandler callback = mock(NetworkClientDelegate.DefaultRequestFutureCompletionHandler.class);
         NetworkClientDelegate.UnsentRequest r = mockUnsentFindCoordinatorRequest(callback);
         when(this.client.leastLoadedNode(timeNowMs)).thenReturn(this.node);
         when(this.client.isReady(this.node, timeNowMs)).thenReturn(true);
-        assertTrue(ncd.doSend(r, timeNowMs));
+        assertTrue(ncd.doSend(r, timeNowMs, buffer));
         verify(client, times(1)).send(any(), eq(timeNowMs));
 
         when(this.client.leastLoadedNode(timeNowMs)).thenReturn(null);
-        assertFalse(ncd.doSend(r, timeNowMs));
+        assertFalse(ncd.doSend(r, timeNowMs, buffer));
+        assertTrue(buffer.isEmpty());
     }
 
     @Test
