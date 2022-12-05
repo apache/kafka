@@ -49,13 +49,13 @@ public class KeyQueryMetadata {
         this.activeHost = activeHost;
         this.standbyHosts = standbyHosts;
         this.partition = partition;
-        this.partitions = null;
+        this.partitions = Collections.singleton(partition);
     }
 
     public KeyQueryMetadata(final HostInfo activeHost, final Set<HostInfo> standbyHosts, final Set<Integer> partitions) {
         this.activeHost = activeHost;
         this.standbyHosts = standbyHosts;
-        this.partition = -1;
+        this.partition = partitions.size() == 1 ? partitions.iterator().next() : -1;
         this.partitions = partitions;
     }
 

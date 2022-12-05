@@ -23,9 +23,6 @@ import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
-import java.util
-import java.util.Optional
-
 class RepartitionedTest {
 
   @Test
@@ -75,40 +72,6 @@ class RepartitionedTest {
   def testCreateRepartitionedWithTopicNameAndNumPartitionsAndStreamPartitioner(): Unit = {
     val partitioner = new StreamPartitioner[String, Long] {
       override def partition(topic: String, key: String, value: Long, numPartitions: Int): Integer = 0
-    }
-    val repartitioned: Repartitioned[String, Long] =
-      Repartitioned
-        .`with`[String, Long](5)
-        .withName("repartitionTopic")
-        .withStreamPartitioner(partitioner)
-
-    val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    assertEquals(Serdes.stringSerde.getClass, internalRepartitioned.keySerde.getClass)
-    assertEquals(Serdes.longSerde.getClass, internalRepartitioned.valueSerde.getClass)
-    assertEquals(5, internalRepartitioned.numberOfPartitions)
-    assertEquals("repartitionTopic", internalRepartitioned.name)
-    assertEquals(partitioner, internalRepartitioned.streamPartitioner)
-  }
-
-  @Test
-  def testCreateRepartitionedWithSerdesAndTopicNameAndNumPartitionsAndStreamPartitionerWithPartitionsMethod(): Unit = {
-    val partitioner = new StreamPartitioner[String, Long] {
-      override def partition(topic: String, key: String, value: Long, numPartitions: Int): Integer = 0
-      override def partitions(topic: String, key: String, value: Long, numPartitions: Int): Optional[util.Set[Integer]] = super.partitions(topic, key, value, numPartitions)
-    }
-    val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long](partitioner)
-
-    val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    assertEquals(Serdes.stringSerde.getClass, internalRepartitioned.keySerde.getClass)
-    assertEquals(Serdes.longSerde.getClass, internalRepartitioned.valueSerde.getClass)
-    assertEquals(partitioner, internalRepartitioned.streamPartitioner)
-  }
-
-  @Test
-  def testCreateRepartitionedWithTopicNameAndNumPartitionsAndStreamPartitionerWithPartitionsMethod(): Unit = {
-    val partitioner = new StreamPartitioner[String, Long] {
-      override def partition(topic: String, key: String, value: Long, numPartitions: Int): Integer = 0
-      override def partitions(topic: String, key: String, value: Long, numPartitions: Int): Optional[util.Set[Integer]] = super.partitions(topic, key, value, numPartitions)
     }
     val repartitioned: Repartitioned[String, Long] =
       Repartitioned
