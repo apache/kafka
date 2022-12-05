@@ -48,6 +48,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private MirrorCheckpointConfig config;
     private GroupFilter groupFilter;
     private Admin sourceAdminClient;
+    private Admin targetAdminClient;
     private SourceAndTarget sourceAndTarget;
     private List<String> knownConsumerGroups = Collections.emptyList();
 
@@ -71,6 +72,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         groupFilter = config.groupFilter();
         sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
         scheduler = new Scheduler(MirrorCheckpointConnector.class, config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
@@ -88,6 +90,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         Utils.closeQuietly(scheduler, "scheduler");
         Utils.closeQuietly(groupFilter, "group filter");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
+        Utils.closeQuietly(targetAdminClient, "target admin client");
     }
 
     @Override
@@ -162,7 +165,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         MirrorUtils.createSinglePartitionCompactedTopic(
                 config.checkpointsTopic(),
                 config.checkpointsTopicReplicationFactor(),
-                sourceAdminClient
+                targetAdminClient
         );
     } 
 
