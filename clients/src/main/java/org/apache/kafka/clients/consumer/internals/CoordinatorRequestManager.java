@@ -113,7 +113,6 @@ public class CoordinatorRequestManager implements RequestManager {
      * @return Optional coordinator node that can be null.
      */
     protected void markCoordinatorUnknown(final String cause, final long currentTimeMs) {
-        Node oldCoordinator = this.coordinator;
         if (this.coordinator != null) {
             log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
                             + "Rediscovery will be attempted.", this.coordinator, cause);
@@ -170,31 +169,31 @@ public class CoordinatorRequestManager implements RequestManager {
     }
 
     public void onResponse(final FindCoordinatorResponse response, Throwable t) {
-        long currentTimeMS = time.milliseconds();
-        // RuntimeException handling
+        long currentTimeMs = time.milliseconds();
+        // handle Runtime exception
         if (t != null) {
-            markCoordinatorUnknown("coordinator unavailable", time.milliseconds());
+            log.error("FindCoordinator request failed due to {}", t.getMessage());
+            markCoordinatorUnknown("coordinator unavailable", currentTimeMs);
             return;
         }
 
         List<FindCoordinatorResponseData.Coordinator> coordinators = response.getCoordinatorsByKey(this.groupId);
         if (coordinators.size() != 1) {
-            coordinatorRequestState.updateLastFailedAttempt(currentTimeMS);
-            log.error("Group coordinator lookup failed: Invalid response should contain only one coordinator, " +
-                            "it has {}", coordinators.size());
-            errorHandler.handle(new IllegalStateException(
-                    "Group coordinator lookup failed: Invalid response should contain only one coordinator, " +
-                            "it has " + coordinators.size()));
+            coordinatorRequestState.updateLastFailedAttempt(currentTimeMs);
+            String msg = String.format("Group coordinator lookup failed: Response should contain exactly one " +
+                    "coordinator, it has %d", coordinators.size());
+            log.error(msg);
+            errorHandler.handle(new IllegalStateException(msg));
             return;
         }
 
         FindCoordinatorResponseData.Coordinator node = coordinators.get(0);
         if (node.errorCode() != Errors.NONE.code()) {
-            coordinatorRequestState.updateLastFailedAttempt(time.milliseconds());
-            handleFailedCoordinatorResponse(node, currentTimeMS);
+            coordinatorRequestState.updateLastFailedAttempt(currentTimeMs);
+            handleFailedCoordinatorResponse(node, currentTimeMs);
             return;
         }
-        handleSuccessFindCoordinatorResponse(node, currentTimeMS);
+        handleSuccessFindCoordinatorResponse(node, currentTimeMs);
     }
 
     public Node coordinator() {
