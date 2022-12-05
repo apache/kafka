@@ -3022,57 +3022,188 @@ class KafkaApisTest {
     assertEquals(expectedTopicErrors, response.data.topics())
   }
 
-  @Test
-  def testMultipleLeaveGroup(): Unit = {
-    val groupId = "groupId"
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
+  def testHandleLeaveGroupWithMultipleMembers(version: Short): Unit = {
+    def makeRequest(version: Short): RequestChannel.Request = {
+      buildRequest(new LeaveGroupRequest.Builder(
+        "group",
+        List(
+          new MemberIdentity()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1"),
+          new MemberIdentity()
+            .setMemberId("member-2")
+            .setGroupInstanceId("instance-2")
+        ).asJava
+      ).build(version))
+    }
 
-    val leaveMemberList = List(
-      new MemberIdentity()
-        .setMemberId("member-1")
-        .setGroupInstanceId("instance-1"),
-      new MemberIdentity()
-        .setMemberId("member-2")
-        .setGroupInstanceId("instance-2")
-    )
+    if (version < 3) {
+      // Request version earlier than version 3 do not support batching members.
+      assertThrows(classOf[UnsupportedVersionException], () => makeRequest(version))
+    } else {
+      val requestChannelRequest = makeRequest(version)
 
-    val leaveRequest = buildRequest(
-      new LeaveGroupRequest.Builder(
-        groupId,
-        leaveMemberList.asJava
-      ).build()
-    )
+      val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+        .setGroupId("group")
+        .setMembers(List(
+          new MemberIdentity()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1"),
+          new MemberIdentity()
+            .setMemberId("member-2")
+            .setGroupInstanceId("instance-2")
+        ).asJava)
 
-    createKafkaApis().handleLeaveGroupRequest(leaveRequest)
-    verify(groupCoordinator).handleLeaveGroup(
-      ArgumentMatchers.eq(groupId),
-      ArgumentMatchers.eq(leaveMemberList),
-      any()
-    )
+      val future = new CompletableFuture[LeaveGroupResponseData]()
+      when(newGroupCoordinator.leaveGroup(
+        requestChannelRequest.context,
+        expectedLeaveGroupRequest
+      )).thenReturn(future)
+
+      createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+
+      val expectedLeaveResponse = new LeaveGroupResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setMembers(List(
+          new LeaveGroupResponseData.MemberResponse()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1"),
+          new LeaveGroupResponseData.MemberResponse()
+            .setMemberId("member-2")
+            .setGroupInstanceId("instance-2"),
+        ).asJava)
+
+      future.complete(expectedLeaveResponse)
+      val capturedResponse = verifyNoThrottling(requestChannelRequest)
+      val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+      assertEquals(expectedLeaveResponse, response.data)
+    }
+  }
+
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
+  def testHandleLeaveGroupWithSingleMember(version: Short): Unit = {
+    val requestChannelRequest = buildRequest(new LeaveGroupRequest.Builder(
+      "group",
+      List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava
+    ).build(version))
+
+    val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+      .setGroupId("group")
+      .setMembers(List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId(if (version >= 3) "instance-1" else null)
+      ).asJava)
+
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+    when(newGroupCoordinator.leaveGroup(
+      requestChannelRequest.context,
+      expectedLeaveGroupRequest
+    )).thenReturn(future)
+
+    createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+
+    val leaveGroupResponse = new LeaveGroupResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMembers(List(
+        new LeaveGroupResponseData.MemberResponse()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava)
+
+    val expectedLeaveResponse = if (version >= 3) {
+      new LeaveGroupResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setMembers(List(
+          new LeaveGroupResponseData.MemberResponse()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1")
+        ).asJava)
+    } else {
+      new LeaveGroupResponseData()
+        .setErrorCode(Errors.NONE.code)
+    }
+
+    future.complete(leaveGroupResponse)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    assertEquals(expectedLeaveResponse, response.data)
   }
 
   @Test
-  def testSingleLeaveGroup(): Unit = {
-    val groupId = "groupId"
-    val memberId = "member"
+  def testHandleLeaveGroupFutureFailed(): Unit = {
+    val requestChannelRequest = buildRequest(new LeaveGroupRequest.Builder(
+      "group",
+      List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava
+    ).build(ApiKeys.LEAVE_GROUP.latestVersion))
 
-    val singleLeaveMember = List(
-      new MemberIdentity()
-        .setMemberId(memberId)
-    )
+    val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+      .setGroupId("group")
+      .setMembers(List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava)
 
-    val leaveRequest = buildRequest(
-      new LeaveGroupRequest.Builder(
-        groupId,
-        singleLeaveMember.asJava
-      ).build()
-    )
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+    when(newGroupCoordinator.leaveGroup(
+      requestChannelRequest.context,
+      expectedLeaveGroupRequest
+    )).thenReturn(future)
 
-    createKafkaApis().handleLeaveGroupRequest(leaveRequest)
-    verify(groupCoordinator).handleLeaveGroup(
-      ArgumentMatchers.eq(groupId),
-      ArgumentMatchers.eq(singleLeaveMember),
-      any()
-    )
+    createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+
+    future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
+  }
+
+  @Test
+  def testHandleLeaveGroupAuthenticationFailed(): Unit = {
+    val requestChannelRequest = buildRequest(new LeaveGroupRequest.Builder(
+      "group",
+      List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava
+    ).build(ApiKeys.LEAVE_GROUP.latestVersion))
+
+    val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+      .setGroupId("group")
+      .setMembers(List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava)
+
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+    when(newGroupCoordinator.leaveGroup(
+      requestChannelRequest.context,
+      expectedLeaveGroupRequest
+    )).thenReturn(future)
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleLeaveGroupRequest(requestChannelRequest)
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
   @Test
