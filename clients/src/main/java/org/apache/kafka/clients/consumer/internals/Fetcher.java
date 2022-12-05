@@ -1155,7 +1155,9 @@ public class Fetcher<K, V> implements Closeable {
             } else {
                 log.trace("Not fetching from {} for partition {} since it is marked offline or is missing from our metadata," +
                           " using the leader instead.", nodeId, partition);
-                subscriptions.clearPreferredReadReplica(partition);
+                // Note that this condition may happen due to stale metadata, so we clear preferred replica and
+                // refresh metadata.
+                requestMetadataUpdate(partition);
                 return leaderReplica;
             }
         } else {
