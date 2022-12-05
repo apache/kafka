@@ -1622,23 +1622,14 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleListGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val listGroupsRequest = request.body[ListGroupsRequest]
-
-    def sendResponse(response: AbstractResponse): Unit = {
-      trace("Sending list groups response %s for correlation id %d to client %s."
-        .format(response, request.header.correlationId, request.header.clientId))
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        response.maybeSetThrottleTimeMs(requestThrottleMs)
-        response
-      })
-    }
-
     val hasClusterDescribe = authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
+
     newGroupCoordinator.listGroups(
       request.context,
       listGroupsRequest.data
     ).handle[Unit] { (response, exception) =>
       if (exception != null) {
-        sendResponse(listGroupsRequest.getErrorResponse(exception))
+        requestHelper.sendMaybeThrottle(request, listGroupsRequest.getErrorResponse(exception))
       } else {
         val listGroupsResponse = if (hasClusterDescribe) {
           // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
@@ -1650,7 +1641,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
           new ListGroupsResponse(response.setGroups(authorizedGroups.asJava))
         }
-        sendResponse(listGroupsResponse)
+        requestHelper.sendMaybeThrottle(request, listGroupsResponse)
       }
     }
   }

@@ -178,9 +178,6 @@ class GroupCoordinatorAdapter(
     val response = new ListGroupsResponseData()
       .setErrorCode(error.code)
 
-    // Copying results this way to ensure that a native Java collections
-    // is returned to the caller. The caller uses Iterator#remove and it
-    // does not work with wrapped scala collections.
     groups.foreach { group =>
       response.groups.add(new ListGroupsResponseData.ListedGroup()
         .setGroupId(group.groupId)
