@@ -27,6 +27,7 @@ import scala.jdk.CollectionConverters._
 class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Logging {
 
   override def getOrCreateMigrationRecoveryState(initialState: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+    zkClient.createTopLevelPaths()
     zkClient.getOrCreateMigrationState(initialState)
   }
 
@@ -219,7 +220,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
 
     val requests = Seq(createTopicZNode, createPartitionsZNode) ++ createPartitionZNodeReqs
-    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state.controllerZkVersion(), state)
+    val (migrationZkVersion, _) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
     state.withMigrationZkVersion(migrationZkVersion)
   }
 
@@ -260,7 +261,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     if (requests.isEmpty) {
       state
     } else {
-      val (migrationZkVersion, _) = zkClient.retryMigrationRequestsUntilConnected(requests.toSeq, state.controllerZkVersion(), state)
+      val (migrationZkVersion, _) = zkClient.retryMigrationRequestsUntilConnected(requests.toSeq, state)
       state.withMigrationZkVersion(migrationZkVersion)
     }
   }
@@ -300,7 +301,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
       } else {
         Seq(SetDataRequest(ConfigEntityZNode.path(entityType, path), configData, ZkVersion.MatchAnyVersion))
       }
-      val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state.controllerZkVersion(), state)
+      val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
       if (!create && responses.head.resultCode.equals(Code.NONODE)) {
         // Not fatal. Just means we need to Create this node instead of SetData
         None

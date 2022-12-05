@@ -1388,7 +1388,8 @@ class KafkaZkClientTest extends QuorumTestHarness {
       CreateRequest("/foo", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
     )
 
-    zkClient.retryMigrationRequestsUntilConnected(requests_bad, stat.getVersion, migrationState) match {
+    migrationState = migrationState.withControllerZkVersion(stat.getVersion)
+    zkClient.retryMigrationRequestsUntilConnected(requests_bad, migrationState) match {
       case (zkVersion: Int, requests: Seq[AsyncRequest#Response]) =>
         assertEquals(0, zkVersion)
         assert(requests.take(3).forall(resp => resp.resultCode.equals(Code.OK)))
@@ -1409,7 +1410,8 @@ class KafkaZkClientTest extends QuorumTestHarness {
       CreateRequest("/foo/bar/eggs", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
     )
 
-    zkClient.retryMigrationRequestsUntilConnected(requests_good, stat.getVersion, migrationState) match {
+    migrationState = migrationState.withControllerZkVersion(stat.getVersion)
+    zkClient.retryMigrationRequestsUntilConnected(requests_good, migrationState) match {
       case (zkVersion: Int, requests: Seq[AsyncRequest#Response]) =>
         assertEquals(1, zkVersion)
         assert(requests.take(3).forall(resp => resp.resultCode.equals(Code.NODEEXISTS)))

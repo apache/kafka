@@ -141,14 +141,14 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
     def tryCreateControllerZNodeAndIncrementEpoch(): (Int, Int) = {
       val response = retryRequestUntilConnected(
-          MultiRequest(Seq(
-            SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(newControllerEpoch), expectedControllerEpochZkVersion),
-            CreateOp(ControllerZNode.path, ControllerZNode.encode(controllerId, timestamp), defaultAcls(ControllerZNode.path), CreateMode.EPHEMERAL)))
-        )
+        MultiRequest(Seq(
+          CreateOp(ControllerZNode.path, ControllerZNode.encode(controllerId, timestamp), defaultAcls(ControllerZNode.path), CreateMode.EPHEMERAL),
+          SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(newControllerEpoch), expectedControllerEpochZkVersion)))
+      )
       response.resultCode match {
         case Code.NODEEXISTS | Code.BADVERSION => checkControllerAndEpoch()
         case Code.OK =>
-          val setDataResult = response.zkOpResults(0).rawOpResult.asInstanceOf[SetDataResult]
+          val setDataResult = response.zkOpResults(1).rawOpResult.asInstanceOf[SetDataResult]
           (newControllerEpoch, setDataResult.getStat.getVersion)
         case code => throw KeeperException.create(code)
       }
@@ -1915,21 +1915,19 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * twice, so we need to ignore NodeExists and NoNode failures for those cases.
    *
    * @param requests  A sequence of ZK requests. Only Create, Delete, and SetData are supported.
-   * @param expectedControllerZkVersion The expected zkVersion of the /controller_epoch ZNode. Used for check operations.
    * @param migrationState The current migration state. This is written out as part of the final multi-op request.
    * @return  The new version of /migration ZNode and the sequence of responses for the given requests.
    */
   def retryMigrationRequestsUntilConnected[Req <: AsyncRequest](requests: Seq[Req],
-                                                                expectedControllerZkVersion: Int,
                                                                 migrationState: ZkMigrationLeadershipState): (Int, Seq[Req#Response]) = {
 
     if (requests.isEmpty) {
-      throw new IllegalArgumentException("Must specify at least one ZK request for a migration operation.")
+      return (migrationState.migrationZkVersion(), Seq.empty)
     }
 
     def wrapMigrationRequest(request: Req, lastRequestInBatch: Boolean): MultiRequest = {
       // Wrap a single request with the multi-op transactional request.
-      val checkOp = CheckOp(ControllerEpochZNode.path, expectedControllerZkVersion)
+      val checkOp = CheckOp(ControllerEpochZNode.path, migrationState.controllerZkVersion())
       val migrationOp = if (lastRequestInBatch) {
         SetDataOp(MigrationZNode.path, MigrationZNode.encode(migrationState), migrationState.migrationZkVersion())
       } else {
@@ -1988,33 +1986,33 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
       response match {
         case MultiResponse(resultCode, _, ctx, zkOpResults, responseMetadata) =>
         zkOpResults match {
-            case Seq(ZkOpResult(checkOp: CheckOp, checkOpResult), ZkOpResult(migrationOp: CheckOp, migrationResult), zkOpResult) =>
-              // Matches all requests except or the last one (CheckOp on /migration)
-              if (lastRequestInBatch) {
-                throw new IllegalStateException("Should not see a Check operation on /migration in the last request.")
-              }
-              handleUnwrappedCheckOp(checkOp, checkOpResult)
-              val migrationVersion = handleUnwrappedMigrationResult(migrationOp, migrationResult)
-              (handleUnwrappedZkOp(zkOpResult, resultCode, ctx, responseMetadata), migrationVersion)
-            case Seq(ZkOpResult(checkOp: CheckOp, checkOpResult), ZkOpResult(migrationOp: SetDataOp, migrationResult), zkOpResult) =>
-              // Matches the last request in a batch (SetDataOp on /migration)
-              if (!lastRequestInBatch) {
-                throw new IllegalStateException("Should only see a SetData operation on /migration in the last request.")
-              }
-              handleUnwrappedCheckOp(checkOp, checkOpResult)
-              val migrationVersion = handleUnwrappedMigrationResult(migrationOp, migrationResult)
-              (handleUnwrappedZkOp(zkOpResult, resultCode, ctx, responseMetadata), migrationVersion)
-            case null => throw KeeperException.create(resultCode)
-            case _ => throw new IllegalStateException(s"Cannot unwrap $response because it does not contain the expected operations for a migration operation.")
-          }
+          case Seq(ZkOpResult(checkOp: CheckOp, checkOpResult), ZkOpResult(migrationOp: CheckOp, migrationResult), zkOpResult) =>
+            // Matches all requests except or the last one (CheckOp on /migration)
+            if (lastRequestInBatch) {
+              throw new IllegalStateException("Should not see a Check operation on /migration in the last request.")
+            }
+            handleUnwrappedCheckOp(checkOp, checkOpResult)
+            val migrationVersion = handleUnwrappedMigrationResult(migrationOp, migrationResult)
+            (handleUnwrappedZkOp(zkOpResult, resultCode, ctx, responseMetadata), migrationVersion)
+          case Seq(ZkOpResult(checkOp: CheckOp, checkOpResult), ZkOpResult(migrationOp: SetDataOp, migrationResult), zkOpResult) =>
+            // Matches the last request in a batch (SetDataOp on /migration)
+            if (!lastRequestInBatch) {
+              throw new IllegalStateException("Should only see a SetData operation on /migration in the last request.")
+            }
+            handleUnwrappedCheckOp(checkOp, checkOpResult)
+            val migrationVersion = handleUnwrappedMigrationResult(migrationOp, migrationResult)
+            (handleUnwrappedZkOp(zkOpResult, resultCode, ctx, responseMetadata), migrationVersion)
+          case null => throw KeeperException.create(resultCode)
+          case _ => throw new IllegalStateException(s"Cannot unwrap $response because it does not contain the expected operations for a migration operation.")
+        }
         case _ => throw new IllegalStateException(s"Cannot unwrap $response because it is not a MultiResponse")
       }
     }
 
-    expectedControllerZkVersion match {
+    migrationState.controllerZkVersion() match {
       case ZkVersion.MatchAnyVersion => throw new IllegalArgumentException(s"Expected a controller epoch zkVersion when making migration writes, not -1.")
       case version if version >= 0 =>
-        logger.trace(s"Performing ${requests.size} migration update(s) with controllerEpochZkVersion=$expectedControllerZkVersion and migrationState=$migrationState")
+        logger.trace(s"Performing ${requests.size} migration update(s) with migrationState=$migrationState")
         val wrappedRequests = requests.map(req => wrapMigrationRequest(req, req == requests.last))
         val results = retryRequestsUntilConnected(wrappedRequests)
         val unwrappedResults = results.map(resp => unwrapMigrationResponse(resp, resp == results.last))
