@@ -1574,19 +1574,10 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDescribeGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val describeRequest = request.body[DescribeGroupsRequest]
     val includeAuthorizedOperations = describeRequest.data.includeAuthorizedOperations
-
-    def sendResponse(response: AbstractResponse): Unit = {
-      trace("Sending describe groups response %s for correlation id %d to client %s."
-        .format(response, request.header.correlationId, request.header.clientId))
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        response.maybeSetThrottleTimeMs(requestThrottleMs)
-        response
-      })
-    }
-
     val futures = new mutable.ArrayBuffer[CompletableFuture[DescribeGroupsResponseData.DescribedGroup]](
       describeRequest.data.groups.size
     )
+
     describeRequest.data.groups.forEach { groupId =>
       if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupId)) {
         futures += CompletableFuture.completedFuture(DescribeGroupsResponse.forError(
@@ -1616,9 +1607,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     CompletableFutureUtils.allAsList(futures.asJava).handle[Unit] { (results, exception) =>
       if (exception != null) {
         // Have to unwrap the CompletionException which allAsList() introduced.
-        sendResponse(describeRequest.getErrorResponse(exception.getCause))
+        requestHelper.sendMaybeThrottle(request, describeRequest.getErrorResponse(exception.getCause))
       } else {
-        sendResponse(new DescribeGroupsResponse(new DescribeGroupsResponseData().setGroups(results)))
+        requestHelper.sendMaybeThrottle(request, new DescribeGroupsResponse(new DescribeGroupsResponseData().setGroups(results)))
       }
     }
   }
