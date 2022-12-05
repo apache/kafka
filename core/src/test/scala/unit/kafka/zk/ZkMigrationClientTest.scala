@@ -21,11 +21,12 @@ import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.server.{ConfigType, QuorumTestHarness, ZkAdminManager}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.internals.QuotaConfigs
+import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import java.util.Properties
@@ -203,5 +204,82 @@ class ZkMigrationClientTest extends QuorumTestHarness {
       ConfigType.User, "user2/clients/clientA")
 
     assertEquals(2, migrationState.migrationZkVersion())
+  }
+
+  @Test
+  def testClaimAbsentController(): Unit = {
+    val migrationClient = new ZkMigrationClient(zkClient)
+    var migrationState = initialMigrationState
+    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
+    assertEquals(0, migrationState.migrationZkVersion())
+
+    migrationState = migrationClient.claimControllerLeadership(migrationState)
+    assertEquals(1, migrationState.controllerZkVersion())
+  }
+
+  @Test
+  def testExistingKRaftControllerClaim(): Unit = {
+    val migrationClient = new ZkMigrationClient(zkClient)
+    var migrationState = initialMigrationState
+    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
+    assertEquals(0, migrationState.migrationZkVersion())
+
+    migrationState = migrationClient.claimControllerLeadership(migrationState)
+    assertEquals(1, migrationState.controllerZkVersion())
+
+    // We don't require a KRaft controller to release the controller in ZK before another KRaft controller
+    // can claim it. This is because KRaft leadership comes from Raft and we are just synchronizing it to ZK.
+    var otherNodeState = new ZkMigrationLeadershipState(3001, 43, 100, 42, Time.SYSTEM.milliseconds(), -1, -1)
+    otherNodeState = migrationClient.claimControllerLeadership(otherNodeState)
+    assertEquals(2, otherNodeState.controllerZkVersion())
+    assertEquals(3001, otherNodeState.kraftControllerId())
+    assertEquals(43, otherNodeState.kraftControllerEpoch())
+  }
+
+  @Test
+  def testNonIncreasingKRaftEpoch(): Unit = {
+    val migrationClient = new ZkMigrationClient(zkClient)
+    var migrationState = initialMigrationState
+    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
+    assertEquals(0, migrationState.migrationZkVersion())
+
+    migrationState = migrationClient.claimControllerLeadership(migrationState)
+    assertEquals(1, migrationState.controllerZkVersion())
+
+    migrationState = migrationState.withNewKRaftController(3000, 40)
+    val t1 = assertThrows(classOf[IllegalStateException], () => migrationClient.claimControllerLeadership(migrationState))
+    assertEquals("Cannot register KRaft controller 3000 as the active controller in ZK since its epoch 40 is not higher than the current ZK epoch 42.", t1.getMessage)
+
+    migrationState = migrationState.withNewKRaftController(3000, 42)
+    val t2 = assertThrows(classOf[IllegalStateException], () => migrationClient.claimControllerLeadership(migrationState))
+    assertEquals("Cannot register KRaft controller 3000 as the active controller in ZK since its epoch 42 is not higher than the current ZK epoch 42.", t2.getMessage)
+  }
+
+  @Test
+  def testClaimAndReleaseExistingController(): Unit = {
+    val migrationClient = new ZkMigrationClient(zkClient)
+    var migrationState = initialMigrationState
+    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
+    assertEquals(0, migrationState.migrationZkVersion())
+
+    val (epoch, zkVersion) = zkClient.registerControllerAndIncrementControllerEpoch(100)
+    assertEquals(epoch, 2)
+    assertEquals(zkVersion, 1)
+
+    migrationState = migrationClient.claimControllerLeadership(migrationState)
+    assertEquals(2, migrationState.controllerZkVersion())
+    zkClient.getControllerEpoch match {
+      case Some((kraftEpoch, stat)) =>
+        assertEquals(42, kraftEpoch)
+        assertEquals(2, stat.getVersion)
+      case None => fail()
+    }
+    assertEquals(3000, zkClient.getControllerId.get)
+    assertThrows(classOf[ControllerMovedException], () => zkClient.registerControllerAndIncrementControllerEpoch(100))
+
+    migrationState = migrationClient.releaseControllerLeadership(migrationState)
+    val (epoch1, zkVersion1) = zkClient.registerControllerAndIncrementControllerEpoch(100)
+    assertEquals(epoch1, 43)
+    assertEquals(zkVersion1, 3)
   }
 }

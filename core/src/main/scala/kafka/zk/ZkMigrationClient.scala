@@ -7,6 +7,7 @@ import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zookeeper._
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.quota.ClientQuotaEntity
@@ -42,6 +43,19 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
       state.withControllerZkVersion(epochZkVersionOpt.get)
     } else {
       state.withControllerZkVersion(-1)
+    }
+  }
+
+  override def releaseControllerLeadership(state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+    try {
+      zkClient.deleteController(state.controllerZkVersion())
+      state.withControllerZkVersion(-1)
+    } catch {
+      case _: ControllerMovedException =>
+        // If the controller moved, no need to release
+        state.withControllerZkVersion(-1)
+      case t: Throwable =>
+        throw new RuntimeException("Could not release controller leadership due to underlying error", t)
     }
   }
 
@@ -325,7 +339,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
         }
         tryWriteClientQuotas(configType.get, path.get, create = true, state) match {
           case Some(newStateSecondTry) => newStateSecondTry
-          case None => throw new RuntimeException("Could not write client quotas")
+          case None => throw new RuntimeException("Could not write client quotas on second attempt when using Create instead of SetData")
         }
     }
   }

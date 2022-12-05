@@ -186,7 +186,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         if (curEpoch >= kraftControllerEpoch) {
           // TODO KAFKA-14436 Need to ensure KRaft has a higher epoch an ZK
           throw new IllegalStateException(s"Cannot register KRaft controller $kraftControllerId as the active controller " +
-            s"since its epoch is not higher. Current ZK epoch is ${curEpoch}, KRaft epoch is $kraftControllerEpoch.")
+            s"in ZK since its epoch ${kraftControllerEpoch} is not higher than the current ZK epoch ${curEpoch}.")
         }
 
         val response = if (controllerOpt.isDefined) {

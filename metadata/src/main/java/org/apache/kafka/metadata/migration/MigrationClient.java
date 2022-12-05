@@ -46,6 +46,17 @@ public interface MigrationClient {
      */
     ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state);
 
+    /**
+     * Release an existing claim on the cluster leadership in ZooKeeper. This involves deleting the /controller ZNode
+     * so that another controller can claim leadership.
+     *
+     * @param state The current migration leadership state.
+     * @return      An updated migration leadership state with controllerZkVersion = 1, or raise an exception if ZooKeeper
+     *
+     *
+     */
+    ZkMigrationLeadershipState releaseControllerLeadership(ZkMigrationLeadershipState state);
+
     ZkMigrationLeadershipState createTopic(String topicName, Uuid topicId, Map<Integer, PartitionRegistration> topicPartitions, ZkMigrationLeadershipState state);
 
     ZkMigrationLeadershipState updateTopicPartitions(Map<String, Map<Integer, PartitionRegistration>> topicPartitions, ZkMigrationLeadershipState state);
