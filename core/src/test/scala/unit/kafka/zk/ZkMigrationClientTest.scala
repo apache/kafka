@@ -18,14 +18,18 @@ package kafka.zk
 
 import kafka.api.LeaderAndIsr
 import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.coordinator.transaction.ProducerIdManager
 import kafka.server.{ConfigType, QuorumTestHarness, ZkAdminManager}
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.common.metadata.ProducerIdsRecord
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
@@ -38,10 +42,18 @@ import scala.jdk.CollectionConverters._
  */
 class ZkMigrationClientTest extends QuorumTestHarness {
 
+  private var migrationClient: ZkMigrationClient = _
+
+  private var migrationState: ZkMigrationLeadershipState = _
+
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     zkClient.createControllerEpochRaw(1)
+
+    migrationClient = new ZkMigrationClient(zkClient)
+    migrationState = initialMigrationState
+    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
    }
 
   private def initialMigrationState: ZkMigrationLeadershipState = {
@@ -51,9 +63,6 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
   @Test
   def testEmptyWrite(): Unit = {
-    val migrationClient = new ZkMigrationClient(zkClient)
-    var migrationState = initialMigrationState
-    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
     val (zkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(Seq(), migrationState)
     assertEquals(migrationState.migrationZkVersion(), zkVersion)
     assertTrue(responses.isEmpty)
@@ -77,9 +86,6 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     zkClient.createTopicPartitionStatesRaw(leaderAndIsrs, 0)
 
     // Now verify that we can update it with migration client
-    val migrationClient = new ZkMigrationClient(zkClient)
-    var migrationState = initialMigrationState
-    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
     assertEquals(0, migrationState.migrationZkVersion())
 
     val partitions = Map(
@@ -103,9 +109,6 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
   @Test
   def testCreateNewPartitions(): Unit = {
-    val migrationClient = new ZkMigrationClient(zkClient)
-    var migrationState = initialMigrationState
-    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
     assertEquals(0, migrationState.migrationZkVersion())
 
     val partitions = Map(
@@ -135,7 +138,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
                                         quotas: Map[String, Double],
                                         zkEntityType: String,
                                         zkEntityName: String): ZkMigrationLeadershipState = {
-    val nextMigrationState = migrationClient.updateClientQuotas(
+    val nextMigrationState = migrationClient.writeClientQuotas(
       new ClientQuotaEntity(entity.asJava),
       quotas.asJava,
       migrationState)
@@ -148,16 +151,12 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
   @Test
   def testWriteExistingClientQuotas(): Unit = {
-    val migrationClient = new ZkMigrationClient(zkClient)
     val props = new Properties()
     props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 100000L)
     adminZkClient.changeConfigs(ConfigType.User, "user1", props)
     adminZkClient.changeConfigs(ConfigType.User, "user1/clients/clientA", props)
 
-    var migrationState = initialMigrationState
-    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
     assertEquals(0, migrationState.migrationZkVersion())
-
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ConfigType.User -> "user1"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
@@ -185,11 +184,6 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
   @Test
   def testWriteNewClientQuotas(): Unit = {
-    val migrationClient = new ZkMigrationClient(zkClient)
-    val adminZkClient = new AdminZkClient(zkClient)
-
-    var migrationState = initialMigrationState
-    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
     assertEquals(0, migrationState.migrationZkVersion())
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ConfigType.User -> "user2"),
@@ -208,22 +202,14 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
   @Test
   def testClaimAbsentController(): Unit = {
-    val migrationClient = new ZkMigrationClient(zkClient)
-    var migrationState = initialMigrationState
-    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
     assertEquals(0, migrationState.migrationZkVersion())
-
     migrationState = migrationClient.claimControllerLeadership(migrationState)
     assertEquals(1, migrationState.controllerZkVersion())
   }
 
   @Test
   def testExistingKRaftControllerClaim(): Unit = {
-    val migrationClient = new ZkMigrationClient(zkClient)
-    var migrationState = initialMigrationState
-    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
     assertEquals(0, migrationState.migrationZkVersion())
-
     migrationState = migrationClient.claimControllerLeadership(migrationState)
     assertEquals(1, migrationState.controllerZkVersion())
 
@@ -238,9 +224,6 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
   @Test
   def testNonIncreasingKRaftEpoch(): Unit = {
-    val migrationClient = new ZkMigrationClient(zkClient)
-    var migrationState = initialMigrationState
-    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
     assertEquals(0, migrationState.migrationZkVersion())
 
     migrationState = migrationClient.claimControllerLeadership(migrationState)
@@ -257,9 +240,6 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
   @Test
   def testClaimAndReleaseExistingController(): Unit = {
-    val migrationClient = new ZkMigrationClient(zkClient)
-    var migrationState = initialMigrationState
-    migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
     assertEquals(0, migrationState.migrationZkVersion())
 
     val (epoch, zkVersion) = zkClient.registerControllerAndIncrementControllerEpoch(100)
@@ -281,5 +261,59 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     val (epoch1, zkVersion1) = zkClient.registerControllerAndIncrementControllerEpoch(100)
     assertEquals(epoch1, 43)
     assertEquals(zkVersion1, 3)
+  }
+
+  @Test
+  def testReadAndWriteProducerId(): Unit = {
+    def generateNextProducerIdWithZkAndRead(): Long = {
+      // Generate a producer ID in ZK
+      val manager = ProducerIdManager.zk(1, zkClient)
+      manager.generateProducerId()
+
+      val records = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+      migrationClient.migrateProducerId(MetadataVersion.latest(), batch => records.add(batch))
+      assertEquals(1, records.size())
+      assertEquals(1, records.get(0).size())
+
+      val record = records.get(0).get(0).message().asInstanceOf[ProducerIdsRecord]
+      record.nextProducerId()
+    }
+
+    // Initialize with ZK ProducerIdManager
+    assertEquals(0, generateNextProducerIdWithZkAndRead())
+
+    // Update next producer ID via migration client
+    migrationState = migrationClient.writeProducerId(6000, migrationState)
+    assertEquals(1, migrationState.migrationZkVersion())
+
+    // Switch back to ZK, it should provision the next block
+    assertEquals(7000, generateNextProducerIdWithZkAndRead())
+  }
+
+  @Test
+  def testWriteNewTopicConfigs(): Unit = {
+    migrationState = migrationClient.writeConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "test"),
+      java.util.Collections.singletonMap(TopicConfig.SEGMENT_MS_CONFIG, "100000"), migrationState)
+    assertEquals(1, migrationState.migrationZkVersion())
+
+    val newProps = zkClient.getEntityConfigs(ConfigType.Topic, "test")
+    assertEquals(1, newProps.size())
+    assertEquals("100000", newProps.getProperty(TopicConfig.SEGMENT_MS_CONFIG))
+  }
+
+  @Test
+  def testWriteExistingTopicConfigs(): Unit = {
+    val props = new Properties()
+    props.put(TopicConfig.FLUSH_MS_CONFIG, 60000)
+    props.put(TopicConfig.RETENTION_MS_CONFIG, 300000)
+    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, "test", props)
+
+    migrationState = migrationClient.writeConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "test"),
+      java.util.Collections.singletonMap(TopicConfig.SEGMENT_MS_CONFIG, "100000"), migrationState)
+    assertEquals(1, migrationState.migrationZkVersion())
+
+    val newProps = zkClient.getEntityConfigs(ConfigType.Topic, "test")
+    assertEquals(1, newProps.size())
+    assertEquals("100000", newProps.getProperty(TopicConfig.SEGMENT_MS_CONFIG))
   }
 }

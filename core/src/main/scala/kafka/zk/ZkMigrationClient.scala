@@ -14,7 +14,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.migration.{MigrationClient, ZkMigrationLeadershipState}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, KeeperException}
 
@@ -280,7 +280,28 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
-  def updateClientQuotas(entity: ClientQuotaEntity, quotas: util.Map[String, Double], state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+  // Try to update an entity config and the migration state. If NoNode is encountered, it probably means we
+  // need to recursively create the parent ZNode. In this case, return None.
+  def tryWriteEntityConfig(entityType: String, path: String, props: Properties, create: Boolean, state: ZkMigrationLeadershipState): Option[ZkMigrationLeadershipState] = {
+    val configData = ConfigEntityZNode.encode(props)
+
+    val requests = if (create) {
+      Seq(CreateRequest(ConfigEntityZNode.path(entityType, path), configData, zkClient.defaultAcls(path), CreateMode.PERSISTENT))
+    } else {
+      Seq(SetDataRequest(ConfigEntityZNode.path(entityType, path), configData, ZkVersion.MatchAnyVersion))
+    }
+    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
+    if (!create && responses.head.resultCode.equals(Code.NONODE)) {
+      // Not fatal. Just means we need to Create this node instead of SetData
+      None
+    } else if (responses.head.resultCode.equals(Code.OK)) {
+      Some(state.withMigrationZkVersion(migrationZkVersion))
+    } else {
+      throw KeeperException.create(responses.head.resultCode, path)
+    }
+  }
+
+  def writeClientQuotas(entity: ClientQuotaEntity, quotas: util.Map[String, Double], state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     val entityMap = entity.entries().asScala
     val hasUser = entityMap.contains(ConfigType.User)
     val hasClient = entityMap.contains(ConfigType.Client)
@@ -305,42 +326,64 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
       return state
     }
 
-    val configData = ConfigEntityZNode.encode(props)
-
-    // Try to update the client quota and migration state. If NoNode is encountered, return None. Otherwise return
-    // the new migration state.
-    def tryWriteClientQuotas(entityType: String, path: String, create: Boolean, state: ZkMigrationLeadershipState): Option[ZkMigrationLeadershipState] = {
-      val requests = if (create) {
-        Seq(CreateRequest(ConfigEntityZNode.path(entityType, path), configData, zkClient.defaultAcls(path), CreateMode.PERSISTENT))
-      } else {
-        Seq(SetDataRequest(ConfigEntityZNode.path(entityType, path), configData, ZkVersion.MatchAnyVersion))
-      }
-      val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
-      if (!create && responses.head.resultCode.equals(Code.NONODE)) {
-        // Not fatal. Just means we need to Create this node instead of SetData
-        None
-      } else if (responses.head.resultCode.equals(Code.OK)) {
-        Some(state.withMigrationZkVersion(migrationZkVersion))
-      } else {
-        throw KeeperException.create(responses.head.resultCode, path)
-      }
-    }
-
-    tryWriteClientQuotas(configType.get, path.get, create=false, state) match {
+    // Try to write the client quota configs once with create=false, and again with create=true if the first operation fails
+    tryWriteEntityConfig(configType.get, path.get, props, create=false, state) match {
       case Some(newState) =>
         newState
       case None =>
         // If we didn't update the migration state, we failed to write the client quota. Try again
         // after recursively create its parent znodes
-        if (hasUser && hasClient) {
-          zkClient.createRecursive(s"${ConfigEntityTypeZNode.path(configType.get)}/${entityMap(ConfigType.User)}/clients", throwIfPathExists=false)
+        val createPath = if (hasUser && hasClient) {
+          s"${ConfigEntityTypeZNode.path(configType.get)}/${entityMap(ConfigType.User)}/clients"
         } else {
-          zkClient.createRecursive(ConfigEntityTypeZNode.path(configType.get), throwIfPathExists=false)
+          ConfigEntityTypeZNode.path(configType.get)
         }
-        tryWriteClientQuotas(configType.get, path.get, create = true, state) match {
+        zkClient.createRecursive(createPath, throwIfPathExists=false)
+        debug(s"Recursively creating ZNode $createPath and attempting to write $entity quotas a second time.")
+
+        tryWriteEntityConfig(configType.get, path.get, props, create=true, state) match {
           case Some(newStateSecondTry) => newStateSecondTry
-          case None => throw new RuntimeException("Could not write client quotas on second attempt when using Create instead of SetData")
+          case None => throw new RuntimeException(s"Could not write client quotas for $entity on second attempt when using Create instead of SetData")
         }
+    }
+  }
+
+  def writeProducerId(nextProducerId: Long, state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+    val newProducerIdBlockData = ProducerIdBlockZNode.generateProducerIdBlockJson(
+      new ProducerIdsBlock(-1, nextProducerId, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE))
+
+    val request = SetDataRequest(ProducerIdBlockZNode.path, newProducerIdBlockData, ZkVersion.MatchAnyVersion)
+    val (migrationZkVersion, _) = zkClient.retryMigrationRequestsUntilConnected(Seq(request), state)
+    state.withMigrationZkVersion(migrationZkVersion)
+  }
+
+  def writeConfigs(resource: ConfigResource, configs: util.Map[String, String], state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+    val configType = resource.`type`() match {
+      case ConfigResource.Type.BROKER => Some(ConfigType.Broker)
+      case ConfigResource.Type.TOPIC => Some(ConfigType.Topic)
+      case _ => None
+    }
+
+    val configName = resource.name()
+    if (configType.isDefined) {
+      val props = new Properties()
+      configs.forEach { case (key, value) => props.put(key, value) }
+      tryWriteEntityConfig(configType.get, configName, props, create=false, state) match {
+        case Some(newState) =>
+          newState
+        case None =>
+          val createPath = ConfigEntityTypeZNode.path(configType.get)
+          debug(s"Recursively creating ZNode $createPath and attempting to write $resource configs a second time.")
+          zkClient.createRecursive(createPath, throwIfPathExists=false)
+
+          tryWriteEntityConfig(configType.get, configName, props, create=true, state) match {
+            case Some(newStateSecondTry) => newStateSecondTry
+            case None => throw new RuntimeException(s"Could not write ${configType.get} configs on second attempt when using Create instead of SetData.")
+          }
+      }
+    } else {
+      debug(s"Not updating ZK for $resource since it is not a Broker or Topic entity.")
+      state
     }
   }
 }
