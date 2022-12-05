@@ -553,6 +553,7 @@
       <allow pkg= "javax.security.auth"/>
       <subpackage name="basic">
         <allow pkg="org.apache.kafka.connect.rest"/>
+        <allow pkg="javax.annotation"/>
       </subpackage>
     </subpackage>
 
