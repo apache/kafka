@@ -31,6 +31,7 @@ import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_A
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException}
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
@@ -374,12 +375,21 @@ class ControllerApis(val requestChannel: RequestChannel,
         }
       }
     }
-    val authorizedTopicNames = if (hasClusterAuth) {
-      topicNames.asScala
-    } else {
-      getCreatableTopics.apply(topicNames.asScala)
+
+    /* The cluster metatdata topic is an internal topic with a different implementation. The user should not be
+     * allowed to create it as a regular topic.
+     */
+    if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {
+      info(s"Rejecting creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME}")
     }
-    val describableTopicNames = getDescribableTopics.apply(topicNames.asScala).asJava
+    val allowedTopicNames = topicNames.asScala.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
+
+    val authorizedTopicNames = if (hasClusterAuth) {
+      allowedTopicNames
+    } else {
+      getCreatableTopics.apply(allowedTopicNames)
+    }
+    val describableTopicNames = getDescribableTopics.apply(allowedTopicNames).asJava
     val effectiveRequest = request.duplicate()
     val iterator = effectiveRequest.topics().iterator()
     while (iterator.hasNext) {
@@ -400,7 +410,8 @@ class ControllerApis(val requestChannel: RequestChannel,
         if (!authorizedTopicNames.contains(name)) {
           response.topics().add(new CreatableTopicResult().
             setName(name).
-            setErrorCode(TOPIC_AUTHORIZATION_FAILED.code))
+            setErrorCode(TOPIC_AUTHORIZATION_FAILED.code).
+            setErrorMessage("Authorization failed."))
         }
       }
       response

@@ -214,7 +214,7 @@ object ConsumerGroupCommand extends Logging {
     private def printGroupStates(groupsAndStates: List[(String, String)]): Unit = {
       // find proper columns width
       var maxGroupLen = 15
-      for ((groupId, state) <- groupsAndStates) {
+      for ((groupId, _) <- groupsAndStates) {
         maxGroupLen = Math.max(maxGroupLen, groupId.length)
       }
       println(s"%${-maxGroupLen}s %s".format("GROUP", "STATE"))

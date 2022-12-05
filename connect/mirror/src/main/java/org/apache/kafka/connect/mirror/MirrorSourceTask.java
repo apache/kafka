@@ -60,7 +60,7 @@ public class MirrorSourceTask extends SourceTask {
     private long maxOffsetLag;
     private Map<TopicPartition, PartitionState> partitionStates;
     private ReplicationPolicy replicationPolicy;
-    private MirrorMetrics metrics;
+    private MirrorSourceMetrics metrics;
     private boolean stopping = false;
     private Semaphore outstandingOffsetSyncs;
     private Semaphore consumerAccess;
@@ -68,7 +68,7 @@ public class MirrorSourceTask extends SourceTask {
     public MirrorSourceTask() {}
 
     // for testing
-    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorMetrics metrics, String sourceClusterAlias,
+    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceMetrics metrics, String sourceClusterAlias,
                      ReplicationPolicy replicationPolicy, long maxOffsetLag, KafkaProducer<byte[], byte[]> producer) {
         this.consumer = consumer;
         this.metrics = metrics;
@@ -81,7 +81,7 @@ public class MirrorSourceTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> props) {
-        MirrorTaskConfig config = new MirrorTaskConfig(props);
+        MirrorSourceTaskConfig config = new MirrorSourceTaskConfig(props);
         outstandingOffsetSyncs = new Semaphore(MAX_OUTSTANDING_OFFSET_SYNCS);
         consumerAccess = new Semaphore(1);  // let one thread at a time access the consumer
         sourceClusterAlias = config.sourceClusterAlias();

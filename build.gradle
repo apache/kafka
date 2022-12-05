@@ -99,11 +99,18 @@ ext {
 
   userEnableTestCoverage = project.hasProperty("enableTestCoverage") ? enableTestCoverage : false
 
+  userKeepAliveModeString = project.hasProperty("keepAliveMode") ? keepAliveMode : "daemon"
+  userKeepAliveMode = KeepAliveMode.values().find(m -> m.name().toLowerCase().equals(userKeepAliveModeString))
+  if (userKeepAliveMode == null) {
+    def keepAliveValues = KeepAliveMode.values().collect(m -> m.name.toLowerCase())
+    throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
+  }
+
   // See README.md for details on this option and the reasoning for the default
   userScalaOptimizerMode = project.hasProperty("scalaOptimizerMode") ? scalaOptimizerMode : "inline-kafka"
   def scalaOptimizerValues = ["none", "method", "inline-kafka", "inline-scala"]
   if (!scalaOptimizerValues.contains(userScalaOptimizerMode))
-    throw new GradleException("Unexpected value for scalaOptimizerMode property. Expected one of $scalaOptimizerValues), but received: $userScalaOptimizerMode")
+    throw new GradleException("Unexpected value for scalaOptimizerMode property. Expected one of $scalaOptimizerValues, but received: $userScalaOptimizerMode")
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 
@@ -195,7 +202,6 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
-        'config/kraft/README.md',
         'TROGDOR.md',
         '**/README.md',
         '**/id_rsa',
@@ -621,6 +627,8 @@ subprojects {
 
   tasks.withType(ScalaCompile) {
 
+    scalaCompileOptions.keepAliveMode = userKeepAliveMode
+
     scalaCompileOptions.additionalParameters = [
       "-deprecation",
       "-unchecked",
@@ -644,6 +652,9 @@ subprojects {
       "-Xlint:type-parameter-shadow",
       "-Xlint:unused"
     ]
+
+    if (versions.baseScala == '2.13')
+      scalaCompileOptions.additionalParameters += ["-Wconf:msg=@nowarn annotation does not suppress any warnings:s"] // See https://github.com/scala/scala/pull/9960
 
     // See README.md for details on this option and the meaning of each value
     if (userScalaOptimizerMode.equals("method"))
@@ -1062,7 +1073,9 @@ project(':core') {
                                ':connect:runtime:genConnectPredicateDocs',
                                ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
-                               ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs'], type: Tar) {
+                               ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs',
+                               ':connect:mirror:genMirrorSourceConfigDocs', ':connect:mirror:genMirrorCheckpointConfigDocs',
+                               ':connect:mirror:genMirrorHeartbeatConfigDocs'], type: Tar) {
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -2831,6 +2844,27 @@ project(':connect:mirror') {
     }
     into "$buildDir/dependant-libs"
     duplicatesStrategy 'exclude'
+  }
+
+  task genMirrorSourceConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.connect.mirror.MirrorSourceConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "mirror_source_config.html").newOutputStream()
+  }
+
+  task genMirrorCheckpointConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.connect.mirror.MirrorCheckpointConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "mirror_checkpoint_config.html").newOutputStream()
+  }
+
+  task genMirrorHeartbeatConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.connect.mirror.MirrorHeartbeatConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "mirror_heartbeat_config.html").newOutputStream()
   }
 
   jar {

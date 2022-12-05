@@ -413,6 +413,9 @@ object KafkaConfig {
   val QuorumVotersProp = RaftConfig.QUORUM_VOTERS_CONFIG
   val MetadataMaxIdleIntervalMsProp = "metadata.max.idle.interval.ms"
 
+  /** ZK to KRaft Migration configs */
+  val MigrationEnabledProp = "zookeeper.metadata.migration.enable"
+
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
   val EarlyStartListenersProp = "early.start.listeners"
@@ -1189,6 +1192,7 @@ object KafkaConfig {
       .define(MetadataMaxRetentionBytesProp, LONG, Defaults.MetadataMaxRetentionBytes, null, HIGH, MetadataMaxRetentionBytesDoc)
       .define(MetadataMaxRetentionMillisProp, LONG, Defaults.LogRetentionHours * 60 * 60 * 1000L, null, HIGH, MetadataMaxRetentionMillisDoc)
       .define(MetadataMaxIdleIntervalMsProp, INT, Defaults.MetadataMaxIdleIntervalMs, atLeast(0), LOW, MetadataMaxIdleIntervalMsDoc)
+      .define(MigrationEnabledProp, BOOLEAN, false, HIGH, "Enable ZK to KRaft migration")
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, new ConfigDef.NonNullValidator(), LOW, AuthorizerClassNameDoc)
@@ -1660,6 +1664,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   def requiresZookeeper: Boolean = processRoles.isEmpty
   def usesSelfManagedQuorum: Boolean = processRoles.nonEmpty
+
+  val migrationEnabled: Boolean = getBoolean(KafkaConfig.MigrationEnabledProp)
 
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KafkaConfig.ProcessRolesProp).asScala.map {

@@ -68,6 +68,23 @@ class KRaftClusterTest {
   }
 
   @Test
+  def testCreateClusterAndRestartNode(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val broker = cluster.brokers().values().iterator().next()
+      broker.shutdown()
+      broker.startup()
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
   def testCreateClusterAndWaitForBrokerInRunningState(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().

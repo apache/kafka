@@ -17,11 +17,12 @@
 package kafka.coordinator.group
 
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData, ListGroupsRequestData, ListGroupsResponseData}
+import org.apache.kafka.common.message.{HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
 import java.util.concurrent.CompletableFuture
+import scala.collection.immutable
 import scala.jdk.CollectionConverters._
 
 /**
@@ -79,6 +80,87 @@ class GroupCoordinatorAdapter(
       callback,
       Option(request.reason),
       RequestLocal(bufferSupplier)
+    )
+
+    future
+  }
+
+  override def syncGroup(
+    context: RequestContext,
+    request: SyncGroupRequestData,
+    bufferSupplier: BufferSupplier
+  ): CompletableFuture[SyncGroupResponseData] = {
+    val future = new CompletableFuture[SyncGroupResponseData]()
+
+    def callback(syncGroupResult: SyncGroupResult): Unit = {
+      future.complete(new SyncGroupResponseData()
+        .setErrorCode(syncGroupResult.error.code)
+        .setProtocolType(syncGroupResult.protocolType.orNull)
+        .setProtocolName(syncGroupResult.protocolName.orNull)
+        .setAssignment(syncGroupResult.memberAssignment)
+      )
+    }
+
+    val assignmentMap = immutable.Map.newBuilder[String, Array[Byte]]
+    request.assignments.forEach { assignment =>
+      assignmentMap += assignment.memberId -> assignment.assignment
+    }
+
+    coordinator.handleSyncGroup(
+      request.groupId,
+      request.generationId,
+      request.memberId,
+      Option(request.protocolType),
+      Option(request.protocolName),
+      Option(request.groupInstanceId),
+      assignmentMap.result(),
+      callback,
+      RequestLocal(bufferSupplier)
+    )
+
+    future
+  }
+
+  override def heartbeat(
+    context: RequestContext,
+    request: HeartbeatRequestData
+  ): CompletableFuture[HeartbeatResponseData] = {
+    val future = new CompletableFuture[HeartbeatResponseData]()
+
+    coordinator.handleHeartbeat(
+      request.groupId,
+      request.memberId,
+      Option(request.groupInstanceId),
+      request.generationId,
+      error => future.complete(new HeartbeatResponseData()
+        .setErrorCode(error.code))
+    )
+
+    future
+  }
+
+  override def leaveGroup(
+    context: RequestContext,
+    request: LeaveGroupRequestData
+  ): CompletableFuture[LeaveGroupResponseData] = {
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+
+    def callback(leaveGroupResult: LeaveGroupResult): Unit = {
+      future.complete(new LeaveGroupResponseData()
+        .setErrorCode(leaveGroupResult.topLevelError.code)
+        .setMembers(leaveGroupResult.memberResponses.map { member =>
+          new LeaveGroupResponseData.MemberResponse()
+            .setErrorCode(member.error.code)
+            .setMemberId(member.memberId)
+            .setGroupInstanceId(member.groupInstanceId.orNull)
+        }.asJava)
+      )
+    }
+
+    coordinator.handleLeaveGroup(
+      request.groupId,
+      request.members.asScala.toList,
+      callback
     )
 
     future
