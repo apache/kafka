@@ -269,7 +269,7 @@ public class StreamsMetadataStateTest {
                 "the-key",
                 partitioner);
         assertEquals(expected, actual);
-        assertEquals(-1, actual.partition());
+        assertEquals(1, actual.partition());
         assertEquals(Collections.singleton(1), actual.partitions());
     }
 

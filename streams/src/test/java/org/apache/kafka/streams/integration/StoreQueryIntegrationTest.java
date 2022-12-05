@@ -39,7 +39,6 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStoreQueryParameters;
-import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -124,7 +123,7 @@ public class StoreQueryIntegrationTest {
     }
 
     @Test
-    public void shouldReturnAllPartitionsWhenRecordIsBroadcasted() throws Exception {
+    public void shouldReturnAllPartitionsWhenRecordIsBroadcast() throws Exception {
 
         class BroadcastingPartitioner implements StreamPartitioner<Integer, String> {
             @Override
@@ -163,9 +162,12 @@ public class StoreQueryIntegrationTest {
 
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
-        final KeyQueryMetadata keyQueryMetadataFetched = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new BroadcastingPartitioner());
-        assertThat(keyQueryMetadataFetched.activeHost().host(), is("localhost"));
-        assertThat(keyQueryMetadataFetched.partitions(), is(mkSet(0, 1)));
+        until(() -> {
+            final KeyQueryMetadata keyQueryMetadataFetched = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new BroadcastingPartitioner());
+            assertThat(keyQueryMetadataFetched.activeHost().host(), is("localhost"));
+            assertThat(keyQueryMetadataFetched.partitions(), is(mkSet(0, 1)));
+            return true;
+        });
     }
 
     @Test
