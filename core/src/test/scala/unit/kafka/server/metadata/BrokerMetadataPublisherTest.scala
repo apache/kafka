@@ -255,12 +255,11 @@ class BrokerMetadataPublisherTest {
 
   @Test
   def testExceptionInUpdateCoordinator(): Unit = {
-    val errorHandler = new MockFaultHandler("publisher")
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).
-      setMetadataFaultHandler(errorHandler).build()
+      build()
     try {
       cluster.format()
       cluster.startup()
@@ -279,11 +278,11 @@ class BrokerMetadataPublisherTest {
         admin.close()
       }
       TestUtils.retry(60000) {
-        assertTrue(Option(errorHandler.firstException()).
+        assertTrue(Option(cluster.nonFatalFaultHandler().firstException()).
           flatMap(e => Option(e.getMessage())).getOrElse("(none)").contains("injected failure"))
       }
     } finally {
-      errorHandler.setIgnore(true)
+      cluster.nonFatalFaultHandler().setIgnore(true)
       cluster.close()
     }
   }

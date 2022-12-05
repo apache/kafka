@@ -90,6 +90,7 @@ public class ConsumerProtocol {
             partition.partitions().add(tp.partition());
         }
 
+        data.setGenerationId(subscription.generationId().orElse(-1));
         return MessageUtil.toVersionPrefixedByteBuffer(version, data);
     }
 
@@ -110,7 +111,8 @@ public class ConsumerProtocol {
             return new Subscription(
                 data.topics(),
                 data.userData() != null ? data.userData().duplicate() : null,
-                ownedPartitions);
+                ownedPartitions,
+                data.generationId());
         } catch (BufferUnderflowException e) {
             throw new SchemaException("Buffer underflow while parsing consumer protocol's subscription", e);
         }

@@ -21,20 +21,15 @@ import java.util.concurrent.CompletableFuture
 import kafka.common.InconsistentNodeIdException
 import kafka.log.{LogConfig, UnifiedLog}
 import kafka.metrics.KafkaMetricsReporter
-import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
-import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{KafkaException, Uuid}
-import org.apache.kafka.controller.QuorumControllerMetrics
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
-import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
+import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.fault.{LoggingFaultHandler, ProcessExitingFaultHandler}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import java.util.Optional
@@ -69,62 +64,30 @@ class KafkaRaftServer(
   private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
     RaftConfig.parseVoterConnections(config.quorumVoters))
 
-  private val raftManager = new KafkaRaftManager[ApiMessageAndVersion](
-    metaProps,
+  private val sharedServer = new SharedServer(
     config,
-    new MetadataRecordSerde,
-    KafkaRaftServer.MetadataPartition,
-    KafkaRaftServer.MetadataTopicId,
+    metaProps,
     time,
     metrics,
     threadNamePrefix,
-    controllerQuorumVotersFuture
+    controllerQuorumVotersFuture,
+    new StandardFaultHandlerFactory(),
   )
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
-    val brokerMetrics = BrokerServerMetrics(metrics)
-    val fatalFaultHandler = new ProcessExitingFaultHandler()
-    val metadataLoadingFaultHandler = new LoggingFaultHandler("metadata loading",
-        () => brokerMetrics.metadataLoadErrorCount.getAndIncrement())
-    val metadataApplyingFaultHandler = new LoggingFaultHandler("metadata application",
-      () => brokerMetrics.metadataApplyErrorCount.getAndIncrement())
     Some(new BrokerServer(
-      config,
-      metaProps,
-      raftManager,
-      time,
-      metrics,
-      brokerMetrics,
-      threadNamePrefix,
-      offlineDirs,
-      controllerQuorumVotersFuture,
-      fatalFaultHandler,
-      metadataLoadingFaultHandler,
-      metadataApplyingFaultHandler
+      sharedServer,
+      offlineDirs
     ))
   } else {
     None
   }
 
   private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
-    val controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)
-    val metadataFaultHandler = new LoggingFaultHandler("controller metadata",
-      () => controllerMetrics.incrementMetadataErrorCount())
-    val fatalFaultHandler = new ProcessExitingFaultHandler()
     Some(new ControllerServer(
-      metaProps,
-      config,
-      raftManager,
-      time,
-      metrics,
-      controllerMetrics,
-      threadNamePrefix,
-      controllerQuorumVotersFuture,
+      sharedServer,
       KafkaRaftServer.configSchema,
-      raftManager.apiVersions,
       bootstrapMetadata,
-      metadataFaultHandler,
-      fatalFaultHandler
     ))
   } else {
     None
@@ -132,9 +95,6 @@ class KafkaRaftServer(
 
   override def startup(): Unit = {
     Mx4jLoader.maybeLoad()
-    // Note that we startup `RaftManager` first so that the controller and broker
-    // can register listeners during initialization.
-    raftManager.startup()
     controller.foreach(_.startup())
     broker.foreach(_.startup())
     AppInfoParser.registerAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics, time.milliseconds())
@@ -142,27 +102,23 @@ class KafkaRaftServer(
   }
 
   override def shutdown(): Unit = {
+    // In combined mode, we want to shut down the broker first, since the controller may be
+    // needed for controlled shutdown. Additionally, the controller shutdown process currently
+    // stops the raft client early on, which would disrupt broker shutdown.
     broker.foreach(_.shutdown())
-    // The order of shutdown for `RaftManager` and `ControllerServer` is backwards
-    // compared to `startup()`. This is because the `SocketServer` implementation that
-    // we rely on to receive requests is owned by `ControllerServer`, so we need it
-    // to stick around until graceful shutdown of `RaftManager` can be completed.
-    raftManager.shutdown()
     controller.foreach(_.shutdown())
     CoreUtils.swallow(AppInfoParser.unregisterAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics), this)
-
   }
 
   override def awaitShutdown(): Unit = {
     broker.foreach(_.awaitShutdown())
     controller.foreach(_.awaitShutdown())
   }
-
 }
 
 object KafkaRaftServer {
-  val MetadataTopic = Topic.METADATA_TOPIC_NAME
-  val MetadataPartition = Topic.METADATA_TOPIC_PARTITION
+  val MetadataTopic = Topic.CLUSTER_METADATA_TOPIC_NAME
+  val MetadataPartition = Topic.CLUSTER_METADATA_TOPIC_PARTITION
   val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 
   sealed trait ProcessRole

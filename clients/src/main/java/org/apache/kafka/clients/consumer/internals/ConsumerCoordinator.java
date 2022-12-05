@@ -244,7 +244,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         for (ConsumerPartitionAssignor assignor : assignors) {
             Subscription subscription = new Subscription(topics,
                                                          assignor.subscriptionUserData(joinedSubscription),
-                                                         subscriptions.assignedPartitionsList());
+                                                         subscriptions.assignedPartitionsList(),
+                                                         generation().generationId);
             ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
 
             protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()

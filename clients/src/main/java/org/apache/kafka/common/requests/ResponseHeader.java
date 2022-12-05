@@ -96,9 +96,14 @@ public class ResponseHeader implements AbstractRequestResponse {
     }
 
     public static ResponseHeader parse(ByteBuffer buffer, short headerVersion) {
+        final int bufferStartPositionForHeader = buffer.position();
         final ResponseHeader header = new ResponseHeader(
             new ResponseHeaderData(new ByteBufferAccessor(buffer), headerVersion), headerVersion);
-        header.size = buffer.remaining();
+        // Size of header is calculated by the shift in the position of buffer's start position during parsing.
+        // Prior to parsing, the buffer's start position points to header data and after the parsing operation
+        // the buffer's start position points to api message. For more information on how the buffer is
+        // constructed, see RequestUtils#serialize()
+        header.size = Math.max(buffer.position() - bufferStartPositionForHeader, 0);
         return header;
     }
 

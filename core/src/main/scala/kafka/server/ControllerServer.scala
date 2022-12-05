@@ -17,36 +17,31 @@
 
 package kafka.server
 
-import java.util
 import java.util.OptionalLong
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import kafka.cluster.Broker.ServerInfo
 import kafka.metrics.{KafkaMetricsGroup, LinuxIoMetricsCollector}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
-import kafka.raft.RaftManager
+import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{Controller, ControllerMetrics, QuorumController, QuorumFeatures}
+import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
@@ -57,21 +52,18 @@ import scala.compat.java8.OptionConverters._
  * A Kafka controller that runs in KRaft (Kafka Raft) mode.
  */
 class ControllerServer(
-  val metaProperties: MetaProperties,
-  val config: KafkaConfig,
-  val raftManager: RaftManager[ApiMessageAndVersion],
-  val time: Time,
-  val metrics: Metrics,
-  val controllerMetrics: ControllerMetrics,
-  val threadNamePrefix: Option[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val sharedServer: SharedServer,
   val configSchema: KafkaConfigSchema,
-  val raftApiVersions: ApiVersions,
   val bootstrapMetadata: BootstrapMetadata,
-  val metadataFaultHandler: FaultHandler,
-  val fatalFaultHandler: FaultHandler,
 ) extends Logging with KafkaMetricsGroup {
+
   import kafka.server.Server._
+
+  val config = sharedServer.config
+  val time = sharedServer.time
+  def metrics = sharedServer.metrics
+  val threadNamePrefix = sharedServer.threadNamePrefix.getOrElse("")
+  def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
 
   config.dynamicConfig.initialize(zkClientOpt = None)
 
@@ -111,7 +103,7 @@ class ControllerServer(
     new DynamicMetricReporterState(config.nodeId, config, metrics, clusterId)
   }
 
-  def clusterId: String = metaProperties.clusterId
+  def clusterId: String = sharedServer.metaProps.clusterId
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
@@ -171,15 +163,18 @@ class ControllerServer(
         throw new ConfigException("No controller.listener.names defined for controller")
       }
 
-      val threadNamePrefixAsString = threadNamePrefix.getOrElse("")
+      sharedServer.startForController()
 
       createTopicPolicy = Option(config.
         getConfiguredInstance(CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get())
-      val quorumFeatures = QuorumFeatures.create(config.nodeId, raftApiVersions, QuorumFeatures.defaultFeatureMap(), controllerNodes)
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(sharedServer.controllerQuorumVotersFuture.get())
+      val quorumFeatures = QuorumFeatures.create(config.nodeId,
+        sharedServer.raftManager.apiVersions,
+        QuorumFeatures.defaultFeatureMap(),
+        controllerNodes)
 
       val controllerBuilder = {
         val leaderImbalanceCheckIntervalNs = if (config.autoLeaderRebalanceEnable) {
@@ -190,9 +185,9 @@ class ControllerServer(
 
         val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
 
-        new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
+        new QuorumController.Builder(config.nodeId, sharedServer.metaProps.clusterId).
           setTime(time).
-          setThreadNamePrefix(threadNamePrefixAsString).
+          setThreadNamePrefix(threadNamePrefix).
           setConfigSchema(configSchema).
           setRaftClient(raftManager.client).
           setQuorumFeatures(quorumFeatures).
@@ -204,13 +199,13 @@ class ControllerServer(
           setSnapshotMaxIntervalMs(config.metadataSnapshotMaxIntervalMs).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
           setMaxIdleIntervalNs(maxIdleIntervalNs).
-          setMetrics(controllerMetrics).
+          setMetrics(sharedServer.controllerMetrics).
           setCreateTopicPolicy(createTopicPolicy.asJava).
           setAlterConfigPolicy(alterConfigPolicy.asJava).
           setConfigurationValidator(new ControllerConfigurationValidator()).
           setStaticConfig(config.originals).
           setBootstrapMetadata(bootstrapMetadata).
-          setFatalFaultHandler(fatalFaultHandler)
+          setFatalFaultHandler(sharedServer.quorumControllerFaultHandler)
       }
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)
@@ -223,7 +218,10 @@ class ControllerServer(
         doRemoteKraftSetup()
       }
 
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
+      quotaManagers = QuotaFactory.instantiate(config,
+        metrics,
+        time,
+        threadNamePrefix)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,
@@ -231,7 +229,7 @@ class ControllerServer(
         controller,
         raftManager,
         config,
-        metaProperties,
+        sharedServer.metaProps,
         controllerNodes.asScala.toSeq,
         apiVersionManager)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
@@ -265,6 +263,9 @@ class ControllerServer(
     if (!maybeChangeStatus(STARTED, SHUTTING_DOWN)) return
     try {
       info("shutting down")
+      // Ensure that we're not the Raft leader prior to shutting down our socket server, for a
+      // smoother transition.
+      sharedServer.ensureNotRaftLeader()
       if (socketServer != null)
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
       if (controller != null)
@@ -283,6 +284,7 @@ class ControllerServer(
       createTopicPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       alterConfigPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
+      sharedServer.stopForController()
     } catch {
       case e: Throwable =>
         fatal("Fatal error during controller shutdown.", e)
