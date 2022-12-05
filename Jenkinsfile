@@ -118,43 +118,43 @@ pipeline {
           }
         }
 
-//         stage('JDK 11 and Scala 2.13') {
-//           agent { label 'ubuntu' }
-//           tools {
-//             jdk 'jdk_11_latest'
-//           }
-//           options {
-//             timeout(time: 8, unit: 'HOURS')
-//             timestamps()
-//           }
-//           environment {
-//             SCALA_VERSION=2.13
-//           }
-//           steps {
-//             doValidation()
-//             doTest(env)
-//             echo 'Skipping Kafka Streams archetype test for Java 11'
-//           }
-//         }
-//
-//         stage('JDK 17 and Scala 2.13') {
-//           agent { label 'ubuntu' }
-//           tools {
-//             jdk 'jdk_17_latest'
-//           }
-//           options {
-//             timeout(time: 8, unit: 'HOURS')
-//             timestamps()
-//           }
-//           environment {
-//             SCALA_VERSION=2.13
-//           }
-//           steps {
-//             doValidation()
-//             doTest(env)
-//             echo 'Skipping Kafka Streams archetype test for Java 17'
-//           }
-//         }
+        stage('JDK 11 and Scala 2.13') {
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_11_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 11'
+          }
+        }
+
+        stage('JDK 17 and Scala 2.13') {
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_17_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 17'
+          }
+        }
         
         // To avoid excessive Jenkins resource usage, we only run the stages
         // above at the PR stage. The ones below are executed after changes
@@ -237,14 +237,14 @@ pipeline {
   post {
     always {
       script {
-        //if (!isChangeRequest(env)) {
+        if (!isChangeRequest(env)) {
           node('ubuntu') {
             step([$class: 'Mailer',
                  notifyEveryUnstableBuild: true,
-                 recipients: "dajac@apache.org",
+                 recipients: "dev@kafka.apache.org",
                  sendToIndividuals: false])
           }
-        //}
+        }
       }
     }
   }
