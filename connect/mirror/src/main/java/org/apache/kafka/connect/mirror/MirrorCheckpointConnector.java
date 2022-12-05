@@ -159,8 +159,11 @@ public class MirrorCheckpointConnector extends SourceConnector {
     }
 
     private void createInternalTopics() {
-        MirrorUtils.createSinglePartitionCompactedTopic(config.checkpointsTopic(),
-            config.checkpointsTopicReplicationFactor(), config.forwardingAdmin(config.targetAdminConfig()));
+        MirrorUtils.createSinglePartitionCompactedTopic(
+                config.checkpointsTopic(),
+                config.checkpointsTopicReplicationFactor(),
+                sourceAdminClient
+        );
     } 
 
     boolean shouldReplicate(String group) {
