@@ -52,7 +52,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public List<Coordinator> getCoordinatorsByKey(String key) {
+    public List<Coordinator> getCoordinatorByKey(String key) {
         Objects.requireNonNull(key);
         if (this.data.coordinators().isEmpty()) {
             // version <= 3

@@ -36,6 +36,20 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Handles the timing of the next FindCoordinatorRequest based on the {@link CoordinatorRequestState}. It checks for:
+ * 1. If there's an existing coordinator.
+ * 2. If there is an inflight request
+ * 3. If the backoff timer has expired
+ *
+ * The {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult} contains either a wait
+ * timer, or a singleton list of
+ * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}.
+ *
+ * The FindCoordinatorResponse will be handled by the {@link FindCoordinatorRequestHandler} callback, which
+ * subsequently invokes {@code onResponse} to handle the exceptions and responses. Note that, the coordinator node
+ * will be marked {@code null} upon receiving a failure.
+ */
 public class CoordinatorRequestManager implements RequestManager {
 
     private final Logger log;
@@ -66,6 +80,7 @@ public class CoordinatorRequestManager implements RequestManager {
         this.coordinatorRequestState = new CoordinatorRequestState(config);
     }
 
+    // Visible for testing
     CoordinatorRequestManager(final Time time,
                               final LogContext logContext,
                               final ErrorEventHandler errorHandler,
@@ -85,6 +100,10 @@ public class CoordinatorRequestManager implements RequestManager {
 
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
+        if (this.coordinator != null) {
+            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
+        }
+
         if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
             NetworkClientDelegate.UnsentRequest request = makeFindCoordinatorRequest(currentTimeMs);
             return new NetworkClientDelegate.PollResult(0, Collections.singletonList(request));
@@ -177,7 +196,7 @@ public class CoordinatorRequestManager implements RequestManager {
             return;
         }
 
-        List<FindCoordinatorResponseData.Coordinator> coordinators = response.getCoordinatorsByKey(this.groupId);
+        List<FindCoordinatorResponseData.Coordinator> coordinators = response.getCoordinatorByKey(this.groupId);
         if (coordinators.size() != 1) {
             coordinatorRequestState.updateLastFailedAttempt(currentTimeMs);
             String msg = String.format("Group coordinator lookup failed: Response should contain exactly one " +

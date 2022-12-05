@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -117,7 +116,6 @@ public class CoordinatorRequestManagerTest {
 
     @Test
     public void testCoordinatorRequestState() {
-        ConsumerConfig config = new ConsumerConfig(properties);
         CoordinatorRequestManager.CoordinatorRequestState state = new CoordinatorRequestManager.CoordinatorRequestState(
                 100,
                 2,
@@ -167,6 +165,19 @@ public class CoordinatorRequestManagerTest {
         coordinatorManager.onResponse(
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "key",
                         this.node), null);
+    }
+
+    @Test
+    public void testPollWithExistingCoordinator() {
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
+        FindCoordinatorResponse resp = FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node);
+        coordinatorManager.onResponse(resp, null);
+        verify(errorEventHandler, never()).handle(any());
+        assertNotNull(coordinatorManager.coordinator());
+
+        NetworkClientDelegate.PollResult pollResult = coordinatorManager.poll(time.milliseconds());
+        assertEquals(Long.MAX_VALUE, pollResult.timeMsTillNextPoll);
+        assertTrue(pollResult.unsentRequests.isEmpty());
     }
 
     @Test
