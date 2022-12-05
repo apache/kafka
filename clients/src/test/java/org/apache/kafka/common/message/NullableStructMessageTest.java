@@ -86,6 +86,17 @@ public class NullableStructMessageTest {
         assertThrows(NullPointerException.class, () -> roundTrip(message, (short) 0));
     }
 
+    @Test
+    public void testToStringWithNullStructs() {
+        NullableStructMessageData message = new NullableStructMessageData()
+            .setNullableStruct(null)
+            .setNullableStruct2(null)
+            .setNullableStruct3(null)
+            .setNullableStruct4(null);
+
+        message.toString();
+    }
+
     private NullableStructMessageData deserialize(ByteBuffer buf, short version) {
         NullableStructMessageData message = new NullableStructMessageData();
         message.read(new ByteBufferAccessor(buf.duplicate()), version);

@@ -1622,10 +1622,17 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         } else if (field.type().isRecords()) {
             buffer.printf("+ \"%s%s=\" + %s%n",
                     prefix, field.camelCaseName(), field.camelCaseName());
-        } else if (field.type() instanceof FieldType.UUIDFieldType ||
-                field.type().isStruct()) {
+        } else if (field.type() instanceof FieldType.UUIDFieldType) {
             buffer.printf("+ \"%s%s=\" + %s.toString()%n",
                 prefix, field.camelCaseName(), field.camelCaseName());
+        } else if (field.type().isStruct()) {
+            if (field.nullableVersions().empty()) {
+                buffer.printf("+ \"%s%s=\" + %s.toString()%n",
+                    prefix, field.camelCaseName(), field.camelCaseName());
+            } else {
+                buffer.printf("+ \"%s%s=\" + ((%s == null) ? \"null\" : %s.toString())%n",
+                    prefix, field.camelCaseName(), field.camelCaseName(), field.camelCaseName());
+            }
         } else if (field.type().isArray()) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
             if (field.nullableVersions().empty()) {
