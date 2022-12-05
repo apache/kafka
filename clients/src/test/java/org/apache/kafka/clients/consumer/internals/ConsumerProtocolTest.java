@@ -56,7 +56,7 @@ public class ConsumerProtocolTest {
             new TopicPartition("foo", 0),
             new TopicPartition("bar", 0));
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"),
-            ByteBuffer.wrap("hello".getBytes()), ownedPartitions, generationId);
+            ByteBuffer.wrap("hello".getBytes()), ownedPartitions, generationId, Optional.empty());
 
         for (short version = ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION; version++) {
             ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription, version);
@@ -153,7 +153,7 @@ public class ConsumerProtocolTest {
     public void deserializeNewSubscriptionWithOldVersion(boolean hasGenerationId) {
         Subscription subscription;
         if (hasGenerationId) {
-            subscription = new Subscription(Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2), generationId);
+            subscription = new Subscription(Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2), generationId, Optional.empty());
         } else {
             subscription = new Subscription(Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2));
         }

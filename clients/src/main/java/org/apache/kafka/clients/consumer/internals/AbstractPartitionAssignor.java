@@ -18,17 +18,21 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Abstract assignor implementation which does some common grunt work (in particular collecting
@@ -47,6 +51,18 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
     public abstract Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                              Map<String, Subscription> subscriptions);
 
+    /**
+     * Default implementation of assignPartitions() that does not include racks. This is only
+     * included to avoid breaking any custom implementation that extends AbstractPartitionAssignor.
+     * Note that this class is internal, but to be safe, we are maintaining compatibility.
+     */
+    public Map<String, List<TopicPartition>> assignPartitions(Map<String, List<PartitionInfo>> partitionsPerTopic,
+                                                              Map<String, Subscription> subscriptions) {
+        Map<String, Integer> partitionCountPerTopic = partitionsPerTopic.entrySet().stream()
+                        .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().size()));
+        return assign(partitionCountPerTopic, subscriptions);
+    }
+
     @Override
     public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription) {
         Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
@@ -54,16 +70,18 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet())
             allSubscribedTopics.addAll(subscriptionEntry.getValue().topics());
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         for (String topic : allSubscribedTopics) {
-            Integer numPartitions = metadata.partitionCountForTopic(topic);
-            if (numPartitions != null && numPartitions > 0)
-                partitionsPerTopic.put(topic, numPartitions);
-            else
+            List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
+            if (partitions != null && !partitions.isEmpty()) {
+                partitions = new ArrayList<>(partitions);
+                partitions.sort(Comparator.comparing(PartitionInfo::partition));
+                partitionsPerTopic.put(topic, partitions);
+            } else
                 log.debug("Skipping assignment for topic {} since no metadata is available", topic);
         }
 
-        Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, subscriptions);
+        Map<String, List<TopicPartition>> rawAssignments = assignPartitions(partitionsPerTopic, subscriptions);
 
         // this class maintains no user data, so just wrap the results
         Map<String, Assignment> assignments = new HashMap<>();
@@ -87,10 +105,16 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
     public static class MemberInfo implements Comparable<MemberInfo> {
         public final String memberId;
         public final Optional<String> groupInstanceId;
+        public final Optional<String> rackId;
 
-        public MemberInfo(String memberId, Optional<String> groupInstanceId) {
+        public MemberInfo(String memberId, Optional<String> groupInstanceId, Optional<String> rackId) {
             this.memberId = memberId;
             this.groupInstanceId = groupInstanceId;
+            this.rackId = rackId;
+        }
+
+        public MemberInfo(String memberId, Optional<String> groupInstanceId) {
+            this(memberId, groupInstanceId, Optional.empty());
         }
 
         @Override
@@ -126,6 +150,7 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
         public String toString() {
             return "MemberInfo [member.id: " + memberId
                     + ", group.instance.id: " + groupInstanceId.orElse("{}")
+                    + ", rack.id: " + rackId.orElse("{}")
                     + "]";
         }
     }
