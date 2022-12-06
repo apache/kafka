@@ -824,11 +824,6 @@ public class StreamsConfig extends AbstractConfig {
                     LogAndFailExceptionHandler.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
-            .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
-                    Type.CLASS,
-                    DefaultKafkaClientSupplier.class.getName(),
-                    Importance.MEDIUM,
-                    DEFAULT_CLIENT_SUPPLIER_DOC)
             .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
                     Type.CLASS,
                     null,
@@ -1110,7 +1105,12 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     null,
                     Importance.LOW,
-                    WINDOW_SIZE_MS_DOC);
+                    WINDOW_SIZE_MS_DOC)
+            .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
+                    Type.CLASS,
+                    DefaultKafkaClientSupplier.class.getName(),
+                    Importance.MEDIUM,
+                    DEFAULT_CLIENT_SUPPLIER_DOC);
     }
 
     // this is the list of configs for underlying clients

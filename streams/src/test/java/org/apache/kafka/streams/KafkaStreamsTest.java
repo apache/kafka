@@ -1111,6 +1111,16 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldUseProvidedClientSupplier() {
+        final StreamsConfig config = new StreamsConfig(props);
+        final StreamsConfig mockConfig = spy(config);
+
+        new KafkaStreams(getBuilderWithSource().build(), mockConfig, supplier);
+        // It's called once in above when mock
+        verify(mockConfig, times(0)).getKafkaClientSupplier();
+    }
+
+    @Test
     public void shouldNotTriggerRecordingOfRocksDBMetricsIfRecordingLevelIsInfo() {
         try (final MockedStatic<Executors> executorsMockedStatic = mockStatic(Executors.class)) {
             final ScheduledExecutorService cleanupSchedule = mock(ScheduledExecutorService.class);
