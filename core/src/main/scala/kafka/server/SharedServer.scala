@@ -78,7 +78,7 @@ class StandardFaultHandlerFactory extends FaultHandlerFactory {
  * make debugging easier and reduce the chance of resource leaks.
  */
 class SharedServer(
-  val sharedServerConfig: KafkaConfig,
+  private val sharedServerConfig: KafkaConfig,
   val metaProps: MetaProperties,
   val time: Time,
   private val _metrics: Metrics,
@@ -91,6 +91,8 @@ class SharedServer(
   private var started = false
   private var usedByBroker: Boolean = false
   private var usedByController: Boolean = false
+  val brokerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
+  val controllerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
   @volatile var metrics: Metrics = _metrics
   @volatile var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
   @volatile var brokerMetrics: BrokerServerMetrics = _

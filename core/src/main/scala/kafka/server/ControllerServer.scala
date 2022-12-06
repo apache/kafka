@@ -59,7 +59,7 @@ class ControllerServer(
 
   import kafka.server.Server._
 
-  val config = new KafkaConfig(sharedServer.sharedServerConfig.props, false, None)
+  val config = sharedServer.controllerConfig
   val time = sharedServer.time
   def metrics = sharedServer.metrics
   val threadNamePrefix = sharedServer.threadNamePrefix.getOrElse("")

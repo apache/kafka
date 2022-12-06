@@ -71,7 +71,7 @@ class BrokerServer(
   val initialOfflineDirs: Seq[String],
 ) extends KafkaBroker {
   val threadNamePrefix = sharedServer.threadNamePrefix
-  val config = new KafkaConfig(sharedServer.sharedServerConfig.props, false, None)
+  val config = sharedServer.brokerConfig
   val time = sharedServer.time
   def metrics = sharedServer.metrics
 
