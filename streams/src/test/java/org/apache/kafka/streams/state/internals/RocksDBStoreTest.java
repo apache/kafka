@@ -230,12 +230,18 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         public RocksDBConfigSetterWithUserProvidedStatistics(){}
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
-            options.setStatistics(new Statistics());
+            lastStatistics = new Statistics();
+            options.setStatistics(lastStatistics);
         }
 
         public void close(final String storeName, final Options options) {
-            options.statistics().close();
+            // We want to be in charge of closing our statistics ourselves.
+            assertTrue(lastStatistics.isOwningHandle());
+            lastStatistics.close();
+            lastStatistics = null;
         }
+
+        protected static Statistics lastStatistics = null;
     }
 
     @Test
@@ -247,6 +253,50 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
     }
+
+
+    @Test
+    public void shouldCloseStatisticsWhenUserProvidesStatistics() {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
+
+
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        final Statistics userStatistics = RocksDBConfigSetterWithUserProvidedStatistics.lastStatistics;
+        final Statistics statisticsHandle = rocksDBStore.statistics;
+        rocksDBStore.close();
+
+        // Both statistics handles must be closed now.
+        assertFalse(userStatistics.isOwningHandle());
+        assertFalse(statisticsHandle.isOwningHandle());
+        assertNull(rocksDBStore.statistics);
+        assertNull(RocksDBConfigSetterWithUserProvidedStatistics.lastStatistics);
+    }
+
+    @Test
+    public void shouldSetStatisticsInValueProvidersWhenUserProvidesNoStatistics() {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG);
+
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+
+        verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), eq(rocksDBStore.statistics));
+    }
+
+    @Test
+    public void shouldCloseStatisticsWhenUserProvidesNoStatistics() {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG);
+
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        final Statistics statisticsHandle = rocksDBStore.statistics;
+        rocksDBStore.close();
+
+        // Statistics handles must be closed now.
+        assertFalse(statisticsHandle.isOwningHandle());
+        assertNull(rocksDBStore.statistics);
+    }
+
 
     public static class RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig implements RocksDBConfigSetter {
         public RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig(){}

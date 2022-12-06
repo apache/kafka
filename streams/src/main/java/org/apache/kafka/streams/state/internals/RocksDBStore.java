@@ -108,7 +108,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     FlushOptions fOptions;
     private Cache cache;
     private BloomFilter filter;
-    private Statistics statistics;
+
+    // visible for testing
+    protected Statistics statistics;
 
     private RocksDBConfigSetter configSetter;
     private boolean userSpecifiedStatistics = false;
@@ -230,6 +232,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         // Setup statistics before the database is opened, otherwise the statistics are not updated
         // with the measurements from Rocks DB
+        setupStatistics(configs, dbOptions);
+        openRocksDB(dbOptions, columnFamilyOptions);
+        open = true;
+
+        addValueProvidersToMetricsRecorder();
+    }
+
+    private void setupStatistics(final Map<String, Object> configs, final DBOptions dbOptions) {
         statistics = userSpecifiedOptions.statistics();
         if (statistics == null) {
             if (RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
@@ -240,10 +250,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         } else {
             userSpecifiedStatistics = true;
         }
-        openRocksDB(dbOptions, columnFamilyOptions);
-        open = true;
-
-        addValueProvidersToMetricsRecorder();
     }
 
     private void addValueProvidersToMetricsRecorder() {
