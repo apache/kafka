@@ -16,22 +16,37 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.RequestManager;
 
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 
 public class ApplicationEventProcessor {
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
+    private final Map<RequestManager.Type, Optional<RequestManager>> registry;
 
-    public ApplicationEventProcessor(final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+    public ApplicationEventProcessor(
+            final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+            final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry) {
         this.backgroundEventQueue = backgroundEventQueue;
+        this.registry = requestManagerRegistry;
     }
+
     public boolean process(final ApplicationEvent event) {
         Objects.requireNonNull(event);
         switch (event.type) {
             case NOOP:
                 return process((NoopApplicationEvent) event);
+            case COMMIT:
+                return process((CommitApplicationEvent) event);
+            case POLL:
+                return process((PollApplicationEvent) event);
         }
         return false;
     }
@@ -45,5 +60,27 @@ public class ApplicationEventProcessor {
      */
     private boolean process(final NoopApplicationEvent event) {
         return backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
+    }
+
+    private boolean process(final PollApplicationEvent event) {
+        Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
+        if (!commitRequestManger.isPresent()) {
+            return false;
+        }
+
+        CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
+        manager.clientPoll(event.pollTimeMs);
+        return true;
+    }
+
+    private boolean process(final CommitApplicationEvent event) {
+        Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
+        if (!commitRequestManger.isPresent()) {
+            return false;
+        }
+
+        CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
+        CompletableFuture<ClientResponse> res = manager.add(event.offsets());
+        return true;
     }
 }

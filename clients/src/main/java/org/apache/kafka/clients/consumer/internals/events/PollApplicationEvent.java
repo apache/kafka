@@ -14,18 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
+public class PollApplicationEvent extends ApplicationEvent {
+    public final long pollTimeMs;
 
-/**
- * {@code PollResult} consist of {@code UnsentRequest} if there are requests to send; otherwise, return the time till
- * the next poll event.
- */
-public interface RequestManager {
-    PollResult poll(long currentTimeMs);
-
-    enum Type {
-        COORDINATOR, COMMIT
+    protected PollApplicationEvent(final long currentTimeMs) {
+        super(Type.POLL);
+        this.pollTimeMs = currentTimeMs;
     }
 }

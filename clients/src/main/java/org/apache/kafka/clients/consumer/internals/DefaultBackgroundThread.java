@@ -30,8 +30,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.util.Iterator;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
@@ -46,7 +48,7 @@ import java.util.concurrent.BlockingQueue;
  * initialized by the polling thread.
  */
 public class DefaultBackgroundThread extends KafkaThread {
-    private static final int MAX_POLL_TIMEOUT_MS = 5000;
+    private static final long MAX_POLL_TIMEOUT_MS = 5000;
     private static final String BACKGROUND_THREAD_NAME =
             "consumer_background_thread";
     private final Time time;
@@ -56,12 +58,13 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final ConsumerMetadata metadata;
     private final ConsumerConfig config;
     // empty if groupId is null
-    private final Optional<CoordinatorRequestManager> coordinatorManager;
     private final ApplicationEventProcessor applicationEventProcessor;
     private final NetworkClientDelegate networkClientDelegate;
     private final ErrorEventHandler errorEventHandler;
-
+    private final GroupStateManager groupState;
     private boolean running;
+
+    private final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry;
 
     // Visible for testing
     DefaultBackgroundThread(final Time time,
@@ -73,7 +76,9 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final ApplicationEventProcessor processor,
                             final ConsumerMetadata metadata,
                             final NetworkClientDelegate networkClient,
-                            final CoordinatorRequestManager coordinatorManager) {
+                            final GroupStateManager groupState,
+                            final CoordinatorRequestManager coordinatorManager,
+                            CommitRequestManager commitRequestManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.running = true;
@@ -84,8 +89,12 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.config = config;
         this.metadata = metadata;
         this.networkClientDelegate = networkClient;
-        this.coordinatorManager = Optional.ofNullable(coordinatorManager);
         this.errorEventHandler = errorEventHandler;
+        this.groupState = groupState;
+
+        this.requestManagerRegistry = new HashMap<>();
+        this.requestManagerRegistry.put(RequestManager.Type.COORDINATOR, Optional.ofNullable(coordinatorManager));
+        this.requestManagerRegistry.put(RequestManager.Type.COMMIT, Optional.ofNullable(commitRequestManager));
     }
     public DefaultBackgroundThread(final Time time,
                                    final ConsumerConfig config,
@@ -111,21 +120,35 @@ public class DefaultBackgroundThread extends KafkaThread {
                     networkClient);
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
-            String groupId = rebalanceConfig.groupId;
-            this.coordinatorManager = groupId == null ?
-                    Optional.empty() :
-                    Optional.of(new CoordinatorRequestManager(
-                        time,
-                        logContext,
-                        config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
-                        errorEventHandler,
-                        groupId
-                    ));
-            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue);
+            this.groupState = new GroupStateManager(rebalanceConfig);
+            this.requestManagerRegistry = Collections.unmodifiableMap(buildRequestManagerRegistry(logContext));
+            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, requestManagerRegistry);
         } catch (final Exception e) {
             close();
             throw new KafkaException("Failed to construct background processor", e.getCause());
         }
+    }
+
+    private Map<RequestManager.Type, Optional<RequestManager>> buildRequestManagerRegistry(final LogContext logContext) {
+        Map<RequestManager.Type, Optional<RequestManager>> registry = new HashMap<>();
+        CoordinatorRequestManager coordinatorManager = groupState.groupId == null ?
+                null :
+                new CoordinatorRequestManager(
+                        time,
+                        logContext,
+                        config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
+                        errorEventHandler,
+                        groupState.groupId);
+        // Add subscriptionState
+        CommitRequestManager commitRequestManager = coordinatorManager == null ?
+                null :
+                new CommitRequestManager(time,
+                        logContext, null, config,
+                        coordinatorManager,
+                        groupState);
+        registry.put(RequestManager.Type.COORDINATOR, Optional.ofNullable(coordinatorManager));
+        registry.put(RequestManager.Type.COMMIT, Optional.ofNullable(commitRequestManager));
+        return registry;
     }
 
     @Override
@@ -151,30 +174,23 @@ public class DefaultBackgroundThread extends KafkaThread {
 
     /**
      * Poll and process an {@link ApplicationEvent}. It performs the following tasks:
-     * 1. Drains and try to process all of the requests in the queue.
-     * 2. Poll request managers to queue up the necessary requests.
+     * 1. Drains and try to process all the requests in the queue.
+     * 2. Iterate through the registry, poll, and get the next poll time for the network poll
      * 3. Poll the networkClient to send and retrieve the response.
      */
     void runOnce() {
         drainAndProcess();
-
         final long currentTimeMs = time.milliseconds();
-        long pollWaitTimeMs = MAX_POLL_TIMEOUT_MS;
-
-        if (coordinatorManager.isPresent()) {
-            pollWaitTimeMs = Math.min(
-                    pollWaitTimeMs,
-                    handlePollResult(coordinatorManager.get().poll(currentTimeMs)));
-        }
-
+        final long pollWaitTimeMs = requestManagerRegistry.values().stream()
+                .filter(Optional::isPresent)
+                .map(m -> handlePollResult(m.get().poll(currentTimeMs)))
+                .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
     }
 
     private void drainAndProcess() {
         Queue<ApplicationEvent> events = pollApplicationEvent();
-        Iterator<ApplicationEvent> iter = events.iterator();
-        while (iter.hasNext()) {
-            ApplicationEvent event = iter.next();
+        for (ApplicationEvent event : events) {
             log.debug("processing application event: {}", event);
             consumeApplicationEvent(event);
         }
