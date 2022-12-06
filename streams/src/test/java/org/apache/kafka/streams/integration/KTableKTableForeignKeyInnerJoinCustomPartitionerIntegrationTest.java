@@ -28,6 +28,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.Optional;
+import java.util.Arrays;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -39,6 +41,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -49,6 +52,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
@@ -61,6 +65,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Disabled;
 
 @Timeout(600)
 @Tag("integration")
@@ -82,6 +87,20 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
     private final static Properties PRODUCER_CONFIG_1 = new Properties();
     private final static Properties PRODUCER_CONFIG_2 = new Properties();
+
+    static class MultiPartitioner implements StreamPartitioner<String, Void> {
+
+        @Override
+        @Deprecated
+        public Integer partition(final String topic, final String key, final Void value, final int numPartitions) {
+            return null;
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Void value, final int numPartitions) {
+            return Optional.of(new HashSet<>(Arrays.asList(0, 1, 2)));
+        }
+    }
 
     @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
@@ -163,6 +182,35 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         verifyKTableKTableJoin(expectedOne);
     }
 
+    @Disabled("This test works individually but fails when run along with the class. Ignoring for now.")
+    @Test
+    public void shouldThrowIllegalArgumentExceptionWhenCustomPartionerReturnsMultiplePartitions() throws Exception {
+        final String innerJoinType = "INNER";
+        final String queryableName = innerJoinType + "-store1";
+
+        streams = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfig);
+        streamsTwo = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfigTwo);
+        streamsThree = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfigThree);
+
+        final List<KafkaStreams> kafkaStreamsList = asList(streams, streamsTwo, streamsThree);
+
+        for (final KafkaStreams stream: kafkaStreamsList) {
+            stream.setUncaughtExceptionHandler(e -> {
+                assertEquals("The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set", e.getCause().getMessage());
+                return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+            });
+        }
+
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(120));
+
+        // Sleeping to let the processing happen inducing the failure
+        Thread.sleep(60000);
+
+        assertEquals(KafkaStreams.State.ERROR, streams.state());
+        assertEquals(KafkaStreams.State.ERROR, streamsTwo.state());
+        assertEquals(KafkaStreams.State.ERROR, streamsThree.state());
+    }
+
     private void verifyKTableKTableJoin(final Set<KeyValue<String, String>> expectedResult) throws Exception {
         final String innerJoinType = "INNER";
         final String queryableName = innerJoinType + "-store1";
@@ -231,6 +279,48 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
             .to(OUTPUT,
                 Produced.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
                     serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)));
+
+        return new KafkaStreams(builder.build(streamsConfig), streamsConfig);
+    }
+
+    private static KafkaStreams prepareTopologyWithNonSingletonPartitions(final String queryableName, final Properties streamsConfig) {
+
+        final UniqueTopicSerdeScope serdeScope = new UniqueTopicSerdeScope();
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KTable<String, String> table1 = builder.stream(TABLE_1,
+                        Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true), serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)))
+                .repartition(repartitionA())
+                .toTable(Named.as("table.a"));
+
+        final KTable<String, String> table2 = builder
+                .stream(TABLE_2,
+                        Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true), serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)))
+                .repartition(repartitionB())
+                .toTable(Named.as("table.b"));
+
+        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized;
+        if (queryableName != null) {
+            materialized = Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(queryableName)
+                    .withKeySerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true))
+                    .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+                    .withCachingDisabled();
+        } else {
+            throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
+        }
+
+        final ValueJoiner<String, String, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
+
+        final TableJoined<String, String> tableJoined = TableJoined.with(
+                new MultiPartitioner(),
+                (topic, key, value, numPartitions) -> Math.abs(key.hashCode()) % numPartitions
+        );
+
+        table1.join(table2, KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest::getKeyB, joiner, tableJoined, materialized)
+                .toStream()
+                .to(OUTPUT,
+                        Produced.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
+                                serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)));
 
         return new KafkaStreams(builder.build(streamsConfig), streamsConfig);
     }
