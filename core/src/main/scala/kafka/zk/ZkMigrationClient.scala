@@ -28,7 +28,7 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.{MigrationClient, ZkMigrationLeadershipState}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.apache.zookeeper.KeeperException.Code
@@ -81,30 +81,46 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     val topics = zkClient.getAllTopicsInCluster()
     val topicConfigs = zkClient.getEntitiesConfigs(ConfigType.Topic, topics)
     val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(topics)
-    replicaAssignmentAndTopicIds.foreach { case TopicIdReplicaAssignment(topic, topicIdOpt, assignments) =>
-      val partitions = assignments.keys.toSeq
+    replicaAssignmentAndTopicIds.foreach { case TopicIdReplicaAssignment(topic, topicIdOpt, partitionAssignments) =>
+      val partitions = partitionAssignments.keys.toSeq
       val leaderIsrAndControllerEpochs = zkClient.getTopicPartitionStates(partitions)
       val topicBatch = new util.ArrayList[ApiMessageAndVersion]()
       topicBatch.add(new ApiMessageAndVersion(new TopicRecord()
         .setName(topic)
         .setTopicId(topicIdOpt.get), TopicRecord.HIGHEST_SUPPORTED_VERSION))
 
-      assignments.foreach { case (topicPartition, replicaAssignment) =>
+      partitionAssignments.foreach { case (topicPartition, replicaAssignment) =>
         replicaAssignment.replicas.foreach(brokerIdConsumer.accept(_))
         replicaAssignment.addingReplicas.foreach(brokerIdConsumer.accept(_))
+        val replicaList = replicaAssignment.replicas.map(Integer.valueOf).asJava
+        leaderIsrAndControllerEpochs.get(topicPartition) match {
+          case Some(leaderIsrAndEpoch) =>
+            topicBatch.add(new ApiMessageAndVersion(new PartitionRecord()
+              .setTopicId(topicIdOpt.get)
+              .setPartitionId(topicPartition.partition)
+              .setReplicas(replicaList)
+              .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
+              .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
+              .setIsr(leaderIsrAndEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava)
+              .setLeader(leaderIsrAndEpoch.leaderAndIsr.leader)
+              .setLeaderEpoch(leaderIsrAndEpoch.leaderAndIsr.leaderEpoch)
+              .setPartitionEpoch(leaderIsrAndEpoch.leaderAndIsr.partitionEpoch)
+              .setLeaderRecoveryState(leaderIsrAndEpoch.leaderAndIsr.leaderRecoveryState.value()), PartitionRecord.HIGHEST_SUPPORTED_VERSION))
 
-        val leaderIsrAndEpoch = leaderIsrAndControllerEpochs(topicPartition)
-        topicBatch.add(new ApiMessageAndVersion(new PartitionRecord()
-          .setTopicId(topicIdOpt.get)
-          .setPartitionId(topicPartition.partition)
-          .setReplicas(replicaAssignment.replicas.map(Integer.valueOf).asJava)
-          .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
-          .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
-          .setIsr(leaderIsrAndEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava)
-          .setLeader(leaderIsrAndEpoch.leaderAndIsr.leader)
-          .setLeaderEpoch(leaderIsrAndEpoch.leaderAndIsr.leaderEpoch)
-          .setPartitionEpoch(leaderIsrAndEpoch.leaderAndIsr.partitionEpoch)
-          .setLeaderRecoveryState(leaderIsrAndEpoch.leaderAndIsr.leaderRecoveryState.value()), PartitionRecord.HIGHEST_SUPPORTED_VERSION))
+          case None =>
+            warn(s"Could not find partition state in ZK for $topicPartition. Initializing this partition with ISR={$replicaList} and leaderEpoch=0.")
+            topicBatch.add(new ApiMessageAndVersion(new PartitionRecord()
+              .setTopicId(topicIdOpt.get)
+              .setPartitionId(topicPartition.partition)
+              .setReplicas(replicaList)
+              .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
+              .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
+              .setIsr(replicaList)
+              .setLeader(replicaList.get(0))
+              .setLeaderEpoch(0)
+              .setPartitionEpoch(0)
+              .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()), PartitionRecord.HIGHEST_SUPPORTED_VERSION))
+        }
       }
 
       val props = topicConfigs(topic)
@@ -115,7 +131,6 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
           .setName(key.toString)
           .setValue(value.toString), ConfigRecord.HIGHEST_SUPPORTED_VERSION))
       }
-
       recordConsumer.accept(topicBatch)
     }
   }
@@ -138,7 +153,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
           .setValue(value.toString), ConfigRecord.HIGHEST_SUPPORTED_VERSION))
       }
     }
-    recordConsumer.accept(batch)
+    if (!batch.isEmpty) {
+      recordConsumer.accept(batch)
+    }
   }
 
   def migrateClientQuotas(metadataVersion: MetadataVersion,

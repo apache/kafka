@@ -24,7 +24,7 @@ import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.ControllerMovedException
-import org.apache.kafka.common.metadata.ProducerIdsRecord
+import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, ProducerIdsRecord}
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
@@ -59,6 +59,16 @@ class ZkMigrationClientTest extends QuorumTestHarness {
   private def initialMigrationState: ZkMigrationLeadershipState = {
     val (_, stat) = zkClient.getControllerEpoch.get
     new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, stat.getVersion)
+  }
+
+  @Test
+  def testMigrateEmptyZk(): Unit = {
+    val brokers = new java.util.ArrayList[Integer]()
+    val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+
+    migrationClient.readAllMetadata(batch => batches.add(batch), brokerId => brokers.add(brokerId))
+    assertEquals(0, brokers.size())
+    assertEquals(0, batches.size())
   }
 
   @Test
@@ -288,6 +298,30 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
     // Switch back to ZK, it should provision the next block
     assertEquals(7000, generateNextProducerIdWithZkAndRead())
+  }
+
+  @Test
+  def testMigrateTopicConfigs(): Unit = {
+    val props = new Properties()
+    props.put(TopicConfig.FLUSH_MS_CONFIG, "60000")
+    props.put(TopicConfig.RETENTION_MS_CONFIG, "300000")
+    adminZkClient.createTopicWithAssignment("test", props, Map(0 -> Seq(0, 1, 2), 1 -> Seq(1, 2, 0), 2 -> Seq(2, 0, 1)), usesTopicId = true)
+
+    val brokers = new java.util.ArrayList[Integer]()
+    val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+    migrationClient.migrateTopics(MetadataVersion.latest(), batch => batches.add(batch), brokerId => brokers.add(brokerId))
+    assertEquals(1, batches.size())
+    val configs = batches.get(0)
+      .asScala
+      .map {_.message()}
+      .filter(message => MetadataRecordType.fromId(message.apiKey()).equals(MetadataRecordType.CONFIG_RECORD))
+      .map {_.asInstanceOf[ConfigRecord]}
+      .toSeq
+    assertEquals(2, configs.size)
+    assertEquals(TopicConfig.FLUSH_MS_CONFIG, configs.head.name())
+    assertEquals("60000", configs.head.value())
+    assertEquals(TopicConfig.RETENTION_MS_CONFIG, configs.last.name())
+    assertEquals("300000", configs.last.value())
   }
 
   @Test

@@ -31,6 +31,7 @@ import java.util.function.Consumer;
  * also updates the state of /migration.
  */
 public interface MigrationClient {
+
     ZkMigrationLeadershipState getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState initialState);
 
     ZkMigrationLeadershipState setMigrationRecoveryState(ZkMigrationLeadershipState state);
