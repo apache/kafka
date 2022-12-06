@@ -177,44 +177,44 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     val timestamp = time.milliseconds()
     val curEpochOpt: Option[(Int, Int)] = getControllerEpoch.map(e => (e._1, e._2.getVersion))
     val controllerOpt = getControllerId
-
+    val controllerEpochToStore = kraftControllerEpoch + 10_000_000 // TODO Remove this after KAFKA-14436
     curEpochOpt match {
       case None =>
         throw new IllegalStateException(s"Cannot register KRaft controller $kraftControllerId as the active controller " +
           s"since there is no ZK controller epoch present.")
       case Some((curEpoch: Int, curEpochZk: Int)) =>
-        if (curEpoch >= kraftControllerEpoch) {
+        if (curEpoch >= controllerEpochToStore) {
           // TODO KAFKA-14436 Need to ensure KRaft has a higher epoch an ZK
           throw new IllegalStateException(s"Cannot register KRaft controller $kraftControllerId as the active controller " +
-            s"in ZK since its epoch ${kraftControllerEpoch} is not higher than the current ZK epoch ${curEpoch}.")
+            s"in ZK since its epoch ${controllerEpochToStore} is not higher than the current ZK epoch ${curEpoch}.")
         }
 
         val response = if (controllerOpt.isDefined) {
           info(s"KRaft controller $kraftControllerId overwriting ${ControllerZNode.path} to become the active " +
-            s"controller with epoch $kraftControllerEpoch. The previous controller was ${controllerOpt.get}.")
+            s"controller with epoch $controllerEpochToStore. The previous controller was ${controllerOpt.get}.")
           retryRequestUntilConnected(
             MultiRequest(Seq(
-              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(kraftControllerEpoch), curEpochZk),
+              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(controllerEpochToStore), curEpochZk),
               DeleteOp(ControllerZNode.path, ZkVersion.MatchAnyVersion),
               CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp),
                 defaultAcls(ControllerZNode.path), CreateMode.PERSISTENT)))
           )
         } else {
           info(s"KRaft controller $kraftControllerId creating ${ControllerZNode.path} to become the active " +
-            s"controller with epoch $kraftControllerEpoch. There was no active controller.")
+            s"controller with epoch $controllerEpochToStore. There was no active controller.")
           retryRequestUntilConnected(
             MultiRequest(Seq(
-              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(kraftControllerEpoch), curEpochZk),
+              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(controllerEpochToStore), curEpochZk),
               CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp),
                 defaultAcls(ControllerZNode.path), CreateMode.PERSISTENT)))
           )
         }
 
         val failureSuffix = s"while trying to register KRaft controller $kraftControllerId with epoch " +
-          s"$kraftControllerEpoch. KRaft controller was not registered."
+          s"$controllerEpochToStore. KRaft controller was not registered."
         response.resultCode match {
           case Code.OK =>
-            info(s"Successfully registered KRaft controller $kraftControllerId with epoch $kraftControllerEpoch")
+            info(s"Successfully registered KRaft controller $kraftControllerId with epoch $controllerEpochToStore")
             // First op is always SetData on /controller_epoch
             val setDataResult = response.zkOpResults(0).rawOpResult.asInstanceOf[SetDataResult]
             Some(setDataResult.getStat.getVersion)
