@@ -40,12 +40,6 @@ public class MirrorCheckpointTaskConfig extends MirrorCheckpointConfig {
         return new HashSet<>(fields);
     }
 
-    MirrorCheckpointMetrics metrics() {
-        MirrorCheckpointMetrics metrics = new MirrorCheckpointMetrics(this);
-        metricsReporters().forEach(metrics::addReporter);
-        return metrics;
-    }
-
     protected static final ConfigDef TASK_CONFIG_DEF = new ConfigDef(CONNECTOR_CONFIG_DEF)
             .define(
                     TASK_CONSUMER_GROUPS,

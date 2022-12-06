@@ -106,14 +106,6 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         return getShort(CHECKPOINTS_TOPIC_REPLICATION_FACTOR);
     }
 
-    GroupFilter groupFilter() {
-        return getConfiguredInstance(GROUP_FILTER_CLASS, GroupFilter.class);
-    }
-
-    TopicFilter topicFilter() {
-        return getConfiguredInstance(TOPIC_FILTER_CLASS, TopicFilter.class);
-    }
-
     Duration syncGroupOffsetsInterval() {
         if (getBoolean(SYNC_GROUP_OFFSETS_ENABLED)) {
             return Duration.ofSeconds(getLong(SYNC_GROUP_OFFSETS_INTERVAL_SECONDS));

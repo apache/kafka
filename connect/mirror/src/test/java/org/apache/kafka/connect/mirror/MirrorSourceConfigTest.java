@@ -19,6 +19,8 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -34,6 +36,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MirrorSourceConfigTest {
 
+    private BackgroundResources backgroundResources;
+    @BeforeEach
+    public void setUp() {
+        backgroundResources = new BackgroundResources();
+    }
+
+    @AfterEach
+    public void tearDown() {
+        backgroundResources.close();
+    }
+
     @Test
     public void testTaskConfigTopicPartitions() {
         List<TopicPartition> topicPartitions = Arrays.asList(new TopicPartition("topic-1", 2),
@@ -48,9 +61,10 @@ public class MirrorSourceConfigTest {
     @Test
     public void testTopicMatching() {
         MirrorSourceConfig config = new MirrorSourceConfig(makeProps("topics", "topic1"));
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic1"),
+        TopicFilter topicFilter = backgroundResources.topicFilter(config, "topic filter");
+        assertTrue(topicFilter.shouldReplicateTopic("topic1"),
                 "topic1 replication property configuration failed");
-        assertFalse(config.topicFilter().shouldReplicateTopic("topic2"),
+        assertFalse(topicFilter.shouldReplicateTopic("topic2"),
                 "topic2 replication property configuration failed");
     }
 
@@ -58,9 +72,10 @@ public class MirrorSourceConfigTest {
     public void testConfigPropertyMatching() {
         MirrorSourceConfig config = new MirrorSourceConfig(
                 makeProps("config.properties.exclude", "prop2"));
-        assertTrue(config.configPropertyFilter().shouldReplicateConfigProperty("prop1"),
+        ConfigPropertyFilter configPropertyFilter = backgroundResources.configPropertyFilter(config, "config property filter");
+        assertTrue(configPropertyFilter.shouldReplicateConfigProperty("prop1"),
                 "config.properties.exclude incorrectly excluded prop1");
-        assertFalse(config.configPropertyFilter().shouldReplicateConfigProperty("prop2"),
+        assertFalse(configPropertyFilter.shouldReplicateConfigProperty("prop2"),
                 "config.properties.exclude incorrectly included prop2");
     }
 
@@ -69,35 +84,40 @@ public class MirrorSourceConfigTest {
         MirrorSourceConfig config = new MirrorSourceConfig(
                 makeProps("config.properties.blacklist", "prop1",
                         "topics.blacklist", "topic-1"));
-        assertFalse(config.configPropertyFilter().shouldReplicateConfigProperty("prop1"));
-        assertTrue(config.configPropertyFilter().shouldReplicateConfigProperty("prop2"));
-        assertFalse(config.topicFilter().shouldReplicateTopic("topic-1"));
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic-2"));
+        ConfigPropertyFilter configPropertyFilter = backgroundResources.configPropertyFilter(config, "config property filter");
+        assertFalse(configPropertyFilter.shouldReplicateConfigProperty("prop1"));
+        assertTrue(configPropertyFilter.shouldReplicateConfigProperty("prop2"));
+        TopicFilter topicFilter = backgroundResources.topicFilter(config, "topic filter");
+        assertFalse(topicFilter.shouldReplicateTopic("topic-1"));
+        assertTrue(topicFilter.shouldReplicateTopic("topic-2"));
     }
 
     @Test
     public void testNoTopics() {
         MirrorSourceConfig config = new MirrorSourceConfig(makeProps("topics", ""));
-        assertFalse(config.topicFilter().shouldReplicateTopic("topic1"), "topic1 shouldn't exist");
-        assertFalse(config.topicFilter().shouldReplicateTopic("topic2"), "topic2 shouldn't exist");
-        assertFalse(config.topicFilter().shouldReplicateTopic(""), "Empty topic shouldn't exist");
+        TopicFilter topicFilter = backgroundResources.topicFilter(config, "topic filter");
+        assertFalse(topicFilter.shouldReplicateTopic("topic1"), "topic1 shouldn't exist");
+        assertFalse(topicFilter.shouldReplicateTopic("topic2"), "topic2 shouldn't exist");
+        assertFalse(topicFilter.shouldReplicateTopic(""), "Empty topic shouldn't exist");
     }
 
     @Test
     public void testAllTopics() {
         MirrorSourceConfig config = new MirrorSourceConfig(makeProps("topics", ".*"));
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic1"),
+        TopicFilter topicFilter = backgroundResources.topicFilter(config, "topic filter");
+        assertTrue(topicFilter.shouldReplicateTopic("topic1"),
                 "topic1 created from wildcard should exist");
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic2"),
+        assertTrue(topicFilter.shouldReplicateTopic("topic2"),
                 "topic2 created from wildcard should exist");
     }
 
     @Test
     public void testListOfTopics() {
         MirrorSourceConfig config = new MirrorSourceConfig(makeProps("topics", "topic1, topic2"));
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic1"), "topic1 created from list should exist");
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic2"), "topic2 created from list should exist");
-        assertFalse(config.topicFilter().shouldReplicateTopic("topic3"), "topic3 created from list should exist");
+        TopicFilter topicFilter = backgroundResources.topicFilter(config, "topic filter");
+        assertTrue(topicFilter.shouldReplicateTopic("topic1"), "topic1 created from list should exist");
+        assertTrue(topicFilter.shouldReplicateTopic("topic2"), "topic2 created from list should exist");
+        assertFalse(topicFilter.shouldReplicateTopic("topic3"), "topic3 created from list should exist");
     }
 
     @Test
