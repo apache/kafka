@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides API for implementing connectors which read data from external applications into Kafka.
+ * Provides an API for implementing source connectors which read data from external applications into Kafka.
  */
 package org.apache.kafka.connect.source;

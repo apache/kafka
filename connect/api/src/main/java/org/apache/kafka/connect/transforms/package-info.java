@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides pluggable interface for altering data which is being moved by Connect.
+ * Provides a pluggable interface for altering data which is being moved by Connect.
  */
 package org.apache.kafka.connect.transforms;

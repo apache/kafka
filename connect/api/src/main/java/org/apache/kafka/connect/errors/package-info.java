@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides common exception classes for Connect.
+ * Provides common exception classes for Connect, used by the framework and plugins to communicate failures.
  */
 package org.apache.kafka.connect.errors;

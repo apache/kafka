@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides API for application-defined metadata attached to Connect records.
+ * Provides an API for application-defined metadata attached to Connect records.
  */
 package org.apache.kafka.connect.header;

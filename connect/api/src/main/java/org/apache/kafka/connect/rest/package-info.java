@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides pluggable interface for altering the behavior of the Connect REST API.
+ * Provides a pluggable interface for altering the behavior of the Connect REST API.
  */
 package org.apache.kafka.connect.rest;

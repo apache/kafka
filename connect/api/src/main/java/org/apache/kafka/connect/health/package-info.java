@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 /**
- * Provides interface for describing the state of a running Connect cluster.
+ * Provides an API for describing the state of a running Connect cluster to
+ * {@link org.apache.kafka.connect.rest.ConnectRestExtension} instances.
  */
 package org.apache.kafka.connect.health;

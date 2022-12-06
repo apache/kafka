@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides pluggable interface for describing when a {@link org.apache.kafka.connect.transforms.Transformation} should be applied to a record.
+ * Provides a pluggable interface for describing when a {@link org.apache.kafka.connect.transforms.Transformation} should be applied to a record.
  */
 package org.apache.kafka.connect.transforms.predicates;

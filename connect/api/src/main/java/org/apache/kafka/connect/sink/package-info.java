@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides API for implementing connectors which write Kafka records to external applications.
+ * Provides an API for implementing sink connectors which write Kafka records to external applications.
  */
 package org.apache.kafka.connect.sink;

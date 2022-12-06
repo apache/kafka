@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides pluggable interfaces for Connector and Task implementations.
+ * Provides interfaces for Connector and Task implementations.
  */
 package org.apache.kafka.connect.connector;
