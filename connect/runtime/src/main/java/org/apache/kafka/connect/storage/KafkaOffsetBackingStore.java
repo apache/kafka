@@ -343,12 +343,18 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         return producerCallback;
     }
 
-    protected final Callback<ConsumerRecord<byte[], byte[]>> consumedCallback = new Callback<ConsumerRecord<byte[], byte[]>>() {
-        @Override
-        public void onCompletion(Throwable error, ConsumerRecord<byte[], byte[]> record) {
-            ByteBuffer key = record.key() != null ? ByteBuffer.wrap(record.key()) : null;
-            ByteBuffer value = record.value() != null ? ByteBuffer.wrap(record.value()) : null;
-            data.put(key, value);
+    protected final Callback<ConsumerRecord<byte[], byte[]>> consumedCallback = (error, record) -> {
+        if (error != null) {
+            log.error("Failed to read from the offsets topic", error);
+            return;
+        }
+
+        ByteBuffer key = record.key() != null ? ByteBuffer.wrap(record.key()) : null;
+
+        if (record.value() == null) {
+            data.remove(key);
+        } else {
+            data.put(key, ByteBuffer.wrap(record.value()));
         }
     };
 
