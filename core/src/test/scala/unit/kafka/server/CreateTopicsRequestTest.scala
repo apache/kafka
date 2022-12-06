@@ -19,6 +19,7 @@ package kafka.server
 
 import kafka.utils._
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
 import org.apache.kafka.common.protocol.ApiKeys
@@ -27,7 +28,6 @@ import org.apache.kafka.common.requests.CreateTopicsRequest
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-
 import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
@@ -196,5 +196,14 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       else
         assertEquals(Uuid.ZERO_UUID, topicResponse.topicId())
     }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCreateClusterMetadataTopic(quorum: String): Unit = {
+    validateErrorCreateTopicsRequests(
+      topicsReq(Seq(topicReq(Topic.CLUSTER_METADATA_TOPIC_NAME))),
+      Map(Topic.CLUSTER_METADATA_TOPIC_NAME -> error(Errors.TOPIC_AUTHORIZATION_FAILED, Some("Authorization failed.")))
+    )
   }
 }

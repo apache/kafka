@@ -21,12 +21,11 @@ import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.{Collections, Optional, Properties, Random}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
-import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.coordinator.group._
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.AppendOrigin
@@ -56,7 +55,6 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{Alter
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterableConfig => IAlterableConfig}
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterableConfigCollection => IAlterableConfigCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
-import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
@@ -77,6 +75,7 @@ import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
@@ -100,6 +99,8 @@ class KafkaApisTest {
   private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
   private val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
   private val groupCoordinator: GroupCoordinator = mock(classOf[GroupCoordinator])
+  private val newGroupCoordinator: org.apache.kafka.coordinator.group.GroupCoordinator =
+    mock(classOf[org.apache.kafka.coordinator.group.GroupCoordinator])
   private val adminManager: ZkAdminManager = mock(classOf[ZkAdminManager])
   private val txnCoordinator: TransactionCoordinator = mock(classOf[TransactionCoordinator])
   private val controller: KafkaController = mock(classOf[KafkaController])
@@ -188,6 +189,7 @@ class KafkaApisTest {
       requestChannel = requestChannel,
       replicaManager = replicaManager,
       groupCoordinator = groupCoordinator,
+      newGroupCoordinator = newGroupCoordinator,
       txnCoordinator = txnCoordinator,
       autoTopicCreationManager = autoTopicCreationManager,
       brokerId = brokerId,
@@ -2524,302 +2526,314 @@ class KafkaApisTest {
     assertEquals(MemoryRecords.EMPTY, FetchResponse.recordsOrFail(partitionData))
   }
 
-  @Test
-  def testJoinGroupProtocolsOrder(): Unit = {
-    val protocols = List(
-      ("first", "first".getBytes()),
-      ("second", "second".getBytes())
-    )
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.JOIN_GROUP)
+  def testHandleJoinGroupRequest(version: Short): Unit = {
+    val joinGroupRequest = new JoinGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setProtocolType("consumer")
+      .setRebalanceTimeoutMs(1000)
+      .setSessionTimeoutMs(2000)
 
-    val groupId = "group"
-    val memberId = "member1"
-    val protocolType = "consumer"
-    val rebalanceTimeoutMs = 10
-    val sessionTimeoutMs = 5
-    val capturedProtocols: ArgumentCaptor[List[(String, Array[Byte])]] = ArgumentCaptor.forClass(classOf[List[(String, Array[Byte])]])
+    val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build(version))
+
+    val expectedJoinGroupRequest = new JoinGroupRequestData()
+      .setGroupId(joinGroupRequest.groupId)
+      .setMemberId(joinGroupRequest.memberId)
+      .setProtocolType(joinGroupRequest.protocolType)
+      .setRebalanceTimeoutMs(if (version >= 1) joinGroupRequest.rebalanceTimeoutMs else joinGroupRequest.sessionTimeoutMs)
+      .setSessionTimeoutMs(joinGroupRequest.sessionTimeoutMs)
+
+    val future = new CompletableFuture[JoinGroupResponseData]()
+    when(newGroupCoordinator.joinGroup(
+      requestChannelRequest.context,
+      expectedJoinGroupRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
 
     createKafkaApis().handleJoinGroupRequest(
-      buildRequest(
-        new JoinGroupRequest.Builder(
-          new JoinGroupRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberId)
-            .setProtocolType(protocolType)
-            .setRebalanceTimeoutMs(rebalanceTimeoutMs)
-            .setSessionTimeoutMs(sessionTimeoutMs)
-            .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-              protocols.map { case (name, protocol) => new JoinGroupRequestProtocol()
-                .setName(name).setMetadata(protocol)
-              }.iterator.asJava))
-        ).build()
-      ),
-      RequestLocal.withThreadConfinedCaching)
-
-    verify(groupCoordinator).handleJoinGroup(
-      ArgumentMatchers.eq(groupId),
-      ArgumentMatchers.eq(memberId),
-      ArgumentMatchers.eq(None),
-      ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(clientId),
-      ArgumentMatchers.eq(InetAddress.getLocalHost.toString),
-      ArgumentMatchers.eq(rebalanceTimeoutMs),
-      ArgumentMatchers.eq(sessionTimeoutMs),
-      ArgumentMatchers.eq(protocolType),
-      capturedProtocols.capture(),
-      any(),
-      any(),
-      any()
+      requestChannelRequest,
+      RequestLocal.NoCaching
     )
-    val capturedProtocolsList = capturedProtocols.getValue
-    assertEquals(protocols.size, capturedProtocolsList.size)
-    protocols.zip(capturedProtocolsList).foreach { case ((expectedName, expectedBytes), (name, bytes)) =>
-      assertEquals(expectedName, name)
-      assertArrayEquals(expectedBytes, bytes)
-    }
+
+    val expectedJoinGroupResponse = new JoinGroupResponseData()
+      .setMemberId("member")
+      .setGenerationId(0)
+      .setLeader("leader")
+      .setProtocolType("consumer")
+      .setProtocolName("range")
+
+    future.complete(expectedJoinGroupResponse)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[JoinGroupResponse]
+    assertEquals(expectedJoinGroupResponse, response.data)
+  }
+
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.JOIN_GROUP)
+  def testJoinGroupProtocolNameBackwardCompatibility(version: Short): Unit = {
+    val joinGroupRequest = new JoinGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setProtocolType("consumer")
+      .setRebalanceTimeoutMs(1000)
+      .setSessionTimeoutMs(2000)
+
+    val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build(version))
+
+    val expectedJoinGroupRequest = new JoinGroupRequestData()
+      .setGroupId(joinGroupRequest.groupId)
+      .setMemberId(joinGroupRequest.memberId)
+      .setProtocolType(joinGroupRequest.protocolType)
+      .setRebalanceTimeoutMs(if (version >= 1) joinGroupRequest.rebalanceTimeoutMs else joinGroupRequest.sessionTimeoutMs)
+      .setSessionTimeoutMs(joinGroupRequest.sessionTimeoutMs)
+
+    val future = new CompletableFuture[JoinGroupResponseData]()
+    when(newGroupCoordinator.joinGroup(
+      requestChannelRequest.context,
+      expectedJoinGroupRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handleJoinGroupRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    val joinGroupResponse = new JoinGroupResponseData()
+      .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code)
+      .setMemberId("member")
+      .setProtocolName(null)
+
+    val expectedJoinGroupResponse = new JoinGroupResponseData()
+      .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code)
+      .setMemberId("member")
+      .setProtocolName(if (version >= 7) null else GroupCoordinator.NoProtocol)
+
+    future.complete(joinGroupResponse)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[JoinGroupResponse]
+    assertEquals(expectedJoinGroupResponse, response.data)
   }
 
   @Test
-  def testJoinGroupWhenAnErrorOccurs(): Unit = {
-    for (version <- ApiKeys.JOIN_GROUP.oldestVersion to ApiKeys.JOIN_GROUP.latestVersion) {
-      testJoinGroupWhenAnErrorOccurs(version.asInstanceOf[Short])
-    }
+  def testHandleJoinGroupRequestFutureFailed(): Unit = {
+    val joinGroupRequest = new JoinGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setProtocolType("consumer")
+      .setRebalanceTimeoutMs(1000)
+      .setSessionTimeoutMs(2000)
+
+    val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build())
+
+    val future = new CompletableFuture[JoinGroupResponseData]()
+    when(newGroupCoordinator.joinGroup(
+      requestChannelRequest.context,
+      joinGroupRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handleJoinGroupRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    future.completeExceptionally(Errors.REQUEST_TIMED_OUT.exception)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[JoinGroupResponse]
+    assertEquals(Errors.REQUEST_TIMED_OUT, response.error)
   }
 
-  def testJoinGroupWhenAnErrorOccurs(version: Short): Unit = {
-    reset(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
+  @Test
+  def testHandleJoinGroupRequestAuthorizationFailed(): Unit = {
+    val joinGroupRequest = new JoinGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setProtocolType("consumer")
+      .setRebalanceTimeoutMs(1000)
+      .setSessionTimeoutMs(2000)
 
-    val groupId = "group"
-    val memberId = "member1"
-    val protocolType = "consumer"
-    val rebalanceTimeoutMs = 10
-    val sessionTimeoutMs = 5
+    val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build())
 
-    val capturedCallback: ArgumentCaptor[JoinGroupCallback] = ArgumentCaptor.forClass(classOf[JoinGroupCallback])
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
 
-    val joinGroupRequest = new JoinGroupRequest.Builder(
-      new JoinGroupRequestData()
-        .setGroupId(groupId)
-        .setMemberId(memberId)
-        .setProtocolType(protocolType)
-        .setRebalanceTimeoutMs(rebalanceTimeoutMs)
-        .setSessionTimeoutMs(sessionTimeoutMs)
-    ).build(version)
-
-    val requestChannelRequest = buildRequest(joinGroupRequest)
-
-    createKafkaApis().handleJoinGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    verify(groupCoordinator).handleJoinGroup(
-      ArgumentMatchers.eq(groupId),
-      ArgumentMatchers.eq(memberId),
-      ArgumentMatchers.eq(None),
-      ArgumentMatchers.eq(if (version >= 4) true else false),
-      ArgumentMatchers.eq(if (version >= 9) true else false),
-      ArgumentMatchers.eq(clientId),
-      ArgumentMatchers.eq(InetAddress.getLocalHost.toString),
-      ArgumentMatchers.eq(if (version >= 1) rebalanceTimeoutMs else sessionTimeoutMs),
-      ArgumentMatchers.eq(sessionTimeoutMs),
-      ArgumentMatchers.eq(protocolType),
-      ArgumentMatchers.eq(List.empty),
-      capturedCallback.capture(),
-      any(),
-      any()
+    createKafkaApis(authorizer = Some(authorizer)).handleJoinGroupRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
     )
-    capturedCallback.getValue.apply(JoinGroupResult(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
 
     val capturedResponse = verifyNoThrottling(requestChannelRequest)
     val response = capturedResponse.getValue.asInstanceOf[JoinGroupResponse]
-
-    assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, response.error)
-    assertEquals(0, response.data.members.size)
-    assertEquals(memberId, response.data.memberId)
-    assertEquals(GroupCoordinator.NoGeneration, response.data.generationId)
-    assertEquals(GroupCoordinator.NoLeader, response.data.leader)
-    assertNull(response.data.protocolType)
-
-    if (version >= 7) {
-      assertNull(response.data.protocolName)
-    } else {
-      assertEquals(GroupCoordinator.NoProtocol, response.data.protocolName)
-    }
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
   @Test
-  def testJoinGroupProtocolType(): Unit = {
-    for (version <- ApiKeys.JOIN_GROUP.oldestVersion to ApiKeys.JOIN_GROUP.latestVersion) {
-      testJoinGroupProtocolType(version.asInstanceOf[Short])
+  def testHandleJoinGroupRequestUnexpectedException(): Unit = {
+    val joinGroupRequest = new JoinGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setProtocolType("consumer")
+      .setRebalanceTimeoutMs(1000)
+      .setSessionTimeoutMs(2000)
+
+    val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build())
+
+    val future = new CompletableFuture[JoinGroupResponseData]()
+    when(newGroupCoordinator.joinGroup(
+      requestChannelRequest.context,
+      joinGroupRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    var response: JoinGroupResponse = null
+    when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
+      throw new Exception("Something went wrong")
+    }.thenAnswer { invocation =>
+      response = invocation.getArgument(1, classOf[JoinGroupResponse])
     }
+
+    createKafkaApis().handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    future.completeExceptionally(Errors.NOT_COORDINATOR.exception)
+
+    // The exception expected here is the one thrown by `sendResponse`. As
+    // `Exception` is not a Kafka errors, `UNKNOWN_SERVER_ERROR` is returned.
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
   }
 
-  def testJoinGroupProtocolType(version: Short): Unit = {
-    reset(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.SYNC_GROUP)
+  def testHandleSyncGroupRequest(version: Short): Unit = {
+    val syncGroupRequest = new SyncGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setProtocolType("consumer")
+      .setProtocolName("range")
 
-    val groupId = "group"
-    val memberId = "member1"
-    val protocolType = "consumer"
-    val protocolName = "range"
-    val rebalanceTimeoutMs = 10
-    val sessionTimeoutMs = 5
+    val requestChannelRequest = buildRequest(new SyncGroupRequest.Builder(syncGroupRequest).build(version))
 
-    val capturedCallback: ArgumentCaptor[JoinGroupCallback] = ArgumentCaptor.forClass(classOf[JoinGroupCallback])
+    val expectedSyncGroupRequest = new SyncGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setProtocolType(if (version >= 5) "consumer" else null)
+      .setProtocolName(if (version >= 5) "range" else null)
 
-    val joinGroupRequest = new JoinGroupRequest.Builder(
-      new JoinGroupRequestData()
-        .setGroupId(groupId)
-        .setMemberId(memberId)
-        .setProtocolType(protocolType)
-        .setRebalanceTimeoutMs(rebalanceTimeoutMs)
-        .setSessionTimeoutMs(sessionTimeoutMs)
-    ).build(version)
+    val future = new CompletableFuture[SyncGroupResponseData]()
+    when(newGroupCoordinator.syncGroup(
+      requestChannelRequest.context,
+      expectedSyncGroupRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
 
-    val requestChannelRequest = buildRequest(joinGroupRequest)
-
-    createKafkaApis().handleJoinGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
-
-    verify(groupCoordinator).handleJoinGroup(
-      ArgumentMatchers.eq(groupId),
-      ArgumentMatchers.eq(memberId),
-      ArgumentMatchers.eq(None),
-      ArgumentMatchers.eq(if (version >= 4) true else false),
-      ArgumentMatchers.eq(if (version >= 9) true else false),
-      ArgumentMatchers.eq(clientId),
-      ArgumentMatchers.eq(InetAddress.getLocalHost.toString),
-      ArgumentMatchers.eq(if (version >= 1) rebalanceTimeoutMs else sessionTimeoutMs),
-      ArgumentMatchers.eq(sessionTimeoutMs),
-      ArgumentMatchers.eq(protocolType),
-      ArgumentMatchers.eq(List.empty),
-      capturedCallback.capture(),
-      any(),
-      any()
+    createKafkaApis().handleSyncGroupRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
     )
-    capturedCallback.getValue.apply(JoinGroupResult(
-      members = List.empty,
-      memberId = memberId,
-      generationId = 0,
-      protocolType = Some(protocolType),
-      protocolName = Some(protocolName),
-      leaderId = memberId,
-      skipAssignment = true,
-      error = Errors.NONE
-    ))
+
+    val expectedSyncGroupResponse = new SyncGroupResponseData()
+      .setProtocolType("consumer")
+      .setProtocolName("range")
+
+    future.complete(expectedSyncGroupResponse)
     val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[JoinGroupResponse]
-
-    assertEquals(Errors.NONE, response.error)
-    assertEquals(0, response.data.members.size)
-    assertEquals(memberId, response.data.memberId)
-    assertEquals(0, response.data.generationId)
-    assertEquals(memberId, response.data.leader)
-    assertEquals(protocolName, response.data.protocolName)
-    assertEquals(protocolType, response.data.protocolType)
-    assertTrue(response.data.skipAssignment)
+    val response = capturedResponse.getValue.asInstanceOf[SyncGroupResponse]
+    assertEquals(expectedSyncGroupResponse, response.data)
   }
 
   @Test
-  def testSyncGroupProtocolTypeAndName(): Unit = {
-    for (version <- ApiKeys.SYNC_GROUP.oldestVersion to ApiKeys.SYNC_GROUP.latestVersion) {
-      testSyncGroupProtocolTypeAndName(version.asInstanceOf[Short])
-    }
+  def testHandleSyncGroupRequestFutureFailed(): Unit = {
+    val syncGroupRequest = new SyncGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setProtocolType("consumer")
+      .setProtocolName("range")
+
+    val requestChannelRequest = buildRequest(new SyncGroupRequest.Builder(syncGroupRequest).build())
+
+    val expectedSyncGroupRequest = new SyncGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setProtocolType("consumer")
+      .setProtocolName("range")
+
+    val future = new CompletableFuture[SyncGroupResponseData]()
+    when(newGroupCoordinator.syncGroup(
+      requestChannelRequest.context,
+      expectedSyncGroupRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handleSyncGroupRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[SyncGroupResponse]
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
   }
 
-  def testSyncGroupProtocolTypeAndName(version: Short): Unit = {
-    reset(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
+  @Test
+  def testHandleSyncGroupRequestAuthenticationFailed(): Unit = {
+    val syncGroupRequest = new SyncGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setProtocolType("consumer")
+      .setProtocolName("range")
 
-    val groupId = "group"
-    val memberId = "member1"
-    val protocolType = "consumer"
-    val protocolName = "range"
+    val requestChannelRequest = buildRequest(new SyncGroupRequest.Builder(syncGroupRequest).build())
 
-    val capturedCallback: ArgumentCaptor[SyncGroupCallback] = ArgumentCaptor.forClass(classOf[SyncGroupCallback])
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
 
-    val requestLocal = RequestLocal.withThreadConfinedCaching
-    val syncGroupRequest = new SyncGroupRequest.Builder(
-      new SyncGroupRequestData()
-        .setGroupId(groupId)
-        .setGenerationId(0)
-        .setMemberId(memberId)
-        .setProtocolType(protocolType)
-        .setProtocolName(protocolName)
-    ).build(version)
-
-    val requestChannelRequest = buildRequest(syncGroupRequest)
-
-    createKafkaApis().handleSyncGroupRequest(requestChannelRequest, requestLocal)
-
-    verify(groupCoordinator).handleSyncGroup(
-      ArgumentMatchers.eq(groupId),
-      ArgumentMatchers.eq(0),
-      ArgumentMatchers.eq(memberId),
-      ArgumentMatchers.eq(if (version >= 5) Some(protocolType) else None),
-      ArgumentMatchers.eq(if (version >= 5) Some(protocolName) else None),
-      ArgumentMatchers.eq(None),
-      ArgumentMatchers.eq(Map.empty),
-      capturedCallback.capture(),
-      ArgumentMatchers.eq(requestLocal)
+    createKafkaApis(authorizer = Some(authorizer)).handleSyncGroupRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
     )
-    capturedCallback.getValue.apply(SyncGroupResult(
-      protocolType = Some(protocolType),
-      protocolName = Some(protocolName),
-      memberAssignment = Array.empty,
-      error = Errors.NONE
-    ))
 
     val capturedResponse = verifyNoThrottling(requestChannelRequest)
     val response = capturedResponse.getValue.asInstanceOf[SyncGroupResponse]
-
-    assertEquals(Errors.NONE, response.error)
-    assertArrayEquals(Array.empty[Byte], response.data.assignment)
-    assertEquals(protocolType, response.data.protocolType)
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
-  @Test
-  def testSyncGroupProtocolTypeAndNameAreMandatorySinceV5(): Unit = {
-    for (version <- ApiKeys.SYNC_GROUP.oldestVersion to ApiKeys.SYNC_GROUP.latestVersion) {
-      testSyncGroupProtocolTypeAndNameAreMandatorySinceV5(version.asInstanceOf[Short])
-    }
-  }
-
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.SYNC_GROUP)
   def testSyncGroupProtocolTypeAndNameAreMandatorySinceV5(version: Short): Unit = {
-    reset(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
+    val syncGroupRequest = new SyncGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
 
-    val groupId = "group"
-    val memberId = "member1"
-    val protocolType = "consumer"
-    val protocolName = "range"
+    val requestChannelRequest = buildRequest(new SyncGroupRequest.Builder(syncGroupRequest).build(version))
 
-    val capturedCallback: ArgumentCaptor[SyncGroupCallback] = ArgumentCaptor.forClass(classOf[SyncGroupCallback])
+    val expectedSyncGroupRequest = new SyncGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
 
-    val requestLocal = RequestLocal.withThreadConfinedCaching
+    val future = new CompletableFuture[SyncGroupResponseData]()
+    when(newGroupCoordinator.syncGroup(
+      requestChannelRequest.context,
+      expectedSyncGroupRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
 
-    val syncGroupRequest = new SyncGroupRequest.Builder(
-      new SyncGroupRequestData()
-        .setGroupId(groupId)
-        .setGenerationId(0)
-        .setMemberId(memberId)
-    ).build(version)
-
-    val requestChannelRequest = buildRequest(syncGroupRequest)
-
-    createKafkaApis().handleSyncGroupRequest(requestChannelRequest, requestLocal)
+    createKafkaApis().handleSyncGroupRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
 
     if (version < 5) {
-      verify(groupCoordinator).handleSyncGroup(
-        ArgumentMatchers.eq(groupId),
-        ArgumentMatchers.eq(0),
-        ArgumentMatchers.eq(memberId),
-        ArgumentMatchers.eq(None),
-        ArgumentMatchers.eq(None),
-        ArgumentMatchers.eq(None),
-        ArgumentMatchers.eq(Map.empty),
-        capturedCallback.capture(),
-        ArgumentMatchers.eq(requestLocal))
-      capturedCallback.getValue.apply(SyncGroupResult(
-        protocolType = Some(protocolType),
-        protocolName = Some(protocolName),
-        memberAssignment = Array.empty,
-        error = Errors.NONE
-      ))
+      future.complete(new SyncGroupResponseData()
+        .setProtocolType("consumer")
+        .setProtocolName("range"))
     }
 
     val capturedResponse = verifyNoThrottling(requestChannelRequest)
@@ -2830,6 +2844,86 @@ class KafkaApisTest {
     } else {
       assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, response.error)
     }
+  }
+
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.HEARTBEAT)
+  def testHandleHeartbeatRequest(version: Short): Unit = {
+    val heartbeatRequest = new HeartbeatRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(0)
+
+    val requestChannelRequest = buildRequest(new HeartbeatRequest.Builder(heartbeatRequest).build(version))
+
+    val expectedHeartbeatRequest = new HeartbeatRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(0)
+
+    val future = new CompletableFuture[HeartbeatResponseData]()
+    when(newGroupCoordinator.heartbeat(
+      requestChannelRequest.context,
+      expectedHeartbeatRequest
+    )).thenReturn(future)
+
+    createKafkaApis().handleHeartbeatRequest(requestChannelRequest)
+
+    val expectedHeartbeatResponse = new HeartbeatResponseData()
+    future.complete(expectedHeartbeatResponse)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[HeartbeatResponse]
+    assertEquals(expectedHeartbeatResponse, response.data)
+  }
+
+  @Test
+  def testHandleHeartbeatRequestFutureFailed(): Unit = {
+    val heartbeatRequest = new HeartbeatRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(0)
+
+    val requestChannelRequest = buildRequest(new HeartbeatRequest.Builder(heartbeatRequest).build())
+
+    val expectedHeartbeatRequest = new HeartbeatRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(0)
+
+    val future = new CompletableFuture[HeartbeatResponseData]()
+    when(newGroupCoordinator.heartbeat(
+      requestChannelRequest.context,
+      expectedHeartbeatRequest
+    )).thenReturn(future)
+
+    createKafkaApis().handleHeartbeatRequest(requestChannelRequest)
+
+    future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[HeartbeatResponse]
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
+  }
+
+  @Test
+  def testHandleHeartbeatRequestAuthenticationFailed(): Unit = {
+    val heartbeatRequest = new HeartbeatRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(0)
+
+    val requestChannelRequest = buildRequest(new HeartbeatRequest.Builder(heartbeatRequest).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleHeartbeatRequest(
+      requestChannelRequest
+    )
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[HeartbeatResponse]
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
   @Test
@@ -2928,57 +3022,188 @@ class KafkaApisTest {
     assertEquals(expectedTopicErrors, response.data.topics())
   }
 
-  @Test
-  def testMultipleLeaveGroup(): Unit = {
-    val groupId = "groupId"
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
+  def testHandleLeaveGroupWithMultipleMembers(version: Short): Unit = {
+    def makeRequest(version: Short): RequestChannel.Request = {
+      buildRequest(new LeaveGroupRequest.Builder(
+        "group",
+        List(
+          new MemberIdentity()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1"),
+          new MemberIdentity()
+            .setMemberId("member-2")
+            .setGroupInstanceId("instance-2")
+        ).asJava
+      ).build(version))
+    }
 
-    val leaveMemberList = List(
-      new MemberIdentity()
-        .setMemberId("member-1")
-        .setGroupInstanceId("instance-1"),
-      new MemberIdentity()
-        .setMemberId("member-2")
-        .setGroupInstanceId("instance-2")
-    )
+    if (version < 3) {
+      // Request version earlier than version 3 do not support batching members.
+      assertThrows(classOf[UnsupportedVersionException], () => makeRequest(version))
+    } else {
+      val requestChannelRequest = makeRequest(version)
 
-    val leaveRequest = buildRequest(
-      new LeaveGroupRequest.Builder(
-        groupId,
-        leaveMemberList.asJava
-      ).build()
-    )
+      val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+        .setGroupId("group")
+        .setMembers(List(
+          new MemberIdentity()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1"),
+          new MemberIdentity()
+            .setMemberId("member-2")
+            .setGroupInstanceId("instance-2")
+        ).asJava)
 
-    createKafkaApis().handleLeaveGroupRequest(leaveRequest)
-    verify(groupCoordinator).handleLeaveGroup(
-      ArgumentMatchers.eq(groupId),
-      ArgumentMatchers.eq(leaveMemberList),
-      any()
-    )
+      val future = new CompletableFuture[LeaveGroupResponseData]()
+      when(newGroupCoordinator.leaveGroup(
+        requestChannelRequest.context,
+        expectedLeaveGroupRequest
+      )).thenReturn(future)
+
+      createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+
+      val expectedLeaveResponse = new LeaveGroupResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setMembers(List(
+          new LeaveGroupResponseData.MemberResponse()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1"),
+          new LeaveGroupResponseData.MemberResponse()
+            .setMemberId("member-2")
+            .setGroupInstanceId("instance-2"),
+        ).asJava)
+
+      future.complete(expectedLeaveResponse)
+      val capturedResponse = verifyNoThrottling(requestChannelRequest)
+      val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+      assertEquals(expectedLeaveResponse, response.data)
+    }
+  }
+
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
+  def testHandleLeaveGroupWithSingleMember(version: Short): Unit = {
+    val requestChannelRequest = buildRequest(new LeaveGroupRequest.Builder(
+      "group",
+      List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava
+    ).build(version))
+
+    val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+      .setGroupId("group")
+      .setMembers(List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId(if (version >= 3) "instance-1" else null)
+      ).asJava)
+
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+    when(newGroupCoordinator.leaveGroup(
+      requestChannelRequest.context,
+      expectedLeaveGroupRequest
+    )).thenReturn(future)
+
+    createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+
+    val leaveGroupResponse = new LeaveGroupResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMembers(List(
+        new LeaveGroupResponseData.MemberResponse()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava)
+
+    val expectedLeaveResponse = if (version >= 3) {
+      new LeaveGroupResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setMembers(List(
+          new LeaveGroupResponseData.MemberResponse()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1")
+        ).asJava)
+    } else {
+      new LeaveGroupResponseData()
+        .setErrorCode(Errors.NONE.code)
+    }
+
+    future.complete(leaveGroupResponse)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    assertEquals(expectedLeaveResponse, response.data)
   }
 
   @Test
-  def testSingleLeaveGroup(): Unit = {
-    val groupId = "groupId"
-    val memberId = "member"
+  def testHandleLeaveGroupFutureFailed(): Unit = {
+    val requestChannelRequest = buildRequest(new LeaveGroupRequest.Builder(
+      "group",
+      List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava
+    ).build(ApiKeys.LEAVE_GROUP.latestVersion))
 
-    val singleLeaveMember = List(
-      new MemberIdentity()
-        .setMemberId(memberId)
-    )
+    val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+      .setGroupId("group")
+      .setMembers(List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava)
 
-    val leaveRequest = buildRequest(
-      new LeaveGroupRequest.Builder(
-        groupId,
-        singleLeaveMember.asJava
-      ).build()
-    )
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+    when(newGroupCoordinator.leaveGroup(
+      requestChannelRequest.context,
+      expectedLeaveGroupRequest
+    )).thenReturn(future)
 
-    createKafkaApis().handleLeaveGroupRequest(leaveRequest)
-    verify(groupCoordinator).handleLeaveGroup(
-      ArgumentMatchers.eq(groupId),
-      ArgumentMatchers.eq(singleLeaveMember),
-      any()
-    )
+    createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+
+    future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
+  }
+
+  @Test
+  def testHandleLeaveGroupAuthenticationFailed(): Unit = {
+    val requestChannelRequest = buildRequest(new LeaveGroupRequest.Builder(
+      "group",
+      List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava
+    ).build(ApiKeys.LEAVE_GROUP.latestVersion))
+
+    val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+      .setGroupId("group")
+      .setMembers(List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava)
+
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+    when(newGroupCoordinator.leaveGroup(
+      requestChannelRequest.context,
+      expectedLeaveGroupRequest
+    )).thenReturn(future)
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleLeaveGroupRequest(requestChannelRequest)
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
   @Test

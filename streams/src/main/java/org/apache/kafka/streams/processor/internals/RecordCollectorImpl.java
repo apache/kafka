@@ -50,6 +50,8 @@ import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
 
 import org.slf4j.Logger;
 
+import java.util.Set;
+import java.util.Optional;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -130,7 +132,6 @@ public class RecordCollectorImpl implements RecordCollector {
                             final String processorNodeId,
                             final InternalProcessorContext<Void, Void> context,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
-        final Integer partition;
 
         if (partitioner != null) {
             final List<PartitionInfo> partitions;
@@ -150,16 +151,30 @@ public class RecordCollectorImpl implements RecordCollector {
                 );
             }
             if (partitions.size() > 0) {
-                partition = partitioner.partition(topic, key, value, partitions.size());
+                final Optional<Set<Integer>> maybeMulticastPartitions = partitioner.partitions(topic, key, value, partitions.size());
+                if (!maybeMulticastPartitions.isPresent()) {
+                    // A null//empty partition indicates we should use the default partitioner
+                    send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
+                } else {
+                    final Set<Integer> multicastPartitions = maybeMulticastPartitions.get();
+                    if (multicastPartitions.isEmpty()) {
+                        // If a record is not to be sent to any partition, mark it as a dropped record.
+                        log.debug("Not sending the record with key {} , value {} to any partition", key, value);
+                        droppedRecordsSensor.record();
+                    } else {
+                        for (final int multicastPartition: multicastPartitions) {
+                            send(topic, key, value, headers, multicastPartition, timestamp, keySerializer, valueSerializer, processorNodeId, context);
+                        }
+                    }
+                }
             } else {
                 throw new StreamsException("Could not get partition information for topic " + topic + " for task " + taskId +
                     ". This can happen if the topic does not exist.");
             }
         } else {
-            partition = null;
+            send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
         }
 
-        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer, processorNodeId, context);
     }
 
     @Override
@@ -212,6 +227,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
             if (exception == null) {
                 final TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
+                log.info("Produced key:{}, value:{} successfully to tp:{}", key, value, tp);
                 if (metadata.offset() >= 0L) {
                     offsets.put(tp, metadata.offset());
                 } else {

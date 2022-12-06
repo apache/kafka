@@ -94,13 +94,14 @@ class HttpMetricsCollector(object):
         super(HttpMetricsCollector, self).start_node(node)
 
     def stop(self):
-        super(HttpMetricsCollector, self).stop()
-
-        if self._http_metrics_thread:
-            self.logger.debug("Shutting down metrics httpd")
-            self._httpd.shutdown()
-            self._http_metrics_thread.join()
-            self.logger.debug("Finished shutting down metrics httpd")
+        try:
+            super(HttpMetricsCollector, self).stop()
+        finally:
+            if self._http_metrics_thread:
+                self.logger.debug("Shutting down metrics httpd")
+                self._httpd.shutdown()
+                self._http_metrics_thread.join()
+                self.logger.debug("Finished shutting down metrics httpd")
 
     def stop_node(self, node):
         super(HttpMetricsCollector, self).stop_node(node)

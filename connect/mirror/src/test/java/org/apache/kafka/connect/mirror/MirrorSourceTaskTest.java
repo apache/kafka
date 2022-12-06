@@ -135,7 +135,7 @@ public class MirrorSourceTaskTest {
         KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
         when(consumer.poll(any())).thenReturn(consumerRecords);
 
-        MirrorMetrics metrics = mock(MirrorMetrics.class);
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
 
         String sourceClusterName = "cluster1";
         ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
@@ -181,7 +181,7 @@ public class MirrorSourceTaskTest {
         KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
         @SuppressWarnings("unchecked")
         KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
-        MirrorMetrics metrics = mock(MirrorMetrics.class);
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
 
         String sourceClusterName = "cluster1";
         ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();

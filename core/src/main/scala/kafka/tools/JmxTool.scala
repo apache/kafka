@@ -98,7 +98,7 @@ object JmxTool extends Logging {
     val helpOpt = parser.accepts("help", "Print usage information.")
 
 
-    if(args.length == 0)
+    if(args.isEmpty)
       CommandLineUtils.printUsageAndDie(parser, "Dump JMX values to standard output.")
 
     val options = parser.parse(args : _*)
