@@ -32,6 +32,7 @@ import java.util.Collections;
  *  @see MirrorHeartbeatConfig for supported config properties.
  */
 public class MirrorHeartbeatConnector extends SourceConnector {
+    private BackgroundResources backgroundResources;
     private MirrorHeartbeatConfig config;
     private Scheduler scheduler;
     private Admin targetAdminClient;
@@ -43,12 +44,14 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     // visible for testing
     MirrorHeartbeatConnector(MirrorHeartbeatConfig config) {
         this.config = config;
+        this.backgroundResources = new BackgroundResources();
     }
 
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorHeartbeatConfig(props);
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
+        this.backgroundResources = new BackgroundResources();
+        targetAdminClient = backgroundResources.admin(config, config.targetAdminConfig(), "target admin client");
         scheduler = new Scheduler(MirrorHeartbeatConnector.class, config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
     }

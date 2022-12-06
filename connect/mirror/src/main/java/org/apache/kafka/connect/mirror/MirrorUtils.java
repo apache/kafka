@@ -19,15 +19,11 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -50,14 +46,6 @@ final class MirrorUtils {
 
     // utility class
     private MirrorUtils() {}
-
-    static KafkaProducer<byte[], byte[]> newProducer(Map<String, Object> props) {
-        return new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
-    }
-
-    static KafkaConsumer<byte[], byte[]> newConsumer(Map<String, Object> props) {
-        return new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-    }
 
     static String encodeTopicPartition(TopicPartition topicPartition) {
         return topicPartition.toString();

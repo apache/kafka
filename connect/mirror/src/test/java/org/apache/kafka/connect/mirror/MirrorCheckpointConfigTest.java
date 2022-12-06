@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -31,6 +33,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MirrorCheckpointConfigTest {
 
+    private BackgroundResources backgroundResources;
+    @BeforeEach
+    public void setUp() {
+        backgroundResources = new BackgroundResources();
+    }
+
+    @AfterEach
+    public void tearDown() {
+        backgroundResources.close();
+    }
+
     @Test
     public void testTaskConfigConsumerGroups() {
         List<String> groups = Arrays.asList("consumer-1", "consumer-2", "consumer-3");
@@ -44,9 +57,10 @@ public class MirrorCheckpointConfigTest {
     @Test
     public void testGroupMatching() {
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps("groups", "group1"));
-        assertTrue(config.groupFilter().shouldReplicateGroup("group1"),
+        GroupFilter groupFilter = backgroundResources.groupFilter(config, "group filter");
+        assertTrue(groupFilter.shouldReplicateGroup("group1"),
                 "topic1 group matching property configuration failed");
-        assertFalse(config.groupFilter().shouldReplicateGroup("group2"),
+        assertFalse(groupFilter.shouldReplicateGroup("group2"),
                 "topic2 group matching property configuration failed");
     }
 

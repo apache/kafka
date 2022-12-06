@@ -36,7 +36,6 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -70,6 +69,7 @@ public class MirrorSourceConnector extends SourceConnector {
         null, PatternType.ANY);
     private static final AclBindingFilter ANY_TOPIC_ACL = new AclBindingFilter(ANY_TOPIC, AccessControlEntryFilter.ANY);
 
+    private BackgroundResources backgroundResources;
     private Scheduler scheduler;
     private MirrorSourceConfig config;
     private SourceAndTarget sourceAndTarget;
@@ -92,6 +92,7 @@ public class MirrorSourceConnector extends SourceConnector {
     MirrorSourceConnector(List<TopicPartition> knownSourceTopicPartitions, MirrorSourceConfig config) {
         this.knownSourceTopicPartitions = knownSourceTopicPartitions;
         this.config = config;
+        this.backgroundResources = new BackgroundResources();
     }
 
     // visible for testing
@@ -101,6 +102,7 @@ public class MirrorSourceConnector extends SourceConnector {
         this.replicationPolicy = replicationPolicy;
         this.topicFilter = topicFilter;
         this.configPropertyFilter = configPropertyFilter;
+        this.backgroundResources = new BackgroundResources();
     }
 
     @Override
@@ -110,16 +112,17 @@ public class MirrorSourceConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
+        backgroundResources = new BackgroundResources();
         connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
-        topicFilter = config.topicFilter();
-        configPropertyFilter = config.configPropertyFilter();
+        topicFilter = backgroundResources.topicFilter(config, "topic filter");
+        configPropertyFilter = backgroundResources.configPropertyFilter(config, "config property filter");
         replicationPolicy = config.replicationPolicy();
         replicationFactor = config.replicationFactor();
-        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
-        offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig());
-        scheduler = new Scheduler(MirrorSourceConnector.class, config.adminTimeout());
+        sourceAdminClient = backgroundResources.admin(config, config.sourceAdminConfig(), "source admin client");
+        targetAdminClient = backgroundResources.admin(config, config.targetAdminConfig(), "target admin client");
+        offsetSyncsAdminClient = backgroundResources.admin(config, config.offsetSyncsTopicAdminConfig(), "offset syncs admin client");
+        scheduler = backgroundResources.scheduler(MirrorSourceConnector.class, config.adminTimeout(), "scheduler");
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
         scheduler.execute(this::computeAndCreateTopicPartitions, "creating downstream topic-partitions");
@@ -139,12 +142,7 @@ public class MirrorSourceConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
-        Utils.closeQuietly(scheduler, "scheduler");
-        Utils.closeQuietly(topicFilter, "topic filter");
-        Utils.closeQuietly(configPropertyFilter, "config property filter");
-        Utils.closeQuietly(sourceAdminClient, "source admin client");
-        Utils.closeQuietly(targetAdminClient, "target admin client");
-        Utils.closeQuietly(offsetSyncsAdminClient, "offset syncs admin client");
+        backgroundResources.close();
         log.info("Stopping {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
 

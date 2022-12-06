@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.ConnectorUtils;
@@ -51,6 +50,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private Admin targetAdminClient;
     private SourceAndTarget sourceAndTarget;
     private List<String> knownConsumerGroups = Collections.emptyList();
+    private BackgroundResources backgroundResources;
 
     public MirrorCheckpointConnector() {
         // nop
@@ -60,6 +60,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     MirrorCheckpointConnector(List<String> knownConsumerGroups, MirrorCheckpointConfig config) {
         this.knownConsumerGroups = knownConsumerGroups;
         this.config = config;
+        this.backgroundResources = new BackgroundResources();
     }
 
     @Override
@@ -68,12 +69,13 @@ public class MirrorCheckpointConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
+        backgroundResources = new BackgroundResources();
         String connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
-        groupFilter = config.groupFilter();
-        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
-        scheduler = new Scheduler(MirrorCheckpointConnector.class, config.adminTimeout());
+        groupFilter = backgroundResources.groupFilter(config, "group filter");
+        sourceAdminClient = backgroundResources.admin(config, config.sourceAdminConfig(), "source admin client");
+        targetAdminClient = backgroundResources.admin(config, config.targetAdminConfig(), "target admin client");
+        scheduler = backgroundResources.scheduler(MirrorCheckpointConnector.class, config.adminTimeout(), "scheduler");
         scheduler.execute(this::createInternalTopics, "creating internal topics");
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
@@ -87,10 +89,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
-        Utils.closeQuietly(scheduler, "scheduler");
-        Utils.closeQuietly(groupFilter, "group filter");
-        Utils.closeQuietly(sourceAdminClient, "source admin client");
-        Utils.closeQuietly(targetAdminClient, "target admin client");
+        backgroundResources.close();
     }
 
     @Override
