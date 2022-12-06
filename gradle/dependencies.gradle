@@ -28,7 +28,7 @@ ext {
 
 // Add Scala version
 def defaultScala212Version = '2.12.15'
-def defaultScala213Version = '2.13.8'
+def defaultScala213Version = '2.13.10'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -76,6 +76,7 @@ versions += [
   jmh: "1.35",
   hamcrest: "2.2",
   scalaLogging: "3.9.4",
+  jaxAnnotation: "1.3.2",
   jaxb: "2.3.0",
   jaxrs: "2.1.1",
   jfreechart: "1.0.0",
@@ -123,7 +124,7 @@ versions += [
   spotbugs: "4.7.3",
   swaggerAnnotations: "2.2.0",
   swaggerJaxrs2: "2.2.0",
-  zinc: "1.6.1",
+  zinc: "1.7.2",
   zookeeper: "3.6.3",
   zstd: "1.5.2-1"
 ]
@@ -148,6 +149,7 @@ libs += [
   jacksonModuleScala: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jackson",
   jacksonJDK8Datatypes: "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$versions.jackson",
   jacksonJaxrsJsonProvider: "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$versions.jackson",
+  jaxAnnotationApi: "javax.annotation:javax.annotation-api:$versions.jaxAnnotation",
   jaxbApi: "javax.xml.bind:jaxb-api:$versions.jaxb",
   jaxrsApi: "javax.ws.rs:javax.ws.rs-api:$versions.jaxrs",
   javassist: "org.javassist:javassist:$versions.javassist",

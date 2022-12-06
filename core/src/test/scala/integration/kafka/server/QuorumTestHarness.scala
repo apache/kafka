@@ -384,6 +384,7 @@ abstract class QuorumTestHarness extends Logging {
     if (implementation != null) {
       implementation.shutdown()
     }
+    TestUtils.clearYammerMetrics()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
     faultHandler.maybeRethrowFirstException()
