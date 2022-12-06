@@ -87,9 +87,11 @@ public class ThreadCache {
             final CircularIterator<NamedCache> circularIterator = new CircularIterator<>(caches.values());
             while (sizeInBytes.get() > maxCacheSizeBytes) {
                 final NamedCache cache = circularIterator.next();
-                final long oldSize = cache.sizeInBytes();
-                cache.evict();
-                sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
+                synchronized (cache) {
+                    final long oldSize = cache.sizeInBytes();
+                    cache.evict();
+                    sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
+                }
                 numEvicts++;
             }
         } else {
