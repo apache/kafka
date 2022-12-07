@@ -959,6 +959,11 @@ public class StreamsConfig extends AbstractConfig {
                     in(ROCKS_DB, IN_MEMORY),
                     Importance.LOW,
                     DEFAULT_DSL_STORE_DOC)
+            .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
+                    Type.CLASS,
+                    DefaultKafkaClientSupplier.class.getName(),
+                    Importance.LOW,
+                    DEFAULT_CLIENT_SUPPLIER_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
                     ConfigDef.Type.LONG,
                     5 * 60 * 1000L,
@@ -1105,12 +1110,7 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     null,
                     Importance.LOW,
-                    WINDOW_SIZE_MS_DOC)
-            .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
-                    Type.CLASS,
-                    DefaultKafkaClientSupplier.class.getName(),
-                    Importance.MEDIUM,
-                    DEFAULT_CLIENT_SUPPLIER_DOC);
+                    WINDOW_SIZE_MS_DOC);
     }
 
     // this is the list of configs for underlying clients
