@@ -59,13 +59,11 @@ class ControllerServer(
 
   import kafka.server.Server._
 
-  val config = sharedServer.config
+  val config = sharedServer.controllerConfig
   val time = sharedServer.time
   def metrics = sharedServer.metrics
   val threadNamePrefix = sharedServer.threadNamePrefix.getOrElse("")
   def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
-
-  config.dynamicConfig.initialize(zkClientOpt = None)
 
   val lock = new ReentrantLock()
   val awaitShutdownCond = lock.newCondition()
@@ -109,6 +107,7 @@ class ControllerServer(
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     try {
       info("Starting controller")
+      config.dynamicConfig.initialize(zkClientOpt = None)
 
       maybeChangeStatus(STARTING, STARTED)
       this.logIdent = new LogContext(s"[ControllerServer id=${config.nodeId}] ").logPrefix()
@@ -284,6 +283,7 @@ class ControllerServer(
       createTopicPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       alterConfigPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
+      CoreUtils.swallow(config.dynamicConfig.clear(), this)
       sharedServer.stopForController()
     } catch {
       case e: Throwable =>

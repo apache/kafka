@@ -23,6 +23,8 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.ListGroupsRequestData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.requests.RequestContext;
@@ -86,6 +88,19 @@ public interface GroupCoordinator {
     CompletableFuture<LeaveGroupResponseData> leaveGroup(
         RequestContext context,
         LeaveGroupRequestData request
+    );
+
+    /**
+     * List Groups.
+     *
+     * @param context           The coordinator request context.
+     * @param request           The ListGroupRequest data.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<ListGroupsResponseData> listGroups(
+        RequestContext context,
+        ListGroupsRequestData request
     );
 
     /**
