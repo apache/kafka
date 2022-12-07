@@ -40,7 +40,7 @@ public final class MetadataImage {
         ProducerIdsImage.EMPTY,
         AclsImage.EMPTY);
 
-    private final OffsetAndEpoch highestOffsetAndEpoch;
+    private final OffsetAndEpoch imageId;
 
     private final FeaturesImage features;
 
@@ -57,7 +57,7 @@ public final class MetadataImage {
     private final AclsImage acls;
 
     public MetadataImage(
-        OffsetAndEpoch highestOffsetAndEpoch,
+        OffsetAndEpoch imageId,
         FeaturesImage features,
         ClusterImage cluster,
         TopicsImage topics,
@@ -66,7 +66,7 @@ public final class MetadataImage {
         ProducerIdsImage producerIds,
         AclsImage acls
     ) {
-        this.highestOffsetAndEpoch = highestOffsetAndEpoch;
+        this.imageId = imageId;
         this.features = features;
         this.cluster = cluster;
         this.topics = topics;
@@ -86,8 +86,16 @@ public final class MetadataImage {
             acls.isEmpty();
     }
 
-    public OffsetAndEpoch highestOffsetAndEpoch() {
-        return highestOffsetAndEpoch;
+    /**
+     * The "imageId" is the (exclusive) offset and epoch of the largest record contained in the image.
+     * If there are no record contained in the image, then 0 is used for both.
+     *
+     * If a snapshot is generated from this image, then the snapshotId will match the imageId.
+     *
+     * @return The ID for this image
+     */
+    public OffsetAndEpoch imageId() {
+        return imageId;
     }
 
     public FeaturesImage features() {
@@ -135,7 +143,7 @@ public final class MetadataImage {
     public boolean equals(Object o) {
         if (o == null || !o.getClass().equals(this.getClass())) return false;
         MetadataImage other = (MetadataImage) o;
-        return highestOffsetAndEpoch.equals(other.highestOffsetAndEpoch) &&
+        return imageId.equals(other.imageId) &&
             features.equals(other.features) &&
             cluster.equals(other.cluster) &&
             topics.equals(other.topics) &&
@@ -147,7 +155,7 @@ public final class MetadataImage {
 
     @Override
     public int hashCode() {
-        return Objects.hash(highestOffsetAndEpoch,
+        return Objects.hash(imageId,
             features,
             cluster,
             topics,
@@ -159,7 +167,7 @@ public final class MetadataImage {
 
     @Override
     public String toString() {
-        return "MetadataImage(highestOffsetAndEpoch=" + highestOffsetAndEpoch +
+        return "MetadataImage(id=" + imageId +
             ", features=" + features +
             ", cluster=" + cluster +
             ", topics=" + topics +

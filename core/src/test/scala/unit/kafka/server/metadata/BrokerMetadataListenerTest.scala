@@ -27,9 +27,10 @@ import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.metadata.{BrokerRegistration, RecordTestUtils, VersionRange}
+import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
@@ -107,7 +108,7 @@ class BrokerMetadataListenerTest {
       )
       listener.startPublishing(new MetadataPublisher {
         override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
-          assertEquals(200L, newImage.highestOffsetAndEpoch().offset)
+          assertEquals(201L, newImage.imageId.offset)
           assertEquals(new BrokerRegistration(0, 100L,
             Uuid.fromString("GFBwlTcpQUuLYQ2ig05CSg"), Collections.emptyList[Endpoint](),
             Collections.emptyMap[String, VersionRange](), Optional.empty[String](), false, false),
@@ -133,22 +134,27 @@ class BrokerMetadataListenerTest {
   class MockMetadataSnapshotter extends MetadataSnapshotter {
     var image = MetadataImage.EMPTY
     val failure = new AtomicReference[Throwable](null)
-    var activeSnapshotOffset = -1L
-    var prevCommittedOffset = -1L
-    var prevCommittedEpoch = -1
+    var activeSnapshotId: OffsetAndEpoch = null
+    var prevSnapshotId: OffsetAndEpoch = null
     var prevLastContainedLogTime = -1L
 
-    override def maybeStartSnapshot(lastContainedLogTime: Long, newImage: MetadataImage, reason: Set[SnapshotReason]): Boolean = {
+    override def maybeStartSnapshot(
+      lastContainedLogTime: Long,
+      newImage: MetadataImage,
+      reason: Set[SnapshotReason]
+    ): Boolean = {
       try {
-        if (activeSnapshotOffset == -1L) {
-          assertTrue(prevCommittedOffset <= newImage.highestOffsetAndEpoch().offset)
-          assertTrue(prevCommittedEpoch <= newImage.highestOffsetAndEpoch().epoch)
-          assertTrue(prevLastContainedLogTime <= lastContainedLogTime)
-          prevCommittedOffset = newImage.highestOffsetAndEpoch().offset
-          prevCommittedEpoch = newImage.highestOffsetAndEpoch().epoch
+        if (activeSnapshotId == null) {
+          val newImageId = newImage.imageId
+          if (prevSnapshotId != null) {
+            assertTrue(prevSnapshotId.offset <= newImageId.offset)
+            assertTrue(prevSnapshotId.epoch <= newImageId.epoch)
+            assertTrue(prevLastContainedLogTime <= lastContainedLogTime)
+          }
+          prevSnapshotId = newImageId
           prevLastContainedLogTime = lastContainedLogTime
           image = newImage
-          activeSnapshotOffset = newImage.highestOffsetAndEpoch().offset
+          activeSnapshotId = newImageId
           true
         } else {
           false
@@ -174,7 +180,7 @@ class BrokerMetadataListenerTest {
 
   private def generateManyRecords(listener: BrokerMetadataListener,
                                   endOffset: Long): Unit = {
-    (0 to 10000).foreach { _ =>
+    (0 until 10000).foreach { _ =>
       listener.handleCommit(
         RecordTestUtils.mockBatchReader(
           endOffset,
@@ -248,28 +254,28 @@ class BrokerMetadataListenerTest {
       assertEquals(200L, listener.highestMetadataOffset)
 
       // Check that we generate at least one snapshot once we see enough records.
-      assertEquals(-1L, snapshotter.prevCommittedOffset)
-      generateManyRecords(listener, 1000L)
-      assertEquals(1000L, snapshotter.prevCommittedOffset)
-      assertEquals(1000L, snapshotter.activeSnapshotOffset)
-      snapshotter.activeSnapshotOffset = -1L
+      assertNull(snapshotter.prevSnapshotId)
+      generateManyRecords(listener, endOffset = 1000L)
+      assertEquals(new OffsetAndEpoch(1000L, 0), snapshotter.prevSnapshotId)
+      assertEquals(new OffsetAndEpoch(1000L, 0), snapshotter.activeSnapshotId)
+      snapshotter.activeSnapshotId = null
 
       // Test creating a new snapshot after publishing it.
       val publisher = new MockMetadataPublisher()
       listener.startPublishing(publisher).get()
-      generateManyRecords(listener, 2000L)
+      generateManyRecords(listener, endOffset = 2000L)
       listener.getImageRecords().get()
-      assertEquals(2000L, snapshotter.activeSnapshotOffset)
-      assertEquals(2000L, snapshotter.prevCommittedOffset)
+      assertEquals(new OffsetAndEpoch(2000L, 0), snapshotter.prevSnapshotId)
+      assertEquals(new OffsetAndEpoch(2000L, 0), snapshotter.activeSnapshotId)
 
       // Test how we handle the snapshotter returning false.
-      generateManyRecords(listener, 3000L)
-      assertEquals(2000L, snapshotter.activeSnapshotOffset)
-      generateManyRecords(listener, 4000L)
-      assertEquals(2000L, snapshotter.activeSnapshotOffset)
-      snapshotter.activeSnapshotOffset = -1L
-      generateManyRecords(listener, 5000L)
-      assertEquals(5000L, snapshotter.activeSnapshotOffset)
+      generateManyRecords(listener, endOffset = 3000L)
+      assertEquals(new OffsetAndEpoch(2000L, 0), snapshotter.activeSnapshotId)
+      generateManyRecords(listener, endOffset = 4000L)
+      assertEquals(new OffsetAndEpoch(2000L, 0), snapshotter.activeSnapshotId)
+      snapshotter.activeSnapshotId = null
+      generateManyRecords(listener, endOffset = 5000L)
+      assertEquals(new OffsetAndEpoch(5000L, 0), snapshotter.activeSnapshotId)
       assertEquals(null, snapshotter.failure.get())
     } finally {
       listener.close()
@@ -284,7 +290,7 @@ class BrokerMetadataListenerTest {
 
     updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.latest.featureLevel(), 100L)
     listener.getImageRecords().get()
-    assertEquals(-1L, snapshotter.activeSnapshotOffset, "We won't generate snapshot on metadata version change before starting publishing")
+    assertNull(snapshotter.activeSnapshotId, "We won't generate snapshot on metadata version change before starting publishing")
   }
 
   @Test
@@ -296,7 +302,8 @@ class BrokerMetadataListenerTest {
     val endOffset = 100L
     updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.latest.featureLevel(), endOffset)
     listener.startPublishing(new MockMetadataPublisher()).get()
-    assertEquals(endOffset, snapshotter.activeSnapshotOffset, "We should try to generate snapshot when starting publishing")
+    assertEquals(new OffsetAndEpoch(endOffset, 0), snapshotter.activeSnapshotId,
+      "We should try to generate snapshot when starting publishing")
   }
 
   @Test
@@ -310,7 +317,8 @@ class BrokerMetadataListenerTest {
     updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, (MetadataVersion.latest().featureLevel() - 1).toShort, endOffset)
     // Waiting for the metadata version update to get processed
     listener.getImageRecords().get()
-    assertEquals(endOffset, snapshotter.activeSnapshotOffset, "We should generate snapshot on feature update")
+    assertEquals(new OffsetAndEpoch(endOffset, 0), snapshotter.activeSnapshotId,
+      "We should generate snapshot on feature update")
   }
 
   @Test
@@ -329,18 +337,15 @@ class BrokerMetadataListenerTest {
       createTopicWithOnePartition(listener, replicas = brokerIds, endOffset = 200L)
       listener.getImageRecords().get()
       assertEquals(200L, listener.highestMetadataOffset)
-      assertEquals(-1L, snapshotter.prevCommittedOffset)
-      assertEquals(-1L, snapshotter.activeSnapshotOffset)
+      assertNull(snapshotter.prevSnapshotId)
 
       // Append invalid records that will normally trigger a snapshot
       generateBadRecords(listener, 1000L)
-      assertEquals(-1L, snapshotter.prevCommittedOffset)
-      assertEquals(-1L, snapshotter.activeSnapshotOffset)
+      assertNull(snapshotter.prevSnapshotId)
 
       // Generate some records that will not throw an error, verify still no snapshots
       generateManyRecords(listener, 2000L)
-      assertEquals(-1L, snapshotter.prevCommittedOffset)
-      assertEquals(-1L, snapshotter.activeSnapshotOffset)
+      assertNull(snapshotter.prevSnapshotId)
     } finally {
       listener.close()
     }

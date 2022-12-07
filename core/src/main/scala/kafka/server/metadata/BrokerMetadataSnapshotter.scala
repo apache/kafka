@@ -23,14 +23,17 @@ import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.image.writer.{ImageWriterOptions, RaftSnapshotWriter}
 import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
+import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotWriter
+
 import scala.jdk.CollectionConverters._
 
 trait SnapshotWriterBuilder {
-  def build(committedOffset: Long,
-            committedEpoch: Int,
-            lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]]
+  def build(
+    snapshotId: OffsetAndEpoch,
+    lastContainedLogTime: Long
+  ): Option[SnapshotWriter[ApiMessageAndVersion]]
 }
 
 class BrokerMetadataSnapshotter(
@@ -69,25 +72,24 @@ class BrokerMetadataSnapshotter(
     snapshotReasons: Set[SnapshotReason]
   ): Boolean = synchronized {
     if (_currentSnapshotOffset != -1) {
-      info(s"Declining to create a new snapshot at ${image.highestOffsetAndEpoch} because " +
+      info(s"Declining to create a new snapshot at ${image.imageId} because " +
         s"there is already a snapshot in progress at offset ${_currentSnapshotOffset}")
       false
     } else {
       val writer = writerBuilder.build(
-        image.highestOffsetAndEpoch().offset,
-        image.highestOffsetAndEpoch().epoch,
+        image.imageId,
         lastContainedLogTime
       )
       if (writer.nonEmpty) {
-        _currentSnapshotOffset = image.highestOffsetAndEpoch.offset
+        _currentSnapshotOffset = image.imageId.offset
 
         val snapshotReasonsMessage = SnapshotReason.stringFromReasons(snapshotReasons.asJava)
-        info(s"Creating a new snapshot at ${image.highestOffsetAndEpoch} because: $snapshotReasonsMessage")
+        info(s"Creating a new snapshot at ${image.imageId} because: $snapshotReasonsMessage")
         eventQueue.append(new CreateSnapshotEvent(image, writer.get))
         true
       } else {
-        info(s"Declining to create a new snapshot at ${image.highestOffsetAndEpoch()} because " +
-          s"there is already a snapshot at offset ${image.highestOffsetAndEpoch().offset}")
+        info(s"Declining to create a new snapshot at ${image.imageId} because " +
+          s"there is already a snapshot at this offset")
         false
       }
     }

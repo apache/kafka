@@ -126,16 +126,16 @@ class BrokerMetadataPublisher(
   val publishedOffsetAtomic = new AtomicLong(-1)
 
   override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
-    val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
+    val imageId = newImage.imageId()
 
     val deltaName = if (_firstPublish) {
-      s"initial MetadataDelta up to ${highestOffsetAndEpoch.offset}"
+      s"initial MetadataDelta from image $imageId"
     } else {
-      s"MetadataDelta up to ${highestOffsetAndEpoch.offset}"
+      s"MetadataDelta from image $imageId"
     }
     try {
       if (isTraceEnabled) {
-        trace(s"Publishing delta $delta with highest offset $highestOffsetAndEpoch")
+        trace(s"Publishing delta $delta from image $imageId")
       }
 
       // Publish the new metadata image to the metadata cache.
@@ -144,18 +144,18 @@ class BrokerMetadataPublisher(
       val metadataVersionLogMsg = s"metadata.version ${newImage.features().metadataVersion()}"
 
       if (_firstPublish) {
-        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
+        info(s"Publishing $deltaName with $metadataVersionLogMsg.")
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
         initializeManagers()
       } else if (isDebugEnabled) {
-        debug(s"Publishing metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
+        debug(s"Publishing $deltaName with $metadataVersionLogMsg.")
       }
 
       Option(delta.featuresDelta()).foreach { featuresDelta =>
         featuresDelta.metadataVersionChange().ifPresent{ metadataVersion =>
-          info(s"Updating metadata.version to ${metadataVersion.featureLevel()} at offset $highestOffsetAndEpoch.")
+          info(s"Updating metadata.version to ${metadataVersion.featureLevel()} from image $imageId.")
         }
       }
 
@@ -166,7 +166,7 @@ class BrokerMetadataPublisher(
           replicaManager.applyDelta(topicsDelta, newImage)
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error applying topics " +
-            s"delta in ${deltaName}", t)
+            s"delta in $deltaName", t)
         }
         try {
           // Update the group coordinator of local changes
@@ -177,7 +177,7 @@ class BrokerMetadataPublisher(
             groupCoordinator.onResignation)
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
-            s"coordinator with local changes in ${deltaName}", t)
+            s"coordinator with local changes in $deltaName", t)
         }
         try {
           // Update the transaction coordinator of local changes
@@ -188,7 +188,7 @@ class BrokerMetadataPublisher(
             txnCoordinator.onResignation)
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating txn " +
-            s"coordinator with local changes in ${deltaName}", t)
+            s"coordinator with local changes in $deltaName", t)
         }
         try {
           // Notify the group coordinator about deleted topics.
@@ -204,7 +204,7 @@ class BrokerMetadataPublisher(
           }
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
-            s"coordinator with deleted partitions in ${deltaName}", t)
+            s"coordinator with deleted partitions in $deltaName", t)
         }
       }
 
@@ -261,7 +261,7 @@ class BrokerMetadataPublisher(
       if (_firstPublish) {
         finishInitializingReplicaManager(newImage)
       }
-      publishedOffsetAtomic.set(newImage.highestOffsetAndEpoch().offset)
+      publishedOffsetAtomic.set(imageId.offset)
     } catch {
       case t: Throwable => metadataPublishingFaultHandler.handleFault("Uncaught exception while " +
         s"publishing broker metadata from ${deltaName}", t)

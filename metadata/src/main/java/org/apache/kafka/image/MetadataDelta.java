@@ -51,7 +51,7 @@ import java.util.Optional;
 public final class MetadataDelta {
     private final MetadataImage image;
 
-    private long highestOffset;
+    private long highestOffsetExclusive;
 
     private int highestEpoch;
 
@@ -71,8 +71,8 @@ public final class MetadataDelta {
 
     public MetadataDelta(MetadataImage image) {
         this.image = image;
-        this.highestOffset = image.highestOffsetAndEpoch().offset();
-        this.highestEpoch = image.highestOffsetAndEpoch().epoch();
+        this.highestOffsetExclusive = image.imageId().offset();
+        this.highestEpoch = image.imageId().epoch();
     }
 
     public MetadataImage image() {
@@ -162,7 +162,7 @@ public final class MetadataDelta {
     }
 
     public void replay(long offset, int epoch, ApiMessage record) {
-        highestOffset = offset;
+        highestOffsetExclusive = offset + 1;
         highestEpoch = epoch;
 
         MetadataRecordType type = MetadataRecordType.fromId(record.apiKey());
@@ -351,8 +351,9 @@ public final class MetadataDelta {
         } else {
             newAcls = aclsDelta.apply();
         }
+
         return new MetadataImage(
-            new OffsetAndEpoch(highestOffset, highestEpoch),
+            new OffsetAndEpoch(highestOffsetExclusive, highestEpoch),
             newFeatures,
             newCluster,
             newTopics,
@@ -366,7 +367,7 @@ public final class MetadataDelta {
     @Override
     public String toString() {
         return "MetadataDelta(" +
-            "highestOffset=" + highestOffset +
+            "highestOffset=" + highestOffsetExclusive +
             ", highestEpoch=" + highestEpoch +
             ", featuresDelta=" + featuresDelta +
             ", clusterDelta=" + clusterDelta +

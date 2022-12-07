@@ -18,7 +18,6 @@
 package kafka.server.metadata
 
 import java.nio.ByteBuffer
-import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CountDownLatch}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.protocol.ByteBufferAccessor
@@ -35,42 +34,42 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.util
-import scala.compat.java8.OptionConverters._
 
 class BrokerMetadataSnapshotterTest {
   @Test
   def testCreateAndClose(): Unit = {
     val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None,
-      (_, _, _) => throw new RuntimeException("unimplemented"))
+      (_, _) => throw new RuntimeException("unimplemented"))
     snapshotter.close()
   }
 
   class MockSnapshotWriterBuilder extends SnapshotWriterBuilder {
     var image = new CompletableFuture[MetadataImage]
 
-    override def build(committedOffset: Long,
-                       committedEpoch: Int,
-                       lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]] = {
-      val offsetAndEpoch = new OffsetAndEpoch(committedOffset, committedEpoch)
-      RecordsSnapshotWriter.createWithHeader(
-        () => {
-          Optional.of(
-            new MockRawSnapshotWriter(offsetAndEpoch, consumeSnapshotBuffer(committedOffset, committedEpoch))
-          )
-        },
-        1024,
-        MemoryPool.NONE,
-        Time.SYSTEM,
-        lastContainedLogTime,
-        CompressionType.NONE,
-        MetadataRecordSerde.INSTANCE
-      ).asScala
+    override def build(
+      snapshotId: OffsetAndEpoch,
+      lastContainedLogTime: Long
+    ): Option[SnapshotWriter[ApiMessageAndVersion]] = {
+      Some(
+        RecordsSnapshotWriter.createWithHeader(
+          new MockRawSnapshotWriter(snapshotId, consumeSnapshotBuffer(snapshotId)),
+          1024,
+          MemoryPool.NONE,
+          Time.SYSTEM,
+          lastContainedLogTime,
+          CompressionType.NONE,
+          MetadataRecordSerde.INSTANCE
+        )
+      )
     }
 
-    def consumeSnapshotBuffer(committedOffset: Long, committedEpoch: Int)(buffer: ByteBuffer): Unit = {
+    def consumeSnapshotBuffer(snapshotId: OffsetAndEpoch)(buffer: ByteBuffer): Unit = {
       val delta = new MetadataDelta(MetadataImage.EMPTY)
       val memoryRecords = MemoryRecords.readableRecords(buffer)
       val batchIterator = memoryRecords.batchIterator()
+      val committedOffset = snapshotId.offset - 1 // snapshotId is exclusive
+      val committedEpoch = snapshotId.epoch
+
       while (batchIterator.hasNext) {
         val batch = batchIterator.next()
         if (!batch.isControlBatch()) {

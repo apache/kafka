@@ -385,6 +385,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
     FinalizedFeaturesAndEpoch(
       features.toMap,
-      image.highestOffsetAndEpoch().offset)
+      image.imageId.offset - 1
+    )
   }
 }

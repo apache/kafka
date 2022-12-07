@@ -35,7 +35,7 @@ class DynamicConfigPublisher(
   logIdent = s"[DynamicConfigPublisher nodeType=${nodeType} id=${conf.nodeId}] "
 
   def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
-    val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
+    val deltaName = s"MetadataDelta up to ${newImage.imageId}"
     try {
       // Apply configuration deltas.
       Option(delta.configsDelta()).foreach { configsDelta =>

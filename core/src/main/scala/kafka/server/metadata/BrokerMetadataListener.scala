@@ -351,13 +351,13 @@ class BrokerMetadataListener(
 
     _delta = new MetadataDelta(_image)
     if (isDebugEnabled) {
-      debug(s"Publishing new metadata delta $delta at offset ${_image.highestOffsetAndEpoch().offset}.")
+      debug(s"Publishing new metadata from image ${_image.imageId}.")
     }
 
     // This publish call is done with its own try-catch and fault handler
     publisher.publish(delta, _image)
 
-    // Update the metrics since the publisher handled the lastest image
+    // Update the metrics since the publisher handled the latest image
     brokerMetrics.lastAppliedRecordOffset.set(_highestOffset)
     brokerMetrics.lastAppliedRecordTimestamp.set(_highestTimestamp)
   }

@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.util.MockRandom;
@@ -49,6 +50,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Utilities for testing classes that deal with metadata records.
  */
 public class RecordTestUtils {
+
+    public static void replayAll(
+        MetadataDelta delta,
+        List<ApiMessageAndVersion> recordsAndVersions
+    ) {
+        OffsetAndEpoch imageId = delta.image().imageId();
+        long highestOffset = imageId.offset() + recordsAndVersions.size() - 1;
+        int highestEpoch = imageId.epoch();
+
+        replayAll(
+            delta,
+            highestOffset,
+            highestEpoch,
+            recordsAndVersions
+        );
+    }
+
     /**
      * Replay a list of records.
      *
@@ -58,11 +76,7 @@ public class RecordTestUtils {
     public static void replayAll(Object target,
                                  List<ApiMessageAndVersion> recordsAndVersions) {
         if (target instanceof MetadataDelta) {
-            MetadataDelta delta = (MetadataDelta) target;
-            replayAll(delta,
-                    delta.image().highestOffsetAndEpoch().offset(),
-                    delta.image().highestOffsetAndEpoch().epoch(),
-                    recordsAndVersions);
+            replayAll((MetadataDelta) target, recordsAndVersions);
             return;
         }
         for (ApiMessageAndVersion recordAndVersion : recordsAndVersions) {

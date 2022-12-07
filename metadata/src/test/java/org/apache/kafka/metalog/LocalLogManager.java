@@ -774,11 +774,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     @Override
     public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(
-        long committedOffset,
-        int committedEpoch,
+        OffsetAndEpoch snapshotId,
         long lastContainedLogTimestamp
     ) {
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, committedEpoch);
         return RecordsSnapshotWriter.createWithHeader(
             () -> createNewSnapshot(snapshotId),
             1024,

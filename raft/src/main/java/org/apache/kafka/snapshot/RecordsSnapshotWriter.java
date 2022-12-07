@@ -133,6 +133,28 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         });
     }
 
+    public static <T> SnapshotWriter<T> createWithHeader(
+        RawSnapshotWriter rawSnapshotWriter,
+        int maxBatchSize,
+        MemoryPool memoryPool,
+        Time snapshotTime,
+        long lastContainedLogTimestamp,
+        CompressionType compressionType,
+        RecordSerde<T> serde
+    ) {
+        RecordsSnapshotWriter<T> writer = new RecordsSnapshotWriter<>(
+            rawSnapshotWriter,
+            maxBatchSize,
+            memoryPool,
+            snapshotTime,
+            lastContainedLogTimestamp,
+            compressionType,
+            serde
+        );
+        writer.initializeSnapshotWithHeader();
+        return writer;
+    }
+
     @Override
     public OffsetAndEpoch snapshotId() {
         return snapshot.snapshotId();

@@ -56,7 +56,7 @@ public class MetadataImageTest {
         RecordTestUtils.replayAll(DELTA1, 200, 5, AclsImageTest.DELTA1_RECORDS);
 
         IMAGE2 = new MetadataImage(
-            new OffsetAndEpoch(200, 5),
+            new OffsetAndEpoch(201, 5),
             FeaturesImageTest.IMAGE2,
             ClusterImageTest.IMAGE2,
             TopicsImageTest.IMAGE2,
@@ -86,14 +86,16 @@ public class MetadataImageTest {
         testToImageAndBack(IMAGE2);
     }
 
-    private void testToImageAndBack(MetadataImage image) throws Throwable {
+    private void testToImageAndBack(MetadataImage image) {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().build());
         MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
-        RecordTestUtils.replayAll(delta,
-                image.highestOffsetAndEpoch().offset(),
-                image.highestOffsetAndEpoch().epoch(),
-                writer.records());
+        RecordTestUtils.replayAll(
+            delta,
+            image.imageId().offset() - 1,
+            image.imageId().epoch(),
+            writer.records()
+        );
         MetadataImage nextImage = delta.apply();
         assertEquals(image, nextImage);
     }
