@@ -306,7 +306,7 @@
   </subpackage>
 
   <subpackage name="queue">
-      <allow pkg="org.apache.kafka.test" />
+    <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
   <subpackage name="clients">
