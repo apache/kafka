@@ -376,7 +376,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param isUserClientId If true, this entity is user and clientId entity
    * @return True, if the node is deleted
    */
-  private def tryCleanQuotaNodes(entityType: String, entityName: String, isUserClientId: Boolean = false): Boolean = {
+  private def tryCleanQuotaNodes(entityType: String, entityName: String, isUserClientId: Boolean): Boolean = {
     val currPath = ConfigEntityZNode.path(entityType, entityName)
     if (zkClient.getChildren(currPath).isEmpty) {
       var pathToDelete = currPath
