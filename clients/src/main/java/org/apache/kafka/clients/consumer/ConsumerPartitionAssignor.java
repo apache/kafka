@@ -103,27 +103,29 @@ public interface ConsumerPartitionAssignor {
         private final List<String> topics;
         private final ByteBuffer userData;
         private final List<TopicPartition> ownedPartitions;
+        private final Optional<String> rackId;
         private Optional<String> groupInstanceId;
         private final Optional<Integer> generationId;
 
-        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions, int generationId) {
+        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions, int generationId, Optional<String> rackId) {
             this.topics = topics;
             this.userData = userData;
             this.ownedPartitions = ownedPartitions;
             this.groupInstanceId = Optional.empty();
             this.generationId = generationId < 0 ? Optional.empty() : Optional.of(generationId);
+            this.rackId = rackId;
         }
 
         public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
-            this(topics, userData, ownedPartitions, DEFAULT_GENERATION);
+            this(topics, userData, ownedPartitions, DEFAULT_GENERATION, Optional.empty());
         }
 
         public Subscription(List<String> topics, ByteBuffer userData) {
-            this(topics, userData, Collections.emptyList(), DEFAULT_GENERATION);
+            this(topics, userData, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
         }
 
         public Subscription(List<String> topics) {
-            this(topics, null, Collections.emptyList(), DEFAULT_GENERATION);
+            this(topics, null, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
         }
 
         public List<String> topics() {
@@ -136,6 +138,10 @@ public interface ConsumerPartitionAssignor {
 
         public List<TopicPartition> ownedPartitions() {
             return ownedPartitions;
+        }
+
+        public Optional<String> rackId() {
+            return rackId;
         }
 
         public void setGroupInstanceId(Optional<String> groupInstanceId) {
@@ -158,6 +164,7 @@ public interface ConsumerPartitionAssignor {
                 ", ownedPartitions=" + ownedPartitions +
                 ", groupInstanceId=" + groupInstanceId.map(String::toString).orElse("null") +
                 ", generationId=" + generationId.orElse(-1) +
+                ", rackId=" + (rackId.orElse("null")) +
                 ")";
         }
     }
