@@ -37,6 +37,8 @@ class MockBrokerToControllerChannelManager(
 
   override def shutdown(): Unit = {}
 
+  override def time(): Long = time.milliseconds()
+
   override def sendRequest(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
     callback: ControllerRequestCompletionHandler

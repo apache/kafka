@@ -19,9 +19,11 @@ package kafka.coordinator.transaction
 import kafka.server.BrokerToControllerChannelManager
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse
+import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.server.common.ProducerIdsBlock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -37,17 +39,31 @@ class ProducerIdManagerTest {
 
   var brokerToController: BrokerToControllerChannelManager = mock(classOf[BrokerToControllerChannelManager])
   val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
+  val time: Time = new MockTime()
+
+  when(brokerToController.time()).thenAnswer(_ => time.milliseconds())
 
   // Mutable test implementation that lets us easily set the idStart and error
-  class MockProducerIdManager(val brokerId: Int, var idStart: Long, val idLen: Int, var error: Errors = Errors.NONE)
-    extends RPCProducerIdManager(brokerId, () => 1, brokerToController, 100) {
+  class MockProducerIdManager(val brokerId: Int, var idStart: Long, val idLen: Int, var error: Errors = Errors.NONE, val timeout: Boolean = false)
+    extends RPCProducerIdManager(brokerId, () => 1, brokerToController) {
+
+    var tries = 0
+    override private[transaction] val maxWaitMs: Long = 100L
 
     override private[transaction] def sendRequest(): Unit = {
+      tries = tries + 1
+      if (timeout) {
+        time.sleep(75)
+        handleTimeout()
+        return
+      }
+
       if (error == Errors.NONE) {
         handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
           new AllocateProducerIdsResponseData().setProducerIdStart(idStart).setProducerIdLen(idLen)))
         idStart += idLen
       } else {
+        time.sleep(75)
         handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
           new AllocateProducerIdsResponseData().setErrorCode(error.code)))
       }
@@ -136,6 +152,17 @@ class ProducerIdManagerTest {
 
     manager = new MockProducerIdManager(0, Long.MaxValue-1, 10)
     assertThrows(classOf[KafkaException], () => manager.generateProducerId())
+  }
+
+  @Test
+  def testRPCProducerIdManagerRetries(): Unit = {
+    val manager = new MockProducerIdManager(0, 0, 0, timeout = true)
+    assertThrows(classOf[TimeoutException], () => manager.generateProducerId())
+    assertEquals(2, manager.tries)
+
+    val manager2 = new MockProducerIdManager(0, 0, 10, error = Errors.BROKER_ID_NOT_REGISTERED)
+    assertThrows(classOf[TimeoutException], () => manager2.generateProducerId())
+    assertEquals(2, manager2.tries)
   }
 }
 

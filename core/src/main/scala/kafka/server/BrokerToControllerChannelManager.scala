@@ -138,6 +138,7 @@ object BrokerToControllerChannelManager {
 trait BrokerToControllerChannelManager {
   def start(): Unit
   def shutdown(): Unit
+  def time(): Long
   def controllerApiVersions(): Option[NodeApiVersions]
   def sendRequest(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
@@ -173,6 +174,10 @@ class BrokerToControllerChannelManagerImpl(
   def shutdown(): Unit = {
     requestThread.shutdown()
     info(s"Broker to controller channel manager for $channelName shutdown")
+  }
+
+  def time(): Long = {
+    time.milliseconds()
   }
 
   private[server] def newRequestThread = {

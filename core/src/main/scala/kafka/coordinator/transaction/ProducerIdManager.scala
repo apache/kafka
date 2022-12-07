@@ -50,9 +50,8 @@ object ProducerIdManager {
   // Creates a ProducerIdGenerate that uses AllocateProducerIds RPC, IBP >= 3.0-IV0
   def rpc(brokerId: Int,
             brokerEpochSupplier: () => Long,
-            controllerChannel: BrokerToControllerChannelManager,
-            maxWaitMs: Int): RPCProducerIdManager = {
-    new RPCProducerIdManager(brokerId, brokerEpochSupplier, controllerChannel, maxWaitMs)
+            controllerChannel: BrokerToControllerChannelManager): RPCProducerIdManager = {
+    new RPCProducerIdManager(brokerId, brokerEpochSupplier, controllerChannel)
   }
 }
 
@@ -138,20 +137,22 @@ class ZkProducerIdManager(brokerId: Int,
 
 class RPCProducerIdManager(brokerId: Int,
                            brokerEpochSupplier: () => Long,
-                           controllerChannel: BrokerToControllerChannelManager,
-                           maxWaitMs: Int) extends ProducerIdManager with Logging {
+                           controllerChannel: BrokerToControllerChannelManager) extends ProducerIdManager with Logging {
 
   this.logIdent = "[RPC ProducerId Manager " + brokerId + "]: "
 
+  private[transaction] val maxWaitMs: Long = Long.MaxValue // TODO: replace this with a request-provided wait
   private val nextProducerIdBlock = new ArrayBlockingQueue[Try[ProducerIdsBlock]](1)
   private val requestInFlight = new AtomicBoolean(false)
   private var currentProducerIdBlock: ProducerIdsBlock = ProducerIdsBlock.EMPTY
   private var nextProducerId: Long = -1L
+  private var startTime = 0L
 
   override def generateProducerId(): Long = {
     this synchronized {
       if (nextProducerId == -1L) {
         // Send an initial request to get the first block
+        startTime = controllerChannel.time()
         maybeRequestNextBlock()
         nextProducerId = 0L
       } else {
@@ -159,6 +160,7 @@ class RPCProducerIdManager(brokerId: Int,
 
         // Check if we need to fetch the next block
         if (nextProducerId >= (currentProducerIdBlock.firstProducerId + currentProducerIdBlock.size * ProducerIdManager.PidPrefetchThreshold)) {
+          startTime = controllerChannel.time()
           maybeRequestNextBlock()
         }
       }
@@ -183,8 +185,11 @@ class RPCProducerIdManager(brokerId: Int,
 
 
   private def maybeRequestNextBlock(): Unit = {
-    if (nextProducerIdBlock.isEmpty && requestInFlight.compareAndSet(false, true)) {
+    val timeLeft = (startTime + maxWaitMs) - controllerChannel.time()
+    if (nextProducerIdBlock.isEmpty && requestInFlight.compareAndSet(false, true) && timeLeft > 0) {
       sendRequest()
+    } else if (timeLeft <= 0) {
+      nextProducerIdBlock.put(Failure(Errors.REQUEST_TIMED_OUT.exception))
     }
   }
 
@@ -236,7 +241,6 @@ class RPCProducerIdManager(brokerId: Int,
   private[transaction] def handleTimeout(): Unit = {
     warn("Timed out when requesting AllocateProducerIds from the controller.")
     requestInFlight.set(false)
-    nextProducerIdBlock.put(Failure(Errors.REQUEST_TIMED_OUT.exception))
     maybeRequestNextBlock()
   }
 }
