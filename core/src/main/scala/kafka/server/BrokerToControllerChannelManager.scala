@@ -38,8 +38,10 @@ import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
-case class ControllerInformation(node: Option[Node], listenerName: ListenerName,
-                                 securityProtocol: SecurityProtocol, saslMechanism: String,
+case class ControllerInformation(node: Option[Node],
+                                 listenerName: ListenerName,
+                                 securityProtocol: SecurityProtocol,
+                                 saslMechanism: String,
                                  isZkController: Boolean)
 
 trait ControllerNodeProvider {
@@ -182,46 +184,55 @@ class BrokerToControllerChannelManagerImpl(
   private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
-  private var isZkControllerThread = true
-  @volatile private var requestThread = newRequestThread
+  @volatile private var isZkControllerThread = true
+  @volatile private var requestThread = newRequestThread()
+  @volatile private var shutdownStarted = false
 
   def start(): Unit = {
     requestThread.start()
+    maybeScheduleReinitializeRequestThread()
+  }
+
+  def shutdown(): Unit = {
+    requestThread.shutdown()
+    shutdownStarted = false
+    info(s"Broker to controller channel manager for $channelName shutdown")
+  }
+
+  def maybeScheduleReinitializeRequestThread(): Unit = {
     // If migration is enabled for zkBroker, then we might see controller change from zk to kraft
     // and vice-versa. This periodic task takes care of setting the right channel when such
     // controller change is noticed.
     if (config.migrationEnabled && config.requiresZookeeper) {
       kafkaScheduler.schedule("maybeReinitializeRequestThread",
-        () => maybeReinitializeRequestThread(), 0L, 500, TimeUnit.MILLISECONDS)
+        () => maybeReinitializeRequestThread(), delay = 500, period = -1, TimeUnit.MILLISECONDS)
     }
-  }
-
-  def shutdown(): Unit = {
-    requestThread.shutdown()
-    info(s"Broker to controller channel manager for $channelName shutdown")
   }
 
   def maybeReinitializeRequestThread(): Unit = {
-    val controllerInfo = controllerNodeProvider.getControllerInfo()
-    if (isZkControllerThread == controllerInfo.isZkController)
-      return
-    val oldRequestThread = requestThread
-    // Close the old thread and start a new one if old one is not already in the process of
-    // shutting down.
-    if (oldRequestThread.isRunning) {
-      val newThread = newRequestThread
-      newThread.start()
-      requestThread = newThread
-      // Shutdown the request thread. This fails the inflight requests to be failed with
-      // disconnection exception.
-      oldRequestThread.shutdown()
-      // There can still be unsent requests in the queue which need to be cleaned.
-      oldRequestThread.failAllUnsentRequests()
+    if (shutdownStarted) {
+      // A request thread can be created after shutdown is initiated due to race between
+      // reinitialize thread and the thread calling shutdown. So, let's shutdown the thread and
+      // not schedule a new task to check if reinitialization of request thread is needed.
+      if (requestThread.isRunning) {
+        requestThread.shutdown()
+      }
+    } else {
+      val controllerInfo = controllerNodeProvider.getControllerInfo()
+      if (isZkControllerThread != controllerInfo.isZkController && !shutdownStarted) {
+        val newThread = newRequestThread(Some(controllerInfo))
+        newThread.start()
+        val oldRequestThread = requestThread
+        requestThread = newThread
+        oldRequestThread.shutdown()
+        oldRequestThread.failAllUnsentRequests()
+      }
+      maybeScheduleReinitializeRequestThread()
     }
   }
 
-  private[server] def newRequestThread = {
-    val controllerInfo = controllerNodeProvider.getControllerInfo()
+  private[server] def newRequestThread(controllerInfoOpt: Option[ControllerInformation] = None) = {
+    val controllerInfo = controllerInfoOpt.getOrElse(controllerNodeProvider.getControllerInfo())
     isZkControllerThread = controllerInfo.isZkController
     val networkClient = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(

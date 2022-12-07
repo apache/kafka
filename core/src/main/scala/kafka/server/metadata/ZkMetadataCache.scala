@@ -332,7 +332,8 @@ class ZkMetadataCache(brokerId: Int, metadataVersion: MetadataVersion,
   /**
    * Return controller id. Additionally returns if the controller is zk or kraft controller.
    * Returns true for zk controller, false otherwise.
-   * @return
+   * @return Controller id and boolean specifying if the controller is a zk controller or kraft
+   *         controller.
    */
   def getZkOrKRaftControllerId: (Option[Int], Boolean) = {
     val snapshot = metadataSnapshot

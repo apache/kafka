@@ -1665,7 +1665,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def usesSelfManagedQuorum: Boolean = processRoles.nonEmpty
 
   val migrationEnabled: Boolean = getBoolean(KafkaConfig.MigrationEnabledProp)
-  def enableZkApiForwarding: Boolean = migrationEnabled && interBrokerProtocolVersion.isApiForwardingSupported
+  def enableZkApiForwarding: Boolean = migrationEnabled && interBrokerProtocolVersion.isApiForwardingEnabled
 
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KafkaConfig.ProcessRolesProp).asScala.map {

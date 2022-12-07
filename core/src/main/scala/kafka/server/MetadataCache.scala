@@ -94,6 +94,14 @@ trait MetadataCache {
 
   def getControllerId: Option[Int]
 
+  /**
+   * Used to return the controller id when the request comes from an external client. For
+   * Zookeeper based Kafka cluster, we return the controller id. For KRaft Kafka cluster, we
+   * return a random alive broker. For Zookeeper cluster in migration mode with KRaft controller,
+   * we return random alive broker. Returning random id works when we have KRaft controller
+   * since, the any random broker can forward the requests to KRaft controller.
+   * @return Returns controller id of the Kafka cluster.
+   */
   def getControllerIdForExternalClient: Option[Int]
 
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster

@@ -243,7 +243,7 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_3_IV1);
     }
 
-    public boolean isApiForwardingSupported() {
+    public boolean isApiForwardingEnabled() {
         return this.isAtLeast(IBP_3_4_IV0);
     }
 
