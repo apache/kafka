@@ -108,9 +108,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     FlushOptions fOptions;
     private Cache cache;
     private BloomFilter filter;
-
-    // visible for testing
-    protected Statistics statistics;
+    private Statistics statistics;
 
     private RocksDBConfigSetter configSetter;
     private boolean userSpecifiedStatistics = false;
