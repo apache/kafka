@@ -28,7 +28,7 @@ import kafka.server.DynamicBrokerConfig._
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.common.{Reconfigurable, Uuid}
+import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter}
 import org.apache.kafka.common.config.types.Password
@@ -1019,7 +1019,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
         listenersToMap(newConfig.effectiveAdvertisedListeners))) {
       verifyListenerRegistrationAlterationSupported()
       server match {
-        case kafkaServer: KafkaServer => kafkaServer.kafkaController.updateBrokerInfo(kafkaServer.createBrokerInfo(Uuid.fromString(kafkaServer.clusterId)))
+        case kafkaServer: KafkaServer => kafkaServer.kafkaController.updateBrokerInfo(kafkaServer.createBrokerInfo)
         case _ => throw new RuntimeException("Unable to handle non-kafkaServer")
       }
     }

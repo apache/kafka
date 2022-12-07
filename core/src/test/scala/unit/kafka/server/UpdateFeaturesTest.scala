@@ -23,7 +23,6 @@ import kafka.utils.TestUtils
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.clients.admin.{Admin, FeatureUpdate, UpdateFeaturesOptions, UpdateFeaturesResult}
-import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.message.UpdateFeaturesRequestData

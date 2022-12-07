@@ -28,11 +28,10 @@ import kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorAdapter}
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsReporter
-import kafka.migration.OffsetTrackingListener
 import kafka.network.{ControlPlaneAcceptor, DataPlaneAcceptor, RequestChannel, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
-import kafka.server.metadata.{ZkConfigRepository, ZkMetadataCache}
+import kafka.server.metadata.{OffsetTrackingListener, ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
@@ -48,7 +47,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
-import org.apache.kafka.common.{Endpoint, Node, Uuid}
+import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
@@ -535,7 +534,7 @@ class KafkaServer(
         dynamicConfigManager = new ZkConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
-        if (lifecycleManager != null) {
+        if (config.migrationEnabled && lifecycleManager != null) {
           lifecycleManager.initialCatchUpFuture.whenComplete { case (_, t) =>
             if (t != null) {
               fatal("Encountered an exception when waiting to catch up with KRaft metadata log", t)
@@ -771,7 +770,8 @@ class KafkaServer(
       // the shutdown.
       _brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
 
-      val shutdownSucceeded = if (lifecycleManager != null &&
+      val shutdownSucceeded = if (config.migrationEnabled &&
+                                  lifecycleManager != null &&
                                   lifecycleManager.state == BrokerState.RUNNING) {
         lifecycleManager.beginControlledShutdown()
         try {
