@@ -21,7 +21,6 @@ import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
@@ -48,6 +47,7 @@ import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -144,6 +144,7 @@ class KafkaServer(
 
   var kafkaScheduler: KafkaScheduler = _
 
+  var kraftControllerNodes: Seq[Node] = Seq.empty
   @volatile var metadataCache: ZkMetadataCache = _
   var quotaManagers: QuotaFactory.QuotaManagers = _
 
@@ -262,8 +263,11 @@ class KafkaServer(
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
-        metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion, brokerFeatures)
-        val controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
+        if (config.migrationEnabled) {
+          kraftControllerNodes = RaftConfig.voterConnectionsToNodes(RaftConfig.parseVoterConnections(config.quorumVoters)).asScala
+        }
+        metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion, brokerFeatures, kraftControllerNodes)
+        val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config)
 
         /* initialize feature change listener */
         _featureChangeListener = new FinalizedFeatureChangeListener(metadataCache, _zkClient)
@@ -278,6 +282,7 @@ class KafkaServer(
 
         clientToControllerChannelManager = BrokerToControllerChannelManager(
           controllerNodeProvider = controllerNodeProvider,
+          kafkaScheduler = kafkaScheduler,
           time = time,
           metrics = metrics,
           config = config,
@@ -544,6 +549,7 @@ class KafkaServer(
   private def controlledShutdown(): Unit = {
     val socketTimeoutMs = config.controllerSocketTimeoutMs
 
+    // TODO: Handle controlled shutdown for zkBroker when we have KRaft controller.
     def doControlledShutdown(retries: Int): Boolean = {
       val metadataUpdater = new ManualMetadataUpdater()
       val networkClient = {

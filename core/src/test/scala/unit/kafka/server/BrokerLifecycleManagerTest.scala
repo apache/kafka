@@ -59,11 +59,14 @@ class BrokerLifecycleManagerTest {
 
     override def get(): Option[Node] = Option(node.get())
 
-    override def listenerName: ListenerName = new ListenerName("PLAINTEXT")
+    def listenerName: ListenerName = new ListenerName("PLAINTEXT")
 
-    override def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT;
+    def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT;
 
-    override def saslMechanism: String = SaslConfigs.DEFAULT_SASL_MECHANISM
+    def saslMechanism: String = SaslConfigs.DEFAULT_SASL_MECHANISM
+
+    override def getControllerInfo(): ControllerInformation = ControllerInformation(get(),
+      listenerName, securityProtocol, saslMechanism, isZkController = false)
   }
 
   class BrokerLifecycleManagerTestContext(properties: Properties) {

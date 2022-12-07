@@ -1324,7 +1324,7 @@ class KafkaApis(val requestChannel: RequestChannel,
          requestThrottleMs,
          brokers.toList.asJava,
          clusterId,
-         metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         metadataCache.getControllerIdForExternalClient.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
          completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
@@ -3332,7 +3332,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
-    val controllerId = metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
+    val controllerId = metadataCache.getControllerIdForExternalClient.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
       val data = new DescribeClusterResponseData()

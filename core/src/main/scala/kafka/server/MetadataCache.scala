@@ -94,6 +94,8 @@ trait MetadataCache {
 
   def getControllerId: Option[Int]
 
+  def getControllerIdForExternalClient: Option[Int]
+
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster
 
   def contains(topic: String): Boolean
@@ -108,8 +110,11 @@ trait MetadataCache {
 object MetadataCache {
   def zkMetadataCache(brokerId: Int,
                       metadataVersion: MetadataVersion,
-                      brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty()): ZkMetadataCache = {
-    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures)
+                      brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty(),
+                      kraftControllerNodes: collection.Seq[Node] = null)
+  : ZkMetadataCache = {
+    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures,
+      Option(kraftControllerNodes).getOrElse(collection.Seq.empty[Node]))
   }
 
   def kRaftMetadataCache(brokerId: Int): KRaftMetadataCache = {

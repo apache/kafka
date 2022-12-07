@@ -110,7 +110,8 @@ public class MetadataRequestBenchmark {
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
-    private ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(brokerId, MetadataVersion.latest(), BrokerFeatures.createEmpty());
+    private ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(brokerId,
+        MetadataVersion.latest(), BrokerFeatures.createEmpty(), null);
     private ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);

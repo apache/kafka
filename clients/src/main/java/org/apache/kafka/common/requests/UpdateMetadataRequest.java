@@ -51,7 +51,16 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
                        Map<String, Uuid> topicIds) {
-            super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch);
+            super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch, false);
+            this.partitionStates = partitionStates;
+            this.liveBrokers = liveBrokers;
+            this.topicIds = topicIds;
+        }
+
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+                       List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
+                       Map<String, Uuid> topicIds, boolean kraftController) {
+            super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch, kraftController);
             this.partitionStates = partitionStates;
             this.liveBrokers = liveBrokers;
             this.topicIds = topicIds;
@@ -81,10 +90,14 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             }
 
             UpdateMetadataRequestData data = new UpdateMetadataRequestData()
-                    .setControllerId(controllerId)
                     .setControllerEpoch(controllerEpoch)
                     .setBrokerEpoch(brokerEpoch)
                     .setLiveBrokers(liveBrokers);
+            if (kraftController) {
+                data.setKRaftControllerId(controllerId).setControllerId(-1);
+            } else {
+                data.setControllerId(controllerId).setKRaftControllerId(-1);
+            }
 
             if (version >= 5) {
                 Map<String, UpdateMetadataTopicState> topicStatesMap = groupByTopic(topicIds, partitionStates);
@@ -178,6 +191,11 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     @Override
     public int controllerId() {
         return data.controllerId();
+    }
+
+    @Override
+    public int kraftControllerId() {
+        return data.kRaftControllerId();
     }
 
     @Override

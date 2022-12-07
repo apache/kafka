@@ -140,6 +140,21 @@ abstract class InterBrokerSendThread(
     }
   }
 
+  def failAllUnsentRequests(): Unit = {
+    val now = time.milliseconds()
+    drainGeneratedRequests()
+    val iterator = unsentRequests.iterator()
+    while (iterator.hasNext) {
+      val entry = iterator.next
+      val (node, requests) = (entry.getKey, entry.getValue)
+      iterator.remove()
+      for (request <- requests.asScala) {
+        debug(s"Failed to send the following request: $request")
+        completeWithDisconnect(request, now, null)
+      }
+    }
+  }
+
   def completeWithDisconnect(request: ClientRequest,
                              now: Long,
                              authenticationException: AuthenticationException): Unit = {

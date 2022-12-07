@@ -289,6 +289,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   override def getControllerId: Option[Int] = getRandomAliveBroker(_currentImage)
 
+  override def getControllerIdForExternalClient: Option[Int] = getControllerId
+
   /**
    * Choose a random broker node to report as the controller. We do this because we want
    * the client to send requests destined for the controller to a random broker.

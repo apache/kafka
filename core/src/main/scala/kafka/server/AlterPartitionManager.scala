@@ -86,6 +86,7 @@ object AlterPartitionManager {
   ): AlterPartitionManager = {
     val channelManager = BrokerToControllerChannelManager(
       controllerNodeProvider,
+      scheduler,
       time = time,
       metrics = metrics,
       config = config,

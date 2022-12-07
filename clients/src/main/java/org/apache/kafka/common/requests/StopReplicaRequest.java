@@ -45,16 +45,28 @@ public class StopReplicaRequest extends AbstractControlRequest {
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        boolean deletePartitions, List<StopReplicaTopicState> topicStates) {
-            super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch);
+            super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch, false);
+            this.deletePartitions = deletePartitions;
+            this.topicStates = topicStates;
+        }
+
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+                       boolean deletePartitions, List<StopReplicaTopicState> topicStates,
+                       boolean kraftController) {
+            super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch, kraftController);
             this.deletePartitions = deletePartitions;
             this.topicStates = topicStates;
         }
 
         public StopReplicaRequest build(short version) {
             StopReplicaRequestData data = new StopReplicaRequestData()
-                .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch);
+            if (kraftController) {
+                data.setKRaftControllerId(controllerId).setControllerId(-1);
+            } else {
+                data.setControllerId(controllerId).setKRaftControllerId(-1);
+            }
 
             if (version >= 3) {
                 data.setTopicStates(topicStates);
@@ -194,6 +206,11 @@ public class StopReplicaRequest extends AbstractControlRequest {
     @Override
     public int controllerId() {
         return data.controllerId();
+    }
+
+    @Override
+    public int kraftControllerId() {
+        return data.kRaftControllerId();
     }
 
     @Override

@@ -17,11 +17,12 @@
 
 package kafka.server
 
-import java.util.concurrent.LinkedBlockingDeque
+import java.util.concurrent.{LinkedBlockingDeque, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.raft.RaftManager
-import kafka.utils.Logging
+import kafka.server.metadata.ZkMetadataCache
+import kafka.utils.{KafkaScheduler, Logging}
 import org.apache.kafka.clients._
 import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.metrics.Metrics
@@ -37,42 +38,53 @@ import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
+case class ControllerInformation(node: Option[Node], listenerName: ListenerName,
+                                 securityProtocol: SecurityProtocol, saslMechanism: String,
+                                 isZkController: Boolean)
+
 trait ControllerNodeProvider {
   def get(): Option[Node]
-  def listenerName: ListenerName
-  def securityProtocol: SecurityProtocol
-  def saslMechanism: String
-}
-
-object MetadataCacheControllerNodeProvider {
-  def apply(
-    config: KafkaConfig,
-    metadataCache: kafka.server.MetadataCache
-  ): MetadataCacheControllerNodeProvider = {
-    val listenerName = config.controlPlaneListenerName
-      .getOrElse(config.interBrokerListenerName)
-
-    val securityProtocol = config.controlPlaneSecurityProtocol
-      .getOrElse(config.interBrokerSecurityProtocol)
-
-    new MetadataCacheControllerNodeProvider(
-      metadataCache,
-      listenerName,
-      securityProtocol,
-      config.saslMechanismInterBrokerProtocol
-    )
-  }
+  def getControllerInfo(): ControllerInformation
 }
 
 class MetadataCacheControllerNodeProvider(
-  val metadataCache: kafka.server.MetadataCache,
-  val listenerName: ListenerName,
-  val securityProtocol: SecurityProtocol,
-  val saslMechanism: String
+  val metadataCache: ZkMetadataCache,
+  val config: KafkaConfig
 ) extends ControllerNodeProvider {
+
+  def listenerName(isZkController: Boolean): ListenerName = {
+    if (isZkController) {
+      config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
+    } else {
+      new ListenerName(config.controllerListenerNames.head)
+    }
+  }
+
   override def get(): Option[Node] = {
-    metadataCache.getControllerId
-      .flatMap(metadataCache.getAliveBrokerNode(_, listenerName))
+    getControllerInfo().node
+  }
+
+  def securityProtocol(isZkController: Boolean): SecurityProtocol = {
+    if (isZkController) {
+      config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
+    } else {
+      val listener = listenerName(false)
+      config.effectiveListenerSecurityProtocolMap.getOrElse(listener, SecurityProtocol.forName(listener.value()))
+    }
+  }
+
+  def saslMechanism(isZkController: Boolean): String = {
+    if (isZkController) {
+      config.saslMechanismInterBrokerProtocol
+    } else {
+      config.saslMechanismControllerProtocol
+    }
+  }
+
+  override def getControllerInfo(): ControllerInformation = {
+    val (controllerIdOpt, isZkController) = metadataCache.getZkOrKRaftControllerId
+    val controllerNodeOpt = controllerIdOpt.flatMap(metadataCache.getAliveBrokerNode(_, listenerName(isZkController)))
+    ControllerInformation(controllerNodeOpt, listenerName(isZkController), securityProtocol(isZkController), saslMechanism(isZkController), isZkController)
   }
 }
 
@@ -111,11 +123,15 @@ class RaftControllerNodeProvider(
   override def get(): Option[Node] = {
     raftManager.leaderAndEpoch.leaderId.asScala.map(idToNode)
   }
+
+  override def getControllerInfo(): ControllerInformation = ControllerInformation(get(),
+    listenerName, securityProtocol, saslMechanism, false)
 }
 
 object BrokerToControllerChannelManager {
   def apply(
     controllerNodeProvider: ControllerNodeProvider,
+    kafkaScheduler: KafkaScheduler,
     time: Time,
     metrics: Metrics,
     config: KafkaConfig,
@@ -125,6 +141,7 @@ object BrokerToControllerChannelManager {
   ): BrokerToControllerChannelManager = {
     new BrokerToControllerChannelManagerImpl(
       controllerNodeProvider,
+      kafkaScheduler,
       time,
       metrics,
       config,
@@ -154,6 +171,7 @@ trait BrokerToControllerChannelManager {
  */
 class BrokerToControllerChannelManagerImpl(
   controllerNodeProvider: ControllerNodeProvider,
+  kafkaScheduler: KafkaScheduler,
   time: Time,
   metrics: Metrics,
   config: KafkaConfig,
@@ -164,10 +182,18 @@ class BrokerToControllerChannelManagerImpl(
   private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
-  private val requestThread = newRequestThread
+  private var isZkControllerThread = true
+  @volatile private var requestThread = newRequestThread
 
   def start(): Unit = {
     requestThread.start()
+    // If migration is enabled for zkBroker, then we might see controller change from zk to kraft
+    // and vice-versa. This periodic task takes care of setting the right channel when such
+    // controller change is noticed.
+    if (config.migrationEnabled && config.requiresZookeeper) {
+      kafkaScheduler.schedule("maybeReinitializeRequestThread",
+        () => maybeReinitializeRequestThread(), 0L, 500, TimeUnit.MILLISECONDS)
+    }
   }
 
   def shutdown(): Unit = {
@@ -175,14 +201,35 @@ class BrokerToControllerChannelManagerImpl(
     info(s"Broker to controller channel manager for $channelName shutdown")
   }
 
+  def maybeReinitializeRequestThread(): Unit = {
+    val controllerInfo = controllerNodeProvider.getControllerInfo()
+    if (isZkControllerThread == controllerInfo.isZkController)
+      return
+    val oldRequestThread = requestThread
+    // Close the old thread and start a new one if old one is not already in the process of
+    // shutting down.
+    if (oldRequestThread.isRunning) {
+      val newThread = newRequestThread
+      newThread.start()
+      requestThread = newThread
+      // Shutdown the request thread. This fails the inflight requests to be failed with
+      // disconnection exception.
+      oldRequestThread.shutdown()
+      // There can still be unsent requests in the queue which need to be cleaned.
+      oldRequestThread.failAllUnsentRequests()
+    }
+  }
+
   private[server] def newRequestThread = {
+    val controllerInfo = controllerNodeProvider.getControllerInfo()
+    isZkControllerThread = controllerInfo.isZkController
     val networkClient = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
-        controllerNodeProvider.securityProtocol,
+        controllerInfo.securityProtocol,
         JaasContext.Type.SERVER,
         config,
-        controllerNodeProvider.listenerName,
-        controllerNodeProvider.saslMechanism,
+        controllerInfo.listenerName,
+        controllerInfo.saslMechanism,
         time,
         config.saslInterBrokerHandshakeRequestEnable,
         logContext
