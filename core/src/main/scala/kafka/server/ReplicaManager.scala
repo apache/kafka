@@ -1209,7 +1209,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     var limitBytes = params.maxBytes
-    val result = new mutable.ArrayBuffer[(TopicIdPartition, LogReadResult)]
+    val result = new mutable.ListBuffer[(TopicIdPartition, LogReadResult)]
     var minOneMessage = !params.hardMaxBytesLimit
     readPartitionInfo.foreach { case (tp, fetchInfo) =>
       val readResult = read(tp, fetchInfo, limitBytes, minOneMessage)
@@ -1512,10 +1512,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @return true if the request topic id is consistent, false otherwise
    */
   private def hasConsistentTopicId(requestTopicIdOpt: Option[Uuid], logTopicIdOpt: Option[Uuid]): Boolean = {
-    requestTopicIdOpt match {
-      case None => true
-      case Some(requestTopicId) => logTopicIdOpt.isEmpty || logTopicIdOpt.contains(requestTopicId)
-    }
+    requestTopicIdOpt.forall(requestTopicId => logTopicIdOpt.isEmpty || logTopicIdOpt.contains(requestTopicId))
   }
 
   /**
