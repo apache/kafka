@@ -23,6 +23,7 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.{Collections, Optional, Properties}
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.yammer.metrics.core.Counter
 import kafka.network
 import kafka.network.RequestChannel.Metrics
 import kafka.server.KafkaConfig
@@ -46,6 +47,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 import org.mockito.{ArgumentCaptor, Mockito}
 
+import java.util
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
@@ -354,6 +356,71 @@ class RequestChannelTest {
     config = KafkaConfig.fromProps(props)
     metrics = new Metrics(apis, config)
     testMetricsRequestSizeBucketDefault(metrics)
+  }
+  @Test
+  def testHistogram(): Unit = {
+    var props = new Properties()
+    props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
+    props.put(KafkaConfig.RequestMetricsTotalTimeBucketsProp, "0, 10, 30, 300")
+    var config = KafkaConfig.fromProps(props)
+    val requestMetrics = new RequestMetrics("RequestMetrics", config)
+    val boundaries = Array(0, 10, 30, 300)
+    val histogram = new requestMetrics.Histogram("TotalTime", "Ms", boundaries)
+    val counterMap = histogram.boundaryCounterMap
+
+    assertEquals(4, counterMap.size())
+    assertTrue(counterMap.containsKey(0))
+    assertTrue(counterMap.containsKey(10))
+    assertTrue(counterMap.containsKey(30))
+    assertTrue(counterMap.containsKey(300))
+
+    assertEquals("TotalTime_Bin1_0To10Ms", counterMap.get(0)._1)
+    assertEquals("TotalTime_Bin2_10To30Ms", counterMap.get(10)._1)
+    assertEquals("TotalTime_Bin3_30To300Ms", counterMap.get(30)._1)
+    assertEquals("TotalTime_Bin4_300MsGreater", counterMap.get(300)._1)
+
+    testHistogramCounts(counterMap, Array(0, 0, 0, 0), boundaries)
+
+    histogram.update(0)
+    testHistogramCounts(counterMap, Array(1, 0, 0, 0), boundaries)
+
+    histogram.update(10.0)
+    testHistogramCounts(counterMap, Array(1, 1, 0, 0), boundaries)
+
+    histogram.update(15.345)
+    testHistogramCounts(counterMap, Array(1, 2, 0, 0), boundaries)
+
+    histogram.update(26.345)
+    testHistogramCounts(counterMap, Array(1, 3, 0, 0), boundaries)
+
+    histogram.update(6.345)
+    testHistogramCounts(counterMap, Array(2, 3, 0, 0), boundaries)
+
+    histogram.update(66.345)
+    testHistogramCounts(counterMap, Array(2, 3, 1, 0), boundaries)
+
+    histogram.update(166.345)
+    testHistogramCounts(counterMap, Array(2, 3, 2, 0), boundaries)
+
+    histogram.update(366.345)
+    testHistogramCounts(counterMap, Array(2, 3, 2, 1), boundaries)
+
+    histogram.update(30066.345)
+    testHistogramCounts(counterMap, Array(2, 3, 2, 2), boundaries)
+
+    histogram.update(-1)
+    testHistogramCounts(counterMap, Array(3, 3, 2, 2), boundaries)
+
+    assertEquals(4, requestMetrics.totalTimeBucketHist.boundaryCounterMap.size())
+    assertTrue(requestMetrics.totalTimeBucketHist.boundaryCounterMap.containsKey(300))
+    assertEquals("TotalTime_Bin4_300MsGreater", requestMetrics.totalTimeBucketHist.boundaryCounterMap.get(300)._1)
+  }
+
+  private def testHistogramCounts(counterMap: util.TreeMap[Int, (String, Counter)], counts: Array[Int],
+    boundaries: Array[Int]): Unit = {
+    for(i <- 0 until counts.length) {
+      assertEquals(counts(i), counterMap.get(boundaries(i))._2.count())
+    }
   }
 
   private def testMetricsRequestSizeBucketDefault(metrics: Metrics): Unit = {

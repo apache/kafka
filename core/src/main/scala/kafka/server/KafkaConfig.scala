@@ -266,6 +266,7 @@ object Defaults {
   val MetricRecordingLevel = Sensor.RecordingLevel.INFO.toString()
   val MetricReplaceOnDuplicate = false
   val RequestMetricsSizeBuckets = "0,1,10,50,100"
+  val RequestMetricsTotalTimeBuckets = "0,5,10,20,30,40,50,100,200,300,500,1000,5000,15000"
 
 
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
@@ -623,6 +624,7 @@ object KafkaConfig {
   val MetricRecordingLevelProp: String = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG
   val MetricReplaceOnDuplicateProp: String = CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_CONFIG
   val RequestMetricsSizeBucketsProp: String = "request.metrics.size.buckets"
+  val RequestMetricsTotalTimeBucketsProp: String = "request.metrics.total.time.buckets"
 
   /** ********* Kafka Yammer Metrics Reporters Configuration ***********/
   val KafkaMetricsReporterClassesProp = "kafka.metrics.reporters"
@@ -1070,6 +1072,7 @@ object KafkaConfig {
   val MetricRecordingLevelDoc = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC
   val MetricReplaceOnDuplicateDoc = CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_DOC
   val RequestMetricsSizeBucketsDoc = "The size buckets used to group requests to provide RequestMetrics for each group"
+  val RequestMetricsTotalTimeBucketsDoc = "The bin boundaries used to get the latency histogram. The number of requests with TotalTime latency within these bin boundaries is counted."
 
 
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
@@ -1396,7 +1399,8 @@ object KafkaConfig {
       .define(MetricReporterClassesProp, LIST, Defaults.MetricReporterClasses, LOW, MetricReporterClassesDoc)
       .define(MetricRecordingLevelProp, STRING, Defaults.MetricRecordingLevel, LOW, MetricRecordingLevelDoc)
       .define(MetricReplaceOnDuplicateProp, BOOLEAN, Defaults.MetricReplaceOnDuplicate, LOW, MetricReplaceOnDuplicateDoc)
-      .define(RequestMetricsSizeBucketsProp, STRING, Defaults.RequestMetricsSizeBuckets, RequestMetricsSizeBucketsValidator, LOW, RequestMetricsSizeBucketsDoc)
+      .define(RequestMetricsSizeBucketsProp, STRING, Defaults.RequestMetricsSizeBuckets, RequestMetricsBucketsValidator, LOW, RequestMetricsSizeBucketsDoc)
+      .define(RequestMetricsTotalTimeBucketsProp, STRING, Defaults.RequestMetricsTotalTimeBuckets, RequestMetricsBucketsValidator, LOW, RequestMetricsTotalTimeBucketsDoc)
 
       /** ********* Kafka Yammer Metrics Reporter Configuration for docs ***********/
       .define(KafkaMetricsReporterClassesProp, LIST, Defaults.KafkaMetricReporterClasses, LOW, KafkaMetricsReporterClassesDoc)
@@ -1488,27 +1492,32 @@ object KafkaConfig {
       .define(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
   }
 
-  object RequestMetricsSizeBucketsValidator extends Validator {
+  object RequestMetricsBucketsValidator extends Validator {
     override def ensureValid(name: String, value: Any): Unit = {
-      getRequestMetricsSizeBuckets(value.toString)
+      getIntArray(name, value.toString, 2)
     }
 
     override def toString: String = "integer list, separated by ',', at least two integers"
   }
-  // convert requestMetricsSizeBucketsConfig from string to int array. e.g., "0,1,10,50,100" => [0,1,10,50,100]
-  private def getRequestMetricsSizeBuckets(requestMetricsSizeBuckets: String): Array[Int] = {
-    val bucketsString = requestMetricsSizeBuckets.replaceAll("\\s", "").split(',')
-    if(bucketsString.length < 2) {
-      throw new ConfigException(RequestMetricsSizeBucketsProp, requestMetricsSizeBuckets,
-        s"requestMetricsSizeBuckets has fewer than 2 buckets: '${requestMetricsSizeBuckets}'.")
-    }
+
+  // convert int array configs from string to int array. e.g., "0,1,10,50,100" => [0,1,10,50,100]
+  private def getIntArray(name: String, value: String): Array[Int] = {
+    val bucketsString = value.replaceAll("\\s", "").split(',')
     try {
       bucketsString.map(_.toInt)
     } catch {
-      case _: Exception =>
-        throw new ConfigException(RequestMetricsSizeBucketsProp, requestMetricsSizeBuckets,
-          s"Failed to parse requestMetricsSizeBuckets: '${requestMetricsSizeBuckets}'. ")
+      case e: Exception =>
+        throw new ConfigException(name, value, s"Failed to parse $name: '$value'. error: $e")
     }
+  }
+
+  // convert int array configs from string to int array. e.g., "0,1,10,50,100" => [0,1,10,50,100]
+  private def getIntArray(name: String, value: String, minSize: Int): Array[Int] = {
+    val array = getIntArray(name, value)
+    if(array.length < minSize) {
+      throw new ConfigException(name, value, s"$name has fewer than $minSize elements: '$value'.")
+    }
+    array
   }
 
   /** ********* Remote Log Management Configuration *********/
@@ -1944,6 +1953,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val metricRecordingLevel = getString(KafkaConfig.MetricRecordingLevelProp)
   val metricReplaceOnDuplicate = getBoolean(KafkaConfig.MetricReplaceOnDuplicateProp)
   def requestMetricsSizeBuckets = getRequestMetricsSizeBuckets()
+  def requestMetricsTotalTimeBuckets = getRequestMetricsTotalTimeBuckets()
 
   /** ********* SSL/SASL Configuration **************/
   // Security configs may be overridden for listeners, so it is not safe to use the base values
@@ -2079,7 +2089,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   }
 
   def getRequestMetricsSizeBuckets(): Array[Int] = {
-    KafkaConfig.getRequestMetricsSizeBuckets(getString(KafkaConfig.RequestMetricsSizeBucketsProp))
+    KafkaConfig.getIntArray(KafkaConfig.RequestMetricsSizeBucketsProp, getString(KafkaConfig.RequestMetricsSizeBucketsProp))
+  }
+
+  def getRequestMetricsTotalTimeBuckets(): Array[Int] = {
+    KafkaConfig.getIntArray(KafkaConfig.RequestMetricsTotalTimeBucketsProp, getString(KafkaConfig.RequestMetricsTotalTimeBucketsProp))
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {

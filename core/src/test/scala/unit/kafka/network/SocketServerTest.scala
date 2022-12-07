@@ -51,6 +51,7 @@ import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
+import scala.collection.convert.ImplicitConversions.`map AsScala`
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -1121,6 +1122,9 @@ class SocketServerTest {
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
+      def getTotalTimeBucketHistCount(): Map[Int, Long] = requestMetrics.totalTimeBucketHist.boundaryCounterMap
+        .map({case (boundary, (name, counter)) => (boundary, counter.count())}).toMap
+      val originalTotalTimeBucketHistCount = getTotalTimeBucketHistCount()
       val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
       val headerLog = new ObjectNode(JsonNodeFactory.instance)
       headerLog.set("response", new TextNode("someResponse"))
@@ -1130,6 +1134,24 @@ class SocketServerTest {
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
 
+      TestUtils.waitUntilTrue(() => {
+        val updatedTotalTimeBucketHistCount = getTotalTimeBucketHistCount()
+        assertTrue(updatedTotalTimeBucketHistCount.size > 0)
+        assertEquals(originalTotalTimeBucketHistCount.size, updatedTotalTimeBucketHistCount.size)
+        var increaseCount = 0
+        // only one bucket should be updated
+        for(boundary <- originalTotalTimeBucketHistCount.keySet) {
+          val originalCount = originalTotalTimeBucketHistCount.get(boundary).get
+          val updatedCount = updatedTotalTimeBucketHistCount.get(boundary).get
+          if(originalCount != updatedCount) {
+            assertEquals(originalCount + 1, updatedCount)
+            increaseCount += 1
+          }
+        }
+        assertTrue(increaseCount <= 1)
+        increaseCount == 1
+      },
+      "totalTimeBucketHist is not updated")
     } finally {
       shutdownServerAndMetrics(overrideServer)
     }

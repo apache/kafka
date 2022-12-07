@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent._
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
-import com.yammer.metrics.core.{Histogram, Meter}
+import com.yammer.metrics.core.{Counter, Histogram, Meter}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network
 import kafka.server.{BrokerMetadataStats, KafkaConfig, Observer}
@@ -80,7 +80,7 @@ object RequestChannel extends Logging {
       Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName) ++
       getConsumerFetchRequestSizeMetricNames ++
       getProduceRequestAcksSizeMetricNames)
-      .foreach { name => metricsMap.put(name, new RequestMetrics(name))
+      .foreach { name => metricsMap.put(name, new RequestMetrics(name, config))
     }
 
     def apply(metricName: String): RequestMetrics = metricsMap(metricName)
@@ -90,20 +90,12 @@ object RequestChannel extends Logging {
     }
 
     // generate map[request/responseSize, metricName] for requests of different size
-    def getRequestSizeMetricNameMap(requestType: String):util.TreeMap[Int, String] = {
+    def getRequestSizeMetricNameMap(requestType: String): util.TreeMap[Int, String] = {
       val buckets = config.requestMetricsSizeBuckets
       // get size and corresponding term to be used in metric name
-      // [0,1,10,50,100] => requestSizeBuckets:Seq((0, "0To1Mb"), (1, "1To10Mb"), (10, "10To50Mb"), (50, "50To100Mb"),
-      // (100, "100MbGreater"))
-      val requestSizeBuckets = for (i <- 0 until buckets.length) yield {
-        val size = buckets(i)
-        if (i == buckets.length - 1) (size, s"${size}MbGreater")
-        else (size, s"${size}To${buckets(i + 1)}Mb")
-      }
-      val treeMap = new util.TreeMap[Int, String]
-      requestSizeBuckets.map(bucket => (bucket._1, s"${requestType}${bucket._2}")).toMap
-        .foreach{case (size, bucket) => treeMap.put(size, bucket)}
-      treeMap
+      // [0,1,10,50,100] => Seq((0, "Produce0To1Mb"), (1, "Produce1To10Mb"), (10, "Produce10To50Mb"),
+      // (50, "Produce50To100Mb"),(100, "Produce100MbGreater"))
+      RequestMetrics.getBucketBoundaryObjectMap(buckets, requestType, "Mb", name => name, false)
     }
 
     // generate map[acks, map[requestSize, metricName]] for produce requests of different request size and acks
@@ -138,8 +130,7 @@ object RequestChannel extends Logging {
     // the bucket is [left, right)
     def getRequestSizeBucketMetricName(sizeMetricNameMap: util.TreeMap[Int, String], sizeBytes: Long): String = {
       val sizeMb = sizeBytes / 1024 / 1024
-      if(sizeMb < sizeMetricNameMap.firstKey()) sizeMetricNameMap.firstEntry().getValue
-      else sizeMetricNameMap.floorEntry(sizeMb.toInt).getValue
+      RequestMetrics.getBucketObject(sizeMetricNameMap, sizeMb.toInt)
     }
   }
 
@@ -346,6 +337,7 @@ object RequestChannel extends Logging {
         m.responseQueueTimeHist.update(Math.round(responseQueueTimeMs))
         m.responseSendTimeHist.update(Math.round(responseSendTimeMs))
         m.totalTimeHist.update(Math.round(totalTimeMs))
+        m.totalTimeBucketHist.update(totalTimeMs)
         m.requestBytesHist.update(sizeOfBodyInBytes)
         m.responseBytesHist.update(responseBytes)
         m.messageConversionsTimeHist.foreach(_.update(Math.round(messageConversionsTimeMs)))
@@ -690,9 +682,34 @@ object RequestMetrics {
   val MessageConversionsTimeMs = "MessageConversionsTimeMs"
   val TemporaryMemoryBytes = "TemporaryMemoryBytes"
   val ErrorsPerSec = "ErrorsPerSec"
+
+  // generate map[bucketLeftBoundary, object] for buckets
+  def getBucketBoundaryObjectMap[T](buckets: Array[Int], namePrefix: String, namePostfix: String,
+    createValueFunc: String => T, addBinNum: Boolean): util.TreeMap[Int, T] = {
+    // get bin boundary and corresponding name to be used in createValueFunc. (addBinNum would help with metrics ordering)
+    // [0,1,10,50,100], prefix=Produce, postfix=Mb =>
+    // leftBoundaryBucketNames:Seq((0, "Produce0To1Mb"), (1, "Produce1To10Mb"), (10, "Produce10To50Mb"),
+    // (50, "Produce50To100Mb"),(100, "Produce100MbGreater"))
+    val leftBoundaryBucketNames = for (i <- 0 until buckets.length) yield {
+      val binNum = if (addBinNum) s"_Bin${i + 1}_" else ""
+      val bucket = buckets(i)
+      if (i == buckets.length - 1) (bucket, s"${namePrefix}${binNum}${bucket}${namePostfix}Greater")
+      else (bucket, s"${namePrefix}${binNum}${bucket}To${buckets(i + 1)}${namePostfix}")
+    }
+    val treeMap = new util.TreeMap[Int, T]
+    leftBoundaryBucketNames.foreach{case (boundary, name) => treeMap.put(boundary, createValueFunc(name))}
+    treeMap
+  }
+
+  // get object for a given bucket boundary. the bucket is [left, right)
+  def getBucketObject[T](bucketBoundaryObjectMap: util.TreeMap[Int, T], boundary: Int): T = {
+    if (boundary < bucketBoundaryObjectMap.firstKey()) bucketBoundaryObjectMap.firstEntry().getValue
+    else bucketBoundaryObjectMap.floorEntry(boundary).getValue
+  }
+
 }
 
-class RequestMetrics(name: String) extends KafkaMetricsGroup {
+class RequestMetrics(name: String, config: KafkaConfig) extends KafkaMetricsGroup {
 
   import RequestMetrics._
 
@@ -732,6 +749,9 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     else
       None
 
+  // metrics to count the number of requests in different total time buckets.
+  val totalTimeBucketHist = new Histogram("TotalTime", "Ms", config.requestMetricsTotalTimeBuckets)
+
   private val errorMeters = mutable.Map[Errors, ErrorMeter]()
   Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
 
@@ -766,6 +786,40 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     }
   }
 
+  class Histogram(val metricNamePrefix: String, val metricNamePostfix: String, val binBoundaries: Array[Int]) {
+    // bin boundary with Int type should be good for current usages
+    // If we need boundary bigger than Int.MaxValue, which probably indicates we should use a different unit
+
+    // binLeftBoundary => (name, Counter)
+    val boundaryCounterMap = createHistogram()
+
+    def update(value: Double): Unit = {
+      val valueLong = Math.round(value)
+      update(valueLong)
+    }
+
+    def update(value: Long): Unit = {
+      val valueInt = if(value > Int.MaxValue) Int.MaxValue else value.toInt
+      update(valueInt)
+    }
+
+    def update(value: Int): Unit = {
+      val counter = getBucketObject(boundaryCounterMap, value)._2
+      counter.inc()
+    }
+
+    def removeHistogram(): Unit = {
+      boundaryCounterMap.values.forEach(nameCounter => removeMetric(nameCounter._1, tags))
+    }
+
+    // [0,10,50], metricNamePrefix="TotalTime", metricNamePostfix="Mb" =>
+    // Map(0=>("TotalTime0To10Ms", counter), 10=>("TotalTime10To50Ms", counter), 50=>("TotalTime50MsGreater", counter))
+    private def createHistogram(): util.TreeMap[Int, (String, Counter)] = {
+      getBucketBoundaryObjectMap(binBoundaries, metricNamePrefix, metricNamePostfix,
+        name => (name, newCounter(name, tags)), true)
+    }
+  }
+
   def markErrorMeter(error: Errors, count: Int): Unit = {
     errorMeters(error).getOrCreateMeter().mark(count.toLong)
   }
@@ -790,5 +844,6 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     }
     errorMeters.values.foreach(_.removeMeter())
     errorMeters.clear()
+    totalTimeBucketHist.removeHistogram()
   }
 }
