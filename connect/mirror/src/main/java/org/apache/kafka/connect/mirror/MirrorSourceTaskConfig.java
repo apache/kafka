@@ -43,6 +43,12 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
             .collect(Collectors.toSet());
     }
 
+    MirrorSourceMetrics metrics() {
+        MirrorSourceMetrics metrics = new MirrorSourceMetrics(this);
+        metricsReporters().forEach(metrics::addReporter);
+        return metrics;
+    }
+ 
     protected static final ConfigDef TASK_CONFIG_DEF = new ConfigDef(CONNECTOR_CONFIG_DEF)
         .define(
             TASK_TOPIC_PARTITIONS,

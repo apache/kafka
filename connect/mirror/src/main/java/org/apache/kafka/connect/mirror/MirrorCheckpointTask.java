@@ -26,6 +26,7 @@ import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
@@ -51,7 +52,6 @@ public class MirrorCheckpointTask extends SourceTask {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorCheckpointTask.class);
 
-    private BackgroundResources backgroundResources;
     private Admin sourceAdminClient;
     private Admin targetAdminClient;
     private String sourceClusterAlias;
@@ -81,29 +81,27 @@ public class MirrorCheckpointTask extends SourceTask {
         this.offsetSyncStore = offsetSyncStore;
         this.idleConsumerGroupsOffset = idleConsumerGroupsOffset;
         this.checkpointsPerConsumerGroup = checkpointsPerConsumerGroup;
-        this.backgroundResources = new BackgroundResources();
     }
 
     @Override
     public void start(Map<String, String> props) {
         MirrorCheckpointTaskConfig config = new MirrorCheckpointTaskConfig(props);
         stopping = false;
-        backgroundResources = new BackgroundResources();
         sourceClusterAlias = config.sourceClusterAlias();
         targetClusterAlias = config.targetClusterAlias();
         consumerGroups = config.taskConsumerGroups();
         checkpointsTopic = config.checkpointsTopic();
-        topicFilter = backgroundResources.topicFilter(config, "topic filter");
+        topicFilter = config.topicFilter();
         replicationPolicy = config.replicationPolicy();
         interval = config.emitCheckpointsInterval();
         pollTimeout = config.consumerPollTimeout();
-        offsetSyncStore = backgroundResources.offsetSyncStore(config, "offset sync store");
-        sourceAdminClient = backgroundResources.admin(config, config.sourceAdminConfig(), "source admin client");
-        targetAdminClient = backgroundResources.admin(config, config.targetAdminConfig(), "target admin client");
-        metrics = backgroundResources.checkpointMetrics(config, "checkpoint metrics");
+        offsetSyncStore = new OffsetSyncStore(config);
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
+        metrics = config.metrics();
         idleConsumerGroupsOffset = new HashMap<>();
         checkpointsPerConsumerGroup = new HashMap<>();
-        scheduler = backgroundResources.scheduler(MirrorCheckpointTask.class, config.adminTimeout(), "scheduler");
+        scheduler = new Scheduler(MirrorCheckpointTask.class, config.adminTimeout());
         scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
                                     "refreshing idle consumers group offsets at target cluster");
         scheduler.scheduleRepeatingDelayed(this::syncGroupOffset, config.syncGroupOffsetsInterval(),
@@ -119,7 +117,12 @@ public class MirrorCheckpointTask extends SourceTask {
     public void stop() {
         long start = System.currentTimeMillis();
         stopping = true;
-        backgroundResources.close();
+        Utils.closeQuietly(topicFilter, "topic filter");
+        Utils.closeQuietly(offsetSyncStore, "offset sync store");
+        Utils.closeQuietly(sourceAdminClient, "source admin client");
+        Utils.closeQuietly(targetAdminClient, "target admin client");
+        Utils.closeQuietly(metrics, "metrics");
+        Utils.closeQuietly(scheduler, "scheduler");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
 

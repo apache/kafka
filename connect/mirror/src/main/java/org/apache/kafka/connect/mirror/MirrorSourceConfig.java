@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.ConfigUtils;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 
 import java.time.Duration;
 import java.util.List;
@@ -99,6 +100,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         super(configDef, props);
     }
 
+    String connectorName() {
+        return getString(ConnectorConfig.NAME_CONFIG);
+    }
+
     Map<String, String> taskConfigForTopicPartitions(List<TopicPartition> topicPartitions) {
         Map<String, String> props = originalsStrings();
         String topicPartitionsString = topicPartitions.stream()
@@ -166,12 +171,24 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         }
     }
 
+    ReplicationPolicy replicationPolicy() {
+        return getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
+    }
+
     int replicationFactor() {
         return getInt(REPLICATION_FACTOR);
     }
 
     short offsetSyncsTopicReplicationFactor() {
         return getShort(OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR);
+    }
+
+    TopicFilter topicFilter() {
+        return getConfiguredInstance(TOPIC_FILTER_CLASS, TopicFilter.class);
+    }
+
+    ConfigPropertyFilter configPropertyFilter() {
+        return getConfiguredInstance(CONFIG_PROPERTY_FILTER_CLASS, ConfigPropertyFilter.class);
     }
 
     Duration consumerPollTimeout() {
