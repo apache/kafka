@@ -260,7 +260,6 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
 
-
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
         final Statistics userStatistics = RocksDBConfigSetterWithUserProvidedStatistics.lastStatistics;
         final Statistics statisticsHandle = rocksDBStore.statistics;
