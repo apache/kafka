@@ -177,7 +177,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     val timestamp = time.milliseconds()
     val curEpochOpt: Option[(Int, Int)] = getControllerEpoch.map(e => (e._1, e._2.getVersion))
     val controllerOpt = getControllerId
-    val controllerEpochToStore = kraftControllerEpoch + 10_000_000 // TODO Remove this after KAFKA-14436
+    val controllerEpochToStore = kraftControllerEpoch + 10000000 // TODO Remove this after KAFKA-14436
     curEpochOpt match {
       case None =>
         throw new IllegalStateException(s"Cannot register KRaft controller $kraftControllerId as the active controller " +
