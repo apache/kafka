@@ -1963,8 +1963,9 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
               data match {
                 case Some(value) =>
                   val failedPayload = MigrationZNode.decode(value, version, -1)
-                  throw new RuntimeException(s"Conditional update on KRaft Migration ZNode failed. Expected zkVersion = ${version}. " +
-                    s"The failed write was: ${failedPayload}. This indicates that another KRaft controller is making writes to ZooKeeper.")
+                  throw new RuntimeException(
+                    s"Conditional update on KRaft Migration ZNode failed. Expected zkVersion = ${version}. The failed " +
+                    s"write was: ${failedPayload}. This indicates that another KRaft controller is making writes to ZooKeeper.")
                 case None =>
                   throw new RuntimeException(s"Check op on KRaft Migration ZNode failed. Expected zkVersion = ${version}. " +
                     s"This indicates that another KRaft controller is making writes to ZooKeeper.")
@@ -1978,7 +1979,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
           } else {
             throw new RuntimeException(s"Got migration result for incorrect path $path")
           }
-        case _ => throw new RuntimeException(s"Expected either CheckResult, SetDataResult, or ErrorResult for migration op, but saw ${migrationResult}")
+        case _ => throw new RuntimeException(
+          s"Expected either CheckResult, SetDataResult, or ErrorResult for migration op, but saw ${migrationResult}")
       }
     }
 
@@ -2003,14 +2005,16 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
             val migrationVersion = handleUnwrappedMigrationResult(migrationOp, migrationResult)
             (handleUnwrappedZkOp(zkOpResult, resultCode, ctx, responseMetadata), migrationVersion)
           case null => throw KeeperException.create(resultCode)
-          case _ => throw new IllegalStateException(s"Cannot unwrap $response because it does not contain the expected operations for a migration operation.")
+          case _ => throw new IllegalStateException(
+            s"Cannot unwrap $response because it does not contain the expected operations for a migration operation.")
         }
         case _ => throw new IllegalStateException(s"Cannot unwrap $response because it is not a MultiResponse")
       }
     }
 
     migrationState.controllerZkVersion() match {
-      case ZkVersion.MatchAnyVersion => throw new IllegalArgumentException(s"Expected a controller epoch zkVersion when making migration writes, not -1.")
+      case ZkVersion.MatchAnyVersion => throw new IllegalArgumentException(
+        s"Expected a controller epoch zkVersion when making migration writes, not -1.")
       case version if version >= 0 =>
         logger.trace(s"Performing ${requests.size} migration update(s) with migrationState=$migrationState")
         val wrappedRequests = requests.map(req => wrapMigrationRequest(req, req == requests.last))
@@ -2020,7 +2024,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         // Return the new version of /migration and the sequence of responses to the original requests
         (migrationZkVersion, unwrappedResults.map(_._1.asInstanceOf[Req#Response]))
       case invalidVersion =>
-        throw new IllegalArgumentException(s"Expected controller epoch zkVersion $invalidVersion should be non-negative or equal to ${ZkVersion.MatchAnyVersion}")
+        throw new IllegalArgumentException(
+          s"Expected controller epoch zkVersion $invalidVersion should be non-negative or equal to ${ZkVersion.MatchAnyVersion}")
     }
   }
 
@@ -2264,7 +2269,10 @@ object KafkaZkClient {
     }
   }
 
-  private def handleUnwrappedZkOp(zkOpResult: ZkOpResult, resultCode: Code, ctx: Option[Any], responseMetadata: ResponseMetadata): AsyncResponse = {
+  private def handleUnwrappedZkOp(zkOpResult: ZkOpResult,
+                                  resultCode: Code,
+                                  ctx: Option[Any],
+                                  responseMetadata: ResponseMetadata): AsyncResponse = {
     val rawOpResult = zkOpResult.rawOpResult
     zkOpResult.zkOp match {
       case createOp: CreateOp =>

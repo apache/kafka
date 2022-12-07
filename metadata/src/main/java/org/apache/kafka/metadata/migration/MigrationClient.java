@@ -32,8 +32,21 @@ import java.util.function.Consumer;
  */
 public interface MigrationClient {
 
+    /**
+     * Read or initialize the ZK migration leader state in ZK. If the ZNode is absent, the given {@code initialState}
+     * will be written and subsequently returned with the zkVersion of the node. If the ZNode is present, it will be
+     * read and returned.
+     * @param initialState  An initial, emtpy, state to write to ZooKeeper for the migration state.
+     * @return  The existing migration state, or the initial state given.
+     */
     ZkMigrationLeadershipState getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState initialState);
 
+    /**
+     * Overwrite the migration state in ZK. This is done as a conditional update using
+     * {@link ZkMigrationLeadershipState#migrationZkVersion()}. If the conditional update fails, an exception is thrown.
+     * @param state The migration state to persist
+     * @return  The persisted migration state or an exception.
+     */
     ZkMigrationLeadershipState setMigrationRecoveryState(ZkMigrationLeadershipState state);
 
     /**
@@ -58,9 +71,17 @@ public interface MigrationClient {
      */
     ZkMigrationLeadershipState releaseControllerLeadership(ZkMigrationLeadershipState state);
 
-    ZkMigrationLeadershipState createTopic(String topicName, Uuid topicId, Map<Integer, PartitionRegistration> topicPartitions, ZkMigrationLeadershipState state);
+    ZkMigrationLeadershipState createTopic(
+        String topicName,
+        Uuid topicId,
+        Map<Integer, PartitionRegistration> topicPartitions,
+        ZkMigrationLeadershipState state
+    );
 
-    ZkMigrationLeadershipState updateTopicPartitions(Map<String, Map<Integer, PartitionRegistration>> topicPartitions, ZkMigrationLeadershipState state);
+    ZkMigrationLeadershipState updateTopicPartitions(
+        Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
+        ZkMigrationLeadershipState state
+    );
 
     void readAllMetadata(Consumer<List<ApiMessageAndVersion>> batchConsumer, Consumer<Integer> brokerIdConsumer);
 

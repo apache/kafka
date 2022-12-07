@@ -20,7 +20,6 @@ import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
-import kafka.zk.ZkMigrationClient
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
@@ -54,7 +53,7 @@ class ZkMigrationIntegrationTest {
   }
 
   @ClusterTest(brokers = 3, clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_4_IV0)
-  def testMigrateCluster(clusterInstance: ClusterInstance): Unit = {
+  def testMigrate(clusterInstance: ClusterInstance): Unit = {
     val admin = clusterInstance.createAdminClient()
     val newTopics = new util.ArrayList[NewTopic]()
     newTopics.add(new NewTopic("test-topic-1", 2, 3.toShort)
@@ -96,6 +95,9 @@ class ZkMigrationIntegrationTest {
 
       assertNotNull(image.topics().getTopic("test-topic-3"))
       assertEquals(10, image.topics().getTopic("test-topic-3").partitions().size())
+
+      val clientQuotas = image.clientQuotas().entities()
+      assertEquals(3, clientQuotas.size())
     }
 
     migrationState = migrationClient.releaseControllerLeadership(migrationState)

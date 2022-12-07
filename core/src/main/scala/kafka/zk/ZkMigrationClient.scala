@@ -93,34 +93,30 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
         replicaAssignment.replicas.foreach(brokerIdConsumer.accept(_))
         replicaAssignment.addingReplicas.foreach(brokerIdConsumer.accept(_))
         val replicaList = replicaAssignment.replicas.map(Integer.valueOf).asJava
+        val record = new PartitionRecord()
+          .setTopicId(topicIdOpt.get)
+          .setPartitionId(topicPartition.partition)
+          .setReplicas(replicaList)
+          .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
+          .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
         leaderIsrAndControllerEpochs.get(topicPartition) match {
-          case Some(leaderIsrAndEpoch) =>
-            topicBatch.add(new ApiMessageAndVersion(new PartitionRecord()
-              .setTopicId(topicIdOpt.get)
-              .setPartitionId(topicPartition.partition)
-              .setReplicas(replicaList)
-              .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
-              .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
+          case Some(leaderIsrAndEpoch) => record
               .setIsr(leaderIsrAndEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava)
               .setLeader(leaderIsrAndEpoch.leaderAndIsr.leader)
               .setLeaderEpoch(leaderIsrAndEpoch.leaderAndIsr.leaderEpoch)
               .setPartitionEpoch(leaderIsrAndEpoch.leaderAndIsr.partitionEpoch)
-              .setLeaderRecoveryState(leaderIsrAndEpoch.leaderAndIsr.leaderRecoveryState.value()), PartitionRecord.HIGHEST_SUPPORTED_VERSION))
-
+              .setLeaderRecoveryState(leaderIsrAndEpoch.leaderAndIsr.leaderRecoveryState.value())
           case None =>
-            warn(s"Could not find partition state in ZK for $topicPartition. Initializing this partition with ISR={$replicaList} and leaderEpoch=0.")
-            topicBatch.add(new ApiMessageAndVersion(new PartitionRecord()
-              .setTopicId(topicIdOpt.get)
-              .setPartitionId(topicPartition.partition)
-              .setReplicas(replicaList)
-              .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
-              .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
+            warn(s"Could not find partition state in ZK for $topicPartition. Initializing this partition " +
+              s"with ISR={$replicaList} and leaderEpoch=0.")
+            record
               .setIsr(replicaList)
               .setLeader(replicaList.get(0))
               .setLeaderEpoch(0)
               .setPartitionEpoch(0)
-              .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()), PartitionRecord.HIGHEST_SUPPORTED_VERSION))
+              .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
         }
+        topicBatch.add(new ApiMessageAndVersion(record, PartitionRecord.HIGHEST_SUPPORTED_VERSION))
       }
 
       val props = topicConfigs(topic)
@@ -215,7 +211,8 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
-  override def readAllMetadata(batchConsumer: Consumer[util.List[ApiMessageAndVersion]], brokerIdConsumer: Consumer[Integer]): Unit = {
+  override def readAllMetadata(batchConsumer: Consumer[util.List[ApiMessageAndVersion]],
+                               brokerIdConsumer: Consumer[Integer]): Unit = {
     migrateTopics(MetadataVersion.latest(), batchConsumer, brokerIdConsumer)
     migrateBrokerConfigs(MetadataVersion.latest(), batchConsumer)
     migrateClientQuotas(MetadataVersion.latest(), batchConsumer)
@@ -236,9 +233,13 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     brokersWithAssignments.map(Integer.valueOf).asJava
   }
 
-  override def createTopic(topicName: String, topicId: Uuid, partitions: util.Map[Integer, PartitionRegistration], state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+  override def createTopic(topicName: String,
+                           topicId: Uuid,
+                           partitions: util.Map[Integer, PartitionRegistration],
+                           state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     val assignments = partitions.asScala.map { case (partitionId, partition) =>
-      new TopicPartition(topicName, partitionId) -> ReplicaAssignment(partition.replicas, partition.addingReplicas, partition.removingReplicas)
+      new TopicPartition(topicName, partitionId) ->
+        ReplicaAssignment(partition.replicas, partition.addingReplicas, partition.removingReplicas)
     }
 
     val createTopicZNode = {
@@ -276,7 +277,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     CreateRequest(path, null, zkClient.defaultAcls(path), CreateMode.PERSISTENT, Some(topicPartition))
   }
 
-  private def partitionStatePathAndData(topicPartition: TopicPartition, partitionRegistration: PartitionRegistration, controllerEpoch: Int): (String, Array[Byte]) = {
+  private def partitionStatePathAndData(topicPartition: TopicPartition,
+                                        partitionRegistration: PartitionRegistration,
+                                        controllerEpoch: Int): (String, Array[Byte]) = {
     val path = TopicPartitionStateZNode.path(topicPartition)
     val data = TopicPartitionStateZNode.encode(LeaderIsrAndControllerEpoch(new LeaderAndIsr(
       partitionRegistration.leader,
@@ -287,12 +290,16 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     (path, data)
   }
 
-  private def createTopicPartitionState(topicPartition: TopicPartition, partitionRegistration: PartitionRegistration, controllerEpoch: Int): CreateRequest = {
+  private def createTopicPartitionState(topicPartition: TopicPartition,
+                                        partitionRegistration: PartitionRegistration,
+                                        controllerEpoch: Int): CreateRequest = {
     val (path, data) = partitionStatePathAndData(topicPartition, partitionRegistration, controllerEpoch)
     CreateRequest(path, data, zkClient.defaultAcls(path), CreateMode.PERSISTENT, Some(topicPartition))
   }
 
-  private def updateTopicPartitionState(topicPartition: TopicPartition, partitionRegistration: PartitionRegistration, controllerEpoch: Int): SetDataRequest = {
+  private def updateTopicPartitionState(topicPartition: TopicPartition,
+                                        partitionRegistration: PartitionRegistration,
+                                        controllerEpoch: Int): SetDataRequest = {
     val (path, data) = partitionStatePathAndData(topicPartition, partitionRegistration, controllerEpoch)
     SetDataRequest(path, data, ZkVersion.MatchAnyVersion, Some(topicPartition))
   }
@@ -315,7 +322,11 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
 
   // Try to update an entity config and the migration state. If NoNode is encountered, it probably means we
   // need to recursively create the parent ZNode. In this case, return None.
-  def tryWriteEntityConfig(entityType: String, path: String, props: Properties, create: Boolean, state: ZkMigrationLeadershipState): Option[ZkMigrationLeadershipState] = {
+  def tryWriteEntityConfig(entityType: String,
+                           path: String,
+                           props: Properties,
+                           create: Boolean,
+                           state: ZkMigrationLeadershipState): Option[ZkMigrationLeadershipState] = {
     val configData = ConfigEntityZNode.encode(props)
 
     val requests = if (create) {
@@ -334,7 +345,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
-  def writeClientQuotas(entity: ClientQuotaEntity, quotas: util.Map[String, Double], state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+  def writeClientQuotas(entity: ClientQuotaEntity,
+                        quotas: util.Map[String, Double],
+                        state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     val entityMap = entity.entries().asScala
     val hasUser = entityMap.contains(ConfigType.User)
     val hasClient = entityMap.contains(ConfigType.Client)
@@ -376,7 +389,8 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
 
         tryWriteEntityConfig(configType.get, path.get, props, create=true, state) match {
           case Some(newStateSecondTry) => newStateSecondTry
-          case None => throw new RuntimeException(s"Could not write client quotas for $entity on second attempt when using Create instead of SetData")
+          case None => throw new RuntimeException(
+            s"Could not write client quotas for $entity on second attempt when using Create instead of SetData")
         }
     }
   }
@@ -390,7 +404,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     state.withMigrationZkVersion(migrationZkVersion)
   }
 
-  def writeConfigs(resource: ConfigResource, configs: util.Map[String, String], state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+  def writeConfigs(resource: ConfigResource,
+                   configs: util.Map[String, String],
+                   state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     val configType = resource.`type`() match {
       case ConfigResource.Type.BROKER => Some(ConfigType.Broker)
       case ConfigResource.Type.TOPIC => Some(ConfigType.Topic)
@@ -411,7 +427,8 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
 
           tryWriteEntityConfig(configType.get, configName, props, create=true, state) match {
             case Some(newStateSecondTry) => newStateSecondTry
-            case None => throw new RuntimeException(s"Could not write ${configType.get} configs on second attempt when using Create instead of SetData.")
+            case None => throw new RuntimeException(
+              s"Could not write ${configType.get} configs on second attempt when using Create instead of SetData.")
           }
       }
     } else {
