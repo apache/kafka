@@ -37,7 +37,7 @@ import java.net.URI;
 import java.util.Map;
 
 /**
- * Connect initialization common logic that can be leveraged by concrete implementations of command line utilities
+ * Common initialization logic for Kafka Connect, intended for use by command line utilities
  *
  * @param <T> the type of {@link WorkerConfig} to be used
  */
@@ -46,9 +46,6 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
     private static final Logger log = LoggerFactory.getLogger(AbstractConnectCli.class);
     private final Time time = Time.SYSTEM;
 
-    /**
-     * @param config an instance of {@link WorkerConfig}
-     */
     protected abstract Herder createHerder(T config, String workerId, Plugins plugins,
                                            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                            RestServer restServer, RestClient restClient);
