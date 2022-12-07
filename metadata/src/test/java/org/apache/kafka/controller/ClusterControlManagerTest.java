@@ -41,9 +41,8 @@ import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.metadata.placement.ClusterDescriber;
+import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.metadata.placement.PlacementSpec;
-import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -56,7 +55,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
@@ -403,19 +401,14 @@ public class ClusterControlManagerTest {
                 String.format("broker %d was not unfenced.", i));
         }
         for (int i = 0; i < 100; i++) {
-            List<List<Integer>> results = clusterControl.replicaPlacer().place(
+            List<PartitionAssignment> results = clusterControl.replicaPlacer().place(
                 new PlacementSpec(0,
                     1,
                     (short) 3),
-                new ClusterDescriber() {
-                    @Override
-                    public Iterator<UsableBroker> usableBrokers() {
-                        return clusterControl.usableBrokers();
-                    }
-                }
-            );
+                    clusterControl::usableBrokers
+            ).assignments();
             HashSet<Integer> seen = new HashSet<>();
-            for (Integer result : results.get(0)) {
+            for (Integer result : results.get(0).replicas()) {
                 assertTrue(result >= 0);
                 assertTrue(result < numUsableBrokers);
                 assertTrue(seen.add(result));

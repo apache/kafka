@@ -464,7 +464,7 @@ public class Selector implements Selectable, AutoCloseable {
         long startSelect = time.nanoseconds();
         int numReadyKeys = select(timeout);
         long endSelect = time.nanoseconds();
-        this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
+        this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds(), false);
 
         if (numReadyKeys > 0 || !immediatelyConnectedKeys.isEmpty() || dataInBuffers) {
             Set<SelectionKey> readyKeys = this.nioSelector.selectedKeys();
@@ -489,7 +489,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         long endIo = time.nanoseconds();
-        this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
+        this.sensors.ioTime.record(endIo - endSelect, time.milliseconds(), false);
 
         // Close channels that were delayed and are now ready to be closed
         completeDelayedChannelClose(endIo);
@@ -1345,7 +1345,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         public void recordBytesSent(String connectionId, long bytes, long currentTimeMs) {
-            this.bytesSent.record(bytes, currentTimeMs);
+            this.bytesSent.record(bytes, currentTimeMs, false);
             if (!connectionId.isEmpty()) {
                 String bytesSentName = "node-" + connectionId + ".bytes-sent";
                 Sensor bytesSent = this.metrics.getSensor(bytesSentName);
@@ -1355,7 +1355,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         public void recordCompletedSend(String connectionId, long totalBytes, long currentTimeMs) {
-            requestsSent.record(totalBytes, currentTimeMs);
+            requestsSent.record(totalBytes, currentTimeMs, false);
             if (!connectionId.isEmpty()) {
                 String nodeRequestName = "node-" + connectionId + ".requests-sent";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
@@ -1365,7 +1365,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         public void recordBytesReceived(String connectionId, long bytes, long currentTimeMs) {
-            this.bytesReceived.record(bytes, currentTimeMs);
+            this.bytesReceived.record(bytes, currentTimeMs, false);
             if (!connectionId.isEmpty()) {
                 String bytesReceivedName = "node-" + connectionId + ".bytes-received";
                 Sensor bytesReceived = this.metrics.getSensor(bytesReceivedName);
@@ -1375,7 +1375,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         public void recordCompletedReceive(String connectionId, long totalBytes, long currentTimeMs) {
-            responsesReceived.record(totalBytes, currentTimeMs);
+            responsesReceived.record(totalBytes, currentTimeMs, false);
             if (!connectionId.isEmpty()) {
                 String nodeRequestName = "node-" + connectionId + ".responses-received";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);

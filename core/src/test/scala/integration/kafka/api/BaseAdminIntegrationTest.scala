@@ -215,11 +215,6 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
   override def kraftControllerConfigs(): Seq[Properties] = {
     val controllerConfig = new Properties()
-    if (testInfo.getTestMethod.toString.contains("testCreateTopicsReturnsConfigs")) {
-      // For testCreateTopicsReturnsConfigs, set the controller's ID to 1 so that the dynamic
-      // config we set for node 1 will apply to it.
-      controllerConfig.setProperty(KafkaConfig.NodeIdProp, "1")
-    }
     val controllerConfigs = Seq(controllerConfig)
     modifyConfigs(controllerConfigs)
     controllerConfigs

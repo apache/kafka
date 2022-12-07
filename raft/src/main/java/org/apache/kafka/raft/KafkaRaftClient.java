@@ -2358,10 +2358,19 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
+    public Optional<OffsetAndEpoch> latestSnapshotId() {
+        return log.latestSnapshotId();
+    }
+
+    @Override
     public void close() {
         log.flush(true);
         if (kafkaRaftMetrics != null) {
             kafkaRaftMetrics.close();
+        }
+        if (memoryPool instanceof BatchMemoryPool) {
+            BatchMemoryPool batchMemoryPool = (BatchMemoryPool) memoryPool;
+            batchMemoryPool.releaseRetained();
         }
     }
 

@@ -125,7 +125,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
         DistributedConfig config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, null);
         Assert.assertEquals("http://localhost:8080/", server.advertisedUrl().toString());
         server.stop();
 
@@ -135,7 +135,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "https");
         config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, null);
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
         server.stop();
 
@@ -144,7 +144,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://localhost:8443");
         config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, null);
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
         server.stop();
 
@@ -156,7 +156,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.REST_ADVERTISED_PORT_CONFIG, "10000");
         config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, null);
         Assert.assertEquals("http://somehost:10000/", server.advertisedUrl().toString());
         server.stop();
 
@@ -165,7 +165,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://encrypted-localhost:42069,http://plaintext-localhost:4761");
         configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");
         config = new DistributedConfig(configMap);
-        server = new RestServer(config);
+        server = new RestServer(config, null);
         Assert.assertEquals("http://plaintext-localhost:4761/", server.advertisedUrl().toString());
         server.stop();
     }
@@ -179,7 +179,7 @@ public class RestServerTest {
         doReturn(plugins).when(herder).plugins();
         doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -207,7 +207,7 @@ public class RestServerTest {
         doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
         doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
         URI serverUrl = server.advertisedUrl();
@@ -251,7 +251,7 @@ public class RestServerTest {
         doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
         doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
         HttpRequest request = new HttpGet("/connectors");
@@ -272,7 +272,7 @@ public class RestServerTest {
         // create some loggers in the process
         LoggerFactory.getLogger("a.b.c.s.W");
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -307,7 +307,7 @@ public class RestServerTest {
         LoggerFactory.getLogger("a.b.c.p.Y");
         LoggerFactory.getLogger("a.b.c.p.Z");
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -331,7 +331,7 @@ public class RestServerTest {
         doReturn(plugins).when(herder).plugins();
         doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -351,7 +351,7 @@ public class RestServerTest {
         doReturn(plugins).when(herder).plugins();
         doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -398,7 +398,7 @@ public class RestServerTest {
         doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
         doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, null);
         server.initializeServer();
         server.initializeResources(herder);
         HttpRequest request = new HttpGet("/connectors");

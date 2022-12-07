@@ -53,6 +53,41 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final public class KafkaRaftClientSnapshotTest {
     @Test
+    public void testLatestSnapshotId() throws Exception {
+        int localId = 0;
+        int leaderId = localId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, leaderId);
+        int epoch = 2;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch(), Arrays.asList("a", "b", "c"))
+            .appendToLog(snapshotId.epoch(), Arrays.asList("d", "e", "f"))
+            .withEmptySnapshot(snapshotId)
+            .withElectedLeader(epoch, leaderId)
+            .build();
+
+        assertEquals(Optional.of(snapshotId), context.client.latestSnapshotId());
+    }
+
+    @Test
+    public void testLatestSnapshotIdMissing() throws Exception {
+        int localId = 0;
+        int leaderId = localId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, leaderId);
+        int epoch = 2;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(snapshotId.epoch(), Arrays.asList("a", "b", "c"))
+            .appendToLog(snapshotId.epoch(), Arrays.asList("d", "e", "f"))
+            .withElectedLeader(epoch, leaderId)
+            .build();
+
+        assertEquals(Optional.empty(), context.client.latestSnapshotId());
+    }
+
+    @Test
     public void testLeaderListenerNotified() throws Exception {
         int localId = 0;
         int otherNodeId = localId + 1;

@@ -30,10 +30,11 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Arrays;
 
@@ -41,8 +42,11 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 @SuppressWarnings("rawtypes")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
 
     private final MockRecordCollector collector = new MockRecordCollector();
@@ -83,25 +87,20 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
     @Test
     public void shouldDelegateDeprecatedInit() {
         final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
+        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
         final StateStore outer = new ChangeLoggingTimestampedKeyValueBytesStore(inner);
-        inner.init((ProcessorContext) context, outer);
-        EasyMock.expectLastCall();
-        EasyMock.replay(inner);
         outer.init((ProcessorContext) context, outer);
-        EasyMock.verify(inner);
+        verify(inner).init((ProcessorContext) context, outer);
     }
 
     @Test
     public void shouldDelegateInit() {
         final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
+        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
         final StateStore outer = new ChangeLoggingTimestampedKeyValueBytesStore(inner);
-        inner.init((StateStoreContext) context, outer);
-        EasyMock.expectLastCall();
-        EasyMock.replay(inner);
+
         outer.init((StateStoreContext) context, outer);
-        EasyMock.verify(inner);
+        verify(inner).init((StateStoreContext) context, outer);
     }
 
     @Test

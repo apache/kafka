@@ -58,8 +58,8 @@ public class ConnectStandalone {
 
     public static void main(String[] args) {
 
-        if (args.length < 2 || Arrays.asList(args).contains("--help")) {
-            log.info("Usage: ConnectStandalone worker.properties connector1.properties [connector2.properties ...]");
+        if (args.length < 1 || Arrays.asList(args).contains("--help")) {
+            log.info("Usage: ConnectStandalone worker.properties [connector1.properties connector2.properties ...]");
             Exit.exit(1);
         }
 
@@ -82,7 +82,8 @@ public class ConnectStandalone {
             String kafkaClusterId = config.kafkaClusterId();
             log.debug("Kafka cluster ID: {}", kafkaClusterId);
 
-            RestServer rest = new RestServer(config);
+            // Do not initialize a RestClient because the ConnectorsResource will not use it in standalone mode.
+            RestServer rest = new RestServer(config, null);
             rest.initializeServer();
 
             URI advertisedUrl = rest.advertisedUrl();
