@@ -349,7 +349,7 @@ class ReplicaManagerConcurrencyTest {
     override def doWork(): Unit = {
       channel.poll() match {
         case InitializeEvent =>
-          val delta = new MetadataDelta(latestImage)
+          val delta = new MetadataDelta.Builder().setImage(latestImage).build()
           brokerIds.foreach { brokerId =>
             delta.replay(new RegisterBrokerRecord()
               .setBrokerId(brokerId)
@@ -357,14 +357,14 @@ class ReplicaManagerConcurrencyTest {
             )
           }
           topic.initialize(delta)
-          latestImage = delta.apply()
+          latestImage = delta.apply(latestImage.provenance())
           metadataCache.setImage(latestImage)
           replicaManager.applyDelta(delta.topicsDelta, latestImage)
 
         case AlterIsrEvent(future, topicPartition, leaderAndIsr) =>
-          val delta = new MetadataDelta(latestImage)
+          val delta = new MetadataDelta.Builder().setImage(latestImage).build()
           val updatedLeaderAndIsr = topic.alterIsr(topicPartition, leaderAndIsr, delta)
-          latestImage = delta.apply()
+          latestImage = delta.apply(latestImage.provenance())
           future.complete(updatedLeaderAndIsr)
           replicaManager.applyDelta(delta.topicsDelta, latestImage)
 
