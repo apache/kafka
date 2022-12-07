@@ -56,6 +56,24 @@ public class StreamsMetadataTest {
     }
 
     @Test
+    public void shouldGetInstanceWithKeyAndCustomPartitionerUsingDefaultPartitioner() {
+        final TopicPartition tp4 = new TopicPartition("topic-three", 1);
+        hostToActivePartitions.put(hostTwo, mkSet(topic2P0, tp4));
+        final StreamPartitioner<String, Object> partitioner1 = (topic, key, value, numPartitions) -> null;
+
+        metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions,
+                               cluster.withPartitions(Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null))));
+
+        final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, Collections.emptySet(), 1);
+
+        final KeyQueryMetadata actual = metadataState.getKeyQueryMetadataForKey("table-three",
+                                                                                "the-key",
+                                                                                partitioner1);
+        assertEquals(expected, actual);
+        assertEquals(1, actual.partition());
+    }
+
+    @Test
     public void shouldNotAllowModificationOfInternalStateViaGetters() {
         assertThat(isUnmodifiable(streamsMetadata.stateStoreNames()), is(true));
         assertThat(isUnmodifiable(streamsMetadata.topicPartitions()), is(true));
