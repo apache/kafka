@@ -37,7 +37,7 @@ import org.apache.zookeeper.{CreateMode, KeeperException}
 import java.util
 import java.util.Properties
 import java.util.function.Consumer
-import scala.collection.{Seq, mutable}
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 
@@ -226,11 +226,13 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
   override def readBrokerIdsFromTopicAssignments(): util.Set[Integer] = {
     val topics = zkClient.getAllTopicsInCluster()
     val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(topics)
-    val brokersWithAssignments = mutable.HashSet[Int]()
+    val brokersWithAssignments = new util.HashSet[Integer]()
     replicaAssignmentAndTopicIds.foreach { case TopicIdReplicaAssignment(_, _, assignments) =>
-      assignments.values.foreach { assignment => brokersWithAssignments.addAll(assignment.replicas) }
+      assignments.values.foreach { assignment =>
+        assignment.replicas.foreach { brokerId => brokersWithAssignments.add(brokerId) }
+      }
     }
-    brokersWithAssignments.map(Integer.valueOf).asJava
+    brokersWithAssignments
   }
 
   override def createTopic(topicName: String,

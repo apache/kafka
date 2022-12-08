@@ -162,7 +162,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
   @Test
   def testWriteExistingClientQuotas(): Unit = {
     val props = new Properties()
-    props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 100000L)
+    props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "100000")
     adminZkClient.changeConfigs(ConfigType.User, "user1", props)
     adminZkClient.changeConfigs(ConfigType.User, "user1/clients/clientA", props)
 
@@ -338,8 +338,8 @@ class ZkMigrationClientTest extends QuorumTestHarness {
   @Test
   def testWriteExistingTopicConfigs(): Unit = {
     val props = new Properties()
-    props.put(TopicConfig.FLUSH_MS_CONFIG, 60000)
-    props.put(TopicConfig.RETENTION_MS_CONFIG, 300000)
+    props.put(TopicConfig.FLUSH_MS_CONFIG, "60000")
+    props.put(TopicConfig.RETENTION_MS_CONFIG, "300000")
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, "test", props)
 
     migrationState = migrationClient.writeConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "test"),
