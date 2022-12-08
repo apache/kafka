@@ -18,7 +18,7 @@ package kafka.coordinator.group
 
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito.{mock, verify}
+import org.mockito.Mockito.{mock, verify, when}
 
 import java.net.InetAddress
 import scala.jdk.CollectionConverters._
@@ -240,6 +240,109 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertEquals(new HeartbeatResponseData(), future.get())
+  }
+
+  def testLeaveGroup(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    val ctx = makeContext(ApiKeys.LEAVE_GROUP, ApiKeys.LEAVE_GROUP.latestVersion)
+    val data = new LeaveGroupRequestData()
+      .setGroupId("group")
+      .setMembers(List(
+        new LeaveGroupRequestData.MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1"),
+        new LeaveGroupRequestData.MemberIdentity()
+          .setMemberId("member-2")
+          .setGroupInstanceId("instance-2")
+      ).asJava)
+
+    val future = adapter.leaveGroup(ctx, data)
+
+    val capturedCallback: ArgumentCaptor[LeaveGroupResult => Unit] =
+      ArgumentCaptor.forClass(classOf[LeaveGroupResult => Unit])
+
+    verify(groupCoordinator).handleLeaveGroup(
+      ArgumentMatchers.eq(data.groupId),
+      ArgumentMatchers.eq(data.members.asScala.toList),
+      capturedCallback.capture(),
+    )
+
+    assertFalse(future.isDone)
+
+    capturedCallback.getValue.apply(LeaveGroupResult(
+      topLevelError = Errors.NONE,
+      memberResponses = List(
+        LeaveMemberResponse(
+          memberId = "member-1",
+          groupInstanceId = Some("instance-1"),
+          error = Errors.NONE
+        ),
+        LeaveMemberResponse(
+          memberId = "member-2",
+          groupInstanceId = Some("instance-2"),
+          error = Errors.NONE
+        )
+      )
+    ))
+
+    val expectedData = new LeaveGroupResponseData()
+      .setMembers(List(
+        new LeaveGroupResponseData.MemberResponse()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1"),
+        new LeaveGroupResponseData.MemberResponse()
+          .setMemberId("member-2")
+          .setGroupInstanceId("instance-2")
+      ).asJava)
+
+    assertTrue(future.isDone)
+    assertEquals(expectedData, future.get())
+  }
+
+  @Test
+  def testListGroups(): Unit = {
+    testListGroups(null, Set.empty)
+    testListGroups(List(), Set.empty)
+    testListGroups(List("Stable"), Set("Stable"))
+  }
+
+  def testListGroups(
+    statesFilter: List[String],
+    expectedStatesFilter: Set[String]
+  ): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    val ctx = makeContext(ApiKeys.LIST_GROUPS, ApiKeys.LIST_GROUPS.latestVersion)
+    val data = new ListGroupsRequestData()
+      .setStatesFilter(statesFilter.asJava)
+
+    when(groupCoordinator.handleListGroups(expectedStatesFilter)).thenReturn {
+      (Errors.NOT_COORDINATOR, List(
+        GroupOverview("group1", "protocol1", "Stable"),
+        GroupOverview("group2", "qwerty", "Empty")
+      ))
+    }
+
+    val future = adapter.listGroups(ctx, data)
+    assertTrue(future.isDone)
+
+    val expectedData = new ListGroupsResponseData()
+      .setErrorCode(Errors.NOT_COORDINATOR.code)
+      .setGroups(List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId("group1")
+          .setGroupState("Stable")
+          .setProtocolType("protocol1"),
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId("group2")
+          .setGroupState("Empty")
+          .setProtocolType("qwerty")
+      ).asJava)
+
+    assertEquals(expectedData, future.get())
   }
 
 }

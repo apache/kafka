@@ -3022,57 +3022,188 @@ class KafkaApisTest {
     assertEquals(expectedTopicErrors, response.data.topics())
   }
 
-  @Test
-  def testMultipleLeaveGroup(): Unit = {
-    val groupId = "groupId"
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
+  def testHandleLeaveGroupWithMultipleMembers(version: Short): Unit = {
+    def makeRequest(version: Short): RequestChannel.Request = {
+      buildRequest(new LeaveGroupRequest.Builder(
+        "group",
+        List(
+          new MemberIdentity()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1"),
+          new MemberIdentity()
+            .setMemberId("member-2")
+            .setGroupInstanceId("instance-2")
+        ).asJava
+      ).build(version))
+    }
 
-    val leaveMemberList = List(
-      new MemberIdentity()
-        .setMemberId("member-1")
-        .setGroupInstanceId("instance-1"),
-      new MemberIdentity()
-        .setMemberId("member-2")
-        .setGroupInstanceId("instance-2")
-    )
+    if (version < 3) {
+      // Request version earlier than version 3 do not support batching members.
+      assertThrows(classOf[UnsupportedVersionException], () => makeRequest(version))
+    } else {
+      val requestChannelRequest = makeRequest(version)
 
-    val leaveRequest = buildRequest(
-      new LeaveGroupRequest.Builder(
-        groupId,
-        leaveMemberList.asJava
-      ).build()
-    )
+      val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+        .setGroupId("group")
+        .setMembers(List(
+          new MemberIdentity()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1"),
+          new MemberIdentity()
+            .setMemberId("member-2")
+            .setGroupInstanceId("instance-2")
+        ).asJava)
 
-    createKafkaApis().handleLeaveGroupRequest(leaveRequest)
-    verify(groupCoordinator).handleLeaveGroup(
-      ArgumentMatchers.eq(groupId),
-      ArgumentMatchers.eq(leaveMemberList),
-      any()
-    )
+      val future = new CompletableFuture[LeaveGroupResponseData]()
+      when(newGroupCoordinator.leaveGroup(
+        requestChannelRequest.context,
+        expectedLeaveGroupRequest
+      )).thenReturn(future)
+
+      createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+
+      val expectedLeaveResponse = new LeaveGroupResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setMembers(List(
+          new LeaveGroupResponseData.MemberResponse()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1"),
+          new LeaveGroupResponseData.MemberResponse()
+            .setMemberId("member-2")
+            .setGroupInstanceId("instance-2"),
+        ).asJava)
+
+      future.complete(expectedLeaveResponse)
+      val capturedResponse = verifyNoThrottling(requestChannelRequest)
+      val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+      assertEquals(expectedLeaveResponse, response.data)
+    }
+  }
+
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
+  def testHandleLeaveGroupWithSingleMember(version: Short): Unit = {
+    val requestChannelRequest = buildRequest(new LeaveGroupRequest.Builder(
+      "group",
+      List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava
+    ).build(version))
+
+    val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+      .setGroupId("group")
+      .setMembers(List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId(if (version >= 3) "instance-1" else null)
+      ).asJava)
+
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+    when(newGroupCoordinator.leaveGroup(
+      requestChannelRequest.context,
+      expectedLeaveGroupRequest
+    )).thenReturn(future)
+
+    createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+
+    val leaveGroupResponse = new LeaveGroupResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMembers(List(
+        new LeaveGroupResponseData.MemberResponse()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava)
+
+    val expectedLeaveResponse = if (version >= 3) {
+      new LeaveGroupResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setMembers(List(
+          new LeaveGroupResponseData.MemberResponse()
+            .setMemberId("member-1")
+            .setGroupInstanceId("instance-1")
+        ).asJava)
+    } else {
+      new LeaveGroupResponseData()
+        .setErrorCode(Errors.NONE.code)
+    }
+
+    future.complete(leaveGroupResponse)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    assertEquals(expectedLeaveResponse, response.data)
   }
 
   @Test
-  def testSingleLeaveGroup(): Unit = {
-    val groupId = "groupId"
-    val memberId = "member"
+  def testHandleLeaveGroupFutureFailed(): Unit = {
+    val requestChannelRequest = buildRequest(new LeaveGroupRequest.Builder(
+      "group",
+      List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava
+    ).build(ApiKeys.LEAVE_GROUP.latestVersion))
 
-    val singleLeaveMember = List(
-      new MemberIdentity()
-        .setMemberId(memberId)
-    )
+    val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+      .setGroupId("group")
+      .setMembers(List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava)
 
-    val leaveRequest = buildRequest(
-      new LeaveGroupRequest.Builder(
-        groupId,
-        singleLeaveMember.asJava
-      ).build()
-    )
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+    when(newGroupCoordinator.leaveGroup(
+      requestChannelRequest.context,
+      expectedLeaveGroupRequest
+    )).thenReturn(future)
 
-    createKafkaApis().handleLeaveGroupRequest(leaveRequest)
-    verify(groupCoordinator).handleLeaveGroup(
-      ArgumentMatchers.eq(groupId),
-      ArgumentMatchers.eq(singleLeaveMember),
-      any()
-    )
+    createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+
+    future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
+  }
+
+  @Test
+  def testHandleLeaveGroupAuthenticationFailed(): Unit = {
+    val requestChannelRequest = buildRequest(new LeaveGroupRequest.Builder(
+      "group",
+      List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava
+    ).build(ApiKeys.LEAVE_GROUP.latestVersion))
+
+    val expectedLeaveGroupRequest = new LeaveGroupRequestData()
+      .setGroupId("group")
+      .setMembers(List(
+        new MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1")
+      ).asJava)
+
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+    when(newGroupCoordinator.leaveGroup(
+      requestChannelRequest.context,
+      expectedLeaveGroupRequest
+    )).thenReturn(future)
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleLeaveGroupRequest(requestChannelRequest)
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
   @Test
@@ -3359,47 +3490,176 @@ class KafkaApisTest {
     }
   }
 
-  @Test
-  def testListGroupsRequest(): Unit = {
-    val overviews = List(
-      GroupOverview("group1", "protocol1", "Stable"),
-      GroupOverview("group2", "qwerty", "Empty")
-    )
-    val response = listGroupRequest(None, overviews)
-    assertEquals(2, response.data.groups.size)
-    assertEquals("Stable", response.data.groups.get(0).groupState)
-    assertEquals("Empty", response.data.groups.get(1).groupState)
-  }
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.LIST_GROUPS)
+  def testListGroupsRequest(version: Short): Unit = {
+    val listGroupsRequest = new ListGroupsRequestData()
+      .setStatesFilter(if (version >= 4) List("Stable", "Empty").asJava else List.empty.asJava)
 
-  @Test
-  def testListGroupsRequestWithState(): Unit = {
-    val overviews = List(
-      GroupOverview("group1", "protocol1", "Stable")
-    )
-    val response = listGroupRequest(Some("Stable"), overviews)
-    assertEquals(1, response.data.groups.size)
-    assertEquals("Stable", response.data.groups.get(0).groupState)
-  }
+    val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build(version))
 
-  private def listGroupRequest(state: Option[String], overviews: List[GroupOverview]): ListGroupsResponse = {
-    reset(groupCoordinator, clientRequestQuotaManager, requestChannel)
+    val expectedListGroupsRequest = new ListGroupsRequestData()
+      .setStatesFilter(if (version >= 4) List("Stable", "Empty").asJava else List.empty.asJava)
 
-    val data = new ListGroupsRequestData()
-    if (state.isDefined)
-      data.setStatesFilter(Collections.singletonList(state.get))
-    val listGroupsRequest = new ListGroupsRequest.Builder(data).build()
-    val requestChannelRequest = buildRequest(listGroupsRequest)
-
-    val expectedStates: Set[String] = if (state.isDefined) Set(state.get) else Set()
-    when(groupCoordinator.handleListGroups(expectedStates))
-      .thenReturn((Errors.NONE, overviews))
+    val future = new CompletableFuture[ListGroupsResponseData]()
+    when(newGroupCoordinator.listGroups(
+      requestChannelRequest.context,
+      expectedListGroupsRequest
+    )).thenReturn(future)
 
     createKafkaApis().handleListGroupsRequest(requestChannelRequest)
 
+    val expectedListGroupsResponse = new ListGroupsResponseData()
+      .setGroups(List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId("group1")
+          .setGroupState("Stable")
+          .setProtocolType("protocol1"),
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId("group2")
+          .setGroupState("Empty")
+          .setProtocolType("qwerty")
+      ).asJava)
+
+    future.complete(expectedListGroupsResponse)
     val capturedResponse = verifyNoThrottling(requestChannelRequest)
     val response = capturedResponse.getValue.asInstanceOf[ListGroupsResponse]
-    assertEquals(Errors.NONE.code, response.data.errorCode)
-    response
+    assertEquals(expectedListGroupsResponse, response.data)
+  }
+
+  @Test
+  def testListGroupsRequestFutureFailed(): Unit = {
+    val listGroupsRequest = new ListGroupsRequestData()
+      .setStatesFilter(List("Stable", "Empty").asJava)
+
+    val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build())
+
+    val expectedListGroupsRequest = new ListGroupsRequestData()
+      .setStatesFilter(List("Stable", "Empty").asJava)
+
+    val future = new CompletableFuture[ListGroupsResponseData]()
+    when(newGroupCoordinator.listGroups(
+      requestChannelRequest.context,
+      expectedListGroupsRequest
+    )).thenReturn(future)
+
+    createKafkaApis().handleListGroupsRequest(requestChannelRequest)
+
+    future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[ListGroupsResponse]
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR.code, response.data.errorCode)
+  }
+
+  @Test
+  def testListGroupsRequestFiltersUnauthorizedGroupsWithDescribeCluster(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+
+    authorizeResource(
+      authorizer,
+      AclOperation.DESCRIBE,
+      ResourceType.GROUP,
+      "group1",
+      AuthorizationResult.DENIED,
+      logIfDenied = false
+    )
+    authorizeResource(
+      authorizer,
+      AclOperation.DESCRIBE,
+      ResourceType.GROUP,
+      "group2",
+      AuthorizationResult.DENIED,
+      logIfDenied = false
+    )
+    authorizeResource(
+      authorizer,
+      AclOperation.DESCRIBE,
+      ResourceType.CLUSTER,
+      Resource.CLUSTER_NAME,
+      AuthorizationResult.ALLOWED,
+      logIfDenied = false
+    )
+
+    testListGroupsRequestFiltersUnauthorizedGroups(
+      authorizer,
+      List("group1", "group2"),
+      List("group1", "group2")
+    )
+  }
+
+  @Test
+  def testListGroupsRequestFiltersUnauthorizedGroupsWithDescribeGroups(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+
+    authorizeResource(
+      authorizer,
+      AclOperation.DESCRIBE,
+      ResourceType.GROUP,
+      "group1",
+      AuthorizationResult.DENIED,
+      logIfDenied = false
+    )
+    authorizeResource(
+      authorizer,
+      AclOperation.DESCRIBE,
+      ResourceType.GROUP,
+      "group2",
+      AuthorizationResult.ALLOWED,
+      logIfDenied = false
+    )
+    authorizeResource(
+      authorizer,
+      AclOperation.DESCRIBE,
+      ResourceType.CLUSTER,
+      Resource.CLUSTER_NAME,
+      AuthorizationResult.DENIED,
+      logIfDenied = false
+    )
+
+    testListGroupsRequestFiltersUnauthorizedGroups(
+      authorizer,
+      List("group1", "group2"),
+      List("group2")
+    )
+  }
+
+  def testListGroupsRequestFiltersUnauthorizedGroups(
+    authorizer: Authorizer,
+    groups: List[String],
+    expectedGroups: List[String],
+  ): Unit = {
+    val listGroupsRequest = new ListGroupsRequestData()
+
+    val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build())
+
+    val expectedListGroupsRequest = new ListGroupsRequestData()
+
+    val future = new CompletableFuture[ListGroupsResponseData]()
+    when(newGroupCoordinator.listGroups(
+      requestChannelRequest.context,
+      expectedListGroupsRequest
+    )).thenReturn(future)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleListGroupsRequest(requestChannelRequest)
+
+    val listGroupsResponse = new ListGroupsResponseData()
+    groups.foreach { groupId =>
+      listGroupsResponse.groups.add(new ListGroupsResponseData.ListedGroup()
+        .setGroupId(groupId)
+      )
+    }
+
+    val expectedListGroupsResponse = new ListGroupsResponseData()
+    expectedGroups.foreach { groupId =>
+      expectedListGroupsResponse.groups.add(new ListGroupsResponseData.ListedGroup()
+        .setGroupId(groupId)
+      )
+    }
+
+    future.complete(listGroupsResponse)
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[ListGroupsResponse]
+    assertEquals(expectedListGroupsResponse, response.data)
   }
 
   @Test
