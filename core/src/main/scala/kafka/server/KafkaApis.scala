@@ -1586,7 +1586,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     describeRequest.data.groups.forEach { groupId =>
       if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupId)) {
-        describeGroupsResponseData.groups.add(DescribeGroupsResponse.forError(groupId, Errors.GROUP_AUTHORIZATION_FAILED))
+        describeGroupsResponseData.groups.add(DescribeGroupsResponse.groupError(groupId, Errors.GROUP_AUTHORIZATION_FAILED))
       } else {
         val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
         val members = summary.members.map { member =>
