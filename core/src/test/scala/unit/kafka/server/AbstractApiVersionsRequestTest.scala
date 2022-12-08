@@ -75,7 +75,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       ApiKeys.controllerApis()
     } else {
       ApiVersionsResponse.intersectForwardableApis(
-        ApiMessageType.ListenerType.BROKER,
+        ApiKeys.apisForListener(ApiMessageType.ListenerType.BROKER),
         RecordVersion.current,
         NodeApiVersions.create(ApiKeys.controllerApis().asScala.map(ApiVersionsResponse.toApiVersion).asJava).allSupportedApiVersions()
       )

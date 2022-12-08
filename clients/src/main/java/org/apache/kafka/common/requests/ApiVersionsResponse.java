@@ -112,7 +112,11 @@ public class ApiVersionsResponse extends AbstractResponse {
         int throttleTimeMs,
         ApiMessageType.ListenerType listenerType
     ) {
-        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType), Features.emptySupportedFeatures());
+        return createApiVersionsResponse(
+            throttleTimeMs,
+            filterApis(ApiKeys.apisForListener(listenerType), RecordVersion.current()),
+            Features.emptySupportedFeatures()
+        );
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
@@ -144,12 +148,38 @@ public class ApiVersionsResponse extends AbstractResponse {
         NodeApiVersions controllerApiVersions,
         ListenerType listenerType
     ) {
+        return createApiVersionsResponse(
+            throttleTimeMs,
+            minRecordVersion,
+            latestSupportedFeatures,
+            finalizedFeatures,
+            finalizedFeaturesEpoch,
+            controllerApiVersions,
+            ApiKeys.apisForListener(listenerType)
+        );
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse(
+        int throttleTimeMs,
+        RecordVersion minRecordVersion,
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        Map<String, Short> finalizedFeatures,
+        long finalizedFeaturesEpoch,
+        NodeApiVersions controllerApiVersions,
+        Set<ApiKeys> enabledApis
+    ) {
         ApiVersionCollection apiKeys;
         if (controllerApiVersions != null) {
             apiKeys = intersectForwardableApis(
-                listenerType, minRecordVersion, controllerApiVersions.allSupportedApiVersions());
+                enabledApis,
+                minRecordVersion,
+                controllerApiVersions.allSupportedApiVersions()
+            );
         } else {
-            apiKeys = filterApis(minRecordVersion, listenerType);
+            apiKeys = filterApis(
+                enabledApis,
+                minRecordVersion
+            );
         }
 
         return createApiVersionsResponse(
@@ -181,11 +211,11 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public static ApiVersionCollection filterApis(
-        RecordVersion minRecordVersion,
-        ApiMessageType.ListenerType listenerType
+        Set<ApiKeys> enabledApi,
+        RecordVersion minRecordVersion
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
+        for (ApiKeys apiKey : enabledApi) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 apiKeys.add(ApiVersionsResponse.toApiVersion(apiKey));
             }
@@ -205,18 +235,18 @@ public class ApiVersionsResponse extends AbstractResponse {
      * Find the common range of supported API versions between the locally
      * known range and that of another set.
      *
-     * @param listenerType the listener type which constrains the set of exposed APIs
+     * @param enabledApis the set of enabled APIs
      * @param minRecordVersion min inter broker magic
      * @param activeControllerApiVersions controller ApiVersions
      * @return commonly agreed ApiVersion collection
      */
     public static ApiVersionCollection intersectForwardableApis(
-        final ApiMessageType.ListenerType listenerType,
+        final Set<ApiKeys> enabledApis,
         final RecordVersion minRecordVersion,
         final Map<ApiKeys, ApiVersion> activeControllerApiVersions
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
+        for (ApiKeys apiKey : enabledApis) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 ApiVersion brokerApiVersion = toApiVersion(apiKey);
 

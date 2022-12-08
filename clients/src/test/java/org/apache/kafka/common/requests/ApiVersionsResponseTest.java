@@ -99,7 +99,7 @@ public class ApiVersionsResponseTest {
         );
 
         ApiVersionCollection commonResponse = ApiVersionsResponse.intersectForwardableApis(
-            ApiMessageType.ListenerType.ZK_BROKER,
+            ApiKeys.apisForListener(ApiMessageType.ListenerType.ZK_BROKER),
             RecordVersion.current(),
             activeControllerApiVersions
         );

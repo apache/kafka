@@ -38,6 +38,7 @@ class ApiVersionManagerTest {
   def testApiScope(apiScope: ListenerType): Unit = {
     val versionManager = new DefaultApiVersionManager(
       listenerType = apiScope,
+      enabledApis = ApiKeys.apisForListener(apiScope).asScala,
       forwardingManager = None,
       features = brokerFeatures,
       metadataCache = metadataCache
@@ -61,6 +62,7 @@ class ApiVersionManagerTest {
 
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
+      enabledApis = ApiKeys.apisForListener(ListenerType.ZK_BROKER).asScala,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
       metadataCache = metadataCache
@@ -81,6 +83,7 @@ class ApiVersionManagerTest {
     for (forwardingManagerOpt <- Seq(Some(forwardingManager), None)) {
       val versionManager = new DefaultApiVersionManager(
         listenerType = ListenerType.BROKER,
+        enabledApis = ApiKeys.apisForListener(ListenerType.BROKER).asScala,
         forwardingManager = forwardingManagerOpt,
         features = brokerFeatures,
         metadataCache = metadataCache
@@ -102,6 +105,7 @@ class ApiVersionManagerTest {
 
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
+      enabledApis = ApiKeys.apisForListener(ListenerType.ZK_BROKER).asScala,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
       metadataCache = metadataCache
@@ -120,6 +124,7 @@ class ApiVersionManagerTest {
   def testEnvelopeDisabledWhenForwardingManagerEmpty(): Unit = {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
+      enabledApis = ApiKeys.apisForListener(ListenerType.ZK_BROKER).asScala,
       forwardingManager = None,
       features = brokerFeatures,
       metadataCache = metadataCache
