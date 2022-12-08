@@ -60,8 +60,8 @@ class KafkaServerKRaftRegistrationTest {
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, voters)
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
-      //zkCluster.rollingBrokerRestart()
-      //zkCluster.waitForReadyBrokers()
+      zkCluster.rollingBrokerRestart()
+      zkCluster.waitForReadyBrokers()
 
       try {
         readyFuture.get(30, TimeUnit.SECONDS)
