@@ -19,10 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
-import org.apache.kafka.common.errors.InconsistentClusterIdException;
-import org.apache.kafka.common.errors.StaleBrokerEpochException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.*;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
@@ -339,6 +336,10 @@ public class ClusterControlManager {
                     heartbeatManager.remove(brokerId);
                 }
             }
+        }
+
+        if (request.isMigratingZkBroker() && !featureControl.metadataVersion().isMigrationSupported()) {
+            throw new BrokerIdNotRegisteredException("Controller does not support registering ZK brokers.");
         }
 
         RegisterBrokerRecord record = new RegisterBrokerRecord().
@@ -675,10 +676,12 @@ public class ClusterControlManager {
                 setEndPoints(endpoints).
                 setFeatures(features).
                 setRack(registration.rack().orElse(null)).
-                setFenced(registration.fenced()).
-                setIsMigratingZkBroker(registration.isMigratingZkBroker());
+                setFenced(registration.fenced());
             if (metadataVersion.isInControlledShutdownStateSupported()) {
                 record.setInControlledShutdown(registration.inControlledShutdown());
+            }
+            if (metadataVersion.isMigrationSupported()) {
+                record.setIsMigratingZkBroker(registration.isMigratingZkBroker());
             }
             return singletonList(new ApiMessageAndVersion(record,
                 metadataVersion.registerBrokerRecordVersion()));

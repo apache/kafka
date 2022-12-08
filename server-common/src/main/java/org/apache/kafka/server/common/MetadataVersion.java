@@ -265,8 +265,12 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_3_IV3);
     }
 
+    public boolean isMigrationSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_3_4_IV0);
+    }
+
     public short registerBrokerRecordVersion() {
-        if (this.isAtLeast(IBP_3_4_IV0)) {
+        if (isMigrationSupported()) {
             // new isMigrationZkBroker field
             return (short) 2;
         } else if (isInControlledShutdownStateSupported()) {

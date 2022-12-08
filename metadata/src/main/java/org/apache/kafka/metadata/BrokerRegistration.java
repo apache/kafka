@@ -26,6 +26,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeature;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -197,7 +198,6 @@ public class BrokerRegistration {
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {
         RegisterBrokerRecord registrationRecord = new RegisterBrokerRecord().
             setBrokerId(id).
-            setIsMigratingZkBroker(isMigratingZkBroker).
             setRack(rack.orElse(null)).
             setBrokerEpoch(epoch).
             setIncarnationId(incarnationId).
@@ -208,6 +208,14 @@ public class BrokerRegistration {
                 registrationRecord.setInControlledShutdown(true);
             } else {
                 options.handleLoss("the inControlledShutdown state of one or more brokers");
+            }
+        }
+
+        if (isMigratingZkBroker) {
+            if (options.metadataVersion().isMigrationSupported()) {
+                registrationRecord.setIsMigratingZkBroker(isMigratingZkBroker);
+            } else {
+                options.handleLoss("the isMigratingZkBroker state of one or more brokers");
             }
         }
 
