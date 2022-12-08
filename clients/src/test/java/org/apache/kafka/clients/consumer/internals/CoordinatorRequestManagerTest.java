@@ -45,7 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -104,10 +103,11 @@ public class CoordinatorRequestManagerTest {
         verify(errorEventHandler, never()).handle(any());
         assertNotNull(coordinatorManager.coordinator());
 
-        FindCoordinatorResponse errResp = FindCoordinatorResponse.prepareResponse(Errors.COORDINATOR_NOT_AVAILABLE,
+        FindCoordinatorResponse retriableErrorResp =
+                FindCoordinatorResponse.prepareResponse(Errors.COORDINATOR_NOT_AVAILABLE,
                 groupId, node);
-        coordinatorManager.onResponse(errResp, time.milliseconds(), null);
-        verify(errorEventHandler, times(1)).handle(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+        coordinatorManager.onResponse(retriableErrorResp, time.milliseconds(), null);
+        verify(errorEventHandler, never()).handle(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         assertNull(coordinatorManager.coordinator());
 
         coordinatorManager.onResponse(

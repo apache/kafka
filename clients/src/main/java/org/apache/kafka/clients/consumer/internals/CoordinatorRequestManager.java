@@ -169,7 +169,7 @@ public class CoordinatorRequestManager implements RequestManager {
             return;
         }
 
-        if (!(exception instanceof RetriableException)) {
+        if (exception instanceof RetriableException) {
             log.debug("FindCoordinator request failed due to retriable exception", exception);
             return;
         }
