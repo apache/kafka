@@ -26,7 +26,7 @@ import java.util.Objects;
  * Information about the source of a metadata image.
  */
 public final class MetadataProvenance {
-    public static final MetadataProvenance EMPTY = new MetadataProvenance(-1L, 0, 0L);
+    public static final MetadataProvenance EMPTY = new MetadataProvenance(-1L, -1, -1L);
 
     private final long offset;
     private final int epoch;
@@ -58,6 +58,9 @@ public final class MetadataProvenance {
         return lastContainedLogTimeMs;
     }
 
+    /**
+     * Returns the name that a snapshot with this provenance would have.
+     */
     public String snapshotName() {
         return String.format("snapshot %020d-%010d", offset, epoch);
     }

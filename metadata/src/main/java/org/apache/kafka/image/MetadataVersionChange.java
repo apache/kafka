@@ -33,8 +33,8 @@ public final class MetadataVersionChange {
             MetadataVersion oldVersion,
             MetadataVersion newVersion
     ) {
-        this.oldVersion = oldVersion;
-        this.newVersion = newVersion;
+        this.oldVersion = Objects.requireNonNull(oldVersion);
+        this.newVersion = Objects.requireNonNull(newVersion);
     }
 
     public MetadataVersion oldVersion() {
@@ -43,6 +43,14 @@ public final class MetadataVersionChange {
 
     public MetadataVersion newVersion() {
         return newVersion;
+    }
+
+    public boolean isUpgrade() {
+        return oldVersion.isLessThan(newVersion);
+    }
+
+    public boolean isDowngrade() {
+        return newVersion.isLessThan(oldVersion);
     }
 
     @Override
