@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.HashMap;
 import java.util.Map.Entry;
 
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ForwardingAdmin;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -302,7 +304,8 @@ public class MirrorSourceConnector extends SourceConnector {
         Map<String, Config> sourceConfigs = describeTopicConfigs(topicsBeingReplicated());
         Map<String, Config> targetConfigs = sourceConfigs.entrySet().stream()
             .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue())));
-        updateTopicConfigs(targetConfigs);
+        updateTopicConfigsUsingIncrementalAlterConfigs(targetConfigs);
+        // updateTopicConfigs(targetConfigs);
     }
 
     private void createOffsetSyncsTopic() {
@@ -426,6 +429,25 @@ public class MirrorSourceConnector extends SourceConnector {
             }
         }));
     }
+
+    private void updateTopicConfigsUsingIncrementalAlterConfigs(Map<String, Config> topicConfigs) {
+        Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>();
+        for (Map.Entry<String, Config> topicConfig : topicConfigs.entrySet()) {
+            Collection<AlterConfigOp> ops = new ArrayList<>();
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, topicConfig.getKey());
+            for (ConfigEntry config : topicConfig.getValue().entries()) {
+                ops.add(new AlterConfigOp(config, AlterConfigOp.OpType.SET));
+            }
+            configOps.put(configResource, ops);
+        }
+        log.trace("Syncing configs for {} topics.", configOps.size());
+        targetAdminClient.incrementalAlterConfigs(configOps).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+            if (e != null) {
+                log.warn("Could not alter configuration of topic {}.", k.name(), e);
+            }
+        }));
+    }
+
 
     private void updateTopicAcls(List<AclBinding> bindings) {
         log.trace("Syncing {} topic ACL bindings.", bindings.size());

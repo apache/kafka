@@ -152,7 +152,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
 
     @Test
     @SuppressWarnings("deprecation")
-    public void testSyncTopicConfiguration() throws Exception {
+    public void testSyncTopicConfigs() throws Exception {
         mm2Props.put("sync.topic.configs.interval.seconds", "1");
         mm2Config = new MirrorMakerConfig(mm2Props);
 
@@ -170,7 +170,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         primary.kafka().createTopic(topic, NUM_PARTITIONS, 1, topicConfig);
         waitForTopicCreated(backup, backupTopic);
 
-        // regression test for the remote topic config that should not be overwritten by the replication
+        // regression test for the remote topic config that should not be overwritten by the syncTopicConfigs()
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, backupTopic);
         Collection<AlterConfigOp> ops = new ArrayList<>();
         ops.add(new AlterConfigOp(new ConfigEntry("delete.retention.ms", "2000"), AlterConfigOp.OpType.SET));
