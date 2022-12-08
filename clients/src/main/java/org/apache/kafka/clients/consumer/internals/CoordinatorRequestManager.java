@@ -120,9 +120,9 @@ public class CoordinatorRequestManager implements RequestManager {
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 .setKey(this.groupId);
         return NetworkClientDelegate.UnsentRequest.makeUnsentRequest(
-                this.time.timer(requestTimeoutMs),
                 new FindCoordinatorRequest.Builder(data),
-                new FindCoordinatorRequestHandler());
+                new FindCoordinatorRequestHandler(),
+                null);
     }
 
     /**

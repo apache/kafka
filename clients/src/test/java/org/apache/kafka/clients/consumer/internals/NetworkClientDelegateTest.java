@@ -34,6 +34,7 @@ import java.util.Properties;
 import java.util.Queue;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -55,7 +56,7 @@ public class NetworkClientDelegateTest {
     private SubscriptionState subscription;
     private ConsumerMetadata metadata;
     private Node node;
-    private long requestTimeoutMs = 500;
+    private int requestTimeoutMs = 500;
 
     @BeforeEach
     public void setup() {
@@ -64,6 +65,7 @@ public class NetworkClientDelegateTest {
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, 100);
+        properties.put(REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs);
         this.logContext = new LogContext();
         this.client = mock(NetworkClient.class);
         this.node = mockNode();
@@ -136,13 +138,14 @@ public class NetworkClientDelegateTest {
 
     public NetworkClientDelegate.UnsentRequest mockUnsentFindCoordinatorRequest(NetworkClientDelegate.AbstractRequestFutureCompletionHandler callback) {
         Objects.requireNonNull(groupId);
-        return new NetworkClientDelegate.UnsentRequest(
+        NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
                                 .setKey(this.groupId)
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())),
-                callback,
-                time.timer(requestTimeoutMs));
+                callback);
+        req.setTimer(this.time, this.requestTimeoutMs);
+        return req;
     }
 
     private Node mockNode() {

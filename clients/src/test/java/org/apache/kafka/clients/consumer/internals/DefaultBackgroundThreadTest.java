@@ -26,7 +26,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -108,10 +108,10 @@ public class DefaultBackgroundThreadTest {
     @Test
     void testPollResultTimer() {
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
-        // purposedly setting a non MAX time to ensure it is returning Long.MAX_VALUE upon success
+        // purposely setting a non MAX time to ensure it is returning Long.MAX_VALUE upon success
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
                 10,
-                Collections.singletonList(findCoordinatorUnsentRequest(this.time.timer(requestTimeoutMs))));
+                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
         assertEquals(10, backgroundThread.handlePollResult(success));
 
         NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
@@ -120,14 +120,16 @@ public class DefaultBackgroundThreadTest {
         assertEquals(10, backgroundThread.handlePollResult(failure));
     }
 
-    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(Timer timer) {
-        return new NetworkClientDelegate.UnsentRequest(
+    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(final Time time,
+                                                                                   final long timeout) {
+        NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
                                 .setKey("foobar")),
-                null,
-                timer);
+                null);
+        req.setTimer(time, timeout);
+        return req;
     }
 
     private DefaultBackgroundThread mockBackgroundThread() {
@@ -151,6 +153,6 @@ public class DefaultBackgroundThreadTest {
     private NetworkClientDelegate.PollResult mockPollResult() {
         return new NetworkClientDelegate.PollResult(
                 0,
-                Collections.singletonList(findCoordinatorUnsentRequest(this.time.timer(requestTimeoutMs))));
+                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
     }
 }

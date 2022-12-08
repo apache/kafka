@@ -173,8 +173,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public void add(UnsentRequest r) {
-        if (r.timer == null)
-            r.timer = time.timer(requestTimeoutMs);
+        r.setTimer(this.time, this.requestTimeoutMs);
         unsentRequests.add(r);
     }
 
@@ -209,36 +208,34 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public static class UnsentRequest {
-        private final Optional<AbstractRequestFutureCompletionHandler> callback;
         private final AbstractRequest.Builder abstractBuilder;
+        private final Optional<AbstractRequestFutureCompletionHandler> callback;
         private Optional<Node> node; // empty if random node can be choosen
         private Timer timer;
 
         public UnsentRequest(final AbstractRequest.Builder abstractBuilder,
-                             final AbstractRequestFutureCompletionHandler callback,
-                             final Timer timer) {
-            this(abstractBuilder, callback, timer, null);
+                             final AbstractRequestFutureCompletionHandler callback) {
+            this(abstractBuilder, callback, null);
         }
 
         public UnsentRequest(final AbstractRequest.Builder abstractBuilder,
                              final AbstractRequestFutureCompletionHandler callback,
-                             final Timer timer,
                              final Node node) {
             Objects.requireNonNull(abstractBuilder);
             this.abstractBuilder = abstractBuilder;
             this.node = Optional.ofNullable(node);
             this.callback = Optional.ofNullable(callback);
-            this.timer = timer;
+        }
+
+        public void setTimer(final Time time, final long requestTimeoutMs) {
+            this.timer = time.timer(requestTimeoutMs);
         }
 
         public static UnsentRequest makeUnsentRequest(
-                final Timer timeoutTimer,
                 final AbstractRequest.Builder<?> requestBuilder,
-                final AbstractRequestFutureCompletionHandler callback) {
-            return new UnsentRequest(
-                    requestBuilder,
-                    callback,
-                    timeoutTimer);
+                final AbstractRequestFutureCompletionHandler callback,
+                final Node node) {
+            return new UnsentRequest(requestBuilder, callback, node);
         }
 
         @Override
