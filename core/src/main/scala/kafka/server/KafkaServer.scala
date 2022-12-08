@@ -768,28 +768,19 @@ class KafkaServer(
       // We request the controller to do a controlled shutdown. On failure, we backoff for a configured period
       // of time and try again for a configured number of retries. If all the attempt fails, we simply force
       // the shutdown.
+      info("Starting controlled shutdown")
+
       _brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
 
-      val shutdownSucceeded = if (config.migrationEnabled &&
-                                  lifecycleManager != null &&
-                                  lifecycleManager.state == BrokerState.RUNNING) {
+      if (config.migrationEnabled && lifecycleManager != null) {
+        // TODO KAFKA-14447 Only use KRaft controlled shutdown (when in migration mode)
+        // For now we'll send the heartbeat with WantShutDown set so the KRaft controller can see a broker
+        // shutting down without waiting for the heartbeat to time out.
+        info("Notifying KRaft of controlled shutdown")
         lifecycleManager.beginControlledShutdown()
-        try {
-          info("Starting controlled shutdown via BrokerLifecycleManager")
-          lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)
-          true
-        } catch {
-          case _: TimeoutException =>
-            error("Timed out waiting for the controller to approve controlled shutdown")
-            false
-          case e: Throwable =>
-            error("Got unexpected exception waiting for controlled shutdown future", e)
-            false
-        }
-      } else {
-        info("Starting controlled shutdown")
-        doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
       }
+
+      val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
 
       if (!shutdownSucceeded)
         warn("Proceeding to do an unclean shutdown as all the controlled shutdown attempts failed")

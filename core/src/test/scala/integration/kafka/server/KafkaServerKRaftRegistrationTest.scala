@@ -25,13 +25,19 @@ import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.MetadataVersion
+import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.{Tag, Timeout}
 
+import java.util.concurrent.{TimeUnit, TimeoutException}
+import scala.jdk.CollectionConverters._
 
+@Timeout(120)
+@Tag("integration")
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class KafkaServerKRaftRegistrationTest {
 
-  @ClusterTest(clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_4_IV0, autoStart = AutoStart.NO)
+  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0, autoStart = AutoStart.NO)
   def testRegisterZkBrokerInKraft(zkCluster: ClusterInstance): Unit = {
     zkCluster.start()
     val clusterId = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient.getClusterId.get
@@ -45,16 +51,24 @@ class KafkaServerKRaftRegistrationTest {
     try {
       kraftCluster.format()
       kraftCluster.startup()
+      val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
+
+      // Enable migration configs and restart brokers
       val props = kraftCluster.controllerClientProperties()
       val voters = props.get(RaftConfig.QUORUM_VOTERS_CONFIG)
-
-      // Enable migration configs
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, voters)
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
-      zkCluster.rollingBrokerRestart()
-      Thread.sleep(10000)
+      //zkCluster.rollingBrokerRestart()
+      //zkCluster.waitForReadyBrokers()
+
+      try {
+        readyFuture.get(30, TimeUnit.SECONDS)
+      } catch {
+        case _: TimeoutException => fail("Did not see 3 brokers within 30 seconds")
+        case t: Throwable => fail("Had some other error waiting for brokers", t)
+      }
     } finally {
       zkCluster.stop()
       kraftCluster.close()

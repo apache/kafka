@@ -254,8 +254,8 @@ subprojects {
     fineTuneEclipseClasspathFile(eclipse, project)
   }
 
-  //sourceCompatibility = minJavaVersion
-  //targetCompatibility = minJavaVersion
+  sourceCompatibility = minJavaVersion
+  targetCompatibility = minJavaVersion
 
   java {
     consistentResolution {
