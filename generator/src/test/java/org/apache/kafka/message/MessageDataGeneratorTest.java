@@ -272,7 +272,7 @@ public class MessageDataGeneratorTest {
             "      \"default\": \"not-null\", \"fields\": [",
             "        { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\" }",
             "      ]",
-                "}",
+            "    }",
             "  ]",
             "}")), MessageSpec.class);
 
@@ -296,7 +296,7 @@ public class MessageDataGeneratorTest {
             "      \"default\": \"null\", \"fields\": [",
             "        { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\" }",
             "      ]",
-            "}",
+            "    }",
             "  ]",
             "}")), MessageSpec.class);
 
