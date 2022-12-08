@@ -192,7 +192,7 @@ class BrokerMetadataPublisher(
         }
         try {
           // Notify the group coordinator about deleted topics.
-          val deletedTopicPartitions = new mutable.ArrayBuffer[TopicPartition]()
+          val deletedTopicPartitions = new mutable.ListBuffer[TopicPartition]()
           topicsDelta.deletedTopicIds().forEach { id =>
             val topicImage = topicsDelta.image().getTopic(id)
             topicImage.partitions().keySet().forEach {

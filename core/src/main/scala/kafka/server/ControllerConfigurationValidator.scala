@@ -47,7 +47,7 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
   private def validateTopicName(
     name: String
   ): Unit = {
-    if (name.isEmpty()) {
+    if (name.isEmpty) {
       throw new InvalidRequestException("Default topic resources are not allowed.")
     }
     Topic.validate(name)
@@ -56,7 +56,7 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
   private def validateBrokerName(
     name: String
   ): Unit = {
-    if (!name.isEmpty()) {
+    if (name.nonEmpty) {
       val brokerId = try {
         Integer.valueOf(name)
       } catch {
@@ -95,12 +95,12 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
       case TOPIC =>
         validateTopicName(resource.name())
         val properties = new Properties()
-        val nullTopicConfigs = new mutable.ArrayBuffer[String]()
+        val nullTopicConfigs = new mutable.ListBuffer[String]()
         config.entrySet().forEach(e => {
-          if (e.getValue() == null) {
-            nullTopicConfigs += e.getKey()
+          if (e.getValue == null) {
+            nullTopicConfigs += e.getKey
           } else {
-            properties.setProperty(e.getKey(), e.getValue())
+            properties.setProperty(e.getKey, e.getValue)
           }
         })
         if (nullTopicConfigs.nonEmpty) {

@@ -361,7 +361,7 @@ class ZkMetadataCache(brokerId: Int, metadataVersion: MetadataVersion, brokerFea
         // is a bit faster than scala.collection.mutable.HashMap. When we drop support for Scala 2.10, we could
         // move to `AnyRefMap`, which has comparable performance.
         val nodes = new java.util.HashMap[ListenerName, Node]
-        val endPoints = new mutable.ArrayBuffer[EndPoint]
+        val endPoints = new mutable.ListBuffer[EndPoint]
         broker.endpoints.forEach { ep =>
           val listenerName = new ListenerName(ep.listener)
           endPoints += new EndPoint(ep.host, ep.port, listenerName, SecurityProtocol.forId(ep.securityProtocol))
@@ -384,7 +384,7 @@ class ZkMetadataCache(brokerId: Int, metadataVersion: MetadataVersion, brokerFea
       newZeroIds.foreach { case (zeroIdTopic, _) => topicIds.remove(zeroIdTopic) }
       topicIds ++= newTopicIds.toMap
 
-      val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
+      val deletedPartitions = new mutable.ListBuffer[TopicPartition]
       if (!updateMetadataRequest.partitionStates.iterator.hasNext) {
         metadataSnapshot = MetadataSnapshot(metadataSnapshot.partitionStates, topicIds.toMap, controllerIdOpt, aliveBrokers, aliveNodes)
       } else {

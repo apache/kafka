@@ -156,7 +156,7 @@ object BrokerMetadataCheckpoint extends Logging {
     require(logDirs.nonEmpty, "Must have at least one log dir to read meta.properties")
 
     val brokerMetadataMap = mutable.HashMap[String, Properties]()
-    val offlineDirs = mutable.ArrayBuffer.empty[String]
+    val offlineDirs = mutable.ListBuffer.empty[String]
 
     for (logDir <- logDirs) {
       val brokerCheckpointFile = new File(logDir, "meta.properties")
