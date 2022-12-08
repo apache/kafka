@@ -246,7 +246,7 @@ public class NetworkClientDelegate implements AutoCloseable {
 
     public static class DefaultRequestFutureCompletionHandler extends AbstractRequestFutureCompletionHandler {
         @Override
-        public void handleResponse(ClientResponse r, Throwable t) {}
+        public void handleResponse(ClientResponse r, Exception t) {}
     }
 
     public abstract static class AbstractRequestFutureCompletionHandler implements RequestCompletionHandler {
@@ -256,7 +256,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             this.future = new RequestFuture<>();
         }
 
-        abstract public void handleResponse(ClientResponse r, Throwable t);
+        abstract public void handleResponse(ClientResponse r, Exception e);
 
         public void onFailure(RuntimeException e) {
             future.raise(e);

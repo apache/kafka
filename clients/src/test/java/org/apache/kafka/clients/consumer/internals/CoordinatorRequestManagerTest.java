@@ -37,7 +37,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -60,7 +59,7 @@ public class CoordinatorRequestManagerTest {
     private String groupId;
     private int rebalanceTimeoutMs;
     private int requestTimeoutMs;
-    private CoordinatorRequestManager.CoordinatorRequestState coordinatorRequestState;
+    private RequestState coordinatorRequestState;
 
     @BeforeEach
     public void setup() {
@@ -77,7 +76,7 @@ public class CoordinatorRequestManagerTest {
         this.groupId = "group-1";
         this.rebalanceTimeoutMs = 60 * 1000;
         this.requestTimeoutMs = 500;
-        this.coordinatorRequestState = mock(CoordinatorRequestManager.CoordinatorRequestState.class);
+        this.coordinatorRequestState = mock(RequestState.class);
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, 100);
@@ -99,51 +98,26 @@ public class CoordinatorRequestManagerTest {
     public void testOnResponse() {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
         FindCoordinatorResponse resp = FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node);
-        coordinatorManager.onResponse(resp, time.milliseconds(), null);
+        coordinatorManager.onResponse(time.milliseconds(), resp, null);
         verify(errorEventHandler, never()).handle(any());
         assertNotNull(coordinatorManager.coordinator());
 
         FindCoordinatorResponse retriableErrorResp =
                 FindCoordinatorResponse.prepareResponse(Errors.COORDINATOR_NOT_AVAILABLE,
                 groupId, node);
-        coordinatorManager.onResponse(retriableErrorResp, time.milliseconds(), null);
+        coordinatorManager.onResponse(time.milliseconds(), retriableErrorResp, null);
         verify(errorEventHandler, never()).handle(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         assertNull(coordinatorManager.coordinator());
 
         coordinatorManager.onResponse(
-                null,
-                time.milliseconds(),
+                time.milliseconds(), null,
                 new RuntimeException("some error"));
         assertNull(coordinatorManager.coordinator());
     }
 
     @Test
-    public void testCoordinatorRequestState() {
-        CoordinatorRequestManager.CoordinatorRequestState state = new CoordinatorRequestManager.CoordinatorRequestState(
-                100,
-                2,
-                1000,
-                0);
-
-        // ensure not permitting consecutive requests
-        assertTrue(state.canSendRequest(0));
-        state.updateLastSend(0);
-        assertFalse(state.canSendRequest(0));
-        state.updateLastFailedAttempt(35);
-        assertTrue(state.canSendRequest(135));
-        state.updateLastFailedAttempt(140);
-        assertFalse(state.canSendRequest(200));
-        // exponential backoff
-        assertTrue(state.canSendRequest(340));
-
-        // test reset
-        state.reset();
-        assertTrue(state.canSendRequest(200));
-    }
-
-    @Test
     public void testFindCoordinatorBackoff() {
-        this.coordinatorRequestState = new CoordinatorRequestManager.CoordinatorRequestState(
+        this.coordinatorRequestState = new RequestState(
                 100,
                 2,
                 1000,
@@ -153,8 +127,8 @@ public class CoordinatorRequestManagerTest {
         NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         coordinatorManager.onResponse(
-                FindCoordinatorResponse.prepareResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, "key",
-                this.node), time.milliseconds(), null);
+                time.milliseconds(), FindCoordinatorResponse.prepareResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, "key",
+                this.node), null);
         // Need to wait for 100ms until the next send
         res = coordinatorManager.poll(time.milliseconds());
         assertTrue(res.unsentRequests.isEmpty());
@@ -166,15 +140,15 @@ public class CoordinatorRequestManagerTest {
         res = coordinatorManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         coordinatorManager.onResponse(
-                FindCoordinatorResponse.prepareResponse(Errors.NONE, "key",
-                        this.node), time.milliseconds(), null);
+                time.milliseconds(), FindCoordinatorResponse.prepareResponse(Errors.NONE, "key",
+                        this.node), null);
     }
 
     @Test
     public void testPollWithExistingCoordinator() {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
         FindCoordinatorResponse resp = FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node);
-        coordinatorManager.onResponse(resp, time.milliseconds(), null);
+        coordinatorManager.onResponse(time.milliseconds(), resp, null);
         verify(errorEventHandler, never()).handle(any());
         assertNotNull(coordinatorManager.coordinator());
 
@@ -201,7 +175,7 @@ public class CoordinatorRequestManagerTest {
 
     private static class MockRequestFutureCompletionHandlerBase extends NetworkClientDelegate.AbstractRequestFutureCompletionHandler {
         @Override
-        public void handleResponse(ClientResponse r, Throwable t) {
+        public void handleResponse(ClientResponse r, Exception t) {
             throw new RuntimeException("MockRequestFutureCompletionHandlerBase should throw an exception");
         }
     }
