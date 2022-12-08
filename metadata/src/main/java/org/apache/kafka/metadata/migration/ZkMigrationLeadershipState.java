@@ -53,16 +53,22 @@ public class ZkMigrationLeadershipState {
         this.controllerZkVersion = controllerZkVersion;
     }
 
-    public ZkMigrationLeadershipState withZkVersion(int zkVersion) {
+    public ZkMigrationLeadershipState withMigrationZkVersion(int zkVersion) {
         return new ZkMigrationLeadershipState(
-                this.kraftControllerId, this.kraftControllerEpoch, this.kraftMetadataOffset,
-                this.kraftMetadataEpoch, this.lastUpdatedTimeMs, zkVersion, this.controllerZkVersion);
+            this.kraftControllerId, this.kraftControllerEpoch, this.kraftMetadataOffset,
+            this.kraftMetadataEpoch, this.lastUpdatedTimeMs, zkVersion, this.controllerZkVersion);
+    }
+
+    public ZkMigrationLeadershipState withControllerZkVersion(int zkVersion) {
+        return new ZkMigrationLeadershipState(
+            this.kraftControllerId, this.kraftControllerEpoch, this.kraftMetadataOffset,
+            this.kraftMetadataEpoch, this.lastUpdatedTimeMs, this.migrationZkVersion, zkVersion);
     }
 
     public ZkMigrationLeadershipState withNewKRaftController(int controllerId, int controllerEpoch) {
         return new ZkMigrationLeadershipState(
-                controllerId, controllerEpoch, this.kraftMetadataOffset,
-                this.kraftMetadataEpoch, this.lastUpdatedTimeMs, this.migrationZkVersion, this.controllerZkVersion);
+            controllerId, controllerEpoch, this.kraftMetadataOffset,
+            this.kraftMetadataEpoch, this.lastUpdatedTimeMs, this.migrationZkVersion, this.controllerZkVersion);
     }
 
     public int kraftControllerId() {
@@ -100,14 +106,14 @@ public class ZkMigrationLeadershipState {
     @Override
     public String toString() {
         return "ZkMigrationLeadershipState{" +
-                "kraftControllerId=" + kraftControllerId +
-                ", kraftControllerEpoch=" + kraftControllerEpoch +
-                ", kraftMetadataOffset=" + kraftMetadataOffset +
-                ", kraftMetadataEpoch=" + kraftMetadataEpoch +
-                ", lastUpdatedTimeMs=" + lastUpdatedTimeMs +
-                ", migrationZkVersion=" + migrationZkVersion +
-                ", controllerZkVersion=" + controllerZkVersion +
-                '}';
+            "kraftControllerId=" + kraftControllerId +
+            ", kraftControllerEpoch=" + kraftControllerEpoch +
+            ", kraftMetadataOffset=" + kraftMetadataOffset +
+            ", kraftMetadataEpoch=" + kraftMetadataEpoch +
+            ", lastUpdatedTimeMs=" + lastUpdatedTimeMs +
+            ", migrationZkVersion=" + migrationZkVersion +
+            ", controllerZkVersion=" + controllerZkVersion +
+            '}';
     }
 
     @Override
@@ -115,11 +121,24 @@ public class ZkMigrationLeadershipState {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ZkMigrationLeadershipState that = (ZkMigrationLeadershipState) o;
-        return kraftControllerId == that.kraftControllerId && kraftControllerEpoch == that.kraftControllerEpoch && kraftMetadataOffset == that.kraftMetadataOffset && kraftMetadataEpoch == that.kraftMetadataEpoch && lastUpdatedTimeMs == that.lastUpdatedTimeMs && migrationZkVersion == that.migrationZkVersion && controllerZkVersion == that.controllerZkVersion;
+        return kraftControllerId == that.kraftControllerId
+            && kraftControllerEpoch == that.kraftControllerEpoch
+            && kraftMetadataOffset == that.kraftMetadataOffset
+            && kraftMetadataEpoch == that.kraftMetadataEpoch
+            && lastUpdatedTimeMs == that.lastUpdatedTimeMs
+            && migrationZkVersion == that.migrationZkVersion
+            && controllerZkVersion == that.controllerZkVersion;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(kraftControllerId, kraftControllerEpoch, kraftMetadataOffset, kraftMetadataEpoch, lastUpdatedTimeMs, migrationZkVersion, controllerZkVersion);
+        return Objects.hash(
+            kraftControllerId,
+            kraftControllerEpoch,
+            kraftMetadataOffset,
+            kraftMetadataEpoch,
+            lastUpdatedTimeMs,
+            migrationZkVersion,
+            controllerZkVersion);
     }
 }
