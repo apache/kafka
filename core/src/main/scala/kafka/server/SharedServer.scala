@@ -19,10 +19,11 @@ package kafka.server
 
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
+import kafka.server.Server.MetricsPrefix
 import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.controller.QuorumControllerMetrics
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.RaftConfig.AddressSpec
@@ -77,7 +78,7 @@ class StandardFaultHandlerFactory extends FaultHandlerFactory {
  * make debugging easier and reduce the chance of resource leaks.
  */
 class SharedServer(
-  val config: KafkaConfig,
+  private val sharedServerConfig: KafkaConfig,
   val metaProps: MetaProperties,
   val time: Time,
   private val _metrics: Metrics,
@@ -85,11 +86,13 @@ class SharedServer(
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
   val faultHandlerFactory: FaultHandlerFactory
 ) extends Logging {
-  private val logContext: LogContext = new LogContext(s"[SharedServer id=${config.nodeId}] ")
+  private val logContext: LogContext = new LogContext(s"[SharedServer id=${sharedServerConfig.nodeId}] ")
   this.logIdent = logContext.logPrefix
   private var started = false
   private var usedByBroker: Boolean = false
   private var usedByController: Boolean = false
+  val brokerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
+  val controllerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
   @volatile var metrics: Metrics = _metrics
   @volatile var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
   @volatile var brokerMetrics: BrokerServerMetrics = _
@@ -143,7 +146,7 @@ class SharedServer(
    * The fault handler to use when metadata loading fails.
    */
   def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build("metadata loading",
-    fatal = config.processRoles.contains(ControllerRole),
+    fatal = sharedServerConfig.processRoles.contains(ControllerRole),
     action = () => SharedServer.this.synchronized {
       if (brokerMetrics != null) brokerMetrics.metadataLoadErrorCount.getAndIncrement()
       if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
@@ -188,17 +191,17 @@ class SharedServer(
           // This is only done in tests.
           metrics = new Metrics()
         }
-        config.dynamicConfig.initialize(zkClientOpt = None)
+        sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None)
 
-        if (config.processRoles.contains(BrokerRole)) {
+        if (sharedServerConfig.processRoles.contains(BrokerRole)) {
           brokerMetrics = BrokerServerMetrics(metrics)
         }
-        if (config.processRoles.contains(ControllerRole)) {
+        if (sharedServerConfig.processRoles.contains(ControllerRole)) {
           controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)
         }
         raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           metaProps,
-          config,
+          sharedServerConfig,
           new MetadataRecordSerde,
           KafkaRaftServer.MetadataPartition,
           KafkaRaftServer.MetadataTopicId,
@@ -248,8 +251,7 @@ class SharedServer(
         CoreUtils.swallow(metrics.close(), this)
         metrics = null
       }
-      // Clear all reconfigurable instances stored in DynamicBrokerConfig
-      CoreUtils.swallow(config.dynamicConfig.clear(), this)
+      CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, sharedServerConfig.nodeId.toString, metrics), this)
       started = false
     }
   }

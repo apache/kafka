@@ -47,7 +47,6 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupR
 import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsPartitionResult, DeleteRecordsTopicResult}
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.ElectLeadersResponseData.{PartitionResult, ReplicaElectionResult}
-import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -195,10 +194,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
         case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request, requestLocal).exceptionally(handleError)
         case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request).exceptionally(handleError)
-        case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
+        case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request).exceptionally(handleError)
         case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request, requestLocal).exceptionally(handleError)
         case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
-        case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
+        case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request).exceptionally(handleError)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.CREATE_TOPICS => maybeForwardToController(request, handleCreateTopicsRequest)
@@ -1621,36 +1620,29 @@ class KafkaApis(val requestChannel: RequestChannel,
     sendResponseCallback(describeGroupsResponseData)
   }
 
-  def handleListGroupsRequest(request: RequestChannel.Request): Unit = {
+  def handleListGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val listGroupsRequest = request.body[ListGroupsRequest]
-    val states = if (listGroupsRequest.data.statesFilter == null)
-      // Handle a null array the same as empty
-      immutable.Set[String]()
-    else
-      listGroupsRequest.data.statesFilter.asScala.toSet
+    val hasClusterDescribe = authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
 
-    def createResponse(throttleMs: Int, groups: List[GroupOverview], error: Errors): AbstractResponse = {
-       new ListGroupsResponse(new ListGroupsResponseData()
-            .setErrorCode(error.code)
-            .setGroups(groups.map { group =>
-                val listedGroup = new ListGroupsResponseData.ListedGroup()
-                  .setGroupId(group.groupId)
-                  .setProtocolType(group.protocolType)
-                  .setGroupState(group.state)
-                listedGroup
-            }.asJava)
-            .setThrottleTimeMs(throttleMs)
-        )
-    }
-    val (error, groups) = groupCoordinator.handleListGroups(states)
-    if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME, logIfDenied = false))
-      // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        createResponse(requestThrottleMs, groups, error))
-    else {
-      val filteredGroups = groups.filter(group => authHelper.authorize(request.context, DESCRIBE, GROUP, group.groupId, logIfDenied = false))
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        createResponse(requestThrottleMs, filteredGroups, error))
+    newGroupCoordinator.listGroups(
+      request.context,
+      listGroupsRequest.data
+    ).handle[Unit] { (response, exception) =>
+      if (exception != null) {
+        requestHelper.sendMaybeThrottle(request, listGroupsRequest.getErrorResponse(exception))
+      } else {
+        val listGroupsResponse = if (hasClusterDescribe) {
+          // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
+          new ListGroupsResponse(response)
+        } else {
+          // Otherwise, only groups with described group are returned.
+          val authorizedGroups = response.groups.asScala.filter { group =>
+            authHelper.authorize(request.context, DESCRIBE, GROUP, group.groupId, logIfDenied = false)
+          }
+          new ListGroupsResponse(response.setGroups(authorizedGroups.asJava))
+        }
+        requestHelper.sendMaybeThrottle(request, listGroupsResponse)
+      }
     }
   }
 
@@ -1777,41 +1769,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleLeaveGroupRequest(request: RequestChannel.Request): Unit = {
+  def handleLeaveGroupRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val leaveGroupRequest = request.body[LeaveGroupRequest]
 
-    val members = leaveGroupRequest.members.asScala.toList
-
     if (!authHelper.authorize(request.context, READ, GROUP, leaveGroupRequest.data.groupId)) {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        new LeaveGroupResponse(new LeaveGroupResponseData()
-          .setThrottleTimeMs(requestThrottleMs)
-          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
-        )
-      })
+      requestHelper.sendMaybeThrottle(request, leaveGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else {
-      def sendResponseCallback(leaveGroupResult : LeaveGroupResult): Unit = {
-        val memberResponses = leaveGroupResult.memberResponses.map(
-          leaveGroupResult =>
-            new MemberResponse()
-              .setErrorCode(leaveGroupResult.error.code)
-              .setMemberId(leaveGroupResult.memberId)
-              .setGroupInstanceId(leaveGroupResult.groupInstanceId.orNull)
-        )
-        def createResponse(requestThrottleMs: Int): AbstractResponse = {
-          new LeaveGroupResponse(
-            memberResponses.asJava,
-            leaveGroupResult.topLevelError,
-            requestThrottleMs,
-            leaveGroupRequest.version)
+      newGroupCoordinator.leaveGroup(
+        request.context,
+        leaveGroupRequest.normalizedData()
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, leaveGroupRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new LeaveGroupResponse(response, leaveGroupRequest.version))
         }
-        requestHelper.sendResponseMaybeThrottle(request, createResponse)
       }
-
-      groupCoordinator.handleLeaveGroup(
-        leaveGroupRequest.data.groupId,
-        members,
-        sendResponseCallback)
     }
   }
 

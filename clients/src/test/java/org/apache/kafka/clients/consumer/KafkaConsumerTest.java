@@ -2614,7 +2614,8 @@ public class KafkaConsumerTest {
                 autoCommitEnabled,
                 autoCommitIntervalMs,
                 interceptors,
-                throwOnStableOffsetNotSupported);
+                throwOnStableOffsetNotSupported,
+                null);
         }
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,

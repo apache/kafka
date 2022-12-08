@@ -2769,6 +2769,7 @@ project(':connect:basic-auth-extension') {
     implementation project(':connect:api')
     implementation libs.slf4jApi
     implementation libs.jaxrsApi
+    implementation libs.jaxAnnotationApi
 
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore

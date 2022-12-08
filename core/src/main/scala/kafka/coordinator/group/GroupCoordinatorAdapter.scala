@@ -17,7 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
@@ -137,5 +137,54 @@ class GroupCoordinatorAdapter(
     )
 
     future
+  }
+
+  override def leaveGroup(
+    context: RequestContext,
+    request: LeaveGroupRequestData
+  ): CompletableFuture[LeaveGroupResponseData] = {
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+
+    def callback(leaveGroupResult: LeaveGroupResult): Unit = {
+      future.complete(new LeaveGroupResponseData()
+        .setErrorCode(leaveGroupResult.topLevelError.code)
+        .setMembers(leaveGroupResult.memberResponses.map { member =>
+          new LeaveGroupResponseData.MemberResponse()
+            .setErrorCode(member.error.code)
+            .setMemberId(member.memberId)
+            .setGroupInstanceId(member.groupInstanceId.orNull)
+        }.asJava)
+      )
+    }
+
+    coordinator.handleLeaveGroup(
+      request.groupId,
+      request.members.asScala.toList,
+      callback
+    )
+
+    future
+  }
+
+  override def listGroups(
+    context: RequestContext,
+    request: ListGroupsRequestData
+  ): CompletableFuture[ListGroupsResponseData] = {
+    // Handle a null array the same as empty
+    val (error, groups) = coordinator.handleListGroups(
+      Option(request.statesFilter).map(_.asScala.toSet).getOrElse(Set.empty)
+    )
+
+    val response = new ListGroupsResponseData()
+      .setErrorCode(error.code)
+
+    groups.foreach { group =>
+      response.groups.add(new ListGroupsResponseData.ListedGroup()
+        .setGroupId(group.groupId)
+        .setProtocolType(group.protocolType)
+        .setGroupState(group.state))
+    }
+
+    CompletableFuture.completedFuture(response)
   }
 }

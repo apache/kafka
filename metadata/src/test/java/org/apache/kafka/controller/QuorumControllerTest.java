@@ -174,7 +174,7 @@ public class QuorumControllerTest {
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
-                setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
                 setBrokerId(0).
                 setClusterId(logEnv.clusterId())).get();
             testConfigurationOperations(controlEnv.activeController());
@@ -215,7 +215,7 @@ public class QuorumControllerTest {
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
                     setBrokerId(0).
                     setClusterId(logEnv.clusterId())).get();
             testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
@@ -546,7 +546,7 @@ public class QuorumControllerTest {
                     setBrokerId(0).
                     setClusterId(active.clusterId()).
                     setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
                     setListeners(listeners));
             assertEquals(2L, reply.get().epoch());
             CreateTopicsRequestData createTopicsRequestData =
@@ -782,7 +782,7 @@ public class QuorumControllerTest {
                         setBrokerId(i).
                         setRack(null).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                         setListeners(new ListenerCollection(Arrays.asList(new Listener().
                             setName("PLAINTEXT").setHost("localhost").
@@ -845,7 +845,7 @@ public class QuorumControllerTest {
                         setBrokerId(i).
                         setRack(null).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                         setListeners(new ListenerCollection(Arrays.asList(new Listener().
                             setName("PLAINTEXT").setHost("localhost").
@@ -883,7 +883,7 @@ public class QuorumControllerTest {
                         setBrokerId(i).
                         setRack(null).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                         setListeners(new ListenerCollection(Arrays.asList(new Listener().
                             setName("PLAINTEXT").setHost("localhost").
@@ -1271,7 +1271,7 @@ public class QuorumControllerTest {
                     .setBrokerId(brokerId)
                     .setRack(null)
                     .setClusterId(controller.clusterId())
-                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3))
+                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0))
                     .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
                     .setListeners(
                         new ListenerCollection(
