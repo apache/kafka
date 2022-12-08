@@ -19,7 +19,6 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.{Collections, Properties}
-
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
@@ -43,9 +42,10 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.zookeeper.KeeperException.{Code, NoAuthException, NoNodeException, NodeExistsException}
-import org.apache.zookeeper.ZooDefs
+import org.apache.zookeeper.{CreateMode, ZooDefs}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.common.ZKConfig
 import org.apache.zookeeper.data.Stat
@@ -1371,6 +1371,53 @@ class KafkaZkClientTest extends QuorumTestHarness {
       assertJuteMaxBufferConfig(new ZKClientConfig, expectedValue = "3072000")
 
     } finally System.clearProperty(ZKConfig.JUTE_MAXBUFFER)
+  }
+
+  @Test
+  def testFailToUpdateMigrationZNode(): Unit = {
+    val (_, stat) = zkClient.getControllerEpoch.get
+    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, stat.getVersion)
+    migrationState = zkClient.getOrCreateMigrationState(migrationState)
+    assertEquals(0, migrationState.migrationZkVersion())
+
+    // A batch of migration writes to make. The last one will fail causing the migration znode to not be updated
+    val requests_bad = Seq(
+      CreateRequest("/foo", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
+      CreateRequest("/foo/bar", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
+      CreateRequest("/foo/bar/spam", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
+      CreateRequest("/foo", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
+    )
+
+    migrationState = migrationState.withControllerZkVersion(stat.getVersion)
+    zkClient.retryMigrationRequestsUntilConnected(requests_bad, migrationState) match {
+      case (zkVersion: Int, requests: Seq[AsyncRequest#Response]) =>
+        assertEquals(0, zkVersion)
+        assert(requests.take(3).forall(resp => resp.resultCode.equals(Code.OK)))
+        assertEquals(Code.NODEEXISTS, requests.last.resultCode)
+      case _ => fail()
+    }
+
+    // Check state again
+    val loadedState = zkClient.getOrCreateMigrationState(ZkMigrationLeadershipState.EMPTY)
+    assertEquals(0, loadedState.migrationZkVersion())
+
+    // Resend the same requests, with the last one succeeding this time. This will result in NODEEXISTS, but
+    // should still update the migration state
+    val requests_good = Seq(
+      CreateRequest("/foo", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
+      CreateRequest("/foo/bar", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
+      CreateRequest("/foo/bar/spam", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
+      CreateRequest("/foo/bar/eggs", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
+    )
+
+    migrationState = migrationState.withControllerZkVersion(stat.getVersion)
+    zkClient.retryMigrationRequestsUntilConnected(requests_good, migrationState) match {
+      case (zkVersion: Int, requests: Seq[AsyncRequest#Response]) =>
+        assertEquals(1, zkVersion)
+        assert(requests.take(3).forall(resp => resp.resultCode.equals(Code.NODEEXISTS)))
+        assertEquals(Code.OK, requests.last.resultCode)
+      case _ => fail()
+    }
   }
 
   class ExpiredKafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time)
