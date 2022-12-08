@@ -266,7 +266,10 @@ public enum MetadataVersion {
     }
 
     public short registerBrokerRecordVersion() {
-        if (isInControlledShutdownStateSupported()) {
+        if (this.isAtLeast(IBP_3_4_IV0)) {
+            // new isMigrationZkBroker field
+            return (short) 2;
+        } else if (isInControlledShutdownStateSupported()) {
             return (short) 1;
         } else {
             return (short) 0;

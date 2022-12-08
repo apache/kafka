@@ -20,7 +20,9 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{AutoStart, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
+import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.extension.ExtendWith
@@ -30,26 +32,32 @@ import org.junit.jupiter.api.extension.ExtendWith
 class KafkaServerKRaftRegistrationTest {
 
   @ClusterTest(clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_4_IV0, autoStart = AutoStart.NO)
-  def testRegisterZkBrokerInKraft(clusterInstance: ClusterInstance): Unit = {
-    val cluster = new KafkaClusterTestKit.Builder(
+  def testRegisterZkBrokerInKraft(zkCluster: ClusterInstance): Unit = {
+    zkCluster.start()
+    val clusterId = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient.getClusterId.get
+
+    // Bootstrap the ZK cluster ID into KRaft
+    val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
+        setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build()).build()
     try {
-      cluster.format()
-      cluster.startup()
-      val props = cluster.controllerClientProperties()
+      kraftCluster.format()
+      kraftCluster.startup()
+      val props = kraftCluster.controllerClientProperties()
       val voters = props.get(RaftConfig.QUORUM_VOTERS_CONFIG)
 
-      clusterInstance.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
-      clusterInstance.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, voters)
-      clusterInstance.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      clusterInstance.start()
-
-      Thread.sleep(60000)
-      clusterInstance.stop()
+      // Enable migration configs
+      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, voters)
+      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.rollingBrokerRestart()
+      Thread.sleep(10000)
     } finally {
-      cluster.close()
+      zkCluster.stop()
+      kraftCluster.close()
     }
   }
 }
