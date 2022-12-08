@@ -25,11 +25,13 @@ import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -41,6 +43,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
@@ -351,6 +354,25 @@ public class EmbeddedKafkaCluster {
         }
         log.info("Found topics {}", results);
         return results;
+    }
+
+    /**
+     * Update the configuration for the specified resources with the default options.
+     *
+     * @param configs The resources with their configs (topic is the only resource type with configs that can
+     *                be updated currently)
+     * @return The AlterConfigsResult
+     */
+    public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs) {
+        AlterConfigsResult result;
+        log.info("Altering configs for topics {}", configs.keySet());
+        try (Admin admin = createAdminClient()) {
+            result = admin.incrementalAlterConfigs(configs);
+            log.info("Altered configurations {}", result.all().get());
+        } catch (Exception e) {
+            throw new AssertionError("Could not alter topic configurations " + configs.keySet(), e);
+        }
+        return result;
     }
 
     /**

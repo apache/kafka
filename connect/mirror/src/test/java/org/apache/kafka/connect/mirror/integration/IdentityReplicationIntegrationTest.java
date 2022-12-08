@@ -16,10 +16,15 @@
  */
 package org.apache.kafka.connect.mirror.integration;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.mirror.IdentityReplicationPolicy;
@@ -37,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.junit.jupiter.api.Test;
@@ -144,6 +150,55 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
                 "New topic was not replicated to backup cluster.");
     }
 
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testSyncTopicConfiguration() throws Exception {
+        mm2Props.put("sync.topic.configs.interval.seconds", "1");
+        mm2Config = new MirrorMakerConfig(mm2Props);
+
+        waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
+        waitUntilMirrorMakerIsRunning(primary, Collections.singletonList(MirrorHeartbeatConnector.class), mm2Config, BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS);
+
+        // create topic with configuration to test:
+        final Map<String, String> topicConfig = new HashMap<>();
+        topicConfig.put("delete.retention.ms", "1000"); // should be excluded (default value is 86400000)
+        topicConfig.put("retention.bytes", "1000"); // should be included, default value is -1
+
+        final String topic = "test-topic-with-config";
+        final String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
+
+        primary.kafka().createTopic(topic, NUM_PARTITIONS, 1, topicConfig);
+        waitForTopicCreated(backup, backupTopic);
+
+        // regression test for the remote topic config that should not be overwritten by the replication
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, backupTopic);
+        Collection<AlterConfigOp> ops = new ArrayList<>();
+        ops.add(new AlterConfigOp(new ConfigEntry("delete.retention.ms", "2000"), AlterConfigOp.OpType.SET));
+        ops.add(new AlterConfigOp(new ConfigEntry("retention.bytes", "2000"), AlterConfigOp.OpType.SET));
+        Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>(1);
+        configOps.put(configResource, ops);
+        backup.kafka().incrementalAlterConfigs(configOps);
+
+        // sleep few seconds to have MM2 sync topic configuration
+        Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+
+        String primaryConfig, backupConfig;
+
+        primaryConfig = getTopicConfig(primary.kafka(), topic, "delete.retention.ms");
+        backupConfig = getTopicConfig(backup.kafka(), backupTopic, "delete.retention.ms");
+        assertNotEquals(primaryConfig, backupConfig,
+                "`delete.retention.ms` should be different, because it's in exclude filter! ");
+        assertEquals("2000", backupConfig, "`delete.retention.ms` should be 2000, because it's explicitly defined on the target topic! ");
+
+        // regression test for the config that are still supposed to be replicated
+        primaryConfig = getTopicConfig(primary.kafka(), topic, "retention.bytes");
+        backupConfig = getTopicConfig(backup.kafka(), backupTopic, "retention.bytes");
+        assertEquals(primaryConfig, backupConfig,
+                "`retention.bytes` should be the same, because it isn't in exclude filter! ");
+        assertEquals("1000", backupConfig,
+                "`retention.bytes` should be the same, because it's explicitly defined on the source topic! ");
+
+    }
     @Test
     public void testReplicationWithEmptyPartition() throws Exception {
         String consumerGroupName = "consumer-group-testReplicationWithEmptyPartition";
