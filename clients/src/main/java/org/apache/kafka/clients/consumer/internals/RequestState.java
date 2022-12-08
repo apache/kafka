@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 
-// Visible for testing
 class RequestState {
     final static int RECONNECT_BACKOFF_EXP_BASE = 2;
     final static double RECONNECT_BACKOFF_JITTER = 0.2;
