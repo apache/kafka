@@ -69,17 +69,16 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.activeNodes = new HashSet<>();
     }
 
-    public List<ClientResponse> poll(Timer timer, boolean disableWakeup) {
+    public List<ClientResponse> poll(final long timeoutMs) {
         final long currentTimeMs = time.milliseconds();
         // 1. Try to send request in the unsentRequests queue. It is either caused by timeout or network error (node
         // not available)
         // 2. poll for the results if there's any.
         // 3. Check connection status for each node, disconnect ones that are not reachable.
-        client.wakeup();
         trySend(currentTimeMs);
-        List<ClientResponse> res = this.client.poll(timer.timeoutMs(), currentTimeMs);
+        List<ClientResponse> res = this.client.poll(timeoutMs, currentTimeMs);
         checkDisconnects();
-        maybeTriggerWakeup(disableWakeup);
+        maybeTriggerWakeup();
         return res;
     }
 
@@ -157,8 +156,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                 unsent.callback.orElse(new DefaultRequestFutureCompletionHandler()));
     }
 
-    public void maybeTriggerWakeup(boolean disableWakeup) {
-        if (disableWakeup) return;
+    public void maybeTriggerWakeup() {
         if (this.wakeup) {
             this.wakeup = false;
             throw new WakeupException();

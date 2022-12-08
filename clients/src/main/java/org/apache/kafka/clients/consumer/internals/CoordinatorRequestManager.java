@@ -33,8 +33,8 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Handles the timing of the next FindCoordinatorRequest based on the {@link CoordinatorRequestState}. It checks for:
@@ -145,7 +145,7 @@ public class CoordinatorRequestManager implements RequestManager {
         }
     }
 
-    private void handleSuccessFindCoordinatorResponse(
+    private void onSuccessfulResponse(
             final FindCoordinatorResponseData.Coordinator coordinator,
             final long currentTimeMS) {
         // use MAX_VALUE - node.id as the coordinator id to allow separate connections
@@ -162,57 +162,46 @@ public class CoordinatorRequestManager implements RequestManager {
     }
 
     private void handleFailedCoordinatorResponse(
-            final FindCoordinatorResponseData.Coordinator response,
-            final long currentTimeMS) {
-        Errors error = Errors.forCode(response.errorCode());
-        log.debug("FindCoordinator request failed due to {}", error.toString());
-        coordinatorRequestState.updateLastFailedAttempt(currentTimeMS);
-        markCoordinatorUnknown("coordinator unavailable", currentTimeMS);
-        if (!(error.exception() instanceof RetriableException)) {
-            log.info("FindCoordinator request hit fatal exception", error.exception());
-            // Remember the exception if fatal so we can ensure
-            // it gets thrown by the main thread
-            errorHandler.handle(error.exception());
-            return;
-        }
+            final Exception exception,
+            final long currentTimeMs) {
+        coordinatorRequestState.updateLastFailedAttempt(currentTimeMs);
+        markCoordinatorUnknown("coordinator unavailable", currentTimeMs);
 
-        if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+        if (exception == Errors.GROUP_AUTHORIZATION_FAILED.exception()) {
+            log.debug("FindCoordinator request failed due to authorization error {}", exception.getMessage());
             errorHandler.handle(GroupAuthorizationException.forGroupId(this.groupId));
             return;
         }
 
-        log.debug("Group coordinator lookup failed: {}", response.errorMessage());
-        errorHandler.handle(error.exception());
+        if (!(exception instanceof RetriableException)) {
+            log.debug("FindCoordinator request failed due to retriable exception", exception);
+            return;
+        }
 
-        log.debug("Coordinator discovery failed, refreshing metadata", error.exception());
+        log.warn("FindCoordinator request failed due to fatal exception", exception);
+        errorHandler.handle(exception);
     }
 
-    public void onResponse(final FindCoordinatorResponse response, Throwable t) {
-        long currentTimeMs = time.milliseconds();
+    public void onResponse(final FindCoordinatorResponse response, final long currentTimeMs, final Throwable t) {
         // handle Runtime exception
         if (t != null) {
             log.error("FindCoordinator request failed due to {}", t.getMessage());
-            markCoordinatorUnknown("coordinator unavailable", currentTimeMs);
             return;
         }
 
-        List<FindCoordinatorResponseData.Coordinator> coordinators = response.getCoordinatorByKey(this.groupId);
-        if (coordinators.size() != 1) {
-            coordinatorRequestState.updateLastFailedAttempt(currentTimeMs);
-            String msg = String.format("Group coordinator lookup failed: Response should contain exactly one " +
-                    "coordinator, it has %d", coordinators.size());
-            log.error(msg);
-            errorHandler.handle(new IllegalStateException(msg));
+        Optional<FindCoordinatorResponseData.Coordinator> coordinator = response.getCoordinatorByKey(this.groupId);
+        if (!coordinator.isPresent()) {
+            String msg = String.format("Coordinator not found for groupId: %s", this.groupId);
+            handleFailedCoordinatorResponse(new IllegalStateException(msg), currentTimeMs);
             return;
         }
 
-        FindCoordinatorResponseData.Coordinator node = coordinators.get(0);
+        FindCoordinatorResponseData.Coordinator node = coordinator.get();
         if (node.errorCode() != Errors.NONE.code()) {
-            coordinatorRequestState.updateLastFailedAttempt(currentTimeMs);
-            handleFailedCoordinatorResponse(node, currentTimeMs);
+            handleFailedCoordinatorResponse(Errors.forCode(node.errorCode()).exception(), currentTimeMs);
             return;
         }
-        handleSuccessFindCoordinatorResponse(node, currentTimeMs);
+        onSuccessfulResponse(node, currentTimeMs);
     }
 
     public Node coordinator() {
@@ -285,7 +274,7 @@ public class CoordinatorRequestManager implements RequestManager {
         }
 
         private boolean requestBackoffExpired(final long currentTimeMs) {
-            return (currentTimeMs - this.lastReceivedMs) >= this.backoffMs;
+            return remainingBackoffMs(currentTimeMs) <= 0;
         }
 
         private long remainingBackoffMs(final long currentTimeMs) {
@@ -294,10 +283,13 @@ public class CoordinatorRequestManager implements RequestManager {
     }
 
     private class FindCoordinatorRequestHandler extends NetworkClientDelegate.AbstractRequestFutureCompletionHandler {
-
         @Override
-        public void handleResponse(ClientResponse r, Throwable t) {
-            CoordinatorRequestManager.this.onResponse((FindCoordinatorResponse) r.responseBody(), t);
+        public void handleResponse(final ClientResponse r, final Throwable t) {
+            System.out.println(t);
+            CoordinatorRequestManager.this.onResponse(
+                    (FindCoordinatorResponse) r.responseBody(),
+                    r.receivedTimeMs(),
+                    t);
         }
     }
 }

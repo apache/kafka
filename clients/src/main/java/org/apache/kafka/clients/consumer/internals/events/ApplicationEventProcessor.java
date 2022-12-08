@@ -16,22 +16,16 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.CoordinatorRequestManager;
 import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
 
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 
 public class ApplicationEventProcessor {
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private final Optional<CoordinatorRequestManager> coordinatorState;
 
-    public ApplicationEventProcessor(
-            final Optional<CoordinatorRequestManager> coordinatorState,
-            final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+    public ApplicationEventProcessor(final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
         this.backgroundEventQueue = backgroundEventQueue;
-        this.coordinatorState = coordinatorState;
     }
     public boolean process(final ApplicationEvent event) {
         Objects.requireNonNull(event);

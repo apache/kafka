@@ -100,17 +100,20 @@ public class CoordinatorRequestManagerTest {
     public void testOnResponse() {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
         FindCoordinatorResponse resp = FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node);
-        coordinatorManager.onResponse(resp, null);
+        coordinatorManager.onResponse(resp, time.milliseconds(), null);
         verify(errorEventHandler, never()).handle(any());
         assertNotNull(coordinatorManager.coordinator());
 
         FindCoordinatorResponse errResp = FindCoordinatorResponse.prepareResponse(Errors.COORDINATOR_NOT_AVAILABLE,
                 groupId, node);
-        coordinatorManager.onResponse(errResp, null);
+        coordinatorManager.onResponse(errResp, time.milliseconds(), null);
         verify(errorEventHandler, times(1)).handle(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         assertNull(coordinatorManager.coordinator());
 
-        coordinatorManager.onResponse(null, new RuntimeException("some error"));
+        coordinatorManager.onResponse(
+                null,
+                time.milliseconds(),
+                new RuntimeException("some error"));
         assertNull(coordinatorManager.coordinator());
     }
 
@@ -151,7 +154,7 @@ public class CoordinatorRequestManagerTest {
         assertEquals(1, res.unsentRequests.size());
         coordinatorManager.onResponse(
                 FindCoordinatorResponse.prepareResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, "key",
-                this.node), null);
+                this.node), time.milliseconds(), null);
         // Need to wait for 100ms until the next send
         res = coordinatorManager.poll(time.milliseconds());
         assertTrue(res.unsentRequests.isEmpty());
@@ -164,14 +167,14 @@ public class CoordinatorRequestManagerTest {
         assertEquals(1, res.unsentRequests.size());
         coordinatorManager.onResponse(
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "key",
-                        this.node), null);
+                        this.node), time.milliseconds(), null);
     }
 
     @Test
     public void testPollWithExistingCoordinator() {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
         FindCoordinatorResponse resp = FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node);
-        coordinatorManager.onResponse(resp, null);
+        coordinatorManager.onResponse(resp, time.milliseconds(), null);
         verify(errorEventHandler, never()).handle(any());
         assertNotNull(coordinatorManager.coordinator());
 

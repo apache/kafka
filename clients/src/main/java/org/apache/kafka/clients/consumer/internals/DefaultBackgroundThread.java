@@ -108,6 +108,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             String groupId = rebalanceConfig.groupId;
+            // TODO: Maybe consider a NOOP implementation
             this.coordinatorManager = groupId == null ?
                     Optional.empty() :
                     Optional.of(new CoordinatorRequestManager(
@@ -117,9 +118,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             errorEventHandler,
                             groupId,
                             rebalanceConfig.rebalanceTimeoutMs));
-            this.applicationEventProcessor = new ApplicationEventProcessor(
-                    this.coordinatorManager,
-                    backgroundEventQueue);
+            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue);
         } catch (final Exception e) {
             close();
             throw new KafkaException("Failed to construct background processor", e.getCause());
@@ -164,39 +163,33 @@ public class DefaultBackgroundThread extends KafkaThread {
         }
 
         final long currentTimeMs = time.milliseconds();
-        long pollWaitTimeMs = timeToNextHeartbeatMs();
+        // TODO: This is just a place holder value.
+        long pollWaitTimeMs = 100;
 
         // TODO: Add a condition here, like shouldFindCoordinator in the future.  Since we don't always need to find
         //  the coordinator.
         if (coordinatorManager.isPresent()) {
-            pollWaitTimeMs = Math.min(pollWaitTimeMs,
-                    handlePollResult(coordinatorManager.get().poll(currentTimeMs)));
+            pollWaitTimeMs = Math.min(pollWaitTimeMs, handlePollResult(coordinatorManager.get().poll(currentTimeMs)));
         }
 
         // if there are pending events to process, poll then continue without
         // blocking.
         if (!applicationEventQueue.isEmpty()) {
-            networkClientDelegate.poll(time.timer(0), false);
+            networkClientDelegate.poll(0);
             return;
         }
         // if there are no events to process, poll until timeout. The timeout
         // will be the minimum of the requestTimeoutMs, nextHeartBeatMs, and
         // nextMetadataUpdate. See NetworkClient.poll impl.
-        networkClientDelegate.poll(time.timer(pollWaitTimeMs), false);
+        networkClientDelegate.poll(pollWaitTimeMs);
     }
 
     long handlePollResult(NetworkClientDelegate.PollResult res) {
         Objects.requireNonNull(res);
         if (!res.unsentRequests.isEmpty()) {
             networkClientDelegate.addAll(res.unsentRequests);
-            return Long.MAX_VALUE;
         }
         return res.timeMsTillNextPoll;
-    }
-
-    private long timeToNextHeartbeatMs() {
-        // TODO: implemented when heartbeat is added to the impl
-        return 100;
     }
 
     private Optional<ApplicationEvent> maybePollEvent() {

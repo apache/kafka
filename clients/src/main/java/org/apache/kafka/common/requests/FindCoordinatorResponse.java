@@ -30,7 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
+import java.util.Optional;
 
 
 public class FindCoordinatorResponse extends AbstractResponse {
@@ -52,11 +52,11 @@ public class FindCoordinatorResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public List<Coordinator> getCoordinatorByKey(String key) {
+    public Optional<Coordinator> getCoordinatorByKey(String key) {
         Objects.requireNonNull(key);
         if (this.data.coordinators().isEmpty()) {
             // version <= 3
-            return Collections.singletonList(new Coordinator()
+            return Optional.of(new Coordinator()
                     .setErrorCode(data.errorCode())
                     .setErrorMessage(data.errorMessage())
                     .setHost(data.host())
@@ -65,7 +65,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
                     .setKey(key));
         }
         // version >= 4
-        return data.coordinators().stream().filter(c -> c.key().equals(key)).collect(Collectors.toList());
+        return data.coordinators().stream().filter(c -> c.key().equals(key)).findFirst();
     }
 
     @Override

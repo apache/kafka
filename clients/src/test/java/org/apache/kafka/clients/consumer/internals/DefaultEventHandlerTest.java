@@ -17,26 +17,13 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
-import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
@@ -48,6 +35,9 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class DefaultEventHandlerTest {
     private int sessionTimeoutMs = 1000;
@@ -75,51 +65,16 @@ public class DefaultEventHandlerTest {
     }
 
     @Test
-    @Timeout(1)
-    public void testBasicPollAndAddWithNoopEvent() {
-        final Time time = new MockTime(1);
-        final LogContext logContext = new LogContext();
-        final SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        final ConsumerMetadata metadata = newConsumerMetadata(false, subscriptions);
-        final MockClient client = new MockClient(time, metadata);
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
-        Node node = metadata.fetch().nodes().get(0);
+    public void testBasicHandlerOps() {
+        final DefaultBackgroundThread bt = mock(DefaultBackgroundThread.class);
         final BlockingQueue<ApplicationEvent> aq = new LinkedBlockingQueue<>();
         final BlockingQueue<BackgroundEvent> bq = new LinkedBlockingQueue<>();
-        final DefaultEventHandler handler = new DefaultEventHandler(
-                time,
-                new ConsumerConfig(this.properties),
-                this.rebalanceConfig,
-                logContext,
-                aq,
-                bq,
-                metadata,
-                client);
-        assertTrue(client.active());
+        final DefaultEventHandler handler = new DefaultEventHandler(bt, aq, bq);
         assertTrue(handler.isEmpty());
-        handler.add(new NoopApplicationEvent("testBasicPollAndAddWithNoopEvent"));
-        while (handler.isEmpty()) {
-            time.sleep(100);
-        }
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
-        final Optional<BackgroundEvent> poll = handler.poll();
-        assertTrue(poll.isPresent());
-        assertEquals(BackgroundEvent.EventType.NOOP, poll.get().type);
-        assertFalse(client.hasInFlightRequests()); // noop does not send network request
-    }
-
-    private static ConsumerMetadata newConsumerMetadata(final boolean includeInternalTopics,
-                                                        final SubscriptionState subscriptions) {
-        final long refreshBackoffMs = 50;
-        final long expireMs = 50000;
-        return new ConsumerMetadata(
-            refreshBackoffMs,
-            expireMs,
-            includeInternalTopics,
-            false,
-            subscriptions,
-            new LogContext(),
-            new ClusterResourceListeners()
-        );
+        assertFalse(handler.poll().isPresent());
+        handler.add(new NoopApplicationEvent("test"));
+        assertEquals(1, aq.size());
+        handler.close();
+        verify(bt, times(1)).close();
     }
 }

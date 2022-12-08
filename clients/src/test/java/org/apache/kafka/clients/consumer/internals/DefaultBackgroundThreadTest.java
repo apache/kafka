@@ -42,8 +42,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -103,7 +101,7 @@ public class DefaultBackgroundThreadTest {
         when(this.coordinatorManager.poll(time.milliseconds())).thenReturn(mockPollResult());
         backgroundThread.runOnce();
         Mockito.verify(coordinatorManager, times(1)).poll(anyLong());
-        Mockito.verify(networkClient, times(1)).poll(any(), anyBoolean());
+        Mockito.verify(networkClient, times(1)).poll(anyLong());
         backgroundThread.close();
     }
 
@@ -114,8 +112,7 @@ public class DefaultBackgroundThreadTest {
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
                 10,
                 Collections.singletonList(findCoordinatorUnsentRequest(this.time.timer(requestTimeoutMs))));
-
-        assertEquals(Long.MAX_VALUE, backgroundThread.handlePollResult(success));
+        assertEquals(10, backgroundThread.handlePollResult(success));
 
         NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
                 10,
