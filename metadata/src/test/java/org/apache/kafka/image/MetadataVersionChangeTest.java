@@ -33,31 +33,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class MetadataVersionChangeTest {
     private static final Logger log = LoggerFactory.getLogger(MetadataVersionChangeTest.class);
 
-    private final static MetadataVersionChange CHANGE_3_0_IV1_to_3_3_IV0 =
+    private final static MetadataVersionChange CHANGE_3_0_IV1_TO_3_3_IV0 =
         new MetadataVersionChange(IBP_3_0_IV1, IBP_3_3_IV0);
 
-    private final static MetadataVersionChange CHANGE_3_3_IV0_to_3_0_IV1 =
+    private final static MetadataVersionChange CHANGE_3_3_IV0_TO_3_0_IV1 =
         new MetadataVersionChange(IBP_3_3_IV0, IBP_3_0_IV1);
 
     @Test
     public void testIsUpgrade() throws Throwable {
-        assertTrue(CHANGE_3_0_IV1_to_3_3_IV0.isUpgrade());
-        assertFalse(CHANGE_3_3_IV0_to_3_0_IV1.isUpgrade());
+        assertTrue(CHANGE_3_0_IV1_TO_3_3_IV0.isUpgrade());
+        assertFalse(CHANGE_3_3_IV0_TO_3_0_IV1.isUpgrade());
     }
 
     @Test
     public void testIsDowngrade() throws Throwable {
-        assertFalse(CHANGE_3_0_IV1_to_3_3_IV0.isDowngrade());
-        assertTrue(CHANGE_3_3_IV0_to_3_0_IV1.isDowngrade());
+        assertFalse(CHANGE_3_0_IV1_TO_3_3_IV0.isDowngrade());
+        assertTrue(CHANGE_3_3_IV0_TO_3_0_IV1.isDowngrade());
     }
 
     @Test
     public void testMetadataVersionChangeExceptionToString() throws Throwable {
         assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata " +
             "version is changing from 3.0-IV1 to 3.3-IV0",
-                new MetadataVersionChangeException(CHANGE_3_0_IV1_to_3_3_IV0).toString());
+                new MetadataVersionChangeException(CHANGE_3_0_IV1_TO_3_3_IV0).toString());
         assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata " +
             "version is changing from 3.3-IV0 to 3.0-IV1",
-                new MetadataVersionChangeException(CHANGE_3_3_IV0_to_3_0_IV1).toString());
+                new MetadataVersionChangeException(CHANGE_3_3_IV0_TO_3_0_IV1).toString());
     }
 }
