@@ -247,8 +247,6 @@ public class CoordinatorRequestManager implements RequestManager {
                 return true;
             }
 
-            // TODO: I think there's a case when we want to resend the FindCoordinator when we haven't received
-            //  anything yet.
             if (this.lastReceivedMs == -1 ||
                     this.lastReceivedMs < this.lastSentMs) {
                 // there is an inflight request
