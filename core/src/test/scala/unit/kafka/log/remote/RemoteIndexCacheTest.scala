@@ -22,11 +22,11 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.test.TestUtils
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, RepeatedTest, Test}
-import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{mock, reset, times, verify, verifyNoInteractions, when}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito._
 
 import java.io.{File, FileInputStream}
 import java.nio.file.Files
@@ -70,8 +70,8 @@ class RemoteIndexCacheTest {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
           case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
           case IndexType.TRANSACTION => new FileInputStream(txnIdxFile)
-          case IndexType.LEADER_EPOCH =>
-          case IndexType.PRODUCER_SNAPSHOT =>
+          case IndexType.LEADER_EPOCH => // leader-epoch-cache is not accessed.
+          case IndexType.PRODUCER_SNAPSHOT => // producer-snapshot is not accessed.
         }
       })
   }
@@ -144,8 +144,25 @@ class RemoteIndexCacheTest {
     verifyFetchIndexInvocation(count = 4)
   }
 
-  @RepeatedTest(1)
-  def reloadCacheAfterClose(): Unit = {
+  @Test
+  def testGetIndexAfterCacheClose(): Unit = {
+    val cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
+    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
+
+    cache.getIndexEntry(metadataList.head)
+    cache.getIndexEntry(metadataList.head)
+    assertEquals(1, cache.entries.size())
+    verifyFetchIndexInvocation(count = 1)
+
+    cache.close()
+
+    // Check IllegalStateException is thrown when index is accessed after it is closed.
+    assertThrows(classOf[IllegalStateException], () => cache.getIndexEntry(metadataList.head))
+  }
+
+  @Test
+  def testReloadCacheAfterClose(): Unit = {
     val cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)

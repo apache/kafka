@@ -25,7 +25,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageManager}
 
-import java.io.{File, InputStream}
+import java.io.{Closeable, File, InputStream}
 import java.nio.file.{Files, Path}
 import java.util
 import java.util.concurrent.LinkedBlockingQueue
@@ -87,12 +87,12 @@ class Entry(val offsetIndex: LazyIndex[OffsetIndex], val timeIndex: LazyIndex[Ti
  * This is a LRU cache of remote index files stored in `$logdir/remote-log-index-cache`. This is helpful to avoid
  * re-fetching the index files like offset, time indexes from the remote storage for every fetch call.
  *
- * @param maxSize
- * @param remoteStorageManager
- * @param logDir
+ * @param maxSize              maximum number of segment index entries to be cached.
+ * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
+ * @param logDir               log directory
  */
-//todo-tier make maxSize configurable
-class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageManager, logDir: String) extends Logging {
+class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageManager, logDir: String)
+  extends Logging with Closeable {
 
   val cacheDir = new File(logDir, DirName)
   @volatile var closed = false
@@ -194,6 +194,8 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
   cleanerThread.start()
 
   def getIndexEntry(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Entry = {
+    if(closed) throw new IllegalStateException("Instance is already closed.")
+
     def loadIndexFile[T](fileName: String,
                          suffix: String,
                          fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,

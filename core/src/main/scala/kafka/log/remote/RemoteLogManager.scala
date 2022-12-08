@@ -241,9 +241,12 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
    * - Otherwise, return an option of TimestampOffset. The offset is the offset of the first message whose timestamp
    * is greater than or equals to the target timestamp and whose offset is greater than or equals to the startingOffset.
    *
-   * @param timestamp      The timestamp to search for.
-   * @param startingOffset The starting offset to search.
-   * @return the timestamp and offset of the first message that meets the requirements. None will be returned if there is no such message.
+   * @param tp               topic partition in which the offset to be found.
+   * @param timestamp        The timestamp to search for.
+   * @param startingOffset   The starting offset to search.
+   * @param leaderEpochCache LeaderEpochFileCache of the topic partition.
+   * @return the timestamp and offset of the first message that meets the requirements. None will be returned if there
+   *         is no such message.
    */
   def findOffsetByTimestamp(tp: TopicPartition,
                             timestamp: Long,
@@ -282,6 +285,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
       if (!closed) {
         Utils.closeQuietly(remoteLogStorageManager, "RemoteLogStorageManager")
         Utils.closeQuietly(remoteLogMetadataManager, "RemoteLogMetadataManager")
+        Utils.closeQuietly(indexCache, "RemoteIndexCache")
         closed = true
       }
     }
