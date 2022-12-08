@@ -213,7 +213,6 @@ public class CoordinatorRequestManagerTest {
                 this.errorEventHandler,
                 this.groupId,
                 this.rebalanceTimeoutMs,
-                this.requestTimeoutMs,
                 this.coordinatorRequestState);
     }
 }

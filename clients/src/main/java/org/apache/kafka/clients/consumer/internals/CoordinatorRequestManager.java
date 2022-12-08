@@ -54,7 +54,6 @@ public class CoordinatorRequestManager implements RequestManager {
 
     private final Logger log;
     private final Time time;
-    private final long requestTimeoutMs;
     private final ErrorEventHandler errorHandler;
     private final long rebalanceTimeoutMs;
     private final String groupId;
@@ -76,7 +75,6 @@ public class CoordinatorRequestManager implements RequestManager {
         this.errorHandler = errorHandler;
         this.groupId = groupId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
-        this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.coordinatorRequestState = new CoordinatorRequestState(config);
     }
 
@@ -86,7 +84,6 @@ public class CoordinatorRequestManager implements RequestManager {
                               final ErrorEventHandler errorHandler,
                               final String groupId,
                               final long rebalanceTimeoutMs,
-                              final long requestTimeoutMs,
                               final CoordinatorRequestState coordinatorRequestState) {
         Objects.requireNonNull(groupId);
         this.time = time;
@@ -94,7 +91,6 @@ public class CoordinatorRequestManager implements RequestManager {
         this.errorHandler = errorHandler;
         this.groupId = groupId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
-        this.requestTimeoutMs = requestTimeoutMs;
         this.coordinatorRequestState = coordinatorRequestState;
     }
 
