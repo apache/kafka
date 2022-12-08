@@ -79,12 +79,6 @@ public class RocksDBMetricsRecorder {
             }
             this.statistics = statistics;
         }
-
-        public void maybeCloseStatistics() {
-            if (statistics != null) {
-                statistics.close();
-            }
-        }
     }
 
     private static final String ROCKSDB_PROPERTIES_PREFIX = "rocksdb.";
@@ -411,7 +405,6 @@ public class RocksDBMetricsRecorder {
                 " could be found. This is a bug in Kafka Streams. " +
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
-        removedValueProviders.maybeCloseStatistics();
         if (storeToValueProviders.isEmpty()) {
             logger.debug(
                 "Removing metrics recorder for store {} of task {} from metrics recording trigger",
