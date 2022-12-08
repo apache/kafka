@@ -56,10 +56,10 @@ class BrokerMetadataSnapshotter(
   logIdent = logContext.logPrefix()
 
   /**
-   * The offset of the snapshot in progress, or -1 if there isn't one. Accessed only under
+   * The (exclusive) offset of the snapshot in progress, or -1 if there isn't one. Accessed only under
    * the object lock.
    */
-  private var _currentSnapshotOffset = -1L
+  private var _currentSnapshotEndOffset = -1L
 
   /**
    * The event queue which runs this listener.
@@ -71,9 +71,9 @@ class BrokerMetadataSnapshotter(
     image: MetadataImage,
     snapshotReasons: Set[SnapshotReason]
   ): Boolean = synchronized {
-    if (_currentSnapshotOffset != -1) {
+    if (_currentSnapshotEndOffset != -1) {
       info(s"Declining to create a new snapshot at ${image.imageId} because " +
-        s"there is already a snapshot in progress at offset ${_currentSnapshotOffset}")
+        s"there is already a snapshot in progress at offset ${_currentSnapshotEndOffset}")
       false
     } else {
       val writer = writerBuilder.build(
@@ -81,7 +81,7 @@ class BrokerMetadataSnapshotter(
         lastContainedLogTime
       )
       if (writer.nonEmpty) {
-        _currentSnapshotOffset = image.imageId.offset
+        _currentSnapshotEndOffset = image.imageId.offset
 
         val snapshotReasonsMessage = SnapshotReason.stringFromReasons(snapshotReasons.asJava)
         info(s"Creating a new snapshot at ${image.imageId} because: $snapshotReasonsMessage")
@@ -89,7 +89,7 @@ class BrokerMetadataSnapshotter(
         true
       } else {
         info(s"Declining to create a new snapshot at ${image.imageId} because " +
-          s"there is already a snapshot at this offset")
+          "there is already a snapshot at this offset")
         false
       }
     }
@@ -112,7 +112,7 @@ class BrokerMetadataSnapshotter(
           writer.close()
         } finally {
           BrokerMetadataSnapshotter.this.synchronized {
-            _currentSnapshotOffset = -1L
+            _currentSnapshotEndOffset = -1L
           }
         }
       }

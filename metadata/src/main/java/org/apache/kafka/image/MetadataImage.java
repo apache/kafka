@@ -167,7 +167,7 @@ public final class MetadataImage {
 
     @Override
     public String toString() {
-        return "MetadataImage(id=" + imageId +
+        return "MetadataImage(imageId=" + imageId +
             ", features=" + features +
             ", cluster=" + cluster +
             ", topics=" + topics +

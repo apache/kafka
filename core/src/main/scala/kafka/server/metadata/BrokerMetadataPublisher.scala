@@ -123,7 +123,7 @@ class BrokerMetadataPublisher(
   /**
    * This is updated after all components (e.g. LogManager) has finished publishing the new metadata delta
    */
-  val publishedOffsetAtomic = new AtomicLong(-1)
+  val _publishedEndOffset = new AtomicLong(-1)
 
   override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
     val imageId = newImage.imageId()
@@ -261,7 +261,7 @@ class BrokerMetadataPublisher(
       if (_firstPublish) {
         finishInitializingReplicaManager(newImage)
       }
-      publishedOffsetAtomic.set(imageId.offset)
+      _publishedEndOffset.set(imageId.offset)
     } catch {
       case t: Throwable => metadataPublishingFaultHandler.handleFault("Uncaught exception while " +
         s"publishing broker metadata from ${deltaName}", t)
@@ -270,7 +270,7 @@ class BrokerMetadataPublisher(
     }
   }
 
-  override def publishedOffset: Long = publishedOffsetAtomic.get()
+  override def publishedEndOffset: Long = _publishedEndOffset.get()
 
   def reloadUpdatedFilesWithoutConfigChange(props: Properties): Unit = {
     conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)

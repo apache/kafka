@@ -51,9 +51,11 @@ import java.util.Optional;
 public final class MetadataDelta {
     private final MetadataImage image;
 
-    private long highestOffsetExclusive;
+    // Last offset (exclusive) of the last replayed record (0 if there were none)
+    private long endOffset;
 
-    private int highestEpoch;
+    // Last epoch (inclusive) of the last replayed record (0 if there were none)
+    private int lastEpoch;
 
     private FeaturesDelta featuresDelta = null;
 
@@ -71,8 +73,8 @@ public final class MetadataDelta {
 
     public MetadataDelta(MetadataImage image) {
         this.image = image;
-        this.highestOffsetExclusive = image.imageId().offset();
-        this.highestEpoch = image.imageId().epoch();
+        this.endOffset = image.imageId().offset();
+        this.lastEpoch = image.imageId().epoch();
     }
 
     public MetadataImage image() {
@@ -162,8 +164,8 @@ public final class MetadataDelta {
     }
 
     public void replay(long offset, int epoch, ApiMessage record) {
-        highestOffsetExclusive = offset + 1;
-        highestEpoch = epoch;
+        endOffset = offset + 1;
+        lastEpoch = epoch;
 
         MetadataRecordType type = MetadataRecordType.fromId(record.apiKey());
         switch (type) {
@@ -353,7 +355,7 @@ public final class MetadataDelta {
         }
 
         return new MetadataImage(
-            new OffsetAndEpoch(highestOffsetExclusive, highestEpoch),
+            new OffsetAndEpoch(endOffset, lastEpoch),
             newFeatures,
             newCluster,
             newTopics,
@@ -367,8 +369,8 @@ public final class MetadataDelta {
     @Override
     public String toString() {
         return "MetadataDelta(" +
-            "highestOffset=" + highestOffsetExclusive +
-            ", highestEpoch=" + highestEpoch +
+            "endOffset=" + endOffset +
+            ", lastEpoch=" + lastEpoch +
             ", featuresDelta=" + featuresDelta +
             ", clusterDelta=" + clusterDelta +
             ", topicsDelta=" + topicsDelta +

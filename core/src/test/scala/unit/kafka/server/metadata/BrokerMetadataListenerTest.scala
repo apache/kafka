@@ -119,7 +119,7 @@ class BrokerMetadataListenerTest {
             delta.clusterDelta().broker(1))
         }
 
-        override def publishedOffset: Long = -1
+        override def publishedEndOffset: Long = -1
       }).get()
 
       assertEquals(fencedLastOffset, metrics.lastAppliedRecordOffset.get)
@@ -172,7 +172,7 @@ class BrokerMetadataListenerTest {
       image = newImage
     }
 
-    override def publishedOffset: Long = -1
+    override def publishedEndOffset: Long = -1
   }
 
   private val FOO_ID = Uuid.fromString("jj1G9utnTuCegi_gpnRgYw")

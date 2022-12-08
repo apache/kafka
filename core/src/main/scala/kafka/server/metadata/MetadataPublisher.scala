@@ -34,5 +34,5 @@ trait MetadataPublisher {
   /**
    * The highest offset (exclusive) of metadata topic which has been published
    */
-  def publishedOffset: Long
+  def publishedEndOffset: Long
 }
