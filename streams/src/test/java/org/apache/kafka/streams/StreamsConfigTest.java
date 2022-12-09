@@ -1381,7 +1381,7 @@ public class StreamsConfigTest {
     public void shouldSetPartitionAutoscalingTimeout() {
         props.put("partition.autoscaling.timeout.ms", 0L);
         final StreamsConfig config = new StreamsConfig(props);
-        assertThat(config.getBoolean(PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG), is(0L));
+        assertThat(config.getLong(PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG), is(0L));
     }
 
     static class MisconfiguredSerde implements Serde<Object> {
