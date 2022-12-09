@@ -379,7 +379,7 @@ errors.tolerance=all</pre>
 
     <h5><a id="connect_exactlyoncesource" href="connect_exactlyoncesource">Source connectors</a></h5>
 
-    <p>If a source connector supports exactly-once delivery, your Connect cluster must also be configured to enable framework-level support for exactly-once delivery for source connectors, and additional ACLs will be necessary if running against a secured Kafka cluster. Note that exactly-once support for source connectors is currently only available in distributed mode; standalone Connect workers cannot provide exactly-once guarantees.</p>
+    <p>If a source connector supports exactly-once delivery, you must configure your Connect cluster to enable framework-level support for exactly-once delivery for source connectors. Additional ACLs may be necessary if running against a secured Kafka cluster. Note that exactly-once support for source connectors is currently only available in distributed mode; standalone Connect workers cannot provide exactly-once guarantees.</p>
 
     <h6>Worker configuration</h6>
 
