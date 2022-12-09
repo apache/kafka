@@ -221,7 +221,7 @@ class BrokerServer(
         config,
         channelName = "forwarding",
         threadNamePrefix,
-        retryTimeoutMs = config.brokerSessionTimeoutMs / 2
+        retryTimeoutMs = 60000
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
