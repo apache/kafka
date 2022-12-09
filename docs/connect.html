@@ -770,7 +770,7 @@ public List&lt;SourceRecord&gt; poll() {
 
     <p>Some users may require exactly-once delivery guarantees from a connector. In this case, they may set the <code>exactly.once.support</code> property to <code>required</code> in the configuration for the connector. When this happens, the Kafka Connect framework will ask the connector whether it can provide exactly-once delivery guarantees with the specified configuration. This is done by invoking the <code>exactlyOnceSupport</code> method on the connector.</p>
 
-    <p>If a connector doesn't support exactly-once, it should still implement this method, to let users know for certain that it cannot provide exactly-once delivery guarantees:</p>
+    <p>If a connector doesn't support exactly-once delivery, it should still implement this method to let users know for certain that it cannot provide exactly-once delivery guarantees:</p>
 
 <pre class="brush: java;">
 @Override
