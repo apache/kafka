@@ -73,7 +73,6 @@ import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
-import org.apache.kafka.server.util.CompletableFutureUtils
 
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
@@ -82,6 +81,7 @@ import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
 import scala.annotation.nowarn
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -1574,42 +1574,39 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDescribeGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val describeRequest = request.body[DescribeGroupsRequest]
     val includeAuthorizedOperations = describeRequest.data.includeAuthorizedOperations
-    val futures = new mutable.ArrayBuffer[CompletableFuture[DescribeGroupsResponseData.DescribedGroup]](
-      describeRequest.data.groups.size
-    )
+    val response = new DescribeGroupsResponseData()
+    val authorizedGroups = new ArrayBuffer[String]()
 
     describeRequest.data.groups.forEach { groupId =>
       if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupId)) {
-        futures += CompletableFuture.completedFuture(DescribeGroupsResponse.forError(
+        response.groups.add(DescribeGroupsResponse.forError(
           groupId,
           Errors.GROUP_AUTHORIZATION_FAILED
         ))
       } else {
-        futures += newGroupCoordinator.describeGroup(
-          request.context,
-          groupId
-        ).handle[DescribeGroupsResponseData.DescribedGroup] { (response, exception) =>
-          if (exception != null) {
-            DescribeGroupsResponse.forError(groupId, Errors.forException(exception))
-          } else {
-            if (request.header.apiVersion >= 3 && response.errorCode == Errors.NONE.code && includeAuthorizedOperations) {
-              response.setAuthorizedOperations(authHelper.authorizedOperations(
-                request,
-                new Resource(ResourceType.GROUP, groupId)
-              ))
-            }
-            response
-          }
-        }
+        authorizedGroups += groupId
       }
     }
 
-    CompletableFutureUtils.allAsList(futures.asJava).handle[Unit] { (results, exception) =>
+    newGroupCoordinator.describeGroup(
+      request.context,
+      authorizedGroups.asJava
+    ).handle[Unit] { (results, exception) =>
       if (exception != null) {
-        // Have to unwrap the CompletionException which allAsList() introduced.
-        requestHelper.sendMaybeThrottle(request, describeRequest.getErrorResponse(exception.getCause))
+        requestHelper.sendMaybeThrottle(request, describeRequest.getErrorResponse(exception))
       } else {
-        requestHelper.sendMaybeThrottle(request, new DescribeGroupsResponse(new DescribeGroupsResponseData().setGroups(results)))
+        if (request.header.apiVersion >= 3 && includeAuthorizedOperations) {
+          results.forEach { groupResult =>
+            if (groupResult.errorCode == Errors.NONE.code) {
+              groupResult.setAuthorizedOperations(authHelper.authorizedOperations(
+                request,
+                new Resource(ResourceType.GROUP, groupResult.groupId)
+              ))
+            }
+          }
+        }
+        response.groups.addAll(results)
+        requestHelper.sendMaybeThrottle(request, new DescribeGroupsResponse(response))
       }
     }
   }

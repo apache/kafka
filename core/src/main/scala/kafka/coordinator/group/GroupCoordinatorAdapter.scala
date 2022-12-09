@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.{DescribeGroupsResponseData, HeartbeatReq
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
+import java.util
 import java.util.concurrent.CompletableFuture
 import scala.collection.immutable
 import scala.jdk.CollectionConverters._
@@ -190,25 +191,29 @@ class GroupCoordinatorAdapter(
 
   override def describeGroup(
     context: RequestContext,
-    groupId: String
-  ): CompletableFuture[DescribeGroupsResponseData.DescribedGroup] = {
-    val (error, summary) = coordinator.handleDescribeGroup(groupId)
+    groupIds: util.List[String]
+  ): CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]] = {
 
-    CompletableFuture.completedFuture(new DescribeGroupsResponseData.DescribedGroup()
-      .setErrorCode(error.code)
-      .setGroupId(groupId)
-      .setGroupState(summary.state)
-      .setProtocolType(summary.protocolType)
-      .setProtocolData(summary.protocol)
-      .setMembers(summary.members.map { member =>
-        new DescribeGroupsResponseData.DescribedGroupMember()
-          .setMemberId(member.memberId)
-          .setGroupInstanceId(member.groupInstanceId.orNull)
-          .setClientId(member.clientId)
-          .setClientHost(member.clientHost)
-          .setMemberAssignment(member.assignment)
-          .setMemberMetadata(member.metadata)
-      }.asJava)
-    )
+    def describeGroup(groupId: String): DescribeGroupsResponseData.DescribedGroup = {
+      val (error, summary) = coordinator.handleDescribeGroup(groupId)
+
+      new DescribeGroupsResponseData.DescribedGroup()
+        .setErrorCode(error.code)
+        .setGroupId(groupId)
+        .setGroupState(summary.state)
+        .setProtocolType(summary.protocolType)
+        .setProtocolData(summary.protocol)
+        .setMembers(summary.members.map { member =>
+          new DescribeGroupsResponseData.DescribedGroupMember()
+            .setMemberId(member.memberId)
+            .setGroupInstanceId(member.groupInstanceId.orNull)
+            .setClientId(member.clientId)
+            .setClientHost(member.clientHost)
+            .setMemberAssignment(member.assignment)
+            .setMemberMetadata(member.metadata)
+        }.asJava)
+    }
+
+    CompletableFuture.completedFuture(groupIds.asScala.map(describeGroup).asJava)
   }
 }

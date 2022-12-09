@@ -350,45 +350,55 @@ class GroupCoordinatorAdapterTest {
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator)
 
-    val groupId = "group"
-    val memberSummary = MemberSummary(
-      "memberid",
-      Some("instanceid"),
-      "clientid",
-      "clienthost",
-      "metadata".getBytes(),
-      "assignment".getBytes()
-    )
-    val groupSummary = GroupSummary(
+    val groupId1 = "group-1"
+    val groupId2 = "group-2"
+
+    val groupSummary1 = GroupSummary(
       "Stable",
       "consumer",
       "roundrobin",
-      List(memberSummary)
+      List(MemberSummary(
+        "memberid",
+        Some("instanceid"),
+        "clientid",
+        "clienthost",
+        "metadata".getBytes(),
+        "assignment".getBytes()
+      ))
     )
 
-    when(groupCoordinator.handleDescribeGroup(groupId)).thenReturn {
-      (Errors.INVALID_GROUP_ID, groupSummary)
+    when(groupCoordinator.handleDescribeGroup(groupId1)).thenReturn {
+      (Errors.NONE, groupSummary1)
+    }
+
+    when(groupCoordinator.handleDescribeGroup(groupId2)).thenReturn {
+      (Errors.NOT_COORDINATOR, GroupCoordinator.EmptyGroup)
     }
 
     val ctx = makeContext(ApiKeys.DESCRIBE_GROUPS, ApiKeys.DESCRIBE_GROUPS.latestVersion)
-    val future = adapter.describeGroup(ctx, groupId)
+    val future = adapter.describeGroup(ctx, List(groupId1, groupId2).asJava)
     assertTrue(future.isDone)
 
-    val expectedDescribedGroup = new DescribeGroupsResponseData.DescribedGroup()
-      .setErrorCode(Errors.INVALID_GROUP_ID.code)
-      .setGroupId(groupId)
-      .setProtocolType(groupSummary.protocolType)
-      .setProtocolData(groupSummary.protocol)
-      .setGroupState(groupSummary.state)
-      .setMembers(List(new DescribeGroupsResponseData.DescribedGroupMember()
-        .setMemberId(memberSummary.memberId)
-        .setGroupInstanceId(memberSummary.groupInstanceId.orNull)
-        .setClientId(memberSummary.clientId)
-        .setClientHost(memberSummary.clientHost)
-        .setMemberMetadata(memberSummary.metadata)
-        .setMemberAssignment(memberSummary.assignment)
-      ).asJava)
+    val expectedDescribedGroups = List(
+      new DescribeGroupsResponseData.DescribedGroup()
+        .setGroupId(groupId1)
+        .setErrorCode(Errors.NONE.code)
+        .setProtocolType(groupSummary1.protocolType)
+        .setProtocolData(groupSummary1.protocol)
+        .setGroupState(groupSummary1.state)
+        .setMembers(List(new DescribeGroupsResponseData.DescribedGroupMember()
+          .setMemberId(groupSummary1.members.head.memberId)
+          .setGroupInstanceId(groupSummary1.members.head.groupInstanceId.orNull)
+          .setClientId(groupSummary1.members.head.clientId)
+          .setClientHost(groupSummary1.members.head.clientHost)
+          .setMemberMetadata(groupSummary1.members.head.metadata)
+          .setMemberAssignment(groupSummary1.members.head.assignment)
+        ).asJava),
+      new DescribeGroupsResponseData.DescribedGroup()
+        .setGroupId(groupId2)
+        .setErrorCode(Errors.NOT_COORDINATOR.code)
+    ).asJava
 
-    assertEquals(expectedDescribedGroup, future.get())
+    assertEquals(expectedDescribedGroups, future.get())
   }
 }

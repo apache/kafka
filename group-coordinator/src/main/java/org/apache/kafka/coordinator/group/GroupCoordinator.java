@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.BufferSupplier;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public interface GroupCoordinator {
@@ -104,16 +105,16 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Describe a Group.
+     * Describe Groups.
      *
      * @param context           The coordinator request context.
-     * @param groupId           The group id.
+     * @param groupIds          The group ids.
      *
      * @return A future yielding the response or an exception.
      */
-    CompletableFuture<DescribeGroupsResponseData.DescribedGroup> describeGroup(
+    CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroup(
         RequestContext context,
-        String groupId
+        List<String> groupIds
     );
 }
 
