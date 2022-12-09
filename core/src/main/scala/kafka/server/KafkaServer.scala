@@ -84,19 +84,6 @@ object KafkaServer {
     clientConfig
   }
 
-  def zkClient(name: String, time: Time, config: KafkaConfig, zkClientConfig: ZKClientConfig): KafkaZkClient = {
-    val secureAclsEnabled = config.zkEnableSecureAcls
-    val isZkSecurityEnabled = JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig)
-
-    if (secureAclsEnabled && !isZkSecurityEnabled)
-      throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least $KafkaConfig.ZkSslClientEnableProp, $KafkaConfig.ZkClientCnxnSocketProp, and $KafkaConfig.ZkSslKeyStoreLocationProp was not present and the " +
-        s"verification of the JAAS login file failed ${JaasUtils.zkSecuritySysConfigString}")
-
-    KafkaZkClient(config.zkConnect, secureAclsEnabled, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-      config.zkMaxInFlightRequests, time, name = name, zkClientConfig = zkClientConfig,
-      createChrootIfNecessary = true)
-  }
-
   val MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS: Long = 120000
 }
 
@@ -540,6 +527,7 @@ class KafkaServer(
               fatal("Encountered an exception when waiting to catch up with KRaft metadata log", t)
               shutdown()
             } else {
+              info("Finished catching up on KRaft metadata log, requesting that the KRaft controller unfence this broker")
               lifecycleManager.setReadyToUnfence()
             }
           }
@@ -582,7 +570,7 @@ class KafkaServer(
 
   private def initZkClient(time: Time): Unit = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")
-    _zkClient = KafkaServer.zkClient("Kafka server", time, config, zkClientConfig)
+    _zkClient = KafkaZkClient.createZkClient("Kafka server", time, config, zkClientConfig)
     _zkClient.createTopLevelPaths()
   }
 

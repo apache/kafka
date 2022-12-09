@@ -2233,7 +2233,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       if (migrationEnabled) {
         validateNonEmptyQuorumVotersForKRaft()
         require(controllerListenerNames.nonEmpty,
-          s"${KafkaConfig.ControllerListenerNamesProp} must be empty when not running in ZK migration mode: ${controllerListenerNames.asJava}")
+          s"${KafkaConfig.ControllerListenerNamesProp} must not be empty when running in ZK migration mode: ${controllerListenerNames.asJava}")
       } else {
         // controller listener names must be empty when not in KRaft mode
         require(controllerListenerNames.isEmpty,
