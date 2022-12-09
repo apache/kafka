@@ -37,7 +37,7 @@ def retryFlagsString(jobConfig) {
 
 def downstreamBuildFailureOutput = ""
 def publishStep(String vaultSecret) {
-    withVaultFile([["gradle/${vaultSecret}", "settings_file", "${env.WORKSPACE}/init.gradle", "GRADLE_NEXUS_SETTINGS"]]) {
+    withGradleFile(["gradle/${vaultSecret}", "settings_file", "${env.WORKSPACE}/init.gradle", "GRADLE_NEXUS_SETTINGS"]) {
         sh "./gradlewAll --init-script ${GRADLE_NEXUS_SETTINGS} --no-daemon uploadArchives"
     }
 }
