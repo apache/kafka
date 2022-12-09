@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.FindCoordinatorRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import java.time.Duration
 import scala.annotation.nowarn
@@ -292,8 +292,8 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     * Then, 1 consumer should be left out of the group.
     */
   @Test
-  @Disabled // TODO: To be re-enabled once we can make it less flaky (KAFKA-13421)
   def testRollingBrokerRestartsWithSmallerMaxGroupSizeConfigDisruptsBigGroup(): Unit = {
+    warn(s"TEST-TEST-TEST - Setup")
     val group = "group-max-size-test"
     val topic = "group-max-size-test"
     val maxGroupSize = 2
@@ -303,27 +303,44 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-    val partitions = createTopicPartitions(topic, numPartitions = partitionCount, replicationFactor = brokerCount)
+    warn(s"TEST-TEST-TEST - consumerConfig: $consumerConfig")
 
+    val partitions = createTopicPartitions(topic, numPartitions = partitionCount, replicationFactor = brokerCount)
+    warn(s"TEST-TEST-TEST - partitions created: $partitions")
     addConsumersToGroupAndWaitForGroupAssignment(consumerCount, mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]](),
       consumerPollers, List[String](topic), partitions, group)
+    warn(s"TEST-TEST-TEST - consumers added")
+
+    warn(s"TEST-TEST-TEST - before rolling brokers...")
 
     // roll all brokers with a lesser max group size to make sure coordinator has the new config
     val newConfigs = generateKafkaConfigs(maxGroupSize.toString)
+    warn(s"TEST-TEST-TEST - configs generated - newConfigs: $newConfigs")
     for (serverIdx <- servers.indices) {
+      warn(s"TEST-TEST-TEST - killing broker $serverIdx...")
       killBroker(serverIdx)
+      warn(s"TEST-TEST-TEST - broker $serverIdx killed")
       val config = newConfigs(serverIdx)
+      warn(s"TEST-TEST-TEST - newly-created configs: $config")
       servers(serverIdx) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
+      warn(s"TEST-TEST-TEST - created a new broker: $serverIdx, restarting...")
       restartDeadBrokers()
+      warn(s"TEST-TEST-TEST - new broker $serverIdx restarted")
     }
+
+    warn(s"TEST-TEST-TEST - after rolling brokers")
 
     def raisedExceptions: Seq[Throwable] = {
       consumerPollers.flatten(_.thrownException)
     }
 
+    warn(s"TEST-TEST-TEST - waiting for group rebalance...")
+
     // we are waiting for the group to rebalance and one member to get kicked
     TestUtils.waitUntilTrue(() => raisedExceptions.nonEmpty,
       msg = "The remaining consumers in the group could not fetch the expected records", 10000L)
+
+    warn(s"TEST-TEST-TEST - group rebalance complete")
 
     assertEquals(1, raisedExceptions.size)
     assertTrue(raisedExceptions.head.isInstanceOf[GroupMaxSizeReachedException])
