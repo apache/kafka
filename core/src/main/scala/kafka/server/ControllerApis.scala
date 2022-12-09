@@ -99,6 +99,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentials(request)
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
@@ -814,6 +815,24 @@ class ControllerApis(val requestChannel: RequestChannel,
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new AlterPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
       }
+  }
+
+  def handleAlterUserScramCredentials(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val alterRequest = request.body[AlterUserScramCredentialsRequest]
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+    controller.alterUserScramCredentials(context, alterRequest.data)
+      .thenApply[Unit] { response =>
+         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+           new AlterUserScramCredentialsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+      }
+    // controller.alterUserScramCredentials(context, alterRequest.data()).whenComplete((response, e) =>
+    //   if (e != null) {
+    //     requestHelper.handleError(request, e)
+    //   } else {
+    //     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+    //       new AlterUserScramCredentialsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+    //   })
   }
 
   def handleListPartitionReassignments(request: RequestChannel.Request): CompletableFuture[Unit] = {

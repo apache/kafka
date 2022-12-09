@@ -54,7 +54,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, MetadataProvenance, ProducerIdsImage, TopicsDelta, TopicsImage}
+import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage,
+MetadataImage, MetadataProvenance, ScramImage, ProducerIdsImage, TopicsDelta, TopicsImage}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.OffsetAndEpoch
@@ -4362,7 +4363,8 @@ class ReplicaManagerTest {
       ConfigurationsImage.EMPTY,
       ClientQuotasImage.EMPTY,
       ProducerIdsImage.EMPTY,
-      AclsImage.EMPTY
+      AclsImage.EMPTY,
+      ScramImage.EMPTY
     )
   }
 

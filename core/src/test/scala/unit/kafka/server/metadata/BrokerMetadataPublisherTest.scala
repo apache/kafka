@@ -184,6 +184,7 @@ class BrokerMetadataPublisherTest {
       conf = broker.config,
       faultHandler = errorHandler,
       dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap,
+//      credentialProvider = broker.credentialProvider,
       nodeType = "broker"))
   }
 

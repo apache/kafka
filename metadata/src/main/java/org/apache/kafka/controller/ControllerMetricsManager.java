@@ -144,6 +144,8 @@ final class ControllerMetricsManager {
             case PRODUCER_IDS_RECORD:
             case ACCESS_CONTROL_ENTRY_RECORD:
             case REMOVE_ACCESS_CONTROL_ENTRY_RECORD:
+            case USER_SCRAM_CREDENTIAL_RECORD:
+            case REMOVE_USER_SCRAM_CREDENTIAL_RECORD:
             case NO_OP_RECORD:
             case ZK_MIGRATION_STATE_RECORD:
                 // These record types do not affect metrics
