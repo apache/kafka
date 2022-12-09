@@ -175,6 +175,18 @@ public final class AssignmentTestUtils {
         );
     }
 
+    public static AssignmentConfigs getConfigsWithZeroStandbysAndZeroLagAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            0L,
+            maxWarmups,
+            0,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
     public static AssignmentConfigs getConfigsWithOneStandbysAndLagAndWarmups(final long acceptableRecoveryLag,
                                                                               final int maxWarmups) {
         return new AssignmentConfigs(

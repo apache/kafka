@@ -58,6 +58,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getConfigsWithOneStandbysAndWarmups;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getConfigsWithZeroStandbysAndWarmups;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getConfigsWithOneStandbysAndZeroLagAndWarmups;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getConfigsWithZeroStandbysAndZeroLagAndWarmups;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getDefaultConfigsWithOneStandbys;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getDefaultConfigsWithZeroStandbys;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
@@ -139,7 +140,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithOneStandbysAndZeroLagAndWarmups(1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
         );
         assertThat(unstable, is(false));
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
@@ -160,7 +161,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithOneStandbysAndZeroLagAndWarmups(1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
         );
         assertThat(unstable, is(false));
         assertValidAssignment(0, allTaskIds, emptySet(), clientStates, new StringBuilder());
@@ -180,7 +181,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithOneStandbysAndZeroLagAndWarmups(1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
         );
 
         assertThat(unstable, is(false));
@@ -202,7 +203,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithOneStandbysAndZeroLagAndWarmups(1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
         );
 
         assertThat(unstable, is(false));
@@ -231,7 +232,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithOneStandbysAndZeroLagAndWarmups(1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
         );
 
         assertThat(unstable, is(false));
@@ -253,7 +254,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithOneStandbysAndZeroLagAndWarmups(1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
         );
 
         assertThat(unstable, is(false));
@@ -278,7 +279,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithOneStandbysAndWarmups(allTaskIds.size() / 3 + 1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(allTaskIds.size() / 3 + 1)
         );
 
         assertThat(unstable, is(true));
@@ -308,7 +309,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithOneStandbysAndWarmups(allTaskIds.size() / 3 + 1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(allTaskIds.size() / 3 + 1)
         );
 
         assertThat(unstable, is(false));
@@ -329,7 +330,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTaskIds,
             allTaskIds,
-            getConfigsWithOneStandbysAndZeroLagAndWarmups(1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
         );
 
         assertThat(unstable, is(false));
@@ -710,7 +711,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            getConfigsWithOneStandbysAndZeroLagAndWarmups(1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
         );
 
         assertValidAssignment(
@@ -741,7 +742,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            getConfigsWithOneStandbysAndZeroLagAndWarmups(1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
         );
 
         assertValidAssignment(
@@ -772,7 +773,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            getConfigsWithOneStandbysAndZeroLagAndWarmups(1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
         );
 
         assertValidAssignment(
@@ -803,7 +804,7 @@ public class HighAvailabilityTaskAssignorTest {
             clientStates,
             allTasks,
             statefulTasks,
-            getConfigsWithOneStandbysAndZeroLagAndWarmups(1)
+            getConfigsWithZeroStandbysAndZeroLagAndWarmups(1)
         );
 
         assertValidAssignment(
