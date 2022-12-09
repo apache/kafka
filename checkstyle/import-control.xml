@@ -396,6 +396,7 @@
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
+    <allow pkg="kafka.test" />
   </subpackage>
 
   <subpackage name="trogdor">

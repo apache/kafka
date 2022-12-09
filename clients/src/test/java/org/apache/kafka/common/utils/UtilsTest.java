@@ -163,6 +163,13 @@ public class UtilsTest {
     }
 
     @Test
+    public void testMkString() {
+        assertEquals("[]", Utils.mkString(Stream.empty(), "[", "]", ","));
+        assertEquals("(1)", Utils.mkString(Stream.of("1"), "(", ")", ","));
+        assertEquals("{1,2,3}", Utils.mkString(Stream.of(1, 2, 3), "{", "}", ","));
+    }
+
+    @Test
     public void testAbs() {
         assertEquals(0, Utils.abs(Integer.MIN_VALUE));
         assertEquals(10, Utils.abs(-10));
