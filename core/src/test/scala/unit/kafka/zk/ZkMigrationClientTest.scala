@@ -235,17 +235,19 @@ class ZkMigrationClientTest extends QuorumTestHarness {
   @Test
   def testNonIncreasingKRaftEpoch(): Unit = {
     assertEquals(0, migrationState.migrationZkVersion())
+    
+    migrationState = migrationState.withNewKRaftController(3001, 40)
+    val t1 = assertThrows(classOf[ControllerMovedException], () => migrationClient.claimControllerLeadership(migrationState))
+    assertTrue(t1.getMessage.startsWith("Cannot register KRaft controller 3001 with epoch 40 as the active controller since a newer KRaft epoch was seen in the migration state ZNode"))
 
+    migrationState = migrationState.withNewKRaftController(3001, 42)
+    val t2 = assertThrows(classOf[ControllerMovedException], () => migrationClient.claimControllerLeadership(migrationState))
+    assertTrue(t2.getMessage.startsWith("Cannot register KRaft controller 3001 with epoch 42 as the active controller since a newer KRaft epoch was seen in the migration state ZNode"))
+
+    migrationState = migrationState.withNewKRaftController(3001, 100)
     migrationState = migrationClient.claimControllerLeadership(migrationState)
-    assertEquals(1, migrationState.controllerZkVersion())
-
-    migrationState = migrationState.withNewKRaftController(3000, 40)
-    val t1 = assertThrows(classOf[IllegalStateException], () => migrationClient.claimControllerLeadership(migrationState))
-    assertEquals("Cannot register KRaft controller 3000 as the active controller in ZK since its epoch 10000040 is not higher than the current ZK epoch 10000042.", t1.getMessage)
-
-    migrationState = migrationState.withNewKRaftController(3000, 42)
-    val t2 = assertThrows(classOf[IllegalStateException], () => migrationClient.claimControllerLeadership(migrationState))
-    assertEquals("Cannot register KRaft controller 3000 as the active controller in ZK since its epoch 10000042 is not higher than the current ZK epoch 10000042.", t2.getMessage)
+    assertEquals(migrationState.kraftControllerEpoch(), 100)
+    assertEquals(migrationState.kraftControllerId(), 3001)
   }
 
   @Test
@@ -260,7 +262,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     assertEquals(2, migrationState.controllerZkVersion())
     zkClient.getControllerEpoch match {
       case Some((kraftEpoch, stat)) =>
-        assertEquals(10000042, kraftEpoch)
+        assertEquals(42, kraftEpoch)
         assertEquals(2, stat.getVersion)
       case None => fail()
     }
@@ -269,7 +271,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
     migrationState = migrationClient.releaseControllerLeadership(migrationState)
     val (epoch1, zkVersion1) = zkClient.registerControllerAndIncrementControllerEpoch(100)
-    assertEquals(epoch1, 10000043)
+    assertEquals(epoch1, 43)
     assertEquals(zkVersion1, 3)
   }
 

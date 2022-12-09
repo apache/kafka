@@ -177,49 +177,60 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     val timestamp = time.milliseconds()
     val curEpochOpt: Option[(Int, Int)] = getControllerEpoch.map(e => (e._1, e._2.getVersion))
     val controllerOpt = getControllerId
-    val controllerEpochToStore = kraftControllerEpoch + 10000000 // TODO Remove this after KAFKA-14436
+
+    // To fence other KRaft controllers from claiming leadership, first read or create the /migration ZNode
+    val migrationState = getOrCreateMigrationState(
+      ZkMigrationLeadershipState.EMPTY.withNewKRaftController(kraftControllerId, kraftControllerEpoch))
+
+    if (migrationState.kraftControllerEpoch() >= kraftControllerEpoch) {
+      throw new ControllerMovedException(s"Cannot register KRaft controller $kraftControllerId with epoch $kraftControllerEpoch " +
+        s"as the active controller since a newer KRaft epoch was seen in the migration state ZNode: $migrationState.")
+    }
     curEpochOpt match {
       case None =>
         throw new IllegalStateException(s"Cannot register KRaft controller $kraftControllerId as the active controller " +
           s"since there is no ZK controller epoch present.")
       case Some((curEpoch: Int, curEpochZk: Int)) =>
-        if (curEpoch >= controllerEpochToStore) {
-          // TODO KAFKA-14436 Need to ensure KRaft has a higher epoch an ZK
-          throw new IllegalStateException(s"Cannot register KRaft controller $kraftControllerId as the active controller " +
-            s"in ZK since its epoch ${controllerEpochToStore} is not higher than the current ZK epoch ${curEpoch}.")
+        // TODO KAFKA-14436 Increase the KRaft epoch to be higher than the ZK epoch
+        val newControllerEpoch = if (kraftControllerEpoch > curEpoch) {
+          kraftControllerEpoch
+        } else {
+          curEpoch + 1
         }
 
         val response = if (controllerOpt.isDefined) {
           info(s"KRaft controller $kraftControllerId overwriting ${ControllerZNode.path} to become the active " +
-            s"controller with epoch $controllerEpochToStore. The previous controller was ${controllerOpt.get}.")
+            s"controller with ZK epoch $newControllerEpoch. The previous controller was ${controllerOpt.get}.")
           retryRequestUntilConnected(
             MultiRequest(Seq(
-              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(controllerEpochToStore), curEpochZk),
+              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(newControllerEpoch), curEpochZk),
+              CheckOp(MigrationZNode.path, migrationState.migrationZkVersion()),
               DeleteOp(ControllerZNode.path, ZkVersion.MatchAnyVersion),
-              CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp),
+              CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp, kraftControllerEpoch),
                 defaultAcls(ControllerZNode.path), CreateMode.PERSISTENT)))
           )
         } else {
           info(s"KRaft controller $kraftControllerId creating ${ControllerZNode.path} to become the active " +
-            s"controller with epoch $controllerEpochToStore. There was no active controller.")
+            s"controller with ZK epoch $newControllerEpoch. There was no active controller.")
           retryRequestUntilConnected(
             MultiRequest(Seq(
-              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(controllerEpochToStore), curEpochZk),
-              CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp),
+              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(newControllerEpoch), curEpochZk),
+              CheckOp(MigrationZNode.path, migrationState.migrationZkVersion()),
+              CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp, kraftControllerEpoch),
                 defaultAcls(ControllerZNode.path), CreateMode.PERSISTENT)))
           )
         }
 
-        val failureSuffix = s"while trying to register KRaft controller $kraftControllerId with epoch " +
-          s"$controllerEpochToStore. KRaft controller was not registered."
+        val failureSuffix = s"while trying to register KRaft controller $kraftControllerId with ZK epoch " +
+          s"$newControllerEpoch. KRaft controller was not registered."
         response.resultCode match {
           case Code.OK =>
-            info(s"Successfully registered KRaft controller $kraftControllerId with epoch $controllerEpochToStore")
+            info(s"Successfully registered KRaft controller $kraftControllerId with ZK epoch $newControllerEpoch")
             // First op is always SetData on /controller_epoch
             val setDataResult = response.zkOpResults(0).rawOpResult.asInstanceOf[SetDataResult]
             Some(setDataResult.getStat.getVersion)
           case Code.BADVERSION =>
-            info(s"The controller epoch changed $failureSuffix")
+            info(s"The ZK controller epoch changed $failureSuffix")
             None
           case Code.NONODE =>
             info(s"The ephemeral node at ${ControllerZNode.path} went away $failureSuffix")
