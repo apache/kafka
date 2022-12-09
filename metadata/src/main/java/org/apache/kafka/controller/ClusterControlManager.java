@@ -89,6 +89,7 @@ public class ClusterControlManager {
         private ReplicaPlacer replicaPlacer = null;
         private ControllerMetrics controllerMetrics = null;
         private FeatureControlManager featureControl = null;
+        private boolean zkMigrationEnabled = false;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -130,6 +131,11 @@ public class ClusterControlManager {
             return this;
         }
 
+        Builder setZkMigrationEnabled(boolean zkMigrationEnabled) {
+            this.zkMigrationEnabled = zkMigrationEnabled;
+            return this;
+        }
+
         ClusterControlManager build() {
             if (logContext == null) {
                 logContext = new LogContext();
@@ -156,7 +162,8 @@ public class ClusterControlManager {
                 sessionTimeoutNs,
                 replicaPlacer,
                 controllerMetrics,
-                featureControl
+                featureControl,
+                zkMigrationEnabled
             );
         }
     }
@@ -248,6 +255,8 @@ public class ClusterControlManager {
      */
     private final FeatureControlManager featureControl;
 
+    private final boolean zkMigrationEnabled;
+
     private ClusterControlManager(
         LogContext logContext,
         String clusterId,
@@ -256,7 +265,8 @@ public class ClusterControlManager {
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
         ControllerMetrics metrics,
-        FeatureControlManager featureControl
+        FeatureControlManager featureControl,
+        boolean zkMigrationEnabled
     ) {
         this.logContext = logContext;
         this.clusterId = clusterId;
@@ -270,6 +280,7 @@ public class ClusterControlManager {
         this.readyBrokersFuture = Optional.empty();
         this.controllerMetrics = metrics;
         this.featureControl = featureControl;
+        this.zkMigrationEnabled = zkMigrationEnabled;
     }
 
     ReplicaPlacer replicaPlacer() {
@@ -312,6 +323,10 @@ public class ClusterControlManager {
             .collect(Collectors.toSet());
     }
 
+    boolean zkRegistrationAllowed() {
+        return zkMigrationEnabled && featureControl.metadataVersion().isMigrationSupported();
+    }
+
     /**
      * Process an incoming broker registration request.
      */
@@ -342,7 +357,7 @@ public class ClusterControlManager {
             }
         }
 
-        if (request.isMigratingZkBroker() && !featureControl.metadataVersion().isMigrationSupported()) {
+        if (request.isMigratingZkBroker() && !zkRegistrationAllowed()) {
             throw new BrokerIdNotRegisteredException("Controller does not support registering ZK brokers.");
         }
 

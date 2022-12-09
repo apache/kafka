@@ -27,7 +27,6 @@ import kafka.testkit.KafkaClusterTestKit;
 import kafka.testkit.TestKitNodes;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerState;

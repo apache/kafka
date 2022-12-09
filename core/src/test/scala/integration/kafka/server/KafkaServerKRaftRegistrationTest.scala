@@ -32,6 +32,12 @@ import java.util.concurrent.{TimeUnit, TimeoutException}
 import scala.jdk.CollectionConverters._
 
 
+/**
+ * This test creates a full ZK cluster and a controller-only KRaft cluster and configures the ZK brokers to register
+ * themselves with the KRaft controller. This is mainly a happy-path test since the only way to reliably test the
+ * failure paths is to use timeouts. See {@link unit.kafka.server.BrokerRegistrationRequestTest} for integration test
+ * of just the broker registration path.
+ */
 @Timeout(120)
 @Tag("integration")
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
@@ -47,7 +53,9 @@ class KafkaServerKRaftRegistrationTest {
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
         setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
-        setNumControllerNodes(1).build()).build()
+        setNumControllerNodes(1).build())
+      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
+      .build()
     try {
       kraftCluster.format()
       kraftCluster.startup()

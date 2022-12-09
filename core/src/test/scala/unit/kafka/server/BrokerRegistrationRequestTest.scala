@@ -1,11 +1,27 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package unit.kafka.server
 
 import kafka.server.{BrokerToControllerChannelManager, ControllerNodeProvider, ControllerRequestCompletionHandler}
 import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterTest, Type}
+import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.clients.ClientResponse
-import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.common.message.{BrokerRegistrationRequestData, BrokerRegistrationResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -13,15 +29,16 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.{Tag, Timeout}
 
 import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 
 /**
- * This test simulates a broker registering with the KRaft quorum running with different MetadataVersions.
+ * This test simulates a broker registering with the KRaft quorum under different configurations.
  */
 @Timeout(120)
 @Tag("integration")
@@ -66,130 +83,86 @@ class BrokerRegistrationRequestTest {
     responseFuture.get(30, TimeUnit.SECONDS)
   }
 
-  @ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0)
-  def testRegisterZkWithKRaft34(clusterInstance: ClusterInstance): Unit = {
+  def registerBroker(
+    channelManager: BrokerToControllerChannelManager,
+    clusterId: String,
+    brokerId: Int,
+    zk: Boolean,
+    ibpToSend: Option[(MetadataVersion, MetadataVersion)]
+  ): Errors = {
+    val features = new BrokerRegistrationRequestData.FeatureCollection()
+
+    ibpToSend foreach {
+      case (min, max) =>
+        features.add(new BrokerRegistrationRequestData.Feature()
+          .setName(MetadataVersion.FEATURE_NAME)
+          .setMinSupportedVersion(min.featureLevel())
+          .setMaxSupportedVersion(max.featureLevel())
+        )
+    }
+
+    val req = new BrokerRegistrationRequestData()
+      .setBrokerId(brokerId)
+      .setClusterId(clusterId)
+      .setIncarnationId(Uuid.randomUuid())
+      .setIsMigratingZkBroker(zk)
+      .setFeatures(features)
+
+    Errors.forCode(sendAndRecieve(channelManager, req).errorCode())
+  }
+
+
+  @ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
+    serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "false")))
+  def testRegisterZkWithKRaftMigrationDisabled(clusterInstance: ClusterInstance): Unit = {
+    val clusterId = clusterInstance.clusterId()
     val channelManager = brokerToControllerChannelManager(clusterInstance)
     try {
       channelManager.start()
 
-      val resp1 = {
-        val features = new BrokerRegistrationRequestData.FeatureCollection()
-        features.add(new BrokerRegistrationRequestData.Feature()
-          .setName(MetadataVersion.FEATURE_NAME)
-          .setMinSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel())
-          .setMaxSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel())
-        )
-        val req1 = new BrokerRegistrationRequestData()
-          .setBrokerId(100)
-          .setClusterId(clusterInstance.clusterId())
-          .setIncarnationId(Uuid.randomUuid())
-          .setIsMigratingZkBroker(true)
-          .setFeatures(features)
+      assertEquals(
+        Errors.BROKER_ID_NOT_REGISTERED,
+        registerBroker(channelManager, clusterId, 100, true, Some((MetadataVersion.IBP_3_3_IV0, MetadataVersion.IBP_3_3_IV0))))
 
-        sendAndRecieve(channelManager, req1)
-      }
-      assertEquals(Errors.NONE, Errors.forCode(resp1.errorCode()))
+      assertEquals(
+        Errors.BROKER_ID_NOT_REGISTERED,
+        registerBroker(channelManager, clusterId, 100, true, None))
 
-      val resp2 = {
-        val features = new BrokerRegistrationRequestData.FeatureCollection()
-        features.add(new BrokerRegistrationRequestData.Feature()
-          .setName(MetadataVersion.FEATURE_NAME)
-          .setMinSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel())
-          .setMaxSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel())
-        )
-        val req1 = new BrokerRegistrationRequestData()
-          .setBrokerId(100)
-          .setClusterId(clusterInstance.clusterId())
-          .setIncarnationId(Uuid.randomUuid())
-          .setIsMigratingZkBroker(false)
-          .setFeatures(features)
+      assertEquals(
+        Errors.BROKER_ID_NOT_REGISTERED,
+        registerBroker(channelManager, clusterId, 100, true, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
 
-        sendAndRecieve(channelManager, req1)
-      }
-      assertEquals(Errors.NONE, Errors.forCode(resp2.errorCode()))
-
-      val resp3 = {
-        val features = new BrokerRegistrationRequestData.FeatureCollection()
-        features.add(new BrokerRegistrationRequestData.Feature()
-          .setName(MetadataVersion.FEATURE_NAME)
-          .setMinSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())
-          .setMaxSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())
-        )
-        val req1 = new BrokerRegistrationRequestData()
-          .setBrokerId(100)
-          .setClusterId(clusterInstance.clusterId())
-          .setIncarnationId(Uuid.randomUuid())
-          .setIsMigratingZkBroker(true)
-          .setFeatures(features)
-
-        sendAndRecieve(channelManager, req1)
-      }
-      assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(resp3.errorCode()))
-
-      val resp4 = {
-        val features = new BrokerRegistrationRequestData.FeatureCollection()
-        features.add(new BrokerRegistrationRequestData.Feature()
-          .setName(MetadataVersion.FEATURE_NAME)
-          .setMinSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())
-          .setMaxSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())
-        )
-        val req1 = new BrokerRegistrationRequestData()
-          .setBrokerId(100)
-          .setClusterId(clusterInstance.clusterId())
-          .setIncarnationId(Uuid.randomUuid())
-          .setIsMigratingZkBroker(false)
-          .setFeatures(features)
-
-        sendAndRecieve(channelManager, req1)
-      }
-      assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(resp4.errorCode()))
+      assertEquals(
+        Errors.NONE,
+        registerBroker(channelManager, clusterId, 100, false, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
     } finally {
       channelManager.shutdown()
     }
   }
 
-  @ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_3_IV3)
-  def testRegisterZkWithKRaft33(clusterInstance: ClusterInstance): Unit = {
+  @ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
+    serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
+  def testRegisterZkWithKRaftMigrationEnabled(clusterInstance: ClusterInstance): Unit = {
+    val clusterId = clusterInstance.clusterId()
     val channelManager = brokerToControllerChannelManager(clusterInstance)
     try {
       channelManager.start()
-      val resp1 = {
-        val features = new BrokerRegistrationRequestData.FeatureCollection()
-        features.add(new BrokerRegistrationRequestData.Feature()
-          .setName(MetadataVersion.FEATURE_NAME)
-          .setMinSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel())
-          .setMaxSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel())
-        )
 
-        val req1 = new BrokerRegistrationRequestData()
-          .setBrokerId(100)
-          .setClusterId(clusterInstance.clusterId())
-          .setIncarnationId(Uuid.randomUuid())
-          .setIsMigratingZkBroker(true)
-          .setFeatures(features)
+      assertEquals(
+        Errors.NONE,
+        registerBroker(channelManager, clusterId, 100, true, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
 
-        sendAndRecieve(channelManager, req1)
-      }
-      assertEquals(Errors.BROKER_ID_NOT_REGISTERED, Errors.forCode(resp1.errorCode()))
+      assertEquals(
+        Errors.UNSUPPORTED_VERSION,
+        registerBroker(channelManager, clusterId, 100, true, None))
 
-      val resp2 = {
-        val features = new BrokerRegistrationRequestData.FeatureCollection()
-        features.add(new BrokerRegistrationRequestData.Feature()
-          .setName(MetadataVersion.FEATURE_NAME)
-          .setMinSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())
-          .setMaxSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())
-        )
+      assertEquals(
+        Errors.UNSUPPORTED_VERSION,
+        registerBroker(channelManager, clusterId, 100, true, Some((MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_3_IV3))))
 
-        val req1 = new BrokerRegistrationRequestData()
-          .setBrokerId(100)
-          .setClusterId(clusterInstance.clusterId())
-          .setIncarnationId(Uuid.randomUuid())
-          .setIsMigratingZkBroker(true)
-          .setFeatures(features)
-
-        sendAndRecieve(channelManager, req1)
-      }
-      assertEquals(Errors.BROKER_ID_NOT_REGISTERED, Errors.forCode(resp2.errorCode()))
+      assertEquals(
+        Errors.NONE,
+        registerBroker(channelManager, clusterId, 100, false, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
     } finally {
       channelManager.shutdown()
     }
