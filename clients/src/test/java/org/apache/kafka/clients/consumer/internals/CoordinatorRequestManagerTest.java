@@ -182,7 +182,6 @@ public class CoordinatorRequestManagerTest {
     
     private CoordinatorRequestManager setupCoordinatorManager() {
         return new CoordinatorRequestManager(
-                this.time,
                 this.logContext,
                 this.errorEventHandler,
                 this.groupId,

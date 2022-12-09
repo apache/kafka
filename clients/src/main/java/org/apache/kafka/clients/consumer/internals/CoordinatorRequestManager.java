@@ -27,7 +27,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -52,7 +51,6 @@ import java.util.Optional;
 public class CoordinatorRequestManager implements RequestManager {
 
     private final Logger log;
-    private final Time time;
     private final ErrorEventHandler errorHandler;
     private final long rebalanceTimeoutMs;
     private final String groupId;
@@ -62,14 +60,12 @@ public class CoordinatorRequestManager implements RequestManager {
     private Node coordinator;
 
 
-    public CoordinatorRequestManager(final Time time,
-                                     final LogContext logContext,
+    public CoordinatorRequestManager(final LogContext logContext,
                                      final ConsumerConfig config,
                                      final ErrorEventHandler errorHandler,
                                      final String groupId,
                                      final long rebalanceTimeoutMs) {
         Objects.requireNonNull(groupId);
-        this.time = time;
         this.log = logContext.logger(this.getClass());
         this.errorHandler = errorHandler;
         this.groupId = groupId;
@@ -78,14 +74,12 @@ public class CoordinatorRequestManager implements RequestManager {
     }
 
     // Visible for testing
-    CoordinatorRequestManager(final Time time,
-                              final LogContext logContext,
+    CoordinatorRequestManager(final LogContext logContext,
                               final ErrorEventHandler errorHandler,
                               final String groupId,
                               final long rebalanceTimeoutMs,
                               final RequestState coordinatorRequestState) {
         Objects.requireNonNull(groupId);
-        this.time = time;
         this.log = logContext.logger(this.getClass());
         this.errorHandler = errorHandler;
         this.groupId = groupId;
@@ -124,7 +118,6 @@ public class CoordinatorRequestManager implements RequestManager {
      * Mark the current coordinator null and return the old coordinator. Return an empty Optional
      * if the current coordinator is unknown.
      * @param cause why the coordinator is marked unknown
-     * @return Optional coordinator node that can be null.
      */
     protected void markCoordinatorUnknown(final String cause, final long currentTimeMs) {
         if (this.coordinator != null) {
@@ -140,9 +133,7 @@ public class CoordinatorRequestManager implements RequestManager {
         }
     }
 
-    private void onSuccessfulResponse(
-            final FindCoordinatorResponseData.Coordinator coordinator,
-            final long currentTimeMS) {
+    private void onSuccessfulResponse(final FindCoordinatorResponseData.Coordinator coordinator) {
         // use MAX_VALUE - node.id as the coordinator id to allow separate connections
         // for the coordinator in the underlying network client layer
         int coordinatorConnectionId = Integer.MAX_VALUE - coordinator.nodeId();
@@ -153,7 +144,6 @@ public class CoordinatorRequestManager implements RequestManager {
                 coordinator.port());
         log.info("Discovered group coordinator {}", coordinator);
         coordinatorRequestState.reset();
-        return;
     }
 
     private void onFailedCoordinatorResponse(
@@ -196,7 +186,7 @@ public class CoordinatorRequestManager implements RequestManager {
             onFailedCoordinatorResponse(Errors.forCode(node.errorCode()).exception(), currentTimeMs);
             return;
         }
-        onSuccessfulResponse(node, currentTimeMs);
+        onSuccessfulResponse(node);
     }
 
     public Node coordinator() {

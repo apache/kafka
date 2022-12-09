@@ -112,7 +112,6 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.coordinatorManager = groupId == null ?
                     Optional.empty() :
                     Optional.of(new CoordinatorRequestManager(
-                            time,
                             logContext,
                             config,
                             errorEventHandler,
