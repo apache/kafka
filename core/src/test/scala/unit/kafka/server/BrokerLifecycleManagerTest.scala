@@ -57,15 +57,13 @@ class BrokerLifecycleManagerTest {
   class SimpleControllerNodeProvider extends ControllerNodeProvider {
     val node = new AtomicReference[Node](null)
 
-    override def get(): Option[Node] = Option(node.get())
-
     def listenerName: ListenerName = new ListenerName("PLAINTEXT")
 
     def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT;
 
     def saslMechanism: String = SaslConfigs.DEFAULT_SASL_MECHANISM
 
-    override def getControllerInfo(): ControllerInformation = ControllerInformation(get(),
+    override def getControllerInfo(): ControllerInformation = ControllerInformation(Option(node.get()),
       listenerName, securityProtocol, saslMechanism, isZkController = false)
   }
 

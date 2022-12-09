@@ -210,7 +210,6 @@ class BrokerServer(
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(
         controllerNodeProvider,
-        kafkaScheduler,
         time,
         metrics,
         config,
@@ -334,7 +333,6 @@ class BrokerServer(
 
       val brokerLifecycleChannelManager = BrokerToControllerChannelManager(
         controllerNodeProvider,
-        kafkaScheduler,
         time,
         metrics,
         config,

@@ -19,8 +19,7 @@
   "listeners": ["controller", "zkBroker"],
   "name": "EnvelopeRequest",
   // Request struct for forwarding.
-  // Version 1 adds the envelope request support to ZK brokers as well.
-  "validVersions": "0-1",
+  "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "RequestData", "type": "bytes", "versions": "0+", "zeroCopy": true,

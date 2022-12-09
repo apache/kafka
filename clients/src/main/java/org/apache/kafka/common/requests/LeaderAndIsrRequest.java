@@ -75,14 +75,11 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             ).collect(Collectors.toList());
 
             LeaderAndIsrRequestData data = new LeaderAndIsrRequestData()
+                .setControllerId(kraftController ? -1 : controllerId)
+                .setKRaftControllerId(kraftController ? controllerId : -1)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
                 .setLiveLeaders(leaders);
-            if (kraftController) {
-                data.setKRaftControllerId(controllerId).setControllerId(-1);
-            } else {
-                data.setControllerId(controllerId).setKRaftControllerId(-1);
-            }
 
             if (version >= 2) {
                 Map<String, LeaderAndIsrTopicState> topicStatesMap = groupByTopic(partitionStates, topicIds);

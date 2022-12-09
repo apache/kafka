@@ -282,7 +282,6 @@ class KafkaServer(
 
         clientToControllerChannelManager = BrokerToControllerChannelManager(
           controllerNodeProvider = controllerNodeProvider,
-          kafkaScheduler = kafkaScheduler,
           time = time,
           metrics = metrics,
           config = config,
