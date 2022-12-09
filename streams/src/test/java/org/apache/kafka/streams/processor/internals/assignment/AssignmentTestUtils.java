@@ -113,9 +113,23 @@ public final class AssignmentTestUtils {
 
     private AssignmentTestUtils() {}
 
-    public static AssignmentConfigs getConfigsWithLagWithStandby(final long acceptableRecoveryLagMs) {
+    public static final long ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT = 100;
+
+    public static AssignmentConfigs getDefaultConfigsWithZeroStandbys() {
         return new AssignmentConfigs(
-            acceptableRecoveryLagMs,
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            2,
+            0,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getDefaultConfigsWithOneStandbys() {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
             2,
             1,
             false,
@@ -125,22 +139,9 @@ public final class AssignmentTestUtils {
         );
     }
 
-    public static AssignmentConfigs getConfigsWithLagWithoutStandby(final long acceptableRecoveryLagMs) {
+    public static AssignmentConfigs getConfigsWithZeroStandbysAndWarmups(final int maxWarmups) {
         return new AssignmentConfigs(
-            acceptableRecoveryLagMs,
-            2,
-            0,
-            false,
-            90_000L,
-            60_000L,
-            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
-        );
-    }
-
-    public static AssignmentConfigs getConfigsWithLagAndWarmupsWithoutStandby(final long acceptableRecoveryLagMs,
-                                                                              final int maxWarmups) {
-        return new AssignmentConfigs(
-            acceptableRecoveryLagMs,
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
             maxWarmups,
             0,
             false,
@@ -150,10 +151,34 @@ public final class AssignmentTestUtils {
         );
     }
 
-    public static AssignmentConfigs getConfigsWithLagAndWarmupsWithStandby(final long acceptableRecoveryLagMs,
-                                                                           final int maxWarmups) {
+    public static AssignmentConfigs getConfigsWithOneStandbysAndWarmups(final int maxWarmups) {
         return new AssignmentConfigs(
-            acceptableRecoveryLagMs,
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            maxWarmups,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithOneStandbysAndZeroLagAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            0L,
+            maxWarmups,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithOneStandbysAndLagAndWarmups(final long acceptableRecoveryLag,
+                                                                              final int maxWarmups) {
+        return new AssignmentConfigs(
+            acceptableRecoveryLag,
             maxWarmups,
             1,
             false,
