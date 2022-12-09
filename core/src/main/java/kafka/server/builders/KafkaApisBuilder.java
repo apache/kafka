@@ -18,6 +18,7 @@
 package kafka.server.builders;
 
 import kafka.coordinator.group.GroupCoordinator;
+import kafka.coordinator.group.GroupCoordinatorAdapter;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.ApiVersionManager;
@@ -178,6 +179,7 @@ public class KafkaApisBuilder {
                              metadataSupport,
                              replicaManager,
                              groupCoordinator,
+                             new GroupCoordinatorAdapter(groupCoordinator),
                              txnCoordinator,
                              autoTopicCreationManager,
                              brokerId,

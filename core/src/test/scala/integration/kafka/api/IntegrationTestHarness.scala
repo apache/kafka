@@ -47,6 +47,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   val adminClientConfig = new Properties
   val superuserClientConfig = new Properties
   val serverConfig = new Properties
+  val controllerConfig = new Properties
 
   private val consumers = mutable.Buffer[KafkaConsumer[_, _]]()
   private val producers = mutable.Buffer[KafkaProducer[_, _]]()
@@ -65,6 +66,10 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     modifyConfigs(cfgs)
     insertControllerListenersIfNeeded(cfgs)
     cfgs.map(KafkaConfig.fromProps)
+  }
+
+  override protected def kraftControllerConfigs(): Seq[Properties] = {
+    Seq(controllerConfig)
   }
 
   protected def configureListeners(props: Seq[Properties]): Unit = {

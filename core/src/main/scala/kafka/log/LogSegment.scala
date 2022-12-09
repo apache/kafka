@@ -16,12 +16,14 @@
  */
 package kafka.log
 
+import com.yammer.metrics.core.Timer
+
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
 import kafka.common.LogSegmentOffsetOverflowException
-import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
+import kafka.metrics.KafkaMetricsGroup
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
@@ -464,7 +466,7 @@ class LogSegment private[log] (val log: FileRecords,
    */
   @threadsafe
   def flush(): Unit = {
-    LogFlushStats.logFlushTimer.time {
+    LogFlushStats.logFlushTimer.time { () =>
       log.flush()
       offsetIndex.flush()
       timeIndex.flush()
@@ -687,5 +689,5 @@ object LogSegment {
 }
 
 object LogFlushStats extends KafkaMetricsGroup {
-  val logFlushTimer = new KafkaTimer(newTimer("LogFlushRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  val logFlushTimer: Timer = newTimer("LogFlushRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
 }

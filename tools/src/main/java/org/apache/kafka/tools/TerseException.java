@@ -14,22 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.metrics
-
-import com.yammer.metrics.core.Timer
+package org.apache.kafka.tools;
 
 /**
- * A wrapper around metrics timer object that provides a convenient mechanism
- * to time code blocks. This pattern was borrowed from the metrics-scala_2.9.1
- * package.
- * @param metric The underlying timer object.
+ * An exception thrown to indicate that the command has failed, but we don't want to
+ * print a stack trace.
  */
-class KafkaTimer(metric: Timer) {
+public class TerseException extends Exception {
 
-  def time[A](f: => A): A = {
-    val ctx = metric.time
-    try f
-    finally ctx.stop()
-  }
+    /**
+     * Create new instance with the provided message.
+     *
+     * @param message The message to print out before exiting.  A stack trace will not be printed.
+     */
+    public TerseException(String message) {
+        super(message);
+    }
 }
-

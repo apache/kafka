@@ -18,7 +18,6 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ForwardingAdmin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -72,7 +71,7 @@ public class MirrorClient implements AutoCloseable {
     }
 
     // for testing
-    MirrorClient(ForwardingAdmin adminClient, ReplicationPolicy replicationPolicy,
+    MirrorClient(Admin adminClient, ReplicationPolicy replicationPolicy,
             Map<String, Object> consumerConfig) {
         this.adminClient = adminClient;
         this.replicationPolicy = replicationPolicy;

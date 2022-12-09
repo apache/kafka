@@ -104,7 +104,7 @@ object TopicCommand extends Logging {
                               markedForDeletion: Boolean) {
 
     def printDescription(): Unit = {
-      val configsAsString = config.entries.asScala.filter(!_.isDefault).map { ce => s"${ce.name}=${ce.value}" }.mkString(",")
+      val configsAsString = config.entries.asScala.filterNot(_.isDefault).map { ce => s"${ce.name}=${ce.value}" }.mkString(",")
       print(s"Topic: $topic")
       if(topicId != Uuid.ZERO_UUID) print(s"\tTopicId: $topicId")
       print(s"\tPartitionCount: $numPartitions")
@@ -587,7 +587,7 @@ object TopicCommand extends Logging {
     def partitions: Option[Integer] = valueAsOption(partitionsOpt)
     def replicationFactor: Option[Integer] = valueAsOption(replicationFactorOpt)
     def replicaAssignment: Option[Map[Int, List[Int]]] =
-      if (has(replicaAssignmentOpt) && !Option(options.valueOf(replicaAssignmentOpt)).getOrElse("").isEmpty)
+      if (has(replicaAssignmentOpt) && Option(options.valueOf(replicaAssignmentOpt)).getOrElse("").nonEmpty)
         Some(parseReplicaAssignment(options.valueOf(replicaAssignmentOpt)))
       else
         None
@@ -604,7 +604,7 @@ object TopicCommand extends Logging {
     def configsToDelete: Option[util.List[String]] = valuesAsOption(deleteConfigOpt)
 
     def checkArgs(): Unit = {
-      if (args.length == 0)
+      if (args.isEmpty)
         CommandLineUtils.printUsageAndDie(parser, "Create, delete, describe, or change a topic.")
 
       CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to create, delete, describe, or change a topic.")

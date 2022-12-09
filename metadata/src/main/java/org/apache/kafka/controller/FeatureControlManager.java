@@ -347,4 +347,8 @@ public class FeatureControlManager {
     FeatureControlIterator iterator(long epoch) {
         return new FeatureControlIterator(epoch);
     }
+
+    boolean isControllerId(int nodeId) {
+        return quorumFeatures.isControllerId(nodeId);
+    }
 }
