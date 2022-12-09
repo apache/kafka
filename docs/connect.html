@@ -790,7 +790,7 @@ public ExactlyOnceSupport exactlyOnceSupport(Map&lt;String, String&gt; props) {
 }
 </pre>
 
-    <p>Additionally, if the user has configured the connector to define its own transaction boundaries, the Kafka Connect framework will ask the connector whether it can define its own transaction boundaries with the specified configuration, via the <code>canDefineTransactionBoundaries</code> method:</p>
+    <p>Additionally, if the user has configured the connector to define its own transaction boundaries, the Kafka Connect framework will ask the connector whether it can define its own transaction boundaries with the specified configuration, using the <code>canDefineTransactionBoundaries</code> method:</p>
 
 <pre class="brush: java;">
 @Override
