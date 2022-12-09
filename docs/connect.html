@@ -762,7 +762,7 @@ public List&lt;SourceRecord&gt; poll() {
 
     <p>Most connectors do not need to define their own transaction boundaries. However, it may be useful if files or objects in the source system are broken up into multiple source records, but should be delivered atomically. Additionally, it may be useful if it is impossible to give each source record a unique source offset, if every record with a given offset is delivered within a single transaction.</p>
 
-    <p>Note that if the user has not enabled connector-defined transaction boundaries in the connector config, the <code>TransactionContext</code> returned by <code>context.transactionContext()</code> will be <code>null</code>.</p>
+    <p>Note that if the user has not enabled connector-defined transaction boundaries in the connector configuration, the <code>TransactionContext</code> returned by <code>context.transactionContext()</code> will be <code>null</code>.</p>
 
     <h6>Validation APIs</h6>
 
