@@ -1605,7 +1605,15 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
           }
         }
-        response.groups.addAll(results)
+
+        if (response.groups.isEmpty) {
+          // If the response is empty, we can directly reuse the results.
+          response.setGroups(results)
+        } else {
+          // Otherwise, we have to copy the results into the existing ones.
+          response.groups.addAll(results)
+        }
+
         requestHelper.sendMaybeThrottle(request, new DescribeGroupsResponse(response))
       }
     }
