@@ -371,7 +371,7 @@ errors.tolerance=all</pre>
 
     <h4><a id="connect_exactlyonce" href="#connect_exactlyonce">Exactly-once support</a></h4>
 
-    <p>Kafka Connect is capable of providing exactly-once delivery guarantees for sink connectors (as of version 0.11.0) and source connectors (as of version 3.3.0). Please note that <b>support for exactly-once delivery is highly dependent on the type of connector being run.</b> Even if all the correct worker properties are set in the config for each node in a cluster, if a connector is not designed to or simply cannot take advantage of the capabilities of the Kafka Connect framework, exactly-once may not be possible.</p>
+    <p>Kafka Connect is capable of providing exactly-once delivery guarantees for sink connectors (as of version 0.11.0) and source connectors (as of version 3.3.0). Please note that <b>support for exactly-once delivery is highly dependent on the type of connector you run.</b> Even if you set all the correct worker properties in the configuration for each node in a cluster, if a connector is not designed to, or cannot take advantage of the capabilities of the Kafka Connect framework, exactly-once may not be possible.</p>
 
     <h5><a id="connect_exactlyoncesink" href="#connect_exactlyoncesink">Sink connectors</a></h5>
 
