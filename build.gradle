@@ -800,6 +800,26 @@ gradle.taskGraph.whenReady { taskGraph ->
   }
 }
 
+// Skip publish tasks for projects that do not have a separate artifact per scala version when the
+// scala version is not the default. This is necessary because some repositories ensure immutability
+// of non snapshot artifacts - i.e. they don't allow the same artifact to be published a second time.
+def defaultScalaSuffix = "2.13"
+gradle.taskGraph.whenReady { taskGraph ->
+  def skippedPublish = false
+  taskGraph.getAllTasks().each { task ->
+    if (task.name.equals("publishMavenJavaPublicationToMavenRepository") &&
+        !versions.baseScala.equals(defaultScalaSuffix) &&
+        task.project.hasProperty("archivesBaseName") &&
+        !task.project.archivesBaseName.endsWith("_${versions.baseScala}")) {
+      task.enabled = false
+      skippedPublish = true
+    }
+  }
+  if (skippedPublish)
+    println("Skipping publish for projects that don't have a separate artifact per Scala version since " +
+      "the Scala version (`${versions.baseScala}`) is not the default (`$defaultScalaSuffix`)")
+}
+
 def fineTuneEclipseClasspathFile(eclipse, project) {
   eclipse.classpath.file {
     beforeMerged { cp ->
