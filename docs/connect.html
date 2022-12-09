@@ -375,7 +375,7 @@ errors.tolerance=all</pre>
 
     <h5><a id="connect_exactlyoncesink" href="#connect_exactlyoncesink">Sink connectors</a></h5>
 
-    <p>If a sink connector supports exactly-once delivery, all that is necessary to enable exactly-once delivery at the Connect worker level is ensuring that its consumer group is configured to ignore records in aborted transactions. This can be done by setting the worker property <code>consumer.isolation.level</code> to <code>read_committed</code> or, if running a version of Kafka Connect that supports it, using a <a href="#connectconfigs_connector.client.config.override.policy">connector client config override policy</a> that allows the <code>consumer.override.isolation.level</code> property to be set to <code>read_committed</code> in individual connector configs. There are no additional ACL requirements.</p>
+    <p>If a sink connector supports exactly-once delivery, to enable exactly-once delivery at the Connect worker level, you must ensure its consumer group is configured to ignore records in aborted transactions. You can do this by setting the worker property <code>consumer.isolation.level</code> to <code>read_committed</code> or, if running a version of Kafka Connect that supports it, using a <a href="#connectconfigs_connector.client.config.override.policy">connector client config override policy</a> that allows the <code>consumer.override.isolation.level</code> property to be set to <code>read_committed</code> in individual connector configs. There are no additional ACL requirements.</p>
 
     <h5><a id="connect_exactlyoncesource" href="connect_exactlyoncesource">Source connectors</a></h5>
 
