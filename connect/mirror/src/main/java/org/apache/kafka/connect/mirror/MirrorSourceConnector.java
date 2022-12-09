@@ -18,7 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import java.util.Map.Entry;
 
-import org.apache.kafka.clients.admin.ForwardingAdmin;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
@@ -80,8 +80,9 @@ public class MirrorSourceConnector extends SourceConnector {
     private List<TopicPartition> knownTargetTopicPartitions = Collections.emptyList();
     private ReplicationPolicy replicationPolicy;
     private int replicationFactor;
-    private ForwardingAdmin sourceAdminClient;
-    private ForwardingAdmin targetAdminClient;
+    private Admin sourceAdminClient;
+    private Admin targetAdminClient;
+    private Admin offsetSyncsAdminClient;
 
     public MirrorSourceConnector() {
         // nop
@@ -117,6 +118,7 @@ public class MirrorSourceConnector extends SourceConnector {
         replicationFactor = config.replicationFactor();
         sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
         targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
+        offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig());
         scheduler = new Scheduler(MirrorSourceConnector.class, config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
@@ -142,6 +144,7 @@ public class MirrorSourceConnector extends SourceConnector {
         Utils.closeQuietly(configPropertyFilter, "config property filter");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
+        Utils.closeQuietly(offsetSyncsAdminClient, "offset syncs admin client");
         log.info("Stopping {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
 
@@ -306,9 +309,10 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private void createOffsetSyncsTopic() {
-        MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(),
+        MirrorUtils.createSinglePartitionCompactedTopic(
+                config.offsetSyncsTopic(),
                 config.offsetSyncsTopicReplicationFactor(),
-                config.forwardingAdmin(config.offsetSyncsTopicAdminConfig())
+                offsetSyncsAdminClient
         );
     }
 
@@ -393,7 +397,7 @@ public class MirrorSourceConnector extends SourceConnector {
         }));
     }
 
-    private Set<String> listTopics(ForwardingAdmin adminClient)
+    private Set<String> listTopics(Admin adminClient)
             throws InterruptedException, ExecutionException {
         return adminClient.listTopics().names().get();
     }
@@ -403,7 +407,7 @@ public class MirrorSourceConnector extends SourceConnector {
         return sourceAdminClient.describeAcls(ANY_TOPIC_ACL).values().get();
     }
 
-    private static Collection<TopicDescription> describeTopics(ForwardingAdmin adminClient, Collection<String> topics)
+    private static Collection<TopicDescription> describeTopics(Admin adminClient, Collection<String> topics)
             throws InterruptedException, ExecutionException {
         return adminClient.describeTopics(topics).allTopicNames().get().values();
     }
