@@ -17,10 +17,9 @@
 
 package kafka.server
 
-import kafka.test.annotation.{ClusterTemplate, Type}
+import kafka.test.ClusterInstance
+import kafka.test.annotation.{ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
-import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
-import kafka.test.{ClusterConfig, ClusterGenerator, ClusterInstance}
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.raft.RaftConfig
@@ -32,57 +31,27 @@ import org.junit.jupiter.api.{Tag, Timeout}
 import java.util.concurrent.{TimeUnit, TimeoutException}
 import scala.jdk.CollectionConverters._
 
-object KafkaServerKRaftRegistrationTest {
-
-  def buildClusterConfig(name: String,
-                         zkMetadataVersion: MetadataVersion,
-                         kraftMetadataVersion: MetadataVersion,
-                         success: Boolean): ClusterConfig = {
-    val config = ClusterConfig.defaultClusterBuilder()
-      .name(name)
-      .`type`(Type.ZK)
-      .brokers(3)
-      .metadataVersion(zkMetadataVersion)
-      .build()
-    config.serverProperties().put("test.kraft.metadata.version", kraftMetadataVersion.version())
-    config.serverProperties().put("test.success", success.toString)
-    config
-  }
-
-  def generateTestRuns(clusterGenerator: ClusterGenerator): Unit = {
-    clusterGenerator.accept(buildClusterConfig("3.3->3.3", MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_3_IV3, success = false))
-    clusterGenerator.accept(buildClusterConfig("3.4->3.3", MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_3_IV3, success = false))
-    clusterGenerator.accept(buildClusterConfig("3.3->3.4", MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_4_IV0, success = false))
-    clusterGenerator.accept(buildClusterConfig("3.4->3.4", MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0, success = true))
-  }
-}
 
 @Timeout(120)
 @Tag("integration")
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class KafkaServerKRaftRegistrationTest {
 
-  @ClusterTemplate("generateTestRuns")
-  def testRegisterZkBrokerInKraft(zkCluster: ClusterInstance, config: ClusterConfig): Unit = {
-    val clusterId = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient.getClusterId.get
-    val kraftMetadataVersion = MetadataVersion.fromVersionString(config.serverProperties().get("test.kraft.metadata.version").toString)
-    val shouldSucceed = config.serverProperties().get("test.success").toString.toBoolean
+  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0)
+  def testRegisterZkBrokerInKraft1(zkCluster: ClusterInstance): Unit = {
+    val clusterId = zkCluster.clusterId()
 
     // Bootstrap the ZK cluster ID into KRaft
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(kraftMetadataVersion).
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
         setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build()).build()
     try {
       kraftCluster.format()
       kraftCluster.startup()
-      val readyFuture = if (shouldSucceed) {
-        kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
-      } else {
-        kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(1)
-      }
+      val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
 
       // Enable migration configs and restart brokers
       val props = kraftCluster.controllerClientProperties()
@@ -94,25 +63,14 @@ class KafkaServerKRaftRegistrationTest {
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
 
-      if (shouldSucceed) {
-        try {
-          readyFuture.get(30, TimeUnit.SECONDS)
-        } catch {
-          case _: TimeoutException => fail("Did not see 3 brokers within 30 seconds")
-          case t: Throwable => fail("Had some other error waiting for brokers", t)
-        }
-      } else {
-        try {
-          readyFuture.get(10, TimeUnit.SECONDS)
-          fail("Should not have any brokers after 10 seconds")
-        } catch {
-          case _: TimeoutException => // pass
-          case _: AssertionError => // pass
-          case t: Throwable => fail("Had some other error waiting for brokers", t)
-        }
+      try {
+        // Wait until all three ZK brokers are registered with KRaft controller
+        readyFuture.get(30, TimeUnit.SECONDS)
+      } catch {
+        case _: TimeoutException => fail("Did not see 3 brokers within 30 seconds")
+        case t: Throwable => fail("Had some other error waiting for brokers", t)
       }
     } finally {
-      zkCluster.stop()
       kraftCluster.close()
     }
   }

@@ -21,6 +21,7 @@ import kafka.network.SocketServer;
 import kafka.server.BrokerFeatures;
 import kafka.test.annotation.ClusterTest;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 
 import java.util.Collection;
@@ -114,6 +115,8 @@ public interface ClusterInstance {
      * Return a mapping of the underlying broker IDs to their supported features
      */
     Map<Integer, BrokerFeatures> brokerFeatures();
+
+    String clusterId();
 
     /**
      * The underlying object which is responsible for setting up and tearing down the cluster.

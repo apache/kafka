@@ -27,6 +27,7 @@ import kafka.testkit.KafkaClusterTestKit;
 import kafka.testkit.TestKitNodes;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerState;
@@ -181,6 +182,14 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 brokerServer -> brokerServer.config().nodeId(),
                 BrokerServer::brokerFeatures
             ));
+        }
+
+        @Override
+        public String clusterId() {
+            return controllers().findFirst().map(ControllerServer::clusterId).orElse(
+                brokers().findFirst().map(BrokerServer::clusterId).orElseThrow(
+                    () -> new RuntimeException("No controllers or brokers!"))
+            );
         }
 
         public Collection<ControllerServer> controllerServers() {
