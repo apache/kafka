@@ -209,7 +209,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
         startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(120));
 
-        // the streams applications should in failed state due to the IllegalStateException.
+        // the streams applications should have shut down into `ERROR` due to the IllegalStateException
         waitForApplicationState(Arrays.asList(streams, streamsTwo, streamsThree), KafkaStreams.State.ERROR, ofSeconds(30));
 
     }
