@@ -24,6 +24,8 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
@@ -68,7 +70,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.TestInfo;
 
 @Timeout(600)
@@ -210,7 +211,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(120));
 
         // the streams applications should have shut down into `ERROR` due to the IllegalStateException
-        waitForApplicationState(Arrays.asList(streams, streamsTwo, streamsThree), KafkaStreams.State.ERROR, ofSeconds(30));
+        waitForApplicationState(Arrays.asList(streams, streamsTwo, streamsThree), KafkaStreams.State.ERROR, ofSeconds(60));
 
     }
 
