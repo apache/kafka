@@ -107,7 +107,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
 
     assertEquals(1, getPreferredReplica)
 
-    // Shutdown follower broker. Consumer will reach out to leader after metadata.max.age.ms
+    // Shutdown follower broker.
     brokers(followerBrokerId).shutdown()
     val topicPartition = new TopicPartition(topic, 0)
     TestUtils.waitUntilTrue(() => {
