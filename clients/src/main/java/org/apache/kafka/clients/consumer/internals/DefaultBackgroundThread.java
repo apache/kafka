@@ -146,12 +146,10 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     /**
-     * Process event from a single poll. It performs the following tasks sequentially:
-     *  1. Try to poll and event from the queue, and try to process it.
+     * Poll and process an {@link ApplicationEvent}. It performs the following tasks:
+     *  1. Try to poll and event from the queue, and try to process it using the coorsponding {@link ApplicationEventProcessor}.
      *  2. Try to find Coordinator if needed
-     *  3. Try to send fetches.
-     *  4. Poll the networkClient for outstanding requests. If non: poll until next
-     *  iteration.
+     *  3. Poll the networkClient for outstanding requests.
      */
     void runOnce() {
         Optional<ApplicationEvent> event = maybePollEvent();
@@ -177,7 +175,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             networkClientDelegate.poll(0);
             return;
         }
-        // if there are no events to process, poll until timeout. The timeout
+        // if there are no pending application event, poll until timeout. The timeout
         // will be the minimum of the requestTimeoutMs, nextHeartBeatMs, and
         // nextMetadataUpdate. See NetworkClient.poll impl.
         networkClientDelegate.poll(pollWaitTimeMs);
@@ -199,11 +197,6 @@ public class DefaultBackgroundThread extends KafkaThread {
         return Optional.ofNullable(this.applicationEventQueue.poll());
     }
 
-    /**
-     * ApplicationEvent are consumed here.
-     *
-     * @param event an {@link ApplicationEvent}
-     */
     private void consumeApplicationEvent(final ApplicationEvent event) {
         log.debug("try consuming event: {}", Optional.ofNullable(event));
         Objects.requireNonNull(event);

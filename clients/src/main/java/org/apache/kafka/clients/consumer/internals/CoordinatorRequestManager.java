@@ -35,18 +35,17 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Handles the timing of the next FindCoordinatorRequest based on the {@link RequestState}. It checks for:
- * 1. If there's an existing coordinator.
- * 2. If there is an inflight request
- * 3. If the backoff timer has expired
+ * This is responsible for timing to send the next {@link FindCoordinatorRequest} based on the following criteria:
  *
- * The {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult} contains either a wait
- * timer, or a singleton list of
- * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}.
+ * Whether there is an existing coordinator.
+ * Whether there is an inflight request.
+ * Whether the backoff timer has expired.
+ * The {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult} contains either a wait timer
+ * or a singleton list of {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}.
  *
- * The FindCoordinatorResponse will be handled by the {@link FindCoordinatorRequestHandler} callback, which
- * subsequently invokes {@code onResponse} to handle the exceptions and responses. Note that, the coordinator node
- * will be marked {@code null} upon receiving a failure.
+ * The {@link FindCoordinatorRequest} will be handled by the {@link FindCoordinatorRequestHandler} callback, which
+ * subsequently invokes {@code onResponse} to handle the exception and response. Note that the coordinator node will be
+ * marked {@code null} upon receiving a failure.
  */
 public class CoordinatorRequestManager implements RequestManager {
 
@@ -58,7 +57,6 @@ public class CoordinatorRequestManager implements RequestManager {
     private final RequestState coordinatorRequestState;
     private long timeMarkedUnknownMs = -1L; // starting logging a warning only after unable to connect for a while
     private Node coordinator;
-
 
     public CoordinatorRequestManager(final LogContext logContext,
                                      final ConsumerConfig config,
@@ -87,6 +85,15 @@ public class CoordinatorRequestManager implements RequestManager {
         this.coordinatorRequestState = coordinatorRequestState;
     }
 
+    /**
+     * Poll for the FindCoordinator request if we need one.
+     * If we don't need to discover a coordinator, this method will return a PollResult with Long.MAX_VALUE and an empty list.
+     * If we are still backing off from a previous attempt, this method will return a PollResult with the remaining backoff time and an empty list.
+     * Otherwise, this returns will return a PollResult with a singleton list of UnsentRequest.
+     * Note that this method does not involve any actual network IO, and it only determines if we need to send a new request or not.
+     * @param currentTimeMs current time in ms.
+     * @return {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult}. This will not be {@code null}.
+     */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         if (this.coordinator != null) {
@@ -115,9 +122,9 @@ public class CoordinatorRequestManager implements RequestManager {
     }
 
     /**
-     * Mark the current coordinator null and return the old coordinator. Return an empty Optional
-     * if the current coordinator is unknown.
-     * @param cause why the coordinator is marked unknown
+     * Mark the current coordinator null.
+     * @param cause why the coordinator is marked unknown.
+     * @param currentTimeMs the current time in ms.
      */
     protected void markCoordinatorUnknown(final String cause, final long currentTimeMs) {
         if (this.coordinator != null) {
@@ -167,8 +174,16 @@ public class CoordinatorRequestManager implements RequestManager {
         errorHandler.handle(exception);
     }
 
+    /**
+     * Handles the response and exception upon completing the {@link FindCoordinatorRequest}. This is invoked in the callback
+     * {@link FindCoordinatorRequestHandler}. If the response was successful, a coordinator node will be updated. If the
+     * response failed due to errors, the current coordinator will be marked unknown.
+     * @param currentTimeMs current time ins ms.
+     * @param response the response, can be null.
+     * @param e the exception, can be null.
+     */
     public void onResponse(final long currentTimeMs, final FindCoordinatorResponse response, final Exception e) {
-        // handle Runtime exception
+        // handles Runtime exception
         if (e != null) {
             onFailedCoordinatorResponse(e, currentTimeMs);
             return;
@@ -189,6 +204,10 @@ public class CoordinatorRequestManager implements RequestManager {
         onSuccessfulResponse(node);
     }
 
+    /**
+     * Returns the current coordinator node. It can be {@code null}.
+     * @return the current coordinator node.
+     */
     public Node coordinator() {
         return this.coordinator;
     }

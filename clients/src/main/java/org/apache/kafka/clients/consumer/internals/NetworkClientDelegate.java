@@ -69,12 +69,13 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.activeNodes = new HashSet<>();
     }
 
+    /**
+     * Polls for the responses of the sent requests. This methods will try to send the requests in the {@code unsentRequests}, poll for reponses, and check the disconnected nodes.
+     * @param timeoutMs
+     * @return
+     */
     public List<ClientResponse> poll(final long timeoutMs) {
         final long currentTimeMs = time.milliseconds();
-        // 1. Try to send request in the unsentRequests queue. It is either caused by timeout or network error (node
-        // not available)
-        // 2. poll for the results if there's any.
-        // 3. Check connection status for each node, disconnect ones that are not reachable.
         trySend(currentTimeMs);
         List<ClientResponse> res = this.client.poll(timeoutMs, currentTimeMs);
         checkDisconnects();
