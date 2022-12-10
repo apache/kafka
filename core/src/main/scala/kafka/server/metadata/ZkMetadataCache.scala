@@ -27,7 +27,7 @@ import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
 import kafka.controller.StateChangeLogger
-import kafka.server.{BrokerFeatures, FinalizedFeaturesAndEpoch, MetadataCache}
+import kafka.server.{BrokerFeatures, CachedControllerId, FinalizedFeaturesAndEpoch, KRaftCachedControllerId, MetadataCache, ZkCachedControllerId}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import kafka.utils.Implicits._
@@ -324,35 +324,17 @@ class ZkMetadataCache(brokerId: Int, metadataVersion: MetadataVersion,
     }.getOrElse(Map.empty[Int, Node])
   }
 
-  def getControllerId: Option[Int] = {
-    val snapshot = metadataSnapshot
-    snapshot.controllerId.orElse(snapshot.kraftControllerId)
-  }
-
-  /**
-   * Return controller id. Additionally returns if the controller is zk or kraft controller.
-   * Returns true for zk controller, false otherwise.
-   * @return Controller id and boolean specifying if the controller is a zk controller or kraft
-   *         controller.
-   */
-  def getZkOrKRaftControllerId: (Option[Int], Boolean) = {
+  def getControllerId: Option[CachedControllerId] = {
     val snapshot = metadataSnapshot
     snapshot.kraftControllerId match {
-      case Some(controller) => (Some(controller), false)
-      case None => (snapshot.controllerId, true)
+      case Some(id) => Some(KRaftCachedControllerId(id))
+      case None => snapshot.controllerId.map(ZkCachedControllerId)
     }
   }
 
-  override def getControllerIdForExternalClient: Option[Int] = {
-    val snapshot = metadataSnapshot
-    if (snapshot.controllerId.nonEmpty) {
-      snapshot.controllerId
-    } else if (snapshot.kraftControllerId.nonEmpty) {
-      val aliveBrokers = snapshot.aliveBrokers.values.toList
-      Some(aliveBrokers(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
-    } else {
-      None
-    }
+  def   getRandomAliveBrokerId: Option[Int] = {
+    val aliveBrokers = metadataSnapshot.aliveBrokers.values.toList
+    Some(aliveBrokers(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
   }
 
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {

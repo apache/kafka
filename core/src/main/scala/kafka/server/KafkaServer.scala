@@ -603,7 +603,7 @@ class KafkaServer(
 
           // 1. Find the controller and establish a connection to it.
           // If the controller id or the broker registration are missing, we sleep and retry (if there are remaining retries)
-          metadataCache.getControllerId match {
+          metadataCache.getControllerId.filter(_.isInstanceOf[ZkCachedControllerId]).map(_.id) match {
             case Some(controllerId) =>
               metadataCache.getAliveBrokerNode(controllerId, config.interBrokerListenerName) match {
                 case Some(broker) =>

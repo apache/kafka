@@ -27,7 +27,7 @@ import kafka.log.AppendOrigin
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.server.metadata.ConfigRepository
+import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -80,7 +80,6 @@ import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
-
 import scala.annotation.nowarn
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
@@ -1317,6 +1316,15 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
+    val controllerId = {
+      metadataCache match {
+        case cache: KRaftMetadataCache => cache.getControllerId.map(_.id)
+        case cache => cache.getControllerId.flatMap {
+          case ZkCachedControllerId(id) => Some(id)
+          case KRaftCachedControllerId(_) => cache.getRandomAliveBrokerId
+        }
+      }
+    }
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
        MetadataResponse.prepareResponse(
@@ -1324,7 +1332,7 @@ class KafkaApis(val requestChannel: RequestChannel,
          requestThrottleMs,
          brokers.toList.asJava,
          clusterId,
-         metadataCache.getControllerIdForExternalClient.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
          completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
@@ -3332,13 +3340,21 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
-    val controllerId = metadataCache.getControllerIdForExternalClient.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
+    val controllerId = {
+      metadataCache match {
+        case cache: KRaftMetadataCache => cache.getControllerId.map(_.id)
+        case cache => cache.getControllerId.flatMap {
+          case ZkCachedControllerId(id) => Some(id)
+          case KRaftCachedControllerId(_) => cache.getRandomAliveBrokerId
+        }
+      }
+    }
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
       val data = new DescribeClusterResponseData()
         .setThrottleTimeMs(requestThrottleMs)
         .setClusterId(clusterId)
-        .setControllerId(controllerId)
+        .setControllerId(controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID))
         .setClusterAuthorizedOperations(clusterAuthorizedOperations)
 
 

@@ -53,35 +53,40 @@ class MetadataCacheControllerNodeProvider(
   val config: KafkaConfig
 ) extends ControllerNodeProvider {
 
-  def listenerName(isZkController: Boolean): ListenerName = {
-    if (isZkController) {
-      config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
-    } else {
-      new ListenerName(config.controllerListenerNames.head)
-    }
-  }
+  private val zkControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
+  private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
+  private val zkControllerSaslMechanism = config.saslMechanismInterBrokerProtocol
 
-  def securityProtocol(isZkController: Boolean): SecurityProtocol = {
-    if (isZkController) {
-      config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
-    } else {
-      val listener = listenerName(false)
-      config.effectiveListenerSecurityProtocolMap.getOrElse(listener, SecurityProtocol.forName(listener.value()))
-    }
-  }
+  private val kraftControllerListenerName = if (config.controllerListenerNames.nonEmpty)
+    new ListenerName(config.controllerListenerNames.head) else null
+  private val kraftControllerSecurityProtocol = Option(kraftControllerListenerName)
+    .map( listener => config.effectiveListenerSecurityProtocolMap.getOrElse(
+      listener, SecurityProtocol.forName(kraftControllerListenerName.value())))
+    .orNull
+  private val kraftControllerSaslMechanism = config.saslMechanismControllerProtocol
 
-  def saslMechanism(isZkController: Boolean): String = {
-    if (isZkController) {
-      config.saslMechanismInterBrokerProtocol
-    } else {
-      config.saslMechanismControllerProtocol
-    }
-  }
+  private val emptyZkControllerInfo =  ControllerInformation(
+    None,
+    zkControllerListenerName,
+    zkControllerSecurityProtocol,
+    zkControllerSaslMechanism,
+    isZkController = true)
 
   override def getControllerInfo(): ControllerInformation = {
-    val (controllerIdOpt, isZkController) = metadataCache.getZkOrKRaftControllerId
-    val controllerNodeOpt = controllerIdOpt.flatMap(metadataCache.getAliveBrokerNode(_, listenerName(isZkController)))
-    ControllerInformation(controllerNodeOpt, listenerName(isZkController), securityProtocol(isZkController), saslMechanism(isZkController), isZkController)
+    metadataCache.getControllerId.map {
+      case ZkCachedControllerId(id) => ControllerInformation(
+        metadataCache.getAliveBrokerNode(id, zkControllerListenerName),
+        zkControllerListenerName,
+        zkControllerSecurityProtocol,
+        zkControllerSaslMechanism,
+        isZkController = true)
+      case KRaftCachedControllerId(id) => ControllerInformation(
+        metadataCache.getAliveBrokerNode(id, kraftControllerListenerName),
+        kraftControllerListenerName,
+        kraftControllerSecurityProtocol,
+        kraftControllerSaslMechanism,
+        isZkController = false)
+    }.getOrElse(emptyZkControllerInfo)
   }
 }
 
