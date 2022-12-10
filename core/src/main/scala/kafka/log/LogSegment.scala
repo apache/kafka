@@ -32,6 +32,7 @@ import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords.{LogOffsetPosition, TimestampAndOffset}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.server.log.internals.{OffsetPosition, TimestampOffset}
 
 import scala.jdk.CollectionConverters._
 import scala.math._
@@ -102,10 +103,10 @@ class LogSegment private[log] (val log: FileRecords,
   @volatile private var rollingBasedTimestamp: Option[Long] = None
 
   /* The maximum timestamp and offset we see so far */
-  @volatile private var _maxTimestampAndOffsetSoFar: TimestampOffset = TimestampOffset.Unknown
+  @volatile private var _maxTimestampAndOffsetSoFar: TimestampOffset = TimestampOffset.UNKNOWN
   def maxTimestampAndOffsetSoFar_= (timestampOffset: TimestampOffset): Unit = _maxTimestampAndOffsetSoFar = timestampOffset
   def maxTimestampAndOffsetSoFar: TimestampOffset = {
-    if (_maxTimestampAndOffsetSoFar == TimestampOffset.Unknown)
+    if (_maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN)
       _maxTimestampAndOffsetSoFar = timeIndex.lastEntry
     _maxTimestampAndOffsetSoFar
   }
@@ -161,7 +162,7 @@ class LogSegment private[log] (val log: FileRecords,
       trace(s"Appended $appendedBytes to ${log.file} at end offset $largestOffset")
       // Update the in memory max timestamp and corresponding offset.
       if (largestTimestamp > maxTimestampSoFar) {
-        maxTimestampAndOffsetSoFar = TimestampOffset(largestTimestamp, shallowOffsetOfMaxTimestamp)
+        maxTimestampAndOffsetSoFar = new TimestampOffset(largestTimestamp, shallowOffsetOfMaxTimestamp)
       }
       // append an entry to the index (if needed)
       if (bytesSinceLastIndexEntry > indexIntervalBytes) {
@@ -340,7 +341,7 @@ class LogSegment private[log] (val log: FileRecords,
     txnIndex.reset()
     var validBytes = 0
     var lastIndexEntry = 0
-    maxTimestampAndOffsetSoFar = TimestampOffset.Unknown
+    maxTimestampAndOffsetSoFar = TimestampOffset.UNKNOWN
     try {
       for (batch <- log.batches.asScala) {
         batch.ensureValid()
@@ -348,7 +349,7 @@ class LogSegment private[log] (val log: FileRecords,
 
         // The max timestamp is exposed at the batch level, so no need to iterate the records
         if (batch.maxTimestamp > maxTimestampSoFar) {
-          maxTimestampAndOffsetSoFar = TimestampOffset(batch.maxTimestamp, batch.lastOffset)
+          maxTimestampAndOffsetSoFar = new TimestampOffset(batch.maxTimestamp, batch.lastOffset)
         }
 
         // Build offset index
@@ -393,7 +394,7 @@ class LogSegment private[log] (val log: FileRecords,
     // Scan the rest of the messages to see if there is a larger timestamp after the last time index entry.
     val maxTimestampOffsetAfterLastEntry = log.largestTimestampAfter(offsetPosition.position)
     if (maxTimestampOffsetAfterLastEntry.timestamp > lastTimeIndexEntry.timestamp) {
-      maxTimestampAndOffsetSoFar = TimestampOffset(maxTimestampOffsetAfterLastEntry.timestamp, maxTimestampOffsetAfterLastEntry.offset)
+      maxTimestampAndOffsetSoFar = new TimestampOffset(maxTimestampOffsetAfterLastEntry.timestamp, maxTimestampOffsetAfterLastEntry.offset)
     }
   }
 
@@ -590,7 +591,7 @@ class LogSegment private[log] (val log: FileRecords,
    * Close this log segment
    */
   def close(): Unit = {
-    if (_maxTimestampAndOffsetSoFar != TimestampOffset.Unknown)
+    if (_maxTimestampAndOffsetSoFar != TimestampOffset.UNKNOWN)
       CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar,
         skipFullCheck = true), this)
     CoreUtils.swallow(lazyOffsetIndex.close(), this)

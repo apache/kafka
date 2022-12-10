@@ -24,6 +24,7 @@ import kafka.utils.{Logging, nonthreadsafe}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.log.internals.CorruptIndexException
 
 import scala.collection.mutable.ListBuffer
 
