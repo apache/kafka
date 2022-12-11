@@ -32,6 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
+import org.apache.kafka.server.log.internals.TransactionIndex
 import org.apache.kafka.snapshot.Snapshots
 
 import scala.jdk.CollectionConverters._
@@ -94,7 +95,7 @@ object DumpLogSegments {
 
   private def dumpTxnIndex(file: File): Unit = {
     val index = new TransactionIndex(UnifiedLog.offsetFromFile(file), file)
-    for (abortedTxn <- index.allAbortedTxns) {
+    for (abortedTxn <- index.allAbortedTxns.asScala) {
       println(s"version: ${abortedTxn.version} producerId: ${abortedTxn.producerId} firstOffset: ${abortedTxn.firstOffset} " +
         s"lastOffset: ${abortedTxn.lastOffset} lastStableOffset: ${abortedTxn.lastStableOffset}")
     }

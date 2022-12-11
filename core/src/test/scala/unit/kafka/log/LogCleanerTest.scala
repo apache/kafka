@@ -30,6 +30,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.log.internals.AbortedTxn
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -328,8 +329,8 @@ class LogCleanerTest {
     assertEquals(20L, log.logEndOffset)
 
     val expectedAbortedTxns = List(
-      new AbortedTxn(producerId=producerId1, firstOffset=8, lastOffset=10, lastStableOffset=11),
-      new AbortedTxn(producerId=producerId2, firstOffset=11, lastOffset=16, lastStableOffset=17)
+      new AbortedTxn(producerId1, 8, 10, 11),
+      new AbortedTxn(producerId2, 11, 16, 17)
     )
 
     assertAllTransactionsComplete(log)
