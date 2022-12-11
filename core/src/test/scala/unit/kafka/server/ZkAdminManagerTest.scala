@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.Properties
-
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils.TestUtils
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -28,10 +27,7 @@ import org.apache.kafka.common.message.DescribeConfigsRequestData
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.junit.jupiter.api.{AfterEach, Test}
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertThrows}
 import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
@@ -52,6 +48,28 @@ class ZkAdminManagerTest {
   def createConfigHelper(metadataCache: MetadataCache, zkClient: KafkaZkClient): ConfigHelper = {
     val props = TestUtils.createBrokerConfig(brokerId, "zk")
     new ConfigHelper(metadataCache, KafkaConfig.fromProps(props), new ZkConfigRepository(new AdminZkClient(zkClient)))
+  }
+
+  @Test
+  def testClientQuotasToProps(): Unit = {
+    val emptyProps = ZkAdminManager.clientQuotaPropsToDoubleMap(Map.empty)
+    assertEquals(0, emptyProps.size)
+
+    val oneProp = ZkAdminManager.clientQuotaPropsToDoubleMap(Map("foo" -> "1234"))
+    assertEquals(1, oneProp.size)
+    assertEquals(1234.0, oneProp("foo"))
+
+    // This is probably not desired, but kept for compatability with existing usages
+    val emptyKey = ZkAdminManager.clientQuotaPropsToDoubleMap(Map("" -> "-42.1"))
+    assertEquals(1, emptyKey.size)
+    assertEquals(-42.1, emptyKey(""))
+
+    val manyProps = ZkAdminManager.clientQuotaPropsToDoubleMap(Map("foo" -> "1234", "bar" -> "0", "spam" -> "-1234.56"))
+    assertEquals(3, manyProps.size)
+
+    assertThrows(classOf[NullPointerException], () => ZkAdminManager.clientQuotaPropsToDoubleMap(Map("foo" -> null)))
+    assertThrows(classOf[IllegalStateException], () => ZkAdminManager.clientQuotaPropsToDoubleMap(Map("foo" -> "bar")))
+    assertThrows(classOf[IllegalStateException], () => ZkAdminManager.clientQuotaPropsToDoubleMap(Map("foo" -> "")))
   }
 
   @Test

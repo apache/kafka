@@ -34,12 +34,13 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
-import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
+import org.apache.zookeeper.OpResult.{CheckResult, CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.common.ZKConfig
 import org.apache.zookeeper.data.{ACL, Stat}
-import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
+import org.apache.zookeeper.{CreateMode, KeeperException, OpResult, ZooKeeper}
 
 import scala.collection.{Map, Seq, mutable}
 
@@ -154,6 +155,83 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     }
 
     tryCreateControllerZNodeAndIncrementEpoch()
+  }
+
+  /**
+   * Registers a given KRaft controller in zookeeper as the active controller. Unlike the ZK equivalent of this method,
+   * this creates /controller as a persistent znode. This prevents ZK brokers from attempting to claim the controller
+   * leadership during a KRaft leadership failover.
+   *
+   * This method is called at the beginning of a KRaft migration and during subsequent KRaft leadership changes during
+   * the migration.
+   *
+   * To ensure that the KRaft controller epoch exceeds the current ZK controller epoch, this registration algorithm
+   * uses a conditional update on the /controller_epoch znode. If a new ZK controller is elected during this method,
+   * the conditional update on /controller_epoch fails which causes the whole multi-op transaction to fail.
+   *
+   * @param kraftControllerId ID of the KRaft controller node
+   * @param kraftControllerEpoch Epoch of the KRaft controller node
+   * @return An optional of the new zkVersion of /controller_epoch. None if we could not register the KRaft controller.
+   */
+  def tryRegisterKRaftControllerAsActiveController(kraftControllerId: Int, kraftControllerEpoch: Int): Option[Int] = {
+    val timestamp = time.milliseconds()
+    val curEpochOpt: Option[(Int, Int)] = getControllerEpoch.map(e => (e._1, e._2.getVersion))
+    val controllerOpt = getControllerId
+    val controllerEpochToStore = kraftControllerEpoch + 10000000 // TODO Remove this after KAFKA-14436
+    curEpochOpt match {
+      case None =>
+        throw new IllegalStateException(s"Cannot register KRaft controller $kraftControllerId as the active controller " +
+          s"since there is no ZK controller epoch present.")
+      case Some((curEpoch: Int, curEpochZk: Int)) =>
+        if (curEpoch >= controllerEpochToStore) {
+          // TODO KAFKA-14436 Need to ensure KRaft has a higher epoch an ZK
+          throw new IllegalStateException(s"Cannot register KRaft controller $kraftControllerId as the active controller " +
+            s"in ZK since its epoch ${controllerEpochToStore} is not higher than the current ZK epoch ${curEpoch}.")
+        }
+
+        val response = if (controllerOpt.isDefined) {
+          info(s"KRaft controller $kraftControllerId overwriting ${ControllerZNode.path} to become the active " +
+            s"controller with epoch $controllerEpochToStore. The previous controller was ${controllerOpt.get}.")
+          retryRequestUntilConnected(
+            MultiRequest(Seq(
+              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(controllerEpochToStore), curEpochZk),
+              DeleteOp(ControllerZNode.path, ZkVersion.MatchAnyVersion),
+              CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp),
+                defaultAcls(ControllerZNode.path), CreateMode.PERSISTENT)))
+          )
+        } else {
+          info(s"KRaft controller $kraftControllerId creating ${ControllerZNode.path} to become the active " +
+            s"controller with epoch $controllerEpochToStore. There was no active controller.")
+          retryRequestUntilConnected(
+            MultiRequest(Seq(
+              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(controllerEpochToStore), curEpochZk),
+              CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp),
+                defaultAcls(ControllerZNode.path), CreateMode.PERSISTENT)))
+          )
+        }
+
+        val failureSuffix = s"while trying to register KRaft controller $kraftControllerId with epoch " +
+          s"$controllerEpochToStore. KRaft controller was not registered."
+        response.resultCode match {
+          case Code.OK =>
+            info(s"Successfully registered KRaft controller $kraftControllerId with epoch $controllerEpochToStore")
+            // First op is always SetData on /controller_epoch
+            val setDataResult = response.zkOpResults(0).rawOpResult.asInstanceOf[SetDataResult]
+            Some(setDataResult.getStat.getVersion)
+          case Code.BADVERSION =>
+            info(s"The controller epoch changed $failureSuffix")
+            None
+          case Code.NONODE =>
+            info(s"The ephemeral node at ${ControllerZNode.path} went away $failureSuffix")
+            None
+          case Code.NODEEXISTS =>
+            info(s"The ephemeral node at ${ControllerZNode.path} was created by another controller $failureSuffix")
+            None
+          case code =>
+            error(s"ZooKeeper had an error $failureSuffix")
+            throw KeeperException.create(code)
+        }
+    }
   }
 
   private def maybeCreateControllerEpochZNode(): (Int, Int) = {
@@ -338,6 +416,24 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
       case Code.NONODE => new Properties()
       case _ => throw getDataResponse.resultException.get
     }
+  }
+
+  def getEntitiesConfigs(rootEntityType: String, sanitizedEntityNames: Set[String]): Map[String, Properties] = {
+    val getDataRequests: Seq[GetDataRequest] = sanitizedEntityNames.map { entityName =>
+      GetDataRequest(ConfigEntityZNode.path(rootEntityType, entityName), Some(entityName))
+    }.toSeq
+
+    val getDataResponses = retryRequestsUntilConnected(getDataRequests)
+    getDataResponses.map { response =>
+      val entityName = response.ctx.get.asInstanceOf[String]
+      response.resultCode match {
+        case Code.OK =>
+          entityName -> ConfigEntityZNode.decode(response.data)
+        case Code.NONODE =>
+          entityName -> new Properties()
+        case _ => throw response.resultException.get
+      }
+    }.toMap
   }
 
   /**
@@ -1554,6 +1650,36 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     }
   }
 
+  def getOrCreateMigrationState(initialState: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+    val getDataRequest = GetDataRequest(MigrationZNode.path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    getDataResponse.resultCode match {
+      case Code.OK =>
+        MigrationZNode.decode(getDataResponse.data, getDataResponse.stat.getVersion, getDataResponse.stat.getMtime)
+      case Code.NONODE =>
+        createInitialMigrationState(initialState)
+      case _ => throw getDataResponse.resultException.get
+    }
+  }
+
+  def createInitialMigrationState(initialState: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+    val createRequest = CreateRequest(
+      MigrationZNode.path,
+      MigrationZNode.encode(initialState),
+      defaultAcls(MigrationZNode.path),
+      CreateMode.PERSISTENT)
+    val response = retryRequestUntilConnected(createRequest)
+    response.maybeThrow()
+    initialState.withMigrationZkVersion(0)
+  }
+
+  def updateMigrationState(migrationState: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+    val req = SetDataRequest(MigrationZNode.path, MigrationZNode.encode(migrationState), migrationState.migrationZkVersion())
+    val resp = retryRequestUntilConnected(req)
+    resp.maybeThrow()
+    migrationState.withMigrationZkVersion(resp.stat.getVersion)
+  }
+
   /**
     * Return the ACLs of the node of the given path
     * @param path the given path for the node
@@ -1769,6 +1895,137 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
           .map(unwrapResponseWithControllerEpochCheck(_).asInstanceOf[Req#Response])
       case invalidVersion =>
         throw new IllegalArgumentException(s"Expected controller epoch zkVersion $invalidVersion should be non-negative or equal to ${ZkVersion.MatchAnyVersion}")
+    }
+  }
+
+  /**
+   * Safely performs a sequence of writes to ZooKeeper as part of a KRaft migration. For each request in {@code requests}, we
+   * wrap the operation in a multi-op transaction that includes a check op on /controller_epoch and /migration. This ensures
+   * that another KRaft controller or another ZK controller has unexpectedly taken leadership.
+   *
+   * In cases of KRaft failover during a migration, it is possible that a write is attempted before the old KRaft controller
+   * receives the new leader information. In this case, the check op on /migration acts as a guard against multiple writers.
+   *
+   * The multi-op for the last request in {@code requests} is used to update the /migration node with the latest migration
+   * state. This effectively checkpoints the progress of the migration in ZK relative to the metadata log.
+   *
+   * Each multi-op request is atomic. The overall sequence of multi-op requests is not atomic and we may fail during any
+   * of them. When the KRaft controller recovers the migration state, it will re-apply all of the writes needed to update
+   * the ZK state with the latest KRaft state. In the case of Create or Delete operations, these will fail if applied
+   * twice, so we need to ignore NodeExists and NoNode failures for those cases.
+   *
+   * @param requests  A sequence of ZK requests. Only Create, Delete, and SetData are supported.
+   * @param migrationState The current migration state. This is written out as part of the final multi-op request.
+   * @return  The new version of /migration ZNode and the sequence of responses for the given requests.
+   */
+  def retryMigrationRequestsUntilConnected[Req <: AsyncRequest](requests: Seq[Req],
+                                                                migrationState: ZkMigrationLeadershipState): (Int, Seq[Req#Response]) = {
+
+    if (requests.isEmpty) {
+      return (migrationState.migrationZkVersion(), Seq.empty)
+    }
+
+    def wrapMigrationRequest(request: Req, lastRequestInBatch: Boolean): MultiRequest = {
+      // Wrap a single request with the multi-op transactional request.
+      val checkOp = CheckOp(ControllerEpochZNode.path, migrationState.controllerZkVersion())
+      val migrationOp = if (lastRequestInBatch) {
+        SetDataOp(MigrationZNode.path, MigrationZNode.encode(migrationState), migrationState.migrationZkVersion())
+      } else {
+        CheckOp(MigrationZNode.path, migrationState.migrationZkVersion())
+      }
+
+      request match {
+        case CreateRequest(path, data, acl, createMode, ctx) =>
+          MultiRequest(Seq(checkOp, migrationOp, CreateOp(path, data, acl, createMode)), ctx)
+        case DeleteRequest(path, version, ctx) =>
+          MultiRequest(Seq(checkOp, migrationOp, DeleteOp(path, version)), ctx)
+        case SetDataRequest(path, data, version, ctx) =>
+          MultiRequest(Seq(checkOp, migrationOp, SetDataOp(path, data, version)), ctx)
+        case _ => throw new IllegalStateException(s"$request does not need controller epoch check")
+      }
+    }
+
+    def handleUnwrappedMigrationResult(migrationOp: ZkOp, migrationResult: OpResult): Int = {
+      // Handle just the operation that updated /migration ZNode
+      val (path: String, data: Option[Array[Byte]], version: Int) = migrationOp match {
+        case CheckOp(path, version) => (path, None, version)
+        case SetDataOp(path, data, version) => (path, Some(data), version)
+        case _ => throw new IllegalStateException("Unexpected result on /migration znode")
+      }
+
+      migrationResult match {
+        case _: CheckResult => version
+        case setDataResult: SetDataResult => setDataResult.getStat.getVersion
+        case errorResult: ErrorResult =>
+          if (path.equals(MigrationZNode.path)) {
+            val errorCode = Code.get(errorResult.getErr)
+            if (errorCode == Code.BADVERSION) {
+              data match {
+                case Some(value) =>
+                  val failedPayload = MigrationZNode.decode(value, version, -1)
+                  throw new RuntimeException(
+                    s"Conditional update on KRaft Migration ZNode failed. Expected zkVersion = ${version}. The failed " +
+                    s"write was: ${failedPayload}. This indicates that another KRaft controller is making writes to ZooKeeper.")
+                case None =>
+                  throw new RuntimeException(s"Check op on KRaft Migration ZNode failed. Expected zkVersion = ${version}. " +
+                    s"This indicates that another KRaft controller is making writes to ZooKeeper.")
+              }
+            } else if (errorCode == Code.OK) {
+              // This means the Check or SetData op would have been ok, but failed because of another operation in this multi-op
+              version
+            } else {
+              throw KeeperException.create(errorCode, path)
+            }
+          } else {
+            throw new RuntimeException(s"Got migration result for incorrect path $path")
+          }
+        case _ => throw new RuntimeException(
+          s"Expected either CheckResult, SetDataResult, or ErrorResult for migration op, but saw ${migrationResult}")
+      }
+    }
+
+    def unwrapMigrationResponse(response: AsyncResponse, lastRequestInBatch: Boolean): (AsyncResponse, Int) = {
+      response match {
+        case MultiResponse(resultCode, _, ctx, zkOpResults, responseMetadata) =>
+        zkOpResults match {
+          case Seq(ZkOpResult(checkOp: CheckOp, checkOpResult), ZkOpResult(migrationOp: CheckOp, migrationResult), zkOpResult) =>
+            // Matches all requests except or the last one (CheckOp on /migration)
+            if (lastRequestInBatch) {
+              throw new IllegalStateException("Should not see a Check operation on /migration in the last request.")
+            }
+            handleUnwrappedCheckOp(checkOp, checkOpResult)
+            val migrationVersion = handleUnwrappedMigrationResult(migrationOp, migrationResult)
+            (handleUnwrappedZkOp(zkOpResult, resultCode, ctx, responseMetadata), migrationVersion)
+          case Seq(ZkOpResult(checkOp: CheckOp, checkOpResult), ZkOpResult(migrationOp: SetDataOp, migrationResult), zkOpResult) =>
+            // Matches the last request in a batch (SetDataOp on /migration)
+            if (!lastRequestInBatch) {
+              throw new IllegalStateException("Should only see a SetData operation on /migration in the last request.")
+            }
+            handleUnwrappedCheckOp(checkOp, checkOpResult)
+            val migrationVersion = handleUnwrappedMigrationResult(migrationOp, migrationResult)
+            (handleUnwrappedZkOp(zkOpResult, resultCode, ctx, responseMetadata), migrationVersion)
+          case null => throw KeeperException.create(resultCode)
+          case _ => throw new IllegalStateException(
+            s"Cannot unwrap $response because it does not contain the expected operations for a migration operation.")
+        }
+        case _ => throw new IllegalStateException(s"Cannot unwrap $response because it is not a MultiResponse")
+      }
+    }
+
+    migrationState.controllerZkVersion() match {
+      case ZkVersion.MatchAnyVersion => throw new IllegalArgumentException(
+        s"Expected a controller epoch zkVersion when making migration writes, not -1.")
+      case version if version >= 0 =>
+        logger.trace(s"Performing ${requests.size} migration update(s) with migrationState=$migrationState")
+        val wrappedRequests = requests.map(req => wrapMigrationRequest(req, req == requests.last))
+        val results = retryRequestsUntilConnected(wrappedRequests)
+        val unwrappedResults = results.map(resp => unwrapMigrationResponse(resp, resp == results.last))
+        val migrationZkVersion = unwrappedResults.last._2
+        // Return the new version of /migration and the sequence of responses to the original requests
+        (migrationZkVersion, unwrappedResults.map(_._1.asInstanceOf[Req#Response]))
+      case invalidVersion =>
+        throw new IllegalArgumentException(
+          s"Expected controller epoch zkVersion $invalidVersion should be non-negative or equal to ${ZkVersion.MatchAnyVersion}")
     }
   }
 
@@ -1997,6 +2254,45 @@ object KafkaZkClient {
       }
   }
 
+  private def handleUnwrappedCheckOp(checkOp: CheckOp, checkOpResult: OpResult): Unit = {
+    checkOpResult match {
+      case errorResult: ErrorResult =>
+        if (checkOp.path.equals(ControllerEpochZNode.path)) {
+          val errorCode = Code.get(errorResult.getErr)
+          if (errorCode == Code.BADVERSION)
+          // Throw ControllerMovedException when the zkVersionCheck is performed on the controller epoch znode and the check fails
+            throw new ControllerMovedException(s"Controller epoch zkVersion check fails. Expected zkVersion = ${checkOp.version}")
+          else if (errorCode != Code.OK)
+            throw KeeperException.create(errorCode, checkOp.path)
+        }
+      case _ =>
+    }
+  }
+
+  private def handleUnwrappedZkOp(zkOpResult: ZkOpResult,
+                                  resultCode: Code,
+                                  ctx: Option[Any],
+                                  responseMetadata: ResponseMetadata): AsyncResponse = {
+    val rawOpResult = zkOpResult.rawOpResult
+    zkOpResult.zkOp match {
+      case createOp: CreateOp =>
+        val name = rawOpResult match {
+          case c: CreateResult => c.getPath
+          case _ => null
+        }
+        CreateResponse(resultCode, createOp.path, ctx, name, responseMetadata)
+      case deleteOp: DeleteOp =>
+        DeleteResponse(resultCode, deleteOp.path, ctx, responseMetadata)
+      case setDataOp: SetDataOp =>
+        val stat = rawOpResult match {
+          case s: SetDataResult => s.getStat
+          case _ => null
+        }
+        SetDataResponse(resultCode, setDataOp.path, ctx, stat, responseMetadata)
+      case zkOp => throw new IllegalStateException(s"Unexpected zkOp: $zkOp")
+    }
+  }
+
   // A helper function to transform a MultiResponse with the check on
   // controller epoch znode zkVersion back into a regular response.
   // ControllerMovedException will be thrown if the controller epoch
@@ -2006,37 +2302,10 @@ object KafkaZkClient {
     response match {
       case MultiResponse(resultCode, _, ctx, zkOpResults, responseMetadata) =>
         zkOpResults match {
+          // In normal ZK writes, we just have a MultiOp with a CheckOp and the actual operation we're performing
           case Seq(ZkOpResult(checkOp: CheckOp, checkOpResult), zkOpResult) =>
-            checkOpResult match {
-              case errorResult: ErrorResult =>
-                if (checkOp.path.equals(ControllerEpochZNode.path)) {
-                  val errorCode = Code.get(errorResult.getErr)
-                  if (errorCode == Code.BADVERSION)
-                  // Throw ControllerMovedException when the zkVersionCheck is performed on the controller epoch znode and the check fails
-                    throw new ControllerMovedException(s"Controller epoch zkVersion check fails. Expected zkVersion = ${checkOp.version}")
-                  else if (errorCode != Code.OK)
-                    throw KeeperException.create(errorCode, checkOp.path)
-                }
-              case _ =>
-            }
-            val rawOpResult = zkOpResult.rawOpResult
-            zkOpResult.zkOp match {
-              case createOp: CreateOp =>
-                val name = rawOpResult match {
-                  case c: CreateResult => c.getPath
-                  case _ => null
-                }
-                CreateResponse(resultCode, createOp.path, ctx, name, responseMetadata)
-              case deleteOp: DeleteOp =>
-                DeleteResponse(resultCode, deleteOp.path, ctx, responseMetadata)
-              case setDataOp: SetDataOp =>
-                val stat = rawOpResult match {
-                  case s: SetDataResult => s.getStat
-                  case _ => null
-                }
-                SetDataResponse(resultCode, setDataOp.path, ctx, stat, responseMetadata)
-              case zkOp => throw new IllegalStateException(s"Unexpected zkOp: $zkOp")
-            }
+            handleUnwrappedCheckOp(checkOp, checkOpResult)
+            handleUnwrappedZkOp(zkOpResult, resultCode, ctx, responseMetadata)
           case null => throw KeeperException.create(resultCode)
           case _ => throw new IllegalStateException(s"Cannot unwrap $response because the first zookeeper op is not check op in original MultiRequest")
         }

@@ -61,6 +61,8 @@ import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH;
+import static org.apache.kafka.streams.StreamsConfig.PARTITION_AUTOSCALING_ENABLED_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATE_DIR_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
@@ -1366,6 +1368,20 @@ public class StreamsConfigTest {
     public void shouldNotEnableAnyOptimizationsWithNoOptimizationConfig() {
         final Set<String> configs = StreamsConfig.verifyTopologyOptimizationConfigs(StreamsConfig.NO_OPTIMIZATION);
         assertEquals(0, configs.size());
+    }
+
+    @Test
+    public void shouldEnablePartitionAutoscaling() {
+        props.put("partition.autoscaling.enabled", true);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertTrue(config.getBoolean(PARTITION_AUTOSCALING_ENABLED_CONFIG));
+    }
+
+    @Test
+    public void shouldSetPartitionAutoscalingTimeout() {
+        props.put("partition.autoscaling.timeout.ms", 0L);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertThat(config.getLong(PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG), is(0L));
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

@@ -28,6 +28,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
 import org.easymock.EasyMock;
 import org.hamcrest.BaseMatcher;
@@ -111,6 +112,93 @@ public final class AssignmentTestUtils {
     public static final Map<String, String> EMPTY_CLIENT_TAGS = Collections.emptyMap();
 
     private AssignmentTestUtils() {}
+
+    public static final long ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT = 100;
+
+    public static AssignmentConfigs getDefaultConfigsWithZeroStandbys() {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            2,
+            0,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getDefaultConfigsWithOneStandbys() {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            2,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithZeroStandbysAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            maxWarmups,
+            0,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithOneStandbysAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            ACCEPTABLE_RECOVERY_LAG_TEST_DEFAULT,
+            maxWarmups,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithOneStandbysAndZeroLagAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            0L,
+            maxWarmups,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithZeroStandbysAndZeroLagAndWarmups(final int maxWarmups) {
+        return new AssignmentConfigs(
+            0L,
+            maxWarmups,
+            0,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
+
+    public static AssignmentConfigs getConfigsWithOneStandbysAndLagAndWarmups(final long acceptableRecoveryLag,
+                                                                              final int maxWarmups) {
+        return new AssignmentConfigs(
+            acceptableRecoveryLag,
+            maxWarmups,
+            1,
+            false,
+            90_000L,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+        );
+    }
 
     static Map<UUID, ClientState> getClientStatesMap(final ClientState... states) {
         final Map<UUID, ClientState> clientStates = new HashMap<>();
