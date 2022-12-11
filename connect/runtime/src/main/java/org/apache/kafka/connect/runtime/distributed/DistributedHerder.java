@@ -789,7 +789,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         member.wakeup();
         herderExecutor.shutdown();
         try {
-            if (!herderExecutor.awaitTermination(HERDER_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+            if (!herderExecutor.awaitTermination(Math.max(workerTasksShutdownTimeoutMs, HERDER_SHUTDOWN_TIMEOUT_MS), TimeUnit.MILLISECONDS))
                 herderExecutor.shutdownNow();
 
             forwardRequestExecutor.shutdown();
