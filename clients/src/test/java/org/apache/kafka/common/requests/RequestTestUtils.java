@@ -207,8 +207,8 @@ public class RequestTestUtils {
                                                       final short responseVersion,
                                                       final Map<String, Uuid> topicIds) {
         return metadataUpdateWith(clusterId, numNodes, topicErrors,
-                topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new,
-                ApiKeys.METADATA.latestVersion(), topicIds, true);
+                topicPartitionCounts, epochSupplier, partitionSupplier,
+                responseVersion, topicIds, true);
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
