@@ -110,7 +110,7 @@ public interface GroupCoordinator {
      * @param context           The coordinator request context.
      * @param groupIds          The group ids.
      *
-     * @return A future yielding the response or an exception.
+     * @return A future yielding the results or an exception.
      */
     CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroups(
         RequestContext context,
