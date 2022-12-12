@@ -112,7 +112,7 @@ public interface GroupCoordinator {
      *
      * @return A future yielding the response or an exception.
      */
-    CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroup(
+    CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroups(
         RequestContext context,
         List<String> groupIds
     );

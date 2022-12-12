@@ -189,7 +189,7 @@ class GroupCoordinatorAdapter(
     CompletableFuture.completedFuture(response)
   }
 
-  override def describeGroup(
+  override def describeGroups(
     context: RequestContext,
     groupIds: util.List[String]
   ): CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]] = {

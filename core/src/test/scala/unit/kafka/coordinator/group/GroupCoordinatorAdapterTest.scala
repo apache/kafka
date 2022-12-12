@@ -376,7 +376,7 @@ class GroupCoordinatorAdapterTest {
     }
 
     val ctx = makeContext(ApiKeys.DESCRIBE_GROUPS, ApiKeys.DESCRIBE_GROUPS.latestVersion)
-    val future = adapter.describeGroup(ctx, List(groupId1, groupId2).asJava)
+    val future = adapter.describeGroups(ctx, List(groupId1, groupId2).asJava)
     assertTrue(future.isDone)
 
     val expectedDescribedGroups = List(

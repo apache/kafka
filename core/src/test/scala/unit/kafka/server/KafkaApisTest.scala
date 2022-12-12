@@ -2001,7 +2001,7 @@ class KafkaApisTest {
     val requestChannelRequest = buildRequest(new DescribeGroupsRequest.Builder(describeGroupsRequest).build())
 
     val future = new CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]]()
-    when(newGroupCoordinator.describeGroup(
+    when(newGroupCoordinator.describeGroups(
       requestChannelRequest.context,
       describeGroupsRequest.groups
     )).thenReturn(future)
@@ -2044,7 +2044,7 @@ class KafkaApisTest {
     val requestChannelRequest = buildRequest(new DescribeGroupsRequest.Builder(describeGroupsRequest).build())
 
     val future = new CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]]()
-    when(newGroupCoordinator.describeGroup(
+    when(newGroupCoordinator.describeGroups(
       requestChannelRequest.context,
       describeGroupsRequest.groups
     )).thenReturn(future)
@@ -2099,7 +2099,7 @@ class KafkaApisTest {
     }
 
     val future = new CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]]()
-    when(newGroupCoordinator.describeGroup(
+    when(newGroupCoordinator.describeGroups(
       requestChannelRequest.context,
       List("group-2").asJava
     )).thenReturn(future)

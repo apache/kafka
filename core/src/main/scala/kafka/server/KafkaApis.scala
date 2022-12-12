@@ -80,6 +80,7 @@ import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
+
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
@@ -1588,7 +1589,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    newGroupCoordinator.describeGroup(
+    newGroupCoordinator.describeGroups(
       request.context,
       authorizedGroups.asJava
     ).handle[Unit] { (results, exception) =>
