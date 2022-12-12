@@ -276,6 +276,7 @@ class SecurityConfig(TemplateRenderer):
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
         jaas_conf_file = "jaas.conf"
         java_version = node.account.ssh_capture("java -version")
+        is_ibm_security = any('IBM' in line for line in java_version) and not any('Semeru' in line for line in java_version)
 
         jaas_conf = None
         if 'sasl.jaas.config' not in self.properties:
@@ -283,7 +284,7 @@ class SecurityConfig(TemplateRenderer):
                 jaas_conf_file,
                 {
                     'node': node,
-                    'is_ibm_jdk': any('IBM' in line for line in java_version),
+                    'is_ibm_security': is_ibm_security,
                     'SecurityConfig': SecurityConfig,
                     'client_sasl_mechanism': self.client_sasl_mechanism,
                     'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
@@ -299,7 +300,7 @@ class SecurityConfig(TemplateRenderer):
                                          "admin_client_as_broker_jaas.conf",
                                          {
                                              'node': node,
-                                             'is_ibm_jdk': any('IBM' in line for line in java_version),
+                                             'is_ibm_security': is_ibm_security,
                                              'SecurityConfig': SecurityConfig,
                                              'client_sasl_mechanism': self.client_sasl_mechanism,
                                              'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms

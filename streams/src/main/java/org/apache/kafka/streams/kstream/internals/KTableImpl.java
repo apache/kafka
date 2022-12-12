@@ -78,6 +78,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -1046,7 +1047,18 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, TableJoined.with(null, null), materialized, true);
     }
 
-    @SuppressWarnings("unchecked")
+    private final Function<Optional<Set<Integer>>, Integer> getPartition = maybeMulticastPartitions -> {
+        if (!maybeMulticastPartitions.isPresent()) {
+            return null;
+        }
+        if (maybeMulticastPartitions.get().size() != 1) {
+            throw new IllegalArgumentException("The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set");
+        }
+        return maybeMulticastPartitions.get().iterator().next();
+    };
+
+
+    @SuppressWarnings({"unchecked", "deprecation"})
     private <VR, KO, VO> KTable<K, VR> doJoinOnForeignKey(final KTable<KO, VO> foreignKeyTable,
                                                           final Function<V, KO> foreignKeyExtractor,
                                                           final ValueJoiner<V, VO, VR> joiner,
@@ -1069,6 +1081,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         enableSendingOldValues(true);
 
         final TableJoinedInternal<K, KO> tableJoinedInternal = new TableJoinedInternal<>(tableJoined);
+
         final NamedInternal renamed = new NamedInternal(tableJoinedInternal.name());
 
         final String subscriptionTopicName = renamed.suffixWithOrElseGet(
@@ -1118,12 +1131,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         );
         builder.addGraphNode(graphNode, subscriptionNode);
 
-
         final StreamPartitioner<KO, SubscriptionWrapper<K>> subscriptionSinkPartitioner =
-            tableJoinedInternal.otherPartitioner() == null
-                ? null
-                : (topic, key, val, numPartitions) ->
-                    tableJoinedInternal.otherPartitioner().partition(topic, key, null, numPartitions);
+                tableJoinedInternal.otherPartitioner() == null
+                        ? null
+                        : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.otherPartitioner().partitions(topic, key, null, numPartitions));
 
         final StreamSinkNode<KO, SubscriptionWrapper<K>> subscriptionSink = new StreamSinkNode<>(
             renamed.suffixWithOrElseGet("-subscription-registration-sink", builder, SINK_NAME),
@@ -1196,10 +1207,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.internalTopologyBuilder.addInternalTopic(finalRepartitionTopicName, InternalTopicProperties.empty());
 
         final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> foreignResponseSinkPartitioner =
-            tableJoinedInternal.partitioner() == null
-                ? (topic, key, subscriptionResponseWrapper, numPartitions) -> subscriptionResponseWrapper.getPrimaryPartition()
-                : (topic, key, val, numPartitions) ->
-                    tableJoinedInternal.partitioner().partition(topic, key, null, numPartitions);
+                tableJoinedInternal.partitioner() == null
+                        ? (topic, key, subscriptionResponseWrapper, numPartitions) -> subscriptionResponseWrapper.getPrimaryPartition()
+                        : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.partitioner().partitions(topic, key, null, numPartitions));
 
         final StreamSinkNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSink =
             new StreamSinkNode<>(

@@ -259,10 +259,16 @@ public final class AssignorConfiguration {
         void onAssignmentComplete(final boolean stable);
     }
 
+    /**
+     * NOTE: any StreamsConfig you add here MUST be passed in to the consumer via
+     * {@link StreamsConfig#getMainConsumerConfigs}
+     */
     public static class AssignmentConfigs {
         public final long acceptableRecoveryLag;
         public final int maxWarmupReplicas;
         public final int numStandbyReplicas;
+        public final boolean partitionAutoscalingEnabled;
+        public final long partitionAutoscalingTimeoutMs;
         public final long probingRebalanceIntervalMs;
         public final List<String> rackAwareAssignmentTags;
 
@@ -270,6 +276,8 @@ public final class AssignorConfiguration {
             acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
             maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
             numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+            partitionAutoscalingEnabled = configs.getBoolean(StreamsConfig.PARTITION_AUTOSCALING_ENABLED_CONFIG);
+            partitionAutoscalingTimeoutMs = configs.getLong(StreamsConfig.PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG);
             probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
             rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         }
@@ -277,11 +285,15 @@ public final class AssignorConfiguration {
         AssignmentConfigs(final Long acceptableRecoveryLag,
                           final Integer maxWarmupReplicas,
                           final Integer numStandbyReplicas,
+                          final boolean partitionAutoscalingEnabled,
+                          final long partitionAutoscalingTimeoutMs,
                           final Long probingRebalanceIntervalMs,
                           final List<String> rackAwareAssignmentTags) {
             this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
             this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
             this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
+            this.partitionAutoscalingEnabled = validated(StreamsConfig.PARTITION_AUTOSCALING_ENABLED_CONFIG, partitionAutoscalingEnabled);
+            this.partitionAutoscalingTimeoutMs = validated(StreamsConfig.PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG, partitionAutoscalingTimeoutMs);
             this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
             this.rackAwareAssignmentTags = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
         }

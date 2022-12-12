@@ -203,8 +203,6 @@ object BrokerApiVersionsCommand {
   private object AdminClient {
     val DefaultConnectionMaxIdleMs = 9 * 60 * 1000
     val DefaultRequestTimeoutMs = 5000
-    val DefaultSocketConnectionSetupMs = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
-    val DefaultSocketConnectionSetupMaxMs = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
     val DefaultMaxInFlightRequestsPerConnection = 100
     val DefaultReconnectBackoffMs = 50
     val DefaultReconnectBackoffMax = 50
