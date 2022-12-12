@@ -22,7 +22,7 @@ import kafka.utils.{CoreUtils, Logging, ShutdownableThread}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.{OffsetIndex, OffsetPosition, TransactionIndex}
+import org.apache.kafka.server.log.internals.{OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageManager}
 
