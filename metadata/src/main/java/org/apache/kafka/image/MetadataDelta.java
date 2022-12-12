@@ -34,26 +34,29 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.util.Iterator;
-import java.util.List;
 import java.util.Optional;
 
 
 /**
  * A change to the broker metadata image.
- *
- * This class is thread-safe.
  */
 public final class MetadataDelta {
+    public static class Builder {
+        private MetadataImage image = MetadataImage.EMPTY;
+
+        public Builder setImage(MetadataImage image) {
+            this.image = image;
+            return this;
+        }
+
+        public MetadataDelta build() {
+            return new MetadataDelta(image);
+        }
+    }
+
     private final MetadataImage image;
-
-    private long highestOffset;
-
-    private int highestEpoch;
 
     private FeaturesDelta featuresDelta = null;
 
@@ -71,8 +74,6 @@ public final class MetadataDelta {
 
     public MetadataDelta(MetadataImage image) {
         this.image = image;
-        this.highestOffset = image.highestOffsetAndEpoch().offset();
-        this.highestEpoch = image.highestOffsetAndEpoch().epoch();
     }
 
     public MetadataImage image() {
@@ -152,19 +153,7 @@ public final class MetadataDelta {
         }
     }
 
-    public void read(long highestOffset, int highestEpoch, Iterator<List<ApiMessageAndVersion>> reader) {
-        while (reader.hasNext()) {
-            List<ApiMessageAndVersion> batch = reader.next();
-            for (ApiMessageAndVersion messageAndVersion : batch) {
-                replay(highestOffset, highestEpoch, messageAndVersion.message());
-            }
-        }
-    }
-
-    public void replay(long offset, int epoch, ApiMessage record) {
-        highestOffset = offset;
-        highestEpoch = epoch;
-
+    public void replay(ApiMessage record) {
         MetadataRecordType type = MetadataRecordType.fromId(record.apiKey());
         switch (type) {
             case REGISTER_BROKER_RECORD:
@@ -223,13 +212,11 @@ public final class MetadataDelta {
     }
 
     public void replay(RegisterBrokerRecord record) {
-        if (clusterDelta == null) clusterDelta = new ClusterDelta(image.cluster());
-        clusterDelta.replay(record);
+        getOrCreateClusterDelta().replay(record);
     }
 
     public void replay(UnregisterBrokerRecord record) {
-        if (clusterDelta == null) clusterDelta = new ClusterDelta(image.cluster());
-        clusterDelta.replay(record);
+        getOrCreateClusterDelta().replay(record);
     }
 
     public void replay(TopicRecord record) {
@@ -308,7 +295,7 @@ public final class MetadataDelta {
         getOrCreateAclsDelta().finishSnapshot();
     }
 
-    public MetadataImage apply() {
+    public MetadataImage apply(MetadataProvenance provenance) {
         FeaturesImage newFeatures;
         if (featuresDelta == null) {
             newFeatures = image.features();
@@ -352,7 +339,7 @@ public final class MetadataDelta {
             newAcls = aclsDelta.apply();
         }
         return new MetadataImage(
-            new OffsetAndEpoch(highestOffset, highestEpoch),
+            provenance,
             newFeatures,
             newCluster,
             newTopics,
@@ -366,9 +353,7 @@ public final class MetadataDelta {
     @Override
     public String toString() {
         return "MetadataDelta(" +
-            "highestOffset=" + highestOffset +
-            ", highestEpoch=" + highestEpoch +
-            ", featuresDelta=" + featuresDelta +
+            "featuresDelta=" + featuresDelta +
             ", clusterDelta=" + clusterDelta +
             ", topicsDelta=" + topicsDelta +
             ", configsDelta=" + configsDelta +

@@ -17,14 +17,11 @@
 
 package kafka.server.metadata
 
-import kafka.coordinator.group.GroupCoordinator
-import kafka.coordinator.transaction.TransactionCoordinator
-
 import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-import kafka.log.{LogManager, UnifiedLog}
-import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
+import kafka.log.UnifiedLog
+import kafka.server.{BrokerServer, KafkaConfig}
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
@@ -36,7 +33,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
-import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.apache.kafka.server.fault.FaultHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -179,29 +176,15 @@ class BrokerMetadataPublisherTest {
     new TopicsImage(idsMap.asJava, namesMap.asJava)
   }
 
-  private def newMockPublisher(
+  private def newMockDynamicConfigPublisher(
     broker: BrokerServer,
-    logManager: LogManager,
-    replicaManager: ReplicaManager,
-    groupCoordinator: GroupCoordinator,
-    txnCoordinator: TransactionCoordinator,
-    errorHandler: FaultHandler = new MockFaultHandler("publisher")
-  ): BrokerMetadataPublisher = {
-    val mockLogManager = Mockito.mock(classOf[LogManager])
-    Mockito.when(mockLogManager.allLogs).thenReturn(Iterable.empty[UnifiedLog])
-    Mockito.spy(new BrokerMetadataPublisher(
+    errorHandler: FaultHandler
+  ): DynamicConfigPublisher = {
+    Mockito.spy(new DynamicConfigPublisher(
       conf = broker.config,
-      metadataCache = broker.metadataCache,
-      logManager,
-      replicaManager,
-      groupCoordinator,
-      txnCoordinator,
-      clientQuotaMetadataManager = broker.clientQuotaMetadataManager,
+      faultHandler = errorHandler,
       dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap,
-      _authorizer = Option.empty,
-      errorHandler,
-      errorHandler
-    ))
+      nodeType = "broker"))
   }
 
   @Test
@@ -215,20 +198,14 @@ class BrokerMetadataPublisherTest {
       cluster.startup()
       cluster.waitForReadyBrokers()
       val broker = cluster.brokers().values().iterator().next()
-      val mockLogManager = Mockito.mock(classOf[LogManager])
-      Mockito.when(mockLogManager.allLogs).thenReturn(Iterable.empty[UnifiedLog])
-      val mockReplicaManager = Mockito.mock(classOf[ReplicaManager])
-      val mockGroupCoordinator = Mockito.mock(classOf[GroupCoordinator])
-      val mockTxnCoordinator = Mockito.mock(classOf[TransactionCoordinator])
-
-      val publisher = newMockPublisher(broker, mockLogManager, mockReplicaManager, mockGroupCoordinator, mockTxnCoordinator)
+      val publisher = newMockDynamicConfigPublisher(broker, cluster.nonFatalFaultHandler())
 
       val numTimesReloadCalled = new AtomicInteger(0)
       Mockito.when(publisher.reloadUpdatedFilesWithoutConfigChange(any[Properties]())).
         thenAnswer(new Answer[Unit]() {
           override def answer(invocation: InvocationOnMock): Unit = numTimesReloadCalled.addAndGet(1)
         })
-      broker.metadataListener.alterPublisher(publisher).get()
+      broker.metadataPublisher.dynamicConfigPublisher = publisher
       val admin = Admin.create(cluster.clientProperties())
       try {
         assertEquals(0, numTimesReloadCalled.get())

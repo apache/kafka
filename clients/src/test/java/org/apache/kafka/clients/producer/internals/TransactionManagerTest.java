@@ -77,6 +77,8 @@ import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -1676,6 +1678,61 @@ public class TransactionManagerTest {
         // Finally we get to the produce.
         runUntil(responseFuture::isDone);
         assertTrue(secondResponseFuture.isDone());
+    }
+
+    @ParameterizedTest
+    @EnumSource(names = {
+            "UNKNOWN_TOPIC_OR_PARTITION",
+            "REQUEST_TIMED_OUT",
+            "COORDINATOR_LOAD_IN_PROGRESS",
+            "CONCURRENT_TRANSACTIONS"
+    })
+    public void testRetriableErrors2(Errors error) {
+        // Ensure FindCoordinator retries.
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(error, false, CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        // Ensure InitPid retries.
+        prepareInitPidResponse(error, false, producerId, epoch);
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(transactionManager::hasProducerId);
+
+        result.await();
+        transactionManager.beginTransaction();
+
+        // Ensure AddPartitionsToTxn retries. Since CONCURRENT_TRANSACTIONS is handled differently here, we substitute.
+        Errors addPartitionsToTxnError = error.equals(Errors.CONCURRENT_TRANSACTIONS) ? Errors.COORDINATOR_LOAD_IN_PROGRESS : error;
+        transactionManager.maybeAddPartition(tp0);
+        prepareAddPartitionsToTxnResponse(addPartitionsToTxnError, tp0, epoch, producerId);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
+
+        // Ensure txnOffsetCommit retries is tested in testRetriableErrorInTxnOffsetCommit.
+
+        // Ensure EndTxn retries.
+        TransactionalRequestResult abortResult = transactionManager.beginCommit();
+        prepareEndTxnResponse(error, TransactionResult.COMMIT, producerId, epoch);
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
+        runUntil(abortResult::isCompleted);
+        assertTrue(abortResult.isSuccessful());
+    }
+
+    @Test
+    public void testCoordinatorNotAvailable() {
+        // Ensure FindCoordinator with COORDINATOR_NOT_AVAILABLE error retries.
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, false, CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(transactionManager::hasProducerId);
+
+        result.await();
     }
 
     @Test

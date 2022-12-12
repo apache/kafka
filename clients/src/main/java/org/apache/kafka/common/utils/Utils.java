@@ -598,13 +598,25 @@ public final class Utils {
      */
     public static <T> String join(Collection<T> collection, String separator) {
         Objects.requireNonNull(collection);
+        return mkString(collection.stream(), "", "", separator);
+    }
+
+    /**
+     * Create a string representation of a stream surrounded by `begin` and `end` and joined by `separator`.
+     *
+     * @return The string representation.
+     */
+    public static <T> String mkString(Stream<T> stream, String begin, String end, String separator) {
+        Objects.requireNonNull(stream);
         StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = collection.iterator();
+        sb.append(begin);
+        Iterator<T> iter = stream.iterator();
         while (iter.hasNext()) {
             sb.append(iter.next());
             if (iter.hasNext())
                 sb.append(separator);
         }
+        sb.append(end);
         return sb.toString();
     }
 

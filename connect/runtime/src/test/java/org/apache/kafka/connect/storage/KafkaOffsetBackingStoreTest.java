@@ -40,6 +40,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -285,7 +286,7 @@ public class KafkaOffsetBackingStoreTest {
                     new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, null, TP0_VALUE.array(),
                             new RecordHeaders(), Optional.empty()));
             capturedConsumedCallback.getValue().onCompletion(null,
-                    new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY.array(), null,
+                    new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY.array(), TP1_VALUE.array(),
                             new RecordHeaders(), Optional.empty()));
             storeLogCallbackArgumentCaptor.getValue().onCompletion(null, null);
             return null;
@@ -296,10 +297,10 @@ public class KafkaOffsetBackingStoreTest {
 
         verify(storeLog).start();
 
-        // Set offsets using null keys and values
+        // Set some offsets
         Map<ByteBuffer, ByteBuffer> toSet = new HashMap<>();
         toSet.put(null, TP0_VALUE);
-        toSet.put(TP1_KEY, null);
+        toSet.put(TP1_KEY, TP1_VALUE);
         final AtomicBoolean invoked = new AtomicBoolean(false);
         Future<Void> setFuture = store.set(toSet, (error, result) -> invoked.set(true));
         assertFalse(setFuture.isDone());
@@ -308,7 +309,7 @@ public class KafkaOffsetBackingStoreTest {
         ArgumentCaptor<org.apache.kafka.clients.producer.Callback> callback0 = ArgumentCaptor.forClass(org.apache.kafka.clients.producer.Callback.class);
         verify(storeLog).send(isNull(), aryEq(TP0_VALUE.array()), callback0.capture());
         ArgumentCaptor<org.apache.kafka.clients.producer.Callback> callback1 = ArgumentCaptor.forClass(org.apache.kafka.clients.producer.Callback.class);
-        verify(storeLog).send(aryEq(TP1_KEY.array()), isNull(), callback1.capture());
+        verify(storeLog).send(aryEq(TP1_KEY.array()), aryEq(TP1_VALUE.array()), callback1.capture());
         // Out of order callbacks shouldn't matter, should still require all to be invoked before invoking the callback
         // for the store's set callback
         callback1.getValue().onCompletion(null, null);
@@ -319,7 +320,37 @@ public class KafkaOffsetBackingStoreTest {
         // Getting data should read to end of our published data and return it
         Map<ByteBuffer, ByteBuffer> offsets = store.get(Arrays.asList(null, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
         assertEquals(TP0_VALUE, offsets.get(null));
+        assertEquals(TP1_VALUE, offsets.get(TP1_KEY));
+
+        // set null offset for TP1_KEY
+        toSet.clear();
+        toSet.put(TP1_KEY, null);
+        invoked.set(false);
+        setFuture = store.set(toSet, (error, result) -> invoked.set(true));
+        assertFalse(setFuture.isDone());
+
+        callback0 = ArgumentCaptor.forClass(org.apache.kafka.clients.producer.Callback.class);
+        verify(storeLog).send(aryEq(TP1_KEY.array()), isNull(), callback0.capture());
+        callback0.getValue().onCompletion(null, null);
+        assertTrue(invoked.get());
+
+        doAnswer(invocation -> {
+            // Read null offset for TP1_KEY (tombstone message)
+            capturedConsumedCallback.getValue().onCompletion(null,
+                    new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY.array(), null,
+                            new RecordHeaders(), Optional.empty()));
+            storeLogCallbackArgumentCaptor.getValue().onCompletion(null, null);
+            return null;
+        }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
+
+        // Getting data should read to end of our published data and return it
+        offsets = store.get(Collections.singletonList(TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
         assertNull(offsets.get(TP1_KEY));
+
+        // Just verifying that KafkaOffsetBackingStore::get returns null isn't enough, we also need to verify that the mapping for the source partition key is removed.
+        // This is because KafkaOffsetBackingStore::get returns null if either there is no existing offset for the source partition or if there is an offset with null value.
+        // We need to make sure that tombstoned offsets are removed completely (i.e. that the mapping for the corresponding source partition is removed).
+        assertFalse(store.data.containsKey(TP1_KEY));
 
         store.stop();
 
