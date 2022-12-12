@@ -147,7 +147,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         }
     }
 
-    private ClientRequest makeClientRequest(UnsentRequest unsent, Node node) {
+    private ClientRequest makeClientRequest(final UnsentRequest unsent, final Node node) {
         return client.newClientRequest(
                 node.idString(),
                 unsent.abstractBuilder,
@@ -173,12 +173,12 @@ public class NetworkClientDelegate implements AutoCloseable {
         return this.client.leastLoadedNode(time.milliseconds());
     }
 
-    public void add(UnsentRequest r) {
+    public void add(final UnsentRequest r) {
         r.setTimer(this.time, this.requestTimeoutMs);
         unsentRequests.add(r);
     }
 
-    public void ready(Node node) {
+    public void ready(final Node node) {
         client.ready(node, time.milliseconds());
     }
 
@@ -186,7 +186,7 @@ public class NetworkClientDelegate implements AutoCloseable {
      * Check if the code is disconnected and unavailable for immediate reconnection (i.e. if it is in
      * reconnect backoff window following the disconnect).
      */
-    public boolean nodeUnavailable(Node node) {
+    public boolean nodeUnavailable(final Node node) {
         return client.connectionFailed(node) && client.connectionDelay(node, time.milliseconds()) > 0;
     }
 
@@ -194,7 +194,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.client.close();
     }
 
-    public void addAll(List<UnsentRequest> unsentRequests) {
+    public void addAll(final List<UnsentRequest> unsentRequests) {
         unsentRequests.forEach(this::add);
     }
 
@@ -259,19 +259,19 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         abstract public void handleResponse(ClientResponse r, Exception e);
 
-        public void onFailure(RuntimeException e) {
+        public void onFailure(final RuntimeException e) {
             future.raise(e);
             handleResponse(null, e);
         }
 
         @Override
-        public void onComplete(ClientResponse response) {
+        public void onComplete(final ClientResponse response) {
             // TODO: pendingCompletion in the orignal implementation: why did we batch it?
             fireCompletion(response);
             handleResponse(response, null);
         }
 
-        private void fireCompletion(ClientResponse response) {
+        private void fireCompletion(final ClientResponse response) {
             if (response.authenticationException() != null) {
                 future.raise(response.authenticationException());
             } else if (response.wasDisconnected()) {
