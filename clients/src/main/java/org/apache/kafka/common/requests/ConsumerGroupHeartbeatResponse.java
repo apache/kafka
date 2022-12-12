@@ -49,7 +49,7 @@ public class ConsumerGroupHeartbeatResponse extends AbstractResponse {
     }
 
     @Override
-    public ApiMessage data() {
+    public ConsumerGroupHeartbeatResponseData data() {
         return data;
     }
 

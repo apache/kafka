@@ -64,7 +64,7 @@ public class ConsumerGroupHeartbeatRequest extends AbstractRequest {
     }
 
     @Override
-    public ApiMessage data() {
+    public ConsumerGroupHeartbeatRequestData data() {
         return data;
     }
 
