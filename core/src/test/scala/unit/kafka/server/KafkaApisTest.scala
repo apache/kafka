@@ -1992,12 +1992,11 @@ class KafkaApisTest {
 
   @Test
   def testHandleDeleteGroups(): Unit = {
-    val deleteGroupsRequest = new DeleteGroupsRequestData()
-      .setGroupsNames(List(
-        "group-1",
-        "group-2",
-        "group-3"
-      ).asJava)
+    val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(List(
+      "group-1",
+      "group-2",
+      "group-3"
+    ).asJava)
 
     val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build())
 
@@ -2037,12 +2036,11 @@ class KafkaApisTest {
 
   @Test
   def testHandleDeleteGroupsFutureFailed(): Unit = {
-    val deleteGroupsRequest = new DeleteGroupsRequestData()
-      .setGroupsNames(List(
-        "group-1",
-        "group-2",
-        "group-3"
-      ).asJava)
+    val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(List(
+      "group-1",
+      "group-2",
+      "group-3"
+    ).asJava)
 
     val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build())
 
@@ -2080,12 +2078,11 @@ class KafkaApisTest {
 
   @Test
   def testHandleDeleteGroupsAuthenticationFailed(): Unit = {
-    val deleteGroupsRequest = new DeleteGroupsRequestData()
-      .setGroupsNames(List(
-        "group-1",
-        "group-2",
-        "group-3"
-      ).asJava)
+    val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(List(
+      "group-1",
+      "group-2",
+      "group-3"
+    ).asJava)
 
     val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build())
 
