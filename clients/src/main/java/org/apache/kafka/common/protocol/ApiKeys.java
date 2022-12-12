@@ -17,7 +17,6 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.message.ApiMessageType;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
