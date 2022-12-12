@@ -27,7 +27,7 @@ import kafka.log.AppendOrigin
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.metadata.ConfigRepository
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -1317,12 +1317,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
     val controllerId = {
-      metadataCache match {
-        case cache: KRaftMetadataCache => cache.getControllerId.map(_.id)
-        case cache => cache.getControllerId.flatMap {
-          case ZkCachedControllerId(id) => Some(id)
-          case KRaftCachedControllerId(_) => cache.getRandomAliveBrokerId
-        }
+      metadataCache.getControllerId.flatMap {
+        case ZkCachedControllerId(id) => Some(id)
+        case KRaftCachedControllerId(_) => metadataCache.getRandomAliveBrokerId
       }
     }
 
@@ -3334,12 +3331,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
     val controllerId = {
-      metadataCache match {
-        case cache: KRaftMetadataCache => cache.getControllerId.map(_.id)
-        case cache => cache.getControllerId.flatMap {
-          case ZkCachedControllerId(id) => Some(id)
-          case KRaftCachedControllerId(_) => cache.getRandomAliveBrokerId
-        }
+      metadataCache.getControllerId.flatMap {
+        case ZkCachedControllerId(id) => Some(id)
+        case KRaftCachedControllerId(_) => metadataCache.getRandomAliveBrokerId
       }
     }
 

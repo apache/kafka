@@ -332,7 +332,7 @@ class ZkMetadataCache(brokerId: Int, metadataVersion: MetadataVersion,
     }
   }
 
-  def   getRandomAliveBrokerId: Option[Int] = {
+  def getRandomAliveBrokerId: Option[Int] = {
     val aliveBrokers = metadataSnapshot.aliveBrokers.values.toList
     Some(aliveBrokers(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
   }

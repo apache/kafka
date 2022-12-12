@@ -90,11 +90,16 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             }
 
             UpdateMetadataRequestData data = new UpdateMetadataRequestData()
-                .setControllerId(kraftController ? -1 : controllerId)
-                .setKRaftControllerId(kraftController ? controllerId : -1)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
                 .setLiveBrokers(liveBrokers);
+
+            if (version >= 8) {
+                data.setControllerId(kraftController ? -1 : controllerId)
+                    .setKRaftControllerId(kraftController ? controllerId : -1);
+            } else {
+                data.setControllerId(controllerId);
+            }
 
             if (version >= 5) {
                 Map<String, UpdateMetadataTopicState> topicStatesMap = groupByTopic(topicIds, partitionStates);

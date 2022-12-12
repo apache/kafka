@@ -36,7 +36,7 @@
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },
-    { "name": "KRaftControllerId", "type": "int32", "versions": "8+", "entityType": "brokerId",
+    { "name": "KRaftControllerId", "type": "int32", "versions": "8+", "default": "-1", "entityType": "brokerId",
       "about": "The KRaft controller id, used during migration." },
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The controller epoch." },
