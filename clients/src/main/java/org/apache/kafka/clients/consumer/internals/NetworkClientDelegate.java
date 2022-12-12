@@ -70,7 +70,8 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
-     * Polls for the responses of the sent requests. This methods will try to send the requests in the {@code unsentRequests}, poll for reponses, and check the disconnected nodes.
+     * Returns the responses of the sent requests. This methods will try to send the unsent requests, poll for responses,
+     * and check the disconnected nodes.
      * @param timeoutMs
      * @return
      */
@@ -84,10 +85,9 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
-     * Walk through the unsentRequests queue and try to perform a client.send() for each unsent request. If the
-     * request doesn't have an assigned node, we will find the leastLoadedOne.
-     * Here we also register all the nodes to the {@code activeNodes} set, which will then be used to check the
-     * connection.
+     * Iterates through the unsentRequests queue and tries to send the unsent requests. If the request doesn't have an
+     * assigned node, it will find the leastLoadedOne.
+     * Here it also stores all the nodes in the {@code activeNodes}, which will then be used to check for the disconnection.
      */
     void trySend(final long currentTimeMs) {
         Queue<UnsentRequest> unsentAndUnreadyRequests = new LinkedList<>();
