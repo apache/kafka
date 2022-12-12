@@ -906,6 +906,8 @@ class LogManagerTest {
     // Replace the current log with the future one and verify that only one set of metrics are present
     logManager.replaceCurrentWithFutureLog(tp)
     verifyMetrics(1)
+    // the future log is gone, so we have to make sure the metrics gets gone also.
+    assertEquals(0, logMetrics.count(m => m.getMBeanName.contains("is-future")))
 
     // Trigger the deletion of the former current directory and verify that one set of metrics is still present
     time.sleep(logConfig.fileDeleteDelayMs + 1)

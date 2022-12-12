@@ -1073,6 +1073,9 @@ class LogManager(logDirs: Seq[File],
       if (destLog == null)
         throw new KafkaStorageException(s"The future replica for $topicPartition is offline")
 
+      // the metrics tags still contain "future", so we have to remove it.
+      // we will add metrics back after sourceLog remove the metrics
+      destLog.removeLogMetrics()
       destLog.renameDir(UnifiedLog.logDirName(topicPartition), true)
       destLog.updateHighWatermark(sourceLog.highWatermark)
 
@@ -1095,6 +1098,7 @@ class LogManager(logDirs: Seq[File],
         checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)
         checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
         sourceLog.removeLogMetrics()
+        destLog.newMetrics()
         addLogToBeDeleted(sourceLog)
       } catch {
         case e: KafkaStorageException =>

@@ -551,15 +551,18 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     )
   }
 
-  private val tags = {
+  private def tags: Map[String, String] = {
     val maybeFutureTag = if (isFuture) Map("is-future" -> "true") else Map.empty[String, String]
     Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++ maybeFutureTag
   }
 
-  newGauge(LogMetricNames.NumLogSegments, () => numberOfSegments, tags)
-  newGauge(LogMetricNames.LogStartOffset, () => logStartOffset, tags)
-  newGauge(LogMetricNames.LogEndOffset, () => logEndOffset, tags)
-  newGauge(LogMetricNames.Size, () => size, tags)
+  newMetrics()
+  private[log] def newMetrics(): Unit = {
+    newGauge(LogMetricNames.NumLogSegments, () => numberOfSegments, tags)
+    newGauge(LogMetricNames.LogStartOffset, () => logStartOffset, tags)
+    newGauge(LogMetricNames.LogEndOffset, () => logEndOffset, tags)
+    newGauge(LogMetricNames.Size, () => size, tags)
+  }
 
   val producerExpireCheck = scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
     lock synchronized {
