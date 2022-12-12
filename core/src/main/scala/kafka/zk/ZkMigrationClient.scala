@@ -53,12 +53,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
   }
 
   override def claimControllerLeadership(state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
-    val epochZkVersionOpt = zkClient.tryRegisterKRaftControllerAsActiveController(
-      state.kraftControllerId(), state.kraftControllerEpoch())
-    if (epochZkVersionOpt.isDefined) {
-      state.withControllerZkVersion(epochZkVersionOpt.get)
-    } else {
-      state.withControllerZkVersion(-1)
+    zkClient.tryRegisterKRaftControllerAsActiveController(state.kraftControllerId(), state.kraftControllerEpoch()) match {
+      case Some((_, epochZkVersion)) => state.withControllerZkVersion(epochZkVersion)
+      case None => state.withControllerZkVersion(-1)
     }
   }
 
