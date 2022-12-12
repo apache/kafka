@@ -100,4 +100,6 @@ class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) ex
       }
     }
   }
+
+  override def shutdown(): Unit = {}
 }

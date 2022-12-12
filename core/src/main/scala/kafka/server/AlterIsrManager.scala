@@ -16,8 +16,6 @@
  */
 package kafka.server
 
-import java.util
-import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue, TimeUnit}
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{KafkaScheduler, Logging, Scheduler}
@@ -27,12 +25,11 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AlterIsrRequest, AlterIsrResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AlterIsrRequest, AlterIsrResponse}
 import org.apache.kafka.common.utils.Time
 
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util
 import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 
 /**
@@ -44,9 +41,9 @@ import scala.jdk.CollectionConverters._
  * requests.
  */
 trait AlterIsrManager {
-  def start(): Unit = {}
+  def start(): Unit
 
-  def shutdown(): Unit = {}
+  def shutdown(): Unit
 
   def submit(alterIsrItem: AlterIsrItem): Boolean
 }
@@ -54,13 +51,21 @@ trait AlterIsrManager {
 case class AlterIsrItem(topicPartition: TopicPartition,
                         leaderAndIsr: LeaderAndIsr,
                         callback: Either[Errors, LeaderAndIsr] => Unit,
-                        controllerEpoch: Int) // controllerEpoch needed for Zk impl
+                        controllerEpoch: Int) extends BrokerToControllerRequestItem // controllerEpoch needed for Zk impl
 
 object AlterIsrManager {
 
   /**
-   * Factory to AlterIsr based implementation, used when IBP >= 2.7-IV2
+   * Factory for ZK based implementation, used when IBP < 2.7-IV2
    */
+  def apply(
+    scheduler: Scheduler,
+    time: Time,
+    zkClient: KafkaZkClient
+  ): AlterIsrManager = {
+    new ZkIsrManager(scheduler, time, zkClient)
+  }
+
   def apply(
     config: KafkaConfig,
     metadataCache: MetadataCache,
@@ -82,6 +87,7 @@ object AlterIsrManager {
       threadNamePrefix = threadNamePrefix,
       retryTimeoutMs = Long.MaxValue
     )
+
     new DefaultAlterIsrManager(
       controllerChannelManager = channelManager,
       scheduler = scheduler,
@@ -90,130 +96,22 @@ object AlterIsrManager {
       brokerEpochSupplier = brokerEpochSupplier
     )
   }
-
-  /**
-   * Factory for ZK based implementation, used when IBP < 2.7-IV2
-   */
-  def apply(
-    scheduler: Scheduler,
-    time: Time,
-    zkClient: KafkaZkClient
-  ): AlterIsrManager = {
-    new ZkIsrManager(scheduler, time, zkClient)
-  }
-
 }
 
 class DefaultAlterIsrManager(
-  val controllerChannelManager: BrokerToControllerChannelManager,
-  val scheduler: Scheduler,
-  val time: Time,
-  val brokerId: Int,
-  val brokerEpochSupplier: () => Long
-) extends AlterIsrManager with Logging with KafkaMetricsGroup {
-
-  private[server] val unsentIsrQueue: BlockingQueue[AlterIsrItem] = new LinkedBlockingQueue()
-  // The inflightIsrUpdates map is populated by the unsentIsrQueue, and the items in it are removed in the response callback.
-  // Putting new items to the inflightIsrUpdates and removing items from it won't be performed at the same time, and the coordination is
-  // done via the inflightRequest flag.
-  private[server] val inflightIsrUpdates: util.Map[TopicPartition, AlterIsrItem] = new ConcurrentHashMap[TopicPartition, AlterIsrItem]()
-
-  // Used to allow only one in-flight request at a time
-  private val inflightRequest: AtomicBoolean = new AtomicBoolean(false)
-
-  override def start(): Unit = {
-    controllerChannelManager.start()
-  }
-
-  override def shutdown(): Unit = {
-    controllerChannelManager.shutdown()
-  }
-
-  override def submit(alterIsrItem: AlterIsrItem): Boolean = {
-    unsentIsrQueue.put(alterIsrItem)
-    maybePropagateIsrChanges()
-    true
-  }
-
-  private[server] def maybePropagateIsrChanges(): Unit = {
-    // Send all pending items if there is not already a request in-flight.
-    if ((!unsentIsrQueue.isEmpty || !inflightIsrUpdates.isEmpty) && inflightRequest.compareAndSet(false, true)) {
-      // Copy current unsent ISRs but don't remove from the map, they get cleared in the response handler
-      while (!unsentIsrQueue.isEmpty) {
-        val item = unsentIsrQueue.poll()
-        // if there are multiple AlterIsrItems for the same partition in the queue, the last one wins
-        // and the previous ones will be discarded
-        inflightIsrUpdates.put(item.topicPartition, item)
-      }
-      // Since the maybePropagateIsrChanges can be called from the response callback,
-      // there may be cases where right after the while loop, some new items are added to the unsentIsrQueue in the submit
-      // thread. In such a case, the newly added item will be sent in the next request
-
-      val inflightAlterIsrItems = new ListBuffer[AlterIsrItem]()
-      inflightIsrUpdates.values().forEach(item => inflightAlterIsrItems.append(item))
-      sendRequest(inflightAlterIsrItems)
-    }
-  }
-
-  private[server] def clearInFlightRequest(): Unit = {
-    if (!inflightRequest.compareAndSet(true, false)) {
-      warn("Attempting to clear AlterIsr in-flight flag when no apparent request is in-flight")
-    }
-  }
-
-  private def sendRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
-    val message = buildRequest(inflightAlterIsrItems)
-    debug(s"Sending AlterIsr to controller $message")
-
-    // We will not timeout AlterISR request, instead letting it retry indefinitely
-    // until a response is received, or a new LeaderAndIsr overwrites the existing isrState
-    // which causes the response for those partitions to be ignored.
-    controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message),
-      new ControllerRequestCompletionHandler {
-        override def onComplete(response: ClientResponse): Unit = {
-          debug(s"Received AlterIsr response $response")
-          val error = try {
-            if (response.authenticationException != null) {
-              // For now we treat authentication errors as retriable. We use the
-              // `NETWORK_EXCEPTION` error code for lack of a good alternative.
-              // Note that `BrokerToControllerChannelManager` will still log the
-              // authentication errors so that users have a chance to fix the problem.
-              Errors.NETWORK_EXCEPTION
-            } else if (response.versionMismatch != null) {
-              Errors.UNSUPPORTED_VERSION
-            } else {
-              val body = response.responseBody().asInstanceOf[AlterIsrResponse]
-              handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
-            }
-          } finally {
-            // clear the flag so future requests can proceed
-            clearInFlightRequest()
-          }
-
-          // check if we need to send another request right away
-          error match {
-              case Errors.NONE =>
-                // In the normal case, check for pending updates to send immediately
-                maybePropagateIsrChanges()
-              case _ =>
-                // If we received a top-level error from the controller, retry the request in the near future
-                scheduler.schedule("send-alter-isr", () => maybePropagateIsrChanges(), 50, -1, TimeUnit.MILLISECONDS)
-            }
-        }
-
-        override def onTimeout(): Unit = {
-          throw new IllegalStateException("Encountered unexpected timeout when sending AlterIsr to the controller")
-        }
-      })
-  }
-
-  private def buildRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): AlterIsrRequestData = {
+  controllerChannelManager: BrokerToControllerChannelManager,
+  scheduler: Scheduler,
+  time: Time,
+  brokerId: Int,
+  brokerEpochSupplier: () => Long
+) extends AbstractBrokerToControllerRequestManager[AlterIsrItem](controllerChannelManager, scheduler, time, brokerId, brokerEpochSupplier) with AlterIsrManager with Logging with KafkaMetricsGroup {
+  override def buildRequest(inflightItems: Seq[AlterIsrItem], brokerEpoch: Long): AbstractRequest.Builder[_ <: AbstractRequest] = {
     val message = new AlterIsrRequestData()
       .setBrokerId(brokerId)
       .setBrokerEpoch(brokerEpochSupplier.apply())
       .setTopics(new util.ArrayList())
 
-    inflightAlterIsrItems.groupBy(_.topicPartition.topic).foreach(entry => {
+    inflightItems.groupBy(_.topicPartition.topic).foreach(entry => {
       val topicPart = new AlterIsrRequestData.TopicData()
         .setName(entry._1)
         .setPartitions(new util.ArrayList())
@@ -227,12 +125,12 @@ class DefaultAlterIsrManager(
         )
       })
     })
-    message
+    new AlterIsrRequest.Builder(message)
   }
 
-  def handleAlterIsrResponse(alterIsrResponse: AlterIsrResponse,
-                             sentBrokerEpoch: Long,
-                             inflightAlterIsrItems: Seq[AlterIsrItem]): Errors = {
+  override def handleResponse(clientResponse: ClientResponse, sentBrokerEpoch: Long, inflightItems: Seq[AlterIsrItem]): Errors = {
+    val alterIsrResponse = clientResponse.responseBody().asInstanceOf[AlterIsrResponse]
+
     val data: AlterIsrResponseData = alterIsrResponse.data
 
     Errors.forCode(data.errorCode) match {
@@ -263,13 +161,13 @@ class DefaultAlterIsrManager(
         // Iterate across the items we sent rather than what we received to ensure we run the callback even if a
         // partition was somehow erroneously excluded from the response. Note that these callbacks are run from
         // the leaderIsrUpdateLock write lock in Partition#sendAlterIsrRequest
-        inflightAlterIsrItems.foreach(inflightAlterIsr =>
+        inflightItems.foreach(inflightAlterIsr =>
           if (partitionResponses.contains(inflightAlterIsr.topicPartition)) {
             try {
               inflightAlterIsr.callback.apply(partitionResponses(inflightAlterIsr.topicPartition))
             } finally {
               // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further updates
-              inflightIsrUpdates.remove(inflightAlterIsr.topicPartition)
+              removeInflightItem(inflightAlterIsr.topicPartition)
             }
           } else {
             // Don't remove this partition from the update map so it will get re-sent
@@ -282,4 +180,5 @@ class DefaultAlterIsrManager(
 
     Errors.forCode(data.errorCode)
   }
+
 }

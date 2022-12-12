@@ -1186,10 +1186,18 @@ object TestUtils extends Logging {
         fail("Expected an in-flight ISR update, but there was none")
       }
     }
+
+    override def start(): Unit = {}
+
+    override def shutdown(): Unit = {}
   }
 
   class MockTransferLeaderManager extends TransferLeaderManager {
-    override def submit(transferLeaderItem: TransferLeaderItem): Unit = ???
+    override def submit(transferLeaderItem: TransferLeaderItem): Boolean = ???
+
+    override def start(): Unit = {}
+
+    override def shutdown(): Unit = {}
   }
 
   def createAlterIsrManager(): MockAlterIsrManager = {

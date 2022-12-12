@@ -190,7 +190,7 @@ class AlterIsrManagerTest {
     callbackCapture.getValue.onComplete(response)
 
     // Any top-level error, we want to retry, so we don't clear items from the pending map
-    assertTrue(alterIsrManager.inflightIsrUpdates.containsKey(tp0))
+    assertTrue(alterIsrManager.inflightItems.containsKey(tp0))
 
     EasyMock.reset(brokerToController)
     EasyMock.expect(brokerToController.sendRequest(EasyMock.anyObject(), EasyMock.capture(callbackCapture))).times(1)
@@ -208,7 +208,7 @@ class AlterIsrManagerTest {
 
     EasyMock.verify(brokerToController)
 
-    assertFalse(alterIsrManager.inflightIsrUpdates.containsKey(tp0))
+    assertFalse(alterIsrManager.inflightItems.containsKey(tp0))
   }
 
   @Test
