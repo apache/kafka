@@ -196,7 +196,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
 
     var remoteSegInputStream: InputStream = null
     try {
-      // Search forward for the position of the last offset that is greater than or equal to the target offset
+      // Search forward for the position of the last offset that is greater than or equal to the startingOffset
       remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(rlsMetadata, startPos)
       val remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream)
       var batch: RecordBatch = null
@@ -235,7 +235,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
    * - If there are no messages in the remote storage, return None
    * - If all the messages in the remote storage have smaller offsets, return None
    * - If all the messages in the remote storage have smaller timestamps, return None
-   * - If all the messages in the remote storage have larger timestamps, or no message in the remote storage has a timestamp
+   * - no message in the remote storage has a timestamp,
    * the returned offset will be max(the earliest offset in the remote storage, startingOffset) and the timestamp will
    * be the first message's timestamp.
    * - Otherwise, return an option of TimestampOffset. The offset is the offset of the first message whose timestamp
@@ -258,8 +258,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
     }
 
     // Get the respective epoch in which the starting-offset exists.
-    val startingOffsetEpoch = leaderEpochCache.epochForOffset(startingOffset)
-    var maybeEpoch = startingOffsetEpoch;
+    var maybeEpoch = leaderEpochCache.epochForOffset(startingOffset)
     while (maybeEpoch.nonEmpty) {
       val epoch = maybeEpoch.get
       remoteLogMetadataManager.listRemoteLogSegments(new TopicIdPartition(topicId, tp), epoch).asScala

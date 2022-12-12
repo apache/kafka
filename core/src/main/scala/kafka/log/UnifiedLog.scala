@@ -296,7 +296,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   @volatile var partitionMetadataFile: Option[PartitionMetadataFile] = None
 
-  private[kafka] var _localLogStartOffset: Long = logStartOffset
+  @volatile private[kafka] var _localLogStartOffset: Long = logStartOffset
 
   def localLogStartOffset(): Long = _localLogStartOffset
 
@@ -597,6 +597,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def loadProducerState(lastOffset: Long): Unit = lock synchronized {
     rebuildProducerState(lastOffset, producerStateManager)
     maybeIncrementFirstUnstableOffset()
+    if (highWatermark >= localLog.logEndOffset)
+      updateHighWatermark(localLog.logEndOffsetMetadata)
   }
 
   private def recordVersion: RecordVersion = config.recordVersion

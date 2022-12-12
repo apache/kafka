@@ -17,16 +17,16 @@
 
 package kafka.log
 
-import kafka.common.IndexOffsetOverflowException
-import kafka.utils.CoreUtils.inLock
-import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem, Utils}
-
-import java.io.{File, RandomAccessFile}
+import java.io.{Closeable, File, RandomAccessFile}
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.util.concurrent.locks.{Lock, ReentrantLock}
+
+import kafka.common.IndexOffsetOverflowException
+import kafka.utils.CoreUtils.inLock
+import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem, Utils}
 
 /**
  * The abstract index class which holds entry format agnostic methods.
@@ -36,7 +36,7 @@ import java.util.concurrent.locks.{Lock, ReentrantLock}
  * @param maxIndexSize The maximum index size in bytes.
  */
 abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: Long, val maxIndexSize: Int = -1,
-                             val writable: Boolean) {
+                             val writable: Boolean) extends Closeable {
   import AbstractIndex._
 
   // Length of the index file

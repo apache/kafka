@@ -53,12 +53,16 @@ public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
             throw new CorruptRecordException(String.format("Found record size %d smaller than minimum record " +
                                                                    "overhead (%d).", size, LegacyRecord.RECORD_OVERHEAD_V0));
 
-        // 'size' includes, 4 bytes + magic + size(batch-records). So, the complete batch buffer including the header
-        // will have size of "LOG_OVERHEAD + size"
+        // 'size' = 4 bytes + magic + sizeOf(batch-records).
+        // So, the complete batch buffer including the header will have size of "LOG_OVERHEAD + size"
         int bufferSize = LOG_OVERHEAD + size;
+        // buffer contains the complete payload including header and records.
         ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+
+        // write log header into buffer
         buffer.put(logHeaderBuffer);
 
+        // write the records payload into the buffer
         Utils.readFully(inputStream, buffer);
         if (buffer.position() != bufferSize)
             return null;
