@@ -3535,6 +3535,7 @@ class UnifiedLogTest {
     // bound by the log end offset
     assertEquals(None, log.maybeUpdateHighWatermark(101L))
   }
+
   def testEnableRemoteLogStorageOnCompactedTopics(): Unit = {
       var logConfig = LogTestUtils.createLogConfig()
       var log = createLog(logDir, logConfig)

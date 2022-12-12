@@ -758,7 +758,7 @@ class ProducerStateManagerTest {
     assertEquals(1, logDir.listFiles().length)
     assertEquals(Set(5), currentSnapshotOffsets)
 
-    pathAndDataList.foreach(e => Files.write(e._1, e._2))
+    pathAndDataList.foreach { case (path, data) => Files.write(path, data) }
     stateManager.reloadSnapshots()
     assertEquals(Some(3), stateManager.latestSnapshotOffset)
     assertEquals(Set(3), currentSnapshotOffsets)

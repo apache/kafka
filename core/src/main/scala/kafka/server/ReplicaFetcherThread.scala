@@ -204,7 +204,7 @@ class ReplicaFetcherThread(name: String,
     partition.truncateFullyAndStartAt(offset, isFuture = false)
   }
 
-  def buildProducerSnapshotFile(snapshotFile: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata, rlm: RemoteLogManager): Unit = {
+  private def buildProducerSnapshotFile(snapshotFile: File, remoteLogSegmentMetadata: RemoteLogSegmentMetadata, rlm: RemoteLogManager): Unit = {
     val tmpSnapshotFile = new File(snapshotFile.getAbsolutePath + ".tmp")
     // Copy it to snapshot file in atomic manner.
     Files.copy(rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
@@ -306,9 +306,9 @@ class ReplicaFetcherThread(name: String,
           // Reload producer snapshots.
           log.producerStateManager.reloadSnapshots()
           log.loadProducerState(nextOffset)
-          debug(s"Built the leader epoch cache and producer snapshots from remote tier for $partition. " +
-            s"Active producers: ${log.producerStateManager.activeProducers.size}, " +
-            s"LeaderLogStartOffset: $leaderLogStartOffset, endOffset: $nextOffset")
+          debug(s"Built the leader epoch cache and producer snapshots from remote tier for $partition, with " +
+            s"active producers size: ${log.producerStateManager.activeProducers.size}, " +
+            s"leaderLogStartOffset: $leaderLogStartOffset, and logEndOffset: $nextOffset")
 
           // Return the offset from which next fetch should happen.
           nextOffset

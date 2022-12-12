@@ -402,7 +402,7 @@ abstract class AbstractFetcherThread(name: String,
                     partitionsWithError += topicPartition
                 case Errors.OFFSET_MOVED_TO_TIERED_STORAGE =>
                   debug(s"Received error ${Errors.OFFSET_MOVED_TO_TIERED_STORAGE}, " +
-                    s"fetch offset: ${currentFetchState.fetchOffset}, " + s"topic-partition: $topicPartition")
+                    s"at fetch offset: ${currentFetchState.fetchOffset}, " + s"topic-partition: $topicPartition")
                   if (!handleOffsetsMovedToTieredStorage(topicPartition, currentFetchState,
                     fetchPartitionData.currentLeaderEpoch, partitionData.logStartOffset()))
                     partitionsWithError += topicPartition
@@ -739,7 +739,7 @@ abstract class AbstractFetcherThread(name: String,
    *
    * Returns true if
    *    - the request succeeded or
-   *    - it was fenced and this thread haven't received new epoch, which means we need not backoff and retry as the
+   *    - it was fenced and this thread hasn't received new epoch, which means we need not backoff and retry as the
    *    partition is moved to failed state.
    *
    * Returns false if there was a retriable error.

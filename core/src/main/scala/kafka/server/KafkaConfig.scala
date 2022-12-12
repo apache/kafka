@@ -1861,21 +1861,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     MetadataVersion.MINIMUM_KRAFT_VERSION
   }
 
-  val fetchRequestVersion: Short =
-    if (interBrokerProtocolVersion.isAtLeast(IBP_3_3_IV2)) 14
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_3_1_IV0)) 13
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_7_IV1)) 12
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_3_IV1)) 11
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_1_IV2)) 10
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV1)) 8
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_1_1_IV0)) 7
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_11_0_IV1)) 5
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_11_0_IV0)) 4
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_10_1_IV1)) 3
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_10_0_IV0)) 2
-    else if (interBrokerProtocolVersion.isAtLeast(IBP_0_9_0)) 1
-    else 0
-
   val offsetForLeaderEpochRequestVersion: Short =
     if (interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 4
     else if (interBrokerProtocolVersion.isAtLeast(IBP_2_3_IV1)) 3

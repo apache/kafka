@@ -17,7 +17,11 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.server.log.remote.storage.*;
+import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
+import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -26,6 +30,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * A wrapper class of {@link RemoteLogMetadataManager} that sets the context class loader when calling the respective
+ * methods.
+ */
 public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetadataManager {
     private final RemoteLogMetadataManager delegate;
     private final ClassLoader loader;

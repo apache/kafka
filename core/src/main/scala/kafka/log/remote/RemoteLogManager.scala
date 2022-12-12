@@ -235,7 +235,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
    * - If there are no messages in the remote storage, return None
    * - If all the messages in the remote storage have smaller offsets, return None
    * - If all the messages in the remote storage have smaller timestamps, return None
-   * - no message in the remote storage has a timestamp,
+   * - no message in the remote storage has the given timestamp,
    * the returned offset will be max(the earliest offset in the remote storage, startingOffset) and the timestamp will
    * be the first message's timestamp.
    * - Otherwise, return an option of TimestampOffset. The offset is the offset of the first message whose timestamp

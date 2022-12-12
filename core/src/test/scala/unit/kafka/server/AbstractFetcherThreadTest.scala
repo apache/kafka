@@ -1211,8 +1211,8 @@ class AbstractFetcherThreadTest {
       val leaderState = leaderPartitionState(topicPartition)
       checkLeaderEpochAndThrow(leaderEpoch, leaderState)
       (leaderState.leaderEpoch, leaderState.localLogStartOffset)
-
     }
+
     override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
       val endOffsets = mutable.Map[TopicPartition, EpochEndOffset]()
       partitions.forKeyValue { (partition, epochData) =>
