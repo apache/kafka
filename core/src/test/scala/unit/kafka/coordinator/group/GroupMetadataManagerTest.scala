@@ -81,7 +81,7 @@ class GroupMetadataManagerTest {
       offsetsTopicNumPartitions = config.offsetsTopicPartitions,
       offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
       offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-      offsetsTopicCompressionCodec = config.offsetsTopicCompressionCodec,
+      offsetsTopicCompressionType = config.offsetsTopicCompressionType,
       offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
   }
