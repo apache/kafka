@@ -528,6 +528,14 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldResetToDefaultIfConsumerAllowAutoCreateTopicsIsOverridden() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs("a", "b", threadIdx);
+        assertEquals("false", consumerConfigs.get("allow.auto.create.topics"));
+    }
+
+    @Test
     public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosDisabled() {
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(nullValue()));

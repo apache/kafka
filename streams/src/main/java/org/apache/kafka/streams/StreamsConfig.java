@@ -754,7 +754,7 @@ public class StreamsConfig extends AbstractConfig {
 
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
-        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
+        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
         new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
     private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
@@ -1128,6 +1128,7 @@ public class StreamsConfig extends AbstractConfig {
         tempConsumerDefaultOverrides.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000");
         tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         tempConsumerDefaultOverrides.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        tempConsumerDefaultOverrides.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
         tempConsumerDefaultOverrides.put("internal.leave.group.on.close", false);
         CONSUMER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
@@ -1436,9 +1437,9 @@ public class StreamsConfig extends AbstractConfig {
 
         for (final String config: nonConfigurableConfigs) {
             if (clientProvidedProps.containsKey(config)) {
-
                 if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
                     if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
+                        System.out.println("This is a test - " + config);
                         log.warn(String.format(nonConfigurableConfigMessage, "consumer", config, "", clientProvidedProps.get(config),  CONSUMER_DEFAULT_OVERRIDES.get(config)));
                         clientProvidedProps.remove(config);
                     }
