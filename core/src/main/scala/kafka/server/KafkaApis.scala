@@ -1716,15 +1716,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     val deleteGroupsRequest = request.body[DeleteGroupsRequest]
     val groups = deleteGroupsRequest.data.groupsNames.asScala.distinct
 
-    def sendResponse(response: AbstractResponse): Unit = {
-      trace("Sending delete groups response %s for correlation id %d to client %s."
-        .format(response, request.header.correlationId, request.header.clientId))
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        response.maybeSetThrottleTimeMs(requestThrottleMs)
-        response
-      })
-    }
-
     val (authorizedGroups, unauthorizedGroups) =
       authHelper.partitionSeqByAuthorized(request.context, DELETE, GROUP, groups)(identity)
 
@@ -1752,7 +1743,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))
       }
 
-      sendResponse(new DeleteGroupsResponse(response))
+      requestHelper.sendMaybeThrottle(request, new DeleteGroupsResponse(response))
     }
   }
 
