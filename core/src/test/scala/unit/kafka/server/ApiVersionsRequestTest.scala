@@ -21,7 +21,7 @@ import kafka.test.{ClusterConfig, ClusterInstance}
 import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.ApiVersionsRequest
-import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
+import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach
@@ -42,6 +42,13 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request, cluster.clientListener())
     validateApiVersionsResponse(apiVersionsResponse)
+  }
+
+  @ClusterTest(serverProperties = Array(new ClusterConfigProperty(key = "unreleased.apis.enable", value = "true")))
+  def testApiVersionsRequestIncludesUnreleasedApis(): Unit = {
+    val request = new ApiVersionsRequest.Builder().build()
+    val apiVersionsResponse = sendApiVersionsRequest(request, cluster.clientListener())
+    validateApiVersionsResponse(apiVersionsResponse, shouldIncludeUnreleasedApi = true)
   }
 
   @ClusterTest(clusterType = Type.ZK)

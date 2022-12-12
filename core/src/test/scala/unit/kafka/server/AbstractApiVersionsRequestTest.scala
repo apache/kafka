@@ -68,14 +68,18 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     } finally socket.close()
   }
 
-  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse, listenerName: ListenerName = cluster.clientListener()): Unit = {
+  def validateApiVersionsResponse(
+    apiVersionsResponse: ApiVersionsResponse,
+    listenerName: ListenerName = cluster.clientListener(),
+    shouldIncludeUnreleasedApi: Boolean = false
+  ): Unit = {
     val expectedApis = if (!cluster.isKRaftTest) {
-      ApiKeys.zkBrokerApis()
+      ApiKeys.apisForListener(ApiMessageType.ListenerType.ZK_BROKER, shouldIncludeUnreleasedApi)
     } else if (cluster.controllerListenerName().asScala.contains(listenerName)) {
-      ApiKeys.controllerApis()
+      ApiKeys.apisForListener(ApiMessageType.ListenerType.CONTROLLER, shouldIncludeUnreleasedApi)
     } else {
       ApiVersionsResponse.intersectForwardableApis(
-        ApiKeys.apisForListener(ApiMessageType.ListenerType.BROKER),
+        ApiKeys.apisForListener(ApiMessageType.ListenerType.BROKER, shouldIncludeUnreleasedApi),
         RecordVersion.current,
         NodeApiVersions.create(ApiKeys.controllerApis().asScala.map(ApiVersionsResponse.toApiVersion).asJava).allSupportedApiVersions()
       )

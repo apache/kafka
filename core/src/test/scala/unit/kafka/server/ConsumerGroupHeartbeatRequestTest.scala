@@ -14,16 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.server
+package kafka.server
 
-import kafka.server.IntegrationTestUtils
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
@@ -38,17 +37,13 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testConsumerGroupHeartbeatIsDisabledByDefault(): Unit = {
-    val apiVersionRequest = new ApiVersionsRequest.Builder().build()
-    val apiVersionResponse = connectAndReceive(apiVersionRequest)
-    assertNull(apiVersionResponse.data.apiKeys.find(ApiKeys.CONSUMER_GROUP_HEARTBEAT.id))
-
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
       new ConsumerGroupHeartbeatRequestData()
     ).build()
     assertThrows(classOf[EOFException], () => connectAndReceive(consumerGroupHeartbeatRequest))
   }
 
-  @ClusterTest(serverProperties = Array(new ClusterConfigProperty(key = "new.group.coordinator.enable", value = "true")))
+  @ClusterTest(serverProperties = Array(new ClusterConfigProperty(key = "unreleased.apis.enable", value = "true")))
   def testConsumerGroupHeartbeatIsAccessibleWhenEnabled(): Unit = {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
       new ConsumerGroupHeartbeatRequestData()
@@ -61,14 +56,6 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   private def connectAndReceive(request: ConsumerGroupHeartbeatRequest): ConsumerGroupHeartbeatResponse = {
     IntegrationTestUtils.connectAndReceive[ConsumerGroupHeartbeatResponse](
-      request,
-      cluster.anyBrokerSocketServer(),
-      cluster.clientListener()
-    )
-  }
-
-  private def connectAndReceive(request: ApiVersionsRequest): ApiVersionsResponse = {
-    IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](
       request,
       cluster.anyBrokerSocketServer(),
       cluster.clientListener()

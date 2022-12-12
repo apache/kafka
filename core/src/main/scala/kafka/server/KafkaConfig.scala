@@ -523,7 +523,6 @@ object KafkaConfig {
   val GroupMaxSessionTimeoutMsProp = "group.max.session.timeout.ms"
   val GroupInitialRebalanceDelayMsProp = "group.initial.rebalance.delay.ms"
   val GroupMaxSizeProp = "group.max.size"
-  val NewGroupCoordinatorEnable = "new.group.coordinator.enable"
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeProp = "offset.metadata.max.bytes"
   val OffsetsLoadBufferSizeProp = "offsets.load.buffer.size"
@@ -656,6 +655,9 @@ object KafkaConfig {
   val PasswordEncoderCipherAlgorithmProp = "password.encoder.cipher.algorithm"
   val PasswordEncoderKeyLengthProp =  "password.encoder.key.length"
   val PasswordEncoderIterationsProp =  "password.encoder.iterations"
+
+  /** Internal Configurations **/
+  val UnreleasedApisEnableProd = "unreleased.apis.enable"
 
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
@@ -1302,10 +1304,6 @@ object KafkaConfig {
       .define(GroupInitialRebalanceDelayMsProp, INT, Defaults.GroupInitialRebalanceDelayMs, MEDIUM, GroupInitialRebalanceDelayMsDoc)
       .define(GroupMaxSizeProp, INT, Defaults.GroupMaxSize, atLeast(1), MEDIUM, GroupMaxSizeDoc)
 
-      // This is a temporary feature flag to gate KIP-848 feature during the implementation. It
-      // will be eventually replaced by a MetadataVersion or a feature flag.
-      .defineInternal(NewGroupCoordinatorEnable, BOOLEAN, false, LOW)
-
       /** ********* Offset management configuration ***********/
       .define(OffsetMetadataMaxSizeProp, INT, Defaults.OffsetMetadataMaxSize, HIGH, OffsetMetadataMaxSizeDoc)
       .define(OffsetsLoadBufferSizeProp, INT, Defaults.OffsetsLoadBufferSize, atLeast(1), HIGH, OffsetsLoadBufferSizeDoc)
@@ -1446,6 +1444,10 @@ object KafkaConfig {
       .define(RaftConfig.QUORUM_LINGER_MS_CONFIG, INT, Defaults.QuorumLingerMs, null, MEDIUM, RaftConfig.QUORUM_LINGER_MS_DOC)
       .define(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumRequestTimeoutMs, null, MEDIUM, RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_DOC)
       .define(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
+
+      /** Internal Configurations **/
+      // This indicates whether unreleased APIs should be advertised by this broker.
+      .defineInternal(UnreleasedApisEnableProd, BOOLEAN, false, LOW)
   }
 
   /** ********* Remote Log Management Configuration *********/
@@ -1879,7 +1881,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val groupMaxSessionTimeoutMs = getInt(KafkaConfig.GroupMaxSessionTimeoutMsProp)
   val groupInitialRebalanceDelay = getInt(KafkaConfig.GroupInitialRebalanceDelayMsProp)
   val groupMaxSize = getInt(KafkaConfig.GroupMaxSizeProp)
-  val newGroupCoordinatorEnabled = getBoolean(KafkaConfig.NewGroupCoordinatorEnable)
 
   /** ********* Offset management configuration ***********/
   val offsetMetadataMaxSize = getInt(KafkaConfig.OffsetMetadataMaxSizeProp)
@@ -1970,6 +1971,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val quorumLingerMs = getInt(RaftConfig.QUORUM_LINGER_MS_CONFIG)
   val quorumRequestTimeoutMs = getInt(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG)
   val quorumRetryBackoffMs = getInt(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
+
+  /** Internal Configurations **/
+  val advertiseUnreleasedApis = getBoolean(KafkaConfig.UnreleasedApisEnableProd)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
