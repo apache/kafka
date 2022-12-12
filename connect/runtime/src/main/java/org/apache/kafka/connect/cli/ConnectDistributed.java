@@ -16,11 +16,8 @@
  */
 package org.apache.kafka.connect.cli;
 
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
-import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
@@ -40,8 +37,6 @@ import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -58,6 +53,15 @@ import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
  */
 public class ConnectDistributed extends AbstractConnectCli<DistributedConfig> {
     private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
+
+    public ConnectDistributed(String... args) {
+        super(args);
+    }
+
+    @Override
+    protected String usage() {
+        return "ConnectDistributed worker.properties";
+    }
 
     @Override
     protected Herder createHerder(DistributedConfig config, String workerId, Plugins plugins,
@@ -102,25 +106,7 @@ public class ConnectDistributed extends AbstractConnectCli<DistributedConfig> {
     }
 
     public static void main(String[] args) {
-
-        if (args.length < 1 || Arrays.asList(args).contains("--help")) {
-            log.info("Usage: ConnectDistributed worker.properties");
-            Exit.exit(1);
-        }
-
-        try {
-            String workerPropsFile = args[0];
-            Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
-                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.emptyMap();
-            ConnectDistributed connectDistributed = new ConnectDistributed();
-            Connect connect = connectDistributed.startConnect(workerProps);
-
-            // Shutdown will be triggered by Ctrl-C or via HTTP shutdown request
-            connect.awaitStop();
-
-        } catch (Throwable t) {
-            log.error("Stopping due to error", t);
-            Exit.exit(2);
-        }
+        ConnectDistributed connectDistributed = new ConnectDistributed(args);
+        connectDistributed.run();
     }
 }
