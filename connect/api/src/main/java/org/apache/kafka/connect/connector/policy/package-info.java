@@ -15,6 +15,9 @@
  * limitations under the License.
  */
 /**
- * Provides pluggable interfaces for connector security policies.
+ * Provides pluggable interfaces for policies controlling how users can configure connectors.
+ * For example, the
+ * {@link org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy ConnectorClientConfigOverridePolicy}
+ * interface can be used to control which Kafka client properties can be overridden on a per-connector basis.
  */
 package org.apache.kafka.connect.connector.policy;
