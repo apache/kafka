@@ -22,11 +22,9 @@ import java.util.concurrent.atomic.AtomicLong
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
-import kafka.server.ConfigAdminManager.toLoggableProps
-import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
@@ -103,7 +101,7 @@ class BrokerMetadataPublisher(
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
   clientQuotaMetadataManager: ClientQuotaMetadataManager,
-  dynamicConfigHandlers: Map[String, ConfigHandler],
+  var dynamicConfigPublisher: DynamicConfigPublisher,
   private val _authorizer: Option[Authorizer],
   fatalFaultHandler: FaultHandler,
   metadataPublishingFaultHandler: FaultHandler
@@ -211,61 +209,10 @@ class BrokerMetadataPublisher(
       }
 
       // Apply configuration deltas.
-      Option(delta.configsDelta()).foreach { configsDelta =>
-        configsDelta.changes().keySet().forEach { resource =>
-          val props = newImage.configs().configProperties(resource)
-          resource.`type`() match {
-            case TOPIC =>
-              try {
-                // Apply changes to a topic's dynamic configuration.
-                info(s"Updating topic ${resource.name()} with new configuration : " +
-                  toLoggableProps(resource, props).mkString(","))
-                dynamicConfigHandlers(ConfigType.Topic).
-                  processConfigChanges(resource.name(), props)
-              } catch {
-                case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating topic " +
-                  s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
-                  s"in ${deltaName}", t)
-              }
-            case BROKER =>
-              if (resource.name().isEmpty) {
-                try {
-                  // Apply changes to "cluster configs" (also known as default BROKER configs).
-                  // These are stored in KRaft with an empty name field.
-                  info("Updating cluster configuration : " +
-                    toLoggableProps(resource, props).mkString(","))
-                  dynamicConfigHandlers(ConfigType.Broker).
-                    processConfigChanges(ConfigEntityName.Default, props)
-                } catch {
-                  case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating " +
-                    s"cluster with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
-                    s"in ${deltaName}", t)
-                }
-              } else if (resource.name() == brokerId.toString) {
-                try {
-                  // Apply changes to this broker's dynamic configuration.
-                  info(s"Updating broker $brokerId with new configuration : " +
-                    toLoggableProps(resource, props).mkString(","))
-                  dynamicConfigHandlers(ConfigType.Broker).
-                    processConfigChanges(resource.name(), props)
-                  // When applying a per broker config (not a cluster config), we also
-                  // reload any associated file. For example, if the ssl.keystore is still
-                  // set to /tmp/foo, we still want to reload /tmp/foo in case its contents
-                  // have changed. This doesn't apply to topic configs or cluster configs.
-                  reloadUpdatedFilesWithoutConfigChange(props)
-                } catch {
-                  case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating " +
-                    s"broker with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
-                    s"in ${deltaName}", t)
-                }
-              }
-            case _ => // nothing to do
-          }
-        }
-      }
+      dynamicConfigPublisher.publish(delta, newImage)
 
+      // Apply client quotas delta.
       try {
-        // Apply client quotas delta.
         Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
           clientQuotaMetadataManager.update(clientQuotasDelta)
         }

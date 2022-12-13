@@ -14,22 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.metrics
 
-import com.yammer.metrics.core.Timer
+package org.apache.kafka.image;
+
 
 /**
- * A wrapper around metrics timer object that provides a convenient mechanism
- * to time code blocks. This pattern was borrowed from the metrics-scala_2.9.1
- * package.
- * @param metric The underlying timer object.
+ * Indicates that the metadata version has changed.
  */
-class KafkaTimer(metric: Timer) {
+public final class MetadataVersionChangeException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+    private final MetadataVersionChange change;
 
-  def time[A](f: => A): A = {
-    val ctx = metric.time
-    try f
-    finally ctx.stop()
-  }
+    public MetadataVersionChangeException(MetadataVersionChange change) {
+        super("The metadata version is changing from " + change.oldVersion() + " to " +
+                change.newVersion());
+        this.change = change;
+    }
+
+    public MetadataVersionChange change() {
+        return change;
+    }
 }
-

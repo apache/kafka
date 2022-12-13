@@ -381,17 +381,18 @@ public final class QuorumController implements Controller {
                     // Cluster configs are always allowed.
                     if (configResource.name().isEmpty()) break;
 
-                    // Otherwise, check that the broker ID is valid.
-                    int brokerId;
+                    // Otherwise, check that the node ID is valid.
+                    int nodeId;
                     try {
-                        brokerId = Integer.parseInt(configResource.name());
+                        nodeId = Integer.parseInt(configResource.name());
                     } catch (NumberFormatException e) {
                         throw new InvalidRequestException("Invalid broker name " +
                             configResource.name());
                     }
-                    if (!clusterControl.brokerRegistrations().containsKey(brokerId)) {
-                        throw new BrokerIdNotRegisteredException("No broker with id " +
-                            brokerId + " found.");
+                    if (!(clusterControl.brokerRegistrations().containsKey(nodeId) ||
+                            featureControl.isControllerId(nodeId))) {
+                        throw new BrokerIdNotRegisteredException("No node with id " +
+                            nodeId + " found.");
                     }
                     break;
                 case TOPIC:

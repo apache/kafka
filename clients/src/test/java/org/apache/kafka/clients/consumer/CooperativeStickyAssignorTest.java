@@ -54,12 +54,12 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
     @Override
     public Subscription buildSubscriptionV1(List<String> topics, List<TopicPartition> partitions, int generationId) {
         assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(partitions), new ConsumerGroupMetadata(groupId, generationId, consumer1, Optional.empty()));
-        return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions, DEFAULT_GENERATION);
+        return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions, DEFAULT_GENERATION, Optional.empty());
     }
 
     @Override
     public Subscription buildSubscriptionV2Above(List<String> topics, List<TopicPartition> partitions, int generationId) {
-        return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions, generationId);
+        return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions, generationId, Optional.empty());
     }
 
     @Override
@@ -156,7 +156,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
         // subscription containing empty owned partitions and the same generation id, and non-empty owned partition in user data,
         // member data should honor the one in subscription since cooperativeStickyAssignor only supports ConsumerProtocolSubscription v1 and above
-        Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationId), Collections.emptyList(), generationId);
+        Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationId), Collections.emptyList(), generationId, Optional.empty());
 
         AbstractStickyAssignor.MemberData memberData = memberData(subscription);
         assertEquals(Collections.emptyList(), memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
@@ -170,7 +170,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
         // subscription containing empty owned partitions and a higher generation id, and non-empty owned partition in user data,
         // member data should honor the one in subscription since generation id is higher
-        Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationId - 1), Collections.emptyList(), generationId);
+        Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationId - 1), Collections.emptyList(), generationId, Optional.empty());
 
         AbstractStickyAssignor.MemberData memberData = memberData(subscription);
         assertEquals(Collections.emptyList(), memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");

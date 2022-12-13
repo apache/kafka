@@ -31,7 +31,7 @@ import java.util.Objects;
  */
 public final class MetadataImage {
     public final static MetadataImage EMPTY = new MetadataImage(
-        new OffsetAndEpoch(0, 0),
+        MetadataProvenance.EMPTY,
         FeaturesImage.EMPTY,
         ClusterImage.EMPTY,
         TopicsImage.EMPTY,
@@ -40,7 +40,7 @@ public final class MetadataImage {
         ProducerIdsImage.EMPTY,
         AclsImage.EMPTY);
 
-    private final OffsetAndEpoch highestOffsetAndEpoch;
+    private final MetadataProvenance provenance;
 
     private final FeaturesImage features;
 
@@ -57,7 +57,7 @@ public final class MetadataImage {
     private final AclsImage acls;
 
     public MetadataImage(
-        OffsetAndEpoch highestOffsetAndEpoch,
+        MetadataProvenance provenance,
         FeaturesImage features,
         ClusterImage cluster,
         TopicsImage topics,
@@ -66,7 +66,7 @@ public final class MetadataImage {
         ProducerIdsImage producerIds,
         AclsImage acls
     ) {
-        this.highestOffsetAndEpoch = highestOffsetAndEpoch;
+        this.provenance = provenance;
         this.features = features;
         this.cluster = cluster;
         this.topics = topics;
@@ -86,8 +86,16 @@ public final class MetadataImage {
             acls.isEmpty();
     }
 
+    public MetadataProvenance provenance() {
+        return provenance;
+    }
+
     public OffsetAndEpoch highestOffsetAndEpoch() {
-        return highestOffsetAndEpoch;
+        return new OffsetAndEpoch(provenance.offset(), provenance.epoch());
+    }
+
+    public long offset() {
+        return provenance.offset();
     }
 
     public FeaturesImage features() {
@@ -135,7 +143,7 @@ public final class MetadataImage {
     public boolean equals(Object o) {
         if (o == null || !o.getClass().equals(this.getClass())) return false;
         MetadataImage other = (MetadataImage) o;
-        return highestOffsetAndEpoch.equals(other.highestOffsetAndEpoch) &&
+        return provenance.equals(other.provenance) &&
             features.equals(other.features) &&
             cluster.equals(other.cluster) &&
             topics.equals(other.topics) &&
@@ -147,7 +155,8 @@ public final class MetadataImage {
 
     @Override
     public int hashCode() {
-        return Objects.hash(highestOffsetAndEpoch,
+        return Objects.hash(
+            provenance,
             features,
             cluster,
             topics,
@@ -159,7 +168,8 @@ public final class MetadataImage {
 
     @Override
     public String toString() {
-        return "MetadataImage(highestOffsetAndEpoch=" + highestOffsetAndEpoch +
+        return "MetadataImage(" +
+            "provenance=" + provenance +
             ", features=" + features +
             ", cluster=" + cluster +
             ", topics=" + topics +
