@@ -159,7 +159,8 @@ public class RecordCollectorImpl implements RecordCollector {
                     final Set<Integer> multicastPartitions = maybeMulticastPartitions.get();
                     if (multicastPartitions.isEmpty()) {
                         // If a record is not to be sent to any partition, mark it as a dropped record.
-                        log.debug("Not sending the record with key {} , value {} to any partition", key, value);
+                        log.warn("Skipping record as partitioner returned empty partitions. "
+                                + "topic=[{}]", topic);
                         droppedRecordsSensor.record();
                     } else {
                         for (final int multicastPartition: multicastPartitions) {
