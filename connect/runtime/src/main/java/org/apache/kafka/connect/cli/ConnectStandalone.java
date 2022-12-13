@@ -39,8 +39,12 @@ import java.util.Map;
 /**
  * <p>
  * Command line utility that runs Kafka Connect as a standalone process. In this mode, work (connectors and tasks) is not
- * distributed. Instead, all the normal Connect machinery works within a single process. This is useful for for development
- * and testing Kafka Connect on a local machine.
+ * distributed. Instead, all the normal Connect machinery works within a single process. This is useful for ad hoc,
+ * small, or experimental jobs.
+ * </p>
+ * <p>
+ * Connector and task configs are stored in memory and are not persistent. However, connector offset data is persistent
+ * since it uses file storage (configurable via {@link StandaloneConfig#OFFSET_STORAGE_FILE_FILENAME_CONFIG})
  * </p>
  */
 public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
