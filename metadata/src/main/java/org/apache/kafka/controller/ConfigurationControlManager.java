@@ -43,7 +43,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -473,40 +472,5 @@ public class ConfigurationControlManager {
     Map<String, String> currentControllerConfig() {
         Map<String, String> result = configData.get(currentController);
         return (result == null) ? Collections.emptyMap() : result;
-    }
-
-    class ConfigurationControlIterator implements Iterator<List<ApiMessageAndVersion>> {
-        private final long epoch;
-        private final Iterator<Entry<ConfigResource, TimelineHashMap<String, String>>> iterator;
-
-        ConfigurationControlIterator(long epoch) {
-            this.epoch = epoch;
-            this.iterator = configData.entrySet(epoch).iterator();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iterator.hasNext();
-        }
-
-        @Override
-        public List<ApiMessageAndVersion> next() {
-            if (!hasNext()) throw new NoSuchElementException();
-            List<ApiMessageAndVersion> records = new ArrayList<>();
-            Entry<ConfigResource, TimelineHashMap<String, String>> entry = iterator.next();
-            ConfigResource resource = entry.getKey();
-            for (Entry<String, String> configEntry : entry.getValue().entrySet(epoch)) {
-                records.add(new ApiMessageAndVersion(new ConfigRecord().
-                    setResourceName(resource.name()).
-                    setResourceType(resource.type().id()).
-                    setName(configEntry.getKey()).
-                    setValue(configEntry.getValue()), (short) 0));
-            }
-            return records;
-        }
-    }
-
-    ConfigurationControlIterator iterator(long epoch) {
-        return new ConfigurationControlIterator(epoch);
     }
 }
