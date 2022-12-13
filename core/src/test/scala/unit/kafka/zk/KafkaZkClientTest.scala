@@ -1204,10 +1204,10 @@ class KafkaZkClientTest extends QuorumTestHarness {
     // Register KRaft
     var controllerEpochZkVersion = -1
     zkClient.tryRegisterKRaftControllerAsActiveController(3000, 42) match {
-      case Some((kraftEpoch, zkVersion)) =>
-        assertEquals(42, kraftEpoch)
+      case SuccessfulRegistrationResult(kraftEpoch, zkVersion) =>
+        assertEquals(2, kraftEpoch)
         controllerEpochZkVersion = zkVersion
-      case None => fail("Expected to register KRaft as controller in ZK")
+      case FailedRegistrationResult() => fail("Expected to register KRaft as controller in ZK")
     }
     assertEquals(1, controllerEpochZkVersion)
 
@@ -1217,14 +1217,14 @@ class KafkaZkClientTest extends QuorumTestHarness {
     // Delete controller, and try again
     zkClient.deleteController(controllerEpochZkVersion)
     val (newEpoch, newZkVersion) = zkClient.registerControllerAndIncrementControllerEpoch(1)
-    assertEquals(43, newEpoch)
+    assertEquals(3, newEpoch)
     assertEquals(2, newZkVersion)
 
     zkClient.tryRegisterKRaftControllerAsActiveController(3000, 42) match {
-      case Some((kraftEpoch, zkVersion)) =>
-        assertEquals(44, kraftEpoch)
+      case SuccessfulRegistrationResult(zkEpoch, zkVersion) =>
+        assertEquals(4, zkEpoch)
         assertEquals(3, zkVersion)
-      case None => fail("Expected to register KRaft as controller in ZK")
+      case FailedRegistrationResult() => fail("Expected to register KRaft as controller in ZK")
     }
   }
 
@@ -1238,14 +1238,14 @@ class KafkaZkClientTest extends QuorumTestHarness {
       () => {
         0.to(999).foreach(epoch =>
           zkClient.tryRegisterKRaftControllerAsActiveController(nodeId, epoch) match {
-            case Some((writtenEpoch, _)) =>
+            case SuccessfulRegistrationResult(writtenEpoch, _) =>
               registeredEpochs.add(writtenEpoch)
               registeringNodes.compute(nodeId, (_, count) => if (count == null) {
                 0
               } else {
                 count + 1
               })
-            case None =>
+            case FailedRegistrationResult() =>
           }
         )
       }

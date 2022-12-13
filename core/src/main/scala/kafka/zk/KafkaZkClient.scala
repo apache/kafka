@@ -44,6 +44,10 @@ import org.apache.zookeeper.{CreateMode, KeeperException, OpResult, ZooKeeper}
 
 import scala.collection.{Map, Seq, mutable}
 
+sealed trait KRaftRegistrationResult
+case class FailedRegistrationResult() extends KRaftRegistrationResult
+case class SuccessfulRegistrationResult(zkControllerEpoch: Int, controllerEpochZkVersion: Int) extends KRaftRegistrationResult
+
 /**
  * Provides higher level Kafka-specific operations on top of the pipelined [[kafka.zookeeper.ZooKeeperClient]].
  *
@@ -175,9 +179,9 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    *
    * @param kraftControllerId ID of the KRaft controller node
    * @param kraftControllerEpoch Epoch of the KRaft controller node
-   * @return An optional of the written epoch and new zkVersion of /controller_epoch. None if we could not register the KRaft controller.
+   * @return A result object containing the written ZK controller epoch and version, or nothing.
    */
-  def tryRegisterKRaftControllerAsActiveController(kraftControllerId: Int, kraftControllerEpoch: Int): Option[(Int, Int)] = {
+  def tryRegisterKRaftControllerAsActiveController(kraftControllerId: Int, kraftControllerEpoch: Int): KRaftRegistrationResult = {
     val timestamp = time.milliseconds()
     val curEpochOpt: Option[(Int, Int)] = getControllerEpoch.map(e => (e._1, e._2.getVersion))
     val controllerOpt = getControllerRegistration
@@ -195,12 +199,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         throw new IllegalStateException(s"Cannot register KRaft controller $kraftControllerId as the active controller " +
           s"since there is no ZK controller epoch present.")
       case Some((curEpoch: Int, curEpochZk: Int)) =>
-        // TODO KAFKA-14436 Increase the KRaft epoch to be higher than the ZK epoch
-        val newControllerEpoch = if (kraftControllerEpoch >= curEpoch) {
-          kraftControllerEpoch
-        } else {
-          curEpoch + 1
-        }
+        val newControllerEpoch = curEpoch + 1
 
         val response = controllerOpt match {
           case Some(controller) =>
@@ -231,16 +230,16 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
             info(s"Successfully registered KRaft controller $kraftControllerId with ZK epoch $newControllerEpoch")
             // First op is always SetData on /controller_epoch
             val setDataResult = response.zkOpResults(0).rawOpResult.asInstanceOf[SetDataResult]
-            Some((newControllerEpoch, setDataResult.getStat.getVersion))
+            SuccessfulRegistrationResult(newControllerEpoch, setDataResult.getStat.getVersion)
           case Code.BADVERSION =>
             info(s"The ZK controller epoch changed $failureSuffix")
-            None
+            FailedRegistrationResult()
           case Code.NONODE =>
             info(s"The ephemeral node at ${ControllerZNode.path} went away $failureSuffix")
-            None
+            FailedRegistrationResult()
           case Code.NODEEXISTS =>
             info(s"The ephemeral node at ${ControllerZNode.path} was created by another controller $failureSuffix")
-            None
+            FailedRegistrationResult()
           case code =>
             error(s"ZooKeeper had an error $failureSuffix")
             throw KeeperException.create(code)
