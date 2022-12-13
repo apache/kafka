@@ -86,11 +86,12 @@ public class CoordinatorRequestManager implements RequestManager {
     }
 
     /**
-     * Poll for the FindCoordinator request if we need one.
-     * If we don't need to discover a coordinator, this method will return a PollResult with Long.MAX_VALUE and an empty list.
+     * Poll for the FindCoordinator request.
+     * If we don't need to discover a coordinator, this method will return a PollResult with Long.MAX_VALUE backoff time and an empty list.
      * If we are still backing off from a previous attempt, this method will return a PollResult with the remaining backoff time and an empty list.
-     * Otherwise, this returns will return a PollResult with a singleton list of UnsentRequest.
+     * Otherwise, this returns will return a PollResult with a singleton list of UnsentRequest and Long.MAX_VALUE backoff time.
      * Note that this method does not involve any actual network IO, and it only determines if we need to send a new request or not.
+     *
      * @param currentTimeMs current time in ms.
      * @return {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult}. This will not be {@code null}.
      */
@@ -102,7 +103,7 @@ public class CoordinatorRequestManager implements RequestManager {
 
         if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
             NetworkClientDelegate.UnsentRequest request = makeFindCoordinatorRequest(currentTimeMs);
-            return new NetworkClientDelegate.PollResult(0, Collections.singletonList(request));
+            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.singletonList(request));
         }
 
         return new NetworkClientDelegate.PollResult(
