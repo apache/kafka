@@ -318,11 +318,11 @@ class ReplicaFetcherThread(name: String,
             s"leaderLogStartOffset: $leaderLogStartOffset, epoch: $targetEpoch as the previous remote log segment " +
             s"metadata was not found")
         }
-
       } else {
-        // Truncate the existing local log and start from leader's localLogStartOffset.
-        truncateFullyAndStartAt(partition, leaderLocalLogStartOffset)
-        leaderLocalLogStartOffset
+        // If the tiered storage is not enabled throw an exception back so tht it will retry until the tiered storage
+        // is set as expected.
+        throw new RemoteStorageException(s"Couldn't build the state from remote store for partition $partition, as " +
+          s"remote log storage is not yet enabled")
       }
     }
 

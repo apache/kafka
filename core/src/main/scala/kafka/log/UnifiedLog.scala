@@ -597,8 +597,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def loadProducerState(lastOffset: Long): Unit = lock synchronized {
     rebuildProducerState(lastOffset, producerStateManager)
     maybeIncrementFirstUnstableOffset()
-    if (highWatermark >= localLog.logEndOffset)
-      updateHighWatermark(localLog.logEndOffsetMetadata)
+    updateHighWatermark(lastOffset)
   }
 
   private def recordVersion: RecordVersion = config.recordVersion
