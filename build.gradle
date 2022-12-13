@@ -691,7 +691,7 @@ def defaultScalaSuffix = "2.13"
 gradle.taskGraph.whenReady { taskGraph ->
   def skippedPublish = false
   taskGraph.getAllTasks().each { task ->
-    if (task.name.equals("publishMavenJavaPublicationToMavenRepository") &&
+    if ((task.name.equals("publishMavenJavaPublicationToMavenRepository") || task instanceof Upload) &&
         !versions.baseScala.equals(defaultScalaSuffix) &&
         task.project.hasProperty("archivesBaseName") &&
         !task.project.archivesBaseName.endsWith("_${versions.baseScala}")) {
