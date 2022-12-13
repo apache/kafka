@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class OffsetsFinder {
+public class MetadataManager {
     private final Logger log;
     private final ConsumerNetworkClient client;
     private final Time time;
@@ -82,7 +82,7 @@ public class OffsetsFinder {
     private final ApiVersions apiVersions;
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
 
-    public OffsetsFinder(LogContext logContext,
+    public MetadataManager(LogContext logContext,
                            ConsumerNetworkClient client,
                            ConsumerMetadata metadata,
                            SubscriptionState subscriptions,
