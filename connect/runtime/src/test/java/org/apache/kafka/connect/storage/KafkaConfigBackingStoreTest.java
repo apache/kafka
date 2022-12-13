@@ -24,6 +24,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.config.ConfigException;
@@ -37,6 +38,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TestFuture;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -62,6 +64,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -300,14 +303,14 @@ public class KafkaConfigBackingStoreTest {
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
 
         // Writing should block until it is written and read back from Kafka
-        configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0));
+        configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
         configState = configStorage.snapshot();
         assertEquals(1, configState.offset());
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
 
         // Second should also block and all configs should still be available
-        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1));
+        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1), null);
         configState = configStorage.snapshot();
         assertEquals(2, configState.offset());
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
@@ -320,6 +323,45 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
         assertNull(configState.targetState(CONNECTOR_IDS.get(1)));
+
+        configStorage.stop();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testPutConnectorConfigProducerError() throws Exception {
+        expectConfigure();
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+        expectPartitionCount(1);
+
+        expectConvert(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(0));
+        final Capture<org.apache.kafka.clients.producer.Callback> callbackCapture = EasyMock.newCapture();
+        storeLog.send(EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.capture(callbackCapture));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            callbackCapture.getValue().onCompletion(null, new TopicAuthorizationException(Collections.singleton("connect-configs")));
+            return null;
+        });
+
+        expectReadToEnd(new LinkedHashMap<>());
+
+        expectStop();
+
+        PowerMock.replayAll();
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        configStorage.start();
+
+        // Verify initial state
+        ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(-1, configState.offset());
+        assertEquals(0, configState.connectors().size());
+
+        FutureCallback<Void> cb = new FutureCallback<>();
+        configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), cb);
+
+        ExecutionException e = assertThrows(ExecutionException.class, cb::get);
+        assertEquals(TopicAuthorizationException.class, e.getCause().getClass());
 
         configStorage.stop();
 
@@ -344,7 +386,7 @@ public class KafkaConfigBackingStoreTest {
         expectConvert(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0), CONFIGS_SERIALIZED.get(0));
         fencableProducer.beginTransaction();
         EasyMock.expectLastCall();
-        EasyMock.expect(fencableProducer.send(EasyMock.anyObject())).andReturn(null);
+        EasyMock.expect(fencableProducer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(null);
         fencableProducer.commitTransaction();
         EasyMock.expectLastCall();
         expectRead(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(0), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0));
@@ -353,7 +395,7 @@ public class KafkaConfigBackingStoreTest {
         expectConvert(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(1));
         fencableProducer.beginTransaction();
         EasyMock.expectLastCall();
-        EasyMock.expect(fencableProducer.send(EasyMock.anyObject())).andReturn(null);
+        EasyMock.expect(fencableProducer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(null);
         // Get fenced out
         fencableProducer.commitTransaction();
         EasyMock.expectLastCall().andThrow(new ProducerFencedException("Better luck next time"));
@@ -373,7 +415,7 @@ public class KafkaConfigBackingStoreTest {
         expectConvert(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(1));
         fencableProducer.beginTransaction();
         EasyMock.expectLastCall();
-        EasyMock.expect(fencableProducer.send(EasyMock.anyObject())).andReturn(null);
+        EasyMock.expect(fencableProducer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(null);
         fencableProducer.commitTransaction();
         EasyMock.expectLastCall();
         expectConvertRead(CONNECTOR_CONFIG_KEYS.get(1), CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(2));
@@ -397,16 +439,16 @@ public class KafkaConfigBackingStoreTest {
         configStorage.putTaskCountRecord(CONNECTOR_IDS.get(0), 6);
 
         // Should fail again when we get fenced out
-        assertThrows(PrivilegedWriteException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0)));
+        assertThrows(PrivilegedWriteException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null));
         // Should fail if we retry without reclaiming write privileges
-        assertThrows(IllegalStateException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0)));
+        assertThrows(IllegalStateException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null));
 
         // Should succeed even without write privileges (target states can be written by anyone)
         configStorage.putTargetState(CONNECTOR_IDS.get(1), TargetState.PAUSED);
 
         // Should succeed if we re-claim write privileges
         configStorage.claimWritePrivileges();
-        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0));
+        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null);
 
         configStorage.stop();
 
@@ -1502,7 +1544,7 @@ public class KafkaConfigBackingStoreTest {
         if (serialized != null)
             EasyMock.expect(converter.fromConnectData(EasyMock.eq(TOPIC), EasyMock.eq(valueSchema), EasyMock.capture(capturedRecord)))
                     .andReturn(serialized);
-        storeLog.send(EasyMock.eq(configKey), EasyMock.aryEq(serialized));
+        storeLog.send(EasyMock.eq(configKey), EasyMock.aryEq(serialized), EasyMock.anyObject(org.apache.kafka.clients.producer.Callback.class));
         PowerMock.expectLastCall();
         EasyMock.expect(converter.toConnectData(EasyMock.eq(TOPIC), EasyMock.aryEq(serialized)))
                 .andAnswer(() -> {

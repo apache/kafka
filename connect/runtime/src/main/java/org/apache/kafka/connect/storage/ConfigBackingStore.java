@@ -19,6 +19,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collection;
@@ -51,8 +52,9 @@ public interface ConfigBackingStore {
      * Update the configuration for a connector.
      * @param connector name of the connector
      * @param properties the connector configuration
+     * @param callback the callback to be invoked after the put is complete; can be {@code null} if no callback is desired
      */
-    void putConnectorConfig(String connector, Map<String, String> properties);
+    void putConnectorConfig(String connector, Map<String, String> properties, Callback<Void> callback);
 
     /**
      * Remove configuration for a connector

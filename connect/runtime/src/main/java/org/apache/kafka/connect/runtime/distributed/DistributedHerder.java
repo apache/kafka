@@ -1058,14 +1058,20 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             }
 
                             log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
-                            writeToConfigTopicAsLeader(() -> configBackingStore.putConnectorConfig(connName, config));
+                            Callback<Void> cb = (err, result) -> {
+                                if (err != null) {
+                                    // producer send error
+                                    callback.onCompletion(err, null);
+                                } else {
+                                    // Note that we use the updated connector config despite the fact that we don't have an updated
+                                    // snapshot yet. The existing task info should still be accurate.
+                                    callback.onCompletion(null, new Created<>(!exists, new ConnectorInfo(connName, config, configState.tasks(connName),
+                                            // validateConnectorConfig have checked the existence of CONNECTOR_CLASS_CONFIG
+                                            connectorType(config))));
+                                }
+                            };
 
-                            // Note that we use the updated connector config despite the fact that we don't have an updated
-                            // snapshot yet. The existing task info should still be accurate.
-                            ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                                // validateConnectorConfig have checked the existence of CONNECTOR_CLASS_CONFIG
-                                connectorType(config));
-                            callback.onCompletion(null, new Created<>(!exists, info));
+                            writeToConfigTopicAsLeader(() -> configBackingStore.putConnectorConfig(connName, config, cb));
                             return null;
                         },
                         forwardErrorCallback(callback)
@@ -1483,7 +1489,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      * exclusively by the leader. For example, {@link ConfigBackingStore#putTargetState(String, TargetState)} does not require this
      * method, as it can be invoked by any worker in the cluster.
      * @param write the action that writes to the config topic, such as {@link ConfigBackingStore#putSessionKey(SessionKey)} or
-     *              {@link ConfigBackingStore#putConnectorConfig(String, Map)}.
+     *              {@link ConfigBackingStore#putConnectorConfig(String, Map, Callback)}.
      */
     private void writeToConfigTopicAsLeader(Runnable write) {
         try {
