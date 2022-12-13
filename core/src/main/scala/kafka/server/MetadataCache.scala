@@ -32,12 +32,14 @@ case class FinalizedFeaturesAndEpoch(features: Map[String, Short], epoch: Long) 
   }
 }
 
-sealed trait CachedControllerId{
+sealed trait CachedControllerId {
   val id: Int
 }
 
 case class ZkCachedControllerId(id: Int) extends CachedControllerId
+case class ZkNoCachedControllerId(id: Int) extends CachedControllerId
 case class KRaftCachedControllerId(id: Int) extends CachedControllerId
+case class KRaftNoCachedControllerId(id: Int) extends CachedControllerId
 
 trait MetadataCache {
 

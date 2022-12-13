@@ -51,10 +51,8 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
                        Collection<Node> liveLeaders) {
-            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch, false);
-            this.partitionStates = partitionStates;
-            this.topicIds = topicIds;
-            this.liveLeaders = liveLeaders;
+            this(version, controllerId, controllerEpoch, brokerEpoch, partitionStates, topicIds,
+                liveLeaders, false);
         }
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,

@@ -3700,7 +3700,7 @@ class KafkaApisTest {
     val capturedResponse = verifyNoThrottling(request)
     val describeClusterResponse = capturedResponse.getValue.asInstanceOf[DescribeClusterResponse]
 
-    assertEquals(metadataCache.getControllerId.get, describeClusterResponse.data.controllerId)
+    assertEquals(metadataCache.getControllerId.get.id, describeClusterResponse.data.controllerId)
     assertEquals(clusterId, describeClusterResponse.data.clusterId)
     assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
     assertEquals(metadataCache.getAliveBrokerNodes(plaintextListener).toSet,

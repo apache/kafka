@@ -45,9 +45,8 @@ public class StopReplicaRequest extends AbstractControlRequest {
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        boolean deletePartitions, List<StopReplicaTopicState> topicStates) {
-            super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch, false);
-            this.deletePartitions = deletePartitions;
-            this.topicStates = topicStates;
+            this(version, controllerId, controllerEpoch, brokerEpoch, deletePartitions,
+                topicStates, false);
         }
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
