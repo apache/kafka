@@ -25,12 +25,13 @@ import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.security.authorizer.AclAuthorizer.{NoAcls, VersionedAcls}
 import kafka.security.authorizer.AclEntry
-import kafka.server.ConfigType
+import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zookeeper._
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
@@ -2311,5 +2312,21 @@ object KafkaZkClient {
         }
       case _ => throw new IllegalStateException(s"Cannot unwrap $response because it is not a MultiResponse")
     }
+  }
+
+  def createZkClient(name: String, time: Time, config: KafkaConfig, zkClientConfig: ZKClientConfig): KafkaZkClient = {
+    val secureAclsEnabled = config.zkEnableSecureAcls
+    val isZkSecurityEnabled = JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig)
+
+    if (secureAclsEnabled && !isZkSecurityEnabled)
+      throw new java.lang.SecurityException(
+        s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least " +
+          s"${KafkaConfig.ZkSslClientEnableProp}, ${KafkaConfig.ZkClientCnxnSocketProp}, and " +
+          s"${KafkaConfig.ZkSslKeyStoreLocationProp} was not present and the verification of the JAAS login file failed " +
+          s"${JaasUtils.zkSecuritySysConfigString}")
+
+    KafkaZkClient(config.zkConnect, secureAclsEnabled, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
+      config.zkMaxInFlightRequests, time, name = name, zkClientConfig = zkClientConfig,
+      createChrootIfNecessary = true)
   }
 }

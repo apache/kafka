@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
@@ -84,6 +85,7 @@ public class ClusterControlManager {
         private ReplicaPlacer replicaPlacer = null;
         private ControllerMetrics controllerMetrics = null;
         private FeatureControlManager featureControl = null;
+        private boolean zkMigrationEnabled = false;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -125,6 +127,11 @@ public class ClusterControlManager {
             return this;
         }
 
+        Builder setZkMigrationEnabled(boolean zkMigrationEnabled) {
+            this.zkMigrationEnabled = zkMigrationEnabled;
+            return this;
+        }
+
         ClusterControlManager build() {
             if (logContext == null) {
                 logContext = new LogContext();
@@ -151,7 +158,8 @@ public class ClusterControlManager {
                 sessionTimeoutNs,
                 replicaPlacer,
                 controllerMetrics,
-                featureControl
+                featureControl,
+                zkMigrationEnabled
             );
         }
     }
@@ -243,6 +251,8 @@ public class ClusterControlManager {
      */
     private final FeatureControlManager featureControl;
 
+    private final boolean zkMigrationEnabled;
+
     private ClusterControlManager(
         LogContext logContext,
         String clusterId,
@@ -251,7 +261,8 @@ public class ClusterControlManager {
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
         ControllerMetrics metrics,
-        FeatureControlManager featureControl
+        FeatureControlManager featureControl,
+        boolean zkMigrationEnabled
     ) {
         this.logContext = logContext;
         this.clusterId = clusterId;
@@ -265,6 +276,7 @@ public class ClusterControlManager {
         this.readyBrokersFuture = Optional.empty();
         this.controllerMetrics = metrics;
         this.featureControl = featureControl;
+        this.zkMigrationEnabled = zkMigrationEnabled;
     }
 
     ReplicaPlacer replicaPlacer() {
@@ -307,6 +319,10 @@ public class ClusterControlManager {
             .collect(Collectors.toSet());
     }
 
+    boolean zkRegistrationAllowed() {
+        return zkMigrationEnabled && featureControl.metadataVersion().isMigrationSupported();
+    }
+
     /**
      * Process an incoming broker registration request.
      */
@@ -337,7 +353,13 @@ public class ClusterControlManager {
             }
         }
 
-        RegisterBrokerRecord record = new RegisterBrokerRecord().setBrokerId(brokerId).
+        if (request.isMigratingZkBroker() && !zkRegistrationAllowed()) {
+            throw new BrokerIdNotRegisteredException("Controller does not support registering ZK brokers.");
+        }
+
+        RegisterBrokerRecord record = new RegisterBrokerRecord().
+            setBrokerId(brokerId).
+            setIsMigratingZkBroker(request.isMigratingZkBroker()).
             setIncarnationId(request.incarnationId()).
             setBrokerEpoch(brokerEpoch).
             setRack(request.rack());
@@ -419,7 +441,7 @@ public class ClusterControlManager {
                 new BrokerRegistration(brokerId, record.brokerEpoch(),
                     record.incarnationId(), listeners, features,
                     Optional.ofNullable(record.rack()), record.fenced(),
-                    record.inControlledShutdown()));
+                    record.inControlledShutdown(), record.isMigratingZkBroker()));
         updateMetrics(prevRegistration, brokerRegistrations.get(brokerId));
         if (heartbeatManager != null) {
             if (prevRegistration != null) heartbeatManager.remove(brokerId);
