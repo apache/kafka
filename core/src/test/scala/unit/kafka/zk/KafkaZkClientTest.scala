@@ -1258,14 +1258,11 @@ class KafkaZkClientTest extends QuorumTestHarness {
     executor.submit(thread2)
     executor.submit(thread3)
     executor.shutdown()
-    executor.awaitTermination(10, TimeUnit.SECONDS)
+    executor.awaitTermination(30, TimeUnit.SECONDS)
 
     assertEquals(1000, registeredEpochs.size())
     val uniqueEpochs = registeredEpochs.asScala.toSet
     assertEquals(1000, uniqueEpochs.size)
-    assertTrue(registeringNodes.get(1) > 0, "Expected node 1 to have more than zero registrations out of 1000 attempts")
-    assertTrue(registeringNodes.get(2) > 0, "Expected node 2 to have more than zero registrations out of 1000 attempts")
-    assertTrue(registeringNodes.get(3) > 0, "Expected node 3 to have more than zero registrations out of 1000 attempts")
   }
 
   @Test
