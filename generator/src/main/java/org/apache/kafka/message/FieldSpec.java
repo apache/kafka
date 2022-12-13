@@ -446,9 +446,13 @@ public final class FieldSpec {
         } else if (type.isRecords()) {
             return "null";
         } else if (type.isStruct()) {
-            if (!fieldDefault.isEmpty()) {
+            if (fieldDefault.equals("null")) {
+                validateNullDefault();
+                return "null";
+            } else if (!fieldDefault.isEmpty()) {
                 throw new RuntimeException("Invalid default for struct field " +
-                    name + ": custom defaults are not supported for struct fields.");
+                    name + ".  The only valid default for a struct field " +
+                    "is the empty struct or null.");
             }
             return "new " + type.toString() + "()";
         } else if (type.isArray()) {

@@ -201,9 +201,9 @@ class TopicCommandTest {
       () => topicService.deleteTopic(new TopicCommandOptions(Array("--topic", topicName))))
     assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
 
-    verify(adminClient, times(1)).deleteTopics(
-      argThat((_.contains(topicName)): ArgumentMatcher[Collection[String]]),
-      argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[DeleteTopicsOptions])
+    verify(adminClient).deleteTopics(
+      argThat((topics: java.util.Collection[String]) => topics.asScala.toBuffer.equals(Seq(topicName))),
+      argThat((options: DeleteTopicsOptions) => !options.shouldRetryOnQuotaViolation)
     )
   }
 

@@ -217,7 +217,7 @@ object LogConfig {
   val PreAllocateEnableProp = TopicConfig.PREALLOCATE_CONFIG
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
-  @deprecated("3.0") @nowarn("cat=deprecation")
+  @deprecated("3.0")
   val MessageFormatVersionProp = TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG
   val MessageTimestampTypeProp = TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG
   val MessageTimestampDifferenceMaxMsProp = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG
@@ -252,7 +252,7 @@ object LogConfig {
   val PreAllocateEnableDoc = TopicConfig.PREALLOCATE_DOC
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
-  @deprecated("3.0") @nowarn("cat=deprecation")
+  @deprecated("3.0")
   val MessageFormatVersionDoc = TopicConfig.MESSAGE_FORMAT_VERSION_DOC
 
   val MessageTimestampTypeDoc = TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC

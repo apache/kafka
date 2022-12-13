@@ -53,19 +53,19 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     @Override
     public Subscription buildSubscriptionV0(List<String> topics, List<TopicPartition> partitions, int generationId) {
         return new Subscription(topics, serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generationId))),
-            Collections.emptyList(), DEFAULT_GENERATION);
+            Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
     }
 
     @Override
     public Subscription buildSubscriptionV1(List<String> topics, List<TopicPartition> partitions, int generationId) {
         return new Subscription(topics, serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generationId))),
-            partitions, DEFAULT_GENERATION);
+            partitions, DEFAULT_GENERATION, Optional.empty());
     }
 
     @Override
     public Subscription buildSubscriptionV2Above(List<String> topics, List<TopicPartition> partitions, int generationId) {
         return new Subscription(topics, serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generationId))),
-            partitions, generationId);
+            partitions, generationId, Optional.empty());
     }
 
     @Override
@@ -308,7 +308,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         List<TopicPartition> ownedPartitions = partitions(tp(topic1, 0), tp(topic2, 1));
         int generationIdInUserData = generationId - 1;
 
-        Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationIdInUserData), Collections.emptyList(), generationId);
+        Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationIdInUserData), Collections.emptyList(), generationId, Optional.empty());
         AbstractStickyAssignor.MemberData memberData = memberData(subscription);
         // in StickyAssignor with eager rebalance protocol, we'll always honor data in user data
         assertEquals(ownedPartitions, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");

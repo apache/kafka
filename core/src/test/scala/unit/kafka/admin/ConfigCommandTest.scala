@@ -1354,7 +1354,7 @@ class ConfigCommandTest extends Logging {
       override def fetchEntityConfig(entityType: String, entityName: String): Properties = {
         credentials.getOrElse(entityName, new Properties())
       }
-      override def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configChange: Properties): Unit = {
+      override def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configChange: Properties, isUserClientId: Boolean = false): Unit = {
         assertEquals(user, sanitizedEntityName)
         assertEquals(mechanisms, configChange.keySet().asScala)
         for (mechanism <- mechanisms) {
@@ -1581,7 +1581,7 @@ class ConfigCommandTest extends Logging {
     override def changeBrokerConfig(brokerIds: Seq[Int], configs: Properties): Unit = {}
     override def fetchEntityConfig(entityType: String, entityName: String): Properties = {new Properties}
     override def changeClientIdConfig(clientId: String, configs: Properties): Unit = {}
-    override def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configs: Properties): Unit = {}
+    override def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configs: Properties, isUserClientId: Boolean = false): Unit = {}
     override def changeTopicConfig(topic: String, configs: Properties): Unit = {}
   }
 

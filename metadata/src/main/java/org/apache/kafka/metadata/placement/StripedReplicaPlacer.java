@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.metadata.OptionalStringComparator;
@@ -427,7 +428,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
     }
 
     @Override
-    public List<List<Integer>> place(
+    public TopicAssignment place(
         PlacementSpec placement,
         ClusterDescriber cluster
     ) throws InvalidReplicationFactorException {
@@ -440,6 +441,8 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
         for (int partition = 0; partition < placement.numPartitions(); partition++) {
             placements.add(rackList.place(placement.numReplicas()));
         }
-        return placements;
+        return new TopicAssignment(
+            placements.stream().map(PartitionAssignment::new).collect(Collectors.toList())
+        );
     }
 }
