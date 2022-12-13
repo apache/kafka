@@ -1583,24 +1583,25 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
      * <p>
      * The next Consumer Record which will be retrieved when poll() is invoked will have the offset specified, given that
-     * a record with that offset exists (ie: it is a valid offset).
+     * a record with that offset exists (i.e. it is a valid offset).
      * <p>
-     * {@link KafkaConsumer#seekToBeginning(Collection)} will go to the first offset in the topic.
-     * seek(0) is equivalent to seekToBeginning for a topic with beginning offset 0,
+     * {@link #seekToBeginning(Collection)} will go to the first offset in the topic.
+     * seek(0) is equivalent to seekToBeginning for a TopicPartition with beginning offset 0,
      * assuming that there is a record at offset 0 still available.
-     * {@link KafkaConsumer#seekToEnd(Collection)} is equivalent to seeking to the highest known offset + 1.
+     * {@link #seekToEnd(Collection)} is equivalent to seeking to the last offset of the partition, but behavior depends on
+     * {@code isolation.level}, so see {@link #seekToBeginning(Collection)} documentation for more details.
      * <p>
      * Seeking to the offset smaller than the log start offset or larger than the log end offset
      * or high watermark means an invalid offset is reached.
-     * Invalid offset behaviour is controlled by
-     * the {@link ConsumerConfig AUTO_RESET_CONFIG} property.
+     * Invalid offset behaviour is controlled by the {@link ConsumerConfig AUTO_RESET_CONFIG} property.
      * If this is set to "earliest", the next poll will return records from the starting offset.
-     * If it is set to "latest", it will seek to the last known record (similar to seekToEnd()).
-     * If it is set to "none", an {@link OffsetOutOfRangeException} will be thrown.
+     * If it is set to "latest", it will seek to the last offset (similar to seekToEnd()).
+     * If it is set to "none", an {@code OffsetOutOfRangeException} will be thrown.
      * <p>
      * Note that, the seek offset won't change to the in-flight fetch request, it will take effect in next fetch request.
      * So, the consumer might wait for {@code fetch.max.wait.ms} before starting to fetch the records from desired offset.
      *
+     * @param partition The TopicPartition on which the seek will be performed.
      * @param offset the next offset returned by poll() will be either this or greater.
      * @throws IllegalArgumentException if the provided offset is negative
      * @throws IllegalStateException if the provided TopicPartition is not assigned to this consumer
