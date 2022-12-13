@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
+import org.apache.kafka.raft
 import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -59,7 +60,8 @@ class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
   override def build(committedOffset: Long,
                      committedEpoch: Int,
                      lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]] = {
-    raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).asScala
+    val snapshotId = new raft.OffsetAndEpoch(committedOffset + 1, committedEpoch)
+    raftClient.createSnapshot(snapshotId, lastContainedLogTime).asScala
   }
 }
 
