@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
@@ -33,7 +34,8 @@ import java.util.Collections;
 public class MirrorHeartbeatConnector extends SourceConnector {
     private MirrorHeartbeatConfig config;
     private Scheduler scheduler;
-    
+    private Admin targetAdminClient;
+
     public MirrorHeartbeatConnector() {
         // nop
     }
@@ -46,6 +48,7 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorHeartbeatConfig(props);
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
         scheduler = new Scheduler(MirrorHeartbeatConnector.class, config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
     }
@@ -53,6 +56,7 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     @Override
     public void stop() {
         Utils.closeQuietly(scheduler, "scheduler");
+        Utils.closeQuietly(targetAdminClient, "target admin client");
     }
 
     @Override
@@ -82,7 +86,10 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     }
 
     private void createInternalTopics() {
-        MirrorUtils.createSinglePartitionCompactedTopic(config.heartbeatsTopic(),
-            config.heartbeatsTopicReplicationFactor(), config.forwardingAdmin(config.targetAdminConfig()));
+        MirrorUtils.createSinglePartitionCompactedTopic(
+                config.heartbeatsTopic(),
+                config.heartbeatsTopicReplicationFactor(),
+                targetAdminClient
+        );
     }
 }

@@ -1048,7 +1048,14 @@ object MigrationZNode {
       val controllerEpoch = js("kraft_controller_epoch").to[Int]
       val metadataOffset = js("kraft_metadata_offset").to[Long]
       val metadataEpoch = js("kraft_metadata_epoch").to[Int]
-      Some(new ZkMigrationLeadershipState(controllerId, controllerEpoch, metadataOffset, metadataEpoch, modifyTimeMs, zkVersion, -2))
+      Some(new ZkMigrationLeadershipState(
+        controllerId,
+        controllerEpoch,
+        metadataOffset,
+        metadataEpoch,
+        modifyTimeMs,
+        zkVersion,
+        ZkVersion.UnknownVersion))
     }.getOrElse(throw new KafkaException(s"Failed to parse the migration json $jsonDataAsString"))
   }
 }

@@ -17,10 +17,11 @@
 package kafka.coordinator.group
 
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
+import java.util
 import java.util.concurrent.CompletableFuture
 import scala.collection.immutable
 import scala.jdk.CollectionConverters._
@@ -164,5 +165,55 @@ class GroupCoordinatorAdapter(
     )
 
     future
+  }
+
+  override def listGroups(
+    context: RequestContext,
+    request: ListGroupsRequestData
+  ): CompletableFuture[ListGroupsResponseData] = {
+    // Handle a null array the same as empty
+    val (error, groups) = coordinator.handleListGroups(
+      Option(request.statesFilter).map(_.asScala.toSet).getOrElse(Set.empty)
+    )
+
+    val response = new ListGroupsResponseData()
+      .setErrorCode(error.code)
+
+    groups.foreach { group =>
+      response.groups.add(new ListGroupsResponseData.ListedGroup()
+        .setGroupId(group.groupId)
+        .setProtocolType(group.protocolType)
+        .setGroupState(group.state))
+    }
+
+    CompletableFuture.completedFuture(response)
+  }
+
+  override def describeGroups(
+    context: RequestContext,
+    groupIds: util.List[String]
+  ): CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]] = {
+
+    def describeGroup(groupId: String): DescribeGroupsResponseData.DescribedGroup = {
+      val (error, summary) = coordinator.handleDescribeGroup(groupId)
+
+      new DescribeGroupsResponseData.DescribedGroup()
+        .setErrorCode(error.code)
+        .setGroupId(groupId)
+        .setGroupState(summary.state)
+        .setProtocolType(summary.protocolType)
+        .setProtocolData(summary.protocol)
+        .setMembers(summary.members.map { member =>
+          new DescribeGroupsResponseData.DescribedGroupMember()
+            .setMemberId(member.memberId)
+            .setGroupInstanceId(member.groupInstanceId.orNull)
+            .setClientId(member.clientId)
+            .setClientHost(member.clientHost)
+            .setMemberAssignment(member.assignment)
+            .setMemberMetadata(member.metadata)
+        }.asJava)
+    }
+
+    CompletableFuture.completedFuture(groupIds.asScala.map(describeGroup).asJava)
   }
 }

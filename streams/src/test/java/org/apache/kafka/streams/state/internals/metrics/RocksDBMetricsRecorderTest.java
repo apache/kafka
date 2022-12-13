@@ -347,20 +347,6 @@ public class RocksDBMetricsRecorderTest {
     }
 
     @Test
-    public void shouldCloseStatisticsWhenValueProvidersAreRemoved() {
-        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
-        recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
-        verify(statisticsToAdd1).close();
-    }
-
-    @Test
-    public void shouldNotCloseStatisticsWhenValueProvidersWithoutStatisticsAreRemoved() {
-        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
-        recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
-        verify(statisticsToAdd1, never()).close();
-    }
-
-    @Test
     public void shouldNotRemoveItselfFromRecordingTriggerWhenAtLeastOneValueProviderIsPresent() {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
         recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);

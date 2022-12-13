@@ -18,7 +18,7 @@ package kafka.coordinator.group
 
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito.{mock, verify}
+import org.mockito.Mockito.{mock, verify, when}
 
 import java.net.InetAddress
 import scala.jdk.CollectionConverters._
@@ -299,5 +299,106 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertEquals(expectedData, future.get())
+  }
+
+  @Test
+  def testListGroups(): Unit = {
+    testListGroups(null, Set.empty)
+    testListGroups(List(), Set.empty)
+    testListGroups(List("Stable"), Set("Stable"))
+  }
+
+  def testListGroups(
+    statesFilter: List[String],
+    expectedStatesFilter: Set[String]
+  ): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    val ctx = makeContext(ApiKeys.LIST_GROUPS, ApiKeys.LIST_GROUPS.latestVersion)
+    val data = new ListGroupsRequestData()
+      .setStatesFilter(statesFilter.asJava)
+
+    when(groupCoordinator.handleListGroups(expectedStatesFilter)).thenReturn {
+      (Errors.NOT_COORDINATOR, List(
+        GroupOverview("group1", "protocol1", "Stable"),
+        GroupOverview("group2", "qwerty", "Empty")
+      ))
+    }
+
+    val future = adapter.listGroups(ctx, data)
+    assertTrue(future.isDone)
+
+    val expectedData = new ListGroupsResponseData()
+      .setErrorCode(Errors.NOT_COORDINATOR.code)
+      .setGroups(List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId("group1")
+          .setGroupState("Stable")
+          .setProtocolType("protocol1"),
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId("group2")
+          .setGroupState("Empty")
+          .setProtocolType("qwerty")
+      ).asJava)
+
+    assertEquals(expectedData, future.get())
+  }
+
+  @Test
+  def testDescribeGroup(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    val groupId1 = "group-1"
+    val groupId2 = "group-2"
+
+    val groupSummary1 = GroupSummary(
+      "Stable",
+      "consumer",
+      "roundrobin",
+      List(MemberSummary(
+        "memberid",
+        Some("instanceid"),
+        "clientid",
+        "clienthost",
+        "metadata".getBytes(),
+        "assignment".getBytes()
+      ))
+    )
+
+    when(groupCoordinator.handleDescribeGroup(groupId1)).thenReturn {
+      (Errors.NONE, groupSummary1)
+    }
+
+    when(groupCoordinator.handleDescribeGroup(groupId2)).thenReturn {
+      (Errors.NOT_COORDINATOR, GroupCoordinator.EmptyGroup)
+    }
+
+    val ctx = makeContext(ApiKeys.DESCRIBE_GROUPS, ApiKeys.DESCRIBE_GROUPS.latestVersion)
+    val future = adapter.describeGroups(ctx, List(groupId1, groupId2).asJava)
+    assertTrue(future.isDone)
+
+    val expectedDescribedGroups = List(
+      new DescribeGroupsResponseData.DescribedGroup()
+        .setGroupId(groupId1)
+        .setErrorCode(Errors.NONE.code)
+        .setProtocolType(groupSummary1.protocolType)
+        .setProtocolData(groupSummary1.protocol)
+        .setGroupState(groupSummary1.state)
+        .setMembers(List(new DescribeGroupsResponseData.DescribedGroupMember()
+          .setMemberId(groupSummary1.members.head.memberId)
+          .setGroupInstanceId(groupSummary1.members.head.groupInstanceId.orNull)
+          .setClientId(groupSummary1.members.head.clientId)
+          .setClientHost(groupSummary1.members.head.clientHost)
+          .setMemberMetadata(groupSummary1.members.head.metadata)
+          .setMemberAssignment(groupSummary1.members.head.assignment)
+        ).asJava),
+      new DescribeGroupsResponseData.DescribedGroup()
+        .setGroupId(groupId2)
+        .setErrorCode(Errors.NOT_COORDINATOR.code)
+    ).asJava
+
+    assertEquals(expectedDescribedGroups, future.get())
   }
 }
