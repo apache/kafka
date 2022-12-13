@@ -317,9 +317,6 @@ final class SchemaGenerator {
                         fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
             }
         } else if (type.isStruct()) {
-            if (nullable) {
-                throw new RuntimeException("Type " + type + " cannot be nullable.");
-            }
             return String.format("%s.SCHEMA_%d", type.toString(),
                 floorVersion(type.toString(), version));
         } else {
