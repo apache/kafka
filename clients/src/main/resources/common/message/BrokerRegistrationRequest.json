@@ -18,7 +18,7 @@
   "type": "request",
   "listeners": ["controller"],
   "name": "BrokerRegistrationRequest",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -51,7 +51,7 @@
     },
     { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The rack which this broker is in." },
-    { "name": "IsMigratingZkBroker", "type": "int8", "versions": "0+", "taggedVersions": "0+", "tag": 0, "ignorable": true,
+    { "name": "IsMigratingZkBroker", "type": "bool", "versions": "1+", "default": "false",
       "about": "Set by a ZK broker if the required configurations for ZK migration are present." }
   ]
 }
