@@ -25,9 +25,17 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public class EnvVarConfigProvider implements ConfigProvider {
+    private final Map<String, String> envVarMap;
+
+    public EnvVarConfigProvider() {
+        envVarMap = getEnvVars();
+    }
+
+    public EnvVarConfigProvider(Map<String, String> envVarsAsArgument) {
+        envVarMap = envVarsAsArgument;
+    }
 
     private static final Logger log = LoggerFactory.getLogger(EnvVarConfigProvider.class);
 
@@ -55,21 +63,17 @@ public class EnvVarConfigProvider implements ConfigProvider {
      */
     @Override
     public ConfigData get(String s, Set<String> keys) {
-        Map<String, String> data = getEnvVars();
 
-        if (data == null) {
+        if (envVarMap == null) {
             return new ConfigData(new HashMap<>());
         }
 
         if (keys == null) {
-            return new ConfigData(data);
+            return new ConfigData(envVarMap);
         }
 
-        Map<String, String> filteredData = data
-                .entrySet()
-                .stream()
-                .filter(envVar -> keys.contains(envVar.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        HashMap<String, String> filteredData = new HashMap<>(envVarMap);
+        filteredData.keySet().retainAll(keys);
 
         return new ConfigData(filteredData);
     }
