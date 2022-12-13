@@ -167,13 +167,13 @@ class RemoteLogManagerTest {
   def testFindOffsetByTimestamp(): Unit = {
     val tp = leaderTopicIdPartition.topicPartition()
     val remoteLogSegmentId = new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid())
-    val timestamp = time.milliseconds()
+    val ts = time.milliseconds()
     val startOffset = 120
     val targetLeaderEpoch = 10
 
     val segmentMetadata = mock(classOf[RemoteLogSegmentMetadata])
     when(segmentMetadata.remoteLogSegmentId()).thenReturn(remoteLogSegmentId)
-    when(segmentMetadata.maxTimestampMs()).thenReturn(timestamp + 2)
+    when(segmentMetadata.maxTimestampMs()).thenReturn(ts + 2)
     when(segmentMetadata.startOffset()).thenReturn(startOffset)
     when(segmentMetadata.endOffset()).thenReturn(startOffset + 2)
 
@@ -207,8 +207,23 @@ class RemoteLogManagerTest {
         else
           List().asJava.iterator()
       })
+
+    def records(timestamp: Long,
+                initialOffset: Long,
+                partitionLeaderEpoch: Int): MemoryRecords = {
+      MemoryRecords.withRecords(initialOffset, CompressionType.NONE, partitionLeaderEpoch,
+        new SimpleRecord(timestamp - 1, "first message".getBytes()),
+        new SimpleRecord(timestamp + 1, "second message".getBytes()),
+        new SimpleRecord(timestamp + 2, "third message".getBytes()),
+      )
+    }
+
+    // 3 messages are added with offset, and timestamp as below
+    // startOffset   , ts-1
+    // startOffset+1 , ts+1
+    // startOffset+2 , ts+2
     when(remoteStorageManager.fetchLogSegment(segmentMetadata, 0))
-      .thenReturn(new ByteArrayInputStream(records(timestamp, startOffset, targetLeaderEpoch).buffer().array()))
+      .thenAnswer(_ => new ByteArrayInputStream(records(ts, startOffset, targetLeaderEpoch).buffer().array()))
 
     val leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint)
     leaderEpochFileCache.assign(epoch = 5, startOffset = 99L)
@@ -216,8 +231,18 @@ class RemoteLogManagerTest {
     leaderEpochFileCache.assign(epoch = 12, startOffset = 500L)
 
     remoteLogManager.onLeadershipChange(Set(mockPartition(leaderTopicIdPartition)), Set(), topicIds)
-    val actual = remoteLogManager.findOffsetByTimestamp(tp, timestamp, startOffset, leaderEpochFileCache)
-    assertEquals(Some(new TimestampAndOffset(timestamp + 1, startOffset + 1, Optional.of(targetLeaderEpoch))), actual)
+    // Fetching message for timestamp `ts` will return the message with startOffset+1, and `ts+1` as there are no
+    // messages starting with the startOffset and with `ts`.
+    val maybeTimestampAndOffset1 = remoteLogManager.findOffsetByTimestamp(tp, ts, startOffset, leaderEpochFileCache)
+    assertEquals(Some(new TimestampAndOffset(ts + 1, startOffset + 1, Optional.of(targetLeaderEpoch))), maybeTimestampAndOffset1)
+
+    // Fetching message for `ts+2` will return the message with startOffset+2 and its timestamp value is `ts+2`.
+    val maybeTimestampAndOffset2 = remoteLogManager.findOffsetByTimestamp(tp, ts + 2, startOffset, leaderEpochFileCache)
+    assertEquals(Some(new TimestampAndOffset(ts + 2, startOffset + 2, Optional.of(targetLeaderEpoch))), maybeTimestampAndOffset2)
+
+    // Fetching message for `ts+3` will return None as there are no records with timestamp >= ts+3.
+    val maybeTimestampAndOffset3 = remoteLogManager.findOffsetByTimestamp(tp, ts + 3, startOffset, leaderEpochFileCache)
+    assertEquals(None, maybeTimestampAndOffset3)
   }
 
   @Test
@@ -248,13 +273,4 @@ class RemoteLogManagerTest {
     new RemoteLogManagerConfig(config)
   }
 
-  private def records(timestamp: Long,
-                      initialOffset: Long,
-                      partitionLeaderEpoch: Int): MemoryRecords = {
-    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, partitionLeaderEpoch,
-      new SimpleRecord(timestamp - 1, "first message".getBytes()),
-      new SimpleRecord(timestamp + 1, "second message".getBytes()),
-      new SimpleRecord(timestamp + 2, "third message".getBytes()),
-    )
-  }
 }

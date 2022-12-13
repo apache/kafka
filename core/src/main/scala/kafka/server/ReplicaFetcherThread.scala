@@ -304,7 +304,7 @@ class ReplicaFetcherThread(name: String,
           buildProducerSnapshotFile(snapshotFile, remoteLogSegmentMetadata, rlm)
 
           // Reload producer snapshots.
-          log.producerStateManager.reloadSnapshots()
+          log.producerStateManager.truncateFullyAndReloadSnapshots()
           log.loadProducerState(nextOffset)
           debug(s"Built the leader epoch cache and producer snapshots from remote tier for $partition, with " +
             s"active producers size: ${log.producerStateManager.activeProducers.size}, " +

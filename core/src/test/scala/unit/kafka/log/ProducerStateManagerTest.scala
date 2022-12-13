@@ -754,12 +754,17 @@ class ProducerStateManagerTest {
     assertEquals(2, logDir.listFiles().length)
     assertEquals(Set(3, 5), currentSnapshotOffsets)
 
+    // Truncate to the range (3, 5), this will delete the earlier snapshot until offset 3.
     stateManager.truncateAndReload(3, 5, time.milliseconds())
     assertEquals(1, logDir.listFiles().length)
     assertEquals(Set(5), currentSnapshotOffsets)
 
+    // Add the snapshot files until offset 3 to the log dir.
     pathAndDataList.foreach { case (path, data) => Files.write(path, data) }
-    stateManager.reloadSnapshots()
+    // Cleanup the inmemory snapshots and reload the snapshots from log dir.
+    // It loads the earlier written snapshot files from log dir.
+    stateManager.truncateFullyAndReloadSnapshots()
+
     assertEquals(Some(3), stateManager.latestSnapshotOffset)
     assertEquals(Set(3), currentSnapshotOffsets)
   }

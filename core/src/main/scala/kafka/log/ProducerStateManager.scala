@@ -521,7 +521,7 @@ class ProducerStateManager(
     lastTimestamp > 0 && (currentTimeMs - lastTimestamp) > maxTransactionTimeoutMs + ProducerStateManager.LateTransactionBufferMs
   }
   
-  def reloadSnapshots(): Unit = {
+  def truncateFullyAndReloadSnapshots(): Unit = {
     info("Reloading the producer state snapshots")
     truncateFullyAndStartAt(0L)
     snapshots = loadSnapshots()
