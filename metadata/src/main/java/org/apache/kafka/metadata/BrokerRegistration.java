@@ -57,7 +57,9 @@ public class BrokerRegistration {
     private final Optional<String> rack;
     private final boolean fenced;
     private final boolean inControlledShutdown;
+    private final boolean isMigratingZkBroker;
 
+    // Visible for testing
     public BrokerRegistration(int id,
                               long epoch,
                               Uuid incarnationId,
@@ -67,7 +69,32 @@ public class BrokerRegistration {
                               boolean fenced,
                               boolean inControlledShutdown) {
         this(id, epoch, incarnationId, listenersToMap(listeners), supportedFeatures, rack,
-            fenced, inControlledShutdown);
+            fenced, inControlledShutdown, false);
+    }
+
+    public BrokerRegistration(int id,
+                              long epoch,
+                              Uuid incarnationId,
+                              List<Endpoint> listeners,
+                              Map<String, VersionRange> supportedFeatures,
+                              Optional<String> rack,
+                              boolean fenced,
+                              boolean inControlledShutdown,
+                              boolean isMigratingZkBroker) {
+        this(id, epoch, incarnationId, listenersToMap(listeners), supportedFeatures, rack,
+            fenced, inControlledShutdown, isMigratingZkBroker);
+    }
+
+    // Visible for testing
+    public BrokerRegistration(int id,
+                              long epoch,
+                              Uuid incarnationId,
+                              Map<String, Endpoint> listeners,
+                              Map<String, VersionRange> supportedFeatures,
+                              Optional<String> rack,
+                              boolean fenced,
+                              boolean inControlledShutdown) {
+        this(id, epoch, incarnationId, listeners, supportedFeatures, rack, fenced, inControlledShutdown, false);
     }
 
     public BrokerRegistration(int id,
@@ -77,7 +104,8 @@ public class BrokerRegistration {
                               Map<String, VersionRange> supportedFeatures,
                               Optional<String> rack,
                               boolean fenced,
-                              boolean inControlledShutdown) {
+                              boolean inControlledShutdown,
+                              boolean isMigratingZkBroker) {
         this.id = id;
         this.epoch = epoch;
         this.incarnationId = incarnationId;
@@ -95,6 +123,7 @@ public class BrokerRegistration {
         this.rack = rack;
         this.fenced = fenced;
         this.inControlledShutdown = inControlledShutdown;
+        this.isMigratingZkBroker = isMigratingZkBroker;
     }
 
     public static BrokerRegistration fromRecord(RegisterBrokerRecord record) {
@@ -117,7 +146,8 @@ public class BrokerRegistration {
             supportedFeatures,
             Optional.ofNullable(record.rack()),
             record.fenced(),
-            record.inControlledShutdown());
+            record.inControlledShutdown(),
+            record.isMigratingZkBroker());
     }
 
     public int id() {
@@ -160,6 +190,10 @@ public class BrokerRegistration {
         return inControlledShutdown;
     }
 
+    public boolean isMigratingZkBroker() {
+        return isMigratingZkBroker;
+    }
+
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {
         RegisterBrokerRecord registrationRecord = new RegisterBrokerRecord().
             setBrokerId(id).
@@ -173,6 +207,14 @@ public class BrokerRegistration {
                 registrationRecord.setInControlledShutdown(true);
             } else {
                 options.handleLoss("the inControlledShutdown state of one or more brokers");
+            }
+        }
+
+        if (isMigratingZkBroker) {
+            if (options.metadataVersion().isMigrationSupported()) {
+                registrationRecord.setIsMigratingZkBroker(isMigratingZkBroker);
+            } else {
+                options.handleLoss("the isMigratingZkBroker state of one or more brokers");
             }
         }
 
@@ -199,7 +241,7 @@ public class BrokerRegistration {
     @Override
     public int hashCode() {
         return Objects.hash(id, epoch, incarnationId, listeners, supportedFeatures,
-            rack, fenced, inControlledShutdown);
+            rack, fenced, inControlledShutdown, isMigratingZkBroker);
     }
 
     @Override
@@ -213,7 +255,8 @@ public class BrokerRegistration {
             other.supportedFeatures.equals(supportedFeatures) &&
             other.rack.equals(rack) &&
             other.fenced == fenced &&
-            other.inControlledShutdown == inControlledShutdown;
+            other.inControlledShutdown == inControlledShutdown &&
+            other.isMigratingZkBroker == isMigratingZkBroker;
     }
 
     @Override
@@ -234,6 +277,7 @@ public class BrokerRegistration {
         bld.append(", rack=").append(rack);
         bld.append(", fenced=").append(fenced);
         bld.append(", inControlledShutdown=").append(inControlledShutdown);
+        bld.append(", isMigratingZkBroker=").append(isMigratingZkBroker);
         bld.append(")");
         return bld.toString();
     }
@@ -256,7 +300,8 @@ public class BrokerRegistration {
             supportedFeatures,
             rack,
             newFenced,
-            newInControlledShutdownChange
+            newInControlledShutdownChange,
+            isMigratingZkBroker
         );
     }
 }
