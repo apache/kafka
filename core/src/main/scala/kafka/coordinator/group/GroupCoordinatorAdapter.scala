@@ -18,7 +18,7 @@ package kafka.coordinator.group
 
 import kafka.server.RequestLocal
 import kafka.utils.Implicits.MapExtensionMethods
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
@@ -188,6 +188,34 @@ class GroupCoordinatorAdapter(
     }
 
     CompletableFuture.completedFuture(response)
+  }
+
+  override def describeGroups(
+    context: RequestContext,
+    groupIds: util.List[String]
+  ): CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]] = {
+
+    def describeGroup(groupId: String): DescribeGroupsResponseData.DescribedGroup = {
+      val (error, summary) = coordinator.handleDescribeGroup(groupId)
+
+      new DescribeGroupsResponseData.DescribedGroup()
+        .setErrorCode(error.code)
+        .setGroupId(groupId)
+        .setGroupState(summary.state)
+        .setProtocolType(summary.protocolType)
+        .setProtocolData(summary.protocol)
+        .setMembers(summary.members.map { member =>
+          new DescribeGroupsResponseData.DescribedGroupMember()
+            .setMemberId(member.memberId)
+            .setGroupInstanceId(member.groupInstanceId.orNull)
+            .setClientId(member.clientId)
+            .setClientHost(member.clientHost)
+            .setMemberAssignment(member.assignment)
+            .setMemberMetadata(member.metadata)
+        }.asJava)
+    }
+
+    CompletableFuture.completedFuture(groupIds.asScala.map(describeGroup).asJava)
   }
 
   override def deleteGroups(

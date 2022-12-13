@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -105,10 +106,24 @@ public interface GroupCoordinator {
     );
 
     /**
+     * Describe Groups.
+     *
+     * @param context           The coordinator request context.
+     * @param groupIds          The group ids.
+     *
+     * @return A future yielding the results or an exception.
+     */
+    CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroups(
+        RequestContext context,
+        List<String> groupIds
+    );
+
+    /**
      * Delete Groups.
      *
      * @param context           The request context.
      * @param groupIds          The group ids.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
      * @return A future yielding the results or an exception.
      */

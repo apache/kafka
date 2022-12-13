@@ -18,7 +18,7 @@ package kafka.coordinator.group
 
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -343,6 +343,63 @@ class GroupCoordinatorAdapterTest {
       ).asJava)
 
     assertEquals(expectedData, future.get())
+  }
+
+  @Test
+  def testDescribeGroup(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    val groupId1 = "group-1"
+    val groupId2 = "group-2"
+
+    val groupSummary1 = GroupSummary(
+      "Stable",
+      "consumer",
+      "roundrobin",
+      List(MemberSummary(
+        "memberid",
+        Some("instanceid"),
+        "clientid",
+        "clienthost",
+        "metadata".getBytes(),
+        "assignment".getBytes()
+      ))
+    )
+
+    when(groupCoordinator.handleDescribeGroup(groupId1)).thenReturn {
+      (Errors.NONE, groupSummary1)
+    }
+
+    when(groupCoordinator.handleDescribeGroup(groupId2)).thenReturn {
+      (Errors.NOT_COORDINATOR, GroupCoordinator.EmptyGroup)
+    }
+
+    val ctx = makeContext(ApiKeys.DESCRIBE_GROUPS, ApiKeys.DESCRIBE_GROUPS.latestVersion)
+    val future = adapter.describeGroups(ctx, List(groupId1, groupId2).asJava)
+    assertTrue(future.isDone)
+
+    val expectedDescribedGroups = List(
+      new DescribeGroupsResponseData.DescribedGroup()
+        .setGroupId(groupId1)
+        .setErrorCode(Errors.NONE.code)
+        .setProtocolType(groupSummary1.protocolType)
+        .setProtocolData(groupSummary1.protocol)
+        .setGroupState(groupSummary1.state)
+        .setMembers(List(new DescribeGroupsResponseData.DescribedGroupMember()
+          .setMemberId(groupSummary1.members.head.memberId)
+          .setGroupInstanceId(groupSummary1.members.head.groupInstanceId.orNull)
+          .setClientId(groupSummary1.members.head.clientId)
+          .setClientHost(groupSummary1.members.head.clientHost)
+          .setMemberMetadata(groupSummary1.members.head.metadata)
+          .setMemberAssignment(groupSummary1.members.head.assignment)
+        ).asJava),
+      new DescribeGroupsResponseData.DescribedGroup()
+        .setGroupId(groupId2)
+        .setErrorCode(Errors.NOT_COORDINATOR.code)
+    ).asJava
+
+    assertEquals(expectedDescribedGroups, future.get())
   }
 
   @Test
