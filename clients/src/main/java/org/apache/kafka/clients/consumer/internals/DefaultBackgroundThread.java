@@ -30,8 +30,11 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 
 /**
@@ -43,8 +46,9 @@ import java.util.concurrent.BlockingQueue;
  * initialized by the polling thread.
  */
 public class DefaultBackgroundThread extends KafkaThread {
+    private static final int MAX_POLL_TIMEOUT_MS = 5000;
     private static final String BACKGROUND_THREAD_NAME =
-        "consumer_background_thread";
+            "consumer_background_thread";
     private final Time time;
     private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
@@ -108,15 +112,13 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             String groupId = rebalanceConfig.groupId;
-            // TODO: Maybe consider a NOOP implementation
             this.coordinatorManager = groupId == null ?
                     Optional.empty() :
                     Optional.of(new CoordinatorRequestManager(
                             logContext,
                             config,
                             errorEventHandler,
-                            groupId,
-                            rebalanceConfig.rebalanceTimeoutMs));
+                            groupId));
             this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue);
         } catch (final Exception e) {
             close();
@@ -147,54 +149,56 @@ public class DefaultBackgroundThread extends KafkaThread {
 
     /**
      * Poll and process an {@link ApplicationEvent}. It performs the following tasks:
-     *  1. Try to poll and event from the queue, and try to process it using the coorsponding {@link ApplicationEventProcessor}.
-     *  2. Try to find Coordinator if needed
-     *  3. Poll the networkClient for outstanding requests.
+     * 1. Try to process all of the existing events using the coorsponding {@link ApplicationEventProcessor}.
+     * 2. Try to find Coordinator if needed
+     * 3. Poll the networkClient for outstanding requests.
      */
     void runOnce() {
-        Optional<ApplicationEvent> event = maybePollEvent();
-
-        if (event.isPresent()) {
+        Queue<ApplicationEvent> events = pollApplicationEvent();
+        Iterator<ApplicationEvent> iter = events.iterator();
+        while (iter.hasNext()) {
+            ApplicationEvent event = iter.next();
             log.debug("processing application event: {}", event);
-            consumeApplicationEvent(event.get());
+            consumeApplicationEvent(event);
         }
 
         final long currentTimeMs = time.milliseconds();
         // TODO: This is just a place holder value.
-        long pollWaitTimeMs = 100;
+        long pollWaitTimeMs = MAX_POLL_TIMEOUT_MS;
 
-        // TODO: Add a condition here, like shouldFindCoordinator in the future.  Since we don't always need to find
-        //  the coordinator.
         if (coordinatorManager.isPresent()) {
-            pollWaitTimeMs = Math.min(pollWaitTimeMs, handlePollResult(coordinatorManager.get().poll(currentTimeMs)));
+            pollWaitTimeMs = Math.min(
+                    pollWaitTimeMs,
+                    handlePollResult(coordinatorManager.get().poll(currentTimeMs)));
         }
 
         // if there are pending events to process, poll then continue without
         // blocking.
         if (!applicationEventQueue.isEmpty()) {
-            networkClientDelegate.poll(0);
+            networkClientDelegate.poll(0, currentTimeMs);
             return;
         }
         // if there are no pending application event, poll until timeout. The timeout
         // will be the minimum of the requestTimeoutMs, nextHeartBeatMs, and
         // nextMetadataUpdate. See NetworkClient.poll impl.
-        networkClientDelegate.poll(pollWaitTimeMs);
+        networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
     }
 
     long handlePollResult(NetworkClientDelegate.PollResult res) {
-        Objects.requireNonNull(res);
         if (!res.unsentRequests.isEmpty()) {
             networkClientDelegate.addAll(res.unsentRequests);
         }
-        return res.timeMsTillNextPoll;
+        return res.timeUntilNextPollMs;
     }
 
-    private Optional<ApplicationEvent> maybePollEvent() {
+    private Queue<ApplicationEvent> pollApplicationEvent() {
         if (this.applicationEventQueue.isEmpty()) {
-            return Optional.empty();
+            return new LinkedList<>();
         }
 
-        return Optional.ofNullable(this.applicationEventQueue.poll());
+        LinkedList<ApplicationEvent> res = new LinkedList<>();
+        this.applicationEventQueue.drainTo(res);
+        return res;
     }
 
     private void consumeApplicationEvent(final ApplicationEvent event) {

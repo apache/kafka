@@ -37,8 +37,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -57,7 +57,6 @@ public class CoordinatorRequestManagerTest {
     private Node node;
     private final Properties properties = new Properties();
     private String groupId;
-    private int rebalanceTimeoutMs;
     private int requestTimeoutMs;
     private RequestState coordinatorRequestState;
 
@@ -74,7 +73,6 @@ public class CoordinatorRequestManagerTest {
         this.errorEventHandler = mock(ErrorEventHandler.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, "100");
         this.groupId = "group-1";
-        this.rebalanceTimeoutMs = 60 * 1000;
         this.requestTimeoutMs = 500;
         this.coordinatorRequestState = mock(RequestState.class);
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -107,12 +105,12 @@ public class CoordinatorRequestManagerTest {
                 groupId, node);
         coordinatorManager.onResponse(time.milliseconds(), retriableErrorResp, null);
         verify(errorEventHandler, never()).handle(Errors.COORDINATOR_NOT_AVAILABLE.exception());
-        assertNull(coordinatorManager.coordinator());
+        assertFalse(coordinatorManager.coordinator().isPresent());
 
         coordinatorManager.onResponse(
                 time.milliseconds(), null,
                 new RuntimeException("some error"));
-        assertNull(coordinatorManager.coordinator());
+        assertFalse(coordinatorManager.coordinator().isPresent());
     }
 
     @Test
@@ -153,7 +151,7 @@ public class CoordinatorRequestManagerTest {
         assertNotNull(coordinatorManager.coordinator());
 
         NetworkClientDelegate.PollResult pollResult = coordinatorManager.poll(time.milliseconds());
-        assertEquals(Long.MAX_VALUE, pollResult.timeMsTillNextPoll);
+        assertEquals(Long.MAX_VALUE, pollResult.timeUntilNextPollMs);
         assertTrue(pollResult.unsentRequests.isEmpty());
     }
 
@@ -185,7 +183,6 @@ public class CoordinatorRequestManagerTest {
                 this.logContext,
                 this.errorEventHandler,
                 this.groupId,
-                this.rebalanceTimeoutMs,
                 this.coordinatorRequestState);
     }
 }

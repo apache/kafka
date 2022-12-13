@@ -101,7 +101,7 @@ public class DefaultBackgroundThreadTest {
         when(this.coordinatorManager.poll(time.milliseconds())).thenReturn(mockPollResult());
         backgroundThread.runOnce();
         Mockito.verify(coordinatorManager, times(1)).poll(anyLong());
-        Mockito.verify(networkClient, times(1)).poll(anyLong());
+        Mockito.verify(networkClient, times(1)).poll(anyLong(), anyLong());
         backgroundThread.close();
     }
 

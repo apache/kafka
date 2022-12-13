@@ -29,7 +29,6 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
@@ -51,23 +50,21 @@ public class CoordinatorRequestManager implements RequestManager {
 
     private final Logger log;
     private final ErrorEventHandler errorHandler;
-    private final long rebalanceTimeoutMs;
     private final String groupId;
 
     private final RequestState coordinatorRequestState;
     private long timeMarkedUnknownMs = -1L; // starting logging a warning only after unable to connect for a while
+    private long totalDisconnectedMin = 0;
     private Node coordinator;
 
     public CoordinatorRequestManager(final LogContext logContext,
                                      final ConsumerConfig config,
                                      final ErrorEventHandler errorHandler,
-                                     final String groupId,
-                                     final long rebalanceTimeoutMs) {
+                                     final String groupId) {
         Objects.requireNonNull(groupId);
         this.log = logContext.logger(this.getClass());
         this.errorHandler = errorHandler;
         this.groupId = groupId;
-        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.coordinatorRequestState = new RequestState(config);
     }
 
@@ -75,13 +72,11 @@ public class CoordinatorRequestManager implements RequestManager {
     CoordinatorRequestManager(final LogContext logContext,
                               final ErrorEventHandler errorHandler,
                               final String groupId,
-                              final long rebalanceTimeoutMs,
                               final RequestState coordinatorRequestState) {
         Objects.requireNonNull(groupId);
         this.log = logContext.logger(this.getClass());
         this.errorHandler = errorHandler;
         this.groupId = groupId;
-        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.coordinatorRequestState = coordinatorRequestState;
     }
 
@@ -108,7 +103,7 @@ public class CoordinatorRequestManager implements RequestManager {
 
         return new NetworkClientDelegate.PollResult(
                 coordinatorRequestState.remainingBackoffMs(currentTimeMs),
-                new ArrayList<>());
+                Collections.emptyList());
     }
 
     private NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
@@ -135,9 +130,12 @@ public class CoordinatorRequestManager implements RequestManager {
             timeMarkedUnknownMs = currentTimeMs;
         } else {
             long durationOfOngoingDisconnect = Math.max(0, currentTimeMs - timeMarkedUnknownMs);
-            if (durationOfOngoingDisconnect > this.rebalanceTimeoutMs)
+            long currDisconnectMin = durationOfOngoingDisconnect / (60 * 1000);
+            if (currDisconnectMin > this.totalDisconnectedMin) {
                 log.debug("Consumer has been disconnected from the group coordinator for {}ms",
                         durationOfOngoingDisconnect);
+                totalDisconnectedMin = currDisconnectMin;
+            }
         }
     }
 
@@ -158,16 +156,16 @@ public class CoordinatorRequestManager implements RequestManager {
             final Exception exception,
             final long currentTimeMs) {
         coordinatorRequestState.updateLastFailedAttempt(currentTimeMs);
-        markCoordinatorUnknown("coordinator unavailable", currentTimeMs);
+        markCoordinatorUnknown("FindCoordinator failed with exception", currentTimeMs);
+
+        if (exception instanceof RetriableException) {
+            log.debug("FindCoordinator request failed due to retriable exception", exception);
+            return;
+        }
 
         if (exception == Errors.GROUP_AUTHORIZATION_FAILED.exception()) {
             log.debug("FindCoordinator request failed due to authorization error {}", exception.getMessage());
             errorHandler.handle(GroupAuthorizationException.forGroupId(this.groupId));
-            return;
-        }
-
-        if (exception instanceof RetriableException) {
-            log.debug("FindCoordinator request failed due to retriable exception", exception);
             return;
         }
 
@@ -179,9 +177,10 @@ public class CoordinatorRequestManager implements RequestManager {
      * Handles the response and exception upon completing the {@link FindCoordinatorRequest}. This is invoked in the callback
      * {@link FindCoordinatorRequestHandler}. If the response was successful, a coordinator node will be updated. If the
      * response failed due to errors, the current coordinator will be marked unknown.
+     *
      * @param currentTimeMs current time ins ms.
-     * @param response the response, can be null.
-     * @param e the exception, can be null.
+     * @param response      the response for finding the coordinator. null if an exception is thrown.
+     * @param e             the exception, null if a valid response is received.
      */
     public void onResponse(final long currentTimeMs, final FindCoordinatorResponse response, final Exception e) {
         // handles Runtime exception
@@ -190,9 +189,9 @@ public class CoordinatorRequestManager implements RequestManager {
             return;
         }
 
-        Optional<FindCoordinatorResponseData.Coordinator> coordinator = response.getCoordinatorByKey(this.groupId);
+        Optional<FindCoordinatorResponseData.Coordinator> coordinator = response.coordinatorByKey(this.groupId);
         if (!coordinator.isPresent()) {
-            String msg = String.format("Coordinator not found for groupId: %s", this.groupId);
+            String msg = String.format("Response did not contain expected coordinator section for groupId: %s", this.groupId);
             onFailedCoordinatorResponse(new IllegalStateException(msg), currentTimeMs);
             return;
         }
@@ -207,10 +206,11 @@ public class CoordinatorRequestManager implements RequestManager {
 
     /**
      * Returns the current coordinator node. It can be {@code null}.
+     *
      * @return the current coordinator node.
      */
-    public Node coordinator() {
-        return this.coordinator;
+    public Optional<Node> coordinator() {
+        return Optional.ofNullable(this.coordinator);
     }
 
     private class FindCoordinatorRequestHandler extends NetworkClientDelegate.AbstractRequestFutureCompletionHandler {

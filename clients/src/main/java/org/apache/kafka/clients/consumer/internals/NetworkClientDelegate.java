@@ -22,9 +22,9 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.LogContext;
@@ -52,7 +52,6 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final Time time;
     private final Logger log;
     private final int requestTimeoutMs;
-    private boolean wakeup = false;
     private final Queue<UnsentRequest> unsentRequests;
     private final Set<Node> activeNodes;
 
@@ -70,17 +69,17 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
-     * Returns the responses of the sent requests. This methods will try to send the unsent requests, poll for responses,
+     * Returns the responses of the sent requests. This method will try to send the unsent requests, poll for responses,
      * and check the disconnected nodes.
+     *
      * @param timeoutMs
      * @return
      */
-    public List<ClientResponse> poll(final long timeoutMs) {
-        final long currentTimeMs = time.milliseconds();
+    public List<ClientResponse> poll(final long timeoutMs, final long currentTimeMs) {
         trySend(currentTimeMs);
         List<ClientResponse> res = this.client.poll(timeoutMs, currentTimeMs);
         checkDisconnects();
-        maybeTriggerWakeup();
+        wakeup();
         return res;
     }
 
@@ -89,7 +88,7 @@ public class NetworkClientDelegate implements AutoCloseable {
      * assigned node, it will find the leastLoadedOne.
      * Here it also stores all the nodes in the {@code activeNodes}, which will then be used to check for the disconnection.
      */
-    void trySend(final long currentTimeMs) {
+    private void trySend(final long currentTimeMs) {
         Queue<UnsentRequest> unsentAndUnreadyRequests = new LinkedList<>();
         while (!unsentRequests.isEmpty()) {
             UnsentRequest unsent = unsentRequests.poll();
@@ -102,8 +101,13 @@ public class NetworkClientDelegate implements AutoCloseable {
 
             if (!doSend(unsent, currentTimeMs, unsentAndUnreadyRequests)) {
                 log.debug("No broker available to send the request: {}", unsent);
-                unsent.callback.ifPresent(v -> v.onFailure(Errors.NETWORK_EXCEPTION.exception(
-                        "No node available in the kafka cluster to send the request")));
+                if (unsent.timer.isExpired()) {
+                    unsent.callback.ifPresent(v -> v.onFailure(Errors.NETWORK_EXCEPTION.exception(
+                            "No node available in the kafka cluster to send the request")));
+                } else {
+                    // retry unexpired request
+                    unsentAndUnreadyRequests.add(unsent);
+                }
             }
         }
 
@@ -113,15 +117,14 @@ public class NetworkClientDelegate implements AutoCloseable {
         }
     }
 
-    // Visible for testing
-    boolean doSend(final UnsentRequest r,
-                   final long currentTimeMs,
-                   final Queue<UnsentRequest> unsentAndUnreadyRequests) {
+    private boolean doSend(final UnsentRequest r,
+                           final long currentTimeMs,
+                           final Queue<UnsentRequest> unsentAndUnreadyRequests) {
         Node node = r.node.orElse(client.leastLoadedNode(currentTimeMs));
         if (node == null || nodeUnavailable(node)) {
             return false;
         }
-        ClientRequest request = makeClientRequest(r, node);
+        ClientRequest request = makeClientRequest(r, node, currentTimeMs);
         if (client.isReady(node, currentTimeMs)) {
             activeNodes.add(node);
             client.send(request, currentTimeMs);
@@ -137,36 +140,24 @@ public class NetworkClientDelegate implements AutoCloseable {
     private void checkDisconnects() {
         // Check the connection status by all the nodes that are active. Disconnect the disconnected node if it is
         // unable to be connected.
-        Iterator<Node> iter = activeNodes.iterator();
+        Iterator<UnsentRequest> iter = unsentRequests.iterator();
         while (iter.hasNext()) {
-            Node node = iter.next();
-            iter.remove();
-            if (client.connectionFailed(node)) {
-                client.disconnect(node.idString());
+            UnsentRequest u = iter.next();
+            if (u.node.isPresent() && client.connectionFailed(u.node.get())) {
+                AuthenticationException authenticationException = client.authenticationException(u.node.get());
+                u.callback.ifPresent(r -> r.onFailure(authenticationException));
             }
         }
     }
 
-    private ClientRequest makeClientRequest(final UnsentRequest unsent, final Node node) {
+    private ClientRequest makeClientRequest(final UnsentRequest unsent, final Node node, final long currentTimeMs) {
         return client.newClientRequest(
                 node.idString(),
                 unsent.abstractBuilder,
-                time.milliseconds(),
+                currentTimeMs,
                 true,
                 (int) unsent.timer.remainingMs(),
                 unsent.callback.orElse(new DefaultRequestFutureCompletionHandler()));
-    }
-
-    public void maybeTriggerWakeup() {
-        if (this.wakeup) {
-            this.wakeup = false;
-            throw new WakeupException();
-        }
-    }
-
-    public void wakeup() {
-        this.wakeup = true;
-        this.client.wakeup();
     }
 
     public Node leastLoadedNode() {
@@ -178,8 +169,8 @@ public class NetworkClientDelegate implements AutoCloseable {
         unsentRequests.add(r);
     }
 
-    public void ready(final Node node) {
-        client.ready(node, time.milliseconds());
+    public void wakeup() {
+        client.wakeup();
     }
 
     /**
@@ -194,16 +185,16 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.client.close();
     }
 
-    public void addAll(final List<UnsentRequest> unsentRequests) {
-        unsentRequests.forEach(this::add);
+    public void addAll(final List<UnsentRequest> requests) {
+        this.unsentRequests.addAll(requests);
     }
 
     public static class PollResult {
-        public final long timeMsTillNextPoll;
+        public final long timeUntilNextPollMs;
         public final List<UnsentRequest> unsentRequests;
 
         public PollResult(final long timeMsTillNextPoll, final List<UnsentRequest> unsentRequests) {
-            this.timeMsTillNextPoll = timeMsTillNextPoll;
+            this.timeUntilNextPollMs = timeMsTillNextPoll;
             this.unsentRequests = Collections.unmodifiableList(unsentRequests);
         }
     }

@@ -28,17 +28,13 @@ import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.Queue;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -73,23 +69,6 @@ public class NetworkClientDelegateTest {
     }
 
     @Test
-    public void testDoSendFindCoordinatorRequest() {
-        long timeNowMs = time.milliseconds();
-        NetworkClientDelegate ncd = mockNetworkClientDelegate();
-        Queue<NetworkClientDelegate.UnsentRequest> buffer = new LinkedList<>();
-        NetworkClientDelegate.DefaultRequestFutureCompletionHandler callback = mock(NetworkClientDelegate.DefaultRequestFutureCompletionHandler.class);
-        NetworkClientDelegate.UnsentRequest r = mockUnsentFindCoordinatorRequest(callback);
-        when(this.client.leastLoadedNode(timeNowMs)).thenReturn(this.node);
-        when(this.client.isReady(this.node, timeNowMs)).thenReturn(true);
-        assertTrue(ncd.doSend(r, timeNowMs, buffer));
-        verify(client, times(1)).send(any(), eq(timeNowMs));
-
-        when(this.client.leastLoadedNode(timeNowMs)).thenReturn(null);
-        assertFalse(ncd.doSend(r, timeNowMs, buffer));
-        assertTrue(buffer.isEmpty());
-    }
-
-    @Test
     public void testTrySend() {
         NetworkClientDelegate ncd = mockNetworkClientDelegate();
 
@@ -99,7 +78,7 @@ public class NetworkClientDelegateTest {
         ncd.add(r);
         when(this.client.leastLoadedNode(time.milliseconds())).thenReturn(this.node);
         when(this.client.isReady(this.node, time.milliseconds())).thenReturn(true);
-        ncd.trySend(time.milliseconds());
+        ncd.poll(100, time.milliseconds());
         verify(client, times(1)).send(any(), eq(time.milliseconds()));
         verify(callback, never()).onFailure(any());
 
@@ -109,7 +88,7 @@ public class NetworkClientDelegateTest {
         ncd.add(r2);
         time.sleep(501);
         when(this.client.leastLoadedNode(time.milliseconds())).thenReturn(this.node);
-        ncd.trySend(time.milliseconds());
+        ncd.poll(100, time.milliseconds());
         verify(client, never()).send(any(), eq(time.milliseconds()));
         verify(callback2, times(1)).onFailure(any());
 
@@ -119,7 +98,7 @@ public class NetworkClientDelegateTest {
         ncd.add(r3);
         when(this.client.leastLoadedNode(time.milliseconds())).thenReturn(this.node);
         when(this.client.isReady(this.node, time.milliseconds())).thenReturn(false);
-        ncd.trySend(time.milliseconds());
+        ncd.poll(100, time.milliseconds());
         verify(client, never()).send(any(), eq(time.milliseconds()));
         verify(callback3, never()).onFailure(any());
 
@@ -127,7 +106,7 @@ public class NetworkClientDelegateTest {
         time.sleep(499);
         when(this.client.leastLoadedNode(time.milliseconds())).thenReturn(this.node);
         when(this.client.isReady(this.node, time.milliseconds())).thenReturn(true);
-        ncd.trySend(time.milliseconds());
+        ncd.poll(100, time.milliseconds());
         verify(client, times(1)).send(any(), eq(time.milliseconds()));
         verify(callback3, never()).onFailure(any());
     }
