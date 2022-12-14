@@ -75,16 +75,16 @@ public class TopicConfig {
         "\"delete\" retention policy. This represents an SLA on how soon consumers must read " +
         "their data. If set to -1, no time limit is applied.";
 
-    public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.storage.enable";
+    public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.log.storage.enable";
     public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tier storage for a topic, set `remote.storage.enable` as true. " +
             "You can not disable this config once it is enabled. It will be provided in future versions.";
 
-    public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.retention.ms";
+    public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.log.retention.ms";
     public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milli seconds to keep the local log segment before it gets deleted. " +
             "Default value is -2, it represents `retention.ms` value is to be used. The effective value should always be less than or equal " +
             "to `retention.ms` value.";
 
-    public static final String LOCAL_LOG_RETENTION_BYTES_CONFIG = "local.retention.bytes";
+    public static final String LOCAL_LOG_RETENTION_BYTES_CONFIG = "local.log.retention.bytes";
     public static final String LOCAL_LOG_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it " +
             "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
             "less than or equal to `retention.bytes` value.";
