@@ -21,6 +21,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteStorageAction;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 
 import java.io.IOException;
@@ -69,8 +70,7 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
 
     @Override
     public CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata) throws RemoteStorageException {
-        return withClassLoader(() -> delegate.putRemotePartitionDeleteMetadata(remotePartitionDeleteMetadata)
-        );
+        return withClassLoader(() -> delegate.putRemotePartitionDeleteMetadata(remotePartitionDeleteMetadata));
     }
 
     @Override
@@ -121,27 +121,23 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     }
 
     @SuppressWarnings("UnusedReturnValue")
-    private <T> T withTryCatchClassLoader(Worker<T> worker) {
+    private <T> T withTryCatchClassLoader(RemoteStorageAction<T> action) {
         try {
-            return withClassLoader(worker);
+            return withClassLoader(action);
         } catch (final RemoteStorageException ex) {
             // ignore, this exception is not thrown by the method.
         }
         return null;
     }
 
-    private <T> T withClassLoader(Worker<T> worker) throws RemoteStorageException {
+    private <T> T withClassLoader(RemoteStorageAction<T> action) throws RemoteStorageException {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
-            return worker.doWork();
+            return action.execute();
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
     }
 
-    @FunctionalInterface
-    public interface Worker<T> {
-        T doWork() throws RemoteStorageException;
-    }
 }
