@@ -55,8 +55,10 @@ public final class ClientUtils {
                 try {
                     String host = getHost(url);
                     Integer port = getPort(url);
-                    if (host == null || port == null)
-                        throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+                    if (host == null) 
+                        throw new ConfigException("Invalid host in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+                    if (port == null)
+                        throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
                     if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
                         InetAddress[] inetAddresses = InetAddress.getAllByName(host);
