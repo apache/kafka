@@ -45,6 +45,10 @@ import org.apache.zookeeper.{CreateMode, KeeperException, OpResult, ZooKeeper}
 
 import scala.collection.{Map, Seq, mutable}
 
+sealed trait KRaftRegistrationResult
+case class FailedRegistrationResult() extends KRaftRegistrationResult
+case class SuccessfulRegistrationResult(zkControllerEpoch: Int, controllerEpochZkVersion: Int) extends KRaftRegistrationResult
+
 /**
  * Provides higher level Kafka-specific operations on top of the pipelined [[kafka.zookeeper.ZooKeeperClient]].
  *
@@ -167,67 +171,76 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * the migration.
    *
    * To ensure that the KRaft controller epoch exceeds the current ZK controller epoch, this registration algorithm
-   * uses a conditional update on the /controller_epoch znode. If a new ZK controller is elected during this method,
-   * the conditional update on /controller_epoch fails which causes the whole multi-op transaction to fail.
+   * uses a conditional update on the /controller and /controller_epoch znodes.
+   *
+   * If a new controller is registered concurrently with this registration, one of the two will fail the CAS
+   * operation on /controller_epoch. For KRaft, we have an extra guard against the registered KRaft epoch going
+   * backwards. If a KRaft controller had previously registered, an additional CAS operation is done on the /controller
+   * ZNode to ensure that the KRaft epoch being registered is newer.
    *
    * @param kraftControllerId ID of the KRaft controller node
    * @param kraftControllerEpoch Epoch of the KRaft controller node
-   * @return An optional of the new zkVersion of /controller_epoch. None if we could not register the KRaft controller.
+   * @return A result object containing the written ZK controller epoch and version, or nothing.
    */
-  def tryRegisterKRaftControllerAsActiveController(kraftControllerId: Int, kraftControllerEpoch: Int): Option[Int] = {
+  def tryRegisterKRaftControllerAsActiveController(kraftControllerId: Int, kraftControllerEpoch: Int): KRaftRegistrationResult = {
     val timestamp = time.milliseconds()
     val curEpochOpt: Option[(Int, Int)] = getControllerEpoch.map(e => (e._1, e._2.getVersion))
-    val controllerOpt = getControllerId
-    val controllerEpochToStore = kraftControllerEpoch + 10000000 // TODO Remove this after KAFKA-14436
+    val controllerOpt = getControllerRegistration
+
+    // If we have a KRaft epoch registered in /controller, and it is not _older_ than the requested epoch, throw an error.
+    controllerOpt.flatMap(_.kraftEpoch).foreach { kraftEpochInZk =>
+      if (kraftEpochInZk >= kraftControllerEpoch) {
+        throw new ControllerMovedException(s"Cannot register KRaft controller $kraftControllerId with epoch $kraftControllerEpoch " +
+          s"as the current controller register in ZK has the same or newer epoch $kraftEpochInZk.")
+      }
+    }
+
     curEpochOpt match {
       case None =>
         throw new IllegalStateException(s"Cannot register KRaft controller $kraftControllerId as the active controller " +
           s"since there is no ZK controller epoch present.")
       case Some((curEpoch: Int, curEpochZk: Int)) =>
-        if (curEpoch >= controllerEpochToStore) {
-          // TODO KAFKA-14436 Need to ensure KRaft has a higher epoch an ZK
-          throw new IllegalStateException(s"Cannot register KRaft controller $kraftControllerId as the active controller " +
-            s"in ZK since its epoch ${controllerEpochToStore} is not higher than the current ZK epoch ${curEpoch}.")
+        val newControllerEpoch = curEpoch + 1
+
+        val response = controllerOpt match {
+          case Some(controller) =>
+            info(s"KRaft controller $kraftControllerId overwriting ${ControllerZNode.path} to become the active " +
+              s"controller with ZK epoch $newControllerEpoch. The previous controller was ${controller.broker}.")
+            retryRequestUntilConnected(
+              MultiRequest(Seq(
+                SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(newControllerEpoch), curEpochZk),
+                DeleteOp(ControllerZNode.path, controller.zkVersion),
+                CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp, kraftControllerEpoch),
+                  defaultAcls(ControllerZNode.path), CreateMode.PERSISTENT)))
+            )
+          case None =>
+            info(s"KRaft controller $kraftControllerId creating ${ControllerZNode.path} to become the active " +
+              s"controller with ZK epoch $newControllerEpoch. There was no active controller.")
+            retryRequestUntilConnected(
+              MultiRequest(Seq(
+                SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(newControllerEpoch), curEpochZk),
+                CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp, kraftControllerEpoch),
+                  defaultAcls(ControllerZNode.path), CreateMode.PERSISTENT)))
+            )
         }
 
-        val response = if (controllerOpt.isDefined) {
-          info(s"KRaft controller $kraftControllerId overwriting ${ControllerZNode.path} to become the active " +
-            s"controller with epoch $controllerEpochToStore. The previous controller was ${controllerOpt.get}.")
-          retryRequestUntilConnected(
-            MultiRequest(Seq(
-              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(controllerEpochToStore), curEpochZk),
-              DeleteOp(ControllerZNode.path, ZkVersion.MatchAnyVersion),
-              CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp),
-                defaultAcls(ControllerZNode.path), CreateMode.PERSISTENT)))
-          )
-        } else {
-          info(s"KRaft controller $kraftControllerId creating ${ControllerZNode.path} to become the active " +
-            s"controller with epoch $controllerEpochToStore. There was no active controller.")
-          retryRequestUntilConnected(
-            MultiRequest(Seq(
-              SetDataOp(ControllerEpochZNode.path, ControllerEpochZNode.encode(controllerEpochToStore), curEpochZk),
-              CreateOp(ControllerZNode.path, ControllerZNode.encode(kraftControllerId, timestamp),
-                defaultAcls(ControllerZNode.path), CreateMode.PERSISTENT)))
-          )
-        }
-
-        val failureSuffix = s"while trying to register KRaft controller $kraftControllerId with epoch " +
-          s"$controllerEpochToStore. KRaft controller was not registered."
+        val failureSuffix = s"while trying to register KRaft controller $kraftControllerId with ZK epoch " +
+          s"$newControllerEpoch. KRaft controller was not registered."
         response.resultCode match {
           case Code.OK =>
-            info(s"Successfully registered KRaft controller $kraftControllerId with epoch $controllerEpochToStore")
+            info(s"Successfully registered KRaft controller $kraftControllerId with ZK epoch $newControllerEpoch")
             // First op is always SetData on /controller_epoch
             val setDataResult = response.zkOpResults(0).rawOpResult.asInstanceOf[SetDataResult]
-            Some(setDataResult.getStat.getVersion)
+            SuccessfulRegistrationResult(newControllerEpoch, setDataResult.getStat.getVersion)
           case Code.BADVERSION =>
-            info(s"The controller epoch changed $failureSuffix")
-            None
+            info(s"The ZK controller epoch changed $failureSuffix")
+            FailedRegistrationResult()
           case Code.NONODE =>
             info(s"The ephemeral node at ${ControllerZNode.path} went away $failureSuffix")
-            None
+            FailedRegistrationResult()
           case Code.NODEEXISTS =>
             info(s"The ephemeral node at ${ControllerZNode.path} was created by another controller $failureSuffix")
-            None
+            FailedRegistrationResult()
           case code =>
             error(s"ZooKeeper had an error $failureSuffix")
             throw KeeperException.create(code)
@@ -1205,6 +1218,17 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
       case Code.OK => ControllerZNode.decode(getDataResponse.data)
+      case Code.NONODE => None
+      case _ => throw getDataResponse.resultException.get
+    }
+  }
+
+
+  def getControllerRegistration: Option[ZKControllerRegistration] = {
+    val getDataRequest = GetDataRequest(ControllerZNode.path)
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    getDataResponse.resultCode match {
+      case Code.OK => Some(ControllerZNode.decodeController(getDataResponse.data, getDataResponse.stat.getVersion))
       case Code.NONODE => None
       case _ => throw getDataResponse.resultException.get
     }
