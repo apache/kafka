@@ -42,6 +42,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   def overridingProps: Properties = {
     val props = new Properties
     props.put(KafkaConfig.NumPartitionsProp, numParts.toString)
+    props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, numNodes.toString)
     props
   }
 
