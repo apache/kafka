@@ -27,6 +27,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.jupiter.api.Disabled;
 import org.junit.rules.TestName;
 import org.junit.rules.TestRule;
 import org.slf4j.Logger;
@@ -223,6 +224,7 @@ public class ConnectorRestartApiIntegrationTest {
         failedTasksRestart(true, true, 0, buildExpectedTasksRestarts(tasksToFail), tasksToFail, false);
     }
 
+    @Disabled
     @Test
     public void testMultiWorkerRestartOnlyConnector() throws Exception {
         //run two additional workers to ensure that one worker will always be free and not running any tasks or connector instance for this connector
