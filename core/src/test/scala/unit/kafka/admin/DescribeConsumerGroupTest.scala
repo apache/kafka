@@ -184,7 +184,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
       TestUtils.waitUntilTrue(() => {
         val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroups())
-        val numLines = output.trim.split("\n").filterNot(line => line.isEmpty).length
+        val numLines = output.trim.split("\n").count(line => line.nonEmpty)
         (numLines == expectedNumLines) && error.isEmpty
       }, s"Expected a data row and no error in describe results with describe type ${describeType.mkString(" ")}.")
     }
@@ -208,7 +208,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
       TestUtils.waitUntilTrue(() => {
         val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroups())
-        val numLines = output.trim.split("\n").filterNot(line => line.isEmpty).length
+        val numLines = output.trim.split("\n").count(line => line.nonEmpty)
         (numLines == expectedNumLines) && error.isEmpty
       }, s"Expected a data row and no error in describe results with describe type ${describeType.mkString(" ")}.")
     }
@@ -468,7 +468,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assignments.get.count(_.group == group) == 2 &&
         assignments.get.count { x => x.group == group && x.numPartitions == 1 } == 1 &&
         assignments.get.count { x => x.group == group && x.numPartitions == 0 } == 1 &&
-        assignments.get.count(_.assignment.nonEmpty) == 0
+        !assignments.get.exists(_.assignment.nonEmpty)
     }, "Expected rows for consumers with no assigned partitions in describe group results")
 
     val (state, assignments) = service.collectGroupMembers(group, true)

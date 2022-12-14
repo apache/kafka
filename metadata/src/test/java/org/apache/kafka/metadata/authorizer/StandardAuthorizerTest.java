@@ -168,6 +168,66 @@ public class StandardAuthorizerTest {
     }
 
     @Test
+    public void testAllowEveryoneIfNoAclFoundConfigEnabled() throws Exception {
+        StandardAuthorizer authorizer = new StandardAuthorizer();
+        HashMap<String, Object> configs = new HashMap<>();
+        configs.put(SUPER_USERS_CONFIG, "User:alice;User:chris");
+        configs.put(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true");
+        authorizer.configure(configs);
+        authorizer.start(new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
+        authorizer.completeInitialLoad();
+
+        List<StandardAclWithId> acls = singletonList(
+                withId(new StandardAcl(TOPIC, "topic1", LITERAL, "User:Alice", WILDCARD, READ, ALLOW))
+        );
+        acls.forEach(acl -> authorizer.addAcl(acl.id(), acl.acl()));
+        assertEquals(singletonList(DENIED),
+                authorizer.authorize(
+                        new MockAuthorizableRequestContext.Builder()
+                                .setPrincipal(new KafkaPrincipal(USER_TYPE, "Bob"))
+                                .build(),
+                        singletonList(newAction(READ, TOPIC, "topic1"))
+                ));
+        assertEquals(singletonList(ALLOWED),
+                authorizer.authorize(
+                        new MockAuthorizableRequestContext.Builder()
+                                .setPrincipal(new KafkaPrincipal(USER_TYPE, "Bob"))
+                                .build(),
+                        singletonList(newAction(READ, TOPIC, "topic2"))
+                ));
+    }
+
+    @Test
+    public void testAllowEveryoneIfNoAclFoundConfigDisabled() throws Exception {
+        StandardAuthorizer authorizer = new StandardAuthorizer();
+        HashMap<String, Object> configs = new HashMap<>();
+        configs.put(SUPER_USERS_CONFIG, "User:alice;User:chris");
+        configs.put(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
+        authorizer.configure(configs);
+        authorizer.start(new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
+        authorizer.completeInitialLoad();
+
+        List<StandardAclWithId> acls = singletonList(
+                withId(new StandardAcl(TOPIC, "topic1", LITERAL, "User:Alice", WILDCARD, READ, ALLOW))
+        );
+        acls.forEach(acl -> authorizer.addAcl(acl.id(), acl.acl()));
+        assertEquals(singletonList(DENIED),
+                authorizer.authorize(
+                        new MockAuthorizableRequestContext.Builder()
+                                .setPrincipal(new KafkaPrincipal(USER_TYPE, "Bob"))
+                                .build(),
+                        singletonList(newAction(READ, TOPIC, "topic1"))
+                ));
+        assertEquals(singletonList(DENIED),
+                authorizer.authorize(
+                        new MockAuthorizableRequestContext.Builder()
+                                .setPrincipal(new KafkaPrincipal(USER_TYPE, "Bob"))
+                                .build(),
+                        singletonList(newAction(READ, TOPIC, "topic2"))
+                ));
+    }
+
+    @Test
     public void testConfigure() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
         HashMap<String, Object> configs = new HashMap<>();

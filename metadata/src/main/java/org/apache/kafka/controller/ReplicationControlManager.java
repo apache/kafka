@@ -84,7 +84,9 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.ClusterDescriber;
+import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.metadata.placement.PlacementSpec;
+import org.apache.kafka.metadata.placement.TopicAssignment;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -694,13 +696,14 @@ public class ReplicationControlManager {
             short replicationFactor = topic.replicationFactor() == -1 ?
                 defaultReplicationFactor : topic.replicationFactor();
             try {
-                List<List<Integer>> partitions = clusterControl.replicaPlacer().place(new PlacementSpec(
+                TopicAssignment topicAssignment = clusterControl.replicaPlacer().place(new PlacementSpec(
                     0,
                     numPartitions,
                     replicationFactor
                 ), clusterDescriber);
-                for (int partitionId = 0; partitionId < partitions.size(); partitionId++) {
-                    List<Integer> replicas = partitions.get(partitionId);
+                for (int partitionId = 0; partitionId < topicAssignment.assignments().size(); partitionId++) {
+                    PartitionAssignment partitionAssignment = topicAssignment.assignments().get(partitionId);
+                    List<Integer> replicas = partitionAssignment.replicas();
                     List<Integer> isr = replicas.stream().
                         filter(clusterControl::active).collect(Collectors.toList());
                     // If the ISR is empty, it means that all brokers are fenced or
@@ -1544,16 +1547,16 @@ public class ReplicationControlManager {
         short replicationFactor = (short) partitionInfo.replicas.length;
         int startPartitionId = topicInfo.parts.size();
 
-        List<List<Integer>> placements;
+        List<PartitionAssignment> partitionAssignments;
         List<List<Integer>> isrs;
         if (topic.assignments() != null) {
-            placements = new ArrayList<>();
+            partitionAssignments = new ArrayList<>();
             isrs = new ArrayList<>();
             for (int i = 0; i < topic.assignments().size(); i++) {
                 CreatePartitionsAssignment assignment = topic.assignments().get(i);
                 validateManualPartitionAssignment(assignment.brokerIds(),
                     OptionalInt.of(replicationFactor));
-                placements.add(assignment.brokerIds());
+                partitionAssignments.add(new PartitionAssignment(assignment.brokerIds()));
                 List<Integer> isr = assignment.brokerIds().stream().
                     filter(clusterControl::active).collect(Collectors.toList());
                 if (isr.isEmpty()) {
@@ -1564,16 +1567,16 @@ public class ReplicationControlManager {
                 isrs.add(isr);
             }
         } else {
-            placements = clusterControl.replicaPlacer().place(new PlacementSpec(
-                startPartitionId,
-                additional,
-                replicationFactor
-            ), clusterDescriber);
-            isrs = placements;
+            partitionAssignments = clusterControl.replicaPlacer().place(
+                new PlacementSpec(startPartitionId, additional, replicationFactor),
+                clusterDescriber
+            ).assignments();
+            isrs = partitionAssignments.stream().map(PartitionAssignment::replicas).collect(Collectors.toList());
         }
         int partitionId = startPartitionId;
-        for (int i = 0; i < placements.size(); i++) {
-            List<Integer> replicas = placements.get(i);
+        for (int i = 0; i < partitionAssignments.size(); i++) {
+            PartitionAssignment partitionAssignment = partitionAssignments.get(i);
+            List<Integer> replicas = partitionAssignment.replicas();
             List<Integer> isr = isrs.get(i).stream().
                 filter(clusterControl::active).collect(Collectors.toList());
             // If the ISR is empty, it means that all brokers are fenced or

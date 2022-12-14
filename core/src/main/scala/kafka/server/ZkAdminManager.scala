@@ -54,6 +54,19 @@ import org.apache.kafka.common.utils.Sanitizer
 import scala.collection.{Map, mutable, _}
 import scala.jdk.CollectionConverters._
 
+object ZkAdminManager {
+  def clientQuotaPropsToDoubleMap(props: Map[String, String]): Map[String, Double] = {
+    props.map { case (key, value) =>
+      val doubleValue = try value.toDouble catch {
+        case _: NumberFormatException =>
+          throw new IllegalStateException(s"Unexpected client quota configuration value: $key -> $value")
+      }
+      key -> doubleValue
+    }
+  }
+}
+
+
 class ZkAdminManager(val config: KafkaConfig,
                      val metrics: Metrics,
                      val metadataCache: MetadataCache,
@@ -493,7 +506,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
         resource.`type` match {
           case ConfigResource.Type.TOPIC =>
-            if (resource.name.isEmpty()) {
+            if (resource.name.isEmpty) {
               throw new InvalidRequestException("Default topic resources are not allowed.")
             }
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
@@ -636,16 +649,6 @@ class ZkAdminManager(val config: KafkaConfig,
 
   private def sanitized(name: Option[String]): String = name.map(n => sanitizeEntityName(n)).getOrElse("")
 
-  private def fromProps(props: Map[String, String]): Map[String, Double] = {
-    props.map { case (key, value) =>
-      val doubleValue = try value.toDouble catch {
-        case _: NumberFormatException =>
-          throw new IllegalStateException(s"Unexpected client quota configuration value: $key -> $value")
-      }
-      key -> doubleValue
-    }
-  }
-
   def handleDescribeClientQuotas(userComponent: Option[ClientQuotaFilterComponent],
     clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean): Map[ClientQuotaEntity, Map[String, Double]] = {
 
@@ -696,17 +699,17 @@ class ZkAdminManager(val config: KafkaConfig,
     def matches(nameComponent: Option[ClientQuotaFilterComponent], name: Option[String]): Boolean = nameComponent match {
       case Some(component) =>
         toOption(component.`match`) match {
-          case Some(n) => name.exists(_ == n)
+          case Some(n) => name.contains(n)
           case None => name.isDefined
         }
       case None =>
-        !name.isDefined || !strict
+        name.isEmpty || !strict
     }
 
     (userEntries ++ clientIdEntries ++ bothEntries).flatMap { case ((u, c), p) =>
       val quotaProps = p.asScala.filter { case (key, _) => QuotaConfigs.isClientOrUserQuotaConfig(key) }
       if (quotaProps.nonEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
-        Some(userClientIdToEntity(u, c) -> fromProps(quotaProps))
+        Some(userClientIdToEntity(u, c) -> ZkAdminManager.clientQuotaPropsToDoubleMap(quotaProps))
       else
         None
     }.toMap
@@ -732,7 +735,7 @@ class ZkAdminManager(val config: KafkaConfig,
     ipEntries.flatMap { case (ip, props) =>
       val ipQuotaProps = props.asScala.filter { case (key, _) => DynamicConfig.Ip.names.contains(key) }
       if (ipQuotaProps.nonEmpty)
-        Some(ipToQuotaEntity(ip) -> fromProps(ipQuotaProps))
+        Some(ipToQuotaEntity(ip) -> ZkAdminManager.clientQuotaPropsToDoubleMap(ipQuotaProps))
       else
         None
     }
@@ -740,14 +743,14 @@ class ZkAdminManager(val config: KafkaConfig,
 
   def alterClientQuotas(entries: Seq[ClientQuotaAlteration], validateOnly: Boolean): Map[ClientQuotaEntity, ApiError] = {
     def alterEntityQuotas(entity: ClientQuotaEntity, ops: Iterable[ClientQuotaAlteration.Op]): Unit = {
-      val (path, configType, configKeys) = parseAndSanitizeQuotaEntity(entity) match {
-        case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys)
-        case (Some(user), None, None) => (user, ConfigType.User, DynamicConfig.User.configKeys)
-        case (None, Some(clientId), None) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys)
+      val (path, configType, configKeys, isUserClientId) = parseAndSanitizeQuotaEntity(entity) match {
+        case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys, true)
+        case (Some(user), None, None) => (user, ConfigType.User, DynamicConfig.User.configKeys, false)
+        case (None, Some(clientId), None) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys, false)
         case (None, None, Some(ip)) =>
           if (!DynamicConfig.Ip.isValidIpEntity(ip))
             throw new InvalidRequestException(s"$ip is not a valid IP or resolvable host.")
-          (ip, ConfigType.Ip, DynamicConfig.Ip.configKeys)
+          (ip, ConfigType.Ip, DynamicConfig.Ip.configKeys, false)
         case (_, _, Some(_)) => throw new InvalidRequestException(s"Invalid quota entity combination, " +
           s"IP entity should not be used with user/client ID entity.")
         case _ => throw new InvalidRequestException("Invalid client quota entity")
@@ -780,7 +783,7 @@ class ZkAdminManager(val config: KafkaConfig,
         }
       }
       if (!validateOnly)
-        adminZkClient.changeConfigs(configType, path, props)
+        adminZkClient.changeConfigs(configType, path, props, isUserClientId)
     }
     entries.map { entry =>
       val apiError = try {

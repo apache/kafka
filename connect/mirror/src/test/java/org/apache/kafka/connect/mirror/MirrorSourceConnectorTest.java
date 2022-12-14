@@ -31,7 +31,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 
 import org.junit.jupiter.api.Test;
 
-import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.TASK_TOPIC_PARTITIONS;
+import static org.apache.kafka.connect.mirror.MirrorSourceConfig.TASK_TOPIC_PARTITIONS;
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -222,7 +222,7 @@ public class MirrorSourceConnectorTest {
         knownSourceTopicPartitions.add(new TopicPartition("t2", 1));
 
         // MirrorConnectorConfig example for test
-        MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps());
+        MirrorSourceConfig config = new MirrorSourceConfig(makeProps());
 
         // MirrorSourceConnector as minimum to run taskConfig()
         MirrorSourceConnector connector = new MirrorSourceConnector(knownSourceTopicPartitions, config);
@@ -333,4 +333,5 @@ public class MirrorSourceConnectorTest {
                 new CustomReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
         assertDoesNotThrow(() -> connector.isCycle(".b"));
     }
+
 }

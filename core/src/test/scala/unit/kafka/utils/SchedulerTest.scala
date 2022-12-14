@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -31,12 +31,12 @@ class SchedulerTest {
   val mockTime = new MockTime
   val counter1 = new AtomicInteger(0)
   val counter2 = new AtomicInteger(0)
-  
+
   @BeforeEach
   def setup(): Unit = {
     scheduler.startup()
   }
-  
+
   @AfterEach
   def teardown(): Unit = {
     scheduler.shutdown()
@@ -80,6 +80,16 @@ class SchedulerTest {
   @Test
   def testNonPeriodicTask(): Unit = {
     scheduler.schedule("test", counter1.getAndIncrement _, delay = 0)
+    retry(30000) {
+      assertEquals(counter1.get, 1)
+    }
+    Thread.sleep(5)
+    assertEquals(1, counter1.get, "Should only run once")
+  }
+
+  @Test
+  def testNonPeriodicTaskWhenPeriodIsZero(): Unit = {
+    scheduler.schedule("test", counter1.getAndIncrement _, delay = 0, period = 0)
     retry(30000) {
       assertEquals(counter1.get, 1)
     }

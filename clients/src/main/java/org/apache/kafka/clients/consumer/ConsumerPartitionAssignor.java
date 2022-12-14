@@ -30,6 +30,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 
+import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
+
 /**
  * This interface is used to define custom partition assignment for use in
  * {@link org.apache.kafka.clients.consumer.KafkaConsumer}. Members of the consumer group subscribe
@@ -101,21 +103,29 @@ public interface ConsumerPartitionAssignor {
         private final List<String> topics;
         private final ByteBuffer userData;
         private final List<TopicPartition> ownedPartitions;
+        private final Optional<String> rackId;
         private Optional<String> groupInstanceId;
+        private final Optional<Integer> generationId;
 
-        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions, int generationId, Optional<String> rackId) {
             this.topics = topics;
             this.userData = userData;
             this.ownedPartitions = ownedPartitions;
             this.groupInstanceId = Optional.empty();
+            this.generationId = generationId < 0 ? Optional.empty() : Optional.of(generationId);
+            this.rackId = rackId;
+        }
+
+        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+            this(topics, userData, ownedPartitions, DEFAULT_GENERATION, Optional.empty());
         }
 
         public Subscription(List<String> topics, ByteBuffer userData) {
-            this(topics, userData, Collections.emptyList());
+            this(topics, userData, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
         }
 
         public Subscription(List<String> topics) {
-            this(topics, null, Collections.emptyList());
+            this(topics, null, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
         }
 
         public List<String> topics() {
@@ -130,6 +140,10 @@ public interface ConsumerPartitionAssignor {
             return ownedPartitions;
         }
 
+        public Optional<String> rackId() {
+            return rackId;
+        }
+
         public void setGroupInstanceId(Optional<String> groupInstanceId) {
             this.groupInstanceId = groupInstanceId;
         }
@@ -138,13 +152,19 @@ public interface ConsumerPartitionAssignor {
             return groupInstanceId;
         }
 
+        public Optional<Integer> generationId() {
+            return generationId;
+        }
+
         @Override
         public String toString() {
             return "Subscription(" +
                 "topics=" + topics +
                 (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
                 ", ownedPartitions=" + ownedPartitions +
-                ", groupInstanceId=" + (groupInstanceId.map(String::toString).orElse("null")) +
+                ", groupInstanceId=" + groupInstanceId.map(String::toString).orElse("null") +
+                ", generationId=" + generationId.orElse(-1) +
+                ", rackId=" + (rackId.orElse("null")) +
                 ")";
         }
     }

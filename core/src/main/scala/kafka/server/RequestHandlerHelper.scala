@@ -107,6 +107,18 @@ class RequestHandlerHelper(
 
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
   // response immediately.
+  def sendMaybeThrottle(
+    request: RequestChannel.Request,
+    response: AbstractResponse
+  ): Unit = {
+    val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
+    // Only throttle non-forwarded requests
+    if (!request.isForwarded)
+      throttle(quotas.request, request, throttleTimeMs)
+    response.maybeSetThrottleTimeMs(throttleTimeMs)
+    requestChannel.sendResponse(request, response, None)
+  }
+
   def sendResponseMaybeThrottle(request: RequestChannel.Request,
                                 createResponse: Int => AbstractResponse): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)

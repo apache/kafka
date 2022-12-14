@@ -432,7 +432,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       controllerContext.partitionLeadershipInfo(partition) match {
         case Some(LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)) =>
           val replicas = controllerContext.partitionReplicaAssignment(partition)
-          val offlineReplicas = replicas.filter(!controllerContext.isReplicaOnline(_, partition))
+          val offlineReplicas = replicas.filterNot(controllerContext.isReplicaOnline(_, partition))
           val updatedLeaderAndIsr =
             if (beingDeleted) LeaderAndIsr.duringDelete(leaderAndIsr.isr)
             else leaderAndIsr
@@ -461,7 +461,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
   private def sendLeaderAndIsrRequest(controllerEpoch: Int, stateChangeLog: StateChangeLogger): Unit = {
     val leaderAndIsrRequestVersion: Short =
-      if (config.interBrokerProtocolVersion.isAtLeast(IBP_3_2_IV0)) 6
+      if (config.interBrokerProtocolVersion.isAtLeast(IBP_3_4_IV0)) 7
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_3_2_IV0)) 6
       else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV1)) 5
       else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_4_IV1)) 4
       else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_4_IV0)) 3
@@ -512,7 +513,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
     val partitionStates = updateMetadataRequestPartitionInfoMap.values.toBuffer
     val updateMetadataRequestVersion: Short =
-      if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV1)) 7
+      if (config.interBrokerProtocolVersion.isAtLeast(IBP_3_4_IV0)) 8
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV1)) 7
       else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_4_IV1)) 6
       else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_2_IV0)) 5
       else if (config.interBrokerProtocolVersion.isAtLeast(IBP_1_0_IV0)) 4
@@ -568,7 +570,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   private def sendStopReplicaRequests(controllerEpoch: Int, stateChangeLog: StateChangeLogger): Unit = {
     val traceEnabled = stateChangeLog.isTraceEnabled
     val stopReplicaRequestVersion: Short =
-      if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_6_IV0)) 3
+      if (config.interBrokerProtocolVersion.isAtLeast(IBP_3_4_IV0)) 4
+      else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_6_IV0)) 3
       else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_4_IV1)) 2
       else if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_2_IV0)) 1
       else 0

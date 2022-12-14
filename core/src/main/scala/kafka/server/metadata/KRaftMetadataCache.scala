@@ -213,7 +213,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   override def getAliveBrokers(): Iterable[BrokerMetadata] = getAliveBrokers(_currentImage)
 
   private def getAliveBrokers(image: MetadataImage): Iterable[BrokerMetadata] = {
-    image.cluster().brokers().values().asScala.filter(!_.fenced()).
+    image.cluster().brokers().values().asScala.filterNot(_.fenced()).
       map(b => BrokerMetadata(b.id, b.rack.asScala))
   }
 
@@ -223,7 +223,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   }
 
   override def getAliveBrokerNodes(listenerName: ListenerName): Seq[Node] = {
-    _currentImage.cluster().brokers().values().asScala.filter(!_.fenced()).
+    _currentImage.cluster().brokers().values().asScala.filterNot(_.fenced()).
       flatMap(_.node(listenerName.value()).asScala).toSeq
   }
 
