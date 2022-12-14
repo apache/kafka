@@ -22,13 +22,14 @@ import java.util.concurrent.{CompletableFuture, TimeUnit}
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.image.writer.{ImageWriterOptions, RecordListWriter}
-import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.snapshot.SnapshotReader
+
 import scala.compat.java8.OptionConverters._
 
 
@@ -80,9 +81,17 @@ class BrokerMetadataListener(
   @volatile var _highestOffset = -1L
 
   /**
+   * The highest metadata epoch that we've seen.  Written only from the event queue thread.
+   */
+  private var _highestEpoch = -1
+
+  /**
    * The highest metadata log time that we've seen. Written only from the event queue thread.
    */
   private var _highestTimestamp = -1L
+
+  private def provenance(): MetadataProvenance =
+    new MetadataProvenance(_highestOffset, _highestEpoch, _highestTimestamp)
 
   /**
    * The current broker metadata image. Accessed only from the event queue thread.
@@ -181,7 +190,7 @@ class BrokerMetadataListener(
     snapshotter.foreach { snapshotter =>
       if (metadataFaultOccurred.get()) {
         trace("Not starting metadata snapshot since we previously had an error")
-      } else if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply(), reason)) {
+      } else if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply(provenance()), reason)) {
         _bytesSinceLastSnapshot = 0L
       }
     }
@@ -259,7 +268,7 @@ class BrokerMetadataListener(
     while (iterator.hasNext) {
       val batch = iterator.next()
 
-      val epoch = lastCommittedEpoch.getOrElse(batch.epoch())
+      _highestEpoch = lastCommittedEpoch.getOrElse(batch.epoch())
       _highestTimestamp = lastAppendTimestamp.getOrElse(batch.appendTimestamp())
 
       var index = 0
@@ -270,7 +279,7 @@ class BrokerMetadataListener(
         }
         _highestOffset = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
         try {
-          delta.replay(highestMetadataOffset, epoch, messageAndVersion.message())
+          delta.replay(messageAndVersion.message())
         } catch {
           case e: Throwable => snapshotName match {
             case None => metadataLoadingFaultHandler.handleFault(
@@ -341,7 +350,7 @@ class BrokerMetadataListener(
   private def publish(publisher: MetadataPublisher): Unit = {
     val delta = _delta
     try {
-      _image = _delta.apply()
+      _image = _delta.apply(provenance())
     } catch {
       case t: Throwable =>
         // If we cannot apply the delta, this publish event will throw and we will not publish a new image.

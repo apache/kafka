@@ -35,6 +35,15 @@ public class BrokerRegistrationRequest extends AbstractRequest {
         }
 
         @Override
+        public short oldestAllowedVersion() {
+            if (data.isMigratingZkBroker()) {
+                return (short) 1;
+            } else {
+                return (short) 0;
+            }
+        }
+
+        @Override
         public BrokerRegistrationRequest build(short version) {
             return new BrokerRegistrationRequest(data, version);
         }
