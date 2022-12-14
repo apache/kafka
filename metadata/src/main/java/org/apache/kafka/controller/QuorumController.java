@@ -181,6 +181,7 @@ public final class QuorumController implements Controller {
         private Map<String, Object> staticConfig = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
+        private boolean zkMigrationEnabled = false;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -306,6 +307,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setZkMigrationEnabled(boolean zkMigrationEnabled) {
+            this.zkMigrationEnabled = zkMigrationEnabled;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -357,7 +363,8 @@ public final class QuorumController implements Controller {
                     authorizer,
                     staticConfig,
                     bootstrapMetadata,
-                    maxRecordsPerBatch
+                    maxRecordsPerBatch,
+                    zkMigrationEnabled
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -533,9 +540,14 @@ public final class QuorumController implements Controller {
                     )
                 );
             }
+
+            OffsetAndEpoch snapshotId = new OffsetAndEpoch(
+                committedOffset + 1,
+                committedEpoch
+            );
+
             Optional<SnapshotWriter<ApiMessageAndVersion>> writer = raftClient.createSnapshot(
-                committedOffset,
-                committedEpoch,
+                snapshotId,
                 committedTimestamp
             );
             if (writer.isPresent()) {
@@ -1843,7 +1855,8 @@ public final class QuorumController implements Controller {
         Optional<ClusterMetadataAuthorizer> authorizer,
         Map<String, Object> staticConfig,
         BootstrapMetadata bootstrapMetadata,
-        int maxRecordsPerBatch
+        int maxRecordsPerBatch,
+        boolean zkMigrationEnabled
     ) {
         this.fatalFaultHandler = fatalFaultHandler;
         this.logContext = logContext;
@@ -1887,6 +1900,7 @@ public final class QuorumController implements Controller {
             setReplicaPlacer(replicaPlacer).
             setControllerMetrics(controllerMetrics).
             setFeatureControlManager(featureControl).
+            setZkMigrationEnabled(zkMigrationEnabled).
             build();
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;

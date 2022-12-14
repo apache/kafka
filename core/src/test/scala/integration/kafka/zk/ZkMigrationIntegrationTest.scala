@@ -23,7 +23,7 @@ import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
-import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull}
@@ -41,13 +41,13 @@ class ZkMigrationIntegrationTest {
     var offset = 0
     def accept(batch: java.util.List[ApiMessageAndVersion]): Unit = {
       batch.forEach(message => {
-        metadataDelta.replay(offset, 0, message.message())
+        metadataDelta.replay(message.message())
         offset += 1
       })
     }
 
     def verify(verifier: MetadataImage => Unit): Unit = {
-      val image = metadataDelta.apply()
+      val image = metadataDelta.apply(new MetadataProvenance(offset, 0, 0))
       verifier.apply(image)
     }
   }

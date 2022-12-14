@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.BufferSupplier;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public interface GroupCoordinator {
@@ -100,6 +102,19 @@ public interface GroupCoordinator {
     CompletableFuture<ListGroupsResponseData> listGroups(
         RequestContext context,
         ListGroupsRequestData request
+    );
+
+    /**
+     * Describe Groups.
+     *
+     * @param context           The coordinator request context.
+     * @param groupIds          The group ids.
+     *
+     * @return A future yielding the results or an exception.
+     */
+    CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroups(
+        RequestContext context,
+        List<String> groupIds
     );
 }
 
