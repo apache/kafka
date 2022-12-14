@@ -705,7 +705,7 @@ if (offset != null) {
 
     <h6>Supporting exactly-once</h6>
 
-    <p>With the passing of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-618%3A+Exactly-Once+Support+for+Source+Connectors">KIP-618</a>, Kafka Connect supports exactly-once source connectors as of version 3.3.0. In order a source connector to take advantage of this support, it must be able to provide meaningful source offsets for each record that it emits, and resume consumption from the external system at the exact position corresponding to any of those offsets without dropping or duplicating messages.</p>
+    <p>With the passing of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-618%3A+Exactly-Once+Support+for+Source+Connectors">KIP-618</a>, Kafka Connect supports exactly-once source connectors as of version 3.3.0. In order for a source connector to take advantage of this support, it must be able to provide meaningful source offsets for each record that it emits, and resume consumption from the external system at the exact position corresponding to any of those offsets without dropping or duplicating messages.</p>
 
     <h6>Defining transaction boundaries</h6>
 
@@ -736,6 +736,7 @@ public List&lt;SourceRecord&gt; poll() {
         this.recordsSent = 0;
         this.context.transactionContext().commitTransaction();
     }
+    return records;
 }
 </pre>
 
@@ -757,6 +758,7 @@ public List&lt;SourceRecord&gt; poll() {
             this.context.transactionContext().commitTransaction(record);
         }
     }
+    return records;
 }
 </pre>
 
