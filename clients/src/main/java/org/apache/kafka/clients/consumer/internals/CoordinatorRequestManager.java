@@ -49,7 +49,7 @@ import java.util.Optional;
 public class CoordinatorRequestManager implements RequestManager {
 
     private final Logger log;
-    private final ErrorEventHandler errorHandler;
+    private final ErrorEventHandler nonRetriableErrorHandler;
     private final String groupId;
 
     private final RequestState coordinatorRequestState;
@@ -63,7 +63,7 @@ public class CoordinatorRequestManager implements RequestManager {
                                      final String groupId) {
         Objects.requireNonNull(groupId);
         this.log = logContext.logger(this.getClass());
-        this.errorHandler = errorHandler;
+        this.nonRetriableErrorHandler = errorHandler;
         this.groupId = groupId;
         this.coordinatorRequestState = new RequestState(config);
     }
@@ -75,7 +75,7 @@ public class CoordinatorRequestManager implements RequestManager {
                               final RequestState coordinatorRequestState) {
         Objects.requireNonNull(groupId);
         this.log = logContext.logger(this.getClass());
-        this.errorHandler = errorHandler;
+        this.nonRetriableErrorHandler = errorHandler;
         this.groupId = groupId;
         this.coordinatorRequestState = coordinatorRequestState;
     }
@@ -165,12 +165,12 @@ public class CoordinatorRequestManager implements RequestManager {
 
         if (exception == Errors.GROUP_AUTHORIZATION_FAILED.exception()) {
             log.debug("FindCoordinator request failed due to authorization error {}", exception.getMessage());
-            errorHandler.handle(GroupAuthorizationException.forGroupId(this.groupId));
+            nonRetriableErrorHandler.handle(GroupAuthorizationException.forGroupId(this.groupId));
             return;
         }
 
         log.warn("FindCoordinator request failed due to fatal exception", exception);
-        errorHandler.handle(exception);
+        nonRetriableErrorHandler.handle(exception);
     }
 
     /**

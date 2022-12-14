@@ -37,7 +37,6 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -89,37 +88,30 @@ public class NetworkClientDelegate implements AutoCloseable {
      * Here it also stores all the nodes in the {@code activeNodes}, which will then be used to check for the disconnection.
      */
     private void trySend(final long currentTimeMs) {
-        Queue<UnsentRequest> unsentAndUnreadyRequests = new LinkedList<>();
-        while (!unsentRequests.isEmpty()) {
-            UnsentRequest unsent = unsentRequests.poll();
+        Iterator<UnsentRequest> iterator = unsentRequests.iterator();
+        while (iterator.hasNext()) {
+            UnsentRequest unsent = iterator.next();
             unsent.timer.update(currentTimeMs);
             if (unsent.timer.isExpired()) {
+                iterator.remove();
                 unsent.callback.ifPresent(c -> c.onFailure(new TimeoutException(
                         "Failed to send request after " + unsent.timer.timeoutMs() + " " + "ms.")));
                 continue;
             }
 
-            if (!doSend(unsent, currentTimeMs, unsentAndUnreadyRequests)) {
+            if (!doSend(unsent, currentTimeMs)) {
                 log.debug("No broker available to send the request: {}", unsent);
+                iterator.remove();
                 if (unsent.timer.isExpired()) {
                     unsent.callback.ifPresent(v -> v.onFailure(Errors.NETWORK_EXCEPTION.exception(
                             "No node available in the kafka cluster to send the request")));
-                } else {
-                    // retry unexpired request
-                    unsentAndUnreadyRequests.add(unsent);
                 }
             }
-        }
-
-        if (!unsentAndUnreadyRequests.isEmpty()) {
-            // Handle the unready requests in the next event loop
-            unsentRequests.addAll(unsentAndUnreadyRequests);
         }
     }
 
     private boolean doSend(final UnsentRequest r,
-                           final long currentTimeMs,
-                           final Queue<UnsentRequest> unsentAndUnreadyRequests) {
+                           final long currentTimeMs) {
         Node node = r.node.orElse(client.leastLoadedNode(currentTimeMs));
         if (node == null || nodeUnavailable(node)) {
             return false;
@@ -132,7 +124,6 @@ public class NetworkClientDelegate implements AutoCloseable {
             // enqueue the request again if the node isn't ready yet. The request will be handled in the next iteration
             // of the event loop
             log.debug("Node is not ready, handle the request in the next event loop: node={}, request={}", node, r);
-            unsentAndUnreadyRequests.add(r);
         }
         return true;
     }

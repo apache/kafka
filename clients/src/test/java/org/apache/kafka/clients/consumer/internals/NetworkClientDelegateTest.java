@@ -69,7 +69,7 @@ public class NetworkClientDelegateTest {
     }
 
     @Test
-    public void testTrySend() {
+    public void testPoll() {
         NetworkClientDelegate ncd = mockNetworkClientDelegate();
 
         // Successful case
