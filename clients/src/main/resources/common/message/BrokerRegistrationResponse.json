@@ -17,7 +17,7 @@
   "apiKey": 62,
   "type": "response",
   "name": "BrokerRegistrationResponse",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
