@@ -102,7 +102,7 @@ public class NetworkClientDelegateTest {
         verify(client, never()).send(any(), eq(time.milliseconds()));
         verify(callback3, never()).onFailure(any());
 
-        // second loop
+        // The request expires in 500ms.
         time.sleep(499);
         when(this.client.leastLoadedNode(time.milliseconds())).thenReturn(this.node);
         when(this.client.isReady(this.node, time.milliseconds())).thenReturn(true);

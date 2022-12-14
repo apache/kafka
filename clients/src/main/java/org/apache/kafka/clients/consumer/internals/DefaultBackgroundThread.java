@@ -171,16 +171,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                     pollWaitTimeMs,
                     handlePollResult(coordinatorManager.get().poll(currentTimeMs)));
         }
-
-        // if there are pending events to process, poll then continue without
-        // blocking.
-        if (!applicationEventQueue.isEmpty()) {
-            networkClientDelegate.poll(0, currentTimeMs);
-            return;
-        }
-        // if there are no pending application event, poll until timeout. The timeout
-        // will be the minimum of the requestTimeoutMs, nextHeartBeatMs, and
-        // nextMetadataUpdate. See NetworkClient.poll impl.
+        
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
     }
 

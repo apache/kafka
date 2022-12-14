@@ -53,6 +53,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final Set<Node> activeNodes;
+    private final long retryBackoffMs;
 
     public NetworkClientDelegate(
             final Time time,
@@ -64,6 +65,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.log = logContext.logger(getClass());
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.activeNodes = new HashSet<>();
     }
 
@@ -76,7 +78,13 @@ public class NetworkClientDelegate implements AutoCloseable {
      */
     public List<ClientResponse> poll(final long timeoutMs, final long currentTimeMs) {
         trySend(currentTimeMs);
-        List<ClientResponse> res = this.client.poll(timeoutMs, currentTimeMs);
+
+        long pollTimeoutMs = timeoutMs;
+        if (!unsentRequests.isEmpty()) {
+            System.out.println(pollTimeoutMs + ":" + retryBackoffMs);
+            pollTimeoutMs = Math.min(retryBackoffMs, pollTimeoutMs);
+        }
+        List<ClientResponse> res = this.client.poll(pollTimeoutMs, currentTimeMs);
         checkDisconnects();
         wakeup();
         return res;
