@@ -125,15 +125,15 @@ public class CoordinatorRequestManager implements RequestManager {
     protected void markCoordinatorUnknown(final String cause, final long currentTimeMs) {
         if (this.coordinator != null) {
             log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
-                            + "Rediscovery will be attempted.", this.coordinator, cause);
+                    + "Rediscovery will be attempted.", this.coordinator, cause);
             this.coordinator = null;
             timeMarkedUnknownMs = currentTimeMs;
         } else {
-            long durationOfOngoingDisconnect = Math.max(0, currentTimeMs - timeMarkedUnknownMs);
-            long currDisconnectMin = durationOfOngoingDisconnect / (60 * 1000);
+            long durationOfOngoingDisconnectMs = Math.max(0, currentTimeMs - timeMarkedUnknownMs);
+            long currDisconnectMin = durationOfOngoingDisconnectMs / (60 * 1000);
             if (currDisconnectMin > this.totalDisconnectedMin) {
                 log.debug("Consumer has been disconnected from the group coordinator for {}ms",
-                        durationOfOngoingDisconnect);
+                        durationOfOngoingDisconnectMs);
                 totalDisconnectedMin = currDisconnectMin;
             }
         }
@@ -143,7 +143,6 @@ public class CoordinatorRequestManager implements RequestManager {
         // use MAX_VALUE - node.id as the coordinator id to allow separate connections
         // for the coordinator in the underlying network client layer
         int coordinatorConnectionId = Integer.MAX_VALUE - coordinator.nodeId();
-
         this.coordinator = new Node(
                 coordinatorConnectionId,
                 coordinator.host(),
@@ -205,7 +204,7 @@ public class CoordinatorRequestManager implements RequestManager {
     }
 
     /**
-     * Returns the current coordinator node. It can be {@code null}.
+     * Returns the current coordinator node.
      *
      * @return the current coordinator node.
      */

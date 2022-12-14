@@ -149,21 +149,14 @@ public class DefaultBackgroundThread extends KafkaThread {
 
     /**
      * Poll and process an {@link ApplicationEvent}. It performs the following tasks:
-     * 1. Try to process all of the existing events using the coorsponding {@link ApplicationEventProcessor}.
-     * 2. Try to find Coordinator if needed
-     * 3. Poll the networkClient for outstanding requests.
+     * 1. Drains and try to process all of the requests in the queue.
+     * 2. Poll request managers to queue up the necessary requests.
+     * 3. Poll the networkClient to send and retrieve the response.
      */
     void runOnce() {
-        Queue<ApplicationEvent> events = pollApplicationEvent();
-        Iterator<ApplicationEvent> iter = events.iterator();
-        while (iter.hasNext()) {
-            ApplicationEvent event = iter.next();
-            log.debug("processing application event: {}", event);
-            consumeApplicationEvent(event);
-        }
+        drainAndProcess();
 
         final long currentTimeMs = time.milliseconds();
-        // TODO: This is just a place holder value.
         long pollWaitTimeMs = MAX_POLL_TIMEOUT_MS;
 
         if (coordinatorManager.isPresent()) {
@@ -171,8 +164,18 @@ public class DefaultBackgroundThread extends KafkaThread {
                     pollWaitTimeMs,
                     handlePollResult(coordinatorManager.get().poll(currentTimeMs)));
         }
-        
+
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
+    }
+
+    private void drainAndProcess() {
+        Queue<ApplicationEvent> events = pollApplicationEvent();
+        Iterator<ApplicationEvent> iter = events.iterator();
+        while (iter.hasNext()) {
+            ApplicationEvent event = iter.next();
+            log.debug("processing application event: {}", event);
+            consumeApplicationEvent(event);
+        }
     }
 
     long handlePollResult(NetworkClientDelegate.PollResult res) {

@@ -44,7 +44,7 @@ import java.util.Queue;
 import java.util.Set;
 
 /**
- * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle poll and send operations.
+ * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle network poll and send operations.
  */
 public class NetworkClientDelegate implements AutoCloseable {
     private final KafkaClient client;
@@ -91,9 +91,8 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
-     * Iterates through the unsentRequests queue and tries to send the unsent requests. If the request doesn't have an
-     * assigned node, it will find the leastLoadedOne.
-     * Here it also stores all the nodes in the {@code activeNodes}, which will then be used to check for the disconnection.
+     * Tries to send the requests in the unsentRequest queue. If the request doesn't have an assigned node, it will
+     * find the leastLoadedOne.
      */
     private void trySend(final long currentTimeMs) {
         Iterator<UnsentRequest> iterator = unsentRequests.iterator();
@@ -173,8 +172,8 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
-     * Check if the code is disconnected and unavailable for immediate reconnection (i.e. if it is in
-     * reconnect backoff window following the disconnect).
+     * Check if the code is disconnected and unavailable for immediate reconnection (i.e. if it is in reconnect
+     * backoff window following the disconnect).
      */
     public boolean nodeUnavailable(final Node node) {
         return client.connectionFailed(node) && client.connectionDelay(node, time.milliseconds()) > 0;
@@ -256,7 +255,6 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         @Override
         public void onComplete(final ClientResponse response) {
-            // TODO: pendingCompletion in the orignal implementation: why did we batch it?
             fireCompletion(response);
             handleResponse(response, null);
         }
@@ -273,5 +271,4 @@ public class NetworkClientDelegate implements AutoCloseable {
             }
         }
     }
-
 }
