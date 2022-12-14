@@ -82,6 +82,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
 
 import scala.annotation.nowarn
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -196,7 +197,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request).exceptionally(handleError)
         case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request).exceptionally(handleError)
         case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request, requestLocal).exceptionally(handleError)
-        case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
+        case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupsRequest(request).exceptionally(handleError)
         case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request).exceptionally(handleError)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
@@ -1572,53 +1573,52 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleDescribeGroupRequest(request: RequestChannel.Request): Unit = {
-
-    def sendResponseCallback(describeGroupsResponseData: DescribeGroupsResponseData): Unit = {
-      def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        describeGroupsResponseData.setThrottleTimeMs(requestThrottleMs)
-        new DescribeGroupsResponse(describeGroupsResponseData)
-      }
-      requestHelper.sendResponseMaybeThrottle(request, createResponse)
-    }
-
+  def handleDescribeGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val describeRequest = request.body[DescribeGroupsRequest]
-    val describeGroupsResponseData = new DescribeGroupsResponseData()
+    val includeAuthorizedOperations = describeRequest.data.includeAuthorizedOperations
+    val response = new DescribeGroupsResponseData()
+    val authorizedGroups = new ArrayBuffer[String]()
 
     describeRequest.data.groups.forEach { groupId =>
       if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupId)) {
-        describeGroupsResponseData.groups.add(DescribeGroupsResponse.groupError(groupId, Errors.GROUP_AUTHORIZATION_FAILED))
+        response.groups.add(DescribeGroupsResponse.groupError(
+          groupId,
+          Errors.GROUP_AUTHORIZATION_FAILED
+        ))
       } else {
-        val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
-        val members = summary.members.map { member =>
-          new DescribeGroupsResponseData.DescribedGroupMember()
-            .setMemberId(member.memberId)
-            .setGroupInstanceId(member.groupInstanceId.orNull)
-            .setClientId(member.clientId)
-            .setClientHost(member.clientHost)
-            .setMemberAssignment(member.assignment)
-            .setMemberMetadata(member.metadata)
-        }
-
-        val describedGroup = new DescribeGroupsResponseData.DescribedGroup()
-          .setErrorCode(error.code)
-          .setGroupId(groupId)
-          .setGroupState(summary.state)
-          .setProtocolType(summary.protocolType)
-          .setProtocolData(summary.protocol)
-          .setMembers(members.asJava)
-
-        if (request.header.apiVersion >= 3) {
-          if (error == Errors.NONE && describeRequest.data.includeAuthorizedOperations) {
-            describedGroup.setAuthorizedOperations(authHelper.authorizedOperations(request, new Resource(ResourceType.GROUP, groupId)))
-          }
-        }
-
-        describeGroupsResponseData.groups.add(describedGroup)
+        authorizedGroups += groupId
       }
     }
 
-    sendResponseCallback(describeGroupsResponseData)
+    newGroupCoordinator.describeGroups(
+      request.context,
+      authorizedGroups.asJava
+    ).handle[Unit] { (results, exception) =>
+      if (exception != null) {
+        requestHelper.sendMaybeThrottle(request, describeRequest.getErrorResponse(exception))
+      } else {
+        if (request.header.apiVersion >= 3 && includeAuthorizedOperations) {
+          results.forEach { groupResult =>
+            if (groupResult.errorCode == Errors.NONE.code) {
+              groupResult.setAuthorizedOperations(authHelper.authorizedOperations(
+                request,
+                new Resource(ResourceType.GROUP, groupResult.groupId)
+              ))
+            }
+          }
+        }
+
+        if (response.groups.isEmpty) {
+          // If the response is empty, we can directly reuse the results.
+          response.setGroups(results)
+        } else {
+          // Otherwise, we have to copy the results into the existing ones.
+          response.groups.addAll(results)
+        }
+
+        requestHelper.sendMaybeThrottle(request, new DescribeGroupsResponse(response))
+      }
+    }
   }
 
   def handleListGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -1740,21 +1740,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleHeartbeatRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val heartbeatRequest = request.body[HeartbeatRequest]
 
-    def sendResponse(response: AbstractResponse): Unit = {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        response.maybeSetThrottleTimeMs(requestThrottleMs)
-        response
-      })
-    }
-
     if (heartbeatRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponse(heartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      requestHelper.sendMaybeThrottle(request, heartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, heartbeatRequest.data.groupId)) {
-      sendResponse(heartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      requestHelper.sendMaybeThrottle(request, heartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
       newGroupCoordinator.heartbeat(
@@ -1762,9 +1755,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         heartbeatRequest.data
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
-          sendResponse(heartbeatRequest.getErrorResponse(exception))
+          requestHelper.sendMaybeThrottle(request, heartbeatRequest.getErrorResponse(exception))
         } else {
-          sendResponse(new HeartbeatResponse(response))
+          requestHelper.sendMaybeThrottle(request, new HeartbeatResponse(response))
         }
       }
     }

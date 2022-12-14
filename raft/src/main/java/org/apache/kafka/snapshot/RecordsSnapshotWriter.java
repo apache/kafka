@@ -118,19 +118,39 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         CompressionType compressionType,
         RecordSerde<T> serde
     ) {
-        return supplier.get().map(snapshot -> {
-            RecordsSnapshotWriter<T> writer = new RecordsSnapshotWriter<>(
-                    snapshot,
-                    maxBatchSize,
-                    memoryPool,
-                    snapshotTime,
-                    lastContainedLogTimestamp,
-                    compressionType,
-                    serde);
-            writer.initializeSnapshotWithHeader();
+        return supplier.get().map(writer ->
+            createWithHeader(
+                writer,
+                maxBatchSize,
+                memoryPool,
+                snapshotTime,
+                lastContainedLogTimestamp,
+                compressionType,
+                serde
+            )
+        );
+    }
 
-            return writer;
-        });
+    public static <T> SnapshotWriter<T> createWithHeader(
+        RawSnapshotWriter rawSnapshotWriter,
+        int maxBatchSize,
+        MemoryPool memoryPool,
+        Time snapshotTime,
+        long lastContainedLogTimestamp,
+        CompressionType compressionType,
+        RecordSerde<T> serde
+    ) {
+        RecordsSnapshotWriter<T> writer = new RecordsSnapshotWriter<>(
+            rawSnapshotWriter,
+            maxBatchSize,
+            memoryPool,
+            snapshotTime,
+            lastContainedLogTimestamp,
+            compressionType,
+            serde
+        );
+        writer.initializeSnapshotWithHeader();
+        return writer;
     }
 
     @Override
