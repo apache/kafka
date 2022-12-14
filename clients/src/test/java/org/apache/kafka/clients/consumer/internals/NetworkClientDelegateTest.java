@@ -118,7 +118,6 @@ public class NetworkClientDelegateTest {
     public void testUnableToFindBrokerAndTimeout() {
         NetworkClientDelegate ncd = mockNetworkClientDelegate();
 
-        // Successful case
         NetworkClientDelegate.DefaultRequestFutureCompletionHandler callback = mock(NetworkClientDelegate.DefaultRequestFutureCompletionHandler.class);
         NetworkClientDelegate.UnsentRequest r = mockUnsentFindCoordinatorRequest(callback);
         ncd.add(r);
@@ -138,7 +137,6 @@ public class NetworkClientDelegateTest {
     public void testNodeUnready() {
         NetworkClientDelegate ncd = mockNetworkClientDelegate();
 
-        // Successful case
         NetworkClientDelegate.DefaultRequestFutureCompletionHandler callback = mock(NetworkClientDelegate.DefaultRequestFutureCompletionHandler.class);
         NetworkClientDelegate.UnsentRequest r = mockUnsentFindCoordinatorRequest(callback);
         ncd.add(r);
