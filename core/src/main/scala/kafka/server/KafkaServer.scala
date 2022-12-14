@@ -260,15 +260,8 @@ class KafkaServer(
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
         /* start log manager */
-        _logManager = LogManager(
-          config,
-          initialOfflineDirs,
-          configRepository,
-          kafkaScheduler,
-          time,
-          brokerTopicStats,
-          logDirFailureChannel,
-          config.usesTopicId)
+        _logManager = createLogManager(initialOfflineDirs)
+
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
@@ -549,6 +542,18 @@ class KafkaServer(
         shutdown()
         throw e
     }
+  }
+
+  protected def createLogManager(initialOfflineDirs : collection.Seq[String]): LogManager = {
+    LogManager(
+      config,
+      initialOfflineDirs,
+      configRepository,
+      kafkaScheduler,
+      time,
+      brokerTopicStats,
+      logDirFailureChannel,
+      config.usesTopicId)
   }
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
