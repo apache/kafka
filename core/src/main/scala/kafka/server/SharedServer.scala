@@ -251,6 +251,7 @@ class SharedServer(
             setMaxTimeSinceLastSnapshotNs(sharedServerConfig.metadataSnapshotMaxIntervalMs).
             setDisabledReason(snapshotsDiabledReason).
             build()
+          raftManager.register(loader)
           try {
             loader.installPublishers(Collections.singletonList(snapshotGenerator))
           } catch {
