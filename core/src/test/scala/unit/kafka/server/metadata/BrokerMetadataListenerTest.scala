@@ -86,8 +86,8 @@ class BrokerMetadataListenerTest {
       val imageRecords = listener.getImageRecords().get()
       assertEquals(0, imageRecords.size())
       assertEquals(100L, listener.highestMetadataOffset)
-      assertEquals(0L, metrics.lastAppliedOffset())
-      assertEquals(0L, metrics.lastAppliedTimestamp())
+      assertEquals(-1L, metrics.lastAppliedOffset())
+      assertEquals(-1L, metrics.lastAppliedTimestamp())
       assertEquals(0L, metrics.metadataLoadErrorCount.get)
       assertEquals(0L, metrics.metadataApplyErrorCount.get)
 
