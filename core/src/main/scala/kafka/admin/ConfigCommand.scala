@@ -133,8 +133,10 @@ object ConfigCommand extends Logging {
     val entityType = entity.root.entityType
     val entityName = entity.fullSanitizedName
     val errorMessage = s"--bootstrap-server option must be specified to update $entityType configs: {add: $configsToBeAdded, delete: $configsToBeDeleted}"
+    var isUserClientId = false
 
     if (entityType == ConfigType.User) {
+      isUserClientId = entity.child.exists(e => ConfigType.Client.equals(e.entityType))
       if (!configsToBeAdded.isEmpty || configsToBeDeleted.nonEmpty) {
         val info = "User configuration updates using ZooKeeper are only supported for SCRAM credential updates."
         val scramMechanismNames = ScramMechanism.values.map(_.mechanismName)
@@ -165,7 +167,7 @@ object ConfigCommand extends Logging {
     configs ++= configsToBeAdded
     configsToBeDeleted.foreach(configs.remove(_))
 
-    adminZkClient.changeConfigs(entityType, entityName, configs)
+    adminZkClient.changeConfigs(entityType, entityName, configs, isUserClientId)
 
     println(s"Completed updating config for entity: $entity.")
   }

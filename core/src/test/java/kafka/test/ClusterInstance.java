@@ -115,6 +115,8 @@ public interface ClusterInstance {
      */
     Map<Integer, BrokerFeatures> brokerFeatures();
 
+    String clusterId();
+
     /**
      * The underlying object which is responsible for setting up and tearing down the cluster.
      */

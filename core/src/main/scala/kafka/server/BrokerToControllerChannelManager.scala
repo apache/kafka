@@ -412,7 +412,7 @@ class BrokerToControllerRequestThread(
           metadataUpdater.setNodes(Seq(controllerNode).asJava)
         case None =>
           // need to backoff to avoid tight loops
-          debug("No controller defined in metadata cache, retrying after backoff")
+          debug("No controller provided, retrying after backoff")
           super.pollOnce(maxTimeoutMs = 100)
       }
     }
