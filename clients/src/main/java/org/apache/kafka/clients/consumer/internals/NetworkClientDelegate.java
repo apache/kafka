@@ -137,12 +137,12 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     private void checkDisconnects() {
-        // Check the connection status by all the nodes that are active. Disconnect the disconnected node if it is
-        // unable to be connected.
+        // Check the connection of the unsent request. Disconnect the disconnected node if it is unable to be connected.
         Iterator<UnsentRequest> iter = unsentRequests.iterator();
         while (iter.hasNext()) {
             UnsentRequest u = iter.next();
             if (u.node.isPresent() && client.connectionFailed(u.node.get())) {
+                iter.remove();
                 AuthenticationException authenticationException = client.authenticationException(u.node.get());
                 u.callback.ifPresent(r -> r.onFailure(authenticationException));
             }
