@@ -99,12 +99,7 @@ class ProducerIdManagerTest {
   @Test
   def testRPCProducerIdManagerThrowsConcurrentTransactions(): Unit = {
     val manager1 = new MockProducerIdManager(0, 0, 0, timeout = true)
-    val manager2 = new MockProducerIdManager(0, 0, 0)
-
     assertThrows(classOf[CoordinatorLoadInProgressException], () => manager1.generateProducerId())
-
-    manager2.handleTimeout()
-    assertThrows(classOf[CoordinatorLoadInProgressException], () => manager2.generateProducerId())
   }
 
   @Test
