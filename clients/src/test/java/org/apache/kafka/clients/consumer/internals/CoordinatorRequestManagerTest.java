@@ -177,7 +177,21 @@ public class CoordinatorRequestManagerTest {
             throw new RuntimeException("MockRequestFutureCompletionHandlerBase should throw an exception");
         }
     }
-    
+
+    @Test
+    public void testFindCoordinatorResponseVersions() {
+        // v4
+        FindCoordinatorResponse respNew = FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, this.node);
+        assertTrue(respNew.coordinatorByKey(groupId).isPresent());
+        assertEquals(groupId, respNew.coordinatorByKey(groupId).get().key());
+        assertEquals(this.node.id(), respNew.coordinatorByKey(groupId).get().nodeId());
+
+        // <= v3
+        FindCoordinatorResponse respOld = FindCoordinatorResponse.prepareOldResponse(Errors.NONE, this.node);
+        assertTrue(respOld.coordinatorByKey(groupId).isPresent());
+        assertEquals(this.node.id(), respNew.coordinatorByKey(groupId).get().nodeId());
+    }
+
     private CoordinatorRequestManager setupCoordinatorManager() {
         return new CoordinatorRequestManager(
                 this.logContext,
