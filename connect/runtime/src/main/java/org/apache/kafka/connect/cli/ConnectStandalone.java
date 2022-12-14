@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.connect.cli;
 
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
@@ -60,19 +62,25 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
     }
 
     @Override
-    protected void processExtraArgs(Herder herder, String[] extraArgs) throws Throwable {
-        for (final String connectorPropsFile : extraArgs) {
-            Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
-            FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>((error, info) -> {
-                if (error != null)
-                    log.error("Failed to create connector for {}", connectorPropsFile);
-                else
-                    log.info("Created connector {}", info.result().name());
-            });
-            herder.putConnectorConfig(
-                    connectorProps.get(ConnectorConfig.NAME_CONFIG),
-                    connectorProps, false, cb);
-            cb.get();
+    protected void processExtraArgs(Herder herder, Connect connect, String[] extraArgs) {
+        try {
+            for (final String connectorPropsFile : extraArgs) {
+                Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
+                FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>((error, info) -> {
+                    if (error != null)
+                        log.error("Failed to create connector for {}", connectorPropsFile);
+                    else
+                        log.info("Created connector {}", info.result().name());
+                });
+                herder.putConnectorConfig(
+                        connectorProps.get(ConnectorConfig.NAME_CONFIG),
+                        connectorProps, false, cb);
+                cb.get();
+            }
+        } catch (Throwable t) {
+            log.error("Stopping Connect due to an error while attempting to create a connector", t);
+            connect.stop();
+            Exit.exit(3);
         }
     }
 

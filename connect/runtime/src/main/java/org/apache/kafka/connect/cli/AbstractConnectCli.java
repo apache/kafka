@@ -50,7 +50,7 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
      *
      * @param args the CLI arguments to be processed. Note that if one or more arguments are passed, the first argument is
      *             assumed to be the Connect worker properties file and is processed in {@link #run()}. The remaining arguments
-     *             can be handled in {@link #processExtraArgs(Herder, String[])}
+     *             can be handled in {@link #processExtraArgs(Herder, Connect, String[])}
      */
     protected AbstractConnectCli(String... args) {
         this.args = args;
@@ -63,11 +63,11 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
      * can be overridden if there are more arguments that need to be processed.
      *
      * @param herder the {@link Herder} instance that can be used to perform operations on the Connect cluster
+     * @param connect the {@link Connect} instance that can be stopped (via {@link Connect#stop()}) if there's an error
+     *                encountered while processing the additional CLI arguments.
      * @param extraArgs the extra CLI arguments that need to be processed
-     * @throws Throwable if there's an error encountered while processing the extra CLI arguments; this causes {@link Connect}
-     *                   to be stopped.
      */
-    protected void processExtraArgs(Herder herder, String[] extraArgs) throws Throwable {
+    protected void processExtraArgs(Herder herder, Connect connect, String[] extraArgs) {
     }
 
     protected abstract Herder createHerder(T config, String workerId, Plugins plugins,
@@ -105,7 +105,8 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
      * Initialize and start an instance of {@link Connect}
      *
      * @param workerProps the worker properties map used to initialize the {@link WorkerConfig}
-     * @param extraArgs any additional CLI arguments that may need to be processed via {@link #processExtraArgs(Herder, String[])}
+     * @param extraArgs any additional CLI arguments that may need to be processed via
+     *                  {@link #processExtraArgs(Herder, Connect, String[])}
      * @return a started instance of {@link Connect}
      */
     public Connect startConnect(Map<String, String> workerProps, String... extraArgs) {
@@ -145,13 +146,7 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
             Exit.exit(3);
         }
 
-        try {
-            processExtraArgs(herder, extraArgs);
-        } catch (Throwable t) {
-            log.error("Stopping Connect due to an error while processing CLI arguments", t);
-            connect.stop();
-            Exit.exit(3);
-        }
+        processExtraArgs(herder, connect, extraArgs);
 
         return connect;
     }
