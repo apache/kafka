@@ -37,9 +37,7 @@ sealed trait CachedControllerId {
 }
 
 case class ZkCachedControllerId(id: Int) extends CachedControllerId
-case class ZkNoCachedControllerId(id: Int) extends CachedControllerId
 case class KRaftCachedControllerId(id: Int) extends CachedControllerId
-case class KRaftNoCachedControllerId(id: Int) extends CachedControllerId
 
 trait MetadataCache {
 

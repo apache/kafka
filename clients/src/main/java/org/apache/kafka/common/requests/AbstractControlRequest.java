@@ -49,7 +49,7 @@ public abstract class AbstractControlRequest extends AbstractRequest {
 
     public abstract int controllerId();
 
-    public abstract int kraftControllerId();
+    public abstract boolean isKRaftController();
 
     public abstract int controllerEpoch();
 

@@ -215,7 +215,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val brokerIds = brokers.map(_.config.brokerId).toSet
       assertTrue(brokerIds.contains(controller.id))
     } else {
-      assertEquals(brokers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.
+      assertEquals(brokers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.map(_.id).
         getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id)
     }
 

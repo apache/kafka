@@ -31,7 +31,6 @@ import kafka.server.{BrokerFeatures, CachedControllerId, FinalizedFeaturesAndEpo
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import kafka.utils.Implicits._
-import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
@@ -73,9 +72,12 @@ class ZkMetadataCache(
   //replace the value with a completely new one. this means reads (which are not under any lock) need to grab
   //the value of this var (into a val) ONCE and retain that read copy for the duration of their operation.
   //multiple reads of this value risk getting different snapshots.
-  @volatile private var metadataSnapshot: MetadataSnapshot = MetadataSnapshot(partitionStates = mutable.AnyRefMap.empty,
-    topicIds = Map.empty, controllerId = None, kraftControllerId = None,
-    aliveBrokers = mutable.LongMap.empty, aliveNodes = mutable.LongMap.empty)
+  @volatile private var metadataSnapshot: MetadataSnapshot = MetadataSnapshot(
+    partitionStates = mutable.AnyRefMap.empty,
+    topicIds = Map.empty,
+    controllerId = None,
+    aliveBrokers = mutable.LongMap.empty,
+    aliveNodes = mutable.LongMap.empty)
 
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
@@ -258,7 +260,8 @@ class ZkMetadataCache(
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
     val snapshot = metadataSnapshot
     brokerId match {
-      case id if snapshot.kraftControllerId.contains(id) => kraftControllerNodeMap.get(id)
+      case id if snapshot.controllerId.filter(_.isInstanceOf[KRaftCachedControllerId]).exists(_.id == id) =>
+        kraftControllerNodeMap.get(id)
       case _ => snapshot.aliveBrokers.get(brokerId).flatMap(_.getNode(listenerName))
     }
   }
@@ -328,11 +331,7 @@ class ZkMetadataCache(
   }
 
   def getControllerId: Option[CachedControllerId] = {
-    val snapshot = metadataSnapshot
-    snapshot.kraftControllerId match {
-      case Some(id) => Some(KRaftCachedControllerId(id))
-      case None => snapshot.controllerId.map(ZkCachedControllerId)
-    }
+    metadataSnapshot.controllerId
   }
 
   def getRandomAliveBrokerId: Option[Int] = {
@@ -352,6 +351,13 @@ class ZkMetadataCache(
       nodes.getOrElse(id.toLong, new Node(id, "", -1))
     }
 
+    def controllerId(snapshot: MetadataSnapshot): Option[Node] = {
+      snapshot.controllerId.flatMap {
+        case ZkCachedControllerId(id) => getAliveBrokerNode(id, listenerName)
+        case KRaftCachedControllerId(_) => getRandomAliveBrokerId.flatMap(getAliveBrokerNode(_, listenerName))
+      }
+    }
+
     val partitions = getAllPartitions(snapshot)
       .filter { case (_, state) => state.leader != LeaderAndIsr.LeaderDuringDelete }
       .map { case (tp, state) =>
@@ -365,7 +371,7 @@ class ZkMetadataCache(
     new Cluster(clusterId, nodes.values.toBuffer.asJava,
       partitions.toBuffer.asJava,
       unauthorizedTopics, internalTopics,
-      snapshot.controllerId.map(id => node(id)).orNull)
+      controllerId(snapshot).orNull)
   }
 
   // This method returns the deleted TopicPartitions received from UpdateMetadataRequest
@@ -374,16 +380,13 @@ class ZkMetadataCache(
 
       val aliveBrokers = new mutable.LongMap[Broker](metadataSnapshot.aliveBrokers.size)
       val aliveNodes = new mutable.LongMap[collection.Map[ListenerName, Node]](metadataSnapshot.aliveNodes.size)
-      val controllerIdOpt = updateMetadataRequest.controllerId match {
+      val controllerIdOpt: Option[CachedControllerId] = updateMetadataRequest.controllerId match {
         case id if id < 0 => None
-        case id => Some(id)
-      }
-      val kraftControllerIdOpt = updateMetadataRequest.kraftControllerId() match {
-        case id if id < 0 => None
-        case id => Some(id)
-      }
-      if (controllerIdOpt.nonEmpty && kraftControllerIdOpt.nonEmpty) {
-        throw new InvalidRequestException("Received inconsistent controller information")
+        case id =>
+          if (updateMetadataRequest.isKRaftController)
+            Some(KRaftCachedControllerId(id))
+          else
+            Some(ZkCachedControllerId(id))
       }
 
       updateMetadataRequest.liveBrokers.forEach { broker =>
@@ -417,7 +420,7 @@ class ZkMetadataCache(
       val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
       if (!updateMetadataRequest.partitionStates.iterator.hasNext) {
         metadataSnapshot = MetadataSnapshot(metadataSnapshot.partitionStates, topicIds.toMap,
-          controllerIdOpt, kraftControllerIdOpt, aliveBrokers, aliveNodes)
+          controllerIdOpt, aliveBrokers, aliveNodes)
       } else {
         //since kafka may do partial metadata updates, we start by copying the previous state
         val partitionStates = new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]](metadataSnapshot.partitionStates.size)
@@ -451,8 +454,7 @@ class ZkMetadataCache(
         stateChangeLogger.info(s"Add $cachedPartitionsCount partitions and deleted ${deletedPartitions.size} partitions from metadata cache " +
           s"in response to UpdateMetadata request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
 
-        metadataSnapshot = MetadataSnapshot(partitionStates, topicIds.toMap, controllerIdOpt,
-          kraftControllerIdOpt, aliveBrokers, aliveNodes)
+        metadataSnapshot = MetadataSnapshot(partitionStates, topicIds.toMap, controllerIdOpt, aliveBrokers, aliveNodes)
       }
       deletedPartitions
     }
@@ -478,8 +480,7 @@ class ZkMetadataCache(
 
   case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
                               topicIds: Map[String, Uuid],
-                              controllerId: Option[Int],
-                              kraftControllerId: Option[Int],
+                              controllerId: Option[CachedControllerId],
                               aliveBrokers: mutable.LongMap[Broker],
                               aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]) {
     val topicNames: Map[Uuid, String] = topicIds.map { case (topicName, topicId) => (topicId, topicName) }

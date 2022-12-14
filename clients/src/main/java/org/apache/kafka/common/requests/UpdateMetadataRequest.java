@@ -88,15 +88,13 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             }
 
             UpdateMetadataRequestData data = new UpdateMetadataRequestData()
+                .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
                 .setLiveBrokers(liveBrokers);
 
             if (version >= 8) {
-                data.setControllerId(kraftController ? -1 : controllerId)
-                    .setKRaftControllerId(kraftController ? controllerId : -1);
-            } else {
-                data.setControllerId(controllerId);
+                data.setIsKRaftController(kraftController);
             }
 
             if (version >= 5) {
@@ -194,8 +192,8 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     }
 
     @Override
-    public int kraftControllerId() {
-        return data.kRaftControllerId();
+    public boolean isKRaftController() {
+        return data.isKRaftController();
     }
 
     @Override

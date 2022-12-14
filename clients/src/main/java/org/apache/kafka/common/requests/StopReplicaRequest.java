@@ -59,10 +59,13 @@ public class StopReplicaRequest extends AbstractControlRequest {
 
         public StopReplicaRequest build(short version) {
             StopReplicaRequestData data = new StopReplicaRequestData()
-                .setControllerId(kraftController ? -1 : controllerId)
-                .setKRaftControllerId(kraftController ? controllerId : -1)
+                .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch);
+
+            if (version >= 4) {
+                data.setIsKRaftController(kraftController);
+            }
 
             if (version >= 3) {
                 data.setTopicStates(topicStates);
@@ -205,8 +208,8 @@ public class StopReplicaRequest extends AbstractControlRequest {
     }
 
     @Override
-    public int kraftControllerId() {
-        return data.kRaftControllerId();
+    public boolean isKRaftController() {
+        return data.isKRaftController();
     }
 
     @Override
