@@ -20,6 +20,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -36,7 +37,9 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_M
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -109,6 +112,47 @@ public class NetworkClientDelegateTest {
         ncd.poll(100, time.milliseconds());
         verify(client, times(1)).send(any(), eq(time.milliseconds()));
         verify(callback3, never()).onFailure(any());
+    }
+
+    @Test
+    public void testUnableToFindBrokerAndTimeout() {
+        NetworkClientDelegate ncd = mockNetworkClientDelegate();
+
+        // Successful case
+        NetworkClientDelegate.DefaultRequestFutureCompletionHandler callback = mock(NetworkClientDelegate.DefaultRequestFutureCompletionHandler.class);
+        NetworkClientDelegate.UnsentRequest r = mockUnsentFindCoordinatorRequest(callback);
+        ncd.add(r);
+        final long timeoutMs = 100;
+        long totalTimeoutMs = 0;
+        while (totalTimeoutMs <= this.requestTimeoutMs) {
+            when(this.client.leastLoadedNode(time.milliseconds())).thenReturn(null);
+            ncd.poll(timeoutMs, time.milliseconds());
+            totalTimeoutMs += timeoutMs;
+            this.time.sleep(timeoutMs);
+        }
+        verify(client, times(6)).poll(eq(timeoutMs), anyLong());
+        verify(callback, times(1)).onFailure(isA(TimeoutException.class));
+    }
+
+    @Test
+    public void testNodeUnready() {
+        NetworkClientDelegate ncd = mockNetworkClientDelegate();
+
+        // Successful case
+        NetworkClientDelegate.DefaultRequestFutureCompletionHandler callback = mock(NetworkClientDelegate.DefaultRequestFutureCompletionHandler.class);
+        NetworkClientDelegate.UnsentRequest r = mockUnsentFindCoordinatorRequest(callback);
+        ncd.add(r);
+        final long timeoutMs = 100;
+        long totalTimeoutMs = 0;
+        while (totalTimeoutMs <= this.requestTimeoutMs) {
+            when(this.client.leastLoadedNode(time.milliseconds())).thenReturn(this.node);
+            when(this.client.isReady(this.node, time.milliseconds())).thenReturn(false);
+            ncd.poll(timeoutMs, time.milliseconds());
+            totalTimeoutMs += timeoutMs;
+            this.time.sleep(timeoutMs);
+        }
+        verify(client, times(6)).poll(eq(timeoutMs), anyLong());
+        verify(callback, times(1)).onFailure(isA(TimeoutException.class));
     }
 
     public NetworkClientDelegate mockNetworkClientDelegate() {

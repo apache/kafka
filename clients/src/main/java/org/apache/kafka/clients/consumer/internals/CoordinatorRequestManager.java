@@ -47,7 +47,7 @@ import java.util.Optional;
  * marked {@code null} upon receiving a failure.
  */
 public class CoordinatorRequestManager implements RequestManager {
-
+    private static final long COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS = 60 * 1000;
     private final Logger log;
     private final ErrorEventHandler nonRetriableErrorHandler;
     private final String groupId;
@@ -119,7 +119,8 @@ public class CoordinatorRequestManager implements RequestManager {
 
     /**
      * Mark the current coordinator null.
-     * @param cause why the coordinator is marked unknown.
+     *
+     * @param cause         why the coordinator is marked unknown.
      * @param currentTimeMs the current time in ms.
      */
     protected void markCoordinatorUnknown(final String cause, final long currentTimeMs) {
@@ -128,12 +129,12 @@ public class CoordinatorRequestManager implements RequestManager {
                     + "Rediscovery will be attempted.", this.coordinator, cause);
             this.coordinator = null;
             timeMarkedUnknownMs = currentTimeMs;
+            totalDisconnectedMin = 0;
         } else {
             long durationOfOngoingDisconnectMs = Math.max(0, currentTimeMs - timeMarkedUnknownMs);
-            long currDisconnectMin = durationOfOngoingDisconnectMs / (60 * 1000);
+            long currDisconnectMin = durationOfOngoingDisconnectMs / COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS;
             if (currDisconnectMin > this.totalDisconnectedMin) {
-                log.debug("Consumer has been disconnected from the group coordinator for {}ms",
-                        durationOfOngoingDisconnectMs);
+                log.debug("Consumer has been disconnected from the group coordinator for {}ms", durationOfOngoingDisconnectMs);
                 totalDisconnectedMin = currDisconnectMin;
             }
         }
@@ -151,9 +152,7 @@ public class CoordinatorRequestManager implements RequestManager {
         coordinatorRequestState.reset();
     }
 
-    private void onFailedCoordinatorResponse(
-            final Exception exception,
-            final long currentTimeMs) {
+    private void onFailedCoordinatorResponse(final Exception exception, final long currentTimeMs) {
         coordinatorRequestState.updateLastFailedAttempt(currentTimeMs);
         markCoordinatorUnknown("FindCoordinator failed with exception", currentTimeMs);
 
@@ -181,7 +180,7 @@ public class CoordinatorRequestManager implements RequestManager {
      * @param response      the response for finding the coordinator. null if an exception is thrown.
      * @param e             the exception, null if a valid response is received.
      */
-    public void onResponse(final long currentTimeMs, final FindCoordinatorResponse response, final Exception e) {
+    protected void onResponse(final long currentTimeMs, final FindCoordinatorResponse response, final Exception e) {
         // handles Runtime exception
         if (e != null) {
             onFailedCoordinatorResponse(e, currentTimeMs);

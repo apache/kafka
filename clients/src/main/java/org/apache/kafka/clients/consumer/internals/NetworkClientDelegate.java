@@ -25,7 +25,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -35,13 +34,11 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
-import java.util.Set;
 
 /**
  * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle network poll and send operations.
@@ -52,7 +49,6 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final Logger log;
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
-    private final Set<Node> activeNodes;
     private final long retryBackoffMs;
 
     public NetworkClientDelegate(
@@ -66,22 +62,21 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.activeNodes = new HashSet<>();
     }
 
     /**
      * Returns the responses of the sent requests. This method will try to send the unsent requests, poll for responses,
      * and check the disconnected nodes.
      *
-     * @param timeoutMs
-     * @return
+     * @param timeoutMs     timeout time
+     * @param currentTimeMs current time
+     * @return a list of client response
      */
     public List<ClientResponse> poll(final long timeoutMs, final long currentTimeMs) {
         trySend(currentTimeMs);
 
         long pollTimeoutMs = timeoutMs;
         if (!unsentRequests.isEmpty()) {
-            System.out.println(pollTimeoutMs + ":" + retryBackoffMs);
             pollTimeoutMs = Math.min(retryBackoffMs, pollTimeoutMs);
         }
         List<ClientResponse> res = this.client.poll(pollTimeoutMs, currentTimeMs);
@@ -92,7 +87,8 @@ public class NetworkClientDelegate implements AutoCloseable {
 
     /**
      * Tries to send the requests in the unsentRequest queue. If the request doesn't have an assigned node, it will
-     * find the leastLoadedOne.
+     * find the leastLoadedOne, and will be retried in the next {@code poll()}. If the request is expired, a
+     * {@link TimeoutException} will be thrown.
      */
     private void trySend(final long currentTimeMs) {
         Iterator<UnsentRequest> iterator = unsentRequests.iterator();
@@ -107,13 +103,10 @@ public class NetworkClientDelegate implements AutoCloseable {
             }
 
             if (!doSend(unsent, currentTimeMs)) {
-                log.debug("No broker available to send the request: {}", unsent);
-                iterator.remove();
-                if (unsent.timer.isExpired()) {
-                    unsent.callback.ifPresent(v -> v.onFailure(Errors.NETWORK_EXCEPTION.exception(
-                            "No node available in the kafka cluster to send the request")));
-                }
+                // continue to retry until timeout.
+                continue;
             }
+            iterator.remove();
         }
     }
 
@@ -121,17 +114,17 @@ public class NetworkClientDelegate implements AutoCloseable {
                            final long currentTimeMs) {
         Node node = r.node.orElse(client.leastLoadedNode(currentTimeMs));
         if (node == null || nodeUnavailable(node)) {
+            log.debug("No broker available to send the request: {}. Retrying.", r);
             return false;
         }
         ClientRequest request = makeClientRequest(r, node, currentTimeMs);
-        if (client.isReady(node, currentTimeMs)) {
-            activeNodes.add(node);
-            client.send(request, currentTimeMs);
-        } else {
+        if (!client.isReady(node, currentTimeMs)) {
             // enqueue the request again if the node isn't ready yet. The request will be handled in the next iteration
             // of the event loop
             log.debug("Node is not ready, handle the request in the next event loop: node={}, request={}", node, r);
+            return false;
         }
+        client.send(request, currentTimeMs);
         return true;
     }
 
