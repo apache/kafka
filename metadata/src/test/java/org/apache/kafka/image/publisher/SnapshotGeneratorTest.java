@@ -110,7 +110,7 @@ public class SnapshotGeneratorTest {
             assertEquals(Collections.emptyList(), emitter.images());
             emitter.setReady();
         }
-        assertEquals(Arrays.asList(TEST_IMAGE, TEST_IMAGE, TEST_IMAGE), emitter.images());
+        assertEquals(Arrays.asList(TEST_IMAGE), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
