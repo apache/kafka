@@ -697,7 +697,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testFetchOutOfRangeOffsetResetConfigEarliest(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    // ensure no records arrive before poll is called so that the offset actually gets reset
+    // ensure no in-flight fetch request so that the offset can be reset immediately
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
     val totalRecords = 10L
@@ -718,7 +718,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testFetchOutOfRangeOffsetResetConfigLatest(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
-    // ensure no records arrive before poll is called so that the offset actually gets reset
+    // ensure no in-flight fetch request so that the offset can be reset immediately
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
     val totalRecords = 10L
