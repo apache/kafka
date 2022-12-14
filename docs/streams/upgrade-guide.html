@@ -105,6 +105,42 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <h3><a id="streams_api_changes_310" href="#streams_api_changes_310">Streams API changes in 3.1.0</a></h3>
+    <p>
+      The semantics of left/outer stream-stream join got improved via
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-633%3A+Deprecate+24-hour+Default+Grace+Period+for+Windowed+Operations+in+Streams">KIP-633</a>.
+      Previously, left-/outer stream-stream join might have emitted so-call spurious left/outer results, due to an eager-emit strategy.
+      The implementation was changed to emit left/outer join result records only after the join window is closed.
+      The old API to specify the join window, i.e., <code>JoinWindows.of()</code> that enables the eager-emit strategy,
+      was deprecated in favor of a <code>JoinWindows.ofTimeDifferenceAndGrace()</code> and <code>JoinWindows.ofTimeDifferencWithNoGrace()</code>.
+      The new semantics are only enabled if you use the new join window builders.<br />
+      Additionally, KIP-633 makes setting a grace period also mandatory for windowed aggregations, i.e., for
+      <code>TimeWindows</code> (hopping/tumbling), <code>SessionWindows</code>, and <code>SlidingWindows</code>.
+      The corresponding builder methods <code>.of(...)</code> were deprecated in favor of the new
+      <code>.ofTimeDifferenceAndGrace()</code> and <code>.ofTimeDifferencWithNoGrace()</code> methods.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-761%3A+Add+Total+Blocked+Time+Metric+to+Streams">KIP-761</a>
+      adds new metrics that allow to track blocking times on the underlying consumer and producer clients.
+      Check out the section on <a href="/documentation/#kafka_streams_monitoring">Kafka Streams metrics</a> for more details.
+    </p>
+
+    <p>
+      <a href="/documentation/streams/developer-guide/interactive-queries.html">Interactive Queries</a> were improved via
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-763%3A+Range+queries+with+open+endpoints">KIP-763</a>
+      <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=186876596">KIP-766</a>.
+      Range queries now accept <code>null</code> as lower/upper key-range bound to indicate an open-ended lower/upper bound.
+    </p>
+
+    <p>
+      Foreign-key table-table joins now support custom partitioners via
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-775%3A+Custom+partitioners+in+foreign+key+joins">KIP-775</a>.
+      Previously, if an input table was partitioned by a non-default partitioner, joining records might fail.
+      With KIP-775 you now can pass a custom <code>StreamPartitioner</code> into the join using the newly added
+      <code>TableJoined</code> object.
+    </p>
+
     <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>
     <p>
       We improved the semantics of
