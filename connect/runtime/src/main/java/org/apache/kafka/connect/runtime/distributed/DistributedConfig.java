@@ -232,9 +232,12 @@ public class DistributedConfig extends WorkerConfig {
 
     public static final String EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG = "exactly.once.source.support";
     public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DOC = "Whether to enable exactly-once support for source connectors in the cluster "
-            + "by using transactions to write source records and their source offsets, and by proactively fencing out old task generations before bringing up new ones. ";
-            // TODO: https://issues.apache.org/jira/browse/KAFKA-13709
-            //       + "See the exactly-once source support documentation at [add docs link here] for more information on this feature.";
+            + "by using transactions to write source records and their source offsets, and by proactively fencing out old task generations before bringing up new ones.\n"
+            + "To enable exactly-once source support on a new cluster, set this property to '" + ExactlyOnceSourceSupport.ENABLED + "'. "
+            + "To enable support on an existing cluster, first set to '" + ExactlyOnceSourceSupport.PREPARING + "' on every worker in the cluster, "
+            + "then set to '" + ExactlyOnceSourceSupport.ENABLED + "'. A rolling upgrade may be used for both changes. "
+            + "For more information on this feature, see the "
+            + "<a href=\"https://kafka.apache.org/documentation.html#connect_exactlyoncesource\">exactly-once source support documentation</a>.";
     public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT = ExactlyOnceSourceSupport.DISABLED.toString();
 
     private static Object defaultKeyGenerationAlgorithm(Crypto crypto) {
