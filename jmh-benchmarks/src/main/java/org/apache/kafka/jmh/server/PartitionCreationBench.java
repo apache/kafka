@@ -26,6 +26,7 @@ import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.LogDirFailureChannel;
+import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.builders.LogManagerBuilder;
@@ -33,7 +34,6 @@ import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.ConfigRepository;
 import kafka.server.metadata.MockConfigRepository;
-import kafka.server.metadata.ZkMetadataCache;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.Scheduler;
 import kafka.utils.TestUtils;
@@ -160,7 +160,9 @@ public class PartitionCreationBench {
             setLogManager(logManager).
             setQuotaManagers(quotaManagers).
             setBrokerTopicStats(brokerTopicStats).
-            setMetadataCache(new ZkMetadataCache(this.brokerProperties.brokerId(), this.brokerProperties.interBrokerProtocolVersion(), BrokerFeatures.createEmpty())).
+            setMetadataCache(MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
+                this.brokerProperties.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(),
+                null)).
             setLogDirFailureChannel(failureChannel).
             setAlterPartitionManager(alterPartitionManager).
             build();
