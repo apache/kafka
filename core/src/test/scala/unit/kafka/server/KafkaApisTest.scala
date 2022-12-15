@@ -2015,8 +2015,7 @@ class KafkaApisTest {
     val expectedDeleteGroupsResponse = new DeleteGroupsResponseData()
       .setResults(results)
 
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[DeleteGroupsResponse]
+    val response = verifyNoThrottling[DeleteGroupsResponse](requestChannelRequest)
     assertEquals(expectedDeleteGroupsResponse, response.data)
   }
 
@@ -2057,8 +2056,7 @@ class KafkaApisTest {
           .setErrorCode(Errors.NOT_CONTROLLER.code),
       ).iterator.asJava))
 
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[DeleteGroupsResponse]
+    val response = verifyNoThrottling[DeleteGroupsResponse](requestChannelRequest)
     assertEquals(expectedDeleteGroupsResponse, response.data)
   }
 
@@ -2123,8 +2121,7 @@ class KafkaApisTest {
           .setGroupId("group-1")
           .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)).iterator.asJava))
 
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[DeleteGroupsResponse]
+    val response = verifyNoThrottling[DeleteGroupsResponse](requestChannelRequest)
     assertEquals(expectedDeleteGroupsResponse, response.data)
   }
 
@@ -2166,8 +2163,7 @@ class KafkaApisTest {
     future.complete(groupResults)
 
     val expectedDescribeGroupsResponse = new DescribeGroupsResponseData().setGroups(groupResults)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[DescribeGroupsResponse]
+    val response = verifyNoThrottling[DescribeGroupsResponse](requestChannelRequest)
     assertEquals(expectedDescribeGroupsResponse, response.data)
   }
 
@@ -2203,8 +2199,7 @@ class KafkaApisTest {
 
     future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
 
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[DescribeGroupsResponse]
+    val response = verifyNoThrottling[DescribeGroupsResponse](requestChannelRequest)
     assertEquals(expectedDescribeGroupsResponse, response.data)
   }
 
@@ -2263,8 +2258,7 @@ class KafkaApisTest {
         .setErrorCode(Errors.NOT_COORDINATOR.code)
     ).asJava)
 
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[DescribeGroupsResponse]
+    val response = verifyNoThrottling[DescribeGroupsResponse](requestChannelRequest)
     assertEquals(expectedDescribeGroupsResponse, response.data)
   }
 
@@ -2785,12 +2779,11 @@ class KafkaApisTest {
       .setMemberId("member")
       .setGenerationId(0)
       .setLeader("leader")
-      .setProtocolType("consumer")
+      .setProtocolType(if (version >= 7) "consumer" else null)
       .setProtocolName("range")
 
     future.complete(expectedJoinGroupResponse)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[JoinGroupResponse]
+    val response = verifyNoThrottling[JoinGroupResponse](requestChannelRequest)
     assertEquals(expectedJoinGroupResponse, response.data)
   }
 
@@ -2836,8 +2829,7 @@ class KafkaApisTest {
       .setProtocolName(if (version >= 7) null else GroupCoordinator.NoProtocol)
 
     future.complete(joinGroupResponse)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[JoinGroupResponse]
+    val response = verifyNoThrottling[JoinGroupResponse](requestChannelRequest)
     assertEquals(expectedJoinGroupResponse, response.data)
   }
 
@@ -2865,8 +2857,7 @@ class KafkaApisTest {
     )
 
     future.completeExceptionally(Errors.REQUEST_TIMED_OUT.exception)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[JoinGroupResponse]
+    val response = verifyNoThrottling[JoinGroupResponse](requestChannelRequest)
     assertEquals(Errors.REQUEST_TIMED_OUT, response.error)
   }
 
@@ -2890,8 +2881,7 @@ class KafkaApisTest {
       RequestLocal.NoCaching
     )
 
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[JoinGroupResponse]
+    val response = verifyNoThrottling[JoinGroupResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
@@ -2962,12 +2952,11 @@ class KafkaApisTest {
     )
 
     val expectedSyncGroupResponse = new SyncGroupResponseData()
-      .setProtocolType("consumer")
-      .setProtocolName("range")
+      .setProtocolType(if (version >= 5 ) "consumer" else null)
+      .setProtocolName(if (version >= 5 ) "range" else null)
 
     future.complete(expectedSyncGroupResponse)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[SyncGroupResponse]
+    val response = verifyNoThrottling[SyncGroupResponse](requestChannelRequest)
     assertEquals(expectedSyncGroupResponse, response.data)
   }
 
@@ -3000,8 +2989,7 @@ class KafkaApisTest {
     )
 
     future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[SyncGroupResponse]
+    val response = verifyNoThrottling[SyncGroupResponse](requestChannelRequest)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
   }
 
@@ -3024,8 +3012,7 @@ class KafkaApisTest {
       RequestLocal.NoCaching
     )
 
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[SyncGroupResponse]
+    val response = verifyNoThrottling[SyncGroupResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
@@ -3094,8 +3081,7 @@ class KafkaApisTest {
 
     val expectedHeartbeatResponse = new HeartbeatResponseData()
     future.complete(expectedHeartbeatResponse)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[HeartbeatResponse]
+    val response = verifyNoThrottling[HeartbeatResponse](requestChannelRequest)
     assertEquals(expectedHeartbeatResponse, response.data)
   }
 
@@ -3122,8 +3108,7 @@ class KafkaApisTest {
     createKafkaApis().handleHeartbeatRequest(requestChannelRequest)
 
     future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[HeartbeatResponse]
+    val response = verifyNoThrottling[HeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
   }
 
@@ -3144,8 +3129,7 @@ class KafkaApisTest {
       requestChannelRequest
     )
 
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[HeartbeatResponse]
+    val response = verifyNoThrottling[HeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
@@ -3295,8 +3279,7 @@ class KafkaApisTest {
         ).asJava)
 
       future.complete(expectedLeaveResponse)
-      val capturedResponse = verifyNoThrottling(requestChannelRequest)
-      val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+      val response = verifyNoThrottling[LeaveGroupResponse](requestChannelRequest)
       assertEquals(expectedLeaveResponse, response.data)
     }
   }
@@ -3351,8 +3334,7 @@ class KafkaApisTest {
     }
 
     future.complete(leaveGroupResponse)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    val response = verifyNoThrottling[LeaveGroupResponse](requestChannelRequest)
     assertEquals(expectedLeaveResponse, response.data)
   }
 
@@ -3384,8 +3366,7 @@ class KafkaApisTest {
     createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
 
     future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    val response = verifyNoThrottling[LeaveGroupResponse](requestChannelRequest)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
   }
 
@@ -3420,8 +3401,7 @@ class KafkaApisTest {
 
     createKafkaApis(authorizer = Some(authorizer)).handleLeaveGroupRequest(requestChannelRequest)
 
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[LeaveGroupResponse]
+    val response = verifyNoThrottling[LeaveGroupResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
@@ -3730,17 +3710,16 @@ class KafkaApisTest {
       .setGroups(List(
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group1")
-          .setGroupState("Stable")
+          .setGroupState(if (version >= 4) "Stable" else "")
           .setProtocolType("protocol1"),
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group2")
-          .setGroupState("Empty")
+          .setGroupState(if (version >= 4) "Empty" else "")
           .setProtocolType("qwerty")
       ).asJava)
 
     future.complete(expectedListGroupsResponse)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[ListGroupsResponse]
+    val response = verifyNoThrottling[ListGroupsResponse](requestChannelRequest)
     assertEquals(expectedListGroupsResponse, response.data)
   }
 
@@ -3763,8 +3742,7 @@ class KafkaApisTest {
     createKafkaApis().handleListGroupsRequest(requestChannelRequest)
 
     future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[ListGroupsResponse]
+    val response = verifyNoThrottling[ListGroupsResponse](requestChannelRequest)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR.code, response.data.errorCode)
   }
 
@@ -3874,8 +3852,7 @@ class KafkaApisTest {
     }
 
     future.complete(listGroupsResponse)
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[ListGroupsResponse]
+    val response = verifyNoThrottling[ListGroupsResponse](requestChannelRequest)
     assertEquals(expectedListGroupsResponse, response.data)
   }
 
