@@ -336,6 +336,7 @@ public class QuorumControllerTest {
         }
     }
 
+    @Disabled
     @Test
     public void testBalancePartitionLeaders() throws Throwable {
         List<Integer> allBrokers = Arrays.asList(1, 2, 3);
