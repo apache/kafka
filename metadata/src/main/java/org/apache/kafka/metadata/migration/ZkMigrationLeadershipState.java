@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.raft.OffsetAndEpoch;
+
 import java.util.Objects;
 
 /**
@@ -71,6 +73,18 @@ public class ZkMigrationLeadershipState {
             this.kraftMetadataEpoch, this.lastUpdatedTimeMs, this.migrationZkVersion, this.controllerZkVersion);
     }
 
+    public ZkMigrationLeadershipState withKRaftMetadataOffsetAndEpoch(long metadataOffset,
+                                                                      int metadataEpoch) {
+        return new ZkMigrationLeadershipState(
+            this.kraftControllerId,
+            this.kraftControllerEpoch,
+            metadataOffset,
+            metadataEpoch,
+            this.lastUpdatedTimeMs,
+            this.migrationZkVersion,
+            this.controllerZkVersion);
+    }
+
     public int kraftControllerId() {
         return kraftControllerId;
     }
@@ -101,6 +115,10 @@ public class ZkMigrationLeadershipState {
 
     public boolean zkMigrationComplete() {
         return kraftMetadataOffset > 0;
+    }
+
+    public OffsetAndEpoch offsetAndEpoch() {
+        return new OffsetAndEpoch(kraftMetadataOffset, kraftMetadataEpoch);
     }
 
     @Override

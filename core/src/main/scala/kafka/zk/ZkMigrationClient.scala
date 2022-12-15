@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.{MigrationClient, ZkMigrationLeadershipState}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
@@ -40,7 +41,10 @@ import java.util.function.Consumer
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
-
+/**
+ * Migration client in KRaft controller responsible for handling communication to Zookeeper and
+ * the ZkBrokers present in the cluster.
+ */
 class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Logging {
 
   override def getOrCreateMigrationRecoveryState(initialState: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
@@ -54,7 +58,8 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
 
   override def claimControllerLeadership(state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     zkClient.tryRegisterKRaftControllerAsActiveController(state.kraftControllerId(), state.kraftControllerEpoch()) match {
-      case SuccessfulRegistrationResult(_, controllerEpochZkVersion) => state.withControllerZkVersion(controllerEpochZkVersion)
+      case SuccessfulRegistrationResult(_, controllerEpochZkVersion) =>
+        zkClient.getOrCreateMigrationState(state.withControllerZkVersion(controllerEpochZkVersion))
       case FailedRegistrationResult() => state.withControllerZkVersion(-1)
     }
   }
@@ -434,5 +439,12 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
       debug(s"Not updating ZK for $resource since it is not a Broker or Topic entity.")
       state
     }
+  }
+
+  override def writeMetadataDeltaToZookeeper(delta: MetadataDelta,
+                                             image: MetadataImage,
+                                             state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+    // TODO
+    state
   }
 }
