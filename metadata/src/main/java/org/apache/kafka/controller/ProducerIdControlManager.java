@@ -25,14 +25,10 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
 
 
 public class ProducerIdControlManager {
-
     private final ClusterControlManager clusterControlManager;
     private final TimelineObject<ProducerIdsBlock> nextProducerBlock;
     private final TimelineLong brokerEpoch;
@@ -62,6 +58,11 @@ public class ProducerIdControlManager {
         return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(record, (short) 0)), block);
     }
 
+    // VisibleForTesting
+    ProducerIdsBlock nextProducerBlock() {
+        return nextProducerBlock.get();
+    }
+
     void replay(ProducerIdsRecord record) {
         long currentNextProducerId = nextProducerBlock.get().firstProducerId();
         if (record.nextProducerId() <= currentNextProducerId) {
@@ -71,20 +72,5 @@ public class ProducerIdControlManager {
             nextProducerBlock.set(new ProducerIdsBlock(record.brokerId(), record.nextProducerId(), ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE));
             brokerEpoch.set(record.brokerEpoch());
         }
-    }
-
-    Iterator<List<ApiMessageAndVersion>> iterator(long epoch) {
-        List<ApiMessageAndVersion> records = new ArrayList<>(1);
-
-        ProducerIdsBlock producerIdBlock = nextProducerBlock.get(epoch);
-        if (producerIdBlock.firstProducerId() > 0) {
-            records.add(new ApiMessageAndVersion(
-                new ProducerIdsRecord()
-                    .setNextProducerId(producerIdBlock.firstProducerId())
-                    .setBrokerId(producerIdBlock.assignedBrokerId())
-                    .setBrokerEpoch(brokerEpoch.get(epoch)),
-                (short) 0));
-        }
-        return Collections.singleton(records).iterator();
     }
 }
