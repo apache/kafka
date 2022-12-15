@@ -17,7 +17,7 @@
 package kafka.zk
 
 import java.nio.charset.StandardCharsets.UTF_8
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
@@ -1197,6 +1197,72 @@ class KafkaZkClientTest extends QuorumTestHarness {
     assertEquals(SetDataResponse(Code.BADVERSION, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
       eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)),
       "Updating with wrong ZK version returns BADVERSION")
+  }
+
+  @Test
+  def testRegisterZkControllerAfterKRaft(): Unit = {
+    // Register KRaft
+    var controllerEpochZkVersion = -1
+    zkClient.tryRegisterKRaftControllerAsActiveController(3000, 42) match {
+      case SuccessfulRegistrationResult(kraftEpoch, zkVersion) =>
+        assertEquals(2, kraftEpoch)
+        controllerEpochZkVersion = zkVersion
+      case FailedRegistrationResult() => fail("Expected to register KRaft as controller in ZK")
+    }
+    assertEquals(1, controllerEpochZkVersion)
+
+    // Can't register ZK anymore
+    assertThrows(classOf[ControllerMovedException], () => zkClient.registerControllerAndIncrementControllerEpoch(1))
+
+    // Delete controller, and try again
+    zkClient.deleteController(controllerEpochZkVersion)
+    val (newEpoch, newZkVersion) = zkClient.registerControllerAndIncrementControllerEpoch(1)
+    assertEquals(3, newEpoch)
+    assertEquals(2, newZkVersion)
+
+    zkClient.tryRegisterKRaftControllerAsActiveController(3000, 42) match {
+      case SuccessfulRegistrationResult(zkEpoch, zkVersion) =>
+        assertEquals(4, zkEpoch)
+        assertEquals(3, zkVersion)
+      case FailedRegistrationResult() => fail("Expected to register KRaft as controller in ZK")
+    }
+  }
+
+  @Test
+  def testConcurrentKRaftControllerClaim(): Unit = {
+    // Setup three threads to race on registering a KRaft controller in ZK
+    val registeredEpochs = new java.util.concurrent.ConcurrentLinkedQueue[Integer]()
+    val registeringNodes = new java.util.concurrent.ConcurrentHashMap[Integer, Integer]()
+
+    def newThread(nodeId: Int): Runnable = {
+      () => {
+        0.to(999).foreach(epoch =>
+          zkClient.tryRegisterKRaftControllerAsActiveController(nodeId, epoch) match {
+            case SuccessfulRegistrationResult(writtenEpoch, _) =>
+              registeredEpochs.add(writtenEpoch)
+              registeringNodes.compute(nodeId, (_, count) => if (count == null) {
+                0
+              } else {
+                count + 1
+              })
+            case FailedRegistrationResult() =>
+          }
+        )
+      }
+    }
+    val thread1 = newThread(1)
+    val thread2 = newThread(2)
+    val thread3 = newThread(3)
+    val executor = Executors.newFixedThreadPool(3)
+    executor.submit(thread1)
+    executor.submit(thread2)
+    executor.submit(thread3)
+    executor.shutdown()
+    executor.awaitTermination(30, TimeUnit.SECONDS)
+
+    assertEquals(1000, registeredEpochs.size())
+    val uniqueEpochs = registeredEpochs.asScala.toSet
+    assertEquals(1000, uniqueEpochs.size)
   }
 
   @Test
