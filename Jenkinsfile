@@ -29,7 +29,7 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, target = "unitTest integrationTest") {
+def doTest(env, target = "unitTest integrationTest memoryIsolationTest") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""

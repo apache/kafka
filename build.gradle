@@ -421,6 +421,12 @@ subprojects {
     ])
   }
 
+  // Tests which need to execute in a throw-away JVM due to causing high memory pressure.
+  def memoryIsolated = [
+          "**/MemoryRecordsBuilderTest.*",
+          "**/GarbageCollectedMemoryPoolTest.*"
+  ]
+
   test {
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
@@ -436,7 +442,42 @@ subprojects {
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
-    exclude testsToExclude
+    exclude testsToExclude + memoryIsolated
+
+    if (shouldUseJUnit5)
+      useJUnitPlatform()
+
+    retry {
+      maxRetries = userMaxTestRetries
+      maxFailures = userMaxTestRetryFailures
+    }
+
+    // Allows devs to run tests in a loop to debug flaky tests. See README.
+    if (project.hasProperty("rerun-tests")) {
+      outputs.upToDateWhen { false }
+    }
+  }
+
+  task memoryIsolationTest(type: Test, dependsOn: compileJava) {
+    maxParallelForks = maxTestForks
+    ignoreFailures = userIgnoreFailures
+
+    maxHeapSize = defaultMaxHeapSize
+    // Discard the test JVM after each class to isolate them.
+    forkEvery 1
+    // Indicate to the memory-pressure utilities that they are safe to use.
+    // See clients/**/TestUtils.restrictMemory for details.
+    jvmArgs = defaultJvmArgs + ["-DmemoryIsolated=true"]
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+      displayGranularity = 0
+    }
+    logTestStdout.rehydrate(delegate, owner, this)()
+
+    include memoryIsolated
 
     if (shouldUseJUnit5)
       useJUnitPlatform()
@@ -469,7 +510,7 @@ subprojects {
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
-    exclude testsToExclude
+    exclude testsToExclude + memoryIsolated
 
     if (shouldUseJUnit5) {
       if (project.name == 'streams') {

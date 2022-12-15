@@ -637,6 +637,12 @@ public class TestUtils {
      * @throws IllegalStateException if the heap is too fragmented for contiguous data to be allocated
      */
     public static Utils.UncheckedCloseable restrictMemory(long allowedBytes, long toleranceBytes) {
+        if (System.getProperty("memoryIsolated") == null) {
+            throw new IllegalStateException(
+                    "This cannot be used in a shared JVM for risk of poisoning and lasting effects. " +
+                            "To to use this method, add the calling test class to the memoryIsolated list in build.gradle"
+            );
+        }
         // Reserve a single block for the caller before consuming the remaining memory in multiple allocations.
         // Discard the reservation before returning the memory handle to the caller.
         try (Utils.UncheckedCloseable ignored = reserve(allowedBytes)) {
