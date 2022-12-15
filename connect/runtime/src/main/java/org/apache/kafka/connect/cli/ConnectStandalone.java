@@ -78,7 +78,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
                 cb.get();
             }
         } catch (Throwable t) {
-            log.error("Stopping Connect due to an error while attempting to create a connector", t);
+            log.error("Stopping after connector error", t);
             connect.stop();
             Exit.exit(3);
         }
