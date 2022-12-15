@@ -50,8 +50,6 @@ import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
 
 import org.slf4j.Logger;
 
-import java.util.Set;
-import java.util.Optional;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -132,6 +130,7 @@ public class RecordCollectorImpl implements RecordCollector {
                             final String processorNodeId,
                             final InternalProcessorContext<Void, Void> context,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
+        final Integer partition;
 
         if (partitioner != null) {
             final List<PartitionInfo> partitions;
@@ -151,31 +150,16 @@ public class RecordCollectorImpl implements RecordCollector {
                 );
             }
             if (partitions.size() > 0) {
-                final Optional<Set<Integer>> maybeMulticastPartitions = partitioner.partitions(topic, key, value, partitions.size());
-                if (!maybeMulticastPartitions.isPresent()) {
-                    // A null//empty partition indicates we should use the default partitioner
-                    send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
-                } else {
-                    final Set<Integer> multicastPartitions = maybeMulticastPartitions.get();
-                    if (multicastPartitions.isEmpty()) {
-                        // If a record is not to be sent to any partition, mark it as a dropped record.
-                        log.warn("Skipping record as partitioner returned empty partitions. "
-                                + "topic=[{}]", topic);
-                        droppedRecordsSensor.record();
-                    } else {
-                        for (final int multicastPartition: multicastPartitions) {
-                            send(topic, key, value, headers, multicastPartition, timestamp, keySerializer, valueSerializer, processorNodeId, context);
-                        }
-                    }
-                }
+                partition = partitioner.partition(topic, key, value, partitions.size());
             } else {
                 throw new StreamsException("Could not get partition information for topic " + topic + " for task " + taskId +
                     ". This can happen if the topic does not exist.");
             }
         } else {
-            send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
+            partition = null;
         }
 
+        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer, processorNodeId, context);
     }
 
     @Override

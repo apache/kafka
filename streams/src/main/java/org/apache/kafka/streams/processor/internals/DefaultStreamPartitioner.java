@@ -29,7 +29,6 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
     }
 
     @Override
-    @Deprecated
     public Integer partition(final String topic, final K key, final V value, final int numPartitions) {
         final byte[] keyBytes = keySerializer.serialize(topic, key);
 

@@ -43,8 +43,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import static org.apache.kafka.clients.producer.RecordMetadata.UNKNOWN_PARTITION;
-
 /**
  * Provides access to the {@link StreamsMetadata} in a KafkaStreams application. This can be used
  * to discover the locations of {@link org.apache.kafka.streams.processor.StateStore}s
@@ -264,9 +262,9 @@ public class StreamsMetadataState {
             // global stores are on every node. if we don't have the host info
             // for this host then just pick the first metadata
             if (thisHost.equals(UNKNOWN_HOST)) {
-                return new KeyQueryMetadata(allMetadata.get(0).hostInfo(), Collections.emptySet(), UNKNOWN_PARTITION);
+                return new KeyQueryMetadata(allMetadata.get(0).hostInfo(), Collections.emptySet(), -1);
             }
-            return new KeyQueryMetadata(localMetadata.get().hostInfo(), Collections.emptySet(), UNKNOWN_PARTITION);
+            return new KeyQueryMetadata(localMetadata.get().hostInfo(), Collections.emptySet(), -1);
         }
 
         final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
@@ -466,20 +464,10 @@ public class StreamsMetadataState {
                                                            final StreamPartitioner<? super K, ?> partitioner,
                                                            final SourceTopicsInfo sourceTopicsInfo) {
 
-        // Making an assumption that the partitions method won't return an empty Optional set
-        // which means it is not intended to use the default partitioner. It is an optimistic
-        // assumption, but the older implementation with partition() also made the same assumption.
-        final Set<Integer> partitions = partitioner.partitions(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions).get();
-        // The record was dropped and hence won't be found anywhere
-        if (partitions.isEmpty()) {
-            return new KeyQueryMetadata(UNKNOWN_HOST, Collections.emptySet(), UNKNOWN_PARTITION);
-        }
-
+        final Integer partition = partitioner.partition(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions);
         final Set<TopicPartition> matchingPartitions = new HashSet<>();
         for (final String sourceTopic : sourceTopicsInfo.sourceTopics) {
-            for (final Integer partition : partitions) {
-                matchingPartitions.add(new TopicPartition(sourceTopic, partition));
-            }
+            matchingPartitions.add(new TopicPartition(sourceTopic, partition));
         }
 
         HostInfo activeHost = UNKNOWN_HOST;
@@ -501,7 +489,7 @@ public class StreamsMetadataState {
             }
         }
 
-        return new KeyQueryMetadata(activeHost, standbyHosts, partitions);
+        return new KeyQueryMetadata(activeHost, standbyHosts, partition);
     }
 
     private <K> KeyQueryMetadata getKeyQueryMetadataForKey(final String storeName,
@@ -510,21 +498,10 @@ public class StreamsMetadataState {
                                                            final SourceTopicsInfo sourceTopicsInfo,
                                                            final String topologyName) {
         Objects.requireNonNull(topologyName, "topology name must not be null");
-
-        // Making an assumption that the partitions method won't return an empty Optional set
-        // which means it is not intended to use the default partitioner. It is an optimistic
-        // assumption, but the older implementation with partition() also made the same assumption.
-        final Set<Integer> partitions = partitioner.partitions(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions).get();
-        // The record was dropped and hence won't be found anywhere
-        if (partitions.isEmpty()) {
-            return new KeyQueryMetadata(UNKNOWN_HOST, Collections.emptySet(), UNKNOWN_PARTITION);
-        }
-
+        final Integer partition = partitioner.partition(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions);
         final Set<TopicPartition> matchingPartitions = new HashSet<>();
         for (final String sourceTopic : sourceTopicsInfo.sourceTopics) {
-            for (final Integer partition : partitions) {
-                matchingPartitions.add(new TopicPartition(sourceTopic, partition));
-            }
+            matchingPartitions.add(new TopicPartition(sourceTopic, partition));
         }
 
         HostInfo activeHost = UNKNOWN_HOST;
@@ -550,7 +527,7 @@ public class StreamsMetadataState {
             }
         }
 
-        return new KeyQueryMetadata(activeHost, standbyHosts, partitions);
+        return new KeyQueryMetadata(activeHost, standbyHosts, partition);
     }
 
     private SourceTopicsInfo getSourceTopicsInfo(final String storeName) {
