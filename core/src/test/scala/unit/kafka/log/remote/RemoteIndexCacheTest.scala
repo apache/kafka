@@ -127,7 +127,7 @@ class RemoteIndexCacheTest {
     assertEquals(1, cache.entries.size())
     verifyFetchIndexInvocation(count = 1)
 
-    // Here a new key metadataList(1) sis invoked, that should call rsm#fetchIndex, making the cont to 2
+    // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList.head)
     cache.getIndexEntry(metadataList(1))
     assertEquals(2, cache.entries.size())
