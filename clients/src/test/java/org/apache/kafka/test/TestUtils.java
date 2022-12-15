@@ -58,6 +58,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -592,5 +593,84 @@ public class TestUtils {
         iterator2.forEachRemaining(expectedSegmentsSet::add);
 
         return allSegmentsSet.equals(expectedSegmentsSet);
+    }
+
+    private static Utils.UncheckedCloseable releaseOnClose(Object object) {
+        // Prolong the lifetime of this object until it is closed, then make it unreachable.
+        // After closing, only the closure and the reference should still be reachable.
+        AtomicReference<Object> ref = new AtomicReference<>(object);
+        return () -> ref.getAndSet(null);
+    }
+
+    private static Utils.UncheckedCloseable reserve(long reservationBytes) {
+        if (reservationBytes < Long.BYTES) {
+            throw new IllegalArgumentException("Reservation " + reservationBytes + " must be at least " + Long.BYTES);
+        }
+        long reservationLength = (reservationBytes / Long.BYTES) + (reservationBytes % Long.BYTES > 0 ? 1 : 0);
+        if (reservationLength > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Reservation " + reservationBytes + " is too large to able to be allocated in a contiguous block");
+        }
+        try {
+            return releaseOnClose(new long[(int) reservationLength]);
+        } catch (OutOfMemoryError e) {
+            throw new IllegalStateException("Heap is too fragmented to allocate a contiguous block of " + reservationBytes, e);
+        }
+    }
+
+    /**
+     * Create a memory-restricted test environment within a try-with-resources block.
+     * Sets up a single free block of at least allowedBytes, and all other free blocks are smaller than toleranceBytes.
+     * Any allocation requests larger than the toleranceBytes that in total concurrently exceed the allowedBytes
+     * will necessarily fail to allocate memory with an {@link OutOfMemoryError}.
+     * <p>Note: It is still possible that the single free block may become fragmented, and thus otherwise reasonable
+     * allocations may fail if prior allocations fragmented the block. Thus, having all allocations
+     * concurrently less than allowedBytes is not sufficient to avoid an {@link OutOfMemoryError}.
+     * <p>Caution: Setting a toleranceBytes extremely low can make the "GC overhead limit exceeded" error
+     * much more likely, as more and smaller allocations will be used to consume more of the JVM memory.
+     * The value of toleranceBytes should be set as high as possible, while preserving correctness of the test.
+     *
+     * @param allowedBytes Minimum number of bytes to allow to be allocated at once
+     * @param toleranceBytes Smallest memory allocation to guard against
+     * @return An AutoCloseable that un-restricts the heap by releasing captive memory when closed
+     * @throws IllegalArgumentException if the allowedBytes is too small or too large to be allocated,
+     * or if the toleranceBytes is too small for the memory conditions.
+     * @throws IllegalStateException if the heap is too fragmented for contiguous data to be allocated
+     */
+    public static Utils.UncheckedCloseable restrictMemory(long allowedBytes, long toleranceBytes) {
+        // Reserve a single block for the caller before consuming the remaining memory in multiple allocations.
+        // Discard the reservation before returning the memory handle to the caller.
+        try (Utils.UncheckedCloseable ignored = reserve(allowedBytes)) {
+            long memory = Runtime.getRuntime().maxMemory();
+            if (toleranceBytes < memory / Integer.MAX_VALUE) {
+                throw new IllegalStateException(
+                        "Tolerance too small for memory conditions, must be at least " +
+                                (memory / Integer.MAX_VALUE) +
+                                " or max memory must be at most " +
+                                (toleranceBytes * Integer.MAX_VALUE)
+                );
+            }
+            long maxTotalLength = memory / Long.BYTES;
+            long minBlockLength = toleranceBytes / Long.BYTES;
+            // If the total length is very large, fall back to allocating MAX_VALUE longs in each block
+            int blockLength = (int) Math.min(maxTotalLength, Integer.MAX_VALUE);
+            // If the requested number of blocks is very large, fall back to allocating at most MAX_VALUE blocks.
+            // This should be prevented by the tolerance/memory comparison above.
+            int numBlocks = (int) Math.min(maxTotalLength / minBlockLength, Integer.MAX_VALUE);
+            // Allocate the non-block memory up front to avoid running out of memory for our bookkeeping
+            ArrayList<long[]> blocks = new ArrayList<>(numBlocks);
+            Utils.UncheckedCloseable ret = releaseOnClose(blocks);
+            // Finish when enough allocations succeed to consume the whole memory space
+            // Or enough allocations fail that we reach the tolerance limit
+            while (blockLength > minBlockLength && blocks.size() < numBlocks) {
+                try {
+                    blocks.add(new long[blockLength]);
+                } catch (OutOfMemoryError e) {
+                    blockLength >>= 1;
+                }
+            }
+            return ret;
+        } catch (OutOfMemoryError e) {
+            throw new IllegalStateException("Heap is too fragmented, unable to track heap memory", e);
+        }
     }
 }

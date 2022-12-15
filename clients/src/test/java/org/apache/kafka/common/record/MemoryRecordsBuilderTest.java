@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
@@ -55,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class MemoryRecordsBuilderTest {
 
@@ -728,35 +730,36 @@ public class MemoryRecordsBuilderTest {
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsBuilderArgumentsProvider.class)
     public void testBuffersDereferencedOnClose(Args args) {
-        Runtime runtime = Runtime.getRuntime();
         int payloadLen = 1024 * 1024;
+        // Run enough iterations that the total expected builder overhead is more than a single payload buffer.
+        int iterations = 100;
+
         ByteBuffer buffer = ByteBuffer.allocate(payloadLen * 2);
         byte[] key = new byte[0];
         byte[] value = new byte[payloadLen];
         new Random().nextBytes(value); // Use random payload so that compressed buffer is large
-        List<MemoryRecordsBuilder> builders = new ArrayList<>(100);
-        long startMem = 0;
-        long memUsed = 0;
-        int iterations =  0;
-        while (iterations++ < 100) {
-            buffer.rewind();
-            MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, args.magic, args.compressionType,
-                    TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID,
-                    RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH, 0);
-            builder.append(1L, key, value);
-            builder.build();
-            builders.add(builder);
+        List<MemoryRecordsBuilder> builders = new ArrayList<>(iterations);
 
-            System.gc();
-            memUsed = runtime.totalMemory() - runtime.freeMemory() - startMem;
-            // Ignore memory usage during initialization
-            if (iterations == 2)
-                startMem = memUsed;
-            else if (iterations > 2 && memUsed < (iterations - 2) * 1024)
-                break;
+        // Only one payload should be allocated concurrently, include additional budget for builder overhead
+        long expectedBytes = 2 * payloadLen;
+        // Require contiguous payload allocations to count against the budget
+        long minAllocationBytes = payloadLen / 2;
+        try (Utils.UncheckedCloseable ignored = TestUtils.restrictMemory(expectedBytes, minAllocationBytes)) {
+            for (int i = 0; i < iterations; i++) {
+                buffer.rewind();
+                MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, args.magic, args.compressionType,
+                        TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID,
+                        RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
+                        RecordBatch.NO_PARTITION_LEADER_EPOCH, 0);
+                builder.append(1L, key, value);
+                builder.build();
+                builders.add(builder);
+            }
+        } catch (KafkaException | OutOfMemoryError e) {
+            fail("Memory usage too high, unable to allocate " + iterations + " builders with " + expectedBytes + " bytes free", e);
         }
-        assertTrue(iterations < 100, "Memory usage too high: " + memUsed);
+        // Ensure that all builders were allocated and referenced throughout the test.
+        assertEquals(iterations, builders.size());
     }
 
     @ParameterizedTest
