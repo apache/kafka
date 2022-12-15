@@ -151,6 +151,13 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server (e.g. because that data has been deleted): <ul><li>earliest: automatically reset the offset to the earliest offset<li>latest: automatically reset the offset to the latest offset</li><li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li><li>anything else: throw exception to the consumer.</li></ul>";
 
     /**
+     * <code>nearest.offset.reset</code>
+     */
+    public static final String NEAREST_OFFSET_RESET_CONFIG = "nearest.offset.reset";
+    private static final String NEAREST_OFFSET_RESET_DOC = "If true, then out of range errors will reset the consumer's offset to the nearest offset. to the earliest end of the broker range if it was under the range, or to the latest end of the broker range if it was over the range";
+    public static final boolean DEFAULT_NEAREST_OFFSET_RESET = false;
+
+    /**
      * <code>fetch.min.bytes</code>
      */
     public static final String FETCH_MIN_BYTES_CONFIG = "fetch.min.bytes";
@@ -465,6 +472,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         in(Utils.enumOptions(OffsetResetStrategy.class)),
                                         Importance.MEDIUM,
                                         AUTO_OFFSET_RESET_DOC)
+                                .define(NEAREST_OFFSET_RESET_CONFIG,
+                                        Type.BOOLEAN,
+                                        DEFAULT_NEAREST_OFFSET_RESET,
+                                        Importance.MEDIUM,
+                                        NEAREST_OFFSET_RESET_DOC)
                                 .define(CHECK_CRCS_CONFIG,
                                         Type.BOOLEAN,
                                         true,

@@ -14,15 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
+package org.apache.kafka.common.errors;
 
-import java.util.Locale;
+public class InvalidOffsetResetStrategyException extends ApiException {
+    private static final long serialVersionUID = 1L;
 
-public enum OffsetResetStrategy {
-    LATEST, EARLIEST, NONE, NEAREST, LATEST_ON_START, EARLIEST_ON_START, SAFE_LATEST;
+    public InvalidOffsetResetStrategyException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
-    @Override
-    public String toString() {
-        return super.toString().toLowerCase(Locale.ROOT);
+    public InvalidOffsetResetStrategyException(String message) {
+        super(message);
     }
 }

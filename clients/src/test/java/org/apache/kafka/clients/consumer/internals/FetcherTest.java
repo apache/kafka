@@ -193,6 +193,8 @@ public class FetcherTest {
     private FetcherMetricsRegistry metricsRegistry;
     private MockClient client;
     private Metrics metrics;
+    private boolean nearestOffsetReset = false;
+    private long createTimeStamp = System.currentTimeMillis();
     private ApiVersions apiVersions = new ApiVersions();
     private ConsumerNetworkClient consumerClient;
     private Fetcher<?, ?> fetcher;
@@ -3815,6 +3817,8 @@ public class FetcherTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED,
+                nearestOffsetReset,
+                createTimeStamp,
                 apiVersions) {
             @Override
             protected FetchSessionHandler sessionHandler(int id) {
@@ -4613,7 +4617,11 @@ public class FetcherTest {
         assertEquals(0, fetcher.sendFetches());
 
         // Complete reset and now we can fetch
-        fetcher.resetOffsetIfNeeded(tp0, OffsetResetStrategy.LATEST,
+        List<OffsetResetStrategy> relatedOffsetStrategys = new ArrayList<>();
+        relatedOffsetStrategys.add(OffsetResetStrategy.LATEST);
+        relatedOffsetStrategys.add(OffsetResetStrategy.LATEST_ON_START);
+        relatedOffsetStrategys.add(OffsetResetStrategy.SAFE_LATEST);
+        fetcher.resetOffsetIfNeeded(tp0, relatedOffsetStrategys,
                 new Fetcher.ListOffsetData(100, 1L, Optional.empty()));
         assertEquals(1, fetcher.sendFetches());
     }
@@ -5254,6 +5262,8 @@ public class FetcherTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 isolationLevel,
+                nearestOffsetReset,
+                createTimeStamp,
                 apiVersions);
     }
 

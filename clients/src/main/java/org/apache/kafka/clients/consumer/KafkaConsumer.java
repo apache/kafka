@@ -41,6 +41,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidOffsetResetStrategyException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -793,6 +794,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         config.getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
                         config.getString(ConsumerConfig.CLIENT_RACK_CONFIG));
             }
+            long createTimeStamp = System.currentTimeMillis();
+            validateOffsetResetStrategy(offsetResetStrategy, config.getBoolean(ConsumerConfig.NEAREST_OFFSET_RESET_CONFIG));
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,
@@ -813,6 +816,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.retryBackoffMs,
                     this.requestTimeoutMs,
                     isolationLevel,
+                    config.getBoolean(ConsumerConfig.NEAREST_OFFSET_RESET_CONFIG),
+                    createTimeStamp,
                     apiVersions);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, metricGrpPrefix);
@@ -2515,6 +2520,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
         if (offsetAndMetadata != null)
             offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
+    }
+
+    private void validateOffsetResetStrategy(OffsetResetStrategy offsetResetStrategy, boolean useNearestOffsetReset) {
+        if (offsetResetStrategy == OffsetResetStrategy.EARLIEST_ON_START || offsetResetStrategy == OffsetResetStrategy.LATEST_ON_START) {
+            if (useNearestOffsetReset) {
+                throw new InvalidOffsetResetStrategyException("Can not use nearest when out-of-range, if offset " +
+                        "reset strategy is EARLIEST_ON_START or LATEST_ON_START.");
+            }
+        }
     }
 
     // Functions below are for testing only

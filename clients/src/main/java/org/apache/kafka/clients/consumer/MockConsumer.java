@@ -503,11 +503,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private void resetOffsetPosition(TopicPartition tp) {
         OffsetResetStrategy strategy = subscriptions.resetStrategy(tp);
         Long offset;
-        if (strategy == OffsetResetStrategy.EARLIEST) {
+        if (strategy == OffsetResetStrategy.EARLIEST || strategy == OffsetResetStrategy.EARLIEST_ON_START) {
             offset = beginningOffsets.get(tp);
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have beginning offset specified, but tried to seek to beginning");
-        } else if (strategy == OffsetResetStrategy.LATEST) {
+        } else if (strategy == OffsetResetStrategy.LATEST || strategy == OffsetResetStrategy.LATEST_ON_START || strategy == OffsetResetStrategy.SAFE_LATEST) {
             offset = endOffsets.get(tp);
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have end offset specified, but tried to seek to end");

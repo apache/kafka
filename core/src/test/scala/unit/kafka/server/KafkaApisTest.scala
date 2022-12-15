@@ -2420,6 +2420,7 @@ class KafkaApisTest {
       ArgumentMatchers.eq(ListOffsetsRequest.EARLIEST_TIMESTAMP),
       ArgumentMatchers.eq(Some(isolationLevel)),
       ArgumentMatchers.eq(currentLeaderEpoch),
+      ArgumentMatchers.eq(ListOffsetsRequest.UNLIMITED_TIMESTAMP),
       fetchOnlyFromLeader = ArgumentMatchers.eq(true))
     ).thenThrow(error.exception)
 
@@ -4011,6 +4012,7 @@ class KafkaApisTest {
       ArgumentMatchers.eq(ListOffsetsRequest.LATEST_TIMESTAMP),
       ArgumentMatchers.eq(Some(isolationLevel)),
       ArgumentMatchers.eq(currentLeaderEpoch),
+      ArgumentMatchers.eq(ListOffsetsRequest.UNLIMITED_TIMESTAMP),
       fetchOnlyFromLeader = ArgumentMatchers.eq(true))
     ).thenReturn(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, latestOffset, currentLeaderEpoch)))
 

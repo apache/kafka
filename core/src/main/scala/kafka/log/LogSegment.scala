@@ -94,6 +94,8 @@ class LogSegment private[log] (val log: FileRecords,
 
   private var created = time.milliseconds
 
+  def getCreateTime = created
+
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
 
