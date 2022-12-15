@@ -424,7 +424,8 @@ subprojects {
   // Tests which need to execute in a throw-away JVM due to causing high memory pressure.
   def memoryIsolated = [
           "**/MemoryRecordsBuilderTest.*",
-          "**/GarbageCollectedMemoryPoolTest.*"
+          "**/GarbageCollectedMemoryPoolTest.*",
+          "**/ThreadCacheTest.*"
   ]
 
   test {
@@ -479,8 +480,25 @@ subprojects {
 
     include memoryIsolated
 
-    if (shouldUseJUnit5)
-      useJUnitPlatform()
+    if (shouldUseJUnit5) {
+      if (project.name == 'streams') {
+        useJUnitPlatform {
+          excludeTags "integration"
+          excludeTags "org.apache.kafka.test.IntegrationTest"
+          // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+          // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
+          includeEngines "junit-vintage", "junit-jupiter"
+        }
+      } else {
+        useJUnitPlatform {
+          excludeTags "integration"
+        }
+      }
+    } else {
+      useJUnit {
+        excludeCategories 'org.apache.kafka.test.IntegrationTest'
+      }
+    }
 
     retry {
       maxRetries = userMaxTestRetries

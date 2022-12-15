@@ -21,9 +21,12 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import static org.hamcrest.MatcherAssert.assertThat;
+
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -40,6 +43,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class ThreadCacheTest {
     final String namespace = "0.0-namespace";
@@ -84,38 +88,34 @@ public class ThreadCacheTest {
                                 final long desiredCacheSize,
                                 final int keySizeBytes,
                                 final int valueSizeBytes) {
-        final Runtime runtime = Runtime.getRuntime();
-        final long numElements = desiredCacheSize / memoryCacheEntrySize(new byte[keySizeBytes], new byte[valueSizeBytes], "");
+        final long cacheEntrySize = memoryCacheEntrySize(new byte[keySizeBytes], new byte[valueSizeBytes], "");
+        final long numElements = desiredCacheSize / cacheEntrySize;
 
-        System.gc();
-        final long prevRuntimeMemory = runtime.totalMemory() - runtime.freeMemory();
-
-        final ThreadCache cache = new ThreadCache(logContext, desiredCacheSize, new MockStreamsMetrics(new Metrics()));
-        final long size = cache.sizeBytes();
-        assertEquals(size, 0);
-        for (int i = 0; i < numElements; i++) {
-            final String keyStr = "K" + i;
-            final Bytes key = Bytes.wrap(keyStr.getBytes());
-            final byte[] value = new byte[valueSizeBytes];
-            cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, ""));
-        }
-
-
-        System.gc();
         final double ceiling = desiredCacheSize + desiredCacheSize * entryFactor;
-        final long usedRuntimeMemory = runtime.totalMemory() - runtime.freeMemory() - prevRuntimeMemory;
+        final long allowed = (long) (ceiling * systemFactor);
+        ThreadCache cache = null;
+        try (Utils.UncheckedCloseable ignored = TestUtils.restrictMemory(allowed, cacheEntrySize)) {
+            cache = new ThreadCache(logContext, desiredCacheSize, new MockStreamsMetrics(new Metrics()));
+            final long size = cache.sizeBytes();
+            assertEquals(size, 0);
+            for (int i = 0; i < numElements; i++) {
+                final String keyStr = "K" + i;
+                final Bytes key = Bytes.wrap(keyStr.getBytes());
+                final byte[] value = new byte[valueSizeBytes];
+                cache.put(namespace, key, new LRUCacheEntry(value, new RecordHeaders(), true, 1L, 1L, 1, ""));
+            }
+        } catch (final OutOfMemoryError e) {
+            fail("Used memory size greater than expected " + allowed);
+        }
         assertTrue((double) cache.sizeBytes() <= ceiling);
 
-        assertTrue("Used memory size " + usedRuntimeMemory + " greater than expected " + cache.sizeBytes() * systemFactor,
-            cache.sizeBytes() * systemFactor >= usedRuntimeMemory);
     }
 
     @Test
     public void cacheOverheadsSmallValues() {
-        final Runtime runtime = Runtime.getRuntime();
         final double factor = 0.05;
         final double systemFactor = 3; // if I ask for a cache size of 10 MB, accept an overhead of 3x, i.e., 30 MBs might be allocated
-        final long desiredCacheSize = Math.min(100 * 1024 * 1024L, runtime.maxMemory());
+        final long desiredCacheSize = 100 * 1024 * 1024L;
         final int keySizeBytes = 8;
         final int valueSizeBytes = 100;
 
@@ -124,10 +124,9 @@ public class ThreadCacheTest {
 
     @Test
     public void cacheOverheadsLargeValues() {
-        final Runtime runtime = Runtime.getRuntime();
         final double factor = 0.05;
         final double systemFactor = 2; // if I ask for a cache size of 10 MB, accept an overhead of 2x, i.e., 20 MBs might be allocated
-        final long desiredCacheSize = Math.min(100 * 1024 * 1024L, runtime.maxMemory());
+        final long desiredCacheSize = 100 * 1024 * 1024L;
         final int keySizeBytes = 8;
         final int valueSizeBytes = 1000;
 
