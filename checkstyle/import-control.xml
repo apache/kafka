@@ -227,6 +227,7 @@
     <allow pkg="org.apache.kafka.controller" />
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metadata.authorizer" />
+    <allow pkg="org.apache.kafka.metadata.migration" />
     <allow pkg="org.apache.kafka.metalog" />
     <allow pkg="org.apache.kafka.queue" />
     <allow pkg="org.apache.kafka.raft" />
@@ -305,6 +306,10 @@
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
+  <subpackage name="queue">
+    <allow pkg="org.apache.kafka.test" />
+  </subpackage>
+
   <subpackage name="clients">
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
@@ -323,6 +328,13 @@
       <allow pkg="org.apache.kafka.clients.admin" />
       <allow pkg="org.apache.kafka.clients.consumer.internals" />
       <allow pkg="org.apache.kafka.clients.consumer" />
+    </subpackage>
+  </subpackage>
+
+  <subpackage name="coordinator">
+    <subpackage name="group">
+      <allow pkg="org.apache.kafka.common.message" />
+      <allow pkg="org.apache.kafka.common.requests" />
     </subpackage>
   </subpackage>
 
@@ -384,6 +396,7 @@
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
+    <allow pkg="kafka.test" />
   </subpackage>
 
   <subpackage name="trogdor">
@@ -542,6 +555,7 @@
       <allow pkg= "javax.security.auth"/>
       <subpackage name="basic">
         <allow pkg="org.apache.kafka.connect.rest"/>
+        <allow pkg="javax.annotation"/>
       </subpackage>
     </subpackage>
 
@@ -630,6 +644,8 @@
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.tools" />
       <allow pkg="javax.ws.rs" />
+      <allow pkg="org.apache.http"/>
+      <allow pkg="org.eclipse.jetty.util"/>
     </subpackage>
 
     <subpackage name="json">

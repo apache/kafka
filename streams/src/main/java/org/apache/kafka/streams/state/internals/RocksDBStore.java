@@ -108,6 +108,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     FlushOptions fOptions;
     private Cache cache;
     private BloomFilter filter;
+    private Statistics statistics;
 
     private RocksDBConfigSetter configSetter;
     private boolean userSpecifiedStatistics = false;
@@ -229,40 +230,38 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         // Setup statistics before the database is opened, otherwise the statistics are not updated
         // with the measurements from Rocks DB
-        maybeSetUpStatistics(configs);
-
+        setupStatistics(configs, dbOptions);
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
 
         addValueProvidersToMetricsRecorder();
     }
 
-    private void maybeSetUpStatistics(final Map<String, Object> configs) {
-        if (userSpecifiedOptions.statistics() != null) {
+    private void setupStatistics(final Map<String, Object> configs, final DBOptions dbOptions) {
+        statistics = userSpecifiedOptions.statistics();
+        if (statistics == null) {
+            if (RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
+                statistics = new Statistics();
+                dbOptions.setStatistics(statistics);
+            }
+            userSpecifiedStatistics = false;
+        } else {
             userSpecifiedStatistics = true;
-        }
-        if (!userSpecifiedStatistics &&
-                RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
-
-            // metrics recorder will clean up statistics object
-            final Statistics statistics = new Statistics();
-            userSpecifiedOptions.setStatistics(statistics);
         }
     }
 
     private void addValueProvidersToMetricsRecorder() {
         final TableFormatConfig tableFormatConfig = userSpecifiedOptions.tableFormatConfig();
-        final Statistics statistics = userSpecifiedStatistics ? null : userSpecifiedOptions.statistics();
         if (tableFormatConfig instanceof BlockBasedTableConfigWithAccessibleCache) {
             final Cache cache = ((BlockBasedTableConfigWithAccessibleCache) tableFormatConfig).blockCache();
-            metricsRecorder.addValueProviders(name, db, cache, statistics);
+            metricsRecorder.addValueProviders(name, db, cache, userSpecifiedStatistics ? null : statistics);
         } else if (tableFormatConfig instanceof BlockBasedTableConfig) {
             throw new ProcessorStateException("The used block-based table format configuration does not expose the " +
                     "block cache. Use the BlockBasedTableConfig instance provided by Options#tableFormatConfig() to configure " +
                     "the block-based table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
                     "the RocksDB options.");
         } else {
-            metricsRecorder.addValueProviders(name, db, null, statistics);
+            metricsRecorder.addValueProviders(name, db, null, userSpecifiedStatistics ? null : statistics);
         }
     }
 
@@ -526,6 +525,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         fOptions.close();
         filter.close();
         cache.close();
+        if (statistics != null) {
+            statistics.close();
+        }
 
         dbAccessor = null;
         userSpecifiedOptions = null;
@@ -534,6 +536,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         db = null;
         filter = null;
         cache = null;
+        statistics = null;
     }
 
     private void closeOpenIterators() {
@@ -583,9 +586,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         long approximateNumEntries() throws RocksDBException;
 
         void flush() throws RocksDBException;
-
-        void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
-                                    final WriteBatch batch) throws RocksDBException;
 
         void addToBatch(final byte[] key,
                         final byte[] value,
@@ -701,14 +701,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
-        public void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
-                                           final WriteBatch batch) throws RocksDBException {
-            for (final KeyValue<byte[], byte[]> record : records) {
-                addToBatch(record.key, record.value, batch);
-            }
-        }
-
-        @Override
         public void addToBatch(final byte[] key,
                                final byte[] value,
                                final WriteBatch batch) throws RocksDBException {
@@ -727,7 +719,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
         try (final WriteBatch batch = new WriteBatch()) {
-            final List<KeyValue<byte[], byte[]>> keyValues = new ArrayList<>();
             for (final ConsumerRecord<byte[], byte[]> record : records) {
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                     record,
@@ -735,9 +726,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                     position
                 );
                 // If version headers are not present or version is V0
-                keyValues.add(new KeyValue<>(record.key(), record.value()));
+                dbAccessor.addToBatch(record.key(), record.value(), batch);
             }
-            dbAccessor.prepareBatchForRestore(keyValues, batch);
             write(batch);
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error restoring batch to store " + name, e);

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.Arrays;
 import java.util.Map.Entry;
 
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -95,9 +96,9 @@ public class MirrorMakerConfig extends AbstractConfig {
         List<SourceAndTarget> pairs = new ArrayList<>();
         Set<String> clusters = clusters();
         Map<String, String> originalStrings = originalsStrings();
-        boolean globalHeartbeatsEnabled = MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED_DEFAULT;
-        if (originalStrings.containsKey(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
-            globalHeartbeatsEnabled = Boolean.parseBoolean(originalStrings.get(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+        boolean globalHeartbeatsEnabled = MirrorHeartbeatConfig.EMIT_HEARTBEATS_ENABLED_DEFAULT;
+        if (originalStrings.containsKey(MirrorHeartbeatConfig.EMIT_HEARTBEATS_ENABLED)) {
+            globalHeartbeatsEnabled = Boolean.parseBoolean(originalStrings.get(MirrorHeartbeatConfig.EMIT_HEARTBEATS_ENABLED));
         }
 
         for (String source : clusters) {
@@ -106,8 +107,8 @@ public class MirrorMakerConfig extends AbstractConfig {
                     String clusterPairConfigPrefix = source + "->" + target + ".";
                     boolean clusterPairEnabled = Boolean.parseBoolean(originalStrings.get(clusterPairConfigPrefix + "enabled"));
                     boolean clusterPairHeartbeatsEnabled = globalHeartbeatsEnabled;
-                    if (originalStrings.containsKey(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
-                        clusterPairHeartbeatsEnabled = Boolean.parseBoolean(originalStrings.get(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+                    if (originalStrings.containsKey(clusterPairConfigPrefix + MirrorHeartbeatConfig.EMIT_HEARTBEATS_ENABLED)) {
+                        clusterPairHeartbeatsEnabled = Boolean.parseBoolean(originalStrings.get(clusterPairConfigPrefix + MirrorHeartbeatConfig.EMIT_HEARTBEATS_ENABLED));
                     }
 
                     // By default, all source->target Herder combinations are created even if `x->y.enabled=false`
@@ -200,12 +201,25 @@ public class MirrorMakerConfig extends AbstractConfig {
         return props;
     }
 
+    Set<String> allConfigNames() {
+        Set<String> allNames = new HashSet<>();
+        List<ConfigDef> connectorConfigDefs = Arrays.asList(
+                MirrorCheckpointConfig.CONNECTOR_CONFIG_DEF,
+                MirrorSourceConfig.CONNECTOR_CONFIG_DEF,
+                MirrorHeartbeatConfig.CONNECTOR_CONFIG_DEF
+        );
+        for (ConfigDef cd : connectorConfigDefs) {
+            allNames.addAll(cd.names());
+        }
+        return allNames;
+    }
+
     // loads properties of the form cluster.x.y.z and source->target.x.y.z
     public Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
         Map<String, String> props = new HashMap<>();
 
         props.putAll(originalsStrings());
-        props.keySet().retainAll(MirrorConnectorConfig.CONNECTOR_CONFIG_DEF.names());
+        props.keySet().retainAll(allConfigNames());
         
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
         props.putAll(stringsWithPrefix("replication.policy"));

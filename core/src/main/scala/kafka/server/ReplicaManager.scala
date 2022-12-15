@@ -63,6 +63,7 @@ import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
 
 import java.nio.file.{Files, Paths}
+import java.util
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.compat.java8.OptionConverters._
@@ -329,6 +330,15 @@ class ReplicaManager(val config: KafkaConfig,
     val topicPartitionOperationKey = TopicPartitionOperationKey(topicPartition)
     delayedProducePurgatory.checkAndComplete(topicPartitionOperationKey)
     delayedFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
+  }
+
+  /**
+   * Complete any local follower fetches that have been unblocked since new data is available
+   * from the leader for one or more partitions. Should only be called by ReplicaFetcherThread
+   * after successfully replicating from the leader.
+   */
+  private[server] def completeDelayedFetchRequests(topicPartitions: Seq[TopicPartition]): Unit = {
+    topicPartitions.foreach(tp => delayedFetchPurgatory.checkAndComplete(TopicPartitionOperationKey(tp)))
   }
 
   def stopReplicas(correlationId: Int,
@@ -1235,8 +1245,14 @@ class ReplicaManager(val config: KafkaConfig,
 
           partition.remoteReplicas.foreach { replica =>
             val replicaState = replica.stateSnapshot
-            // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
-            if (replicaState.logEndOffset >= fetchOffset && replicaState.logStartOffset <= fetchOffset) {
+            // Exclude replicas that are not in the ISR as the follower may lag behind. Worst case, the follower
+            // will continue to lag and the consumer will fall behind the produce. The leader will
+            // continuously pick the lagging follower when the consumer refreshes its preferred read replica.
+            // This can go on indefinitely.
+            if (partition.inSyncReplicaIds.contains(replica.brokerId) &&
+                replicaState.logEndOffset >= fetchOffset &&
+                replicaState.logStartOffset <= fetchOffset) {
+
               replicaInfoSet.add(new DefaultReplicaView(
                 replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
                 replicaState.logEndOffset,
@@ -1913,7 +1929,16 @@ class ReplicaManager(val config: KafkaConfig,
     if (checkpointHW)
       checkpointHighWatermarks()
     replicaSelectorOpt.foreach(_.close)
+    removeAllTopicMetrics()
     info("Shut down completely")
+  }
+
+  private def removeAllTopicMetrics(): Unit = {
+    val allTopics = new util.HashSet[String]
+    allPartitions.keys.foreach(partition =>
+      if (allTopics.add(partition.topic())) {
+        brokerTopicStats.removeMetrics(partition.topic())
+      })
   }
 
   protected def createReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String], quotaManager: ReplicationQuotaManager) = {

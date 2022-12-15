@@ -86,7 +86,7 @@ class LogCleanerTest {
     val segments = log.logSegments.take(3).toSeq
     val stats = new CleanerStats()
     val expectedBytesRead = segments.map(_.size).sum
-    val shouldRemain = LogTestUtils.keysInLog(log).filter(!keys.contains(_))
+    val shouldRemain = LogTestUtils.keysInLog(log).filterNot(keys.contains)
     cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata, -1)
     assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
     assertEquals(expectedBytesRead, stats.bytesRead)
@@ -844,7 +844,7 @@ class LogCleanerTest {
     // clean the log
     val stats = new CleanerStats()
     cleaner.cleanSegments(log, Seq(log.logSegments.head), map, 0L, stats, new CleanedTransactionMetadata, -1)
-    val shouldRemain = LogTestUtils.keysInLog(log).filter(!keys.contains(_))
+    val shouldRemain = LogTestUtils.keysInLog(log).filterNot(keys.contains)
     assertEquals(shouldRemain, LogTestUtils.keysInLog(log))
   }
 

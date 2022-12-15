@@ -56,6 +56,9 @@ public class BuiltInPartitioner {
     public BuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
         this.log = logContext.logger(BuiltInPartitioner.class);
         this.topic = topic;
+        if (stickyBatchSize < 1) {
+            throw new IllegalArgumentException("stickyBatchSize must be >= 1 but got " + stickyBatchSize);
+        }
         this.stickyBatchSize = stickyBatchSize;
     }
 

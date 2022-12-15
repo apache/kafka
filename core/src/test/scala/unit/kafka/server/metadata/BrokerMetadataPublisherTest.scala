@@ -33,9 +33,9 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
-import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.apache.kafka.server.fault.FaultHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
 import org.mockito.Mockito.doThrow
@@ -176,26 +176,17 @@ class BrokerMetadataPublisherTest {
     new TopicsImage(idsMap.asJava, namesMap.asJava)
   }
 
-  private def newMockPublisher(
+  private def newMockDynamicConfigPublisher(
     broker: BrokerServer,
-    errorHandler: FaultHandler = new MockFaultHandler("publisher")
-  ): BrokerMetadataPublisher = {
-    Mockito.spy(new BrokerMetadataPublisher(
+    errorHandler: FaultHandler
+  ): DynamicConfigPublisher = {
+    Mockito.spy(new DynamicConfigPublisher(
       conf = broker.config,
-      metadataCache = broker.metadataCache,
-      logManager = broker.logManager,
-      replicaManager = broker.replicaManager,
-      groupCoordinator = broker.groupCoordinator,
-      txnCoordinator = broker.transactionCoordinator,
-      clientQuotaMetadataManager = broker.clientQuotaMetadataManager,
+      faultHandler = errorHandler,
       dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap,
-      _authorizer = Option.empty,
-      errorHandler,
-      errorHandler
-    ))
+      nodeType = "broker"))
   }
 
-  @Disabled
   @Test
   def testReloadUpdatedFilesWithoutConfigChange(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
@@ -207,13 +198,14 @@ class BrokerMetadataPublisherTest {
       cluster.startup()
       cluster.waitForReadyBrokers()
       val broker = cluster.brokers().values().iterator().next()
-      val publisher = newMockPublisher(broker)
+      val publisher = newMockDynamicConfigPublisher(broker, cluster.nonFatalFaultHandler())
+
       val numTimesReloadCalled = new AtomicInteger(0)
       Mockito.when(publisher.reloadUpdatedFilesWithoutConfigChange(any[Properties]())).
         thenAnswer(new Answer[Unit]() {
           override def answer(invocation: InvocationOnMock): Unit = numTimesReloadCalled.addAndGet(1)
         })
-      broker.metadataListener.alterPublisher(publisher).get()
+      broker.metadataPublisher.dynamicConfigPublisher = publisher
       val admin = Admin.create(cluster.clientProperties())
       try {
         assertEquals(0, numTimesReloadCalled.get())
@@ -240,12 +232,11 @@ class BrokerMetadataPublisherTest {
 
   @Test
   def testExceptionInUpdateCoordinator(): Unit = {
-    val errorHandler = new MockFaultHandler("publisher")
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).
-      setMetadataFaultHandler(errorHandler).build()
+      build()
     try {
       cluster.format()
       cluster.startup()
@@ -264,11 +255,11 @@ class BrokerMetadataPublisherTest {
         admin.close()
       }
       TestUtils.retry(60000) {
-        assertTrue(Option(errorHandler.firstException()).
+        assertTrue(Option(cluster.nonFatalFaultHandler().firstException()).
           flatMap(e => Option(e.getMessage())).getOrElse("(none)").contains("injected failure"))
       }
     } finally {
-      errorHandler.setIgnore(true)
+      cluster.nonFatalFaultHandler().setIgnore(true)
       cluster.close()
     }
   }

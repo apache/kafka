@@ -18,13 +18,14 @@ package kafka.server.metadata
 
 import java.util.concurrent.RejectedExecutionException
 import kafka.utils.Logging
-import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.image.writer.{ImageWriterOptions, RaftSnapshotWriter}
 import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotWriter
+import scala.jdk.CollectionConverters._
 
 trait SnapshotWriterBuilder {
   def build(committedOffset: Long,
@@ -62,9 +63,13 @@ class BrokerMetadataSnapshotter(
    */
   val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
 
-  override def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage, snapshotReasons: Set[SnapshotReason]): Boolean = synchronized {
+  override def maybeStartSnapshot(
+    lastContainedLogTime: Long,
+    image: MetadataImage,
+    snapshotReasons: Set[SnapshotReason]
+  ): Boolean = synchronized {
     if (_currentSnapshotOffset != -1) {
-      info(s"Declining to create a new snapshot at ${image.highestOffsetAndEpoch()} because " +
+      info(s"Declining to create a new snapshot at ${image.highestOffsetAndEpoch} because " +
         s"there is already a snapshot in progress at offset ${_currentSnapshotOffset}")
       false
     } else {
@@ -74,9 +79,10 @@ class BrokerMetadataSnapshotter(
         lastContainedLogTime
       )
       if (writer.nonEmpty) {
-        _currentSnapshotOffset = image.highestOffsetAndEpoch().offset
+        _currentSnapshotOffset = image.highestOffsetAndEpoch.offset
 
-        info(s"Creating a new snapshot at offset ${_currentSnapshotOffset} because, ${snapshotReasons.mkString(" and ")}")
+        val snapshotReasonsMessage = SnapshotReason.stringFromReasons(snapshotReasons.asJava)
+        info(s"Creating a new snapshot at ${image.highestOffsetAndEpoch} because: $snapshotReasonsMessage")
         eventQueue.append(new CreateSnapshotEvent(image, writer.get))
         true
       } else {
