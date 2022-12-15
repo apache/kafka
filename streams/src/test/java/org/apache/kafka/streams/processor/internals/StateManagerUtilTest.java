@@ -80,9 +80,7 @@ public class StateManagerUtilTest {
     @Test
     public void testRegisterStateStoreFailToLockStateDirectory() {
         when(topology.stateStores()).thenReturn(singletonList(new MockKeyValueStore("store", false)));
-
         when(stateManager.taskId()).thenReturn(taskId);
-
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         final LockException thrown = assertThrows(LockException.class,
@@ -97,16 +95,11 @@ public class StateManagerUtilTest {
         final MockKeyValueStore store1 = new MockKeyValueStore("store1", false);
         final MockKeyValueStore store2 = new MockKeyValueStore("store2", false);
         final List<StateStore> stateStores = Arrays.asList(store1, store2);
-
         final InOrder inOrder = inOrder(stateManager);
-
         when(topology.stateStores()).thenReturn(stateStores);
-
         when(stateManager.taskId()).thenReturn(taskId);
-
         when(stateDirectory.lock(taskId)).thenReturn(true);
         when(stateDirectory.directoryForTaskIsEmpty(taskId)).thenReturn(true);
-
         when(topology.stateStores()).thenReturn(stateStores);
 
         StateManagerUtil.registerStateStores(logger, "logPrefix:",
@@ -120,9 +113,7 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerClean() {
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
-
         when(stateManager.taskId()).thenReturn(taskId);
-
         when(stateDirectory.lock(taskId)).thenReturn(true);
 
         StateManagerUtil.closeStateManager(logger,
@@ -136,9 +127,7 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerThrowsExceptionWhenClean() {
         when(stateManager.taskId()).thenReturn(taskId);
-
         when(stateDirectory.lock(taskId)).thenReturn(true);
-
         doThrow(new ProcessorStateException("state manager failed to close")).when(stateManager).close();
 
         final ProcessorStateException thrown = assertThrows(
@@ -155,9 +144,7 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerThrowsExceptionWhenDirty() {
         when(stateManager.taskId()).thenReturn(taskId);
-
         when(stateDirectory.lock(taskId)).thenReturn(true);
-
         doThrow(new ProcessorStateException("state manager failed to close")).when(stateManager).close();
 
         assertThrows(
@@ -171,10 +158,8 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerWithStateStoreWipeOut() {
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
-
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(true);
-
         // The `baseDir` will be accessed when attempting to delete the state store.
         when(stateManager.baseDir()).thenReturn(TestUtils.tempDirectory("state_store"));
 
@@ -192,9 +177,7 @@ public class StateManagerUtilTest {
 
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(true);
-
         doThrow(new ProcessorStateException("Close failed")).when(stateManager).close();
-
         when(stateManager.baseDir()).thenReturn(randomFile);
 
         try (MockedStatic<Utils> utils = mockStatic(Utils.class)) {
@@ -208,9 +191,7 @@ public class StateManagerUtilTest {
     @Test
     public void testCloseStateManagerWithStateStoreWipeOutRethrowWrappedIOException() {
         final File unknownFile = new File("/unknown/path");
-
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
-
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(true);
         when(stateManager.baseDir()).thenReturn(unknownFile);
@@ -233,7 +214,6 @@ public class StateManagerUtilTest {
     @Test
     public void shouldNotWipeStateStoresIfUnableToLockTaskDirectory() {
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
-
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
