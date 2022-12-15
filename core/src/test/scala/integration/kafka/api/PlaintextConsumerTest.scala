@@ -1902,5 +1902,22 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer2.close()
   }
+
+  @Test
+  def testConsumerRackIdPropagatedToPartitionAssignor(): Unit = {
+    consumerConfig.setProperty(ConsumerConfig.CLIENT_RACK_CONFIG, "rack-a")
+    consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RackAwareAssignor].getName)
+    val consumer = createConsumer()
+    consumer.subscribe(Set(topic).asJava)
+    awaitAssignment(consumer, Set(tp, tp2))
+  }
+}
+
+class RackAwareAssignor extends RoundRobinAssignor {
+  override def assign(partitionsPerTopic: util.Map[String, Integer], subscriptions: util.Map[String, ConsumerPartitionAssignor.Subscription]): util.Map[String, util.List[TopicPartition]] = {
+    assertEquals(1, subscriptions.size())
+    assertEquals(Optional.of("rack-a"), subscriptions.values.asScala.head.rackId)
+    super.assign(partitionsPerTopic, subscriptions)
+  }
 }
 
