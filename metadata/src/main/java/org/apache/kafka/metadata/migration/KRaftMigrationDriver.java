@@ -20,15 +20,22 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.loader.LogDeltaManifest;
+import org.apache.kafka.image.loader.SnapshotManifest;
+import org.apache.kafka.image.publisher.MetadataPublisher;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 
 
+import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -37,7 +44,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * This class orchestrates and manages the state related to a ZK to KRaft migration. An event thread is used to
  * serialize events coming from various threads and listeners.
  */
-public class KRaftMigrationDriver {
+public class KRaftMigrationDriver implements MetadataPublisher {
     private final Time time;
     private final Logger log;
     private final int nodeId;
@@ -66,18 +73,6 @@ public class KRaftMigrationDriver {
         eventQueue.prepend(new PollEvent());
     }
 
-    public void shutdown() throws InterruptedException {
-        eventQueue.close();
-    }
-
-    public void handleLeaderChange(boolean isActive, int epoch) {
-        eventQueue.append(new KRaftLeaderEvent(isActive, epoch));
-    }
-
-    public void publishMetadata(MetadataDelta delta, MetadataImage image) {
-        eventQueue.append(new MetadataChangeEvent(delta, image));
-    }
-
     private void initializeMigrationState() {
         log.info("Recovering migration state");
         apply("Recovery", zkMigrationClient::getOrCreateMigrationRecoveryState);
@@ -88,14 +83,23 @@ public class KRaftMigrationDriver {
     }
 
     private boolean isControllerQuorumReadyForMigration() {
-        // TODO
-        return false;
+        return true;
     }
 
     private boolean areZkBrokersReadyForMigration() {
-        // TODO: Check available broker registrations and known topic assignments to confirm of
-        //  all Zk brokers are registered before beginning migration.
-        return false;
+        Set<Integer> kraftRegisteredZkBrokers = image.cluster().brokers().values()
+            .stream()
+            .filter(BrokerRegistration::isMigratingZkBroker)
+            .map(BrokerRegistration::id)
+            .collect(Collectors.toSet());
+        Set<Integer> zkRegisteredZkBrokers = zkMigrationClient.readBrokerIds();
+        zkRegisteredZkBrokers.removeAll(kraftRegisteredZkBrokers);
+        if (zkRegisteredZkBrokers.isEmpty()) {
+            return true;
+        } else {
+            log.info("Still waiting for ZK brokers {} to register with KRaft.", zkRegisteredZkBrokers);
+            return false;
+        }
     }
 
     private void apply(String name, Function<ZkMigrationLeadershipState, ZkMigrationLeadershipState> stateMutator) {
@@ -157,6 +161,31 @@ public class KRaftMigrationDriver {
                 break;
         }
         migrationState = newState;
+    }
+
+    @Override
+    public String name() {
+        return "KRaftMigrationDriver";
+    }
+
+    @Override
+    public void publishSnapshot(MetadataDelta delta, MetadataImage newImage, SnapshotManifest manifest) {
+        eventQueue.append(new MetadataChangeEvent(delta, newImage));
+    }
+
+    @Override
+    public void publishLogDelta(MetadataDelta delta, MetadataImage newImage, LogDeltaManifest manifest) {
+        eventQueue.append(new MetadataChangeEvent(delta, newImage));
+    }
+
+    @Override
+    public void publishLeaderAndEpoch(LeaderAndEpoch leaderAndEpoch) {
+        eventQueue.append(new KRaftLeaderEvent(leaderAndEpoch.isLeader(nodeId), leaderAndEpoch.epoch()));
+    }
+
+    @Override
+    public void close() throws Exception {
+        eventQueue.close();
     }
 
     // Events handled by Migration Driver.

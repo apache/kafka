@@ -29,6 +29,7 @@ import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPoli
 import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
+import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -42,6 +43,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
+import org.apache.kafka.metadata.migration.{BrokersRpcClient, KRaftMigrationDriver}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
@@ -81,6 +83,7 @@ class ControllerServer(
   var quotaManagers: QuotaManagers = _
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
+  var migrationDriver: KRaftMigrationDriver = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -111,6 +114,14 @@ class ControllerServer(
 
       maybeChangeStatus(STARTING, STARTED)
       this.logIdent = new LogContext(s"[ControllerServer id=${config.nodeId}] ").logPrefix()
+
+      if (config.migrationEnabled) {
+        val zkClient = KafkaZkClient.createZkClient("KRaft migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
+        val migrationClient = new ZkMigrationClient(zkClient)
+        val rpcClient: BrokersRpcClient = null
+        migrationDriver = new KRaftMigrationDriver(config.nodeId, migrationClient, rpcClient)
+        sharedServer.loader.installPublishers(java.util.Collections.singletonList(migrationDriver))
+      }
 
 
       newGauge("ClusterId", () => clusterId)
@@ -267,6 +278,8 @@ class ControllerServer(
       sharedServer.ensureNotRaftLeader()
       if (socketServer != null)
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
+      if (migrationDriver != null)
+        CoreUtils.swallow(migrationDriver.close(), this)
       if (controller != null)
         controller.beginShutdown()
       if (socketServer != null)

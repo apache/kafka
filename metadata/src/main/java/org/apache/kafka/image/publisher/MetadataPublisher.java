@@ -21,6 +21,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.image.loader.SnapshotManifest;
+import org.apache.kafka.raft.LeaderAndEpoch;
 
 
 /**
@@ -64,6 +65,14 @@ public interface MetadataPublisher extends AutoCloseable {
             MetadataImage newImage,
             LogDeltaManifest manifest
     );
+
+
+    /**
+     * Publish a change in the KRaft leader and epoch.
+     *
+     * @param leaderAndEpoch    The new leader and epoch.
+     */
+    default void publishLeaderAndEpoch(LeaderAndEpoch leaderAndEpoch) { }
 
     /**
      * Close this metadata publisher.

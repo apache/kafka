@@ -353,6 +353,14 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch) {
         eventQueue.append(() -> {
             currentLeaderAndEpoch = leaderAndEpoch;
+            for (MetadataPublisher publisher : publishers) {
+                try {
+                    publisher.publishLeaderAndEpoch(leaderAndEpoch);
+                } catch (Throwable e) {
+                    faultHandler.handleFault("Unhandled error publishing the new leader and epoch"
+                        + leaderAndEpoch + " with publisher " + publisher.name(), e);
+                }
+            }
         });
     }
 
