@@ -23,7 +23,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
-import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 
@@ -35,7 +34,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -87,12 +85,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     private boolean areZkBrokersReadyForMigration() {
-        Set<Integer> kraftRegisteredZkBrokers = image.cluster().brokers().values()
-            .stream()
-            .filter(BrokerRegistration::isMigratingZkBroker)
-            .map(BrokerRegistration::id)
-            .collect(Collectors.toSet());
-        Set<Integer> zkRegisteredZkBrokers = zkMigrationClient.readBrokerIds();
+        Set<Integer> kraftRegisteredZkBrokers = image.cluster().zkBrokers().keySet();
+        Set<Integer> zkRegisteredZkBrokers = zkMigrationClient.readBrokerIdsFromTopicAssignments();
         zkRegisteredZkBrokers.removeAll(kraftRegisteredZkBrokers);
         if (zkRegisteredZkBrokers.isEmpty()) {
             return true;
