@@ -36,9 +36,12 @@ import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
@@ -86,6 +89,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             @Override
             public void close() throws Exception { }
         };
+        private Supplier<OptionalLong> highWaterMarkAccessor = null;
 
         public Builder setNodeId(int nodeId) {
             this.nodeId = nodeId;
@@ -112,16 +116,25 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return this;
         }
 
+        public Builder setHighWaterMarkAccessor(Supplier<OptionalLong> highWaterMarkAccessor) {
+            this.highWaterMarkAccessor = highWaterMarkAccessor;
+            return this;
+        }
+
         public MetadataLoader build() {
             if (logContext == null) {
                 logContext = new LogContext("[MetadataLoader " + nodeId + "] ");
+            }
+            if (highWaterMarkAccessor == null) {
+                throw new RuntimeException("You must set the high water mark accessor.");
             }
             return new MetadataLoader(
                 time,
                 logContext,
                 threadNamePrefix,
                 faultHandler,
-                metrics);
+                metrics,
+                highWaterMarkAccessor);
         }
     }
 
@@ -146,9 +159,24 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     private final MetadataLoaderMetrics metrics;
 
     /**
-     * The publishers which should receive cluster metadata updates.
+     * A function which supplies the current high water mark, or empty if it is not known.
      */
-    private final List<MetadataPublisher> publishers;
+    private final Supplier<OptionalLong> highWaterMarkAccessor;
+
+    /**
+     * Publishers which haven't been initialized yet.
+     */
+    private final LinkedHashMap<String, MetadataPublisher> uninitializedPublishers;
+
+    /**
+     * Publishers which are receiving updates.
+     */
+    private final LinkedHashMap<String, MetadataPublisher> publishers;
+
+    /**
+     * True if we have caught up with the initial high water mark.
+     */
+    private boolean catchingUp = false;
 
     /**
      * The current leader and epoch.
@@ -170,15 +198,73 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         LogContext logContext,
         String threadNamePrefix,
         FaultHandler faultHandler,
-        MetadataLoaderMetrics metrics
+        MetadataLoaderMetrics metrics,
+        Supplier<OptionalLong> highWaterMarkAccessor
     ) {
         this.log = logContext.logger(MetadataLoader.class);
         this.time = time;
         this.faultHandler = faultHandler;
         this.metrics = metrics;
-        this.publishers = new ArrayList<>();
+        this.highWaterMarkAccessor = highWaterMarkAccessor;
+        this.uninitializedPublishers = new LinkedHashMap<>();
+        this.publishers = new LinkedHashMap<>();
         this.image = MetadataImage.EMPTY;
         this.eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix);
+    }
+
+    private boolean stillNeedToCatchUp(long offset) {
+        if (!catchingUp) {
+            log.trace("We are not in the initial catching up state.");
+            return false;
+        }
+        OptionalLong highWaterMark = highWaterMarkAccessor.get();
+        if (!highWaterMark.isPresent()) {
+            log.info("The loader is still catching up because we still don't know the high " +
+                    "water mark yet.");
+            return true;
+        }
+        if (highWaterMark.getAsLong() > offset) {
+            log.info("The loader is still catching up because we have loaded up to offset " +
+                    offset + ", but the high water mark is " + highWaterMark.getAsLong());
+            return true;
+        }
+        log.info("The loader finished catch up to the current high water mark of " +
+                highWaterMark.getAsLong());
+        catchingUp = true;
+        return false;
+    }
+
+    private void maybeInitializeNewPublishers() {
+        if (uninitializedPublishers.isEmpty()) {
+            log.trace("There are no uninitialized publishers to initialize.");
+            return;
+        }
+        long startNs = time.nanoseconds();
+        MetadataDelta delta = new MetadataDelta.Builder().
+                setImage(image).
+                build();
+        ImageReWriter writer = new ImageReWriter(delta);
+        image.write(writer, new ImageWriterOptions.Builder().
+                setMetadataVersion(image.features().metadataVersion()).
+                build());
+        SnapshotManifest manifest = new SnapshotManifest(
+                image.provenance(),
+                time.nanoseconds() - startNs);
+        for (Iterator<MetadataPublisher> iter = uninitializedPublishers.values().iterator();
+                iter.hasNext(); ) {
+            MetadataPublisher publisher = iter.next();
+            iter.remove();
+            try {
+                log.info("Publishing initial snapshot at offset {} to {}",
+                        image.highestOffsetAndEpoch().offset(), publisher.name());
+                publisher.publishSnapshot(delta, image, manifest);
+                publishers.put(publisher.name(), publisher);
+            } catch (Throwable e) {
+                faultHandler.handleFault("Unhandled error publishing the initial metadata " +
+                        "image from snapshot at offset " + image.highestOffsetAndEpoch().offset() +
+                        " with publisher " + publisher.name(), e);
+            }
+        }
     }
 
     @Override
@@ -202,8 +288,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                             " and " + manifest.provenance().offset(), e);
                     return;
                 }
+                if (stillNeedToCatchUp(manifest.provenance().offset())) {
+                    return;
+                }
                 log.debug("Publishing new image with provenance {}.", image.provenance());
-                for (MetadataPublisher publisher : publishers) {
+                for (MetadataPublisher publisher : publishers.values()) {
                     try {
                         publisher.publishLogDelta(delta, image, manifest);
                     } catch (Throwable e) {
@@ -212,6 +301,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                                 " with publisher " + publisher.name(), e);
                     }
                 }
+                maybeInitializeNewPublishers();
                 metrics.updateLastAppliedImageProvenance(image.provenance());
             } catch (Throwable e) {
                 // This is a general catch-all block where we don't expect to end up;
@@ -294,8 +384,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                             "snapshot at offset " + reader.lastContainedLogOffset(), e);
                     return;
                 }
+                if (stillNeedToCatchUp(manifest.provenance().offset())) {
+                    return;
+                }
                 log.debug("Publishing new snapshot image with provenance {}.", image.provenance());
-                for (MetadataPublisher publisher : publishers) {
+                for (MetadataPublisher publisher : publishers.values()) {
                     try {
                         publisher.publishSnapshot(delta, image, manifest);
                     } catch (Throwable e) {
@@ -304,6 +397,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                                     " with publisher " + publisher.name(), e);
                     }
                 }
+                maybeInitializeNewPublishers();
                 metrics.updateLastAppliedImageProvenance(image.provenance());
             } catch (Throwable e) {
                 // This is a general catch-all block where we don't expect to end up;
@@ -391,35 +485,23 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     void installNewPublishers(
         List<? extends MetadataPublisher> newPublishers
     ) {
-        long startNs = time.nanoseconds();
         // Publishers can't be re-installed if they're already present.
-        for (MetadataPublisher publisher : newPublishers) {
-            if (publishers.contains(publisher)) {
-                throw faultHandler.handleFault("Attempted to install publisher " + publisher.name() +
-                        ", which is already installed.");
+        for (MetadataPublisher newPublisher : newPublishers) {
+            MetadataPublisher prev = publishers.get(newPublisher.name());
+            if (prev == null) {
+                prev = uninitializedPublishers.get(newPublisher.name());
             }
-        }
-        MetadataDelta delta = new MetadataDelta.Builder().
-                setImage(image).
-                build();
-        ImageReWriter writer = new ImageReWriter(delta);
-        image.write(writer, new ImageWriterOptions.Builder().
-                setMetadataVersion(image.features().metadataVersion()).
-                build());
-        SnapshotManifest manifest = new SnapshotManifest(
-                image.provenance(),
-                time.nanoseconds() - startNs);
-        for (MetadataPublisher publisher : newPublishers) {
-            try {
-                log.info("Publishing initial snapshot at offset {} to {}",
-                        image.highestOffsetAndEpoch().offset(), publisher.name());
-                publisher.publishSnapshot(delta, image, manifest);
-                publishers.add(publisher);
-            } catch (Throwable e) {
-                faultHandler.handleFault("Unhandled error publishing the initial metadata " +
-                        "image from snapshot at offset " + image.highestOffsetAndEpoch().offset() +
-                        " with publisher " + publisher.name(), e);
+            if (prev != null) {
+                if (prev == newPublisher) {
+                    throw faultHandler.handleFault("Attempted to install publisher " +
+                            newPublisher.name() + ", which is already installed.");
+                } else {
+                    throw faultHandler.handleFault("Attempted to install a new publisher " +
+                            "named " + newPublisher.name() + ", but there is already a publisher " +
+                            "with that name.");
+                }
             }
+            uninitializedPublishers.put(newPublisher.name(), newPublisher);
         }
     }
 
@@ -442,11 +524,13 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         CompletableFuture<Void> future = new CompletableFuture<>();
         eventQueue.append(() -> {
             try {
-                if (!publishers.remove(publisher)) {
-                    throw faultHandler.handleFault("Attempted to remove publisher " + publisher.name() +
-                            ", which is not installed.");
+                if (!publishers.remove(publisher.name(), publisher)) {
+                    if (!uninitializedPublishers.remove(publisher.name(), publisher)) {
+                        throw faultHandler.handleFault("Attempted to remove publisher " + publisher.name() +
+                                ", which is not installed.");
+                    }
                 }
-                publisher.close();
+                closePublisher(publisher);
                 future.complete(null);
             } catch (Throwable e) {
                 future.completeExceptionally(e);
@@ -462,15 +546,30 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     @Override
     public void beginShutdown() {
         eventQueue.beginShutdown("beginShutdown", () -> {
-            for (MetadataPublisher publisher : publishers) {
-                try {
-                    publisher.close();
-                } catch (Throwable e) {
-                    faultHandler.handleFault("Got unexpected exception while closing " +
-                        "publisher " + publisher.name(), e);
-                }
+            for (Iterator<MetadataPublisher> iter = uninitializedPublishers.values().iterator();
+                    iter.hasNext(); ) {
+                closePublisher(iter.next());
+                iter.remove();
+            }
+            for (Iterator<MetadataPublisher> iter = publishers.values().iterator();
+                 iter.hasNext(); ) {
+                closePublisher(iter.next());
+                iter.remove();
             }
         });
+    }
+
+    Time time() {
+        return time;
+    }
+
+    private void closePublisher(MetadataPublisher publisher) {
+        try {
+            publisher.close();
+        } catch (Throwable e) {
+            faultHandler.handleFault("Got unexpected exception while closing " +
+                    "publisher " + publisher.name(), e);
+        }
     }
 
     @Override

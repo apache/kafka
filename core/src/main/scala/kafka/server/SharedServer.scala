@@ -228,13 +228,13 @@ class SharedServer(
           controllerQuorumVotersFuture)
         raftManager.startup()
 
-        if (sharedServerConfig.processRoles.contains(ControllerRole) &&
-            !sharedServerConfig.processRoles.contains(BrokerRole)) {
+        if (sharedServerConfig.processRoles.contains(ControllerRole)) {
           val loaderBuilder = new MetadataLoader.Builder().
             setNodeId(metaProps.nodeId).
             setTime(time).
             setThreadNamePrefix(threadNamePrefix.getOrElse("")).
-            setFaultHandler(metadataLoaderFaultHandler)
+            setFaultHandler(metadataLoaderFaultHandler).
+            setHighWaterMarkAccessor(() => raftManager.client.highWatermark())
           if (brokerMetrics != null) {
             loaderBuilder.setMetadataLoaderMetrics(brokerMetrics)
           }
