@@ -41,6 +41,9 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
+/**
+ * Type for updating controller metrics based on metadata records.
+ */
 final class ControllerMetricsManager {
     private final static class PartitionState {
         final int leader;
@@ -98,7 +101,13 @@ final class ControllerMetricsManager {
         }
     }
 
-    // TODO: Document this...
+    /**
+     * Update controller metrics by replaying a metadata record.
+     *
+     * This method assumes that the provided ApiMessage is one of the type covered by MetadataRecordType.
+     *
+     * @param message a metadata record
+     */
     @SuppressWarnings("checkstyle:cyclomaticComplexity")
     void replay(ApiMessage message) {
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
@@ -288,7 +297,11 @@ final class ControllerMetricsManager {
         controllerMetrics.setPreferredReplicaImbalanceCount(imbalancedTopicPartitions.size());
     }
 
-    // TODO: Document this...
+    /**
+     * Resets the value of all of the metrics.
+     *
+     * Resets all of the state tracked by this type and resets all of the related controller metrics.
+     */
     void reset() {
         registeredBrokers.clear();
         fencedBrokers.clear();

@@ -1407,7 +1407,7 @@ public final class QuorumController implements Controller {
 
 
     /**
-     * TODO: document this field
+     * Manager for updating controller metrics based on the committed metadata.
      */
     private final ControllerMetricsManager controllerMetricsManager;
 
