@@ -1326,7 +1326,7 @@ class ReplicaManagerTest {
       appendRecords(replicaManager, tp0, TestUtils.singletonRecords(s"message".getBytes)).onFire { response =>
         assertEquals(Errors.NONE, response.error)
       }
-      // fetch as follower to advance the high watermark
+      // Fetch as follower to initialise the log end offset of the replica
       fetchPartitionAsFollower(
         replicaManager,
         new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
