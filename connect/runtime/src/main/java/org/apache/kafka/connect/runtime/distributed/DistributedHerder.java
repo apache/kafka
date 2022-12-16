@@ -100,6 +100,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -147,7 +148,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private static final long FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
-    private static final long HERDER_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(20);
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
     private static final long CONFIG_TOPIC_WRITE_PRIVILEGES_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
@@ -162,6 +162,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private final String workerGroupId;
     private final int workerSyncTimeoutMs;
     private final long workerTasksShutdownTimeoutMs;
+
+    private final long herderExecutorTerminationTimeoutMs;
     private final int workerUnsyncBackoffMs;
     private final int keyRotationIntervalMs;
     private final String requestSignatureAlgorithm;
@@ -172,7 +174,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // Visible for testing
     ExecutorService forwardRequestExecutor;
     private final ExecutorService herderExecutor;
-    private final ExecutorService startAndStopExecutor;
+    // Visible for testing
+    ExecutorService startAndStopExecutor;
     private final WorkerGroupMember member;
     private final AtomicBoolean stopping;
     private final boolean isTopicTrackingEnabled;
@@ -272,6 +275,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.workerGroupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
         this.workerSyncTimeoutMs = config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
         this.workerTasksShutdownTimeoutMs = config.getLong(DistributedConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
+        // Timeout for herderExecutor to gracefully terminate is set to a value to accommodate
+        // reading to the end of the config topic + successfully attempting to stop all connectors and tasks and a buffer of 10s
+        this.herderExecutorTerminationTimeoutMs = this.workerSyncTimeoutMs + this.workerTasksShutdownTimeoutMs + Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS + 10000;
         this.workerUnsyncBackoffMs = config.getInt(DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
         this.requestSignatureAlgorithm = config.getString(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG);
         this.keyRotationIntervalMs = config.getInt(DistributedConfig.INTER_WORKER_KEY_TTL_MS_CONFIG);
@@ -749,14 +755,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         synchronized (this) {
             // Clean up any connectors and tasks that are still running.
             log.info("Stopping connectors and tasks that are still assigned to this worker.");
-            List<Callable<Void>> callables = new ArrayList<>();
-            for (String connectorName : new ArrayList<>(worker.connectorNames())) {
-                callables.add(getConnectorStoppingCallable(connectorName));
-            }
-            for (ConnectorTaskId taskId : new ArrayList<>(worker.taskIds())) {
-                callables.add(getTaskStoppingCallable(taskId));
-            }
-            startAndStop(callables);
+            worker.stopAndAwaitConnectors();
+            worker.stopAndAwaitTasks();
 
             member.stop();
 
@@ -789,7 +789,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         member.wakeup();
         herderExecutor.shutdown();
         try {
-            if (!herderExecutor.awaitTermination(Math.max(workerTasksShutdownTimeoutMs, HERDER_SHUTDOWN_TIMEOUT_MS), TimeUnit.MILLISECONDS))
+            if (!herderExecutor.awaitTermination(herderExecutorTerminationTimeoutMs, TimeUnit.MILLISECONDS))
                 herderExecutor.shutdownNow();
 
             forwardRequestExecutor.shutdown();
@@ -1659,11 +1659,20 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         backoffRetries = BACKOFF_RETRIES;
     }
 
-    private void startAndStop(Collection<Callable<Void>> callables) {
+    // Visible for testing
+    void startAndStop(Collection<Callable<Void>> callables) {
         try {
             startAndStopExecutor.invokeAll(callables);
         } catch (InterruptedException e) {
             // ignore
+        } catch (RejectedExecutionException e) {
+            // Shutting down. Just log the exception
+            if (stopping.get()) {
+                log.debug("RejectedExecutionException thrown while herder is shutting down. This could be " +
+                        "because startAndStopExecutor is either already shutdown or is full.");
+            } else {
+                throw e;
+            }
         }
     }
 

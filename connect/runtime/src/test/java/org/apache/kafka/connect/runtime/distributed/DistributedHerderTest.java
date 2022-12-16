@@ -100,6 +100,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Callable;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -116,6 +118,7 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CONNECTOR;
 import static org.easymock.EasyMock.anyLong;
+import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.leq;
@@ -662,11 +665,9 @@ public class DistributedHerderTest {
 
     @Test
     public void testHaltCleansUpWorker() {
-        EasyMock.expect(worker.connectorNames()).andReturn(Collections.singleton(CONN1));
-        worker.stopAndAwaitConnector(CONN1);
+        worker.stopAndAwaitConnectors();
         PowerMock.expectLastCall();
-        EasyMock.expect(worker.taskIds()).andReturn(Collections.singleton(TASK1));
-        worker.stopAndAwaitTask(TASK1);
+        worker.stopAndAwaitTasks();
         PowerMock.expectLastCall();
         member.stop();
         PowerMock.expectLastCall();
@@ -3629,6 +3630,64 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
+    @Test(expected = RejectedExecutionException.class)
+    @SuppressWarnings("unchecked")
+    public void shouldThrowWhenStartAndStopExecutorThrowsRejectedExecutionExceptionAndHerderNotStopping() throws InterruptedException {
+        ExecutorService startAndStopExecutor = EasyMock.mock(ExecutorService.class);
+        herder.startAndStopExecutor = startAndStopExecutor;
+
+        Callable<Void> connectorStartingCallable = () -> null;
+
+        EasyMock.expect(startAndStopExecutor.invokeAll(EasyMock.anyObject(Collection.class))).andThrow(new RejectedExecutionException());
+
+        PowerMock.replayAll(startAndStopExecutor);
+
+        herder.startAndStop(Collections.singletonList(connectorStartingCallable));
+
+    }
+
+    @Test
+    public void shouldHaltCleanlyWhenHerderStartsAndStopsAndConfigTopicReadTimesOut() throws TimeoutException {
+        connectProtocolVersion = CONNECT_PROTOCOL_V1;
+        EasyMock.expect(member.memberId()).andStubReturn("member");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(connectProtocolVersion);
+        final int rebalanceDelayMs = 20000;
+
+        // Assign the connector to this worker, and have it start
+        expectRebalance(Collections.emptyList(), Collections.emptyList(), ConnectProtocol.Assignment.NO_ERROR, 1, singletonList(CONN1), Collections.emptyList(), rebalanceDelayMs);
+
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.requestRejoin();
+        PowerMock.expectLastCall();
+        member.maybeLeaveGroup(anyString());
+        PowerMock.expectLastCall();
+        worker.stopAndAwaitConnectors();
+        PowerMock.expectLastCall();
+        worker.stopAndAwaitTasks();
+        PowerMock.expectLastCall();
+        member.stop();
+        PowerMock.expectLastCall();
+        configBackingStore.stop();
+        PowerMock.expectLastCall();
+        statusBackingStore.stop();
+        PowerMock.expectLastCall();
+        worker.stop();
+        PowerMock.expectLastCall();
+
+        // Read to config topic times out
+        configBackingStore.refresh(anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall().andThrow(new TimeoutException());
+
+        PowerMock.replayAll();
+
+        // Start the herder
+        herder.tick();
+        // and immediately stop it.
+        herder.stop();
+
+    }
+
     private void expectRebalance(final long offset,
                                  final List<String> assignedConnectors,
                                  final List<ConnectorTaskId> assignedTasks) {
@@ -3835,8 +3894,10 @@ public class DistributedHerderTest {
             member.wakeup();
             EasyMock.expectLastCall();
         }
-        EasyMock.expect(worker.connectorNames()).andReturn(Collections.emptySet());
-        EasyMock.expect(worker.taskIds()).andReturn(Collections.emptySet());
+        worker.stopAndAwaitConnectors();
+        EasyMock.expectLastCall();
+        worker.stopAndAwaitTasks();
+        EasyMock.expectLastCall();
         member.stop();
         EasyMock.expectLastCall();
         statusBackingStore.stop();
