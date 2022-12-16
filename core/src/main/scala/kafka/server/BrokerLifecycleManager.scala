@@ -310,16 +310,21 @@ class BrokerLifecycleManager(
       if (response.authenticationException() != null) {
         error(s"Unable to register broker $nodeId because of an authentication exception.",
           response.authenticationException())
+        System.err.println(s"Unable to register broker $nodeId because of an authentication exception.")
         scheduleNextCommunicationAfterFailure()
       } else if (response.versionMismatch() != null) {
         error(s"Unable to register broker $nodeId because of an API version problem.",
           response.versionMismatch())
+        System.err.println(s"Unable to register broker $nodeId because of an API version problem.")
         scheduleNextCommunicationAfterFailure()
       } else if (response.responseBody() == null) {
         warn(s"Unable to register broker $nodeId.")
+        System.err.println(s"Unable to register broker $nodeId.")
         scheduleNextCommunicationAfterFailure()
       } else if (!response.responseBody().isInstanceOf[BrokerRegistrationResponse]) {
         error(s"Unable to register broker $nodeId because the controller returned an " +
+          "invalid response type.")
+        System.err.println(s"Unable to register broker $nodeId because the controller returned an " +
           "invalid response type.")
         scheduleNextCommunicationAfterFailure()
       } else {
@@ -331,9 +336,12 @@ class BrokerLifecycleManager(
           registered = true
           initialRegistrationSucceeded = true
           info(s"Successfully registered broker $nodeId with broker epoch ${_brokerEpoch}")
+          System.err.println(s"Successfully registered broker $nodeId with broker epoch ${_brokerEpoch}")
           scheduleNextCommunicationImmediately() // Immediately send a heartbeat
         } else {
           info(s"Unable to register broker $nodeId because the controller returned " +
+            s"error $errorCode")
+          System.err.println(s"Unable to register broker $nodeId because the controller returned " +
             s"error $errorCode")
           scheduleNextCommunicationAfterFailure()
         }
@@ -470,6 +478,7 @@ class BrokerLifecycleManager(
     override def run(): Unit = {
       if (!initialRegistrationSucceeded) {
         error("Shutting down because we were unable to register with the controller quorum.")
+        System.err.println(s"Shutting down $nodeId because we were unable to register with the controller quorum.")
         eventQueue.beginShutdown("registrationTimeout", new ShutdownEvent())
       }
     }

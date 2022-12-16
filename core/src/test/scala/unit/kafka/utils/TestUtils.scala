@@ -450,7 +450,9 @@ object TestUtils extends Logging {
         topicConfig
       )
     } catch {
-      case e: ExecutionException => if (!(e.getCause != null &&
+      case e: ExecutionException =>
+        System.err.println(s"failed to create topic $topic :$e")
+        if (!(e.getCause != null &&
           e.getCause.isInstanceOf[TopicExistsException] &&
           topicHasSameNumPartitionsAndReplicationFactor(admin, topic,
             effectiveNumPartitions, replicationFactor))) {
