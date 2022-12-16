@@ -46,6 +46,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -318,9 +319,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         /**
-         * Returns the snapshot whos last offset is the committed offset.
+         * Returns the snapshot whose last offset is the committed offset.
          *
-         * If such snapshot doesn't exists, it waits until it does.
+         * If such snapshot doesn't exist, it waits until it does.
          */
         synchronized RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
             while (true) {
@@ -379,6 +380,20 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         public long initialMaxReadOffset() {
             return initialMaxReadOffset;
+        }
+
+        /**
+         * Return all records in the log as a list.
+         */
+        public synchronized List<ApiMessageAndVersion> allRecords() {
+            List<ApiMessageAndVersion> allRecords = new ArrayList<>();
+            for (LocalBatch batch : batches.values()) {
+                if (batch instanceof LocalRecordBatch) {
+                    LocalRecordBatch recordBatch = (LocalRecordBatch) batch;
+                    allRecords.addAll(recordBatch.records);
+                }
+            }
+            return allRecords;
         }
     }
 

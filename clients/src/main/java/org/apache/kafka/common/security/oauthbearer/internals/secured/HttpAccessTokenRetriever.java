@@ -344,7 +344,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         clientSecret = sanitizeString("the token endpoint request client secret parameter", clientSecret);
 
         String s = String.format("%s:%s", clientId, clientSecret);
-        String encoded = Base64.getUrlEncoder().encodeToString(Utils.utf8(s));
+        // Per RFC-7617, we need to use the *non-URL safe* base64 encoder. See KAFKA-14496.
+        String encoded = Base64.getEncoder().encodeToString(Utils.utf8(s));
         return String.format("Basic %s", encoded);
     }
 

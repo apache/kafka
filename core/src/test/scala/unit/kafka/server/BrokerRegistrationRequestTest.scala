@@ -17,7 +17,7 @@
 
 package unit.kafka.server
 
-import kafka.server.{BrokerToControllerChannelManager, ControllerNodeProvider, ControllerRequestCompletionHandler}
+import kafka.server.{BrokerToControllerChannelManager, ControllerInformation, ControllerNodeProvider, ControllerRequestCompletionHandler}
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
@@ -48,17 +48,22 @@ class BrokerRegistrationRequestTest {
   def brokerToControllerChannelManager(clusterInstance: ClusterInstance): BrokerToControllerChannelManager = {
     BrokerToControllerChannelManager(
       new ControllerNodeProvider() {
-        override def get(): Option[Node] = Some(new Node(
+        def node: Option[Node] = Some(new Node(
           clusterInstance.anyControllerSocketServer().config.nodeId,
           "127.0.0.1",
           clusterInstance.anyControllerSocketServer().boundPort(clusterInstance.controllerListenerName().get()),
         ))
 
-        override def listenerName: ListenerName = clusterInstance.controllerListenerName().get()
+        def listenerName: ListenerName = clusterInstance.controllerListenerName().get()
 
-        override def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
+        val securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
 
-        override def saslMechanism: String = ""
+        val saslMechanism: String = ""
+
+        def isZkController: Boolean = !clusterInstance.isKRaftTest
+
+        override def getControllerInfo(): ControllerInformation =
+          ControllerInformation(node, listenerName, securityProtocol, saslMechanism, isZkController)
       },
       Time.SYSTEM,
       new Metrics(),

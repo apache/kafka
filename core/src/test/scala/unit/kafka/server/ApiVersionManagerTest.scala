@@ -124,11 +124,11 @@ class ApiVersionManagerTest {
       features = brokerFeatures,
       metadataCache = metadataCache
     )
-    assertFalse(versionManager.isApiEnabled(ApiKeys.ENVELOPE))
-    assertFalse(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
+    assertTrue(versionManager.isApiEnabled(ApiKeys.ENVELOPE))
+    assertTrue(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
 
     val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
-    assertNull(apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id))
+    assertNotNull(apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id))
   }
 
 }
