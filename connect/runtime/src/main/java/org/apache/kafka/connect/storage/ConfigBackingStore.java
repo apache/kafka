@@ -88,8 +88,9 @@ public interface ConfigBackingStore {
      * Transition a connector to a new target state (e.g. paused).
      * @param connector name of the connector
      * @param state the state to transition to
+     * @param callback the callback to be invoked after the put is complete; can be {@code null} if no callback is desired
      */
-    void putTargetState(String connector, TargetState state);
+    void putTargetState(String connector, TargetState state, Callback<Void> callback);
 
     /**
      * Store a new {@link SessionKey} that can be used to validate internal (i.e., non-user-triggered) inter-worker communication.

@@ -48,7 +48,9 @@ import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.FutureCallback;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -246,6 +248,34 @@ public class AbstractHerderTest {
         assertEquals(CONN1_CONFIG, info.config());
         assertEquals(Arrays.asList(TASK0, TASK1, TASK2), info.tasks());
         assertEquals(ConnectorType.SOURCE, info.type());
+    }
+
+    @Test
+    public void testPauseConnector() {
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
+
+        when(configStore.contains(CONN1)).thenReturn(true);
+
+        Callback<Void> cb = new FutureCallback<>();
+        herder.pauseConnector(CONN1, cb);
+
+        verify(configStore).putTargetState(CONN1, TargetState.PAUSED, cb);
+    }
+
+    @Test
+    public void testResumeConnector() {
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
+
+        when(configStore.contains(CONN1)).thenReturn(true);
+
+        Callback<Void> cb = new FutureCallback<>();
+        herder.resumeConnector(CONN1, cb);
+
+        verify(configStore).putTargetState(CONN1, TargetState.STARTED, cb);
     }
 
     @Test

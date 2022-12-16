@@ -139,12 +139,13 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
     }
 
     @Override
-    public synchronized void putTargetState(String connector, TargetState state) {
+    public synchronized void putTargetState(String connector, TargetState state, Callback<Void> cb) {
         ConnectorState connectorState = connectors.get(connector);
         if (connectorState == null)
             throw new IllegalArgumentException("No connector `" + connector + "` configured");
 
         connectorState.targetState = state;
+        cb.onCompletion(null, null);
 
         if (updateListener != null)
             updateListener.onConnectorTargetStateChange(connector);

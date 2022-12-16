@@ -601,14 +601,15 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
      * invoked before invoking this method.
      * @param connector the name of the connector
      * @param state the desired target state for the connector
+     * @param callback the callback to be invoked after the target state has been written; may not be {@code null}
      */
     @Override
-    public void putTargetState(String connector, TargetState state) {
+    public void putTargetState(String connector, TargetState state, Callback<Void> callback) {
         Struct connectTargetState = new Struct(TARGET_STATE_V0);
         connectTargetState.put("state", state.name());
         byte[] serializedTargetState = converter.fromConnectData(topic, TARGET_STATE_V0, connectTargetState);
         log.debug("Writing target state {} for connector {}", state, connector);
-        configLog.send(TARGET_STATE_KEY(connector), serializedTargetState);
+        configLog.send(TARGET_STATE_KEY(connector), serializedTargetState, (metadata, exception) -> callback.onCompletion(exception, null));
     }
 
     /**

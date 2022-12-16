@@ -406,7 +406,7 @@ public class KafkaConfigBackingStoreTest {
 
         // In the meantime, write a target state (which doesn't require write privileges)
         expectConvert(KafkaConfigBackingStore.TARGET_STATE_V0, TARGET_STATE_PAUSED, CONFIGS_SERIALIZED.get(1));
-        storeLog.send("target-state-" + CONNECTOR_IDS.get(1), CONFIGS_SERIALIZED.get(1));
+        storeLog.send(EasyMock.eq("target-state-" + CONNECTOR_IDS.get(1)), EasyMock.eq(CONFIGS_SERIALIZED.get(1)), EasyMock.anyObject(org.apache.kafka.clients.producer.Callback.class));
         PowerMock.expectLastCall();
 
         // Reclaim write privileges
@@ -444,7 +444,7 @@ public class KafkaConfigBackingStoreTest {
         assertThrows(IllegalStateException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null));
 
         // Should succeed even without write privileges (target states can be written by anyone)
-        configStorage.putTargetState(CONNECTOR_IDS.get(1), TargetState.PAUSED);
+        configStorage.putTargetState(CONNECTOR_IDS.get(1), TargetState.PAUSED, new FutureCallback<>());
 
         // Should succeed if we re-claim write privileges
         configStorage.claimWritePrivileges();

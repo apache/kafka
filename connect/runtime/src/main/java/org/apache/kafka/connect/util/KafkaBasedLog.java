@@ -342,10 +342,12 @@ public class KafkaBasedLog<K, V> {
         return future;
     }
 
-    public void send(K key, V value) {
-        send(key, value, null);
-    }
-
+    /**
+     * Send a record asynchronously to the configured {@link #topic}
+     * @param key the key for the {@link ProducerRecord}
+     * @param value the value for the {@link ProducerRecord}
+     * @param callback the callback to invoke after completion
+     */
     public void send(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
         producer.orElseThrow(() ->
                 new IllegalStateException("This KafkaBasedLog was created in read-only mode and does not support write operations")
