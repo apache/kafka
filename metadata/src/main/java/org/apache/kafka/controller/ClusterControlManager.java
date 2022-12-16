@@ -29,9 +29,7 @@ import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
-import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeature;
-import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeatureCollection;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -59,7 +57,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Random;
@@ -68,7 +65,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
@@ -653,61 +649,5 @@ public class ClusterControlManager {
             readyBrokersFuture.get().future.complete(null);
             readyBrokersFuture = Optional.empty();
         }
-    }
-
-    class ClusterControlIterator implements Iterator<List<ApiMessageAndVersion>> {
-        private final Iterator<Entry<Integer, BrokerRegistration>> iterator;
-        private final MetadataVersion metadataVersion;
-
-        ClusterControlIterator(long epoch) {
-            this.iterator = brokerRegistrations.entrySet(epoch).iterator();
-            this.metadataVersion = featureControl.metadataVersion();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iterator.hasNext();
-        }
-
-        @Override
-        public List<ApiMessageAndVersion> next() {
-            if (!hasNext()) throw new NoSuchElementException();
-            Entry<Integer, BrokerRegistration> entry = iterator.next();
-            int brokerId = entry.getKey();
-            BrokerRegistration registration = entry.getValue();
-            BrokerEndpointCollection endpoints = new BrokerEndpointCollection();
-            for (Entry<String, Endpoint> endpointEntry : registration.listeners().entrySet()) {
-                endpoints.add(new BrokerEndpoint().setName(endpointEntry.getKey()).
-                    setHost(endpointEntry.getValue().host()).
-                    setPort(endpointEntry.getValue().port()).
-                    setSecurityProtocol(endpointEntry.getValue().securityProtocol().id));
-            }
-            BrokerFeatureCollection features = new BrokerFeatureCollection();
-            for (Entry<String, VersionRange> featureEntry : registration.supportedFeatures().entrySet()) {
-                features.add(new BrokerFeature().setName(featureEntry.getKey()).
-                    setMaxSupportedVersion(featureEntry.getValue().max()).
-                    setMinSupportedVersion(featureEntry.getValue().min()));
-            }
-            RegisterBrokerRecord record = new RegisterBrokerRecord().
-                setBrokerId(brokerId).
-                setIncarnationId(registration.incarnationId()).
-                setBrokerEpoch(registration.epoch()).
-                setEndPoints(endpoints).
-                setFeatures(features).
-                setRack(registration.rack().orElse(null)).
-                setFenced(registration.fenced());
-            if (metadataVersion.isInControlledShutdownStateSupported()) {
-                record.setInControlledShutdown(registration.inControlledShutdown());
-            }
-            if (metadataVersion.isMigrationSupported()) {
-                record.setIsMigratingZkBroker(registration.isMigratingZkBroker());
-            }
-            return singletonList(new ApiMessageAndVersion(record,
-                metadataVersion.registerBrokerRecordVersion()));
-        }
-    }
-
-    ClusterControlIterator iterator(long epoch) {
-        return new ClusterControlIterator(epoch);
     }
 }
