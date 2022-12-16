@@ -42,8 +42,6 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
 final class ControllerMetricsManager {
-    // TODO: Add a Builder
-    
     private final static class PartitionState {
         final int leader;
         final PartitionAssignment assignment;
@@ -66,7 +64,7 @@ final class ControllerMetricsManager {
 
     private final Set<Integer> fencedBrokers = new HashSet<>();
 
-    private final Set<Uuid> topics = new HashSet<>();
+    private int topicCount = 0;
 
     private final Map<TopicIdPartition, PartitionState> topicPartitions = new HashMap<>();
 
@@ -213,16 +211,13 @@ final class ControllerMetricsManager {
     }
 
     private void replay(TopicRecord record) {
-        topics.add(record.topicId());
+        topicCount++;
 
-        controllerMetrics.setGlobalTopicCount(topics.size());
+        controllerMetrics.setGlobalTopicCount(topicCount);
     }
 
     private void replay(PartitionRecord record) {
         TopicIdPartition tp = new TopicIdPartition(record.topicId(), record.partitionId());
-        if (!topics.contains(tp.topicId())) {
-            throw new IllegalArgumentException(String.format("Unknown topic id for %s", tp));
-        }
 
         PartitionState partitionState = new PartitionState(record.leader(), new PartitionAssignment(record.replicas()));
         topicPartitions.put(tp, partitionState);
@@ -234,9 +229,6 @@ final class ControllerMetricsManager {
 
     private void replay(PartitionChangeRecord record) {
         TopicIdPartition tp = new TopicIdPartition(record.topicId(), record.partitionId());
-        if (!topics.contains(tp.topicId())) {
-            throw new IllegalArgumentException(String.format("Unknown topic id for %s", tp));
-        }
         if (!topicPartitions.containsKey(tp)) {
             throw new IllegalArgumentException(String.format("Unknown topic partitions %s", tp));
         }
@@ -267,7 +259,7 @@ final class ControllerMetricsManager {
         Uuid topicId = record.topicId();
         Predicate<TopicIdPartition> matchesTopic = tp -> tp.topicId() == topicId;
 
-        topics.remove(topicId);
+        topicCount--;
         topicPartitions.keySet().removeIf(matchesTopic);
         offlineTopicPartitions.removeIf(matchesTopic);
         imbalancedTopicPartitions.removeIf(matchesTopic);
@@ -290,6 +282,7 @@ final class ControllerMetricsManager {
     }
 
     void updateTopicAndPartitionMetrics() {
+        controllerMetrics.setGlobalTopicCount(topicCount);
         controllerMetrics.setGlobalPartitionCount(topicPartitions.size());
         controllerMetrics.setOfflinePartitionCount(offlineTopicPartitions.size());
         controllerMetrics.setPreferredReplicaImbalanceCount(imbalancedTopicPartitions.size());
@@ -299,16 +292,12 @@ final class ControllerMetricsManager {
     void reset() {
         registeredBrokers.clear();
         fencedBrokers.clear();
-        topics.clear();
+        topicCount = 0;
         topicPartitions.clear();
         offlineTopicPartitions.clear();
         imbalancedTopicPartitions.clear();
 
-        controllerMetrics.setFencedBrokerCount(0);
-        controllerMetrics.setActiveBrokerCount(0);
-        controllerMetrics.setGlobalTopicCount(0);
-        controllerMetrics.setGlobalPartitionCount(0);
-        controllerMetrics.setOfflinePartitionCount(0);
-        controllerMetrics.setPreferredReplicaImbalanceCount(0);
+        updateBrokerStateMetrics();
+        updateTopicAndPartitionMetrics();
     }
 }
