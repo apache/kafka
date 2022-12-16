@@ -212,6 +212,21 @@ public class StateManagerUtilTest {
     }
 
     @Test
+    public void shouldNotCloseStateManagerIfUnableToLockTaskDirectory() {
+        final InOrder inOrder = inOrder(stateManager, stateDirectory);
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateDirectory.lock(taskId)).thenReturn(false);
+
+        StateManagerUtil.closeStateManager(
+                logger, "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE);
+
+        inOrder.verify(stateManager, never()).close();
+        inOrder.verify(stateManager, never()).baseDir();
+        inOrder.verify(stateDirectory, never()).unlock(taskId);
+        verifyNoMoreInteractions(stateManager, stateDirectory);
+    }
+
+    @Test
     public void shouldNotWipeStateStoresIfUnableToLockTaskDirectory() {
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
         when(stateManager.taskId()).thenReturn(taskId);
