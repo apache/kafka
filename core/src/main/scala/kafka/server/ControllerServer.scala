@@ -50,6 +50,25 @@ import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
 
+
+case class ControllerMigrationSupport(
+  zkClient: KafkaZkClient,
+  migrationDriver: KRaftMigrationDriver,
+  brokersRpcClient: BrokersRpcClient
+) {
+  def shutdown(logging: Logging): Unit = {
+    if (migrationDriver != null) {
+      CoreUtils.swallow(migrationDriver.close(), logging)
+    }
+    if (zkClient != null) {
+      CoreUtils.swallow(zkClient.close(), logging)
+    }
+    if (brokersRpcClient != null) {
+      // TODO
+    }
+  }
+}
+
 /**
  * A Kafka controller that runs in KRaft (Kafka Raft) mode.
  */
@@ -83,7 +102,7 @@ class ControllerServer(
   var quotaManagers: QuotaManagers = _
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
-  var migrationDriver: KRaftMigrationDriver = _
+  var migrationSupport: Option[ControllerMigrationSupport] = None
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -114,15 +133,6 @@ class ControllerServer(
 
       maybeChangeStatus(STARTING, STARTED)
       this.logIdent = new LogContext(s"[ControllerServer id=${config.nodeId}] ").logPrefix()
-
-      if (config.migrationEnabled) {
-        val zkClient = KafkaZkClient.createZkClient("KRaft migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
-        val migrationClient = new ZkMigrationClient(zkClient)
-        val rpcClient: BrokersRpcClient = null
-        migrationDriver = new KRaftMigrationDriver(config.nodeId, migrationClient, rpcClient)
-        sharedServer.loader.installPublishers(java.util.Collections.singletonList(migrationDriver))
-      }
-
 
       newGauge("ClusterId", () => clusterId)
       newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
@@ -228,6 +238,16 @@ class ControllerServer(
         doRemoteKraftSetup()
       }
 
+      if (config.migrationEnabled) {
+        val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
+        val migrationClient = new ZkMigrationClient(zkClient)
+        val rpcClient: BrokersRpcClient = null
+        val migrationDriver = new KRaftMigrationDriver(config.nodeId, controller.asInstanceOf[QuorumController].zkRecordConsumer(), migrationClient, rpcClient)
+        sharedServer.loader.installPublishers(java.util.Collections.singletonList(migrationDriver))
+        migrationDriver.start()
+        migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, rpcClient))
+      }
+
       quotaManagers = QuotaFactory.instantiate(config,
         metrics,
         time,
@@ -278,8 +298,7 @@ class ControllerServer(
       sharedServer.ensureNotRaftLeader()
       if (socketServer != null)
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
-      if (migrationDriver != null)
-        CoreUtils.swallow(migrationDriver.close(), this)
+      migrationSupport.foreach(_.shutdown(this))
       if (controller != null)
         controller.beginShutdown()
       if (socketServer != null)

@@ -359,6 +359,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         long elapsedNs = time.nanoseconds() - startNs;
         metrics.updateBatchProcessingTime(elapsedNs);
         return new LogDeltaManifest(provenance,
+                currentLeaderAndEpoch,
                 numBatches,
                 elapsedNs,
                 numBytes);
@@ -447,14 +448,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch) {
         eventQueue.append(() -> {
             currentLeaderAndEpoch = leaderAndEpoch;
-            for (MetadataPublisher publisher : publishers.values()) {
-                try {
-                    publisher.publishLeaderAndEpoch(leaderAndEpoch);
-                } catch (Throwable e) {
-                    faultHandler.handleFault("Unhandled error publishing the new leader and epoch"
-                        + leaderAndEpoch + " with publisher " + publisher.name(), e);
-                }
-            }
         });
     }
 
