@@ -633,13 +633,4 @@ class LeaderEpochFileCacheTest {
     assertEquals(None, cache.epochForOffset(offset = 5))
   }
 
-  @Test
-  def testAssignWithoutFlush(): Unit = {
-    assertTrue(checkpoint.read().isEmpty)
-    cache.assign(epoch = 0, startOffset = 0)
-    cache.assign(epoch = 2, startOffset = 10)
-    assertEquals(2, checkpoint.read().size)
-    cache.assign(epoch = 5, startOffset = 100, flushToFile = false)
-    assertEquals(2, checkpoint.read().size)
-  }
 }

@@ -761,7 +761,7 @@ class ProducerStateManagerTest {
 
     // Add the snapshot files until offset 3 to the log dir.
     pathAndDataList.foreach { case (path, data) => Files.write(path, data) }
-    // Cleanup the inmemory snapshots and reload the snapshots from log dir.
+    // Cleanup the in-memory snapshots and reload the snapshots from log dir.
     // It loads the earlier written snapshot files from log dir.
     stateManager.truncateFullyAndReloadSnapshots()
 

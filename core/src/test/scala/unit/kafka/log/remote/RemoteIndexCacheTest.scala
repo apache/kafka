@@ -172,23 +172,31 @@ class RemoteIndexCacheTest {
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
+    // getIndex for first time will call rsm#fetchIndex
     cache.getIndexEntry(metadataList.head)
+    // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
     assertEquals(1, cache.entries.size())
     verifyFetchIndexInvocation(count = 1)
 
+    // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList(1))
+    // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(1))
     assertEquals(2, cache.entries.size())
     verifyFetchIndexInvocation(count = 2)
 
+    // Here a new key metadataList(2) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList(2))
+    // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(2))
     assertEquals(2, cache.entries.size())
     verifyFetchIndexInvocation(count = 3)
 
+    // Close the cache
     cache.close()
 
+    // Reload the cache from the disk and check the cache size is same as earlier
     val reloadedCache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
     assertEquals(2, reloadedCache.entries.size())
     reloadedCache.close()

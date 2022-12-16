@@ -597,7 +597,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def loadProducerState(lastOffset: Long): Unit = lock synchronized {
     rebuildProducerState(lastOffset, producerStateManager)
     maybeIncrementFirstUnstableOffset()
-    updateHighWatermark(lastOffset)
+    updateHighWatermark(localLog.logEndOffset)
   }
 
   private def recordVersion: RecordVersion = config.recordVersion
@@ -1310,14 +1310,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         }
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
-        val offset = _localLogStartOffset
+        val curLocalLogStartOffset = localLogStartOffset()
         val earliestLocalLogEpochEntry = leaderEpochCache.flatMap(cache =>
-          cache.epochForOffset(offset).flatMap(cache.epochEntry))
+          cache.epochForOffset(curLocalLogStartOffset).flatMap(cache.epochEntry))
         val epochOpt = earliestLocalLogEpochEntry match {
-          case Some(entry) if entry.startOffset <= offset => Optional.of[Integer](entry.epoch)
+          case Some(entry) if entry.startOffset <= curLocalLogStartOffset => Optional.of[Integer](entry.epoch)
           case _ => Optional.empty[Integer]()
         }
-        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, offset, epochOpt))
+        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
         val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
