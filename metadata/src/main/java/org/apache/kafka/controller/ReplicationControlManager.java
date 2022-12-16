@@ -108,7 +108,6 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map.Entry;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -1909,39 +1908,6 @@ public class ReplicationControlManager {
             setRemovingReplicas(Replicas.toList(partition.removingReplicas)).
             setPartitionIndex(partitionId).
             setReplicas(Replicas.toList(partition.replicas)));
-    }
-
-    class ReplicationControlIterator implements Iterator<List<ApiMessageAndVersion>> {
-        private final long epoch;
-        private final Iterator<TopicControlInfo> iterator;
-
-        ReplicationControlIterator(long epoch) {
-            this.epoch = epoch;
-            this.iterator = topics.values(epoch).iterator();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iterator.hasNext();
-        }
-
-        @Override
-        public List<ApiMessageAndVersion> next() {
-            if (!hasNext()) throw new NoSuchElementException();
-            TopicControlInfo topic = iterator.next();
-            List<ApiMessageAndVersion> records = new ArrayList<>();
-            records.add(new ApiMessageAndVersion(new TopicRecord().
-                setName(topic.name).
-                setTopicId(topic.id), (short) 0));
-            for (Entry<Integer, PartitionRegistration> entry : topic.parts.entrySet(epoch)) {
-                records.add(entry.getValue().toRecord(topic.id, entry.getKey()));
-            }
-            return records;
-        }
-    }
-
-    ReplicationControlIterator iterator(long epoch) {
-        return new ReplicationControlIterator(epoch);
     }
 
     private static final class IneligibleReplica {

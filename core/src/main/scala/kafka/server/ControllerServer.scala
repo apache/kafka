@@ -112,6 +112,7 @@ class ControllerServer(
       maybeChangeStatus(STARTING, STARTED)
       this.logIdent = new LogContext(s"[ControllerServer id=${config.nodeId}] ").logPrefix()
 
+
       newGauge("ClusterId", () => clusterId)
       newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
@@ -194,8 +195,6 @@ class ControllerServer(
           setDefaultNumPartitions(config.numPartitions.intValue()).
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
-          setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
-          setSnapshotMaxIntervalMs(config.metadataSnapshotMaxIntervalMs).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
           setMaxIdleIntervalNs(maxIdleIntervalNs).
           setMetrics(sharedServer.controllerMetrics).
