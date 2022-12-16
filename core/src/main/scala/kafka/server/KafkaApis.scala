@@ -188,7 +188,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request, requestLocal)
         case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
         case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request, requestLocal)
-        case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
+        case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request).exceptionally(handleError)
         case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
         case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request, requestLocal).exceptionally(handleError)
         case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request).exceptionally(handleError)
@@ -1337,11 +1337,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * Handle an offset fetch request
    */
-  def handleOffsetFetchRequest(request: RequestChannel.Request): Unit = {
+  def handleOffsetFetchRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val version = request.header.apiVersion
     if (version == 0) {
       // reading offsets from ZK
       handleOffsetFetchRequestV0(request)
+      CompletableFuture.completedFuture[Unit](())
     } else if (version >= 1 && version <= 7) {
       // reading offsets from Kafka
       handleOffsetFetchRequestBetweenV1AndV7(request)
@@ -1396,19 +1397,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestHelper.sendResponseMaybeThrottle(request, createResponse)
   }
 
-  private def handleOffsetFetchRequestBetweenV1AndV7(request: RequestChannel.Request): Unit = {
+  private def handleOffsetFetchRequestBetweenV1AndV7(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val offsetFetchRequest = request.body[OffsetFetchRequest]
     val requireStable = offsetFetchRequest.data.requireStable
-
-    def sendResponse(response: AbstractResponse): Unit = {
-      trace(s"Sending offset fetch response $response for correlation id ${request.header.correlationId} to " +
-        s"client ${request.header.clientId}.")
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        response.maybeSetThrottleTimeMs(requestThrottleMs)
-        response
-      })
-    }
-
     val isAllPartitions = offsetFetchRequest.data.topics == null
 
     val groupData = new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -1436,7 +1427,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     future.handle[Unit] { (response, exception) =>
       if (exception != null) {
-        sendResponse(offsetFetchRequest.getErrorResponse(Errors.forException(exception)))
+        requestHelper.sendMaybeThrottle(request, offsetFetchRequest.getErrorResponse(Errors.forException(exception)))
       } else {
         val offsetFetchResponse = new OffsetFetchResponseData()
         response.topics.forEach { topic =>
@@ -1452,23 +1443,14 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
           offsetFetchResponse.topics.add(newTopic)
         }
-        sendResponse(new OffsetFetchResponse(offsetFetchResponse, request.context.apiVersion))
+        requestHelper.sendMaybeThrottle(request, new OffsetFetchResponse(offsetFetchResponse, request.context.apiVersion))
       }
     }
   }
 
-  private def handleOffsetFetchRequestV8AndAbove(request: RequestChannel.Request): Unit = {
+  private def handleOffsetFetchRequestV8AndAbove(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val offsetFetchRequest = request.body[OffsetFetchRequest]
     val requireStable = offsetFetchRequest.data.requireStable
-
-    def sendResponse(response: AbstractResponse): Unit = {
-      trace(s"Sending offset fetch response $response for correlation id ${request.header.correlationId} to " +
-        s"client ${request.header.clientId}.")
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        response.maybeSetThrottleTimeMs(requestThrottleMs)
-        response
-      })
-    }
 
     val futures = new mutable.ArrayBuffer[CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]](
       offsetFetchRequest.data.groups.size
@@ -1496,7 +1478,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       futures.foreach { future =>
         offsetFetchResponse.groups.add(future.get())
       }
-      sendResponse(new OffsetFetchResponse(offsetFetchResponse, request.context.apiVersion))
+      requestHelper.sendMaybeThrottle(request, new OffsetFetchResponse(offsetFetchResponse, request.context.apiVersion))
     }
   }
 
