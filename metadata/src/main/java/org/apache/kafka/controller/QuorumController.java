@@ -106,6 +106,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -127,6 +128,8 @@ import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.DOES_NOT_UPDATE_QUEUE_TIME;
+import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.RUNS_IN_PREMIGRATION;
 
 
 /**
@@ -724,6 +727,26 @@ public final class QuorumController implements Controller {
         return event.future();
     }
 
+    enum ControllerOperationFlag {
+        /**
+         * A flag that signifies that this operation should not update the event queue time metric.
+         * We use this when the event was not appended to the queue.
+         */
+        DOES_NOT_UPDATE_QUEUE_TIME,
+
+        /**
+         * A flag that signifies that this operation can be processed when in pre-migration mode.
+         * Operations without this flag will always return NOT_CONTROLLER when invoked in premigration
+         * mode.
+         * <p>
+         * In pre-migration mode, we are still waiting to load the metadata from Apache
+         * ZooKeeper into the metadata log. Therefore, the metadata log is mostly empty,
+         * even though the cluster really does have metadata. Very few operations should
+         * use this flag.
+         */
+        RUNS_IN_PREMIGRATION
+    }
+
     interface ControllerWriteOperation<T> {
         /**
          * Generate the metadata records needed to implement this controller write
@@ -761,19 +784,19 @@ public final class QuorumController implements Controller {
         private final CompletableFuture<T> future;
         private final ControllerWriteOperation<T> op;
         private final long eventCreatedTimeNs = time.nanoseconds();
-        private final boolean deferred;
+        private final EnumSet<ControllerOperationFlag> flags;
         private OptionalLong startProcessingTimeNs = OptionalLong.empty();
         private ControllerResultAndOffset<T> resultAndOffset;
 
-        ControllerWriteEvent(String name, ControllerWriteOperation<T> op) {
-            this(name, op, false);
-        }
-
-        ControllerWriteEvent(String name, ControllerWriteOperation<T> op, boolean deferred) {
+        ControllerWriteEvent(
+            String name,
+            ControllerWriteOperation<T> op,
+            EnumSet<ControllerOperationFlag> flags
+        ) {
             this.name = name;
             this.future = new CompletableFuture<T>();
             this.op = op;
-            this.deferred = deferred;
+            this.flags = flags;
             this.resultAndOffset = null;
         }
 
@@ -784,13 +807,16 @@ public final class QuorumController implements Controller {
         @Override
         public void run() throws Exception {
             long now = time.nanoseconds();
-            if (!deferred) {
-                // We exclude deferred events from the event queue time metric to prevent
-                // incorrectly including the deferral time in the queue time.
+            if (!flags.contains(DOES_NOT_UPDATE_QUEUE_TIME)) {
                 controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
             }
             int controllerEpoch = curClaimEpoch;
-            if (!isActiveController()) {
+            if (!isActiveController(controllerEpoch)) {
+                throw newNotControllerException();
+            }
+            if (inPremigrationMode && !flags.contains(RUNS_IN_PREMIGRATION)) {
+                log.info("Cannot run write operation {} in premigration mode. Returning " +
+                    "NOT_CONTROLLER.", name);
                 throw newNotControllerException();
             }
             startProcessingTimeNs = OptionalLong.of(now);
@@ -951,10 +977,21 @@ public final class QuorumController implements Controller {
         }
     }
 
-    <T> CompletableFuture<T> appendWriteEvent(String name,
-                                              OptionalLong deadlineNs,
-                                              ControllerWriteOperation<T> op) {
-        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
+    <T> CompletableFuture<T> appendWriteEvent(
+        String name,
+        OptionalLong deadlineNs,
+        ControllerWriteOperation<T> op
+    ) {
+        return appendWriteEvent(name, deadlineNs, op, EnumSet.noneOf(ControllerOperationFlag.class));
+    }
+
+    <T> CompletableFuture<T> appendWriteEvent(
+        String name,
+        OptionalLong deadlineNs,
+        ControllerWriteOperation<T> op,
+        EnumSet<ControllerOperationFlag> flags
+    ) {
+        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op, flags);
         if (deadlineNs.isPresent()) {
             queue.appendWithDeadline(deadlineNs.getAsLong(), event);
         } else {
@@ -969,7 +1006,6 @@ public final class QuorumController implements Controller {
             appendRaftEvent("handleCommit[baseOffset=" + reader.baseOffset() + "]", () -> {
                 try {
                     maybeCompleteAuthorizerInitialLoad();
-                    long processedRecordsSize = 0;
                     boolean isActive = isActiveController();
                     while (reader.hasNext()) {
                         Batch<ApiMessageAndVersion> batch = reader.next();
@@ -1169,7 +1205,11 @@ public final class QuorumController implements Controller {
     }
 
     private boolean isActiveController() {
-        return curClaimEpoch != -1;
+        return isActiveController(curClaimEpoch);
+    }
+
+    private boolean isActiveController(int claimEpoch) {
+        return claimEpoch != -1;
     }
 
     private void updateWriteOffset(long offset) {
@@ -1208,7 +1248,8 @@ public final class QuorumController implements Controller {
             // of the queue rather than the end (hence prepend rather than append). It's also
             // important not to use prepend for anything else, to preserve the ordering here.
             queue.prepend(new ControllerWriteEvent<>("completeActivation[" + epoch + "]",
-                    new CompleteActivationEvent()));
+                new CompleteActivationEvent(),
+                    EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION)));
         } catch (Throwable e) {
             fatalFaultHandler.handleFault("exception while claiming leadership", e);
         }
@@ -1289,8 +1330,15 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private <T> void scheduleDeferredWriteEvent(String name, long deadlineNs,
-                                                ControllerWriteOperation<T> op) {
+    private <T> void scheduleDeferredWriteEvent(
+            String name,
+            long deadlineNs,
+            ControllerWriteOperation<T> op,
+            EnumSet<ControllerOperationFlag> flags
+    ) {
+        if (!flags.contains(DOES_NOT_UPDATE_QUEUE_TIME)) {
+            throw new RuntimeException("deferred events should not update the queue time.");
+        }
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op, true);
         queue.scheduleDeferred(name, new EarliestDeadlineFunction(deadlineNs), event);
         event.future.exceptionally(e -> {
@@ -1307,7 +1355,7 @@ public final class QuorumController implements Controller {
             log.error("Unexpected exception while executing deferred write event {}. " +
                 "Rescheduling for a minute from now.", name, e);
             scheduleDeferredWriteEvent(name,
-                deadlineNs + NANOSECONDS.convert(1, TimeUnit.MINUTES), op);
+                deadlineNs + NANOSECONDS.convert(1, TimeUnit.MINUTES), op, flags);
             return null;
         });
     }
@@ -1320,13 +1368,15 @@ public final class QuorumController implements Controller {
             cancelMaybeFenceReplicas();
             return;
         }
-        scheduleDeferredWriteEvent(MAYBE_FENCE_REPLICAS, nextCheckTimeNs, () -> {
-            ControllerResult<Void> result = replicationControl.maybeFenceOneStaleBroker();
-            // This following call ensures that if there are multiple brokers that
-            // are currently stale, then fencing for them is scheduled immediately
-            rescheduleMaybeFenceStaleBrokers();
-            return result;
-        });
+        scheduleDeferredWriteEvent(MAYBE_FENCE_REPLICAS, nextCheckTimeNs,
+            () -> {
+                ControllerResult<Void> result = replicationControl.maybeFenceOneStaleBroker();
+                // This following call ensures that if there are multiple brokers that
+                // are currently stale, then fencing for them is scheduled immediately
+                rescheduleMaybeFenceStaleBrokers();
+                return result;
+            },
+            EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION));
     }
 
     private void cancelMaybeFenceReplicas() {
@@ -1337,9 +1387,9 @@ public final class QuorumController implements Controller {
 
     private void maybeScheduleNextBalancePartitionLeaders() {
         if (imbalancedScheduled != ImbalanceSchedule.SCHEDULED &&
-            leaderImbalanceCheckIntervalNs.isPresent() &&
-            replicationControl.arePartitionLeadersImbalanced()) {
-
+                leaderImbalanceCheckIntervalNs.isPresent() &&
+                replicationControl.arePartitionLeadersImbalanced() &&
+                inPremigrationMode == false) {
             log.debug(
                 "Scheduling write event for {} because scheduled ({}), checkIntervalNs ({}) and isImbalanced ({})",
                 MAYBE_BALANCE_PARTITION_LEADERS,
@@ -1364,7 +1414,7 @@ public final class QuorumController implements Controller {
                 // generated by a ControllerWriteEvent have been applied.
 
                 return result;
-            }, true);
+            }, EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME));
 
             long delayNs = time.nanoseconds();
             if (imbalancedScheduled == ImbalanceSchedule.DEFERRED) {
@@ -1412,8 +1462,7 @@ public final class QuorumController implements Controller {
                         null
                     );
                 },
-                true
-            );
+                EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION));
 
             long delayNs = time.nanoseconds() + maxIdleIntervalNs.getAsLong();
             queue.scheduleDeferred(WRITE_NO_OP_RECORD, new EarliestDeadlineFunction(delayNs), event);
