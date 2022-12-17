@@ -16,9 +16,10 @@
  */
 package kafka.log.remote
 
-import kafka.log.{OffsetIndex, OffsetPosition, TimeIndex, UnifiedLog}
+import kafka.log.{OffsetIndex, TimeIndex, UnifiedLog}
 import kafka.utils.MockTime
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.server.log.internals.OffsetPosition
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.test.TestUtils
@@ -109,7 +110,7 @@ class RemoteIndexCacheTest {
     assertEquals(lastOffsetPosition, cache.lookupOffset(rlsMetadata, greaterOffsetThanLastOffset))
 
     // offsetIndex.lookup() returns OffsetPosition(baseOffset, 0) for offsets smaller than least entry in the offset index.
-    val nonExistentOffsetPosition = OffsetPosition(baseOffset, 0)
+    val nonExistentOffsetPosition = new OffsetPosition(baseOffset, 0)
     val lowerOffsetThanBaseOffset = offsetIndex.baseOffset - 1
     assertEquals(nonExistentOffsetPosition.position, cache.lookupOffset(rlsMetadata, lowerOffsetThanBaseOffset))
   }
