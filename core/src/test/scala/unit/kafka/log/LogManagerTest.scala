@@ -18,6 +18,7 @@
 package kafka.log
 
 import com.yammer.metrics.core.{Gauge, MetricName}
+import kafka.log.remote.RemoteIndexCache
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchLogEnd, LogDirFailureChannel}
@@ -364,6 +365,18 @@ class LogManagerTest {
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
       assertTrue(counts.max <= counts.min + 1, "Load should balance evenly")
     }
+  }
+
+  /**
+   * Tests that the log manager skips the remote-log-index-cache directory when loading the logs from disk
+   */
+  @Test
+  def testLoadLogsSkipRemoteIndexCache(): Unit = {
+    val logDir = TestUtils.tempDir()
+    val remoteIndexCache = new File(logDir, RemoteIndexCache.DirName)
+    remoteIndexCache.mkdir()
+    logManager = createLogManager(Seq(logDir))
+    logManager.loadLogs(logConfig, Map.empty)
   }
 
   /**
