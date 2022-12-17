@@ -18,6 +18,7 @@ package kafka.log
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.server.log.internals.CorruptIndexException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
