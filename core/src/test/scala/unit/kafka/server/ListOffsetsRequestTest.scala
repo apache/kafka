@@ -63,7 +63,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(Errors.UNKNOWN_TOPIC_OR_PARTITION, randomBrokerId, replicaRequest)
     assertResponseError(Errors.UNKNOWN_TOPIC_OR_PARTITION, randomBrokerId, debugReplicaRequest)
 
-    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers)
+    val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 2)
     val replicas = zkClient.getReplicasForPartition(partition).toSet
     val leader = partitionToLeader(partition.partition)
     val follower = replicas.find(_ != leader).get
@@ -112,7 +112,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   def testCurrentEpochValidation(): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
-    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(topicPartition.partition)
 
     // We need a leader change in order to check epoch fencing since the first epoch is 0 and
@@ -171,7 +171,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   @Test
   def testResponseIncludesLeaderEpoch(): Unit = {
-    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 9)
@@ -179,6 +179,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version = -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
     assertEquals((9L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, -1))
 
@@ -192,6 +193,9 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     // No changes to written data
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, -1))
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
@@ -204,7 +208,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   @Test
   def testResponseDefaultOffsetAndLeaderEpochForAllVersions(): Unit = {
-    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 9)
@@ -214,18 +218,22 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       if (version == 0) {
         assertEquals((-1L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
         assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))
+        assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
         assertEquals((10L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, version.toShort))
       } else if (version >= 1 && version <= 3) {
         assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
         assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))
+        assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
         assertEquals((10L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, version.toShort))
       } else if (version >= 4  && version <= 6) {
         assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
         assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))
+        assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
         assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, version.toShort))
       } else if (version >= 7) {
         assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
         assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))
+        assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
         assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, version.toShort))
         assertEquals((9L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, version.toShort))
       }
@@ -244,5 +252,9 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   private def sendRequest(leaderId: Int, request: ListOffsetsRequest): ListOffsetsResponse = {
     connectAndReceive[ListOffsetsResponse](request, destination = brokerSocketServer(leaderId))
+  }
+
+  def createTopic(numPartitions: Int, replicationFactor: Int): Map[Int, Int] = {
+    TestUtils.createTopic(zkClient, topic, numPartitions, replicationFactor, servers)
   }
 }
