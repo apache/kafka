@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.util.Optional
-
 import scala.collection.Seq
 import kafka.cluster.Partition
 import kafka.log.LogOffsetSnapshot

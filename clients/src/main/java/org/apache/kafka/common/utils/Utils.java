@@ -1488,4 +1488,12 @@ public final class Utils {
         return Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).format(dateTimeFormatter);
     }
 
+    /**
+     * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
+     */
+    public static String replaceSuffix(String name, String oldSuffix, String newSuffix) {
+        if (!name.endsWith(oldSuffix))
+            throw new IllegalArgumentException("Expected string to end with " + oldSuffix + " but string is " + name);
+        return name.substring(0, name.length() - oldSuffix.length()) + newSuffix;
+    }
 }

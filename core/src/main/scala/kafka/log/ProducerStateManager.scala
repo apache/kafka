@@ -16,25 +16,24 @@
  */
 package kafka.log
 
+import kafka.server.{BrokerReconfigurable, KafkaConfig}
+import kafka.utils.{Logging, nonthreadsafe, threadsafe}
+import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.errors._
+import org.apache.kafka.common.protocol.types._
+import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
+import org.apache.kafka.common.utils.{ByteUtils, Crc32C, Time}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.server.log.internals.{AppendOrigin, CompletedTxn, LogOffsetMetadata, SnapshotFile}
+
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, NoSuchFileException, StandardOpenOption}
 import java.util.concurrent.ConcurrentSkipListMap
-import kafka.log.UnifiedLog.offsetFromFile
-import kafka.server.{BrokerReconfigurable, KafkaConfig}
-import kafka.utils.{CoreUtils, Logging, nonthreadsafe, threadsafe}
-import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors._
-import org.apache.kafka.common.protocol.types._
-import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
-import org.apache.kafka.common.utils.{ByteUtils, Crc32C, Time, Utils}
-import org.apache.kafka.server.log.internals.{AppendOrigin, CompletedTxn, LogOffsetMetadata}
-
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 import scala.collection.{immutable, mutable}
+import scala.jdk.CollectionConverters._
 
 class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
@@ -462,7 +461,7 @@ object ProducerStateManager {
   private[log] def listSnapshotFiles(dir: File): Seq[SnapshotFile] = {
     if (dir.exists && dir.isDirectory) {
       Option(dir.listFiles).map { files =>
-        files.filter(f => f.isFile && isSnapshotFile(f)).map(SnapshotFile(_)).toSeq
+        files.filter(f => f.isFile && isSnapshotFile(f)).map(new SnapshotFile(_)).toSeq
       }.getOrElse(Seq.empty)
     } else Seq.empty
   }
@@ -493,6 +492,7 @@ class ProducerStateManager(
   val time: Time
 ) extends Logging {
   import ProducerStateManager._
+
   import java.util
 
   this.logIdent = s"[ProducerStateManager partition=$topicPartition] "
@@ -757,7 +757,7 @@ class ProducerStateManager(
   def takeSnapshot(): Unit = {
     // If not a new offset, then it is not worth taking another snapshot
     if (lastMapOffset > lastSnapOffset) {
-      val snapshotFile = SnapshotFile(UnifiedLog.producerSnapshotFile(_logDir, lastMapOffset))
+      val snapshotFile = new SnapshotFile(UnifiedLog.producerSnapshotFile(_logDir, lastMapOffset))
       val start = time.hiResClockMs()
       writeSnapshot(snapshotFile.file, producers)
       info(s"Wrote producer snapshot at offset $lastMapOffset with ${producers.size} producer ids in ${time.hiResClockMs() - start} ms.")
@@ -911,42 +911,9 @@ class ProducerStateManager(
   }
 }
 
-case class SnapshotFile private[log] (@volatile private var _file: File,
-                                      offset: Long) extends Logging {
-  def deleteIfExists(): Boolean = {
-    val deleted = Files.deleteIfExists(file.toPath)
-    if (deleted) {
-      info(s"Deleted producer state snapshot ${file.getAbsolutePath}")
-    } else {
-      info(s"Failed to delete producer state snapshot ${file.getAbsolutePath} because it does not exist.")
-    }
-    deleted
-  }
 
-  def updateParentDir(parentDir: File): Unit = {
-    _file = new File(parentDir, _file.getName)
-  }
 
-  def file: File = {
-    _file
-  }
 
-  def renameTo(newSuffix: String): Unit = {
-    val renamed = new File(CoreUtils.replaceSuffix(_file.getPath, "", newSuffix))
-    try {
-      Utils.atomicMoveWithFallback(_file.toPath, renamed.toPath)
-    } finally {
-      _file = renamed
-    }
-  }
-}
-
-object SnapshotFile {
-  def apply(file: File): SnapshotFile = {
-    val offset = offsetFromFile(file)
-    SnapshotFile(file, offset)
-  }
-}
 
 class ProducerStateManagerConfig(@volatile var producerIdExpirationMs: Int) extends Logging with BrokerReconfigurable {
 
