@@ -46,9 +46,9 @@ public class SnapshotFile {
     public boolean deleteIfExists() throws IOException {
         boolean deleted = Files.deleteIfExists(file.toPath());
         if (deleted) {
-            log.info("Deleted producer state snapshot ${file.getAbsolutePath}");
+            log.info("Deleted producer state snapshot {}", file.getAbsolutePath());
         } else {
-            log.info("Failed to delete producer state snapshot ${file.getAbsolutePath} because it does not exist.");
+            log.info("Failed to delete producer state snapshot {} because it does not exist.", file.getAbsolutePath());
         }
         return deleted;
     }

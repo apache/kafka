@@ -18,13 +18,13 @@ package kafka.log
 
 import kafka.server.{BrokerReconfigurable, KafkaConfig}
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C, Time}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.server.log.internals.{AppendOrigin, CompletedTxn, LogOffsetMetadata, SnapshotFile}
+import org.apache.kafka.server.log.internals._
 
 import java.io.File
 import java.nio.ByteBuffer
@@ -34,8 +34,6 @@ import java.util.concurrent.ConcurrentSkipListMap
 import scala.collection.mutable.ListBuffer
 import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
-
-class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
 /**
  * The last written record for a given producer. The last data offset may be undefined
@@ -492,7 +490,6 @@ class ProducerStateManager(
   val time: Time
 ) extends Logging {
   import ProducerStateManager._
-
   import java.util
 
   this.logIdent = s"[ProducerStateManager partition=$topicPartition] "
