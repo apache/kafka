@@ -20,11 +20,9 @@ package org.apache.kafka.controller;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Consumer;
@@ -304,48 +302,6 @@ public class FeatureControlManager {
                 finalizedVersions.put(record.name(), record.featureLevel());
             }
         }
-    }
-
-    class FeatureControlIterator implements Iterator<List<ApiMessageAndVersion>> {
-        private final Iterator<Entry<String, Short>> iterator;
-        private final MetadataVersion metadataVersion;
-        private boolean wroteVersion = false;
-
-        FeatureControlIterator(long epoch) {
-            this.iterator = finalizedVersions.entrySet(epoch).iterator();
-            this.metadataVersion = FeatureControlManager.this.metadataVersion.get(epoch);
-        }
-
-        @Override
-        public boolean hasNext() {
-            return needsWriteMetadataVersion() || iterator.hasNext();
-        }
-
-        private boolean needsWriteMetadataVersion() {
-            return !wroteVersion && metadataVersion.isAtLeast(minimumBootstrapVersion);
-        }
-
-        @Override
-        public List<ApiMessageAndVersion> next() {
-            // Write the metadata.version first
-            if (needsWriteMetadataVersion()) {
-                wroteVersion = true;
-                return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
-                    .setName(MetadataVersion.FEATURE_NAME)
-                    .setFeatureLevel(metadataVersion.featureLevel()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
-            }
-
-            // Then write the rest of the features
-            if (!iterator.hasNext()) throw new NoSuchElementException();
-            Entry<String, Short> entry = iterator.next();
-            return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
-                .setName(entry.getKey())
-                .setFeatureLevel(entry.getValue()), (short) 0));
-        }
-    }
-
-    FeatureControlIterator iterator(long epoch) {
-        return new FeatureControlIterator(epoch);
     }
 
     boolean isControllerId(int nodeId) {

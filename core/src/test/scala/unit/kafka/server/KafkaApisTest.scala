@@ -1991,6 +1991,158 @@ class KafkaApisTest {
   }
 
   @Test
+  def testHandleDeleteGroups(): Unit = {
+    val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(List(
+      "group-1",
+      "group-2",
+      "group-3"
+    ).asJava)
+
+    val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build())
+
+    val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
+    when(newGroupCoordinator.deleteGroups(
+      requestChannelRequest.context,
+      List("group-1", "group-2", "group-3").asJava,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handleDeleteGroupsRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    val results = new DeleteGroupsResponseData.DeletableGroupResultCollection(List(
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-1")
+        .setErrorCode(Errors.NONE.code),
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-2")
+        .setErrorCode(Errors.NOT_CONTROLLER.code),
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-3")
+        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code),
+    ).iterator.asJava)
+
+    future.complete(results)
+
+    val expectedDeleteGroupsResponse = new DeleteGroupsResponseData()
+      .setResults(results)
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[DeleteGroupsResponse]
+    assertEquals(expectedDeleteGroupsResponse, response.data)
+  }
+
+  @Test
+  def testHandleDeleteGroupsFutureFailed(): Unit = {
+    val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(List(
+      "group-1",
+      "group-2",
+      "group-3"
+    ).asJava)
+
+    val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build())
+
+    val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
+    when(newGroupCoordinator.deleteGroups(
+      requestChannelRequest.context,
+      List("group-1", "group-2", "group-3").asJava,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handleDeleteGroupsRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    future.completeExceptionally(Errors.NOT_CONTROLLER.exception)
+
+    val expectedDeleteGroupsResponse = new DeleteGroupsResponseData()
+      .setResults(new DeleteGroupsResponseData.DeletableGroupResultCollection(List(
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-1")
+          .setErrorCode(Errors.NOT_CONTROLLER.code),
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-2")
+          .setErrorCode(Errors.NOT_CONTROLLER.code),
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-3")
+          .setErrorCode(Errors.NOT_CONTROLLER.code),
+      ).iterator.asJava))
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[DeleteGroupsResponse]
+    assertEquals(expectedDeleteGroupsResponse, response.data)
+  }
+
+  @Test
+  def testHandleDeleteGroupsAuthenticationFailed(): Unit = {
+    val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(List(
+      "group-1",
+      "group-2",
+      "group-3"
+    ).asJava)
+
+    val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+
+    val acls = Map(
+      "group-1" -> AuthorizationResult.DENIED,
+      "group-2" -> AuthorizationResult.ALLOWED,
+      "group-3" -> AuthorizationResult.ALLOWED
+    )
+
+    when(authorizer.authorize(
+      any[RequestContext],
+      any[util.List[Action]]
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument(1, classOf[util.List[Action]])
+      actions.asScala.map { action =>
+        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
+      }.asJava
+    }
+
+    val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
+    when(newGroupCoordinator.deleteGroups(
+      requestChannelRequest.context,
+      List("group-2", "group-3").asJava,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleDeleteGroupsRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    future.complete(new DeleteGroupsResponseData.DeletableGroupResultCollection(List(
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-2")
+        .setErrorCode(Errors.NONE.code),
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-3")
+        .setErrorCode(Errors.NONE.code)
+    ).iterator.asJava))
+
+    val expectedDeleteGroupsResponse = new DeleteGroupsResponseData()
+      .setResults(new DeleteGroupsResponseData.DeletableGroupResultCollection(List(
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-2")
+          .setErrorCode(Errors.NONE.code),
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-3")
+          .setErrorCode(Errors.NONE.code),
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-1")
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)).iterator.asJava))
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[DeleteGroupsResponse]
+    assertEquals(expectedDeleteGroupsResponse, response.data)
+  }
+
+  @Test
   def testHandleDescribeGroups(): Unit = {
     val describeGroupsRequest = new DescribeGroupsRequestData().setGroups(List(
       "group-1",
@@ -3794,7 +3946,7 @@ class KafkaApisTest {
     val capturedResponse = verifyNoThrottling(request)
     val describeClusterResponse = capturedResponse.getValue.asInstanceOf[DescribeClusterResponse]
 
-    assertEquals(metadataCache.getControllerId.get, describeClusterResponse.data.controllerId)
+    assertEquals(metadataCache.getControllerId.get.id, describeClusterResponse.data.controllerId)
     assertEquals(clusterId, describeClusterResponse.data.clusterId)
     assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
     assertEquals(metadataCache.getAliveBrokerNodes(plaintextListener).toSet,

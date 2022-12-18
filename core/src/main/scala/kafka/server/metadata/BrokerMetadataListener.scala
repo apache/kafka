@@ -18,7 +18,7 @@ package kafka.server.metadata
 
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.CompletableFuture
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.image.writer.{ImageWriterOptions, RecordListWriter}
@@ -30,13 +30,9 @@ import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.snapshot.SnapshotReader
 
+import java.util.concurrent.TimeUnit.NANOSECONDS
 import scala.compat.java8.OptionConverters._
 
-
-object BrokerMetadataListener {
-  val MetadataBatchProcessingTimeUs = "MetadataBatchProcessingTimeUs"
-  val MetadataBatchSizes = "MetadataBatchSizes"
-}
 
 class BrokerMetadataListener(
   val brokerId: Int,
@@ -64,16 +60,6 @@ class BrokerMetadataListener(
   private val logContext = new LogContext(s"[BrokerMetadataListener id=$brokerId] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
   logIdent = logContext.logPrefix()
-
-  /**
-   * A histogram tracking the time in microseconds it took to process batches of events.
-   */
-  private val batchProcessingTimeHist = newHistogram(BrokerMetadataListener.MetadataBatchProcessingTimeUs)
-
-  /**
-   * A histogram tracking the sizes of batches that we have processed.
-   */
-  private val metadataBatchSizeHist = newHistogram(BrokerMetadataListener.MetadataBatchSizes)
 
   /**
    * The highest metadata offset that we've seen.  Written only from the event queue thread.
@@ -293,14 +279,14 @@ class BrokerMetadataListener(
         }
       }
       numBytes = numBytes + batch.sizeInBytes()
-      metadataBatchSizeHist.update(batch.records().size())
+      brokerMetrics.updateBatchSize(batch.records().size())
       numBatches = numBatches + 1
     }
 
     val endTimeNs = time.nanoseconds()
-    val elapsedUs = TimeUnit.MICROSECONDS.convert(endTimeNs - startTimeNs, TimeUnit.NANOSECONDS)
-    batchProcessingTimeHist.update(elapsedUs)
-    BatchLoadResults(numBatches, numRecords, elapsedUs, numBytes)
+    val elapsedNs = endTimeNs - startTimeNs
+    brokerMetrics.updateBatchProcessingTime(elapsedNs)
+    BatchLoadResults(numBatches, numRecords, NANOSECONDS.toMicros(elapsedNs), numBytes)
   }
 
   def startPublishing(publisher: MetadataPublisher): CompletableFuture[Void] = {
@@ -367,8 +353,7 @@ class BrokerMetadataListener(
     publisher.publish(delta, _image)
 
     // Update the metrics since the publisher handled the lastest image
-    brokerMetrics.lastAppliedRecordOffset.set(_highestOffset)
-    brokerMetrics.lastAppliedRecordTimestamp.set(_highestTimestamp)
+    brokerMetrics.updateLastAppliedImageProvenance(_image.provenance())
   }
 
   override def handleLeaderChange(leaderAndEpoch: LeaderAndEpoch): Unit = {
@@ -376,15 +361,7 @@ class BrokerMetadataListener(
   }
 
   override def beginShutdown(): Unit = {
-    eventQueue.beginShutdown("beginShutdown", new ShutdownEvent())
-  }
-
-  class ShutdownEvent extends EventQueue.FailureLoggingEvent(log) {
-    override def run(): Unit = {
-      brokerMetrics.close()
-      removeMetric(BrokerMetadataListener.MetadataBatchProcessingTimeUs)
-      removeMetric(BrokerMetadataListener.MetadataBatchSizes)
-    }
+    eventQueue.beginShutdown("beginShutdown")
   }
 
   def close(): Unit = {

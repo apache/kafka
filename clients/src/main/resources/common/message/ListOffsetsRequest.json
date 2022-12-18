@@ -32,7 +32,9 @@
   // Version 6 enables flexible versions.
   //
   // Version 7 enables listing offsets by max timestamp (KIP-734).
-  "validVersions": "0-7",
+  //
+  // Version 8 enables listing offsets by local log start offset (KIP-405).
+  "validVersions": "0-8",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId",

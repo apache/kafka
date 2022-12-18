@@ -18,7 +18,7 @@
 package kafka.server.metadata
 
 import kafka.controller.StateChangeLogger
-import kafka.server.{FinalizedFeaturesAndEpoch, MetadataCache}
+import kafka.server.{CachedControllerId, FinalizedFeaturesAndEpoch, KRaftCachedControllerId, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -287,14 +287,19 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     result.toMap
   }
 
-  override def getControllerId: Option[Int] = getRandomAliveBroker(_currentImage)
-
   /**
    * Choose a random broker node to report as the controller. We do this because we want
    * the client to send requests destined for the controller to a random broker.
    * Clients do not have direct access to the controller in the KRaft world, as explained
    * in KIP-590.
    */
+  override def getControllerId: Option[CachedControllerId] =
+    getRandomAliveBroker(_currentImage).map(KRaftCachedControllerId)
+
+  override def getRandomAliveBrokerId: Option[Int] = {
+    getRandomAliveBroker(_currentImage)
+  }
+
   private def getRandomAliveBroker(image: MetadataImage): Option[Int] = {
     val aliveBrokers = getAliveBrokers(image).toList
     if (aliveBrokers.isEmpty) {
