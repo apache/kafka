@@ -18,7 +18,7 @@ package kafka.coordinator.group
 
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -400,5 +400,40 @@ class GroupCoordinatorAdapterTest {
     ).asJava
 
     assertEquals(expectedDescribedGroups, future.get())
+  }
+
+  @Test
+  def testDeleteGroups(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    val ctx = makeContext(ApiKeys.DELETE_GROUPS, ApiKeys.DELETE_GROUPS.latestVersion)
+    val groupIds = List("group-1", "group-2", "group-3")
+    val bufferSupplier = BufferSupplier.create()
+
+    when(groupCoordinator.handleDeleteGroups(
+      groupIds.toSet,
+      RequestLocal(bufferSupplier)
+    )).thenReturn(Map(
+      "group-1" -> Errors.NONE,
+      "group-2" -> Errors.NOT_COORDINATOR,
+      "group-3" -> Errors.INVALID_GROUP_ID,
+    ))
+
+    val future = adapter.deleteGroups(ctx, groupIds.asJava, bufferSupplier)
+    assertTrue(future.isDone)
+
+    val expectedResults = new DeleteGroupsResponseData.DeletableGroupResultCollection()
+    expectedResults.add(new DeleteGroupsResponseData.DeletableGroupResult()
+      .setGroupId("group-1")
+      .setErrorCode(Errors.NONE.code))
+    expectedResults.add(new DeleteGroupsResponseData.DeletableGroupResult()
+      .setGroupId("group-2")
+      .setErrorCode(Errors.NOT_COORDINATOR.code))
+    expectedResults.add(new DeleteGroupsResponseData.DeletableGroupResult()
+      .setGroupId("group-3")
+      .setErrorCode(Errors.INVALID_GROUP_ID.code))
+
+    assertEquals(expectedResults, future.get())
   }
 }

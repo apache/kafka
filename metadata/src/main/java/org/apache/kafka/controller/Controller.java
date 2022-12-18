@@ -317,14 +317,6 @@ public interface Controller extends AclMutator, AutoCloseable {
     );
 
     /**
-     * Begin writing a controller snapshot.  If there was already an ongoing snapshot, it
-     * simply returns information about that snapshot rather than starting a new one.
-     *
-     * @return              A future yielding the epoch of the snapshot.
-     */
-    CompletableFuture<Long> beginWritingSnapshot();
-
-    /**
      * Create partitions on certain topics.
      *
      * @param topics        The list of topics to create partitions for.
