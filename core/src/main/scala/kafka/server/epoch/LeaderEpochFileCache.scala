@@ -60,6 +60,14 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
+  def assign(entries: Seq[EpochEntry]): Unit = {
+    entries.foreach(entry =>
+      if (assign(entry)) {
+        debug(s"Appended new epoch entry $entry. Cache now contains ${epochs.size} entries.")
+      })
+    flush()
+  }
+
   private def assign(entry: EpochEntry): Boolean = {
     if (entry.epoch < 0 || entry.startOffset < 0) {
       throw new IllegalArgumentException(s"Received invalid partition leader epoch entry $entry")
@@ -169,6 +177,24 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
+  def previousEpoch(epoch: Int): Option[Int] = {
+    inReadLock(lock) {
+      Option(epochs.lowerKey(epoch))
+    }
+  }
+
+  def nextEpoch(epoch: Int): Option[Int] = {
+    inReadLock(lock) {
+      Option(epochs.higherKey(epoch))
+    }
+  }
+
+  def epochEntry(epoch: Int): Option[EpochEntry] = {
+    inReadLock(lock) {
+      Option.apply(epochs.get(epoch))
+    }
+  }
+
   /**
     * Returns the Leader Epoch and the End Offset for a requested Leader Epoch.
     *
@@ -268,6 +294,22 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
+  def epochForOffset(offset: Long): Option[Int] = {
+    inReadLock(lock) {
+      var previousEpoch: Option[Int] = None
+      epochs.values().asScala.foreach {
+        case EpochEntry(epoch, startOffset) =>
+          if (startOffset == offset)
+            return Some(epoch)
+          if (startOffset > offset)
+            return previousEpoch
+
+          previousEpoch = Some(epoch)
+      }
+      previousEpoch
+    }
+  }
+
   /**
     * Delete all entries.
     */
@@ -287,7 +329,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   // Visible for testing
   def epochEntries: Seq[EpochEntry] = epochs.values.asScala.toSeq
 
-  private def flush(): Unit = {
+  def flush(): Unit = {
     checkpoint.write(epochs.values.asScala)
   }
 

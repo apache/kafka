@@ -251,16 +251,17 @@ class LogOffsetTest extends BaseRequestTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush(false)
 
-    val offsets = log.legacyFetchOffsetsBefore(ListOffsetsRequest.EARLIEST_TIMESTAMP, 10)
+    for (timestamp <- Seq(ListOffsetsRequest.EARLIEST_TIMESTAMP, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP)) {
+      val offsets = log.legacyFetchOffsetsBefore(timestamp, 10)
+      assertEquals(Seq(0L), offsets)
 
-    assertEquals(Seq(0L), offsets)
-
-    TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, broker),
-      "Leader should be elected")
-    val request = ListOffsetsRequest.Builder.forReplica(0, 0)
-      .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.EARLIEST_TIMESTAMP, 10).asJava).build()
-    val consumerOffsets = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).oldStyleOffsets.asScala
-    assertEquals(Seq(0L), consumerOffsets)
+      TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, broker),
+        "Leader should be elected")
+      val request = ListOffsetsRequest.Builder.forReplica(0, 0)
+        .setTargetTimes(buildTargetTimes(topicPartition, timestamp, 10).asJava).build()
+      val consumerOffsets = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).oldStyleOffsets.asScala
+      assertEquals(Seq(0L), consumerOffsets)
+    }
   }
 
   /* We test that `fetchOffsetsBefore` works correctly if `LogSegment.size` changes after each invocation (simulating

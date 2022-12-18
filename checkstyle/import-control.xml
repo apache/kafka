@@ -225,6 +225,7 @@
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.common.resource" />
     <allow pkg="org.apache.kafka.controller" />
+    <allow pkg="org.apache.kafka.image.writer" />
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metadata.authorizer" />
     <allow pkg="org.apache.kafka.metadata.migration" />
@@ -248,15 +249,18 @@
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.common.quota" />
-    <allow pkg="org.apache.kafka.common.resource" />
     <allow pkg="org.apache.kafka.common.requests" />
+    <allow pkg="org.apache.kafka.common.resource" />
     <allow pkg="org.apache.kafka.image" />
     <allow pkg="org.apache.kafka.image.writer" />
     <allow pkg="org.apache.kafka.metadata" />
+    <allow pkg="org.apache.kafka.queue" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.fault" />
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="org.apache.kafka.snapshot" />
+    <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
   <subpackage name="metadata">
