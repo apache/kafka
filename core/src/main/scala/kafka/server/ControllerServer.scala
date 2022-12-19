@@ -22,6 +22,7 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import kafka.cluster.Broker.ServerInfo
 import kafka.metrics.{KafkaMetricsGroup, LinuxIoMetricsCollector}
+import kafka.migration.KRaftControllerToZkBrokersRpcClient
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
@@ -64,7 +65,7 @@ case class ControllerMigrationSupport(
       CoreUtils.swallow(zkClient.close(), logging)
     }
     if (brokersRpcClient != null) {
-      // TODO
+      CoreUtils.swallow(brokersRpcClient.shutdown(), logging)
     }
   }
 }
@@ -241,7 +242,7 @@ class ControllerServer(
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
         val migrationClient = new ZkMigrationClient(zkClient)
-        val rpcClient: BrokersRpcClient = null
+        val rpcClient: BrokersRpcClient = new KRaftControllerToZkBrokersRpcClient(config.nodeId, config)
         val migrationDriver = new KRaftMigrationDriver(config.nodeId, controller.asInstanceOf[QuorumController].zkRecordConsumer(), migrationClient, rpcClient)
         sharedServer.loader.installPublishers(java.util.Collections.singletonList(migrationDriver))
         migrationDriver.start()

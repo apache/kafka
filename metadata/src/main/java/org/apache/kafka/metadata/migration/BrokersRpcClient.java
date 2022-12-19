@@ -19,15 +19,13 @@ package org.apache.kafka.metadata.migration;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 
-import java.util.Optional;
-
 public interface BrokersRpcClient {
-    void addZkBroker();
 
-    void removeZkBroker();
+    void startup();
 
-    void publishMetadata(MetadataImage image,
-                         Optional<MetadataDelta> deltaOpt);
+    void shutdown();
+
+    void publishMetadata(MetadataImage image);
 
     void sendRPCsToBrokersFromMetadataDelta(MetadataDelta delta,
                                             MetadataImage image,
@@ -35,5 +33,5 @@ public interface BrokersRpcClient {
 
     void sendRPCsToBrokersFromMetadataImage(MetadataImage image, int controllerEpoch);
 
-    void reset();
+    void clear();
 }

@@ -941,14 +941,11 @@ class ControllerChannelManagerTest {
   private case class SentRequest(request: ControlRequest, responseCallback: AbstractResponse => Unit)
 
   private class MockControllerBrokerRequestBatch(context: ControllerContext, config: KafkaConfig = config)
-    extends AbstractControllerBrokerRequestBatch(config, context, logger) {
+    extends AbstractControllerBrokerRequestBatch(config, () => context, logger) {
 
     val sentEvents = ListBuffer.empty[ControllerEvent]
     val sentRequests = mutable.Map.empty[Int, ListBuffer[SentRequest]]
 
-    override def sendEvent(event: ControllerEvent): Unit = {
-      sentEvents.append(event)
-    }
     override def sendRequest(brokerId: Int, request: ControlRequest, callback: AbstractResponse => Unit): Unit = {
       sentRequests.getOrElseUpdate(brokerId, ListBuffer.empty)
       sentRequests(brokerId).append(SentRequest(request, callback))
@@ -979,6 +976,21 @@ class ControllerChannelManagerTest {
           .map(_.request.build().asInstanceOf[LeaderAndIsrRequest]).toList
         case None => List.empty[LeaderAndIsrRequest]
       }
+    }
+
+    override def handleLeaderAndIsrResponse(response: LeaderAndIsrResponse, broker: Int): Unit = {
+      sentEvents.append(LeaderAndIsrResponseReceived(response, broker))
+    }
+
+    override def handleUpdateMetadataResponse(response: UpdateMetadataResponse, broker: Int)
+    : Unit = {
+      sentEvents.append(UpdateMetadataResponseReceived(response, broker))
+    }
+
+    override def handleStopReplicaResponse(stopReplicaResponse: StopReplicaResponse,
+                                           brokerId: Int, partitionErrorsForDeletingTopics: Map[TopicPartition, Errors]): Unit = {
+      if (partitionErrorsForDeletingTopics.nonEmpty)
+        sentEvents.append(TopicDeletionStopReplicaResponseReceived(brokerId, stopReplicaResponse.error, partitionErrorsForDeletingTopics))
     }
   }
 

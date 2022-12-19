@@ -18,8 +18,6 @@ package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.controller.Controller;
-import org.apache.kafka.controller.MigrationControlManager;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LogDeltaManifest;
@@ -83,6 +81,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
     public void start() {
         eventQueue.prepend(new PollEvent());
+    }
+
+    public void shutdown() throws InterruptedException {
+        eventQueue.close();
     }
 
     private void initializeMigrationState() {
