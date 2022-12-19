@@ -242,8 +242,13 @@ class ControllerServer(
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
         val migrationClient = new ZkMigrationClient(zkClient)
         val rpcClient: BrokersRpcClient = null
-        val migrationDriver = new KRaftMigrationDriver(config.nodeId, controller.asInstanceOf[QuorumController].zkRecordConsumer(), migrationClient, rpcClient)
-        sharedServer.loader.installPublishers(java.util.Collections.singletonList(migrationDriver))
+        val migrationDriver = new KRaftMigrationDriver(
+          config.nodeId,
+          controller.asInstanceOf[QuorumController].zkRecordConsumer(),
+          migrationClient,
+          rpcClient,
+          publisher => sharedServer.loader.installPublishers(java.util.Collections.singletonList(publisher))
+        )
         migrationDriver.start()
         migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, rpcClient))
       }

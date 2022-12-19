@@ -271,8 +271,18 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
 
     val requests = Seq(createTopicZNode, createPartitionsZNode) ++ createPartitionZNodeReqs
-    val (migrationZkVersion, _) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
-    state.withMigrationZkVersion(migrationZkVersion)
+    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
+    val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
+    if (resultCodes(TopicZNode.path(topicName)).equals(Code.NODEEXISTS)) {
+      // topic already created, just return
+      state
+    } else if (resultCodes.forall { case (_, code) => code.equals(Code.OK) } ) {
+      // ok
+      state.withMigrationZkVersion(migrationZkVersion)
+    } else {
+      // not ok
+      throw new RuntimeException(s"Failed to create or update topic $topicName. ZK operation had results $resultCodes")
+    }
   }
 
   private def createTopicPartition(topicPartition: TopicPartition): CreateRequest = {
@@ -318,8 +328,13 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     if (requests.isEmpty) {
       state
     } else {
-      val (migrationZkVersion, _) = zkClient.retryMigrationRequestsUntilConnected(requests.toSeq, state)
-      state.withMigrationZkVersion(migrationZkVersion)
+      val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests.toSeq, state)
+      val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
+      if (resultCodes.forall { case (_, code) => code.equals(Code.OK) } ) {
+        state.withMigrationZkVersion(migrationZkVersion)
+      } else {
+        throw new RuntimeException(s"Failed to update partition states: $topicPartitions. ZK transaction had results $resultCodes")
+      }
     }
   }
 
@@ -443,7 +458,6 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
   override def writeMetadataDeltaToZookeeper(delta: MetadataDelta,
                                              image: MetadataImage,
                                              state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
-    // TODO
     state
   }
 }

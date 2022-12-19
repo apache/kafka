@@ -143,6 +143,22 @@ class ZkMigrationClientTest extends QuorumTestHarness {
     assertEquals(List(1, 2, 3), partition1.isr)
   }
 
+  @Test
+  def testIdempotentCreateTopics(): Unit = {
+    assertEquals(0, migrationState.migrationZkVersion())
+
+    val partitions = Map(
+      0 -> new PartitionRegistration(Array(0, 1, 2), Array(0, 1, 2), Array(), Array(), 0, LeaderRecoveryState.RECOVERED, 0, -1),
+      1 -> new PartitionRegistration(Array(1, 2, 3), Array(1, 2, 3), Array(), Array(), 1, LeaderRecoveryState.RECOVERED, 0, -1)
+    ).map { case (k, v) => Integer.valueOf(k) -> v }.asJava
+    val topicId = Uuid.randomUuid()
+    migrationState = migrationClient.createTopic("test", topicId, partitions, migrationState)
+    assertEquals(1, migrationState.migrationZkVersion())
+
+    migrationState = migrationClient.createTopic("test", topicId, partitions, migrationState)
+    assertEquals(1, migrationState.migrationZkVersion())
+  }
+
   // Write Client Quotas using ZkMigrationClient and read them back using AdminZkClient
   private def writeClientQuotaAndVerify(migrationClient: ZkMigrationClient,
                                         adminZkClient: AdminZkClient,

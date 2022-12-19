@@ -820,7 +820,6 @@ public final class QuorumController implements Controller {
             }
             @Override
             public ControllerResult<Void> generateRecordsAndResult() {
-                log.info("Migrating batch {}", batch);
                 return ControllerResult.atomicOf(batch, null);
             }
 
