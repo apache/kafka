@@ -42,13 +42,10 @@ public class ClassLoaderAwareRemoteStorageManager implements RemoteStorageManage
 
     @Override
     public void configure(Map<String, ?> configs) {
-        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
-        Thread.currentThread().setContextClassLoader(rsmClassLoader);
-        try {
+        withClassLoader(() -> {
             delegate.configure(configs);
-        } finally {
-            Thread.currentThread().setContextClassLoader(originalClassLoader);
-        }
+            return null;
+        });
     }
 
     @Override

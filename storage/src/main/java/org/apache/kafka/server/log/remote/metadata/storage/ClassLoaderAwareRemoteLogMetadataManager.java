@@ -111,13 +111,10 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
 
     @Override
     public void close() throws IOException {
-        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
-        Thread.currentThread().setContextClassLoader(loader);
-        try {
+        withClassLoader(() -> {
             delegate.close();
-        } finally {
-            Thread.currentThread().setContextClassLoader(originalClassLoader);
-        }
+            return null;
+        });
     }
 
     private <T, E extends Exception> T withClassLoader(StorageAction<T, E> action) throws E {
