@@ -16,24 +16,26 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Background thread runnable that consumes {@code ApplicationEvent} and
@@ -44,61 +46,84 @@ import java.util.concurrent.atomic.AtomicReference;
  * initialized by the polling thread.
  */
 public class DefaultBackgroundThread extends KafkaThread {
+    private static final int MAX_POLL_TIMEOUT_MS = 5000;
     private static final String BACKGROUND_THREAD_NAME =
-        "consumer_background_thread";
+            "consumer_background_thread";
     private final Time time;
     private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private final ConsumerNetworkClient networkClient;
-    private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
-    private final Metrics metrics;
     private final ConsumerConfig config;
+    // empty if groupId is null
+    private final Optional<CoordinatorRequestManager> coordinatorManager;
+    private final ApplicationEventProcessor applicationEventProcessor;
+    private final NetworkClientDelegate networkClientDelegate;
+    private final ErrorEventHandler errorEventHandler;
 
-    private String clientId;
-    private long retryBackoffMs;
-    private int heartbeatIntervalMs;
     private boolean running;
-    private Optional<ApplicationEvent> inflightEvent = Optional.empty();
-    private final AtomicReference<Optional<RuntimeException>> exception =
-        new AtomicReference<>(Optional.empty());
 
+    // Visible for testing
+    DefaultBackgroundThread(final Time time,
+                            final ConsumerConfig config,
+                            final LogContext logContext,
+                            final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                            final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                            final ErrorEventHandler errorEventHandler,
+                            final ApplicationEventProcessor processor,
+                            final ConsumerMetadata metadata,
+                            final NetworkClientDelegate networkClient,
+                            final CoordinatorRequestManager coordinatorManager) {
+        super(BACKGROUND_THREAD_NAME, true);
+        this.time = time;
+        this.running = true;
+        this.log = logContext.logger(getClass());
+        this.applicationEventQueue = applicationEventQueue;
+        this.backgroundEventQueue = backgroundEventQueue;
+        this.applicationEventProcessor = processor;
+        this.config = config;
+        this.metadata = metadata;
+        this.networkClientDelegate = networkClient;
+        this.coordinatorManager = Optional.ofNullable(coordinatorManager);
+        this.errorEventHandler = errorEventHandler;
+    }
     public DefaultBackgroundThread(final Time time,
                                    final ConsumerConfig config,
+                                   final GroupRebalanceConfig rebalanceConfig,
                                    final LogContext logContext,
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                   final SubscriptionState subscriptions,
                                    final ConsumerMetadata metadata,
-                                   final ConsumerNetworkClient networkClient,
-                                   final Metrics metrics) {
+                                   final KafkaClient networkClient) {
         super(BACKGROUND_THREAD_NAME, true);
         try {
             this.time = time;
-            this.log = logContext.logger(DefaultBackgroundThread.class);
+            this.log = logContext.logger(getClass());
             this.applicationEventQueue = applicationEventQueue;
             this.backgroundEventQueue = backgroundEventQueue;
             this.config = config;
-            setConfig();
-            this.inflightEvent = Optional.empty();
             // subscriptionState is initialized by the polling thread
-            this.subscriptions = subscriptions;
             this.metadata = metadata;
-            this.networkClient = networkClient;
-            this.metrics = metrics;
+            this.networkClientDelegate = new NetworkClientDelegate(
+                    this.time,
+                    this.config,
+                    logContext,
+                    networkClient);
             this.running = true;
+            this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
+            String groupId = rebalanceConfig.groupId;
+            this.coordinatorManager = groupId == null ?
+                    Optional.empty() :
+                    Optional.of(new CoordinatorRequestManager(
+                            logContext,
+                            config,
+                            errorEventHandler,
+                            groupId));
+            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue);
         } catch (final Exception e) {
-            // now propagate the exception
             close();
-            throw new KafkaException("Failed to construct background processor", e);
+            throw new KafkaException("Failed to construct background processor", e.getCause());
         }
-    }
-
-    private void setConfig() {
-        this.retryBackoffMs = this.config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-        this.heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
     }
 
     @Override
@@ -109,23 +134,13 @@ public class DefaultBackgroundThread extends KafkaThread {
                 try {
                     runOnce();
                 } catch (final WakeupException e) {
-                    log.debug(
-                        "Exception thrown, background thread won't terminate",
-                        e
-                    );
-                    // swallow the wakeup exception to prevent killing the
-                    // background thread.
+                    log.debug("WakeupException caught, background thread won't be interrupted");
+                    // swallow the wakeup exception to prevent killing the background thread.
                 }
             }
         } catch (final Throwable t) {
-            log.error(
-                "The background thread failed due to unexpected error",
-                t
-            );
-            if (t instanceof RuntimeException)
-                this.exception.set(Optional.of((RuntimeException) t));
-            else
-                this.exception.set(Optional.of(new RuntimeException(t)));
+            log.error("The background thread failed due to unexpected error", t);
+            throw new RuntimeException(t);
         } finally {
             close();
             log.debug("{} closed", getClass());
@@ -133,63 +148,57 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     /**
-     * Process event from a single poll
+     * Poll and process an {@link ApplicationEvent}. It performs the following tasks:
+     * 1. Drains and try to process all of the requests in the queue.
+     * 2. Poll request managers to queue up the necessary requests.
+     * 3. Poll the networkClient to send and retrieve the response.
      */
     void runOnce() {
-        this.inflightEvent = maybePollEvent();
-        if (this.inflightEvent.isPresent()) {
-            log.debug("processing application event: {}", this.inflightEvent);
-        }
-        if (this.inflightEvent.isPresent() && maybeConsumeInflightEvent(this.inflightEvent.get())) {
-            // clear inflight event upon successful consumption
-            this.inflightEvent = Optional.empty();
+        drainAndProcess();
+
+        final long currentTimeMs = time.milliseconds();
+        long pollWaitTimeMs = MAX_POLL_TIMEOUT_MS;
+
+        if (coordinatorManager.isPresent()) {
+            pollWaitTimeMs = Math.min(
+                    pollWaitTimeMs,
+                    handlePollResult(coordinatorManager.get().poll(currentTimeMs)));
         }
 
-        // if there are pending events to process, poll then continue without
-        // blocking.
-        if (!applicationEventQueue.isEmpty() || inflightEvent.isPresent()) {
-            networkClient.poll(time.timer(0));
-            return;
-        }
-        // if there are no events to process, poll until timeout. The timeout
-        // will be the minimum of the requestTimeoutMs, nextHeartBeatMs, and
-        // nextMetadataUpdate. See NetworkClient.poll impl.
-        networkClient.poll(time.timer(timeToNextHeartbeatMs(time.milliseconds())));
+        networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
     }
 
-    private long timeToNextHeartbeatMs(final long nowMs) {
-        // TODO: implemented when heartbeat is added to the impl
-        return 100;
-    }
-
-    private Optional<ApplicationEvent> maybePollEvent() {
-        if (this.inflightEvent.isPresent() || this.applicationEventQueue.isEmpty()) {
-            return this.inflightEvent;
+    private void drainAndProcess() {
+        Queue<ApplicationEvent> events = pollApplicationEvent();
+        Iterator<ApplicationEvent> iter = events.iterator();
+        while (iter.hasNext()) {
+            ApplicationEvent event = iter.next();
+            log.debug("processing application event: {}", event);
+            consumeApplicationEvent(event);
         }
-        return Optional.ofNullable(this.applicationEventQueue.poll());
     }
 
-    /**
-     * ApplicationEvent are consumed here.
-     *
-     * @param event an {@link ApplicationEvent}
-     * @return true when successfully consumed the event.
-     */
-    private boolean maybeConsumeInflightEvent(final ApplicationEvent event) {
+    long handlePollResult(NetworkClientDelegate.PollResult res) {
+        if (!res.unsentRequests.isEmpty()) {
+            networkClientDelegate.addAll(res.unsentRequests);
+        }
+        return res.timeUntilNextPollMs;
+    }
+
+    private Queue<ApplicationEvent> pollApplicationEvent() {
+        if (this.applicationEventQueue.isEmpty()) {
+            return new LinkedList<>();
+        }
+
+        LinkedList<ApplicationEvent> res = new LinkedList<>();
+        this.applicationEventQueue.drainTo(res);
+        return res;
+    }
+
+    private void consumeApplicationEvent(final ApplicationEvent event) {
         log.debug("try consuming event: {}", Optional.ofNullable(event));
         Objects.requireNonNull(event);
-        return event.process();
-    }
-
-    /**
-     * Processes {@link NoopApplicationEvent} and equeue a
-     * {@link NoopBackgroundEvent}. This is intentionally left here for
-     * demonstration purpose.
-     *
-     * @param event a {@link NoopApplicationEvent}
-     */
-    private void process(final NoopApplicationEvent event) {
-        backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
+        applicationEventProcessor.process(event);
     }
 
     public boolean isRunning() {
@@ -197,13 +206,13 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     public void wakeup() {
-        networkClient.wakeup();
+        networkClientDelegate.wakeup();
     }
 
     public void close() {
         this.running = false;
         this.wakeup();
-        Utils.closeQuietly(networkClient, "consumer network client");
+        Utils.closeQuietly(networkClientDelegate, "network client utils");
         Utils.closeQuietly(metadata, "consumer metadata client");
     }
 }
