@@ -1436,6 +1436,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
             s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
             10000)
+
+          fail("passed 2nd try!")
       }
 
       // Check the leader hasn't moved
@@ -1603,6 +1605,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
             s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
             10000)
+
+          fail("passed 2nd try!")
       }
 
       // Check the leader hasn't moved
@@ -1770,6 +1774,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
             s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
             10000)
+
+          fail("passed 2nd try!")
       }
 
       // Check the leader hasn't moved
@@ -1937,6 +1943,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
             s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
             10000)
+
+          fail("passed 2nd try!")
       }
 
       // Check the leader hasn't moved
@@ -2104,6 +2112,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
             s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
             10000)
+
+          fail("passed 2nd try!")
       }
 
       // Check the leader hasn't moved
@@ -2271,6 +2281,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
             s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
             10000)
+
+          fail("passed 2nd try!")
       }
 
       // Check the leader hasn't moved
@@ -2438,6 +2450,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
             s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
             10000)
+
+          fail("passed 2nd try!")
       }
 
       // Check the leader hasn't moved
@@ -2605,6 +2619,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
             s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
             10000)
+
+          fail("passed 2nd try!")
       }
 
       // Check the leader hasn't moved
@@ -2772,6 +2788,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
             s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
             10000)
+
+          fail("passed 2nd try!")
       }
 
       // Check the leader hasn't moved

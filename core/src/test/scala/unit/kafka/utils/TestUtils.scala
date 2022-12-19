@@ -483,7 +483,14 @@ object TestUtils extends Logging {
                                                     topic: String,
                                                     numPartitions: Int,
                                                     replicationFactor: Int): Boolean = {
-    val description = describeTopic(adminClient, topic)
+    var description: TopicDescription = null
+    var i = 0
+    waitUntilTrue(() => {
+      System.err.print("checking:" + i)
+      i += 1
+      description = describeTopic(adminClient, topic)
+      description != null
+    }, s"Failed to describe the topic $topic")
     description != null &&
       description.partitions().size() == numPartitions &&
       description.partitions().iterator().next().replicas().size() == replicationFactor
