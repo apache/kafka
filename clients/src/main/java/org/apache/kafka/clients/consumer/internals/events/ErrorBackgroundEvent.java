@@ -16,19 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * The event is NoOp. This is intentionally left here for demonstration purpose.
- */
-public class NoopApplicationEvent extends ApplicationEvent {
-    public final String message;
+public class ErrorBackgroundEvent extends BackgroundEvent {
+    private final Exception exception;
 
-    public NoopApplicationEvent(final String message) {
-        super(Type.NOOP);
-        this.message = message;
-    }
-
-    @Override
-    public String toString() {
-        return getClass() + "_" + this.message;
+    public ErrorBackgroundEvent(Exception e) {
+        super(EventType.ERROR);
+        exception = e;
     }
 }
