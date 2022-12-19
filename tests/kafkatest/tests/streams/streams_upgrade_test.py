@@ -296,7 +296,7 @@ class StreamsUpgradeTest(Test):
         # rolling bounce
         random.shuffle(self.processors)
         for p in self.processors:
-            p.CLEAN_NODE_ENABLED = False
+            p.CLEAN_NODE_ENABLED = True
             self.do_stop_start_bounce(p, None, second_version, counter, extra_properties_second)
             counter = counter + 1
 
