@@ -75,8 +75,9 @@ public class TimeIndex extends AbstractIndex {
 
     @Override
     public void sanityCheck() {
-        long lastTimestamp = lastEntry.timestamp;
-        long lastOffset = lastEntry.offset;
+        TimestampOffset entry = lastEntry();
+        long lastTimestamp = entry.timestamp;
+        long lastOffset = entry.offset;
         if (entries() != 0 && lastTimestamp < timestamp(mmap(), 0))
             throw new CorruptIndexException("Corrupt time index found, time index file (" + file().getAbsolutePath() + ") has "
                 + "non-zero size but the last timestamp is " + lastTimestamp + " which is less than the first timestamp "

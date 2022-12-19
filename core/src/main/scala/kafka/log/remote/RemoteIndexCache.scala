@@ -16,13 +16,13 @@
  */
 package kafka.log.remote
 
-import kafka.log.{LazyIndex, _}
+import kafka.log.UnifiedLog
 import kafka.log.remote.RemoteIndexCache.DirName
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.{OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
+import org.apache.kafka.server.log.internals.{LazyIndex, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageManager}
 
@@ -144,13 +144,13 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         if (offsetIndexFile.exists() && timestampIndexFile.exists() && txnIndexFile.exists()) {
 
           val offsetIndex: LazyIndex[OffsetIndex] = {
-            val index = LazyIndex.forOffset(offsetIndexFile, offset, Int.MaxValue, writable = false)
+            val index = LazyIndex.forOffset(offsetIndexFile, offset, Int.MaxValue, false)
             index.get.sanityCheck()
             index
           }
 
           val timeIndex: LazyIndex[TimeIndex] = {
-            val index = LazyIndex.forTime(timestampIndexFile, offset, Int.MaxValue, writable = false)
+            val index = LazyIndex.forTime(timestampIndexFile, offset, Int.MaxValue, false)
             index.get.sanityCheck()
             index
           }
@@ -241,7 +241,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         val offsetIndex: LazyIndex[OffsetIndex] = loadIndexFile(fileName, UnifiedLog.IndexFileSuffix,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET),
           file => {
-            val index = LazyIndex.forOffset(file, startOffset, Int.MaxValue, writable = false)
+            val index = LazyIndex.forOffset(file, startOffset, Int.MaxValue, false)
             index.get.sanityCheck()
             index
           })
@@ -249,7 +249,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         val timeIndex: LazyIndex[TimeIndex] = loadIndexFile(fileName, UnifiedLog.TimeIndexFileSuffix,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TIMESTAMP),
           file => {
-            val index = LazyIndex.forTime(file, startOffset, Int.MaxValue, writable = false)
+            val index = LazyIndex.forTime(file, startOffset, Int.MaxValue, false)
             index.get.sanityCheck()
             index
           })
