@@ -36,7 +36,6 @@ import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
-import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
@@ -47,19 +46,19 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 final class ControllerMetricsManager {
     private final static class PartitionState {
         final int leader;
-        final PartitionAssignment assignment;
+        final int preferredReplica;
 
-        PartitionState(int leader, PartitionAssignment assignment) {
+        PartitionState(int leader, int preferredReplica) {
             this.leader = leader;
-            this.assignment = assignment;
+            this.preferredReplica = preferredReplica;
         }
 
         int leader() {
             return leader;
         }
 
-        PartitionAssignment assignment() {
-            return assignment;
+        int preferredReplica() {
+            return preferredReplica;
         }
     }
 
@@ -208,6 +207,9 @@ final class ControllerMetricsManager {
         } else if (fencingChange == BrokerRegistrationFencingChange.UNFENCE) {
             fencedBrokers.remove(brokerId);
             updateBrokerStateMetrics();
+        } else {
+            // The fencingChange value is NONE. In this case the controller doesn't need to update the broker
+            // state metrics.
         }
     }
 
@@ -228,7 +230,7 @@ final class ControllerMetricsManager {
     private void replay(PartitionRecord record) {
         TopicIdPartition tp = new TopicIdPartition(record.topicId(), record.partitionId());
 
-        PartitionState partitionState = new PartitionState(record.leader(), new PartitionAssignment(record.replicas()));
+        PartitionState partitionState = new PartitionState(record.leader(), record.replicas().get(0));
         topicPartitions.put(tp, partitionState);
 
         updateBasedOnPartitionState(tp, partitionState);
@@ -248,11 +250,11 @@ final class ControllerMetricsManager {
                 PartitionState newValue = oldValue;
                 // Update replicas
                 if (record.replicas() != null) {
-                    newValue = new PartitionState(newValue.leader(), new PartitionAssignment(record.replicas()));
+                    newValue = new PartitionState(newValue.leader(), record.replicas().get(0));
                 }
 
                 if (record.leader() != NO_LEADER_CHANGE) {
-                    newValue = new PartitionState(record.leader(), newValue.assignment());
+                    newValue = new PartitionState(record.leader(), newValue.preferredReplica());
                 }
 
                 return newValue;
@@ -276,21 +278,21 @@ final class ControllerMetricsManager {
         updateTopicAndPartitionMetrics();
     }
 
-    void updateBasedOnPartitionState(TopicIdPartition tp, PartitionState partitionState) {
+    private void updateBasedOnPartitionState(TopicIdPartition tp, PartitionState partitionState) {
         if (partitionState.leader() == NO_LEADER) {
             offlineTopicPartitions.add(tp);
         } else {
             offlineTopicPartitions.remove(tp);
         }
 
-        if (partitionState.leader() == partitionState.assignment().replicas().get(0)) {
+        if (partitionState.leader() == partitionState.preferredReplica()) {
             imbalancedTopicPartitions.remove(tp);
         } else {
             imbalancedTopicPartitions.add(tp);
         }
     }
 
-    void updateTopicAndPartitionMetrics() {
+    private void updateTopicAndPartitionMetrics() {
         controllerMetrics.setGlobalTopicCount(topicCount);
         controllerMetrics.setGlobalPartitionCount(topicPartitions.size());
         controllerMetrics.setOfflinePartitionCount(offlineTopicPartitions.size());

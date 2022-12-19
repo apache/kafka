@@ -23,12 +23,16 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -66,12 +70,35 @@ final class ControllerMetricsManagerTest {
     }
 
     @Test
+    public void testBrokerLegacyChangedToActive() {
+        ControllerMetrics metrics = new MockControllerMetrics();
+        ControllerMetricsManager manager = new ControllerMetricsManager(metrics);
+
+        manager.replay(brokerRegistration(1, 1, true));
+        manager.replay(brokerUnfence(1, 1));
+        assertEquals(1, metrics.activeBrokerCount());
+        assertEquals(0, metrics.fencedBrokerCount());
+    }
+
+    @Test
     public void testBrokerChangedToFence() {
         ControllerMetrics metrics = new MockControllerMetrics();
         ControllerMetricsManager manager = new ControllerMetricsManager(metrics);
 
         manager.replay(brokerRegistration(1, 1, false));
         manager.replay(brokerChange(1, 1, BrokerRegistrationFencingChange.FENCE));
+        assertEquals(0, metrics.activeBrokerCount());
+        assertEquals(1, metrics.fencedBrokerCount());
+    }
+
+
+    @Test
+    public void testBrokerLegacyChangedToFence() {
+        ControllerMetrics metrics = new MockControllerMetrics();
+        ControllerMetricsManager manager = new ControllerMetricsManager(metrics);
+
+        manager.replay(brokerRegistration(1, 1, false));
+        manager.replay(brokerFence(1, 1));
         assertEquals(0, metrics.activeBrokerCount());
         assertEquals(1, metrics.fencedBrokerCount());
     }
@@ -85,6 +112,39 @@ final class ControllerMetricsManagerTest {
         manager.replay(brokerChange(1, 1, BrokerRegistrationFencingChange.NONE));
         assertEquals(0, metrics.activeBrokerCount());
         assertEquals(1, metrics.fencedBrokerCount());
+    }
+
+    @Test
+    public void testBrokerUnregister() {
+        ControllerMetrics metrics = new MockControllerMetrics();
+        ControllerMetricsManager manager = new ControllerMetricsManager(metrics);
+
+        manager.replay(brokerRegistration(1, 1, true));
+        manager.replay(brokerRegistration(2, 1, false));
+        assertEquals(1, metrics.activeBrokerCount());
+        assertEquals(1, metrics.fencedBrokerCount());
+        manager.replay(brokerUnregistration(1, 1));
+        assertEquals(1, metrics.activeBrokerCount());
+        assertEquals(0, metrics.fencedBrokerCount());
+        manager.replay(brokerUnregistration(2, 1));
+        assertEquals(0, metrics.activeBrokerCount());
+        assertEquals(0, metrics.fencedBrokerCount());
+    }
+
+    @Test
+    public void testReplayBatch() {
+        ControllerMetrics metrics = new MockControllerMetrics();
+        ControllerMetricsManager manager = new ControllerMetricsManager(metrics);
+
+        manager.replayBatch(
+            0,
+            Arrays.asList(
+                new ApiMessageAndVersion(brokerRegistration(1, 1, true), (short) 0),
+                new ApiMessageAndVersion(brokerChange(1, 1, BrokerRegistrationFencingChange.UNFENCE), (short) 0)
+            )
+        );
+        assertEquals(1, metrics.activeBrokerCount());
+        assertEquals(0, metrics.fencedBrokerCount());
     }
 
     @Test
@@ -228,6 +288,15 @@ final class ControllerMetricsManagerTest {
             .setFenced(fenced);
     }
 
+    private static UnregisterBrokerRecord brokerUnregistration(
+        int brokerId,
+        long epoch
+    ) {
+        return new UnregisterBrokerRecord()
+            .setBrokerId(brokerId)
+            .setBrokerEpoch(epoch);
+    }
+
     private static BrokerRegistrationChangeRecord brokerChange(
         int brokerId,
         long epoch,
@@ -237,6 +306,18 @@ final class ControllerMetricsManagerTest {
             .setBrokerId(brokerId)
             .setBrokerEpoch(epoch)
             .setFenced(fencing.value());
+    }
+
+    private static UnfenceBrokerRecord brokerUnfence(int brokerId, long epoch) {
+        return new UnfenceBrokerRecord()
+            .setId(brokerId)
+            .setEpoch(epoch);
+    }
+
+    private static FenceBrokerRecord brokerFence(int brokerId, long epoch) {
+        return new FenceBrokerRecord()
+            .setId(brokerId)
+            .setEpoch(epoch);
     }
 
     private static TopicRecord topicRecord(String name) {

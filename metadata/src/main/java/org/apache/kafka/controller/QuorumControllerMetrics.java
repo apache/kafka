@@ -49,7 +49,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
         "KafkaController", "PreferredReplicaImbalanceCount");
     private final static MetricName METADATA_ERROR_COUNT = getMetricName(
-            "KafkaController", "MetadataErrorCount");
+        "KafkaController", "MetadataErrorCount");
     private final static MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastAppliedRecordOffset");
     private final static MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
