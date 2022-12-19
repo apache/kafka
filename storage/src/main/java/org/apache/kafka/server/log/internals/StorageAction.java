@@ -14,15 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.log.remote.storage;
+package org.apache.kafka.server.log.internals;
 
 /**
- * This interface is used to execute any remote storage/metadata related operation.
+ * This interface is used to execute any storage related operations.
  *
  * @param <T> return type for execute operation
  * @param <E> Exception type to be thrown
  */
 @FunctionalInterface
-public interface ClassLoaderAction<T, E extends Exception> {
+public interface StorageAction<T, E extends Exception> {
     T execute() throws E;
 }

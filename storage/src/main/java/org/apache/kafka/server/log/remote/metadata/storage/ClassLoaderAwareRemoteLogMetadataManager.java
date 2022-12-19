@@ -17,7 +17,7 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.server.log.remote.storage.ClassLoaderAction;
+import org.apache.kafka.server.log.internals.StorageAction;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
@@ -120,7 +120,7 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
         }
     }
 
-    private <T, E extends Exception> T withClassLoader(ClassLoaderAction<T, E> action) throws E {
+    private <T, E extends Exception> T withClassLoader(StorageAction<T, E> action) throws E {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {

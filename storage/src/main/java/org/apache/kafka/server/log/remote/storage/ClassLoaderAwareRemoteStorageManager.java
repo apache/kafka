@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+import org.apache.kafka.server.log.internals.StorageAction;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
@@ -57,7 +59,7 @@ public class ClassLoaderAwareRemoteStorageManager implements RemoteStorageManage
         });
     }
 
-    private <T, E extends Exception> T withClassLoader(ClassLoaderAction<T, E> action) throws E {
+    private <T, E extends Exception> T withClassLoader(StorageAction<T, E> action) throws E {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(rsmClassLoader);
         try {
