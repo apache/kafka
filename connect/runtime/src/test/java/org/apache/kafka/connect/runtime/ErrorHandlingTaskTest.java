@@ -191,6 +191,7 @@ public class ErrorHandlingTaskTest {
     public ErrorHandlingTaskTest(boolean enableTopicCreation) {
         this.enableTopicCreation = enableTopicCreation;
     }
+
     @Before
     public void setup() {
         time = new MockTime(0, 0, 0);
@@ -377,7 +378,6 @@ public class ErrorHandlingTaskTest {
         verify(sourceTask).start(any());
         verify(sourceTask, times(2)).poll();
         verify(producer, times(2)).send(any(), any());
-        assertEquals(null, producer.send(any()));
         // two records were consumed from Kafka
         assertSourceMetricValue("source-record-poll-total", 2.0);
         // only one was written to the task
