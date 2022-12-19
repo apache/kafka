@@ -18,6 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
@@ -48,6 +50,7 @@ public class DefaultEventHandler implements EventHandler {
     private final DefaultBackgroundThread backgroundThread;
 
     public DefaultEventHandler(final ConsumerConfig config,
+                               final GroupRebalanceConfig groupRebalanceConfig,
                                final LogContext logContext,
                                final SubscriptionState subscriptionState,
                                final ApiVersions apiVersions,
@@ -56,6 +59,7 @@ public class DefaultEventHandler implements EventHandler {
                                final Sensor fetcherThrottleTimeSensor) {
         this(Time.SYSTEM,
                 config,
+                groupRebalanceConfig,
                 logContext,
                 new LinkedBlockingQueue<>(),
                 new LinkedBlockingQueue<>(),
@@ -68,6 +72,7 @@ public class DefaultEventHandler implements EventHandler {
 
     public DefaultEventHandler(final Time time,
                                final ConsumerConfig config,
+                               final GroupRebalanceConfig groupRebalanceConfig,
                                final LogContext logContext,
                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                final BlockingQueue<BackgroundEvent> backgroundEventQueue,
@@ -94,7 +99,7 @@ public class DefaultEventHandler implements EventHandler {
             channelBuilder,
             logContext
         );
-        final NetworkClient netClient = new NetworkClient(
+        final NetworkClient networkClient = new NetworkClient(
             selector,
             metadata,
             config.getString(ConsumerConfig.CLIENT_ID_CONFIG),
@@ -113,49 +118,37 @@ public class DefaultEventHandler implements EventHandler {
             fetcherThrottleTimeSensor,
             logContext
         );
-        final ConsumerNetworkClient networkClient = new ConsumerNetworkClient(
-                logContext,
-                netClient,
-                metadata,
-                time,
-                config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
-                config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG));
         this.backgroundThread = new DefaultBackgroundThread(
             time,
             config,
+            groupRebalanceConfig,
             logContext,
             this.applicationEventQueue,
             this.backgroundEventQueue,
-            subscriptionState,
             metadata,
-            networkClient,
-            new Metrics(time)
-        );
+            networkClient);
     }
 
     // VisibleForTesting
     DefaultEventHandler(final Time time,
                         final ConsumerConfig config,
+                        final GroupRebalanceConfig groupRebalanceConfig,
                         final LogContext logContext,
                         final BlockingQueue<ApplicationEvent> applicationEventQueue,
                         final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                        final SubscriptionState subscriptionState,
                         final ConsumerMetadata metadata,
-                        final ConsumerNetworkClient networkClient) {
+                        final KafkaClient networkClient) {
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
         this.backgroundThread = new DefaultBackgroundThread(
             time,
             config,
+            groupRebalanceConfig,
             logContext,
             this.applicationEventQueue,
             this.backgroundEventQueue,
-            subscriptionState,
             metadata,
-            networkClient,
-            new Metrics(time)
-        );
+            networkClient);
         backgroundThread.start();
     }
 

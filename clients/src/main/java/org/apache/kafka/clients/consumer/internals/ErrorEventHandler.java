@@ -14,21 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.clients.consumer.internals;
 
-/**
- * The event is NoOp. This is intentionally left here for demonstration purpose.
- */
-public class NoopApplicationEvent extends ApplicationEvent {
-    public final String message;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 
-    public NoopApplicationEvent(final String message) {
-        super(Type.NOOP);
-        this.message = message;
+import java.util.Queue;
+
+public class ErrorEventHandler {
+    private final Queue<BackgroundEvent> backgroundEventQueue;
+
+    public ErrorEventHandler(Queue<BackgroundEvent> backgroundEventQueue) {
+        this.backgroundEventQueue = backgroundEventQueue;
     }
 
-    @Override
-    public String toString() {
-        return getClass() + "_" + this.message;
+    public void handle(Exception e) {
+        backgroundEventQueue.add(new ErrorBackgroundEvent(e));
     }
 }
