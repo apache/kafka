@@ -211,13 +211,11 @@ class StreamsUpgradeTest(Test):
         else:
             extra_properties = {}
 
-
         self.set_up_services()
 
         self.driver.start()
 
         self.start_all_nodes_with(from_version, extra_properties)
-
 
         counter = 1
         random.seed()
