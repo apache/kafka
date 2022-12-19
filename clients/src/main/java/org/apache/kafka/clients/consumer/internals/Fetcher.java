@@ -346,7 +346,11 @@ public class Fetcher<K, V> implements Closeable {
                             FetchSessionHandler handler = sessionHandler(fetchTarget.id());
                             if (handler != null) {
                                 handler.handleError(e);
-                                handler.sessionTopicPartitions().forEach(subscriptions::clearPreferredReadReplica);
+                                // Make sure to filter out topic partitions that are not part of the assignment
+                                // anymore when the request fails.
+                                handler.sessionTopicPartitions().stream()
+                                    .filter(subscriptions::isAssigned)
+                                    .forEach(subscriptions::clearPreferredReadReplica);
                             }
                         } finally {
                             nodesWithPendingFetchRequests.remove(fetchTarget.id());
