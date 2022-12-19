@@ -412,7 +412,7 @@ public abstract class AbstractIndex implements Closeable {
         }
     }
 
-    // GuardedBy `lock`
+    // The caller is expected to hold `lock` when calling this method
     protected void incrementEntries() {
         ++entries;
     }
@@ -519,12 +519,11 @@ public abstract class AbstractIndex implements Closeable {
             else
                 return new BinarySearchResult(mid, mid);
         }
-        int blah;
         if (lo == entries - 1)
-            blah = -1;
+            hi = -1;
         else
-            blah = lo + 1;
-        return new BinarySearchResult(lo, blah);
+            hi = lo + 1;
+        return new BinarySearchResult(lo, hi);
     }
 
     private int compareIndexEntry(IndexEntry indexEntry, long target, IndexSearchType searchEntity) {
