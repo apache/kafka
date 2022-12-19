@@ -58,7 +58,6 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.On
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
-import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -519,16 +518,6 @@ public class ReplicationControlManagerTest {
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
                 setErrorMessage("Topic 'foo' already exists."));
         assertEquals(expectedResponse4, result4.response());
-        Uuid fooId = result3.response().topics().find("foo").topicId();
-        RecordTestUtils.assertBatchIteratorContains(asList(
-            asList(new ApiMessageAndVersion(new PartitionRecord().
-                    setPartitionId(0).setTopicId(fooId).
-                    setReplicas(asList(1, 2, 0)).setIsr(asList(1, 2, 0)).
-                    setRemovingReplicas(Collections.emptyList()).setAddingReplicas(Collections.emptyList()).setLeader(1).
-                    setLeaderEpoch(0).setPartitionEpoch(0), (short) 0),
-                new ApiMessageAndVersion(new TopicRecord().
-                    setTopicId(fooId).setName("foo"), (short) 0))),
-            ctx.replicationControl.iterator(Long.MAX_VALUE));
     }
 
     @Test

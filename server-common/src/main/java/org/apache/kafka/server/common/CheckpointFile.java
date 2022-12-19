@@ -108,14 +108,14 @@ public class CheckpointFile<T> {
         }
     }
 
-    private static class CheckpointReadBuffer<T> {
+    public static class CheckpointReadBuffer<T> {
 
         private final String location;
         private final BufferedReader reader;
         private final int version;
         private final EntryFormatter<T> formatter;
 
-        CheckpointReadBuffer(String location,
+        public CheckpointReadBuffer(String location,
                              BufferedReader reader,
                              int version,
                              EntryFormatter<T> formatter) {
@@ -125,7 +125,7 @@ public class CheckpointFile<T> {
             this.formatter = formatter;
         }
 
-        List<T> read() throws IOException {
+        public List<T> read() throws IOException {
             String line = reader.readLine();
             if (line == null)
                 return Collections.emptyList();

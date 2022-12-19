@@ -1616,4 +1616,23 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_KRAFT_VERSION)
   }
+
+  @Test
+  def testMetadataMaxSnapshotInterval(): Unit = {
+    val validValue = 100
+    val props = new Properties()
+    props.putAll(kraftProps())
+    props.setProperty(KafkaConfig.MetadataSnapshotMaxIntervalMsProp, validValue.toString)
+
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(validValue, config.metadataSnapshotMaxIntervalMs)
+
+    props.setProperty(KafkaConfig.MetadataSnapshotMaxIntervalMsProp, "-1")
+    val errorMessage = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage
+
+    assertEquals(
+      "Invalid value -1 for configuration metadata.log.max.snapshot.interval.ms: Value must be at least 0",
+      errorMessage
+    )
+  }
 }

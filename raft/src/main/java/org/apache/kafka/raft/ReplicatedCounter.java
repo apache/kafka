@@ -115,8 +115,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     lastOffsetSnapshotted
                 );
                 Optional<SnapshotWriter<Integer>> snapshot = client.createSnapshot(
-                    lastCommittedOffset,
-                    lastCommittedEpoch,
+                    new OffsetAndEpoch(lastCommittedOffset + 1, lastCommittedEpoch),
                     lastCommittedTimestamp);
                 if (snapshot.isPresent()) {
                     try {

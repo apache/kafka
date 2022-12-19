@@ -39,6 +39,7 @@ import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
@@ -62,6 +63,23 @@ class KRaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testCreateClusterAndRestartNode(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val broker = cluster.brokers().values().iterator().next()
+      broker.shutdown()
+      broker.startup()
     } finally {
       cluster.close()
     }
@@ -869,6 +887,32 @@ class KRaftClusterTest {
       }
       TestUtils.waitUntilTrue(() => cluster.brokers().get(1).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latest()),
         "Timed out waiting for metadata version update.")
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testRemoteLogManagerInstantiation(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build())
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+        "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
+        "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
+      .build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.brokers().forEach((_, server) => {
+        server.remoteLogManager match {
+          case Some(_) =>
+          case None => fail("RemoteLogManager should be initialized")
+        }
+      })
     } finally {
       cluster.close()
     }

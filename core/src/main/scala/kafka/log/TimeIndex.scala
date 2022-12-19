@@ -19,11 +19,11 @@ package kafka.log
 
 import java.io.File
 import java.nio.ByteBuffer
-
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.server.log.internals.{CorruptIndexException, TimestampOffset}
 
 /**
  * An index that maps from the timestamp to the logical offsets of the messages in a segment. This index might be
@@ -76,7 +76,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
   private def lastEntryFromIndexFile: TimestampOffset = {
     inLock(lock) {
       _entries match {
-        case 0 => TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset)
+        case 0 => new TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset)
         case s => parseEntry(mmap, s - 1)
       }
     }
@@ -97,7 +97,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
   }
 
   override def parseEntry(buffer: ByteBuffer, n: Int): TimestampOffset = {
-    TimestampOffset(timestamp(buffer, n), baseOffset + relativeOffset(buffer, n))
+    new TimestampOffset(timestamp(buffer, n), baseOffset + relativeOffset(buffer, n))
   }
 
   /**
@@ -134,7 +134,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
         mmap.putLong(timestamp)
         mmap.putInt(relativeOffset(offset))
         _entries += 1
-        _lastEntry = TimestampOffset(timestamp, offset)
+        _lastEntry = new TimestampOffset(timestamp, offset)
         require(_entries * entrySize == mmap.position(), s"${_entries} entries but file position in index is ${mmap.position()}.")
       }
     }
@@ -153,7 +153,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       val idx = mmap.duplicate
       val slot = largestLowerBoundSlotFor(idx, targetTimestamp, IndexSearchType.KEY)
       if (slot == -1)
-        TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset)
+        new TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset)
       else
         parseEntry(idx, slot)
     }

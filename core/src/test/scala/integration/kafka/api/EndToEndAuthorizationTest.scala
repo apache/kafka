@@ -21,9 +21,9 @@ import com.yammer.metrics.core.Gauge
 import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
 
-import kafka.admin.AclCommand
 import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.WildcardHost
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.clients.admin.Admin
@@ -37,12 +37,12 @@ import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthori
 import org.apache.kafka.common.resource._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.auth._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{ValueSource, CsvSource}
 
 import scala.jdk.CollectionConverters._
 
@@ -64,14 +64,10 @@ import scala.jdk.CollectionConverters._
   * SaslTestHarness here directly because it extends QuorumTestHarness, and we
   * would end up with QuorumTestHarness twice.
   */
+@Timeout(60)
 abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
-  override val brokerCount = 3
 
-  override def configureSecurityBeforeServersStart(): Unit = {
-    AclCommand.main(clusterActionArgs)
-    AclCommand.main(clusterAlterArgs)
-    AclCommand.main(topicBrokerReadAclArgs)
-  }
+  override val brokerCount = 3
 
   val numRecords = 1
   val groupPrefix = "gr"
@@ -96,96 +92,45 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def clientPrincipal: KafkaPrincipal
   def kafkaPrincipal: KafkaPrincipal
 
-  // Arguments to AclCommand to set ACLs.
-  def clusterActionArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--cluster",
-                                          s"--operation=ClusterAction",
-                                          s"--allow-principal=$kafkaPrincipal")
-  // necessary to create SCRAM credentials via the admin client using the broker's credentials
-  // without this we would need to create the SCRAM credentials via ZooKeeper
-  def clusterAlterArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--cluster",
-                                          s"--operation=Alter",
-                                          s"--allow-principal=$kafkaPrincipal")
-  def topicBrokerReadAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$wildcard",
-                                          s"--operation=Read",
-                                          s"--allow-principal=$kafkaPrincipal")
-  def produceAclArgs(topic: String): Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$topic",
-                                          s"--producer",
-                                          s"--allow-principal=$clientPrincipal")
-  def describeAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$topic",
-                                          s"--operation=Describe",
-                                          s"--allow-principal=$clientPrincipal")
-  def deleteDescribeAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--remove",
-                                          s"--force",
-                                          s"--topic=$topic",
-                                          s"--operation=Describe",
-                                          s"--allow-principal=$clientPrincipal")
-  def deleteWriteAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--remove",
-                                          s"--force",
-                                          s"--topic=$topic",
-                                          s"--operation=Write",
-                                          s"--allow-principal=$clientPrincipal")
-  def consumeAclArgs(topic: String): Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$topic",
-                                          s"--group=$group",
-                                          s"--consumer",
-                                          s"--allow-principal=$clientPrincipal")
-  def groupAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--group=$group",
-                                          s"--operation=Read",
-                                          s"--allow-principal=$clientPrincipal")
-  def produceConsumeWildcardAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$wildcard",
-                                          s"--group=$wildcard",
-                                          s"--consumer",
-                                          s"--producer",
-                                          s"--allow-principal=$clientPrincipal")
-  def produceConsumePrefixedAclsArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$topicPrefix",
-                                          s"--group=$groupPrefix",
-                                          s"--resource-pattern-type=prefixed",
-                                          s"--consumer",
-                                          s"--producer",
-                                          s"--allow-principal=$clientPrincipal")
-
-  def ClusterActionAndClusterAlterAcls = Set(new AccessControlEntry(kafkaPrincipal.toString, WildcardHost, CLUSTER_ACTION, ALLOW),
-    new AccessControlEntry(kafkaPrincipal.toString, WildcardHost, ALTER, ALLOW))
-  def TopicBrokerReadAcl = Set(new AccessControlEntry(kafkaPrincipal.toString, WildcardHost, READ, ALLOW))
   def GroupReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
   def TopicReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
   def TopicWriteAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, WRITE, ALLOW))
   def TopicDescribeAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, DESCRIBE, ALLOW))
   def TopicCreateAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, CREATE, ALLOW))
-  // The next two configuration parameters enable ZooKeeper secure ACLs
-  // and sets the Kafka authorizer, both necessary to enable security.
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
-  this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, authorizerClass.getName)
+
+  def AclTopicWrite(topicResource : ResourcePattern = topicResource) = new AclBinding(topicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.WRITE, AclPermissionType.ALLOW))
+  def AclTopicCreate(topicResource : ResourcePattern = topicResource) = new AclBinding(topicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.CREATE, AclPermissionType.ALLOW))
+  def AclTopicDescribe(topicResource : ResourcePattern = topicResource) = new AclBinding(topicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
+  def AclTopicRead(topicResource : ResourcePattern = topicResource) = new AclBinding(topicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
+  def AclGroupRead = new AclBinding(groupResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
+
+  def AclWildcardTopicWrite = new AclBinding(wildcardTopicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.WRITE, AclPermissionType.ALLOW))
+  def AclWildcardTopicCreate = new AclBinding(wildcardTopicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.CREATE, AclPermissionType.ALLOW))
+  def AclWildcardTopicDescribe = new AclBinding(wildcardTopicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
+  def AclWildcardTopicRead = new AclBinding(wildcardTopicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
+  def AclWildcardGroupRead = new AclBinding(wildcardGroupResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
+
+  def AclPrefixedTopicWrite = new AclBinding(prefixedTopicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.WRITE, AclPermissionType.ALLOW))
+  def AclPrefixedTopicCreate = new AclBinding(prefixedTopicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.CREATE, AclPermissionType.ALLOW))
+  def AclPrefixedTopicDescribe = new AclBinding(prefixedTopicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
+  def AclPrefixedTopicRead = new AclBinding(prefixedTopicResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
+  def AclPrefixedGroupRead = new AclBinding(prefixedGroupResource,
+    new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
+
   // Some needed configuration for brokers, producers, and consumers
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3")
@@ -195,18 +140,35 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1500")
 
+  val unimplementedquorum = ""
+
   /**
     * Starts MiniKDC and only then sets up the parent trait.
     */
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    super.setUp(testInfo)
-    servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(ClusterActionAndClusterAlterAcls, s.dataPlaneRequestProcessor.authorizer.get, clusterResource)
-      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.dataPlaneRequestProcessor.authorizer.get, new ResourcePattern(TOPIC, "*", LITERAL))
+
+    if (TestInfoUtils.isKRaft(testInfo)) {
+      this.serverConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
+      this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString + ";" + "User:ANONYMOUS")
+      this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
+      this.controllerConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
+    } else {
+      // The next two configuration parameters enable ZooKeeper secure ACLs
+      // and sets the Kafka authorizer, both necessary to enable security.
+      this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+      this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, authorizerClass.getName)
+
+      // Set the specific principal that can update ACLs.
+      this.serverConfig.setProperty(AclAuthorizer.SuperUsersProp, kafkaPrincipal.toString)
     }
+
+    super.setUp(testInfo)
+
     // create the test topic with all the brokers as replicas
-    createTopic(topic, 1, 3)
+    val superuserAdminClient = createSuperuserAdminClient()
+    TestUtils.createTopicWithAdmin(admin = superuserAdminClient, topic = topic, brokers = brokers,
+      numPartitions = 1, replicationFactor = 3, topicConfig = new Properties)
   }
 
   /**
@@ -221,23 +183,28 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   /**
     * Tests the ability of producing and consuming with the appropriate ACLs set.
     */
-  @Test
-  def testProduceConsumeViaAssign(): Unit = {
-    setAclsAndProduce(tp)
-    val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
-    consumeRecords(consumer, numRecords)
-    confirmReauthenticationMetrics()
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testProduceConsumeViaAssign(quorum: String): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
+      setAclsAndProduce(tp)
+      val consumer = createConsumer()
+      consumer.assign(List(tp).asJava)
+      consumeRecords(consumer, numRecords)
+      confirmReauthenticationMetrics()
+    }
   }
 
   protected def confirmReauthenticationMetrics(): Unit = {
     val expiredConnectionsKilledCountTotal = getGauge("ExpiredConnectionsKilledCount").value()
-    servers.foreach { s =>
+    brokers.foreach { s =>
         val numExpiredKilled = TestUtils.totalMetricValue(s, "expired-connections-killed-count")
         assertEquals(0, numExpiredKilled, "Should have been zero expired connections killed: " + numExpiredKilled + "(total=" + expiredConnectionsKilledCountTotal + ")")
     }
     assertEquals(0, expiredConnectionsKilledCountTotal, 0.0, "Should have been zero expired connections killed total")
-    servers.foreach { s =>
+    brokers.foreach { s =>
       assertEquals(0, TestUtils.totalMetricValue(s, "failed-reauthentication-total"), "failed re-authentications not 0")
     }
   }
@@ -249,17 +216,26 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       ._2.asInstanceOf[Gauge[Double]]
   }
 
-  @Test
-  def testProduceConsumeViaSubscribe(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testProduceConsumeViaSubscribe(quorum: String): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
     setAclsAndProduce(tp)
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     consumeRecords(consumer, numRecords)
     confirmReauthenticationMetrics()
+    }
   }
 
-  @Test
-  def testProduceConsumeWithWildcardAcls(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testProduceConsumeWithWildcardAcls(quorum: String): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
     setWildcardResourceAcls()
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -267,10 +243,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumer.subscribe(List(topic).asJava)
     consumeRecords(consumer, numRecords)
     confirmReauthenticationMetrics()
+    }
   }
 
-  @Test
-  def testProduceConsumeWithPrefixedAcls(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testProduceConsumeWithPrefixedAcls(quorum: String): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
     setPrefixedResourceAcls()
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -278,10 +259,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumer.subscribe(List(topic).asJava)
     consumeRecords(consumer, numRecords)
     confirmReauthenticationMetrics()
+    }
   }
 
-  @Test
-  def testProduceConsumeTopicAutoCreateTopicCreateAcl(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testProduceConsumeTopicAutoCreateTopicCreateAcl(quorum: String): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
     // topic2 is not created on setup()
     val tp2 = new TopicPartition("topic2", 0)
     setAclsAndProduce(tp2)
@@ -289,28 +275,40 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumer.assign(List(tp2).asJava)
     consumeRecords(consumer, numRecords, topic = tp2.topic)
     confirmReauthenticationMetrics()
+    }
   }
 
   private def setWildcardResourceAcls(): Unit = {
-    AclCommand.main(produceConsumeWildcardAclArgs)
-    servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl ++ TopicBrokerReadAcl, s.dataPlaneRequestProcessor.authorizer.get, wildcardTopicResource)
+    val superuserAdminClient = createSuperuserAdminClient()
+    superuserAdminClient.createAcls(List(AclWildcardTopicWrite, AclWildcardTopicCreate, AclWildcardTopicDescribe, AclWildcardTopicRead).asJava).values
+    superuserAdminClient.createAcls(List(AclWildcardGroupRead).asJava).values
+
+    brokers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, wildcardTopicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, wildcardGroupResource)
     }
   }
 
   private def setPrefixedResourceAcls(): Unit = {
-    AclCommand.main(produceConsumePrefixedAclsArgs)
-    servers.foreach { s =>
+    val superuserAdminClient = createSuperuserAdminClient()
+    superuserAdminClient.createAcls(List(AclPrefixedTopicWrite, AclPrefixedTopicCreate, AclPrefixedTopicDescribe, AclPrefixedTopicRead).asJava).values
+    superuserAdminClient.createAcls(List(AclPrefixedGroupRead).asJava).values
+
+    brokers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, prefixedTopicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, prefixedGroupResource)
     }
   }
 
   private def setReadAndWriteAcls(tp: TopicPartition): Unit = {
-    AclCommand.main(produceAclArgs(tp.topic))
-    AclCommand.main(consumeAclArgs(tp.topic))
-    servers.foreach { s =>
+    val topicResource = new ResourcePattern(TOPIC, tp.topic, LITERAL)
+    val superuserAdminClient = createSuperuserAdminClient()
+
+    superuserAdminClient.createAcls(List(AclTopicWrite(topicResource), AclTopicCreate(topicResource), AclTopicDescribe(topicResource)).asJava).values
+    superuserAdminClient.createAcls(List(AclTopicRead(topicResource)).asJava).values
+    superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
+
+    brokers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get,
         new ResourcePattern(TOPIC, tp.topic, LITERAL))
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
@@ -324,8 +322,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   private def setConsumerGroupAcls(): Unit = {
-    AclCommand.main(groupAclArgs)
-    servers.foreach { s =>
+    val superuserAdminClient = createSuperuserAdminClient()
+    superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
+    brokers.foreach { s =>
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
     }
   }
@@ -336,8 +335,16 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Also verifies that subsequent publish, consume and describe to authorized topic succeeds.
     */
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(isIdempotenceEnabled: Boolean): Unit = {
+  @CsvSource(value = Array(
+    "kraft, true",
+    "kraft, false",
+    "zk, true",
+    "zk, false"
+  ))
+  def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(quorum:String, isIdempotenceEnabled:Boolean): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
     // Set consumer group acls since we are testing topic authorization
     setConsumerGroupAcls()
 
@@ -400,13 +407,24 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).topicNameValues
     assertEquals(1, describeResults2.get(topic).get().partitions().size())
     assertEquals(1, describeResults2.get(topic2).get().partitions().size())
+    }
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testNoProduceWithDescribeAcl(isIdempotenceEnabled: Boolean): Unit = {
-    AclCommand.main(describeAclArgs)
-    servers.foreach { s =>
+  @CsvSource(value = Array(
+    "kraft, true",
+    "kraft, false",
+    "zk, true",
+    "zk, false"
+  ))
+  def testNoProduceWithDescribeAcl(quorum:String, isIdempotenceEnabled:Boolean): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
+    val superuserAdminClient = createSuperuserAdminClient()
+    superuserAdminClient.createAcls(List(AclTopicDescribe()).asJava).values
+
+    brokers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
     }
 
@@ -422,24 +440,34 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
     confirmReauthenticationMetrics()
+    }
   }
 
    /**
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
-  @Test
-  def testNoConsumeWithoutDescribeAclViaAssign(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testNoConsumeWithoutDescribeAclViaAssign(quorum: String): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
     noConsumeWithoutDescribeAclSetup()
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     // the exception is expected when the consumer attempts to lookup offsets
     assertThrows(classOf[KafkaException], () => consumeRecords(consumer))
     confirmReauthenticationMetrics()
+    }
   }
 
-  @Test
-  def testNoConsumeWithoutDescribeAclViaSubscribe(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testNoConsumeWithoutDescribeAclViaSubscribe(quorum: String): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
     noConsumeWithoutDescribeAclSetup()
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
@@ -454,12 +482,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     // Verify that records are consumed if all topics are authorized
     consumer.subscribe(List(topic).asJava)
     consumeRecordsIgnoreOneAuthorizationException(consumer)
+    }
   }
 
   private def noConsumeWithoutDescribeAclSetup(): Unit = {
-    AclCommand.main(produceAclArgs(tp.topic))
-    AclCommand.main(groupAclArgs)
-    servers.foreach { s =>
+    val superuserAdminClient = createSuperuserAdminClient()
+    superuserAdminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
+    superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
+
+    brokers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
     }
@@ -467,15 +498,20 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
 
-    AclCommand.main(deleteDescribeAclArgs)
-    AclCommand.main(deleteWriteAclArgs)
-    servers.foreach { s =>
+    superuserAdminClient.deleteAcls(List(AclTopicDescribe().toFilter).asJava).values
+    superuserAdminClient.deleteAcls(List(AclTopicWrite().toFilter).asJava).values
+
+    brokers.foreach { s =>
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
     }
   }
 
-  @Test
-  def testNoConsumeWithDescribeAclViaAssign(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testNoConsumeWithDescribeAclViaAssign(quorum: String): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
     noConsumeWithDescribeAclSetup()
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -483,10 +519,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val e = assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer))
     assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     confirmReauthenticationMetrics()
+    }
   }
 
-  @Test
-  def testNoConsumeWithDescribeAclViaSubscribe(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testNoConsumeWithDescribeAclViaSubscribe(quorum: String): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
     noConsumeWithDescribeAclSetup()
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
@@ -494,12 +535,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val e = assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer))
     assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     confirmReauthenticationMetrics()
+    }
   }
 
   private def noConsumeWithDescribeAclSetup(): Unit = {
-    AclCommand.main(produceAclArgs(tp.topic))
-    AclCommand.main(groupAclArgs)
-    servers.foreach { s =>
+    val superuserAdminClient = createSuperuserAdminClient()
+    superuserAdminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
+    superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
+
+    brokers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
     }
@@ -511,10 +555,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
-  @Test
-  def testNoGroupAcl(): Unit = {
-    AclCommand.main(produceAclArgs(tp.topic))
-    servers.foreach { s =>
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testNoGroupAcl(quorum: String): Unit = {
+    if (quorum == unimplementedquorum) {
+        Console.err.println("QuorumName : " + quorum + " is not supported.")
+    } else {
+    val superuserAdminClient = createSuperuserAdminClient()
+    superuserAdminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
+    brokers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
     }
     val producer = createProducer()
@@ -525,6 +574,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val e = assertThrows(classOf[GroupAuthorizationException], () => consumeRecords(consumer))
     assertEquals(group, e.groupId())
     confirmReauthenticationMetrics()
+    }
   }
 
   protected final def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],

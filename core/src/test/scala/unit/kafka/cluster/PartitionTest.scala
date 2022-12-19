@@ -834,6 +834,13 @@ class PartitionTest extends AbstractPartitionTest {
       case Left(e: ApiException) => fail(s"Got ApiException $e")
     }
 
+    // If we request the earliest local timestamp, we skip the check
+    fetchOffsetsForTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+      case Right(Some(offsetAndTimestamp)) => assertEquals(0, offsetAndTimestamp.offset)
+      case Right(None) => fail("Should have seen some offsets")
+      case Left(e: ApiException) => fail(s"Got ApiException $e")
+    }
+
     // If we request an offset by timestamp earlier than the HW, we are ok
     fetchOffsetsForTimestamp(11, Some(IsolationLevel.READ_UNCOMMITTED)) match {
       case Right(Some(offsetAndTimestamp)) =>
@@ -944,8 +951,8 @@ class PartitionTest extends AbstractPartitionTest {
       baseOffset = 0L)
     partition.appendRecordsToLeader(records, origin = AppendOrigin.Client, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
 
-    def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
-      val res = partition.fetchOffsetForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP,
+    def fetchOffset(isolationLevel: Option[IsolationLevel], timestamp: Long): TimestampAndOffset = {
+      val res = partition.fetchOffsetForTimestamp(timestamp,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
         fetchOnlyFromLeader = true)
@@ -953,13 +960,16 @@ class PartitionTest extends AbstractPartitionTest {
       res.get
     }
 
+    def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
+      fetchOffset(isolationLevel, ListOffsetsRequest.LATEST_TIMESTAMP)
+    }
+
     def fetchEarliestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
-      val res = partition.fetchOffsetForTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP,
-        isolationLevel = isolationLevel,
-        currentLeaderEpoch = Optional.empty(),
-        fetchOnlyFromLeader = true)
-      assertTrue(res.isDefined)
-      res.get
+      fetchOffset(isolationLevel, ListOffsetsRequest.EARLIEST_TIMESTAMP)
+    }
+
+    def fetchEarliestLocalOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
+      fetchOffset(isolationLevel, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP)
     }
 
     assertEquals(3L, fetchLatestOffset(isolationLevel = None).offset)
@@ -975,6 +985,10 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, fetchEarliestOffset(isolationLevel = None).offset)
     assertEquals(0L, fetchEarliestOffset(isolationLevel = Some(IsolationLevel.READ_UNCOMMITTED)).offset)
     assertEquals(0L, fetchEarliestOffset(isolationLevel = Some(IsolationLevel.READ_COMMITTED)).offset)
+
+    assertEquals(0L, fetchEarliestLocalOffset(isolationLevel = None).offset)
+    assertEquals(0L, fetchEarliestLocalOffset(isolationLevel = Some(IsolationLevel.READ_UNCOMMITTED)).offset)
+    assertEquals(0L, fetchEarliestLocalOffset(isolationLevel = Some(IsolationLevel.READ_COMMITTED)).offset)
   }
 
   @Test
@@ -2334,9 +2348,9 @@ class PartitionTest extends AbstractPartitionTest {
       "AtMinIsr")
 
     def getMetric(metric: String): Option[Metric] = {
-      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.filter { case (metricName, _) =>
+      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.find { case (metricName, _) =>
         metricName.getName == metric && metricName.getType == "Partition"
-      }.headOption.map(_._2)
+      }.map(_._2)
     }
 
     assertTrue(metricsToCheck.forall(getMetric(_).isDefined))

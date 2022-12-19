@@ -33,23 +33,23 @@ import org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedKeyValue
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
-import org.easymock.EasyMock;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
 import org.hamcrest.CoreMatchers;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.core.IsNot.not;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-@RunWith(EasyMockRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class TimestampedKeyValueStoreMaterializerTest {
 
     private final String storePrefix = "prefix";
-    @Mock(type = MockType.NICE)
+    @Mock
     private InternalNameProvider nameProvider;
 
     @Test
@@ -107,12 +107,11 @@ public class TimestampedKeyValueStoreMaterializerTest {
 
     @Test
     public void shouldCreateKeyValueStoreWithTheProvidedInnerStore() {
-        final KeyValueBytesStoreSupplier supplier = EasyMock.createNiceMock(KeyValueBytesStoreSupplier.class);
+        final KeyValueBytesStoreSupplier supplier = mock(KeyValueBytesStoreSupplier.class);
         final InMemoryKeyValueStore store = new InMemoryKeyValueStore("name");
-        EasyMock.expect(supplier.name()).andReturn("name").anyTimes();
-        EasyMock.expect(supplier.get()).andReturn(store);
-        EasyMock.expect(supplier.metricsScope()).andReturn("metricScope");
-        EasyMock.replay(supplier);
+        when(supplier.name()).thenReturn("name");
+        when(supplier.get()).thenReturn(store);
+        when(supplier.metricsScope()).thenReturn("metricScope");
 
         final MaterializedInternal<String, Integer, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.as(supplier), nameProvider, storePrefix);

@@ -19,7 +19,7 @@ package kafka.api
 import java.util.Properties
 
 import kafka.server.KafkaConfig
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils._
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
@@ -46,6 +46,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramAdmin)
   protected val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
+  override val unimplementedquorum = "kraft"
 
   protected val privilegedAdminClientConfig = new Properties()
 
@@ -90,6 +91,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     val privilegedClientLoginContext = JaasTestUtils.tokenClientLoginModule(privilegedToken.tokenInfo().tokenId(), privilegedToken.hmacAsBase64String())
     privilegedAdminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, privilegedClientLoginContext)
+    superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, privilegedClientLoginContext)
   }
 
   @Test
@@ -109,9 +111,11 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
-    super.setUp(testInfo)
-    privilegedAdminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+    if (!TestInfoUtils.isKRaft(testInfo)) {
+      startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
+      super.setUp(testInfo)
+      privilegedAdminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+    }
   }
 
   def assertTokenOwner(owner: KafkaPrincipal, token: DelegationToken): Unit = {

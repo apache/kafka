@@ -81,7 +81,7 @@ object GetOffsetShell {
                            .ofType(classOf[String])
     val excludeInternalTopicsOpt = parser.accepts("exclude-internal-topics", s"By default, internal topics are included. If specified, internal topics are excluded.")
 
-    if (args.length == 0)
+    if (args.isEmpty)
       CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting topic-partition offsets.")
 
     val options = parser.parse(args : _*)

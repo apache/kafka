@@ -28,6 +28,8 @@ public class StandbyTaskAssignorFactoryTest {
     private static final long ACCEPTABLE_RECOVERY_LAG = 0L;
     private static final int MAX_WARMUP_REPLICAS = 1;
     private static final int NUMBER_OF_STANDBY_REPLICAS = 1;
+    private static final boolean PARTITION_AUTOSCALING_ENABLED = false;
+    private static final long PARTITION_AUTOSCALING_TIMEOUT_MS = 90000L;
     private static final long PROBING_REBALANCE_INTERVAL_MS = 60000L;
 
     @Test
@@ -46,6 +48,8 @@ public class StandbyTaskAssignorFactoryTest {
         return new AssignorConfiguration.AssignmentConfigs(ACCEPTABLE_RECOVERY_LAG,
                                                            MAX_WARMUP_REPLICAS,
                                                            NUMBER_OF_STANDBY_REPLICAS,
+                                                           PARTITION_AUTOSCALING_ENABLED,
+                                                           PARTITION_AUTOSCALING_TIMEOUT_MS,
                                                            PROBING_REBALANCE_INTERVAL_MS,
                                                            rackAwareAssignmentTags);
     }

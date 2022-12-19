@@ -519,7 +519,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         if (serviceLoaderManifestForPlugin(name)) {
             // Default implementation of getResources searches the parent class loader and also its own URL paths. This will enable the
             // PluginClassLoader to limit its resource search to only its own URL paths.
-            return null;
+            return Collections.emptyEnumeration();
         } else {
             return super.getResources(name);
         }

@@ -183,6 +183,14 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             ));
         }
 
+        @Override
+        public String clusterId() {
+            return controllers().findFirst().map(ControllerServer::clusterId).orElse(
+                brokers().findFirst().map(BrokerServer::clusterId).orElseThrow(
+                    () -> new RuntimeException("No controllers or brokers!"))
+            );
+        }
+
         public Collection<ControllerServer> controllerServers() {
             return controllers().collect(Collectors.toList());
         }

@@ -316,6 +316,8 @@ class GroupCoordinator(val brokerId: Int,
           newMemberId,
           groupInstanceId,
           protocols,
+          rebalanceTimeoutMs,
+          sessionTimeoutMs,
           responseCallback,
           requestLocal,
           reason,
@@ -438,7 +440,7 @@ class GroupCoordinator(val brokerId: Int,
           case None => group.currentState match {
             case PreparingRebalance =>
               val member = group.get(memberId)
-              updateMemberAndRebalance(group, member, protocols, s"Member ${member.memberId} joining group during ${group.currentState}; client reason: $reason", responseCallback)
+              updateMemberAndRebalance(group, member, protocols, rebalanceTimeoutMs, sessionTimeoutMs, s"Member ${member.memberId} joining group during ${group.currentState}; client reason: $reason", responseCallback)
 
             case CompletingRebalance =>
               val member = group.get(memberId)
@@ -461,7 +463,7 @@ class GroupCoordinator(val brokerId: Int,
                   error = Errors.NONE))
               } else {
                 // member has changed metadata, so force a rebalance
-                updateMemberAndRebalance(group, member, protocols, s"Updating metadata for member ${member.memberId} during ${group.currentState}; client reason: $reason", responseCallback)
+                updateMemberAndRebalance(group, member, protocols, rebalanceTimeoutMs, sessionTimeoutMs, s"Updating metadata for member ${member.memberId} during ${group.currentState}; client reason: $reason", responseCallback)
               }
 
             case Stable =>
@@ -470,9 +472,9 @@ class GroupCoordinator(val brokerId: Int,
                 // force a rebalance if the leader sends JoinGroup;
                 // This allows the leader to trigger rebalances for changes affecting assignment
                 // which do not affect the member metadata (such as topic metadata changes for the consumer)
-                updateMemberAndRebalance(group, member, protocols, s"Leader ${member.memberId} re-joining group during ${group.currentState}; client reason: $reason", responseCallback)
+                updateMemberAndRebalance(group, member, protocols, rebalanceTimeoutMs, sessionTimeoutMs, s"Leader ${member.memberId} re-joining group during ${group.currentState}; client reason: $reason", responseCallback)
               } else if (!member.matches(protocols)) {
-                updateMemberAndRebalance(group, member, protocols, s"Updating metadata for member ${member.memberId} during ${group.currentState}; client reason: $reason", responseCallback)
+                updateMemberAndRebalance(group, member, protocols, rebalanceTimeoutMs, sessionTimeoutMs, s"Updating metadata for member ${member.memberId} during ${group.currentState}; client reason: $reason", responseCallback)
               } else {
                 // for followers with no actual change to their metadata, just return group information
                 // for the current generation which will allow them to issue SyncGroup
@@ -1296,6 +1298,8 @@ class GroupCoordinator(val brokerId: Int,
     newMemberId: String,
     groupInstanceId: String,
     protocols: List[(String, Array[Byte])],
+    rebalanceTimeoutMs: Int,
+    sessionTimeoutMs: Int,
     responseCallback: JoinCallback,
     requestLocal: RequestLocal,
     reason: String,
@@ -1308,7 +1312,9 @@ class GroupCoordinator(val brokerId: Int,
     completeAndScheduleNextHeartbeatExpiration(group, member)
 
     val knownStaticMember = group.get(newMemberId)
-    group.updateMember(knownStaticMember, protocols, responseCallback)
+    val oldRebalanceTimeoutMs = knownStaticMember.rebalanceTimeoutMs
+    val oldSessionTimeoutMs = knownStaticMember.sessionTimeoutMs
+    group.updateMember(knownStaticMember, protocols, rebalanceTimeoutMs, sessionTimeoutMs, responseCallback)
     val oldProtocols = knownStaticMember.supportedProtocols
 
     group.currentState match {
@@ -1324,7 +1330,7 @@ class GroupCoordinator(val brokerId: Int,
               warn(s"Failed to persist metadata for group ${group.groupId}: ${error.message}")
 
               // Failed to persist member.id of the given static member, revert the update of the static member in the group.
-              group.updateMember(knownStaticMember, oldProtocols, null)
+              group.updateMember(knownStaticMember, oldProtocols, oldRebalanceTimeoutMs, oldSessionTimeoutMs, null)
               val oldMember = group.replaceStaticMember(groupInstanceId, newMemberId, oldMemberId)
               completeAndScheduleNextHeartbeatExpiration(group, oldMember)
               responseCallback(JoinGroupResult(
@@ -1403,9 +1409,11 @@ class GroupCoordinator(val brokerId: Int,
   private def updateMemberAndRebalance(group: GroupMetadata,
                                        member: MemberMetadata,
                                        protocols: List[(String, Array[Byte])],
+                                       rebalanceTimeoutMs: Int,
+                                       sessionTimeoutMs: Int,
                                        reason: String,
                                        callback: JoinCallback): Unit = {
-    group.updateMember(member, protocols, callback)
+    group.updateMember(member, protocols, rebalanceTimeoutMs, sessionTimeoutMs, callback)
     maybePrepareRebalance(group, reason)
   }
 

@@ -24,11 +24,15 @@
   // Version 2 is the first flexible version.
   //
   // Version 3 adds the leader epoch per partition (KIP-570).
-  "validVersions": "0-3",
+  //
+  // Version 4 adds KRaft Controller ID field as part of KIP-866
+  "validVersions": "0-4",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },
+    { "name": "isKRaftController", "type": "bool", "versions": "4+", "default": "false",
+      "about": "If KRaft controller id is used during migration. See KIP-866" },
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "1+", "default": "-1", "ignorable": true,

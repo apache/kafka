@@ -17,7 +17,7 @@
 
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -56,7 +56,7 @@ import java.util.concurrent.ExecutionException;
 public class MirrorClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(MirrorClient.class);
 
-    private final AdminClient adminClient;
+    private final Admin adminClient;
     private final ReplicationPolicy replicationPolicy;
     private final Map<String, Object> consumerConfig;
 
@@ -65,13 +65,13 @@ public class MirrorClient implements AutoCloseable {
     }
 
     public MirrorClient(MirrorClientConfig config) {
-        adminClient = AdminClient.create(config.adminConfig());
+        adminClient = config.forwardingAdmin(config.adminConfig());
         consumerConfig = config.consumerConfig();
         replicationPolicy = config.replicationPolicy();
     }
 
     // for testing
-    MirrorClient(AdminClient adminClient, ReplicationPolicy replicationPolicy,
+    MirrorClient(Admin adminClient, ReplicationPolicy replicationPolicy,
             Map<String, Object> consumerConfig) {
         this.adminClient = adminClient;
         this.replicationPolicy = replicationPolicy;

@@ -84,7 +84,9 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.ClusterDescriber;
+import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.metadata.placement.PlacementSpec;
+import org.apache.kafka.metadata.placement.TopicAssignment;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -106,7 +108,6 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map.Entry;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -694,13 +695,14 @@ public class ReplicationControlManager {
             short replicationFactor = topic.replicationFactor() == -1 ?
                 defaultReplicationFactor : topic.replicationFactor();
             try {
-                List<List<Integer>> partitions = clusterControl.replicaPlacer().place(new PlacementSpec(
+                TopicAssignment topicAssignment = clusterControl.replicaPlacer().place(new PlacementSpec(
                     0,
                     numPartitions,
                     replicationFactor
                 ), clusterDescriber);
-                for (int partitionId = 0; partitionId < partitions.size(); partitionId++) {
-                    List<Integer> replicas = partitions.get(partitionId);
+                for (int partitionId = 0; partitionId < topicAssignment.assignments().size(); partitionId++) {
+                    PartitionAssignment partitionAssignment = topicAssignment.assignments().get(partitionId);
+                    List<Integer> replicas = partitionAssignment.replicas();
                     List<Integer> isr = replicas.stream().
                         filter(clusterControl::active).collect(Collectors.toList());
                     // If the ISR is empty, it means that all brokers are fenced or
@@ -1544,16 +1546,16 @@ public class ReplicationControlManager {
         short replicationFactor = (short) partitionInfo.replicas.length;
         int startPartitionId = topicInfo.parts.size();
 
-        List<List<Integer>> placements;
+        List<PartitionAssignment> partitionAssignments;
         List<List<Integer>> isrs;
         if (topic.assignments() != null) {
-            placements = new ArrayList<>();
+            partitionAssignments = new ArrayList<>();
             isrs = new ArrayList<>();
             for (int i = 0; i < topic.assignments().size(); i++) {
                 CreatePartitionsAssignment assignment = topic.assignments().get(i);
                 validateManualPartitionAssignment(assignment.brokerIds(),
                     OptionalInt.of(replicationFactor));
-                placements.add(assignment.brokerIds());
+                partitionAssignments.add(new PartitionAssignment(assignment.brokerIds()));
                 List<Integer> isr = assignment.brokerIds().stream().
                     filter(clusterControl::active).collect(Collectors.toList());
                 if (isr.isEmpty()) {
@@ -1564,16 +1566,16 @@ public class ReplicationControlManager {
                 isrs.add(isr);
             }
         } else {
-            placements = clusterControl.replicaPlacer().place(new PlacementSpec(
-                startPartitionId,
-                additional,
-                replicationFactor
-            ), clusterDescriber);
-            isrs = placements;
+            partitionAssignments = clusterControl.replicaPlacer().place(
+                new PlacementSpec(startPartitionId, additional, replicationFactor),
+                clusterDescriber
+            ).assignments();
+            isrs = partitionAssignments.stream().map(PartitionAssignment::replicas).collect(Collectors.toList());
         }
         int partitionId = startPartitionId;
-        for (int i = 0; i < placements.size(); i++) {
-            List<Integer> replicas = placements.get(i);
+        for (int i = 0; i < partitionAssignments.size(); i++) {
+            PartitionAssignment partitionAssignment = partitionAssignments.get(i);
+            List<Integer> replicas = partitionAssignment.replicas();
             List<Integer> isr = isrs.get(i).stream().
                 filter(clusterControl::active).collect(Collectors.toList());
             // If the ISR is empty, it means that all brokers are fenced or
@@ -1906,39 +1908,6 @@ public class ReplicationControlManager {
             setRemovingReplicas(Replicas.toList(partition.removingReplicas)).
             setPartitionIndex(partitionId).
             setReplicas(Replicas.toList(partition.replicas)));
-    }
-
-    class ReplicationControlIterator implements Iterator<List<ApiMessageAndVersion>> {
-        private final long epoch;
-        private final Iterator<TopicControlInfo> iterator;
-
-        ReplicationControlIterator(long epoch) {
-            this.epoch = epoch;
-            this.iterator = topics.values(epoch).iterator();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iterator.hasNext();
-        }
-
-        @Override
-        public List<ApiMessageAndVersion> next() {
-            if (!hasNext()) throw new NoSuchElementException();
-            TopicControlInfo topic = iterator.next();
-            List<ApiMessageAndVersion> records = new ArrayList<>();
-            records.add(new ApiMessageAndVersion(new TopicRecord().
-                setName(topic.name).
-                setTopicId(topic.id), (short) 0));
-            for (Entry<Integer, PartitionRegistration> entry : topic.parts.entrySet(epoch)) {
-                records.add(entry.getValue().toRecord(topic.id, entry.getKey()));
-            }
-            return records;
-        }
-    }
-
-    ReplicationControlIterator iterator(long epoch) {
-        return new ReplicationControlIterator(epoch);
     }
 
     private static final class IneligibleReplica {

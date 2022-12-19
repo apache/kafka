@@ -1089,6 +1089,38 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldGetClientSupplierFromConfigForConstructor() {
+        final StreamsConfig config = new StreamsConfig(props);
+        final StreamsConfig mockConfig = spy(config);
+        when(mockConfig.getKafkaClientSupplier()).thenReturn(supplier);
+
+        new KafkaStreams(getBuilderWithSource().build(), mockConfig);
+        // It's called once in above when mock
+        verify(mockConfig, times(2)).getKafkaClientSupplier();
+    }
+
+    @Test
+    public void shouldGetClientSupplierFromConfigForConstructorWithTime() {
+        final StreamsConfig config = new StreamsConfig(props);
+        final StreamsConfig mockConfig = spy(config);
+        when(mockConfig.getKafkaClientSupplier()).thenReturn(supplier);
+
+        new KafkaStreams(getBuilderWithSource().build(), mockConfig, time);
+        // It's called once in above when mock
+        verify(mockConfig, times(2)).getKafkaClientSupplier();
+    }
+
+    @Test
+    public void shouldUseProvidedClientSupplier() {
+        final StreamsConfig config = new StreamsConfig(props);
+        final StreamsConfig mockConfig = spy(config);
+
+        new KafkaStreams(getBuilderWithSource().build(), mockConfig, supplier);
+        // It's called once in above when mock
+        verify(mockConfig, times(0)).getKafkaClientSupplier();
+    }
+
+    @Test
     public void shouldNotTriggerRecordingOfRocksDBMetricsIfRecordingLevelIsInfo() {
         try (final MockedStatic<Executors> executorsMockedStatic = mockStatic(Executors.class)) {
             final ScheduledExecutorService cleanupSchedule = mock(ScheduledExecutorService.class);

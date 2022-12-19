@@ -18,7 +18,7 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.utils.JaasTestUtils
+import kafka.utils._
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
@@ -33,6 +33,7 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramUser)
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramAdmin)
   private val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
+  override val unimplementedquorum = "kraft"
 
   override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
@@ -53,9 +54,11 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    super.setUp(testInfo)
-    // Create client credentials after starting brokers so that dynamic credential creation is also tested
-    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
-    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
+    if (!TestInfoUtils.isKRaft(testInfo)) {
+      super.setUp(testInfo)
+      // Create client credentials after starting brokers so that dynamic credential creation is also tested
+      createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
+      createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
+    }
   }
 }

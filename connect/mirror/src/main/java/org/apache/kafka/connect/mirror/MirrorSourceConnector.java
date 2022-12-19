@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.mirror;
 
 import java.util.Map.Entry;
+
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
@@ -35,7 +37,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -60,7 +61,7 @@ import org.slf4j.LoggerFactory;
 
 /** Replicate data, configuration, and ACLs between clusters.
  *
- *  @see MirrorConnectorConfig for supported config properties.
+ *  @see MirrorSourceConfig for supported config properties.
  */
 public class MirrorSourceConnector extends SourceConnector {
 
@@ -70,7 +71,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private static final AclBindingFilter ANY_TOPIC_ACL = new AclBindingFilter(ANY_TOPIC, AccessControlEntryFilter.ANY);
 
     private Scheduler scheduler;
-    private MirrorConnectorConfig config;
+    private MirrorSourceConfig config;
     private SourceAndTarget sourceAndTarget;
     private String connectorName;
     private TopicFilter topicFilter;
@@ -79,15 +80,16 @@ public class MirrorSourceConnector extends SourceConnector {
     private List<TopicPartition> knownTargetTopicPartitions = Collections.emptyList();
     private ReplicationPolicy replicationPolicy;
     private int replicationFactor;
-    private AdminClient sourceAdminClient;
-    private AdminClient targetAdminClient;
+    private Admin sourceAdminClient;
+    private Admin targetAdminClient;
+    private Admin offsetSyncsAdminClient;
 
     public MirrorSourceConnector() {
         // nop
     }
 
     // visible for testing
-    MirrorSourceConnector(List<TopicPartition> knownSourceTopicPartitions, MirrorConnectorConfig config) {
+    MirrorSourceConnector(List<TopicPartition> knownSourceTopicPartitions, MirrorSourceConfig config) {
         this.knownSourceTopicPartitions = knownSourceTopicPartitions;
         this.config = config;
     }
@@ -104,7 +106,7 @@ public class MirrorSourceConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         long start = System.currentTimeMillis();
-        config = new MirrorConnectorConfig(props);
+        config = new MirrorSourceConfig(props);
         if (!config.enabled()) {
             return;
         }
@@ -114,8 +116,9 @@ public class MirrorSourceConnector extends SourceConnector {
         configPropertyFilter = config.configPropertyFilter();
         replicationPolicy = config.replicationPolicy();
         replicationFactor = config.replicationFactor();
-        sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
-        targetAdminClient = AdminClient.create(config.targetAdminConfig());
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
+        offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig());
         scheduler = new Scheduler(MirrorSourceConnector.class, config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
@@ -141,6 +144,7 @@ public class MirrorSourceConnector extends SourceConnector {
         Utils.closeQuietly(configPropertyFilter, "config property filter");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
+        Utils.closeQuietly(offsetSyncsAdminClient, "offset syncs admin client");
         log.info("Stopping {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
 
@@ -181,7 +185,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     @Override
     public ConfigDef config() {
-        return MirrorConnectorConfig.CONNECTOR_CONFIG_DEF;
+        return MirrorSourceConfig.CONNECTOR_CONFIG_DEF;
     }
 
     @Override
@@ -305,7 +309,11 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private void createOffsetSyncsTopic() {
-        MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.offsetSyncsTopicAdminConfig());
+        MirrorUtils.createSinglePartitionCompactedTopic(
+                config.offsetSyncsTopic(),
+                config.offsetSyncsTopicReplicationFactor(),
+                offsetSyncsAdminClient
+        );
     }
 
     void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
@@ -389,7 +397,7 @@ public class MirrorSourceConnector extends SourceConnector {
         }));
     }
 
-    private Set<String> listTopics(AdminClient adminClient)
+    private Set<String> listTopics(Admin adminClient)
             throws InterruptedException, ExecutionException {
         return adminClient.listTopics().names().get();
     }
@@ -399,7 +407,7 @@ public class MirrorSourceConnector extends SourceConnector {
         return sourceAdminClient.describeAcls(ANY_TOPIC_ACL).values().get();
     }
 
-    private static Collection<TopicDescription> describeTopics(AdminClient adminClient, Collection<String> topics)
+    private static Collection<TopicDescription> describeTopics(Admin adminClient, Collection<String> topics)
             throws InterruptedException, ExecutionException {
         return adminClient.describeTopics(topics).allTopicNames().get().values();
     }

@@ -40,7 +40,7 @@ public interface EventQueue extends AutoCloseable {
          *              its deadline before it could be scheduled.
          *              It will be a RejectedExecutionException if the event could not be
          *              scheduled because the event queue has already been closed.
-         *              Otherweise, it will be whatever exception was thrown by run().
+         *              Otherwise, it will be whatever exception was thrown by run().
          */
         default void handleException(Throwable e) {}
     }
@@ -247,6 +247,19 @@ public interface EventQueue extends AutoCloseable {
      * @param timeUnit      The time unit to use for the timeout.
      */
     void beginShutdown(String source, Event cleanupEvent, long timeSpan, TimeUnit timeUnit);
+
+    /**
+     * @return The number of pending and running events. If this is 0, there is no running event and
+     * no events queued.
+     */
+    int size();
+
+    /**
+     * @return True if there are no pending or running events.
+     */
+    default boolean isEmpty() {
+        return size() == 0;
+    }
 
     /**
      * This method is used during unit tests where MockTime is in use.
