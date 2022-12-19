@@ -792,6 +792,11 @@ public class StreamThread extends Thread {
              *  6. Otherwise, increment N.
              */
             do {
+
+                if (stateUpdaterEnabled) {
+                    checkStateUpdater();
+                }
+
                 log.debug("Processing tasks with {} iterations.", numIterations);
                 final int processed = taskManager.process(numIterations, time);
                 final long processLatency = advanceNowAndComputeLatency();
@@ -880,9 +885,7 @@ public class StreamThread extends Thread {
     private void initializeAndRestorePhase() {
         final java.util.function.Consumer<Set<TopicPartition>> offsetResetter = partitions -> resetOffsets(partitions, null);
         final State stateSnapshot = state;
-        if (stateUpdaterEnabled) {
-            checkStateUpdater();
-        } else {
+        if (!stateUpdaterEnabled) {
             // only try to initialize the assigned tasks
             // if the state is still in PARTITION_ASSIGNED after the poll call
             if (stateSnapshot == State.PARTITIONS_ASSIGNED
