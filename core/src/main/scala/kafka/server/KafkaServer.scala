@@ -703,7 +703,7 @@ class KafkaServer(
                 case None =>
                   info(s"Broker registration for controller $controllerId is not available in the metadata cache")
               }
-            case Some(_: KRaftCachedControllerId) | None =>
+            case _ =>
               info("No zk controller present in the metadata cache")
           }
 
