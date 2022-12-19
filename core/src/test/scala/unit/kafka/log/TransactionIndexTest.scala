@@ -18,6 +18,7 @@ package kafka.log
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.server.log.internals.CorruptIndexException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -168,4 +169,12 @@ class TransactionIndexTest {
     assertEquals(5, abortedTxns(1).firstOffset)
   }
 
+  @Test
+  def testUpdateParentDir(): Unit = {
+    val tmpParentDir = new File(TestUtils.tempDir(), "parent")
+    tmpParentDir.mkdir()
+    assertNotEquals(tmpParentDir, index.file.getParentFile)
+    index.updateParentDir(tmpParentDir)
+    assertEquals(tmpParentDir, index.file.getParentFile)
+  }
 }
