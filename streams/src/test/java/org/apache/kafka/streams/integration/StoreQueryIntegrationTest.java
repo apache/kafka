@@ -97,17 +97,17 @@ public class StoreQueryIntegrationTest {
     private static final String INPUT_TOPIC_NAME = "input-topic";
     private static final String TABLE_NAME = "source-table";
 
-    public final static EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
+    public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private TestInfo testInfo;
 
     private final List<KafkaStreams> streamsToCleanup = new ArrayList<>();
-    private final MockTime mockTime = cluster.time;
+    private final MockTime mockTime = CLUSTER.time;
 
     @BeforeAll
     public static void setupCluster() throws InterruptedException, IOException {
-        cluster.start();
-        cluster.createTopic(INPUT_TOPIC_NAME, 2, 1);
+        CLUSTER.start();
+        CLUSTER.createTopic(INPUT_TOPIC_NAME, 2, 1);
     }
 
     @BeforeEach
@@ -125,7 +125,7 @@ public class StoreQueryIntegrationTest {
 
     @AfterAll
     public static void stopCluster() {
-        cluster.stop();
+        CLUSTER.stop();
     }
 
     @Test
@@ -645,7 +645,7 @@ public class StoreQueryIntegrationTest {
 
     private void produceValueRange(final int key, final int start, final int endExclusive) {
         final Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
 
@@ -664,7 +664,7 @@ public class StoreQueryIntegrationTest {
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
