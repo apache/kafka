@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.server.log.internals.StorageAction;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
@@ -69,8 +70,7 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
 
     @Override
     public CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata) throws RemoteStorageException {
-        return withClassLoader(() -> delegate.putRemotePartitionDeleteMetadata(remotePartitionDeleteMetadata)
-        );
+        return withClassLoader(() -> delegate.putRemotePartitionDeleteMetadata(remotePartitionDeleteMetadata));
     }
 
     @Override
@@ -87,7 +87,7 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     @Override
     public void onPartitionLeadershipChanges(Set<TopicIdPartition> leaderPartitions,
                                              Set<TopicIdPartition> followerPartitions) {
-        withTryCatchClassLoader(() -> {
+        withClassLoader(() -> {
             delegate.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             return null;
         });
@@ -95,7 +95,7 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
 
     @Override
     public void onStopPartitions(Set<TopicIdPartition> partitions) {
-        withTryCatchClassLoader(() -> {
+        withClassLoader(() -> {
             delegate.onStopPartitions(partitions);
             return null;
         });
@@ -103,7 +103,7 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
 
     @Override
     public void configure(Map<String, ?> configs) {
-        withTryCatchClassLoader(() -> {
+        withClassLoader(() -> {
             delegate.configure(configs);
             return null;
         });
@@ -120,28 +120,14 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
         }
     }
 
-    @SuppressWarnings("UnusedReturnValue")
-    private <T> T withTryCatchClassLoader(Worker<T> worker) {
-        try {
-            return withClassLoader(worker);
-        } catch (final RemoteStorageException ex) {
-            // ignore, this exception is not thrown by the method.
-        }
-        return null;
-    }
-
-    private <T> T withClassLoader(Worker<T> worker) throws RemoteStorageException {
+    private <T, E extends Exception> T withClassLoader(StorageAction<T, E> action) throws E {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
-            return worker.doWork();
+            return action.execute();
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
     }
 
-    @FunctionalInterface
-    public interface Worker<T> {
-        T doWork() throws RemoteStorageException;
-    }
 }

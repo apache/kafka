@@ -16,7 +16,7 @@
  */
 package kafka.log.remote
 
-import org.apache.kafka.server.log.remote.storage.RemoteStorageManager
+import org.apache.kafka.server.log.remote.storage.{ClassLoaderAwareRemoteStorageManager, RemoteStorageManager}
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.when
