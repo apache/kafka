@@ -44,7 +44,7 @@ import scala.jdk.CollectionConverters._
 class KafkaServerKRaftRegistrationTest {
 
   @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0)
-  def testRegisterZkBrokerInKraft1(zkCluster: ClusterInstance): Unit = {
+  def testRegisterZkBrokerInKraft(zkCluster: ClusterInstance): Unit = {
     val clusterId = zkCluster.clusterId()
 
     // Bootstrap the ZK cluster ID into KRaft
