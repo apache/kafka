@@ -134,8 +134,6 @@ public class SubscriptionStoreReceiveProcessorSupplierTest {
                   .withValue(new Change<>(newValue, oldValue)),
             forwarded.get(0).record()
         );
-
-        stateStore.close();
     }
 
     @Test

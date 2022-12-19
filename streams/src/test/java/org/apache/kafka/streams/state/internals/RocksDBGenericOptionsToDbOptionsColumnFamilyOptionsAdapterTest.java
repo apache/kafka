@@ -64,6 +64,7 @@ import java.util.stream.Collectors;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
+import static org.easymock.EasyMock.resetToNice;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -149,9 +150,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
                 matchesPattern("Unexpected method call DBOptions\\." + method.getName() + "((.*\n*)*):"));
         } finally {
-            reset(mockedDbOptions);
-            mockedDbOptions.close();
-            replay(mockedDbOptions);
+            resetToNice(mockedDbOptions);
             optionsFacadeDbOptions.close();
         }
     }
@@ -259,9 +258,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
                 matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() +  "(.*)"));
         } finally {
-            reset(mockedColumnFamilyOptions);
-            mockedColumnFamilyOptions.close();
-            replay(mockedColumnFamilyOptions);
+            resetToNice(mockedColumnFamilyOptions);
             optionsFacadeColumnFamilyOptions.close();
         }
     }
