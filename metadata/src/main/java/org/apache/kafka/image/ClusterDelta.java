@@ -68,6 +68,15 @@ public final class ClusterDelta {
             .collect(Collectors.toSet());
     }
 
+    public Set<Integer> newBrokers() {
+        return changedBrokers
+            .entrySet()
+            .stream()
+            .filter(entry -> !image.containsBroker(entry.getKey()) && entry.getValue().isPresent())
+            .map(Entry::getKey)
+            .collect(Collectors.toSet());
+    }
+
     public void finishSnapshot() {
         for (Integer brokerId : image.brokers().keySet()) {
             if (!changedBrokers.containsKey(brokerId)) {

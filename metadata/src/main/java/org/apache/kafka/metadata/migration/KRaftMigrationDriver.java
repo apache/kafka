@@ -89,6 +89,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         eventQueue.prepend(new PollEvent());
     }
 
+    public void shutdown() throws InterruptedException {
+        eventQueue.close();
+    }
+
     private void initializeMigrationState() {
         log.info("Recovering migration state");
         apply("Recovery", zkMigrationClient::getOrCreateMigrationRecoveryState);
