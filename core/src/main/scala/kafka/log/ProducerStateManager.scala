@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C, Time, Utils}
+import org.apache.kafka.server.log.internals.CompletedTxn
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -318,7 +319,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
     // without any associated data will not have any impact on the last stable offset
     // and would not need to be reflected in the transaction index.
     val completedTxn = updatedEntry.currentTxnFirstOffset.map { firstOffset =>
-      CompletedTxn(producerId, firstOffset, offset, endTxnMarker.controlType == ControlRecordType.ABORT)
+      new CompletedTxn(producerId, firstOffset, offset, endTxnMarker.controlType == ControlRecordType.ABORT)
     }
 
     updatedEntry.maybeUpdateProducerEpoch(producerEpoch)

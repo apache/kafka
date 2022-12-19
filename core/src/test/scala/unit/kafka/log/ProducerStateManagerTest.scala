@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Utils}
+import org.apache.kafka.server.log.internals.CompletedTxn
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{mock, when}
@@ -246,7 +247,7 @@ class ProducerStateManagerTest {
     // incomplete transaction
     val secondAppend = stateManager.prepareUpdate(producerId, origin = AppendOrigin.Client)
     val firstCompletedTxn = appendEndTxn(ControlRecordType.COMMIT, 21, secondAppend)
-    assertEquals(Some(CompletedTxn(producerId, 16L, 21, isAborted = false)), firstCompletedTxn)
+    assertEquals(Some(new CompletedTxn(producerId, 16L, 21, false)), firstCompletedTxn)
     assertEquals(None, appendEndTxn(ControlRecordType.COMMIT, 22, secondAppend))
     assertEquals(None, appendEndTxn(ControlRecordType.ABORT, 23, secondAppend))
     appendData(24L, 27L, secondAppend)
@@ -392,21 +393,21 @@ class ProducerStateManagerTest {
     beginTxn(producerId3, startOffset3)
 
     val lastOffset1 = startOffset3 + 15
-    val completedTxn1 = CompletedTxn(producerId1, startOffset1, lastOffset1, isAborted = false)
+    val completedTxn1 = new CompletedTxn(producerId1, startOffset1, lastOffset1, false)
     assertEquals(startOffset2, stateManager.lastStableOffset(completedTxn1))
     stateManager.completeTxn(completedTxn1)
     stateManager.onHighWatermarkUpdated(lastOffset1 + 1)
     assertEquals(Some(startOffset2), stateManager.firstUnstableOffset.map(_.messageOffset))
 
     val lastOffset3 = lastOffset1 + 20
-    val completedTxn3 = CompletedTxn(producerId3, startOffset3, lastOffset3, isAborted = false)
+    val completedTxn3 = new CompletedTxn(producerId3, startOffset3, lastOffset3, false)
     assertEquals(startOffset2, stateManager.lastStableOffset(completedTxn3))
     stateManager.completeTxn(completedTxn3)
     stateManager.onHighWatermarkUpdated(lastOffset3 + 1)
     assertEquals(Some(startOffset2), stateManager.firstUnstableOffset.map(_.messageOffset))
 
     val lastOffset2 = lastOffset3 + 78
-    val completedTxn2 = CompletedTxn(producerId2, startOffset2, lastOffset2, isAborted = false)
+    val completedTxn2 = new CompletedTxn(producerId2, startOffset2, lastOffset2, false)
     assertEquals(lastOffset2 + 1, stateManager.lastStableOffset(completedTxn2))
     stateManager.completeTxn(completedTxn2)
     stateManager.onHighWatermarkUpdated(lastOffset2 + 1)

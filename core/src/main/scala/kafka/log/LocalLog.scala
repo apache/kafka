@@ -30,7 +30,7 @@ import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeEx
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.server.log.internals.OffsetPosition
+import org.apache.kafka.server.log.internals.{AbortedTxn, OffsetPosition}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, immutable}
@@ -448,7 +448,7 @@ class LocalLog(@volatile private var _dir: File,
     }
 
     val abortedTransactions = ListBuffer.empty[FetchResponseData.AbortedTransaction]
-    def accumulator(abortedTxns: List[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)
+    def accumulator(abortedTxns: Seq[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)
     collectAbortedTransactions(startOffset, upperBoundOffset, segment, accumulator)
 
     FetchDataInfo(fetchOffsetMetadata = fetchInfo.fetchOffsetMetadata,
@@ -459,13 +459,13 @@ class LocalLog(@volatile private var _dir: File,
 
   private def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long,
                                          startingSegment: LogSegment,
-                                         accumulator: List[AbortedTxn] => Unit): Unit = {
+                                         accumulator: Seq[AbortedTxn] => Unit): Unit = {
     val higherSegments = segments.higherSegments(startingSegment.baseOffset).iterator
     var segmentEntryOpt = Option(startingSegment)
     while (segmentEntryOpt.isDefined) {
       val segment = segmentEntryOpt.get
       val searchResult = segment.collectAbortedTxns(startOffset, upperBoundOffset)
-      accumulator(searchResult.abortedTransactions)
+      accumulator(searchResult.abortedTransactions.asScala)
       if (searchResult.isComplete)
         return
       segmentEntryOpt = nextOption(higherSegments)
@@ -475,7 +475,7 @@ class LocalLog(@volatile private var _dir: File,
   private[log] def collectAbortedTransactions(logStartOffset: Long, baseOffset: Long, upperBoundOffset: Long): List[AbortedTxn] = {
     val segmentEntry = segments.floorSegment(baseOffset)
     val allAbortedTxns = ListBuffer.empty[AbortedTxn]
-    def accumulator(abortedTxns: List[AbortedTxn]): Unit = allAbortedTxns ++= abortedTxns
+    def accumulator(abortedTxns: Seq[AbortedTxn]): Unit = allAbortedTxns ++= abortedTxns
     segmentEntry.foreach(segment => collectAbortedTransactions(logStartOffset, upperBoundOffset, segment, accumulator))
     allAbortedTxns.toList
   }
