@@ -175,10 +175,8 @@ public class ErrorHandlingTaskTest {
     private TaskStatus.Listener statusListener;
     @SuppressWarnings("unused")
     @Mock private StatusBackingStore statusBackingStore;
-
     @Mock
     private WorkerErrantRecordReporter workerErrantRecordReporter;
-
     private ErrorHandlingMetrics errorHandlingMetrics;
     private boolean enableTopicCreation;
     @Parameterized.Parameters
