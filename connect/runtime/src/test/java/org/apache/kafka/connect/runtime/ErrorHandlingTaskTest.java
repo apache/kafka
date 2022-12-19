@@ -541,6 +541,7 @@ public class ErrorHandlingTaskTest {
                 ClusterConfigState.EMPTY, metrics, pluginLoader, time,
                 retryWithToleranceOperator,
                 statusBackingStore, (Executor) Runnable::run));
+
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {
