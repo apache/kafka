@@ -178,9 +178,11 @@ public class ErrorHandlingTaskTest {
 
     @Mock
     private WorkerErrantRecordReporter workerErrantRecordReporter;
-    
+
     private ErrorHandlingMetrics errorHandlingMetrics;
+
     private boolean enableTopicCreation;
+
     @Parameterized.Parameters
     public static Collection<Boolean> parameters() {
         return Arrays.asList(false, true);
