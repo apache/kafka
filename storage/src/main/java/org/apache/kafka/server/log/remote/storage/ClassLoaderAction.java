@@ -19,10 +19,10 @@ package org.apache.kafka.server.log.remote.storage;
 /**
  * This interface is used to execute any remote storage/metadata related operation.
  *
- * @param <T> return type for execute operation.
- * @link RemoteStorageException}
+ * @param <T> return type for execute operation
+ * @param <E> Exception type to be thrown
  */
 @FunctionalInterface
-public interface RemoteStorageAction<T> {
-    T execute() throws RemoteStorageException;
+public interface ClassLoaderAction<T, E extends Exception> {
+    T execute() throws E;
 }

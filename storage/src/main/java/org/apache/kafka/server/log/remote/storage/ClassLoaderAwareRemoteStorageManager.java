@@ -51,16 +51,13 @@ public class ClassLoaderAwareRemoteStorageManager implements RemoteStorageManage
 
     @Override
     public void close() throws IOException {
-        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
-        Thread.currentThread().setContextClassLoader(rsmClassLoader);
-        try {
+        withClassLoader(() -> {
             delegate.close();
-        } finally {
-            Thread.currentThread().setContextClassLoader(originalClassLoader);
-        }
+            return null;
+        });
     }
 
-    private <T> T withClassLoader(RemoteStorageAction<T> action) throws RemoteStorageException {
+    private <T, E extends Exception> T withClassLoader(ClassLoaderAction<T, E> action) throws E {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(rsmClassLoader);
         try {
