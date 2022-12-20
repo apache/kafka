@@ -282,6 +282,8 @@ class KafkaServer(
         if (config.migrationEnabled) {
           kraftControllerNodes = RaftConfig.voterConnectionsToNodes(
             RaftConfig.parseVoterConnections(config.quorumVoters)).asScala
+        } else {
+          kraftControllerNodes = Seq.empty
         }
         metadataCache = MetadataCache.zkMetadataCache(
           config.brokerId,
