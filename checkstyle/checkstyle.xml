@@ -143,9 +143,15 @@
       <!-- default is 200 -->
       <property name="max" value="500"/>
     </module>
+
+    <!-- Allows the use of the @SuppressWarnings annotation in the code -->
+    <module name="SuppressWarningsHolder"/>
   </module>
 
   <module name="SuppressionFilter">
     <property name="file" value="${suppressionsFile}"/>
   </module>
+
+  <!-- Allows the use of the @SuppressWarnings annotation in the code -->
+  <module name="SuppressWarningsFilter"/>
 </module>

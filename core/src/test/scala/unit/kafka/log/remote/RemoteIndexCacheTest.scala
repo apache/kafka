@@ -16,10 +16,10 @@
  */
 package kafka.log.remote
 
-import kafka.log.{OffsetIndex, TimeIndex, UnifiedLog}
+import kafka.log.{TimeIndex, UnifiedLog}
 import kafka.utils.MockTime
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.log.internals.OffsetPosition
+import org.apache.kafka.server.log.internals.{OffsetIndex, OffsetPosition}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.test.TestUtils
@@ -63,7 +63,7 @@ class RemoteIndexCacheTest {
         val indexType = ans.getArgument[IndexType](1)
         val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
         val offsetIdx = new OffsetIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.IndexFileSuffix),
-          metadata.startOffset(), maxIndexSize = maxEntries * 8)
+          metadata.startOffset(), maxEntries * 8)
         val timeIdx = new TimeIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.TimeIndexFileSuffix),
           metadata.startOffset(), maxIndexSize = maxEntries * 12)
         maybeAppendIndexEntries(offsetIdx, timeIdx)

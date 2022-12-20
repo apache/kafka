@@ -443,7 +443,7 @@ class LocalLog(@volatile private var _dir: File,
     val fetchSize = fetchInfo.records.sizeInBytes
     val startOffsetPosition = new OffsetPosition(fetchInfo.fetchOffsetMetadata.messageOffset,
       fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
-    val upperBoundOffset = segment.fetchUpperBoundOffset(startOffsetPosition, fetchSize).getOrElse {
+    val upperBoundOffset = segment.fetchUpperBoundOffset(startOffsetPosition, fetchSize).orElse {
       segments.higherSegment(segment.baseOffset).map(_.baseOffset).getOrElse(logEndOffset)
     }
 

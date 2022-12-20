@@ -32,7 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
-import org.apache.kafka.server.log.internals.TransactionIndex
+import org.apache.kafka.server.log.internals.{OffsetIndex, TransactionIndex}
 import org.apache.kafka.snapshot.Snapshots
 
 import scala.jdk.CollectionConverters._
@@ -129,7 +129,7 @@ object DumpLogSegments {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
-    val index = new OffsetIndex(file, baseOffset = startOffset, writable = false)
+    val index = new OffsetIndex(file, startOffset, -1, false)
 
     if (index.entries == 0) {
       println(s"$file is empty.")
@@ -171,7 +171,7 @@ object DumpLogSegments {
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
     val indexFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.IndexFileSuffix)
-    val index = new OffsetIndex(indexFile, baseOffset = startOffset, writable = false)
+    val index = new OffsetIndex(indexFile, startOffset, -1, false)
     val timeIndex = new TimeIndex(file, baseOffset = startOffset, writable = false)
 
     try {
