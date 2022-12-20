@@ -28,10 +28,11 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class MirrorUtilsTest {
@@ -50,6 +51,10 @@ public class MirrorUtilsTest {
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);
         MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin);
+
+        verify(future).get();
+        verify(ctr).values();
+        verify(admin).createTopics(any(), any());
     }
 
     @Test
@@ -59,6 +64,10 @@ public class MirrorUtilsTest {
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);
         MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin);
+
+        verify(future).get();
+        verify(ctr).values();
+        verify(admin).createTopics(any(), any());
     }
 
     @Test
@@ -67,12 +76,12 @@ public class MirrorUtilsTest {
         when(future.get()).thenThrow(new ExecutionException(new ClusterAuthorizationException("not authorized")));
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);
-        try {
-            MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin);
-            fail("Should have thrown");
-        } catch (ConnectException ce) {
-            assertTrue(ce.getCause() instanceof ExecutionException);
-            assertTrue(ce.getCause().getCause() instanceof ClusterAuthorizationException);
-        }
+        Throwable ce = assertThrows(ConnectException.class, () -> MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin), "Should have exception thrown");
+
+        assertTrue(ce.getCause() instanceof ExecutionException);
+        assertTrue(ce.getCause().getCause() instanceof ClusterAuthorizationException);
+        verify(future).get();
+        verify(ctr).values();
+        verify(admin).createTopics(any(), any());
     }
 }
