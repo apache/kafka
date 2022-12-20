@@ -35,7 +35,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import java.util
 import java.util.Collections
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
 
 
@@ -248,7 +248,7 @@ class SharedServer(
             setTime(time).
             setFaultHandler(metadataPublishingFaultHandler).
             setMaxBytesSinceLastSnapshot(sharedServerConfig.metadataSnapshotMaxNewRecordBytes).
-            setMaxTimeSinceLastSnapshotNs(sharedServerConfig.metadataSnapshotMaxIntervalMs).
+            setMaxTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(sharedServerConfig.metadataSnapshotMaxIntervalMs)).
             setDisabledReason(snapshotsDiabledReason).
             build()
           raftManager.register(loader)
