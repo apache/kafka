@@ -21,6 +21,9 @@
   // Versions 0 through 2 of ApiVersionsRequest are the same.
   //
   // Version 3 is the first flexible version and adds ClientSoftwareName and ClientSoftwareVersion.
+  //
+  // Version 4 adds zk to kraft migration field to the response used to determine if the controller
+  // is ready for migration.
   "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
