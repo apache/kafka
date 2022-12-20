@@ -941,7 +941,7 @@ class ControllerChannelManagerTest {
   private case class SentRequest(request: ControlRequest, responseCallback: AbstractResponse => Unit)
 
   private class MockControllerBrokerRequestBatch(context: ControllerContext, config: KafkaConfig = config)
-    extends AbstractControllerBrokerRequestBatch(config, () => context, logger) {
+    extends AbstractControllerBrokerRequestBatch(config, () => context, logger, () => config.interBrokerProtocolVersion) {
 
     val sentEvents = ListBuffer.empty[ControllerEvent]
     val sentRequests = mutable.Map.empty[Int, ListBuffer[SentRequest]]

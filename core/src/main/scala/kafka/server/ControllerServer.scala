@@ -248,7 +248,12 @@ class ControllerServer(
           controller.asInstanceOf[QuorumController].zkRecordConsumer(),
           migrationClient,
           rpcClient,
-          publisher => sharedServer.loader.installPublishers(java.util.Collections.singletonList(publisher))
+          publisher => sharedServer.loader.installPublishers(java.util.Collections.singletonList(publisher)),
+          sharedServer.faultHandlerFactory.build(
+            "zk migration",
+            fatal = false,
+            () => {}
+          )
         )
         migrationDriver.start()
         migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, rpcClient))

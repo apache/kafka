@@ -11,6 +11,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.migration.BrokersRpcClient
+import org.apache.kafka.server.common.MetadataVersion
 
 import java.util
 import scala.collection.mutable.ArrayBuffer
@@ -114,7 +115,8 @@ sealed class KRaftControllerBrokerRequestBatch(
   config,
   metadataProvider,
   stateChangeLogger,
-  kraftController = true
+  () => MetadataVersion.IBP_3_4_IV0, // TODO pass this in
+  kraftController = true,
 ) {
 
   override def sendRequest(brokerId: Int, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest], callback: AbstractResponse => Unit): Unit = {
@@ -167,7 +169,7 @@ class KRaftControllerToZkBrokersRpcClient(
   config: KafkaConfig
 ) extends BrokersRpcClient {
   @volatile private var _image = MetadataImage.EMPTY
-  val stateChangeLogger = new StateChangeLogger(nodeId, inControllerContext = false, None)
+  val stateChangeLogger = new StateChangeLogger(nodeId, inControllerContext = true, None)
   val channelManager = new ControllerChannelManager(
     () => _image.highestOffsetAndEpoch().epoch(),
     config,
@@ -213,6 +215,9 @@ class KRaftControllerToZkBrokersRpcClient(
                                                   controllerEpoch: Int): Unit = {
     publishMetadata(image)
     requestBatch.newBatch()
+
+    delta.getOrCreateTopicsDelta()
+    delta.getOrCreateClusterDelta()
 
     val newZkBrokers = delta.clusterDelta().newZkBrokers().asScala.map(_.toInt).toSet
     val zkBrokers = image.cluster().zkBrokers().keySet().asScala.map(_.toInt).toSet
