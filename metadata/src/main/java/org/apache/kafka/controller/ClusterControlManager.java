@@ -353,13 +353,13 @@ public class ClusterControlManager {
             }
         }
 
-        if (request.isMigratingZkBroker() && !zkRegistrationAllowed()) {
+        if (request.migratingZkBrokerEpoch() != -1 && !zkRegistrationAllowed()) {
             throw new BrokerIdNotRegisteredException("Controller does not support registering ZK brokers.");
         }
 
         RegisterBrokerRecord record = new RegisterBrokerRecord().
             setBrokerId(brokerId).
-            setIsMigratingZkBroker(request.isMigratingZkBroker()).
+            setMigratingZkBrokerEpoch(request.migratingZkBrokerEpoch()).
             setIncarnationId(request.incarnationId()).
             setBrokerEpoch(brokerEpoch).
             setRack(request.rack());
@@ -436,12 +436,13 @@ public class ClusterControlManager {
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
 
+
         // Update broker registrations.
         BrokerRegistration prevRegistration = brokerRegistrations.put(brokerId,
                 new BrokerRegistration(brokerId, record.brokerEpoch(),
                     record.incarnationId(), listeners, features,
                     Optional.ofNullable(record.rack()), record.fenced(),
-                    record.inControlledShutdown(), record.isMigratingZkBroker()));
+                    record.inControlledShutdown(), BrokerRegistration.zkBrokerEpoch(record.migratingZkBrokerEpoch())));
         updateMetrics(prevRegistration, brokerRegistrations.get(brokerId));
         if (heartbeatManager != null) {
             if (prevRegistration != null) heartbeatManager.remove(brokerId);

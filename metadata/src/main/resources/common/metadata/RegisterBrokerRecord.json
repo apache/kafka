@@ -22,7 +22,7 @@
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker id." },
-    { "name": "IsMigratingZkBroker", "type": "bool", "versions": "2+", "default": false,
+    { "name": "MigratingZkBrokerEpoch", "type": "int64", "versions": "2+", "default": "-1",
       "about": "True if the registering broker is a ZK broker." },
     { "name": "IncarnationId", "type": "uuid", "versions": "0+",
       "about": "The incarnation ID of the broker process" },

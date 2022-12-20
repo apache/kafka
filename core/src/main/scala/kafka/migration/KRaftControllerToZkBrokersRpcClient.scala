@@ -61,7 +61,7 @@ sealed class KRaftControllerBrokerRequestMetadata(val image: MetadataImage) exte
 
   override val liveBrokerIdAndEpochs: collection.Map[Int, Long] = {
     image.cluster().zkBrokers().asScala.map {
-      case (brokerId, broker) => brokerId.intValue() -> broker.epoch()
+      case (brokerId, broker) => brokerId.intValue() -> broker.migratingZkBrokerEpoch().orElse(-1L)
     }
   }
 

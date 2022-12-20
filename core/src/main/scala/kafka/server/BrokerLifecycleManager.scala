@@ -55,7 +55,7 @@ class BrokerLifecycleManager(
   val config: KafkaConfig,
   val time: Time,
   val threadNamePrefix: Option[String],
-  val isZkBroker: Boolean = false
+  val zkBrokerEpoch: Option[Long] = None
 ) extends Logging {
 
   val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.nodeId}] ")
@@ -270,7 +270,7 @@ class BrokerLifecycleManager(
       _clusterId = clusterId
       _advertisedListeners = advertisedListeners.duplicate()
       _supportedFeatures = new util.HashMap[String, VersionRange](supportedFeatures)
-      if (!isZkBroker) {
+      if (zkBrokerEpoch.isDefined) {
         // ZK brokers don't block on registration during startup
         eventQueue.scheduleDeferred("initialRegistrationTimeout",
           new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
@@ -292,7 +292,7 @@ class BrokerLifecycleManager(
     }
     val data = new BrokerRegistrationRequestData().
         setBrokerId(nodeId).
-        setIsMigratingZkBroker(isZkBroker).
+        setMigratingZkBrokerEpoch(zkBrokerEpoch.getOrElse(-1)).
         setClusterId(_clusterId).
         setFeatures(features).
         setIncarnationId(incarnationId).
