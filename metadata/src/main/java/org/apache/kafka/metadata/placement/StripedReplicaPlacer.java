@@ -353,9 +353,10 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
             }
         }
 
-        protected static Optional<Integer> tryGetPreviousRackOffset(Map<Integer, Optional<String>> brokerIdToRack,
-                                                           List<PartitionAssignment> existingPartitionAssignments,
-                                                           List<Optional<String>> racks) {
+        protected static Optional<Integer> tryGetPreviousRackOffset(
+            Map<Integer, Optional<String>> brokerIdToRack,
+            List<PartitionAssignment> existingPartitionAssignments,
+            List<Optional<String>> racks) {
             if (existingPartitionAssignments.isEmpty()) {
                 return Optional.empty();
             }
@@ -372,10 +373,11 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
             return Optional.empty();
         }
 
-        protected static Optional<Integer> tryGetPreviousBrokerOffset(Map<Integer, Optional<String>> brokerIdToRack,
-                                                             List<PartitionAssignment> existingPartitionAssignments,
-                                                             Optional<String> rack,
-                                                             List<Integer> unfencedBrokers) {
+        protected static Optional<Integer> tryGetPreviousBrokerOffset(
+            Map<Integer, Optional<String>> brokerIdToRack,
+            List<PartitionAssignment> existingPartitionAssignments,
+            Optional<String> rack,
+            List<Integer> unfencedBrokers) {
             for (int i = existingPartitionAssignments.size() - 1; i >= 0; i--) {
                 List<Integer> partitionAssignment = existingPartitionAssignments.get(i).replicas();
                 for (int j = 0; j < partitionAssignment.size(); j++) {

@@ -254,10 +254,10 @@ public class StripedReplicaPlacerTest {
     @Test
     public void testPlaceShiftsInitialOffsetsRackAwareAndUsesUnusedRacks() {
         List<UsableBroker> usableBrokers = Arrays.asList(
-                new UsableBroker(0, Optional.of("1"), false),
-                new UsableBroker(1, Optional.of("2"), false),
-                new UsableBroker(2, Optional.of("3"), false),
-                new UsableBroker(3, Optional.of("4"), false));
+            new UsableBroker(0, Optional.of("1"), false),
+            new UsableBroker(1, Optional.of("2"), false),
+            new UsableBroker(2, Optional.of("3"), false),
+            new UsableBroker(3, Optional.of("4"), false));
 
         List<PartitionAssignment> partitionAssignments = place(new StripedReplicaPlacer(new MockRandom()), 0, 1, (short) 2, usableBrokers).assignments();
         assertEquals(Arrays.asList(0, 1), partitionAssignments.get(0).replicas());
@@ -267,19 +267,19 @@ public class StripedReplicaPlacerTest {
         // Add partitions
         int startPartitionId = partitionAssignments.size();
         partitionAssignments = place(
-                new StripedReplicaPlacer(new MockRandom()), startPartitionId, 1, (short) 2, usableBrokers, partitionAssignments).assignments();
+            new StripedReplicaPlacer(new MockRandom()), startPartitionId, 1, (short) 2, usableBrokers, partitionAssignments).assignments();
         assertEquals(Arrays.asList(1, 2), partitionAssignments.get(0).replicas());
 
         fullPartitionAssignments.addAll(partitionAssignments);
 
         partitionAssignments = place(
-                new StripedReplicaPlacer(new MockRandom()), startPartitionId, 1, (short) 2, usableBrokers, partitionAssignments).assignments();
+            new StripedReplicaPlacer(new MockRandom()), startPartitionId, 1, (short) 2, usableBrokers, partitionAssignments).assignments();
         assertEquals(Arrays.asList(2, 3), partitionAssignments.get(0).replicas());
 
         fullPartitionAssignments.addAll(partitionAssignments);
 
         partitionAssignments = place(
-                new StripedReplicaPlacer(new MockRandom()), startPartitionId, 1, (short) 2, usableBrokers, partitionAssignments).assignments();
+            new StripedReplicaPlacer(new MockRandom()), startPartitionId, 1, (short) 2, usableBrokers, partitionAssignments).assignments();
         assertEquals(Arrays.asList(3, 0), partitionAssignments.get(0).replicas());
     }
 
@@ -328,56 +328,56 @@ public class StripedReplicaPlacerTest {
 
         // No existing partitions case.
         assertEquals(Optional.empty(),
-                RackList.tryGetPreviousBrokerOffset(brokerIdToRack,
-                        new ArrayList<>(), Optional.of("1"), unfencedBrokersRack1));
+            RackList.tryGetPreviousBrokerOffset(brokerIdToRack,
+                new ArrayList<>(), Optional.of("1"), unfencedBrokersRack1));
 
         // Case where existing partitions have broker from rack in last partition.
         assertEquals(Optional.of(1),
-                RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
-                        new PartitionAssignment(Arrays.asList(0, 1, 2)),
-                        new PartitionAssignment(Arrays.asList(1, 2, 0))
-                ), Optional.of("1"), unfencedBrokersRack1));
+            RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
+                new PartitionAssignment(Arrays.asList(0, 1, 2)),
+                new PartitionAssignment(Arrays.asList(1, 2, 0))
+            ), Optional.of("1"), unfencedBrokersRack1));
 
         // Case where existing partitions have broker from rack in last partition but brokers are fenced.
         assertEquals(Optional.empty(),
-                RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
-                        new PartitionAssignment(Arrays.asList(0, 1, 2)),
-                        new PartitionAssignment(Arrays.asList(1, 2, 0))
-                ), Optional.of("1"), new ArrayList<>()));
+            RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
+                new PartitionAssignment(Arrays.asList(0, 1, 2)),
+                new PartitionAssignment(Arrays.asList(1, 2, 0))
+            ), Optional.of("1"), new ArrayList<>()));
 
         // Case where existing partitions have broker from rack in third to last partition.
         assertEquals(Optional.of(1),
-                RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
-                        new PartitionAssignment(Arrays.asList(0, 1, 2)),
-                        new PartitionAssignment(Arrays.asList(1, 2, 0)),
-                        new PartitionAssignment(Arrays.asList(4, 5, 6)),
-                        new PartitionAssignment(Arrays.asList(5, 6, 7))
-                ), Optional.of("1"), unfencedBrokersRack1));
+            RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
+                new PartitionAssignment(Arrays.asList(0, 1, 2)),
+                new PartitionAssignment(Arrays.asList(1, 2, 0)),
+                new PartitionAssignment(Arrays.asList(4, 5, 6)),
+                new PartitionAssignment(Arrays.asList(5, 6, 7))
+            ), Optional.of("1"), unfencedBrokersRack1));
 
         // Case where existing partitions have broker from rack in last partition but not first replica
         // in that partition.
         assertEquals(Optional.of(1),
-                RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
-                        new PartitionAssignment(Arrays.asList(4, 5, 1))
-                ), Optional.of("1"), unfencedBrokersRack1));
+            RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
+                new PartitionAssignment(Arrays.asList(4, 5, 1))
+            ), Optional.of("1"), unfencedBrokersRack1));
 
         // Case where existing partitions have broker from rack in last partition but not first replica
         // in that partition.
         assertEquals(Optional.of(1),
-                RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
-                        new PartitionAssignment(Arrays.asList(1, 2, 0)),
-                        new PartitionAssignment(Arrays.asList(0, 5, 6)),
-                        new PartitionAssignment(Arrays.asList(0, 1, 2))
-                ), Optional.of("2"), unfencedBrokersRack2));
+            RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
+                new PartitionAssignment(Arrays.asList(1, 2, 0)),
+                new PartitionAssignment(Arrays.asList(0, 5, 6)),
+                new PartitionAssignment(Arrays.asList(0, 1, 2))
+            ), Optional.of("2"), unfencedBrokersRack2));
 
         // Case where existing partitions do not have broker from rack.
         assertEquals(Optional.empty(),
-                RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
-                        new PartitionAssignment(Arrays.asList(0, 1, 2)),
-                        new PartitionAssignment(Arrays.asList(1, 2, 0)),
-                        new PartitionAssignment(Arrays.asList(4, 5, 6)),
-                        new PartitionAssignment(Arrays.asList(5, 6, 7))
-                ), Optional.of("3"), unfencedBrokersRack3));
+            RackList.tryGetPreviousBrokerOffset(brokerIdToRack, Arrays.asList(
+                new PartitionAssignment(Arrays.asList(0, 1, 2)),
+                new PartitionAssignment(Arrays.asList(1, 2, 0)),
+                new PartitionAssignment(Arrays.asList(4, 5, 6)),
+                new PartitionAssignment(Arrays.asList(5, 6, 7))
+            ), Optional.of("3"), unfencedBrokersRack3));
     }
 
     @Test
@@ -400,29 +400,29 @@ public class StripedReplicaPlacerTest {
 
         // No existing partitions case.
         assertEquals(Optional.empty(),
-                RackList.tryGetPreviousRackOffset(brokerIdToRack,
-                        new ArrayList<>(), racks));
+            RackList.tryGetPreviousRackOffset(brokerIdToRack,
+                new ArrayList<>(), racks));
 
         // No rack case
         assertEquals(Optional.empty(),
-                RackList.tryGetPreviousRackOffset(brokerIdToRack, Arrays.asList(
-                        new PartitionAssignment(Arrays.asList(6, 8, 2)),
-                        new PartitionAssignment(Arrays.asList(9, 3, 7))
-                ), Arrays.asList(Optional.empty())));
+            RackList.tryGetPreviousRackOffset(brokerIdToRack, Arrays.asList(
+                new PartitionAssignment(Arrays.asList(6, 8, 2)),
+                new PartitionAssignment(Arrays.asList(9, 3, 7))
+            ), Arrays.asList(Optional.empty())));
 
         // Case where existing partitions have previous rack
         assertEquals(Optional.of(2),
-                RackList.tryGetPreviousRackOffset(brokerIdToRack, Arrays.asList(
-                        new PartitionAssignment(Arrays.asList(6, 8, 2)),
-                        new PartitionAssignment(Arrays.asList(9, 3, 7))
-                ), racks));
+            RackList.tryGetPreviousRackOffset(brokerIdToRack, Arrays.asList(
+                new PartitionAssignment(Arrays.asList(6, 8, 2)),
+                new PartitionAssignment(Arrays.asList(9, 3, 7))
+            ), racks));
 
         // Case where last leader rack does not exist in brokerIdToRack Map.
         assertEquals(Optional.empty(),
-                RackList.tryGetPreviousRackOffset(new HashMap<>(), Arrays.asList(
-                        new PartitionAssignment(Arrays.asList(6, 8, 2)),
-                        new PartitionAssignment(Arrays.asList(9, 3, 7))
-                ), racks));
+            RackList.tryGetPreviousRackOffset(new HashMap<>(), Arrays.asList(
+                new PartitionAssignment(Arrays.asList(6, 8, 2)),
+                new PartitionAssignment(Arrays.asList(9, 3, 7))
+            ), racks));
 
     }
 
