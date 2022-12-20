@@ -489,7 +489,7 @@ class StreamsUpgradeTest(Test):
         first_other_node = first_other_processor.node
         second_other_node = second_other_processor.node
 
-        kafka_version_str = self.get_version_string(self.base_version_number)
+        kafka_version_str = self.get_version_string(str(DEV_VERSION))
 
         with first_other_node.account.monitor_log(first_other_processor.LOG_FILE) as first_other_monitor:
             with second_other_node.account.monitor_log(second_other_processor.LOG_FILE) as second_other_monitor:
