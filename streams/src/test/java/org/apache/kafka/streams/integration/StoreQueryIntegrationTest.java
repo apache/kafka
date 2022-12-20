@@ -99,7 +99,7 @@ public class StoreQueryIntegrationTest {
 
     public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private TestInfo testInfo;
+    private String appId;
 
     private final List<KafkaStreams> streamsToCleanup = new ArrayList<>();
     private final MockTime mockTime = CLUSTER.time;
@@ -112,7 +112,7 @@ public class StoreQueryIntegrationTest {
 
     @BeforeEach
     public void before(final TestInfo testInfo) throws InterruptedException, IOException {
-        this.testInfo = testInfo;
+        this.appId = safeUniqueTestName(getClass(), testInfo);
     }
 
     @AfterEach
@@ -659,10 +659,9 @@ public class StoreQueryIntegrationTest {
     }
 
     private Properties streamsConfiguration() {
-        final String safeTestName = safeUniqueTestName(getClass(), this.testInfo);
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + this.appId);
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
