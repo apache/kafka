@@ -26,7 +26,6 @@ import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, TimeUnit}
 import kafka.common.{LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.AppendOrigin.RaftLeader
 import kafka.log.remote.RemoteLogManager
-import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
@@ -46,6 +45,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
 import org.apache.kafka.server.log.internals.{AbortedTxn, CompletedTxn}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
+import org.apache.kafka.server.record.BrokerCompressionType
 
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
@@ -54,11 +54,11 @@ import scala.jdk.CollectionConverters._
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
-    RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
+    RecordConversionStats.EMPTY, CompressionType.NONE, CompressionType.NONE, -1, -1, offsetsMonotonic = false, -1L)
 
   def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
     LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
+      RecordConversionStats.EMPTY, CompressionType.NONE, CompressionType.NONE, -1, -1,
       offsetsMonotonic = false, -1L)
 
   /**
@@ -68,7 +68,7 @@ object LogAppendInfo {
    */
   def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, recordErrors: Seq[RecordError], errorMessage: String): LogAppendInfo =
     LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
+      RecordConversionStats.EMPTY, CompressionType.NONE, CompressionType.NONE, -1, -1,
       offsetsMonotonic = false, -1L, recordErrors, errorMessage)
 }
 
@@ -92,8 +92,8 @@ object LeaderHwChange {
  * @param logAppendTime The log append time (if used) of the message set, otherwise Message.NoTimestamp
  * @param logStartOffset The start offset of the log at the time of this append.
  * @param recordConversionStats Statistics collected during record processing, `null` if `assignOffsets` is `false`
- * @param sourceCodec The source codec used in the message set (send by the producer)
- * @param targetCodec The target codec of the message set(after applying the broker compression configuration if any)
+ * @param sourceCompression The source codec used in the message set (send by the producer)
+ * @param targetCompression The target codec of the message set(after applying the broker compression configuration if any)
  * @param shallowCount The number of shallow messages
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
@@ -110,8 +110,8 @@ case class LogAppendInfo(var firstOffset: Option[LogOffsetMetadata],
                          var logAppendTime: Long,
                          var logStartOffset: Long,
                          var recordConversionStats: RecordConversionStats,
-                         sourceCodec: CompressionCodec,
-                         targetCodec: CompressionCodec,
+                         sourceCompression: CompressionType,
+                         targetCompression: CompressionType,
                          shallowCount: Int,
                          validBytes: Int,
                          offsetsMonotonic: Boolean,
@@ -838,8 +838,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                 offset,
                 time,
                 now,
-                appendInfo.sourceCodec,
-                appendInfo.targetCodec,
+                appendInfo.sourceCompression,
+                appendInfo.targetCompression,
                 config.compact,
                 config.recordVersion.value,
                 config.messageTimestampType,
@@ -1121,7 +1121,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     var firstOffset: Option[LogOffsetMetadata] = None
     var lastOffset = -1L
     var lastLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH
-    var sourceCodec: CompressionCodec = NoCompressionCodec
+    var sourceCompression = CompressionType.NONE
     var monotonic = true
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
@@ -1181,19 +1181,19 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       shallowMessageCount += 1
       validBytesCount += batchSize
 
-      val messageCodec = CompressionCodec.getCompressionCodec(batch.compressionType.id)
-      if (messageCodec != NoCompressionCodec)
-        sourceCodec = messageCodec
+      val batchCompression = CompressionType.forId(batch.compressionType.id)
+      if (batchCompression != CompressionType.NONE)
+        sourceCompression = batchCompression
     }
 
     // Apply broker-side compression if any
-    val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
+    val targetCompression = BrokerCompressionType.forName(config.compressionType).targetCompressionType(sourceCompression)
     val lastLeaderEpochOpt: Option[Int] = if (lastLeaderEpoch != RecordBatch.NO_PARTITION_LEADER_EPOCH)
       Some(lastLeaderEpoch)
     else
       None
     LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
+      RecordConversionStats.EMPTY, sourceCompression, targetCompression, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
   }
 
   /**
