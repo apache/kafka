@@ -56,10 +56,6 @@ public class TimeIndex extends AbstractIndex {
 
     private volatile TimestampOffset lastEntry;
 
-    public TimeIndex(File file, long baseOffset) throws IOException {
-        this(file, baseOffset, -1);
-    }
-
     public TimeIndex(File file, long baseOffset, int maxIndexSize) throws IOException {
         this(file, baseOffset, maxIndexSize, true);
     }
