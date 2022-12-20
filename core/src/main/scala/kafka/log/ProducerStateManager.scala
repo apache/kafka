@@ -30,32 +30,11 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, NoSuchFileException, StandardOpenOption}
+import java.util.OptionalLong
 import java.util.concurrent.ConcurrentSkipListMap
 import scala.collection.mutable.ListBuffer
 import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
-
-/**
- * The last written record for a given producer. The last data offset may be undefined
- * if the only log entry for a producer is a transaction marker.
- */
-case class LastRecord(lastDataOffset: Option[Long], producerEpoch: Short)
-
-
-private[log] case class TxnMetadata(
-  producerId: Long,
-  firstOffset: LogOffsetMetadata,
-  var lastOffset: Option[Long] = None
-) {
-  def this(producerId: Long, firstOffset: Long) = this(producerId, new LogOffsetMetadata(firstOffset))
-
-  override def toString: String = {
-    "TxnMetadata(" +
-      s"producerId=$producerId, " +
-      s"firstOffset=$firstOffset, " +
-      s"lastOffset=$lastOffset)"
-  }
-}
 
 private[log] object ProducerStateEntry {
   private[log] val NumBatchesToRetain = 5
@@ -283,7 +262,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       case None if isTransactional =>
         // Began a new transaction
         updatedEntry.currentTxnFirstOffset = Some(firstOffset)
-        transactions += TxnMetadata(producerId, firstOffsetMetadata)
+        transactions += new TxnMetadata(producerId, firstOffsetMetadata)
 
       case _ => // nothing to do
     }
@@ -809,7 +788,7 @@ class ProducerStateManager(
     while (iterator.hasNext) {
       val txnEntry = iterator.next()
       val lastOffset = txnEntry.getValue.lastOffset
-      if (lastOffset.exists(_ < offset))
+      if (lastOffset.isPresent && lastOffset.getAsLong < offset)
         iterator.remove()
     }
   }
@@ -849,7 +828,7 @@ class ProducerStateManager(
       throw new IllegalArgumentException(s"Attempted to complete transaction $completedTxn on partition $topicPartition " +
         s"which was not started")
 
-    txnMetadata.lastOffset = Some(completedTxn.lastOffset)
+    txnMetadata.lastOffset = OptionalLong.of(completedTxn.lastOffset)
     unreplicatedTxns.put(completedTxn.firstOffset, txnMetadata)
     updateOldestTxnTimestamp()
   }

@@ -32,7 +32,7 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
-import org.apache.kafka.server.log.internals.{AbortedTxn, CleanerConfig, LogDirFailureChannel, OffsetMap, SkimpyOffsetMap, TransactionIndex}
+import org.apache.kafka.server.log.internals.{AbortedTxn, CleanerConfig, LastRecord, LogDirFailureChannel, OffsetMap, SkimpyOffsetMap, TransactionIndex}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -174,7 +174,8 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-    val numThreads = LogCleaner.cleanerConfig(newConfig).numThreads
+    val newCleanerConfig = LogCleaner.cleanerConfig(newConfig)
+    val numThreads = newCleanerConfig.numThreads
     val currentThreads = config.numThreads
     if (numThreads < 1)
       throw new ConfigException(s"Log cleaner threads should be at least 1")
@@ -680,9 +681,10 @@ private[log] class Cleaner(val id: Int,
           // 3) The last entry in the log is a transaction marker. We retain this marker since it has the
           //    last producer epoch, which is needed to ensure fencing.
           lastRecordsOfActiveProducers.get(batch.producerId).exists { lastRecord =>
-            lastRecord.lastDataOffset match {
-              case Some(offset) => batch.lastOffset == offset
-              case None => batch.isControlBatch && batch.producerEpoch == lastRecord.producerEpoch
+            if(lastRecord.lastDataOffset.isPresent) {
+              batch.lastOffset == lastRecord.lastDataOffset.getAsLong
+            } else {
+              batch.isControlBatch && batch.producerEpoch == lastRecord.producerEpoch
             }
           }
         }
