@@ -17,6 +17,11 @@
 
 package org.apache.kafka.controller;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.IntPredicate;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.metadata.LeaderRecoveryState;
@@ -25,13 +30,6 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.function.Function;
-
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
@@ -72,7 +70,7 @@ public class PartitionChangeBuilder {
     private final PartitionRegistration partition;
     private final Uuid topicId;
     private final int partitionId;
-    private final Function<Integer, Boolean> isAcceptableLeader;
+    private final IntPredicate isAcceptableLeader;
     private final boolean isLeaderRecoverySupported;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
@@ -84,7 +82,7 @@ public class PartitionChangeBuilder {
     public PartitionChangeBuilder(PartitionRegistration partition,
                                   Uuid topicId,
                                   int partitionId,
-                                  Function<Integer, Boolean> isAcceptableLeader,
+                                  IntPredicate isAcceptableLeader,
                                   boolean isLeaderRecoverySupported) {
         this.partition = partition;
         this.topicId = topicId;
@@ -197,7 +195,7 @@ public class PartitionChangeBuilder {
         if (election == Election.UNCLEAN) {
             // Attempt unclean leader election
             Optional<Integer> uncleanLeader = targetReplicas.stream()
-                .filter(replica -> isAcceptableLeader.apply(replica))
+                .filter(replica -> isAcceptableLeader.test(replica))
                 .findFirst();
             if (uncleanLeader.isPresent()) {
                 return new ElectionResult(uncleanLeader.get(), true);
@@ -208,7 +206,7 @@ public class PartitionChangeBuilder {
     }
 
     private boolean isValidNewLeader(int replica) {
-        return targetIsr.contains(replica) && isAcceptableLeader.apply(replica);
+        return targetIsr.contains(replica) && isAcceptableLeader.test(replica);
     }
 
     private void tryElection(PartitionChangeRecord record) {
