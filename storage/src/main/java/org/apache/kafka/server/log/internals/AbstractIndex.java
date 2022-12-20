@@ -40,8 +40,8 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public abstract class AbstractIndex implements Closeable {
 
-    private enum SearchType {
-        SMALLEST_UPPER_BOUND, LARGEST_LOWER_BOUND
+    private enum SearchResultType {
+        LARGEST_LOWER_BOUND, SMALLEST_UPPER_BOUND
     }
 
     private static final Logger log = LoggerFactory.getLogger(AbstractIndex.class);
@@ -441,14 +441,14 @@ public abstract class AbstractIndex implements Closeable {
      * @return The slot found or -1 if the least entry in the index is larger than the target key or the index is empty
      */
     protected int largestLowerBoundSlotFor(ByteBuffer idx, long target, IndexSearchType searchEntity) {
-        return indexSlotRangeFor(idx, target, searchEntity, SearchType.LARGEST_LOWER_BOUND);
+        return indexSlotRangeFor(idx, target, searchEntity, SearchResultType.LARGEST_LOWER_BOUND);
     }
 
     /**
      * Find the smallest entry greater than or equal the target key or value. If none can be found, -1 is returned.
      */
     protected int smallestUpperBoundSlotFor(ByteBuffer idx, long target, IndexSearchType searchEntity) {
-        return indexSlotRangeFor(idx, target, searchEntity, SearchType.SMALLEST_UPPER_BOUND);
+        return indexSlotRangeFor(idx, target, searchEntity, SearchResultType.SMALLEST_UPPER_BOUND);
     }
 
     /**
@@ -481,7 +481,7 @@ public abstract class AbstractIndex implements Closeable {
      * Lookup lower or upper bounds for the given target.
      */
     private int indexSlotRangeFor(ByteBuffer idx, long target, IndexSearchType searchEntity,
-                                  SearchType searchType) {
+                                  SearchResultType searchResultType) {
         // check if the index is empty
         if (entries == 0)
             return -1;
@@ -489,24 +489,25 @@ public abstract class AbstractIndex implements Closeable {
         int firstHotEntry = Math.max(0, entries - 1 - warmEntries());
         // check if the target offset is in the warm section of the index
         if (compareIndexEntry(parseEntry(idx, firstHotEntry), target, searchEntity) < 0) {
-            return binarySearch(idx, target, searchEntity, searchType, firstHotEntry, entries - 1);
+            return binarySearch(idx, target, searchEntity,
+                searchResultType, firstHotEntry, entries - 1);
         }
 
         // check if the target offset is smaller than the least offset
         if (compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0) {
-            switch (searchType) {
-                case SMALLEST_UPPER_BOUND:
-                    return -1;
+            switch (searchResultType) {
                 case LARGEST_LOWER_BOUND:
+                    return -1;
+                case SMALLEST_UPPER_BOUND:
                     return 0;
             }
         }
 
-        return binarySearch(idx, target, searchEntity, searchType, 0, firstHotEntry);
+        return binarySearch(idx, target, searchEntity, searchResultType, 0, firstHotEntry);
     }
 
     private int binarySearch(ByteBuffer idx, long target, IndexSearchType searchEntity,
-                             SearchType searchType, int begin, int end) {
+                             SearchResultType searchResultType, int begin, int end) {
         // binary search for the entry
         int lo = begin;
         int hi = end;
@@ -521,16 +522,16 @@ public abstract class AbstractIndex implements Closeable {
             else
                 return mid;
         }
-        switch (searchType) {
-            case SMALLEST_UPPER_BOUND:
-                return lo;
+        switch (searchResultType) {
             case LARGEST_LOWER_BOUND:
+                return lo;
+            case SMALLEST_UPPER_BOUND:
                 if (lo == entries - 1)
                     return -1;
                 else
                     return lo + 1;
             default:
-                throw new IllegalStateException("Unexpected searchType " + searchType);
+                throw new IllegalStateException("Unexpected searchResultType " + searchResultType);
         }
     }
 
