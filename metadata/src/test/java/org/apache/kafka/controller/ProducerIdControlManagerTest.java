@@ -64,7 +64,6 @@ public class ProducerIdControlManagerTest {
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
-            setControllerMetrics(new MockControllerMetrics()).
             setFeatureControlManager(featureControl).
             build();
 

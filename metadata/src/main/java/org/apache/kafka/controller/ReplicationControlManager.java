@@ -92,7 +92,6 @@ import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
-import org.apache.kafka.timeline.TimelineInteger;
 import org.slf4j.Logger;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
@@ -110,7 +109,7 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.function.IntPredicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -151,7 +150,6 @@ public class ReplicationControlManager {
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
-        private ControllerMetrics controllerMetrics = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private FeatureControlManager featureControl = null;
 
@@ -190,11 +188,6 @@ public class ReplicationControlManager {
             return this;
         }
 
-        Builder setControllerMetrics(ControllerMetrics controllerMetrics) {
-            this.controllerMetrics = controllerMetrics;
-            return this;
-        }
-
         Builder setCreateTopicPolicy(Optional<CreateTopicPolicy> createTopicPolicy) {
             this.createTopicPolicy = createTopicPolicy;
             return this;
@@ -210,8 +203,6 @@ public class ReplicationControlManager {
                 throw new IllegalStateException("Configuration control must be set before building");
             } else if (clusterControl == null) {
                 throw new IllegalStateException("Cluster controller must be set before building");
-            } else if (controllerMetrics == null) {
-                throw new IllegalStateException("Metrics must be set before building");
             }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = configurationControl.snapshotRegistry();
@@ -232,7 +223,6 @@ public class ReplicationControlManager {
                 maxElectionsPerImbalance,
                 configurationControl,
                 clusterControl,
-                controllerMetrics,
                 createTopicPolicy,
                 featureControl);
         }
@@ -295,11 +285,6 @@ public class ReplicationControlManager {
     private final int maxElectionsPerImbalance;
 
     /**
-     * A count of the total number of partitions in the cluster.
-     */
-    private final TimelineInteger globalPartitionCount;
-
-    /**
      * A reference to the controller's configuration control manager.
      */
     private final ConfigurationControlManager configurationControl;
@@ -308,11 +293,6 @@ public class ReplicationControlManager {
      * A reference to the controller's cluster control manager.
      */
     private final ClusterControlManager clusterControl;
-
-    /**
-     * A reference to the controller's metrics registry.
-     */
-    private final ControllerMetrics controllerMetrics;
 
     /**
      * The policy to use to validate that topic assignments are valid, if one is present.
@@ -379,7 +359,6 @@ public class ReplicationControlManager {
         int maxElectionsPerImbalance,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
-        ControllerMetrics controllerMetrics,
         Optional<CreateTopicPolicy> createTopicPolicy,
         FeatureControlManager featureControl
     ) {
@@ -389,11 +368,9 @@ public class ReplicationControlManager {
         this.defaultNumPartitions = defaultNumPartitions;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
         this.configurationControl = configurationControl;
-        this.controllerMetrics = controllerMetrics;
         this.createTopicPolicy = createTopicPolicy;
         this.featureControl = featureControl;
         this.clusterControl = clusterControl;
-        this.globalPartitionCount = new TimelineInteger(snapshotRegistry);
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topicsWithCollisionChars = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -415,7 +392,6 @@ public class ReplicationControlManager {
         }
         topics.put(record.topicId(),
             new TopicControlInfo(record.name(), snapshotRegistry, record.topicId()));
-        controllerMetrics.setGlobalTopicsCount(topics.size());
         log.info("Created topic {} with topic ID {}.", record.name(), record.topicId());
     }
 
@@ -434,8 +410,6 @@ public class ReplicationControlManager {
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), null,
                 newPartInfo.isr, NO_LEADER, newPartInfo.leader);
-            globalPartitionCount.increment();
-            controllerMetrics.setGlobalPartitionCount(globalPartitionCount.get());
             updateReassigningTopicsIfNeeded(record.topicId(), record.partitionId(),
                     false,  newPartInfo.isReassigning());
         } else if (!newPartInfo.equals(prevPartInfo)) {
@@ -452,9 +426,6 @@ public class ReplicationControlManager {
         } else {
             imbalancedPartitions.add(new TopicIdPartition(record.topicId(), record.partitionId()));
         }
-
-        controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(imbalancedPartitions.size());
     }
 
     private void updateReassigningTopicsIfNeeded(Uuid topicId, int partitionId,
@@ -503,9 +474,6 @@ public class ReplicationControlManager {
             imbalancedPartitions.add(new TopicIdPartition(record.topicId(), record.partitionId()));
         }
 
-        controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(imbalancedPartitions.size());
-
         if (record.removingReplicas() != null || record.addingReplicas() != null) {
             log.info("Replayed partition assignment change {} for topic {}", record, topicInfo.name);
         } else if (log.isTraceEnabled()) {
@@ -546,15 +514,9 @@ public class ReplicationControlManager {
             }
 
             imbalancedPartitions.remove(new TopicIdPartition(record.topicId(), partitionId));
-
-            globalPartitionCount.decrement();
         }
         brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
 
-        controllerMetrics.setGlobalTopicsCount(topics.size());
-        controllerMetrics.setGlobalPartitionCount(globalPartitionCount.get());
-        controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(imbalancedPartitions.size());
         log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
     }
 
@@ -657,7 +619,7 @@ public class ReplicationControlManager {
                 validateManualPartitionAssignment(assignment.brokerIds(), replicationFactor);
                 replicationFactor = OptionalInt.of(assignment.brokerIds().size());
                 List<Integer> isr = assignment.brokerIds().stream().
-                    filter(clusterControl::active).collect(Collectors.toList());
+                    filter(clusterControl::isActive).collect(Collectors.toList());
                 if (isr.isEmpty()) {
                     return new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
                         "All brokers specified in the manual partition assignment for " +
@@ -701,7 +663,7 @@ public class ReplicationControlManager {
                 for (int partitionId = 0; partitionId < partitions.size(); partitionId++) {
                     List<Integer> replicas = partitions.get(partitionId);
                     List<Integer> isr = replicas.stream().
-                        filter(clusterControl::active).collect(Collectors.toList());
+                        filter(clusterControl::isActive).collect(Collectors.toList());
                     // If the ISR is empty, it means that all brokers are fenced or
                     // in controlled shutdown. To be consistent with the replica placer,
                     // we reject the create topic request with INVALID_REPLICATION_FACTOR.
@@ -980,7 +942,7 @@ public class ReplicationControlManager {
                     partition,
                     topic.id,
                     partitionId,
-                    clusterControl::active,
+                    clusterControl::isActive,
                     featureControl.metadataVersion().isLeaderRecoverySupported());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -1356,7 +1318,7 @@ public class ReplicationControlManager {
         PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
             topicId,
             partitionId,
-            clusterControl::active,
+            clusterControl::isActive,
             featureControl.metadataVersion().isLeaderRecoverySupported());
         builder.setElection(election);
         Optional<ApiMessageAndVersion> record = builder.build();
@@ -1471,7 +1433,7 @@ public class ReplicationControlManager {
                 partition,
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
-                clusterControl::active,
+                clusterControl::isActive,
                 featureControl.metadataVersion().isLeaderRecoverySupported()
             );
             builder.setElection(PartitionChangeBuilder.Election.PREFERRED);
@@ -1554,7 +1516,7 @@ public class ReplicationControlManager {
                     OptionalInt.of(replicationFactor));
                 placements.add(assignment.brokerIds());
                 List<Integer> isr = assignment.brokerIds().stream().
-                    filter(clusterControl::active).collect(Collectors.toList());
+                    filter(clusterControl::isActive).collect(Collectors.toList());
                 if (isr.isEmpty()) {
                     throw new InvalidReplicaAssignmentException(
                         "All brokers specified in the manual partition assignment for " +
@@ -1574,7 +1536,7 @@ public class ReplicationControlManager {
         for (int i = 0; i < placements.size(); i++) {
             List<Integer> replicas = placements.get(i);
             List<Integer> isr = isrs.get(i).stream().
-                filter(clusterControl::active).collect(Collectors.toList());
+                filter(clusterControl::isActive).collect(Collectors.toList());
             // If the ISR is empty, it means that all brokers are fenced or
             // in controlled shutdown. To be consistent with the replica placer,
             // we reject the create topic request with INVALID_REPLICATION_FACTOR.
@@ -1660,8 +1622,8 @@ public class ReplicationControlManager {
         // from the target ISR, but we need to exclude it here too, to handle the case
         // where there is an unclean leader election which chooses a leader from outside
         // the ISR.
-        Function<Integer, Boolean> isAcceptableLeader =
-            r -> (r != brokerToRemove) && (r == brokerToAdd || clusterControl.active(r));
+        IntPredicate isAcceptableLeader =
+            r -> (r != brokerToRemove) && (r == brokerToAdd || clusterControl.isActive(r));
 
         while (iterator.hasNext()) {
             TopicIdPartition topicIdPart = iterator.next();
@@ -1788,7 +1750,7 @@ public class ReplicationControlManager {
         PartitionChangeBuilder builder = new PartitionChangeBuilder(part,
             tp.topicId(),
             tp.partitionId(),
-            clusterControl::active,
+            clusterControl::isActive,
             featureControl.metadataVersion().isLeaderRecoverySupported());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -1840,7 +1802,7 @@ public class ReplicationControlManager {
         PartitionChangeBuilder builder = new PartitionChangeBuilder(part,
             tp.topicId(),
             tp.partitionId(),
-            clusterControl::active,
+            clusterControl::isActive,
             featureControl.metadataVersion().isLeaderRecoverySupported());
         if (!reassignment.merged().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.merged());

@@ -277,7 +277,7 @@ public class QuorumControllerTest {
 
             // Brokers are only registered and should still be fenced
             allBrokers.forEach(brokerId -> {
-                assertFalse(active.clusterControl().unfenced(brokerId),
+                assertFalse(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 
@@ -297,7 +297,7 @@ public class QuorumControllerTest {
             TestUtils.waitForCondition(() -> {
                     sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
                     for (Integer brokerId : brokersToFence) {
-                        if (active.clusterControl().unfenced(brokerId)) {
+                        if (active.clusterControl().isUnfenced(brokerId)) {
                             return false;
                         }
                     }
@@ -311,11 +311,11 @@ public class QuorumControllerTest {
 
             // At this point only the brokers we want fenced should be fenced.
             brokersToKeepUnfenced.forEach(brokerId -> {
-                assertTrue(active.clusterControl().unfenced(brokerId),
+                assertTrue(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been unfenced");
             });
             brokersToFence.forEach(brokerId -> {
-                assertFalse(active.clusterControl().unfenced(brokerId),
+                assertFalse(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 
@@ -376,7 +376,7 @@ public class QuorumControllerTest {
 
             // Brokers are only registered and should still be fenced
             allBrokers.forEach(brokerId -> {
-                assertFalse(active.clusterControl().unfenced(brokerId),
+                assertFalse(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 
@@ -396,7 +396,7 @@ public class QuorumControllerTest {
                 () -> {
                     sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
                     for (Integer brokerId : brokersToFence) {
-                        if (active.clusterControl().unfenced(brokerId)) {
+                        if (active.clusterControl().isUnfenced(brokerId)) {
                             return false;
                         }
                     }
@@ -411,11 +411,11 @@ public class QuorumControllerTest {
 
             // At this point only the brokers we want fenced should be fenced.
             brokersToKeepUnfenced.forEach(brokerId -> {
-                assertTrue(active.clusterControl().unfenced(brokerId),
+                assertTrue(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been unfenced");
             });
             brokersToFence.forEach(brokerId -> {
-                assertFalse(active.clusterControl().unfenced(brokerId),
+                assertFalse(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 

@@ -30,7 +30,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Function;
+import java.util.function.IntPredicate;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -73,7 +73,7 @@ public class PartitionChangeBuilder {
     private final PartitionRegistration partition;
     private final Uuid topicId;
     private final int partitionId;
-    private final Function<Integer, Boolean> isAcceptableLeader;
+    private final IntPredicate isAcceptableLeader;
     private final boolean isLeaderRecoverySupported;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
@@ -85,7 +85,7 @@ public class PartitionChangeBuilder {
     public PartitionChangeBuilder(PartitionRegistration partition,
                                   Uuid topicId,
                                   int partitionId,
-                                  Function<Integer, Boolean> isAcceptableLeader,
+                                  IntPredicate isAcceptableLeader,
                                   boolean isLeaderRecoverySupported) {
         this.partition = partition;
         this.topicId = topicId;
@@ -198,7 +198,7 @@ public class PartitionChangeBuilder {
         if (election == Election.UNCLEAN) {
             // Attempt unclean leader election
             Optional<Integer> uncleanLeader = targetReplicas.stream()
-                .filter(replica -> isAcceptableLeader.apply(replica))
+                .filter(replica -> isAcceptableLeader.test(replica))
                 .findFirst();
             if (uncleanLeader.isPresent()) {
                 return new ElectionResult(uncleanLeader.get(), true);
@@ -209,7 +209,7 @@ public class PartitionChangeBuilder {
     }
 
     private boolean isValidNewLeader(int replica) {
-        return targetIsr.contains(replica) && isAcceptableLeader.apply(replica);
+        return targetIsr.contains(replica) && isAcceptableLeader.test(replica);
     }
 
     private void tryElection(PartitionChangeRecord record) {
