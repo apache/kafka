@@ -454,6 +454,7 @@ object TestUtils extends Logging {
         System.err.println(s"failed to create topic $topic :$e")
         if (!(e.getCause != null &&
           e.getCause.isInstanceOf[TopicExistsException] &&
+          !waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions).isEmpty &&
           topicHasSameNumPartitionsAndReplicationFactor(admin, topic,
             effectiveNumPartitions, replicationFactor))) {
         throw e
