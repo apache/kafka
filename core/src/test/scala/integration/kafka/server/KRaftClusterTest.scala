@@ -41,6 +41,8 @@ import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.server.common.MetadataVersion
 import org.slf4j.LoggerFactory
 
+import java.io.File
+import java.nio.file.{FileSystems, Path}
 import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.concurrent.ExecutionException
@@ -886,6 +888,36 @@ class KRaftClusterTest {
       }
       TestUtils.waitUntilTrue(() => cluster.brokers().get(1).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latest()),
         "Timed out waiting for metadata version update.")
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testSnapshotCount(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(0).
+        setNumControllerNodes(1).build())
+      .setConfigProp("metadata.log.max.snapshot.interval.ms", "500")
+      .setConfigProp("metadata.max.idle.interval.ms", "50") // Set this low to generate metadata
+      .build()
+
+    try {
+      cluster.format()
+      cluster.startup()
+      def snapshotCounter(path: Path): Long = {
+       path.toFile.listFiles((_: File, name: String) => {
+          name.toLowerCase.endsWith("checkpoint")
+        }).length
+      }
+
+      val metaLog = FileSystems.getDefault.getPath(cluster.controllers().get(3000).config.metadataLogDir, "__cluster_metadata-0")
+      TestUtils.waitUntilTrue(() => { snapshotCounter(metaLog) > 0 }, "Failed to see at least one snapshot")
+      Thread.sleep(500 * 10) // Sleep for 10 snapshot intervals
+      val countAfterTenIntervals = snapshotCounter(metaLog)
+      assertTrue(countAfterTenIntervals > 1, s"Expected to see at least one more snapshot, saw $countAfterTenIntervals")
+      assertTrue(countAfterTenIntervals < 20, s"Did not expect to see more than twice as many snapshots as snapshot intervals, saw $countAfterTenIntervals")
     } finally {
       cluster.close()
     }
