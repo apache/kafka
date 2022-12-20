@@ -347,7 +347,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 case BECOME_CONTROLLER:
                     // TODO: Handle unhappy path.
                     apply("BecomeZkLeaderEvent", zkMigrationClient::claimControllerLeadership);
-                    if (migrationLeadershipState.controllerZkVersion() == -1) {
+                    if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
                         // We could not claim leadership, stay in BECOME_CONTROLLER to retry
                     } else {
                         if (!migrationLeadershipState.zkMigrationComplete()) {
@@ -438,7 +438,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             // Ignore sending RPCs to the brokers since we're no longer in the state.
             if (migrationState == MigrationState.KRAFT_CONTROLLER_TO_BROKER_COMM) {
                 if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
-                    rpcClient.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.kraftControllerEpoch());
+                    rpcClient.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.zkControllerEpoch());
                     // Migration leadership state doesn't change since we're not doing any Zk writes.
                     transitionTo(MigrationState.DUAL_WRITE);
                 }
@@ -493,7 +493,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 // TODO: Unhappy path: Probably relinquish leadership and let new controller
                 //  retry the write?
                 rpcClient.sendRPCsToBrokersFromMetadataDelta(delta, image,
-                        migrationLeadershipState.kraftControllerEpoch());
+                        migrationLeadershipState.zkControllerEpoch());
             } else {
                 String metadataType = isSnapshot ? "snapshot" : "delta";
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);

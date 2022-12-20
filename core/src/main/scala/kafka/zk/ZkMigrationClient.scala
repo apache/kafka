@@ -58,19 +58,20 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
 
   override def claimControllerLeadership(state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     zkClient.tryRegisterKRaftControllerAsActiveController(state.kraftControllerId(), state.kraftControllerEpoch()) match {
-      case SuccessfulRegistrationResult(_, controllerEpochZkVersion) => state.withControllerZkVersion(controllerEpochZkVersion)
-      case FailedRegistrationResult() => state.withControllerZkVersion(-1)
+      case SuccessfulRegistrationResult(controllerEpoch, controllerEpochZkVersion) =>
+        state.withZkController(controllerEpoch, controllerEpochZkVersion)
+      case FailedRegistrationResult() => state.withUnknownZkController()
     }
   }
 
   override def releaseControllerLeadership(state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     try {
-      zkClient.deleteController(state.controllerZkVersion())
-      state.withControllerZkVersion(-1)
+      zkClient.deleteController(state.zkControllerEpochZkVersion())
+      state.withUnknownZkController()
     } catch {
       case _: ControllerMovedException =>
         // If the controller moved, no need to release
-        state.withControllerZkVersion(-1)
+        state.withUnknownZkController()
       case t: Throwable =>
         throw new RuntimeException("Could not release controller leadership due to underlying error", t)
     }

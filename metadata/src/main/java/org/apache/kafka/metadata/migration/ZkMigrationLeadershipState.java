@@ -27,7 +27,9 @@ import java.util.Objects;
  */
 public class ZkMigrationLeadershipState {
 
-    public static final ZkMigrationLeadershipState EMPTY = new ZkMigrationLeadershipState(-1, -1, -1, -1, -1, -1, -1);
+    // Use -2 as sentinel for "unknown version" for ZK versions to avoid sending an actual -1 "any version"
+    // when doing ZK writes
+    public static final ZkMigrationLeadershipState EMPTY = new ZkMigrationLeadershipState(-1, -1, -1, -1, -1, -2, -1, -2);
 
     private final int kraftControllerId;
 
@@ -41,36 +43,46 @@ public class ZkMigrationLeadershipState {
 
     private final int migrationZkVersion;
 
-    private final int controllerZkVersion;
+    private final int zkControllerEpoch;
+
+    private final int zkControllerEpochZkVersion;
+
 
     public ZkMigrationLeadershipState(int kraftControllerId, int kraftControllerEpoch,
                                       long kraftMetadataOffset, int kraftMetadataEpoch,
-                                      long lastUpdatedTimeMs, int migrationZkVersion, int controllerZkVersion) {
+                                      long lastUpdatedTimeMs, int migrationZkVersion,
+                                      int zkControllerEpoch, int zkControllerEpochZkVersion) {
         this.kraftControllerId = kraftControllerId;
         this.kraftControllerEpoch = kraftControllerEpoch;
         this.kraftMetadataOffset = kraftMetadataOffset;
         this.kraftMetadataEpoch = kraftMetadataEpoch;
         this.lastUpdatedTimeMs = lastUpdatedTimeMs;
         this.migrationZkVersion = migrationZkVersion;
-        this.controllerZkVersion = controllerZkVersion;
+        this.zkControllerEpoch = zkControllerEpoch;
+        this.zkControllerEpochZkVersion = zkControllerEpochZkVersion;
     }
 
     public ZkMigrationLeadershipState withMigrationZkVersion(int zkVersion) {
         return new ZkMigrationLeadershipState(
             this.kraftControllerId, this.kraftControllerEpoch, this.kraftMetadataOffset,
-            this.kraftMetadataEpoch, this.lastUpdatedTimeMs, zkVersion, this.controllerZkVersion);
+            this.kraftMetadataEpoch, this.lastUpdatedTimeMs, zkVersion, this.zkControllerEpoch, this.zkControllerEpochZkVersion);
     }
 
-    public ZkMigrationLeadershipState withControllerZkVersion(int zkVersion) {
+    public ZkMigrationLeadershipState withZkController(int zkControllerEpoch, int zkControllerEpochZkVersion) {
         return new ZkMigrationLeadershipState(
             this.kraftControllerId, this.kraftControllerEpoch, this.kraftMetadataOffset,
-            this.kraftMetadataEpoch, this.lastUpdatedTimeMs, this.migrationZkVersion, zkVersion);
+            this.kraftMetadataEpoch, this.lastUpdatedTimeMs, this.migrationZkVersion, zkControllerEpoch, zkControllerEpochZkVersion);
     }
+
+    public ZkMigrationLeadershipState withUnknownZkController() {
+        return withZkController(EMPTY.zkControllerEpoch, EMPTY.zkControllerEpochZkVersion);
+    }
+
 
     public ZkMigrationLeadershipState withNewKRaftController(int controllerId, int controllerEpoch) {
         return new ZkMigrationLeadershipState(
             controllerId, controllerEpoch, this.kraftMetadataOffset,
-            this.kraftMetadataEpoch, this.lastUpdatedTimeMs, this.migrationZkVersion, this.controllerZkVersion);
+            this.kraftMetadataEpoch, this.lastUpdatedTimeMs, this.migrationZkVersion, this.zkControllerEpoch, this.zkControllerEpochZkVersion);
     }
 
     public ZkMigrationLeadershipState withKRaftMetadataOffsetAndEpoch(long metadataOffset,
@@ -82,7 +94,8 @@ public class ZkMigrationLeadershipState {
             metadataEpoch,
             this.lastUpdatedTimeMs,
             this.migrationZkVersion,
-            this.controllerZkVersion);
+            this.zkControllerEpoch,
+            this.zkControllerEpochZkVersion);
     }
 
     public int kraftControllerId() {
@@ -109,8 +122,12 @@ public class ZkMigrationLeadershipState {
         return migrationZkVersion;
     }
 
-    public int controllerZkVersion() {
-        return controllerZkVersion;
+    public int zkControllerEpoch() {
+        return zkControllerEpoch;
+    }
+
+    public int zkControllerEpochZkVersion() {
+        return zkControllerEpochZkVersion;
     }
 
     public boolean zkMigrationComplete() {
@@ -130,7 +147,8 @@ public class ZkMigrationLeadershipState {
             ", kraftMetadataEpoch=" + kraftMetadataEpoch +
             ", lastUpdatedTimeMs=" + lastUpdatedTimeMs +
             ", migrationZkVersion=" + migrationZkVersion +
-            ", controllerZkVersion=" + controllerZkVersion +
+            ", controllerZkEpoch=" + zkControllerEpoch +
+            ", controllerZkVersion=" + zkControllerEpochZkVersion +
             '}';
     }
 
@@ -145,7 +163,8 @@ public class ZkMigrationLeadershipState {
             && kraftMetadataEpoch == that.kraftMetadataEpoch
             && lastUpdatedTimeMs == that.lastUpdatedTimeMs
             && migrationZkVersion == that.migrationZkVersion
-            && controllerZkVersion == that.controllerZkVersion;
+            && zkControllerEpoch == that.zkControllerEpoch
+            && zkControllerEpochZkVersion == that.zkControllerEpochZkVersion;
     }
 
     @Override
@@ -157,6 +176,7 @@ public class ZkMigrationLeadershipState {
             kraftMetadataEpoch,
             lastUpdatedTimeMs,
             migrationZkVersion,
-            controllerZkVersion);
+                zkControllerEpoch,
+                zkControllerEpochZkVersion);
     }
 }
