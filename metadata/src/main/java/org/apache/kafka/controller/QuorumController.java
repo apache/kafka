@@ -871,6 +871,9 @@ public final class QuorumController implements Controller {
                                 i++;
                             }
                         }
+
+                        controllerMetricsManager.replayBatch(batch.baseOffset(), messages);
+
                         updateLastCommittedState(
                             offset,
                             epoch,
@@ -924,6 +927,7 @@ public final class QuorumController implements Controller {
                         for (ApiMessageAndVersion message : messages) {
                             try {
                                 replay(message.message(), Optional.of(reader.snapshotId()), reader.lastContainedLogOffset());
+                                controllerMetricsManager.replay(message.message());
                             } catch (Throwable e) {
                                 String failureMessage = String.format("Unable to apply %s record " +
                                         "from snapshot %s on standby controller, which was %d of " +
@@ -935,7 +939,9 @@ public final class QuorumController implements Controller {
                             i++;
                         }
                     }
-                    updateLastCommittedState(reader.lastContainedLogOffset(),
+
+                    updateLastCommittedState(
+                        reader.lastContainedLogOffset(),
                         reader.lastContainedLogEpoch(),
                         reader.lastContainedLogTimestamp());
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
@@ -1353,6 +1359,7 @@ public final class QuorumController implements Controller {
      */
     private void resetToEmptyState() {
         snapshotRegistry.reset();
+        controllerMetricsManager.reset();
 
         updateLastCommittedState(-1, -1, -1);
     }
@@ -1397,6 +1404,12 @@ public final class QuorumController implements Controller {
      * The controller metrics.
      */
     private final ControllerMetrics controllerMetrics;
+
+
+    /**
+     * Manager for updating controller metrics based on the committed metadata.
+     */
+    private final ControllerMetricsManager controllerMetricsManager;
 
     /**
      * A registry for snapshot data.  This must be accessed only by the event queue thread.
@@ -1597,6 +1610,7 @@ public final class QuorumController implements Controller {
         this.queue = queue;
         this.time = time;
         this.controllerMetrics = controllerMetrics;
+        this.controllerMetricsManager = new ControllerMetricsManager(controllerMetrics);
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.purgatory = new ControllerPurgatory();
         this.resourceExists = new ConfigResourceExistenceChecker();
@@ -1629,7 +1643,6 @@ public final class QuorumController implements Controller {
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(sessionTimeoutNs).
             setReplicaPlacer(replicaPlacer).
-            setControllerMetrics(controllerMetrics).
             setFeatureControlManager(featureControl).
             setZkMigrationEnabled(zkMigrationEnabled).
             build();
@@ -1644,7 +1657,6 @@ public final class QuorumController implements Controller {
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
-            setControllerMetrics(controllerMetrics).
             setCreateTopicPolicy(createTopicPolicy).
             setFeatureControl(featureControl).
             build();
