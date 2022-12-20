@@ -29,15 +29,13 @@ import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.fault.FaultHandler;
-import org.apache.kafka.server.fault.LoggingFaultHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -398,10 +396,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             log.info("Starting ZK migration");
             zkRecordConsumer.beginMigration();
             try {
+                AtomicInteger count = new AtomicInteger(0);
                 zkMigrationClient.readAllMetadata(batch -> {
                     try {
                         log.info("Migrating {} records from ZK: {}", batch.size(), batch);
                         CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
+                        count.addAndGet(batch.size());
                         future.get();
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
@@ -410,9 +410,13 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     }
                 }, brokersInMetadata::add);
                 OffsetAndEpoch offsetAndEpochAfterMigration = zkRecordConsumer.completeMigration();
-                log.info("Completed migrating metadata from Zookeeper. Current offset is {} and epoch is {}. Saw brokers {}",
+                log.info("Completed migration of metadata from Zookeeper to KRaft. A total of {} metadata records were " +
+                         "generated. The current metadata offset is now {} with an epoch of {}. Saw {} brokers in the " +
+                         "migrated metadata {}.",
+                    count.get(),
                     offsetAndEpochAfterMigration.offset(),
                     offsetAndEpochAfterMigration.epoch(),
+                    brokersInMetadata.size(),
                     brokersInMetadata);
                 ZkMigrationLeadershipState newState = migrationLeadershipState.withKRaftMetadataOffsetAndEpoch(
                     offsetAndEpochAfterMigration.offset(),
