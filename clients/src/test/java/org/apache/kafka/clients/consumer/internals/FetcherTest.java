@@ -4794,6 +4794,8 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertFalse(fetcher.hasCompletedFetches());
         fetchedRecords();
+        selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(-1, selected.id());
     }
 
     @Test
