@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidOffsetException
-import org.apache.kafka.server.log.internals.{CorruptIndexException, OffsetPosition}
+import org.apache.kafka.server.log.internals.{AbstractIndex, CorruptIndexException, IndexSearchType, OffsetPosition}
 
 /**
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
@@ -60,14 +60,14 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   private[this] var _lastOffset = lastEntry.offset
 
   debug(s"Loaded index file ${file.getAbsolutePath} with maxEntries = $maxEntries, " +
-    s"maxIndexSize = $maxIndexSize, entries = ${_entries}, lastOffset = ${_lastOffset}, file position = ${mmap.position()}")
+    s"maxIndexSize = $maxIndexSize, entries = $entries, lastOffset = ${_lastOffset}, file position = ${mmap.position()}")
 
   /**
    * The last entry in the index
    */
   private def lastEntry: OffsetPosition = {
     inLock(lock) {
-      _entries match {
+      entries match {
         case 0 => new OffsetPosition(baseOffset, 0)
         case s => parseEntry(mmap, s - 1)
       }
@@ -86,14 +86,14 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
    *         the pair (baseOffset, 0) is returned.
    */
   def lookup(targetOffset: Long): OffsetPosition = {
-    maybeLock(lock) {
+    maybeLock(lock, {() =>
       val idx = mmap.duplicate
       val slot = largestLowerBoundSlotFor(idx, targetOffset, IndexSearchType.KEY)
       if(slot == -1)
         new OffsetPosition(baseOffset, 0)
       else
         parseEntry(idx, slot)
-    }
+    })
   }
 
   /**
@@ -102,14 +102,14 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
    * such offset.
    */
   def fetchUpperBoundOffset(fetchOffset: OffsetPosition, fetchSize: Int): Option[OffsetPosition] = {
-    maybeLock(lock) {
+    maybeLock(lock, { () =>
       val idx = mmap.duplicate
       val slot = smallestUpperBoundSlotFor(idx, fetchOffset.position + fetchSize, IndexSearchType.VALUE)
       if (slot == -1)
         None
       else
         Some(parseEntry(idx, slot))
-    }
+    })
   }
 
   private def relativeOffset(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * entrySize)
@@ -126,12 +126,12 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
    * @return The offset/position pair at that entry
    */
   def entry(n: Int): OffsetPosition = {
-    maybeLock(lock) {
-      if (n >= _entries)
+    maybeLock(lock, { () =>
+      if (n >= entries)
         throw new IllegalArgumentException(s"Attempt to fetch the ${n}th entry from index ${file.getAbsolutePath}, " +
-          s"which has size ${_entries}.")
+          s"which has size $entries.")
       parseEntry(mmap, n)
-    }
+    })
   }
 
   /**
@@ -141,14 +141,14 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
    */
   def append(offset: Long, position: Int): Unit = {
     inLock(lock) {
-      require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
-      if (_entries == 0 || offset > _lastOffset) {
+      require(!isFull, "Attempt to append to a full index (size = " + entries + ").")
+      if (entries == 0 || offset > _lastOffset) {
         trace(s"Adding index entry $offset => $position to ${file.getAbsolutePath}")
         mmap.putInt(relativeOffset(offset))
         mmap.putInt(position)
-        _entries += 1
+        incrementEntries()
         _lastOffset = offset
-        require(_entries * entrySize == mmap.position(), s"$entries entries but file position in index is ${mmap.position()}.")
+        require(entries * entrySize == mmap.position(), s"$entries entries but file position in index is ${mmap.position()}.")
       } else {
         throw new InvalidOffsetException(s"Attempt to append an offset ($offset) to position $entries no larger than" +
           s" the last offset appended (${_lastOffset}) to ${file.getAbsolutePath}.")
@@ -184,8 +184,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
    */
   private def truncateToEntries(entries: Int): Unit = {
     inLock(lock) {
-      _entries = entries
-      mmap.position(_entries * entrySize)
+      super.truncateToEntries0(entries)
       _lastOffset = lastEntry.offset
       debug(s"Truncated index ${file.getAbsolutePath} to $entries entries;" +
         s" position is now ${mmap.position()} and last offset is now ${_lastOffset}")
@@ -193,7 +192,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   }
 
   override def sanityCheck(): Unit = {
-    if (_entries != 0 && _lastOffset < baseOffset)
+    if (entries != 0 && _lastOffset < baseOffset)
       throw new CorruptIndexException(s"Corrupt index found, index file (${file.getAbsolutePath}) has non-zero size " +
         s"but the last offset is ${_lastOffset} which is less than the base offset $baseOffset.")
     if (length % entrySize != 0)
