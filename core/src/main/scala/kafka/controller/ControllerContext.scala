@@ -17,6 +17,7 @@
 
 package kafka.controller
 
+import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.utils.Implicits._
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -72,7 +73,7 @@ case class ReplicaAssignment private (replicas: Seq[Int],
     s"removingReplicas=${removingReplicas.mkString(",")})"
 }
 
-class ControllerContext {
+class ControllerContext extends ControllerBrokerRequestMetadata {
   val stats = new ControllerStats
   var offlinePartitionCount = 0
   var preferredReplicaImbalanceCount = 0
@@ -230,7 +231,11 @@ class ControllerContext {
     }.toSet
   }
 
-  def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition, includeShuttingDownBrokers: Boolean = false): Boolean = {
+  def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition): Boolean = {
+    isReplicaOnline(brokerId, topicPartition, includeShuttingDownBrokers = false)
+  }
+
+  def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition, includeShuttingDownBrokers: Boolean): Boolean = {
     val brokerOnline = {
       if (includeShuttingDownBrokers) liveOrShuttingDownBrokerIds.contains(brokerId)
       else liveBrokerIds.contains(brokerId)
@@ -445,6 +450,22 @@ class ControllerContext {
       Some(replicaAssignment), Some(leaderIsrAndControllerEpoch))
   }
 
+  def partitionLeaderAndIsr(partition: TopicPartition): Option[LeaderAndIsr] = {
+    partitionLeadershipInfo.get(partition).map(_.leaderAndIsr)
+  }
+
+  def leaderEpoch(partition: TopicPartition): Int = {
+    // A sentinel (-2) is used as an epoch if the topic is queued for deletion. It overrides
+    // any existing epoch.
+    if (isTopicQueuedUpForDeletion(partition.topic)) {
+      LeaderAndIsr.EpochDuringDelete
+    } else {
+      partitionLeadershipInfo.get(partition)
+        .map(_.leaderAndIsr.leaderEpoch)
+        .getOrElse(LeaderAndIsr.NoEpoch)
+    }
+  }
+
   def partitionLeadershipInfo(partition: TopicPartition): Option[LeaderIsrAndControllerEpoch] = {
     partitionLeadershipInfo.get(partition)
   }
@@ -524,5 +545,4 @@ class ControllerContext {
 
   private def isValidPartitionStateTransition(partition: TopicPartition, targetState: PartitionState): Boolean =
     targetState.validPreviousStates.contains(partitionStates(partition))
-
 }

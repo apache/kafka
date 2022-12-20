@@ -53,6 +53,8 @@ public final class TopicsDelta {
      */
     private final Set<Uuid> deletedTopicIds = new HashSet<>();
 
+    private final Set<Uuid> createdTopicIds = new HashSet<>();
+
     public TopicsDelta(TopicsImage image) {
         this.image = image;
     }
@@ -69,6 +71,7 @@ public final class TopicsDelta {
         TopicDelta delta = new TopicDelta(
             new TopicImage(record.name(), record.topicId(), Collections.emptyMap()));
         changedTopics.put(record.topicId(), delta);
+        createdTopicIds.add(record.topicId());
     }
 
     TopicDelta getOrCreateTopicDelta(Uuid id) {
@@ -170,6 +173,10 @@ public final class TopicsDelta {
         return deletedTopicIds;
     }
 
+    public Set<Uuid> createdTopicIds() {
+        return createdTopicIds;
+    }
+
     /**
      * Find the topic partitions that have change based on the replica given.
      *
@@ -212,6 +219,7 @@ public final class TopicsDelta {
         return "TopicsDelta(" +
             "changedTopics=" + changedTopics +
             ", deletedTopicIds=" + deletedTopicIds +
+            ", createdTopicIds=" + createdTopicIds +
             ')';
     }
 }
