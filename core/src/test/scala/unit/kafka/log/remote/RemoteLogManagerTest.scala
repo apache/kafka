@@ -22,23 +22,23 @@ import kafka.server.KafkaConfig
 import kafka.server.checkpoints.LeaderEpochCheckpoint
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.utils.MockTime
-import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.test.TestUtils
-import org.junit.jupiter.api.{BeforeEach, Test}
-import org.mockito.Mockito._
 import org.junit.jupiter.api.Assertions._
-import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong}
+import org.mockito.Mockito._
+import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 
 import java.io.{ByteArrayInputStream, File, FileInputStream}
 import java.nio.file.Files
-import java.util.{Optional, Properties}
 import java.util
+import java.util.{Optional, Properties}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 

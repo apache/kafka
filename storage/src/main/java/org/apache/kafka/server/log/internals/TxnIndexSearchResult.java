@@ -14,21 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.server.log.internals;
 
-/**
- * The event is NoOp. This is intentionally left here for demonstration purpose.
- */
-public class NoopApplicationEvent extends ApplicationEvent {
-    public final String message;
+import java.util.Collections;
+import java.util.List;
 
-    public NoopApplicationEvent(final String message) {
-        super(Type.NOOP);
-        this.message = message;
-    }
+public class TxnIndexSearchResult {
+    public final List<AbortedTxn> abortedTransactions;
+    public final boolean isComplete;
 
-    @Override
-    public String toString() {
-        return getClass() + "_" + this.message;
+    public TxnIndexSearchResult(List<AbortedTxn> abortedTransactions, boolean isComplete) {
+        this.abortedTransactions = Collections.unmodifiableList(abortedTransactions);
+        this.isComplete = isComplete;
     }
 }

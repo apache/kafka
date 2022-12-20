@@ -14,21 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.server.log.internals;
 
 /**
- * The event is NoOp. This is intentionally left here for demonstration purpose.
+ * This interface is used to execute any storage related operations.
+ *
+ * @param <T> return type for execute operation
+ * @param <E> Exception type to be thrown
  */
-public class NoopApplicationEvent extends ApplicationEvent {
-    public final String message;
-
-    public NoopApplicationEvent(final String message) {
-        super(Type.NOOP);
-        this.message = message;
-    }
-
-    @Override
-    public String toString() {
-        return getClass() + "_" + this.message;
-    }
+@FunctionalInterface
+public interface StorageAction<T, E extends Exception> {
+    T execute() throws E;
 }

@@ -14,21 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.server.log.internals;
+
+import org.apache.kafka.common.KafkaException;
 
 /**
- * The event is NoOp. This is intentionally left here for demonstration purpose.
+ * Indicates that an attempt was made to append a message whose offset could cause the index offset to overflow.
  */
-public class NoopApplicationEvent extends ApplicationEvent {
-    public final String message;
+public class IndexOffsetOverflowException extends KafkaException {
 
-    public NoopApplicationEvent(final String message) {
-        super(Type.NOOP);
-        this.message = message;
+    public IndexOffsetOverflowException(String message) {
+        super(message);
     }
 
-    @Override
-    public String toString() {
-        return getClass() + "_" + this.message;
+    public IndexOffsetOverflowException(String message, Throwable cause) {
+        super(message, cause);
     }
 }
