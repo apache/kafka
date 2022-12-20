@@ -19,22 +19,21 @@ package kafka.server
 
 import kafka.cluster.EndPoint
 import kafka.log.LogConfig
-import kafka.message._
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.Records
+import org.apache.kafka.common.record.{CompressionType, Records}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UNKNOWN_ADDRESS_SPEC_INSTANCE}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
 import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
-
 import org.apache.kafka.common.Node
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
@@ -1083,7 +1082,7 @@ class KafkaConfigTest {
     defaults.setProperty(KafkaConfig.LogRetentionTimeHoursProp, "10")
     //For LogFlushIntervalMsProp
     defaults.setProperty(KafkaConfig.LogFlushSchedulerIntervalMsProp, "123")
-    defaults.setProperty(KafkaConfig.OffsetsTopicCompressionCodecProp, SnappyCompressionCodec.codec.toString)
+    defaults.setProperty(KafkaConfig.OffsetsTopicCompressionCodecProp, CompressionType.SNAPPY.id.toString)
     // For MetricRecordingLevelProp
     defaults.setProperty(KafkaConfig.MetricRecordingLevelProp, Sensor.RecordingLevel.DEBUG.toString)
 
@@ -1100,7 +1099,7 @@ class KafkaConfigTest {
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
     assertEquals(123L, config.logFlushIntervalMs)
-    assertEquals(SnappyCompressionCodec, config.offsetsTopicCompressionCodec)
+    assertEquals(CompressionType.SNAPPY, config.offsetsTopicCompressionType)
     assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)
     assertEquals(false, config.tokenAuthEnabled)
     assertEquals(7 * 24 * 60L * 60L * 1000L, config.delegationTokenMaxLifeMs)
