@@ -51,7 +51,7 @@
     },
     { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The rack which this broker is in." },
-    { "name": "IsMigratingZkBroker", "type": "bool", "versions": "1+", "default": "false",
-      "about": "Set by a ZK broker if the required configurations for ZK migration are present." }
+    { "name": "MigratingZkBrokerEpoch", "type": "int64", "versions": "1+", "default": "-1",
+      "about": "If the required configurations for ZK migration are present, this value is set to the ZK broker epoch" }
   ]
 }

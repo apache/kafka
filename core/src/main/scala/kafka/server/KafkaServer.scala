@@ -209,11 +209,6 @@ class KafkaServer(
       if (canStartup) {
         _brokerState = BrokerState.STARTING
 
-        lifecycleManager = new BrokerLifecycleManager(config,
-          time,
-          threadNamePrefix,
-          isZkBroker = true)
-
         /* setup zookeeper */
         initZkClient(time)
         configRepository = new ZkConfigRepository(new AdminZkClient(zkClient))
@@ -358,6 +353,11 @@ class KafkaServer(
 
         val brokerInfo = createBrokerInfo
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
+
+        lifecycleManager = new BrokerLifecycleManager(config,
+          time,
+          threadNamePrefix,
+          zkBrokerEpoch = Some(brokerEpoch))
 
         // Now that the broker is successfully registered, checkpoint its metadata
         val zkMetaProperties = ZkMetaProperties(clusterId, config.brokerId)
