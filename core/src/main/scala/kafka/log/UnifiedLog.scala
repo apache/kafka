@@ -49,6 +49,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable, mutable}
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.jdk.CollectionConverters._
 
 object LogAppendInfo {
@@ -672,7 +673,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           .setLastSequence(state.lastSeq)
           .setLastTimestamp(state.lastTimestamp)
           .setCoordinatorEpoch(state.coordinatorEpoch)
-          .setCurrentTxnStartOffset(state.currentTxnFirstOffset.getOrElse(-1L))
+          .setCurrentTxnStartOffset(state.currentTxnFirstOffset.orElse(-1L))
       }
     }.toSeq
   }
@@ -1083,7 +1084,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         if (origin == AppendOrigin.CLIENT) {
           val maybeLastEntry = producerStateManager.lastEntry(batch.producerId)
 
-          maybeLastEntry.flatMap(_.findDuplicateBatch(batch)).foreach { duplicate =>
+          maybeLastEntry.flatMap(_.findDuplicateBatch(batch).asScala).foreach { duplicate =>
             return (updatedProducers, completedTxns.toList, Some(duplicate))
           }
         }
