@@ -2027,7 +2027,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!zkSupport.controller.isActive) {
       val result = createPartitionsRequest.data.topics.asScala.map { topic =>
-        (topic.name, new ApiError(Errors.NOT_CONTROLLER, null))
+        (topic.name, new ApiError(Errors.NOT_CONTROLLER,
+            s"this node (brokerId ${brokerId}) is not the active controller, ${metadataSupport.controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)} is"))
       }.toMap
       sendResponseCallback(result)
     } else {
@@ -2044,9 +2045,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         zkSupport.controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name)
       }
 
-      val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
-        unauthorized.map(_.name -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "The topic authorization is failed.")) ++
-        queuedForDeletion.map(_.name -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
+      val errors = dupes.map(topicName => topicName -> new ApiError(Errors.INVALID_REQUEST, s"Duplicate topic in request: ${topicName}")) ++
+        unauthorized.map(topic => topic.name -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, s"Topic authorization failed: ${topic.name}")) ++
+        queuedForDeletion.map(topic => topic.name -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, s"Topic is queued for deletion: ${topic.name}"))
 
       zkSupport.adminManager.createPartitions(
         createPartitionsRequest.data.timeoutMs,
@@ -2792,7 +2793,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case ConfigResource.Type.TOPIC => Errors.TOPIC_AUTHORIZATION_FAILED
       case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
     }
-    new ApiError(error, null)
+    new ApiError(error, resource.name)
   }
 
   def handleIncrementalAlterConfigsRequest(request: RequestChannel.Request): Unit = {
@@ -3319,7 +3320,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
       sendResponseCallback(Left(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)))
     } else if (!zkSupport.controller.isActive) {
-      sendResponseCallback(Left(new ApiError(Errors.NOT_CONTROLLER)))
+      sendResponseCallback(Left(new ApiError(Errors.NOT_CONTROLLER,
+          s"this node (brokerId ${brokerId}) is not the active controller, ${metadataSupport.controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)} is")))
     } else if (!config.isFeatureVersioningSupported) {
       sendResponseCallback(Left(new ApiError(Errors.INVALID_REQUEST, "Feature versioning system is disabled.")))
     } else {
@@ -3413,9 +3415,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       val topicError = invalidTopicError.orElse {
         if (!authHelper.authorize(request.context, READ, TOPIC, topicRequest.name)) {
-          Some(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED))
+          Some(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, topicRequest.name))
         } else if (!metadataCache.contains(topicRequest.name))
-          Some(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+          Some(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, s"topic ${topicRequest.name}, brokerId ${brokerId}"))
         else {
           None
         }

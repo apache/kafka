@@ -347,7 +347,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer, numRecords, topic = tp.topic))
     val adminClient = createAdminClient()
     val e1 = assertThrows(classOf[ExecutionException], () => adminClient.describeTopics(Set(topic).asJava).all().get())
-    assertTrue(e1.getCause.isInstanceOf[TopicAuthorizationException], "Unexpected exception " + e1.getCause)
+    assertTrue(e1.getCause.isInstanceOf[TopicAuthorizationException], "Expected TopicAuthorizationException, not " + e1.getCause)
 
     // Verify successful produce/consume/describe on another topic using the same producer, consumer and adminClient
     val topic2 = "topic2"
@@ -359,7 +359,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val describeResults = adminClient.describeTopics(Set(topic, topic2).asJava).values
     assertEquals(1, describeResults.get(topic2).get().partitions().size())
     val e2 = assertThrows(classOf[ExecutionException], () => adminClient.describeTopics(Set(topic).asJava).all().get())
-    assertTrue(e2.getCause.isInstanceOf[TopicAuthorizationException], "Unexpected exception " + e2.getCause)
+    assertTrue(e2.getCause.isInstanceOf[TopicAuthorizationException], "Expected TopicAuthorizationException, not " + e2.getCause)
 
     // Verify that consumer manually assigning both authorized and unauthorized topic doesn't consume
     // from the unauthorized topic and throw; since we can now return data during the time we are updating

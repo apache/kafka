@@ -1989,7 +1989,7 @@ public class KafkaAdminClient extends AdminClient {
                     KafkaFutureImpl<TopicDescription> future = entry.getValue();
                     Errors topicError = errors.get(topicName);
                     if (topicError != null) {
-                        future.completeExceptionally(topicError.exception());
+                        future.completeExceptionally(topicError.exception(topicError.message() + " (topic: " + topicName + ")"));
                         continue;
                     }
                     if (!cluster.topics().contains(topicName)) {

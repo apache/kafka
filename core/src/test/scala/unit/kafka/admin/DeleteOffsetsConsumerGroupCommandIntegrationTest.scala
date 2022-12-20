@@ -136,8 +136,11 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
       }
       if (expectedError == Errors.NONE)
         assertNull(partitions(tp))
-      else
-        assertEquals(expectedError.exception, partitions(tp).getCause)
+      else {
+        assertEquals(expectedError.exception.getClass, partitions(tp).getCause.getClass)
+        // actual error's message can now be that of whichever Errors.FOO + " (topic: <topicName>)"
+        assertTrue(partitions(tp).getCause.getMessage.startsWith(expectedError.exception.getMessage)) 
+      }
     }
   }
 

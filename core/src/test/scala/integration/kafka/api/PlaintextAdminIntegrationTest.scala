@@ -610,7 +610,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
       () => "Expect InvalidTopicException when the topic is queued for deletion")
     assertTrue(e.getCause.isInstanceOf[InvalidTopicException])
-    assertEquals("The topic is queued for deletion.", e.getCause.getMessage)
+    assertTrue(e.getCause.getMessage.startsWith("Topic is queued for deletion"))
+    assertTrue(e.getCause.getMessage.endsWith(topic1))
   }
 
   @Test
