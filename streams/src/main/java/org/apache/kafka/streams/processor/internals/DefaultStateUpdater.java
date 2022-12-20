@@ -277,6 +277,11 @@ public class DefaultStateUpdater implements StateUpdater {
                         changelogReader.transitToUpdateStandby();
                     }
                 }
+
+                // Move task to paused tasks immediately to not make any progress
+                if (topologyMetadata.isPaused(task.id().topologyName())) {
+                    pauseTask(task);
+                }
             }
         }
 
