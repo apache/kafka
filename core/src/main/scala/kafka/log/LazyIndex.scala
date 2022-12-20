@@ -24,7 +24,7 @@ import LazyIndex._
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.threadsafe
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.AbstractIndex
+import org.apache.kafka.server.log.internals.{AbstractIndex, OffsetIndex}
 
 /**
   * A wrapper over an `AbstractIndex` instance that provides a mechanism to defer loading
