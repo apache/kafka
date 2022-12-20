@@ -99,7 +99,7 @@ public class DataOutputStreamWritable implements Writable, Closeable {
     public void writeByteBuffer(ByteBuffer buf) {
         try {
             if (buf.hasArray()) {
-                out.write(buf.array(), buf.position(), buf.limit());
+                out.write(buf.array(), buf.arrayOffset(), buf.limit());
             } else {
                 byte[] bytes = Utils.toArray(buf);
                 out.write(bytes);
