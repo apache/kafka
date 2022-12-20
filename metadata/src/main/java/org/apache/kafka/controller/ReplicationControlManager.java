@@ -1731,6 +1731,9 @@ public class ReplicationControlManager {
                     log.info("Unable to alter partition reassignment for " +
                         topic.name() + ":" + partition.partitionIndex() + " because " +
                         "of an " + e.getClass().getSimpleName() + " error: " + e.getMessage());
+                    System.err.println("Unable to alter partition reassignment for " +
+                        topic.name() + ":" + partition.partitionIndex() + " because " +
+                        "of an " + e.getClass().getSimpleName() + " error: " + e.getMessage());
                     error = ApiError.fromThrowable(e);
                 }
                 totalAlterations++;
@@ -1743,6 +1746,7 @@ public class ReplicationControlManager {
         }
         log.info("Successfully altered {} out of {} partition reassignment(s).",
             successfulAlterations, totalAlterations);
+        System.err.println("Successfully altered {} out of {} partition reassignment(s)." + successfulAlterations + ";" + totalAlterations);
         return ControllerResult.atomicOf(records, result);
     }
 

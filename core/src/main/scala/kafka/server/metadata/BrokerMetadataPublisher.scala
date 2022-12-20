@@ -165,8 +165,12 @@ class BrokerMetadataPublisher(
           // Notify the replica manager about changes to topics.
           replicaManager.applyDelta(topicsDelta, newImage)
         } catch {
-          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error applying topics " +
-            s"delta in ${deltaName}", t)
+          case t: Throwable => {
+            System.err.println("Error applying topics " +
+              s"delta in ${deltaName}:" + t)
+            metadataPublishingFaultHandler.handleFault("Error applying topics " +
+              s"delta in ${deltaName}", t)
+          }
         }
         try {
           // Update the group coordinator of local changes

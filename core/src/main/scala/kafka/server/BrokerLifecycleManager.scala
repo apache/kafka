@@ -336,13 +336,13 @@ class BrokerLifecycleManager(
           registered = true
           initialRegistrationSucceeded = true
           info(s"Successfully registered broker $nodeId with broker epoch ${_brokerEpoch}")
-          System.err.println(s"Successfully registered broker $nodeId with broker epoch ${_brokerEpoch}")
+//          System.err.println(s"Successfully registered broker $nodeId with broker epoch ${_brokerEpoch}")
           scheduleNextCommunicationImmediately() // Immediately send a heartbeat
         } else {
           info(s"Unable to register broker $nodeId because the controller returned " +
             s"error $errorCode")
-          System.err.println(s"Unable to register broker $nodeId because the controller returned " +
-            s"error $errorCode")
+          System.err.print(s"$nodeId " + s"error $errorCode")
+          System.err.flush()
           scheduleNextCommunicationAfterFailure()
         }
       }

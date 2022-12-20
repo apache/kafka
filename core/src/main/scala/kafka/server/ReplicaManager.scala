@@ -2114,6 +2114,7 @@ class ReplicaManager(val config: KafkaConfig,
 
       // Handle partitions which we are now the leader or follower for.
       if (!localChanges.leaders.isEmpty || !localChanges.followers.isEmpty) {
+        System.err.println(s"$localBrokerId with $localChanges")
         val lazyOffsetCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
         val changedPartitions = new mutable.HashSet[Partition]
         if (!localChanges.leaders.isEmpty) {
@@ -2127,6 +2128,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
+        System.err.println(s"$localBrokerId change done")
       }
     }
   }
@@ -2149,6 +2151,8 @@ class ReplicaManager(val config: KafkaConfig,
         } catch {
           case e: KafkaStorageException =>
             stateChangeLogger.info(s"Skipped the become-leader state change for $tp " +
+              s"with topic id ${info.topicId} due to a storage error ${e.getMessage}")
+            System.err.println(s"Skipped the become-leader state change for $tp " +
               s"with topic id ${info.topicId} due to a storage error ${e.getMessage}")
             // If there is an offline log directory, a Partition object may have been created by
             // `getOrCreatePartition()` before `createLogIfNotExists()` failed to create local replica due
