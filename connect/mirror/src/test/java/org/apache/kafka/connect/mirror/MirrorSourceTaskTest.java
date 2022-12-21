@@ -35,8 +35,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -80,16 +79,65 @@ public class MirrorSourceTaskTest {
     public void testOffsetSync() {
         MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(50);
 
-        assertTrue(partitionState.update(0, 100), "always emit offset sync on first update");
-        assertTrue(partitionState.update(2, 102), "upstream offset skipped -> resync");
-        assertFalse(partitionState.update(3, 152), "no sync");
-        assertFalse(partitionState.update(4, 153), "no sync");
-        assertFalse(partitionState.update(5, 154), "no sync");
-        assertTrue(partitionState.update(6, 205), "one past target offset");
-        assertTrue(partitionState.update(2, 206), "upstream reset");
-        assertFalse(partitionState.update(3, 207), "no sync");
-        assertTrue(partitionState.update(4, 3), "downstream reset");
-        assertFalse(partitionState.update(5, 4), "no sync");
+        long upstreamOffset = 0;
+        long downstreamOffset = 100;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "always emit offset sync on first update");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "always emit offset sync on first update");
+
+        upstreamOffset = 2;
+        downstreamOffset = 102;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "upstream offset skipped -> resync");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "upstream offset skipped -> resync");
+
+        upstreamOffset = 3;
+        downstreamOffset = 152;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertNotEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "no sync");
+        assertNotEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "no sync");
+
+        upstreamOffset = 4;
+        downstreamOffset = 153;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertNotEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "no sync");
+        assertNotEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "no sync");
+
+        upstreamOffset = 5;
+        downstreamOffset = 154;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertNotEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "no sync");
+        assertNotEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "no sync");
+
+        upstreamOffset = 6;
+        downstreamOffset = 205;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "one past target offset");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "one past target offset");
+
+        upstreamOffset = 2;
+        downstreamOffset = 206;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "upstream reset");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "upstream reset");
+
+        upstreamOffset = 3;
+        downstreamOffset = 207;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertNotEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "no sync");
+        assertNotEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "no sync");
+
+        upstreamOffset = 4;
+        downstreamOffset = 3;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "downstream reset");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "downstream reset");
+
+        upstreamOffset = 5;
+        downstreamOffset = 4;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertNotEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "no sync");
+        assertNotEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "no sync");
     }
 
     @Test
@@ -97,16 +145,65 @@ public class MirrorSourceTaskTest {
         MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(0);
 
         // if max offset lag is zero, should always emit offset syncs
-        assertTrue(partitionState.update(0, 100), "zeroOffsetSync downStreamOffset 100 is incorrect");
-        assertTrue(partitionState.update(2, 102), "zeroOffsetSync downStreamOffset 102 is incorrect");
-        assertTrue(partitionState.update(3, 153), "zeroOffsetSync downStreamOffset 153 is incorrect");
-        assertTrue(partitionState.update(4, 154), "zeroOffsetSync downStreamOffset 154 is incorrect");
-        assertTrue(partitionState.update(5, 155), "zeroOffsetSync downStreamOffset 155 is incorrect");
-        assertTrue(partitionState.update(6, 207), "zeroOffsetSync downStreamOffset 207 is incorrect");
-        assertTrue(partitionState.update(2, 208), "zeroOffsetSync downStreamOffset 208 is incorrect");
-        assertTrue(partitionState.update(3, 209), "zeroOffsetSync downStreamOffset 209 is incorrect");
-        assertTrue(partitionState.update(4, 3), "zeroOffsetSync downStreamOffset 3 is incorrect");
-        assertTrue(partitionState.update(5, 4), "zeroOffsetSync downStreamOffset 4 is incorrect");
+        long upstreamOffset = 0;
+        long downstreamOffset = 100;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 100 is incorrect");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 100 is incorrect");
+
+        upstreamOffset = 2;
+        downstreamOffset = 102;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 102 is incorrect");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 102 is incorrect");
+
+        upstreamOffset = 3;
+        downstreamOffset = 153;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 153 is incorrect");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 153 is incorrect");
+
+        upstreamOffset = 4;
+        downstreamOffset = 154;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 154 is incorrect");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 154 is incorrect");
+
+        upstreamOffset = 5;
+        downstreamOffset = 155;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 155 is incorrect");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 155 is incorrect");
+
+        upstreamOffset = 6;
+        downstreamOffset = 207;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 207 is incorrect");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 207 is incorrect");
+
+        upstreamOffset = 2;
+        downstreamOffset = 208;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 208 is incorrect");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 208 is incorrect");
+
+        upstreamOffset = 3;
+        downstreamOffset = 209;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 209 is incorrect");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 209 is incorrect");
+
+        upstreamOffset = 4;
+        downstreamOffset = 3;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 3 is incorrect");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 3 is incorrect");
+
+        upstreamOffset = 5;
+        downstreamOffset = 4;
+        partitionState.update(upstreamOffset, downstreamOffset);
+        assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 4 is incorrect");
+        assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 4 is incorrect");
     }
 
     @Test
