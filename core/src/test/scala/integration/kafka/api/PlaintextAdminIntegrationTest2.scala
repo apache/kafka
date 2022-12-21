@@ -181,8 +181,10 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
     assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+        assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 2)
+    waitUntilTrue( () => brokers.forall(b => b.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id() == 2 &&
+    b.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id() == 2), "cannot get expected leader")
 
     System.err.print("! ")
     System.err.flush()
@@ -358,8 +360,10 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
     assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+        assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 2)
+    waitUntilTrue( () => brokers.forall(b => b.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id() == 2 &&
+    b.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id() == 2), "cannot get expected leader")
 
     System.err.print("! ")
     System.err.flush()
@@ -535,8 +539,10 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
     assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+        assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 2)
+    waitUntilTrue( () => brokers.forall(b => b.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id() == 2 &&
+    b.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id() == 2), "cannot get expected leader")
 
     System.err.print("! ")
     System.err.flush()
@@ -712,8 +718,10 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
     assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+        assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 2)
+    waitUntilTrue( () => brokers.forall(b => b.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id() == 2 &&
+    b.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id() == 2), "cannot get expected leader")
 
     System.err.print("! ")
     System.err.flush()
@@ -889,8 +897,10 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
     assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+        assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 2)
+    waitUntilTrue( () => brokers.forall(b => b.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id() == 2 &&
+    b.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id() == 2), "cannot get expected leader")
 
     System.err.print("! ")
     System.err.flush()
@@ -1066,8 +1076,10 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
     assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+        assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 2)
+    waitUntilTrue( () => brokers.forall(b => b.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id() == 2 &&
+    b.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id() == 2), "cannot get expected leader")
 
     System.err.print("! ")
     System.err.flush()
@@ -1243,8 +1255,10 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
     assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+        assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 2)
+    waitUntilTrue( () => brokers.forall(b => b.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id() == 2 &&
+    b.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id() == 2), "cannot get expected leader")
 
     System.err.print("! ")
     System.err.flush()
@@ -1420,8 +1434,10 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
     assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+        assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 2)
+    waitUntilTrue( () => brokers.forall(b => b.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id() == 2 &&
+    b.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id() == 2), "cannot get expected leader")
 
     System.err.print("! ")
     System.err.flush()
@@ -1597,8 +1613,10 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
     assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+        assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 2)
+    waitUntilTrue( () => brokers.forall(b => b.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id() == 2 &&
+    b.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id() == 2), "cannot get expected leader")
 
     System.err.print("! ")
     System.err.flush()
@@ -1774,8 +1792,10 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
     assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
+        assertFalse(electResult.partitions.get.get(partition2).isPresent)
     TestUtils.assertLeader(client, partition2, 2)
+    waitUntilTrue( () => brokers.forall(b => b.metadataCache.getPartitionLeaderEndpoint(partition1.topic, partition1.partition(), listenerName).get.id() == 2 &&
+    b.metadataCache.getPartitionLeaderEndpoint(partition2.topic, partition2.partition(), listenerName).get.id() == 2), "cannot get expected leader")
 
     System.err.print("! ")
     System.err.flush()
