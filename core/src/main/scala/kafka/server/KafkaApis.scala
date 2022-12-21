@@ -1341,13 +1341,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     val version = request.header.apiVersion
     if (version == 0) {
       handleOffsetFetchRequestFromZookeeper(request)
-      CompletableFuture.completedFuture[Unit](())
     } else {
       handleOffsetFetchRequestFromCoordinator(request)
     }
   }
 
-  private def handleOffsetFetchRequestFromZookeeper(request: RequestChannel.Request): Unit = {
+  private def handleOffsetFetchRequestFromZookeeper(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val header = request.header
     val offsetFetchRequest = request.body[OffsetFetchRequest]
 
@@ -1390,6 +1389,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       offsetFetchResponse
     }
     requestHelper.sendResponseMaybeThrottle(request, createResponse)
+    CompletableFuture.completedFuture[Unit](())
   }
 
   private def handleOffsetFetchRequestFromCoordinator(request: RequestChannel.Request): CompletableFuture[Unit] = {
