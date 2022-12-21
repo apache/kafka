@@ -1324,6 +1324,17 @@ class ReplicaManagerTest {
 
       replicaManager.becomeLeaderOrFollower(2, leaderAndIsrRequest, (_, _) => ())
 
+      appendRecords(replicaManager, tp0, TestUtils.singletonRecords(s"message".getBytes)).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
+      // Fetch as follower to initialise the log end offset of the replica
+      fetchPartitionAsFollower(
+        replicaManager,
+        new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
+        replicaId = 1
+      )
+
       val metadata = new DefaultClientMetadata("rack-b", "client-id",
         InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
@@ -1338,7 +1349,7 @@ class ReplicaManagerTest {
       assertTrue(consumerResult.hasFired)
 
       // PartitionView passed to ReplicaSelector should not contain the follower as it's not in the ISR
-      val expectedReplicaViews = Set(new DefaultReplicaView(leaderNode, 0, 0))
+      val expectedReplicaViews = Set(new DefaultReplicaView(leaderNode, 1, 0))
       val partitionView = replicaManager.replicaSelectorOpt.get
         .asInstanceOf[MockReplicaSelector].getPartitionViewArgument
 
