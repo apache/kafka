@@ -26,7 +26,7 @@ import kafka.utils.{DelayedItem, TestUtils}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.message.UpdateMetadataRequestData
+import org.apache.kafka.common.message.{FetchResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
@@ -195,6 +195,38 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(None, thread.fetchState(t1p0))
     assertEquals(0, thread.partitionCount)
   }
+
+  @Test
+  def test(): Unit = {
+    val brokerId = 1
+    val replicaManager = Mockito.mock(classOf[ReplicaManager])
+    val quotaManager = Mockito.mock(classOf[ReplicationQuotaManager])
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId, "localhost:1234"))
+    val leader = new LocalLeaderEndPoint(new BrokerEndPoint(0, "localhost", 1000), config, replicaManager, quotaManager)
+
+
+    val futureLog = Mockito.mock(classOf[UnifiedLog])
+    when(futureLog.logEndOffset).thenReturn(0L)
+    val partition = Mockito.mock(classOf[Partition])
+    when(partition.futureLocalLogOrException).thenReturn(futureLog)
+    when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
+
+    val thread = new ReplicaAlterLogDirsThread(
+      "alter-logs-dirs-thread",
+      leader,
+      failedPartitions,
+      replicaManager,
+      quotaManager,
+      new BrokerTopicStats,
+      config.replicaFetchBackoffMs)
+
+    // if the future is re-created due to another alter request, the start offset is reset to zero
+    assertEquals(None, thread.processPartitionData(t1p0, 5, new FetchResponseData.PartitionData))
+
+    when(futureLog.logEndOffset).thenReturn(1L)
+    assertThrows(classOf[IllegalStateException], () => thread.processPartitionData(t1p0, 5, new FetchResponseData.PartitionData))
+  }
+
 
   @Test
   def shouldReplaceCurrentLogDirWhenCaughtUp(): Unit = {
