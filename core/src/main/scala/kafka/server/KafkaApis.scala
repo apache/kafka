@@ -188,7 +188,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
         case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request, requestLocal)
         case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
-        case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request, requestLocal)
+        case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request, requestLocal).exceptionally(handleError)
         case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
         case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
         case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request, requestLocal).exceptionally(handleError)
@@ -411,38 +411,22 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * Handle an offset commit request
    */
-  def handleOffsetCommitRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+  def handleOffsetCommitRequest(
+    request: RequestChannel.Request,
+    requestLocal: RequestLocal
+  ): CompletableFuture[Unit] = {
     val offsetCommitRequest = request.body[OffsetCommitRequest]
-
-    def sendResponse(response: OffsetCommitResponse): Unit = {
-      trace(s"Sending offset commit response $response for correlation id ${request.header.correlationId} to " +
-        s"client ${request.header.clientId}.")
-
-      if (isDebugEnabled) {
-        response.data.topics.forEach { topic =>
-          topic.partitions.forEach { partition =>
-            if (partition.errorCode != Errors.NONE.code) {
-              debug(s"Offset commit request with correlation id ${request.header.correlationId} from client ${request.header.clientId} " +
-                s"on partition ${topic.name}-${partition.partitionIndex} failed due to ${Errors.forCode(partition.errorCode)}")
-            }
-          }
-        }
-      }
-
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        response.maybeSetThrottleTimeMs(requestThrottleMs)
-        response
-      })
-    }
 
     // Reject the request if not authorized to the group
     if (!authHelper.authorize(request.context, READ, GROUP, offsetCommitRequest.data.groupId)) {
-      sendResponse(offsetCommitRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else if (offsetCommitRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponse(offsetCommitRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else {
       val offsetCommitResponseData = new OffsetCommitResponseData()
       val topicsPendingPartitions = new mutable.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
@@ -523,7 +507,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       if (authorizedTopicsRequest.isEmpty) {
-        sendResponse(new OffsetCommitResponse(offsetCommitResponseData))
+        requestHelper.sendMaybeThrottle(request, new OffsetCommitResponse(offsetCommitResponseData))
+        CompletableFuture.completedFuture[Unit](())
       } else if (request.header.apiVersion == 0) {
         // For version 0, always store offsets to ZK.
         val zkSupport = metadataSupport.requireZkOrThrow(
@@ -562,7 +547,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         }
 
-        sendResponse(new OffsetCommitResponse(offsetCommitResponseData))
+        requestHelper.sendMaybeThrottle(request, new OffsetCommitResponse(offsetCommitResponseData))
+        CompletableFuture.completedFuture[Unit](())
       } else {
         // Create a new request data with the authorized topic-partitions.
         val offsetCommitRequestData = new OffsetCommitRequestData()
@@ -579,12 +565,12 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestLocal.bufferSupplier
         ).handle[Unit] { (results, exception) =>
           if (exception != null) {
-            sendResponse(offsetCommitRequest.getErrorResponse(exception))
+            requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
           } else {
             if (offsetCommitResponseData.topics.isEmpty) {
               // If the pre-processed response is empty, we can directly
               // send back the new one.
-              sendResponse(new OffsetCommitResponse(results))
+              requestHelper.sendMaybeThrottle(request, new OffsetCommitResponse(results))
             } else {
               // Otherwise, we have to add the topic-partitions from new
               // one into the pre-processed one.
@@ -601,13 +587,9 @@ class KafkaApis(val requestChannel: RequestChannel,
                     existingTopicResponse.partitions.addAll(topic.partitions)
                 }
               }
-              sendResponse(new OffsetCommitResponse(offsetCommitResponseData))
+              requestHelper.sendMaybeThrottle(request, new OffsetCommitResponse(offsetCommitResponseData))
             }
           }
-        }.exceptionally { exception =>
-          error(s"Unexpected error handling request ${request.requestDesc(true)} " +
-            s"with context ${request.context}", exception)
-          requestHelper.handleError(request, exception)
         }
       }
     }

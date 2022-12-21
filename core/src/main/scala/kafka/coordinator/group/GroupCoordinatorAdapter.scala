@@ -250,14 +250,13 @@ class GroupCoordinatorAdapter(
 
     def callback(commitStatus: Map[TopicPartition, Errors]): Unit = {
       val response = new OffsetCommitResponseData()
-      val byTopics = new util.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
+      val byTopics = new mutable.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
 
       commitStatus.forKeyValue { (tp, error) =>
-        var topic = byTopics.get(tp.topic)
+        var topic = byTopics(tp.topic)
         if (topic == null) {
-          topic = new OffsetCommitResponseData.OffsetCommitResponseTopic()
-            .setName(tp.topic)
-          byTopics.put(tp.topic, topic)
+          topic = new OffsetCommitResponseData.OffsetCommitResponseTopic().setName(tp.topic)
+          byTopics += tp.topic -> topic
           response.topics.add(topic)
         }
         topic.partitions.add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
