@@ -50,11 +50,9 @@ import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
-import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
-import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
@@ -878,14 +876,14 @@ public final class QuorumController implements Controller {
                                         "offset {} and epoch {}.", offset, epoch);
                                 }
                             }
-                            int i = 1;
+                            int i = 0;
                             for (ApiMessageAndVersion message : messages) {
                                 try {
-                                    replay(message.message(), Optional.empty(), offset + i - 1, epoch);
+                                    replay(message.message(), Optional.empty(), batch.baseOffset() + i, epoch);
                                 } catch (Throwable e) {
                                     String failureMessage = String.format("Unable to apply %s record on standby " +
                                             "controller, which was %d of %d record(s) in the batch with baseOffset %d.",
-                                            message.message().getClass().getSimpleName(), i, messages.size(),
+                                            message.message().getClass().getSimpleName(), i + 1, messages.size(),
                                             batch.baseOffset());
                                     throw fatalFaultHandler.handleFault(failureMessage, e);
                                 }
@@ -1038,9 +1036,9 @@ public final class QuorumController implements Controller {
         log.debug("Beginning metadata transaction {}_{}.", transactionOffset, transactionEpoch);
     }
 
-    private void endTransaction(long offset) {
+    private void endTransaction(long curOffset) {
         if (transactionEpoch == -1) {
-            throw fatalFaultHandler.handleFault("Tried to end a transaction at offset " + offset +
+            throw fatalFaultHandler.handleFault("Tried to end a transaction at offset " + curOffset +
                 " but there was no current transaction.");
         }
         transactionOffset = -1L;
@@ -1048,13 +1046,13 @@ public final class QuorumController implements Controller {
         log.debug("Completing metadata transaction {}_{}.", transactionOffset, transactionEpoch);
     }
 
-    private void abortTransaction(String reason, long offset) {
+    private void abortTransaction(String reason, long curOffset) {
         if (transactionEpoch == -1) {
             throw fatalFaultHandler.handleFault("Tried to abort a transaction because " + reason +
-                    " at offset " + offset + " but there was no current transaction.");
+                    " at offset " + curOffset + " but there was no current transaction.");
         }
         log.info("Aborting metadata transaction {}_{} because {} at offset {}.",
-                transactionOffset, transactionEpoch, reason, offset);
+                transactionOffset, transactionEpoch, reason, curOffset);
         snapshotRegistry.revertToSnapshot(transactionOffset);
         transactionOffset = -1L;
         transactionEpoch = -1;
@@ -1137,11 +1135,7 @@ public final class QuorumController implements Controller {
                 log.info("The metadata log appears to be empty. Appending {} bootstrap record(s) " +
                         "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
                         bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
-                records.add(new ApiMessageAndVersion(
-                        new BeginTransactionRecord().setName("initial transaction"), (short) 0));
                 records.addAll(bootstrapMetadata.records());
-                records.add(new ApiMessageAndVersion(
-                        new EndTransactionRecord(), (short) 0));
             } else {
                 if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
                     log.info("No metadata.version feature level record was found in the log. " +

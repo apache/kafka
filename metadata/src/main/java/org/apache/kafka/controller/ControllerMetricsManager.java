@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -76,6 +77,8 @@ final class ControllerMetricsManager {
 
     private final ControllerMetrics controllerMetrics;
 
+    private List<ApiMessage> transactionRecords = null;
+
     ControllerMetricsManager(ControllerMetrics controllerMetrics) {
         this.controllerMetrics = controllerMetrics;
     }
@@ -112,31 +115,67 @@ final class ControllerMetricsManager {
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
         switch (type) {
             case REGISTER_BROKER_RECORD:
-                replay((RegisterBrokerRecord) message);
+                if (transactionRecords != null) {
+                    transactionRecords.add(message);
+                } else {
+                    replay((RegisterBrokerRecord) message);
+                }
                 break;
             case UNREGISTER_BROKER_RECORD:
-                replay((UnregisterBrokerRecord) message);
+                if (transactionRecords != null) {
+                    transactionRecords.add(message);
+                } else {
+                    replay((UnregisterBrokerRecord) message);
+                }
                 break;
             case FENCE_BROKER_RECORD:
-                replay((FenceBrokerRecord) message);
+                if (transactionRecords != null) {
+                    transactionRecords.add(message);
+                } else {
+                    replay((FenceBrokerRecord) message);
+                }
                 break;
             case UNFENCE_BROKER_RECORD:
-                replay((UnfenceBrokerRecord) message);
+                if (transactionRecords != null) {
+                    transactionRecords.add(message);
+                } else {
+                    replay((UnfenceBrokerRecord) message);
+                }
                 break;
             case BROKER_REGISTRATION_CHANGE_RECORD:
-                replay((BrokerRegistrationChangeRecord) message);
+                if (transactionRecords != null) {
+                    transactionRecords.add(message);
+                } else {
+                    replay((BrokerRegistrationChangeRecord) message);
+                }
                 break;
             case TOPIC_RECORD:
-                replay((TopicRecord) message);
+                if (transactionRecords != null) {
+                    transactionRecords.add(message);
+                } else {
+                    replay((TopicRecord) message);
+                }
                 break;
             case PARTITION_RECORD:
-                replay((PartitionRecord) message);
+                if (transactionRecords != null) {
+                    transactionRecords.add(message);
+                } else {
+                    replay((PartitionRecord) message);
+                }
                 break;
             case PARTITION_CHANGE_RECORD:
-                replay((PartitionChangeRecord) message);
+                if (transactionRecords != null) {
+                    transactionRecords.add(message);
+                } else {
+                    replay((PartitionChangeRecord) message);
+                }
                 break;
             case REMOVE_TOPIC_RECORD:
-                replay((RemoveTopicRecord) message);
+                if (transactionRecords != null) {
+                    transactionRecords.add(message);
+                } else {
+                    replay((RemoveTopicRecord) message);
+                }
                 break;
             case CONFIG_RECORD:
             case FEATURE_LEVEL_RECORD:
@@ -146,6 +185,21 @@ final class ControllerMetricsManager {
             case REMOVE_ACCESS_CONTROL_ENTRY_RECORD:
             case NO_OP_RECORD:
                 // These record types do not affect metrics
+                break;
+            case BEGIN_TRANSACTION_RECORD:
+                transactionRecords = new ArrayList<>();
+                break;
+            case END_TRANSACTION_RECORD:
+                List<ApiMessage> prevTransactionRecords = transactionRecords;
+                transactionRecords = null;
+                if (prevTransactionRecords != null) {
+                    for (ApiMessage prevMessage : prevTransactionRecords) {
+                        replay(prevMessage);
+                    }
+                }
+                break;
+            case ABORT_TRANSACTION_RECORD:
+                transactionRecords = null;
                 break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);

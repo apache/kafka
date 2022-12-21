@@ -349,6 +349,10 @@ class BrokerMetadataListener(
   }
 
   private def endTransaction(delta: MetadataDelta, endOffset: Long): Unit = {
+    if (_transactionEpoch == -1) {
+      metadataLoadingFaultHandler.handleFault("Encountered end transaction record, but no transaction is active.")
+      return
+    }
     log.debug("Ending metadata transaction {}_{} at offset {}", _transactionOffset, _transactionEpoch, endOffset)
     var index = 0
     _transactionRecords.forEach(record => {
@@ -362,8 +366,9 @@ class BrokerMetadataListener(
 
   private def abortTransaction(reason: String, offset: Long): Unit = {
     if (_transactionEpoch == -1) {
-      throw metadataLoadingFaultHandler.handleFault("Tried to abort a transaction because " +
+      metadataLoadingFaultHandler.handleFault("Tried to abort a transaction because " +
         reason + " at offset " + offset + " but there was no current transaction.")
+      return
     }
     log.info("Aborting metadata transaction {}_{} because {} at offset {}.",
        _transactionOffset, _transactionEpoch, reason, offset)

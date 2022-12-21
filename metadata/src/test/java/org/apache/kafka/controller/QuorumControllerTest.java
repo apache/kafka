@@ -45,10 +45,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.RequestHeaderData;
-import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
-import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Utils;
@@ -539,7 +537,7 @@ public class QuorumControllerTest {
                     setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
                     setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV1)).
                     setListeners(listeners));
-            assertEquals(4L, reply.get().epoch());
+            assertEquals(2L, reply.get().epoch());
             CreateTopicsRequestData createTopicsRequestData =
                 new CreateTopicsRequestData().setTopics(
                     new CreatableTopicCollection(Collections.singleton(
@@ -555,7 +553,7 @@ public class QuorumControllerTest {
                         get().topics().find("foo").errorMessage());
             assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                 active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
-                        setWantFence(false).setBrokerEpoch(4L).setBrokerId(0).
+                        setWantFence(false).setBrokerEpoch(2L).setBrokerId(0).
                         setCurrentMetadataOffset(100000L)).get());
             assertEquals(Errors.NONE.code(), active.createTopics(ANONYMOUS_CONTEXT,
                 createTopicsRequestData, Collections.singleton("foo")).
@@ -667,12 +665,9 @@ public class QuorumControllerTest {
 
     private List<ApiMessageAndVersion> generateTestRecords(Uuid fooId, Map<Integer, Long> brokerEpochs) {
         return Arrays.asList(
-            new ApiMessageAndVersion(new BeginTransactionRecord().
-                setName("initial transaction"), (short) 0),
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
                 setFeatureLevel(MetadataVersion.IBP_3_3_IV3.featureLevel()), (short) 0),
-            new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
