@@ -53,12 +53,12 @@ class MetadataQuorumCommandTest {
      * 3. Fewer brokers than controllers
      */
     @ClusterTests({
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 3),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 3),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 2),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 2),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 3),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 3)
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 2),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 2),
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 1),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 1),
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 2),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 2)
     })
     public void testDescribeQuorumReplicationSuccessful() throws InterruptedException {
         cluster.waitForReadyBrokers();
@@ -94,12 +94,12 @@ class MetadataQuorumCommandTest {
      * 3. Fewer brokers than controllers
      */
     @ClusterTests({
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 3),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 3),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 2),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 2),
-        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 3),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 3)
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 2),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 2),
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 1),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 1),
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 2),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 2)
     })
     public void testDescribeQuorumStatusSuccessful() throws InterruptedException {
         cluster.waitForReadyBrokers();
@@ -141,7 +141,7 @@ class MetadataQuorumCommandTest {
         assertEquals("0", replicationOutput.split("\n")[1].split("\\s+")[2]);
     }
 
-    @ClusterTest(clusterType = Type.ZK, brokers = 3)
+    @ClusterTest(clusterType = Type.ZK, brokers = 1)
     public void testDescribeQuorumInZkMode() {
         assertTrue(
             assertThrows(

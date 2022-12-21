@@ -40,14 +40,8 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public abstract class AbstractIndex implements Closeable {
 
-    private static class BinarySearchResult {
-        public final int largestLowerBound;
-        public final int smallestUpperBound;
-
-        private BinarySearchResult(int largestLowerBound, int smallestUpperBound) {
-            this.largestLowerBound = largestLowerBound;
-            this.smallestUpperBound = smallestUpperBound;
-        }
+    private enum SearchResultType {
+        LARGEST_LOWER_BOUND, SMALLEST_UPPER_BOUND
     }
 
     private static final Logger log = LoggerFactory.getLogger(AbstractIndex.class);
@@ -447,14 +441,14 @@ public abstract class AbstractIndex implements Closeable {
      * @return The slot found or -1 if the least entry in the index is larger than the target key or the index is empty
      */
     protected int largestLowerBoundSlotFor(ByteBuffer idx, long target, IndexSearchType searchEntity) {
-        return indexSlotRangeFor(idx, target, searchEntity).largestLowerBound;
+        return indexSlotRangeFor(idx, target, searchEntity, SearchResultType.LARGEST_LOWER_BOUND);
     }
 
     /**
      * Find the smallest entry greater than or equal the target key or value. If none can be found, -1 is returned.
      */
     protected int smallestUpperBoundSlotFor(ByteBuffer idx, long target, IndexSearchType searchEntity) {
-        return indexSlotRangeFor(idx, target, searchEntity).smallestUpperBound;
+        return indexSlotRangeFor(idx, target, searchEntity, SearchResultType.SMALLEST_UPPER_BOUND);
     }
 
     /**
@@ -484,27 +478,36 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     /**
-     * Lookup lower and upper bounds for the given target.
+     * Lookup lower or upper bounds for the given target.
      */
-    private BinarySearchResult indexSlotRangeFor(ByteBuffer idx, long target, IndexSearchType searchEntity) {
+    private int indexSlotRangeFor(ByteBuffer idx, long target, IndexSearchType searchEntity,
+                                  SearchResultType searchResultType) {
         // check if the index is empty
         if (entries == 0)
-            return new BinarySearchResult(-1, -1);
+            return -1;
 
         int firstHotEntry = Math.max(0, entries - 1 - warmEntries());
         // check if the target offset is in the warm section of the index
         if (compareIndexEntry(parseEntry(idx, firstHotEntry), target, searchEntity) < 0) {
-            return binarySearch(idx, target, searchEntity, firstHotEntry, entries - 1);
+            return binarySearch(idx, target, searchEntity,
+                searchResultType, firstHotEntry, entries - 1);
         }
 
         // check if the target offset is smaller than the least offset
-        if (compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
-            return new BinarySearchResult(-1, 0);
+        if (compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0) {
+            switch (searchResultType) {
+                case LARGEST_LOWER_BOUND:
+                    return -1;
+                case SMALLEST_UPPER_BOUND:
+                    return 0;
+            }
+        }
 
-        return binarySearch(idx, target, searchEntity, 0, firstHotEntry);
+        return binarySearch(idx, target, searchEntity, searchResultType, 0, firstHotEntry);
     }
 
-    private BinarySearchResult binarySearch(ByteBuffer idx, long target, IndexSearchType searchEntity, int begin, int end) {
+    private int binarySearch(ByteBuffer idx, long target, IndexSearchType searchEntity,
+                             SearchResultType searchResultType, int begin, int end) {
         // binary search for the entry
         int lo = begin;
         int hi = end;
@@ -517,13 +520,19 @@ public abstract class AbstractIndex implements Closeable {
             else if (compareResult < 0)
                 lo = mid;
             else
-                return new BinarySearchResult(mid, mid);
+                return mid;
         }
-        if (lo == entries - 1)
-            hi = -1;
-        else
-            hi = lo + 1;
-        return new BinarySearchResult(lo, hi);
+        switch (searchResultType) {
+            case LARGEST_LOWER_BOUND:
+                return lo;
+            case SMALLEST_UPPER_BOUND:
+                if (lo == entries - 1)
+                    return -1;
+                else
+                    return lo + 1;
+            default:
+                throw new IllegalStateException("Unexpected searchResultType " + searchResultType);
+        }
     }
 
     private int compareIndexEntry(IndexEntry indexEntry, long target, IndexSearchType searchEntity) {
