@@ -1451,6 +1451,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           TOPIC,
           offsets.asScala
         )(_.name)
+
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
           .setGroupId(groupOffsetFetch.groupId)
           .setTopics(authorizedOffsets.asJava)
@@ -1490,7 +1491,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         val response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
           .setGroupId(groupOffsetFetch.groupId)
-          .setTopics(topicOffsets)
+
+        response.topics.addAll(topicOffsets)
 
         unauthorizedTopics.foreach { topic =>
           val topicResponse = new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name)

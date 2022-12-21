@@ -3639,6 +3639,158 @@ class KafkaApisTest {
   }
 
   @Test
+  def testHandleOffsetFetchAuthorization(): Unit = {
+    def makeRequest(version: Short): RequestChannel.Request = {
+      val groups = Map(
+        "group-1" -> List(
+          new TopicPartition("foo", 0),
+          new TopicPartition("bar", 0)
+        ).asJava,
+        "group-2" -> List(
+          new TopicPartition("foo", 0),
+          new TopicPartition("bar", 0)
+        ).asJava,
+        "group-3" -> null,
+        "group-4" -> null,
+      ).asJava
+      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+    }
+
+    val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion)
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+
+    val acls = Map(
+      "group-1" -> AuthorizationResult.ALLOWED,
+      "group-2" -> AuthorizationResult.DENIED,
+      "group-3" -> AuthorizationResult.ALLOWED,
+      "group-4" -> AuthorizationResult.DENIED,
+      "foo" -> AuthorizationResult.DENIED,
+      "bar" -> AuthorizationResult.ALLOWED
+    )
+
+    when(authorizer.authorize(
+      any[RequestContext],
+      any[util.List[Action]]
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument(1, classOf[util.List[Action]])
+      actions.asScala.map { action =>
+        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
+      }.asJava
+    }
+
+    // group-1 is allowed and bar is allowed.
+    val group1Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    when(newGroupCoordinator.fetchOffsets(
+      requestChannelRequest.context,
+      "group-1",
+      List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+        .setName("bar")
+        .setPartitionIndexes(List[Integer](0).asJava)
+      ).asJava,
+      false
+    )).thenReturn(group1Future)
+
+    // group-3 is allows and bar is allowed.
+    val group3Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    when(newGroupCoordinator.fetchAllOffsets(
+      requestChannelRequest.context,
+      "group-3",
+      false
+    )).thenReturn(group3Future)
+
+    createKafkaApis(authorizer = Some(authorizer)).handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val group1ResponseFromCoordinator = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId("group-1")
+      .setTopics(List(
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+
+    val group3ResponseFromCoordinator = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId("group-3")
+      .setTopics(List(
+        // foo should be filtered out.
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1)
+          ).asJava),
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+
+    val expectedOffsetFetchResponse = new OffsetFetchResponseData()
+      .setGroups(List(
+        // group-1 is authorized but foo is not.
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("group-1")
+          .setTopics(List(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setName("bar")
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(100)
+                  .setCommittedLeaderEpoch(1)
+              ).asJava),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setName("foo")
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                  .setCommittedOffset(-1)
+              ).asJava)
+          ).asJava),
+        // group-2 is not authorized.
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("group-2")
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code),
+        // group-3 is authorized but foo is not.
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("group-3")
+          .setTopics(List(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setName("bar")
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(100)
+                  .setCommittedLeaderEpoch(1)
+              ).asJava)
+          ).asJava),
+        // group-4 is not authorized.
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("group-4")
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code),
+      ).asJava)
+
+    group1Future.complete(group1ResponseFromCoordinator.topics)
+    group3Future.complete(group3ResponseFromCoordinator.topics)
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[OffsetFetchResponse]
+    assertEquals(expectedOffsetFetchResponse, response.data)
+  }
+
+  @Test
   def testReassignmentAndReplicationBytesOutRateWhenReassigning(): Unit = {
     assertReassignmentAndReplicationBytesOutPerSec(true)
   }
