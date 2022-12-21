@@ -436,7 +436,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       )(_.name)
 
       val responseBuilder = new OffsetCommitResponse.Builder()
-      val authorizedTopicsRequest = new util.ArrayList[OffsetCommitRequestData.OffsetCommitRequestTopic]()
+      val authorizedTopicsRequest = new mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
       offsetCommitRequest.data.topics.forEach { topic =>
         if (!authorizedTopics.contains(topic.name)) {
           // If the topic is not authorized, we add the topic and all its partitions
@@ -461,62 +461,94 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           if (!topicWithValidPartitions.partitions.isEmpty) {
-            authorizedTopicsRequest.add(topicWithValidPartitions)
+            authorizedTopicsRequest += topicWithValidPartitions
           }
         }
       }
 
       if (authorizedTopicsRequest.isEmpty) {
         requestHelper.sendMaybeThrottle(request, responseBuilder.build())
-        CompletableFuture.completedFuture[Unit](())
+        CompletableFuture.completedFuture(())
       } else if (request.header.apiVersion == 0) {
         // For version 0, always store offsets to ZK.
-        val zkSupport = metadataSupport.requireZkOrThrow(
-          KafkaApis.unsupported("Version 0 offset commit requests"))
-
-        authorizedTopicsRequest.forEach { topic =>
-          topic.partitions.forEach { partition =>
-            try {
-              if (partition.committedMetadata != null && partition.committedMetadata.length > config.offsetMetadataMaxSize) {
-                responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.OFFSET_METADATA_TOO_LARGE)
-              } else {
-                zkSupport.zkClient.setOrCreateConsumerOffset(
-                  offsetCommitRequest.data.groupId,
-                  new TopicPartition(topic.name, partition.partitionIndex),
-                  partition.committedOffset
-                )
-                responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.NONE)
-              }
-            } catch {
-              case e: Throwable =>
-                responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.forException(e))
-            }
-          }
-        }
-
-        requestHelper.sendMaybeThrottle(request, responseBuilder.build())
-        CompletableFuture.completedFuture[Unit](())
+        commitOffsetsToZookeeper(
+          request,
+          offsetCommitRequest,
+          authorizedTopicsRequest,
+          responseBuilder
+        )
       } else {
-        // Create a new request data with the authorized topic-partitions.
-        val offsetCommitRequestData = new OffsetCommitRequestData()
-          .setGroupId(offsetCommitRequest.data.groupId)
-          .setMemberId(offsetCommitRequest.data.memberId)
-          .setGenerationId(offsetCommitRequest.data.generationId)
-          .setRetentionTimeMs(offsetCommitRequest.data.retentionTimeMs)
-          .setGroupInstanceId(offsetCommitRequest.data.groupInstanceId)
-          .setTopics(authorizedTopicsRequest)
+        // For version > 0, store offsets to Coordinator.
+        commitOffsetsToCoordinator(
+          request,
+          offsetCommitRequest,
+          authorizedTopicsRequest,
+          responseBuilder,
+          requestLocal
+        )
+      }
+    }
+  }
 
-        newGroupCoordinator.commitOffsets(
-          request.context,
-          offsetCommitRequestData,
-          requestLocal.bufferSupplier
-        ).handle[Unit] { (results, exception) =>
-          if (exception != null) {
-            requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
+  private def commitOffsetsToZookeeper(
+    request: RequestChannel.Request,
+    offsetCommitRequest: OffsetCommitRequest,
+    authorizedTopicsRequest: mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic],
+    responseBuilder: OffsetCommitResponse.Builder
+  ): CompletableFuture[Unit] = {
+    val zkSupport = metadataSupport.requireZkOrThrow(
+      KafkaApis.unsupported("Version 0 offset commit requests"))
+
+    authorizedTopicsRequest.foreach { topic =>
+      topic.partitions.forEach { partition =>
+        val error = try {
+          if (partition.committedMetadata != null && partition.committedMetadata.length > config.offsetMetadataMaxSize) {
+            Errors.OFFSET_METADATA_TOO_LARGE
           } else {
-            requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build())
+            zkSupport.zkClient.setOrCreateConsumerOffset(
+              offsetCommitRequest.data.groupId,
+              new TopicPartition(topic.name, partition.partitionIndex),
+              partition.committedOffset
+            )
+            Errors.NONE
           }
+        } catch {
+          case e: Throwable =>
+            Errors.forException(e)
         }
+
+        responseBuilder.addPartition(topic.name, partition.partitionIndex, error)
+      }
+    }
+
+    requestHelper.sendMaybeThrottle(request, responseBuilder.build())
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  private def commitOffsetsToCoordinator(
+    request: RequestChannel.Request,
+    offsetCommitRequest: OffsetCommitRequest,
+    authorizedTopicsRequest: mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic],
+    responseBuilder: OffsetCommitResponse.Builder,
+    requestLocal: RequestLocal
+  ): CompletableFuture[Unit] = {
+    val offsetCommitRequestData = new OffsetCommitRequestData()
+      .setGroupId(offsetCommitRequest.data.groupId)
+      .setMemberId(offsetCommitRequest.data.memberId)
+      .setGenerationId(offsetCommitRequest.data.generationId)
+      .setRetentionTimeMs(offsetCommitRequest.data.retentionTimeMs)
+      .setGroupInstanceId(offsetCommitRequest.data.groupInstanceId)
+      .setTopics(authorizedTopicsRequest.asJava)
+
+    newGroupCoordinator.commitOffsets(
+      request.context,
+      offsetCommitRequestData,
+      requestLocal.bufferSupplier
+    ).handle[Unit] { (results, exception) =>
+      if (exception != null) {
+        requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
+      } else {
+        requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build())
       }
     }
   }
