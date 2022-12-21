@@ -21,7 +21,7 @@
   // Versions 0 through 2 of ApiVersionsRequest are the same.
   //
   // Version 3 is the first flexible version and adds ClientSoftwareName and ClientSoftwareVersion.
-  "validVersions": "0-4",
+  "validVersions": "0-3",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ClientSoftwareName", "type": "string", "versions": "3+",
