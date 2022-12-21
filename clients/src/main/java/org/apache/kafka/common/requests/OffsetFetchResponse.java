@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseGroup;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponsePartition;
@@ -200,6 +201,56 @@ public class OffsetFetchResponse extends AbstractResponse {
             .setGroups(groupList)
             .setThrottleTimeMs(throttleTimeMs);
         this.error = null;
+    }
+
+    public OffsetFetchResponse(List<OffsetFetchResponseGroup> groups, short version) {
+        super(ApiKeys.OFFSET_FETCH);
+        data = new OffsetFetchResponseData();
+
+        if (version >= 8) {
+            data.setGroups(groups);
+            error = null;
+
+            for (OffsetFetchResponseGroup group : data.groups()) {
+                this.groupLevelErrors.put(group.groupId(), Errors.forCode(group.errorCode()));
+            }
+        } else {
+            if (groups.size() != 1) {
+                throw new UnsupportedVersionException(
+                    "Version " + version + " of OffsetFetchResponse only support one group."
+                );
+            }
+
+            OffsetFetchResponseGroup group = groups.get(0);
+            data.setErrorCode(group.errorCode());
+            error = Errors.forCode(group.errorCode());
+
+            group.topics().forEach(topic -> {
+                OffsetFetchResponseTopic newTopic = new OffsetFetchResponseTopic().setName(topic.name());
+                data.topics().add(newTopic);
+
+                topic.partitions().forEach(partition -> {
+                    OffsetFetchResponsePartition newPartition;
+
+                    if (version < 2 && group.errorCode() != Errors.NONE.code()) {
+                        // Versions prior to version 2 does not support a top level error. Therefore
+                        // we put it at the partition level.
+                        newPartition = new OffsetFetchResponsePartition()
+                            .setPartitionIndex(partition.partitionIndex())
+                            .setErrorCode(group.errorCode());
+                    } else {
+                        newPartition = new OffsetFetchResponsePartition()
+                            .setPartitionIndex(partition.partitionIndex())
+                            .setErrorCode(partition.errorCode())
+                            .setCommittedOffset(partition.committedOffset())
+                            .setMetadata(partition.metadata())
+                            .setCommittedLeaderEpoch(partition.committedLeaderEpoch());
+                    }
+
+                    newTopic.partitions().add(newPartition);
+                });
+            });
+        }
     }
 
     public OffsetFetchResponse(OffsetFetchResponseData data, short version) {

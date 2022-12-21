@@ -1340,25 +1340,20 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleOffsetFetchRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val version = request.header.apiVersion
     if (version == 0) {
-      // reading offsets from ZK
-      handleOffsetFetchRequestV0(request)
+      handleOffsetFetchRequestFromZookeeper(request)
       CompletableFuture.completedFuture[Unit](())
-    } else if (version >= 1 && version <= 7) {
-      // reading offsets from Kafka
-      handleOffsetFetchRequestBetweenV1AndV7(request)
     } else {
-      // batching offset reads for multiple groups starts with version 8 and greater
-      handleOffsetFetchRequestV8AndAbove(request)
+      handleOffsetFetchRequestFromCoordinator(request)
     }
   }
 
-  private def handleOffsetFetchRequestV0(request: RequestChannel.Request): Unit = {
+  private def handleOffsetFetchRequestFromZookeeper(request: RequestChannel.Request): Unit = {
     val header = request.header
     val offsetFetchRequest = request.body[OffsetFetchRequest]
 
     def createResponse(requestThrottleMs: Int): AbstractResponse = {
       val offsetFetchResponse =
-      // reject the request if not authorized to the group
+        // reject the request if not authorized to the group
         if (!authHelper.authorize(request.context, DESCRIBE, GROUP, offsetFetchRequest.groupId))
           offsetFetchRequest.getErrorResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED)
         else {
@@ -1397,65 +1392,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestHelper.sendResponseMaybeThrottle(request, createResponse)
   }
 
-  private def handleOffsetFetchRequestBetweenV1AndV7(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  private def handleOffsetFetchRequestFromCoordinator(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val offsetFetchRequest = request.body[OffsetFetchRequest]
-    val requireStable = offsetFetchRequest.data.requireStable
-    val isAllPartitions = offsetFetchRequest.data.topics == null
+    val groups = offsetFetchRequest.groups()
+    val requireStable = offsetFetchRequest.requireStable()
 
-    val groupData = new OffsetFetchRequestData.OffsetFetchRequestGroup()
-      .setGroupId(offsetFetchRequest.data.groupId)
-
-    val future = if (isAllPartitions) {
-      fetchAllOffsets(
-        request,
-        groupData,
-        requireStable
-      )
-    } else {
-      offsetFetchRequest.data.topics.forEach { topic =>
-        groupData.topics.add(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-          .setName(topic.name)
-          .setPartitionIndexes(topic.partitionIndexes))
-      }
-
-      fetchOffsets(
-        request,
-        groupData,
-        requireStable
-      )
-    }
-
-    future.handle[Unit] { (response, exception) =>
-      if (exception != null) {
-        requestHelper.sendMaybeThrottle(request, offsetFetchRequest.getErrorResponse(Errors.forException(exception)))
-      } else {
-        val offsetFetchResponse = new OffsetFetchResponseData()
-        response.topics.forEach { topic =>
-          val newTopic = new OffsetFetchResponseData.OffsetFetchResponseTopic()
-            .setName(topic.name)
-          topic.partitions.forEach { partition =>
-            newTopic.partitions.add(new OffsetFetchResponseData.OffsetFetchResponsePartition()
-              .setPartitionIndex(partition.partitionIndex)
-              .setErrorCode(partition.errorCode)
-              .setCommittedOffset(partition.committedOffset)
-              .setCommittedLeaderEpoch(partition.committedLeaderEpoch)
-              .setMetadata(partition.metadata))
-          }
-          offsetFetchResponse.topics.add(newTopic)
-        }
-        requestHelper.sendMaybeThrottle(request, new OffsetFetchResponse(offsetFetchResponse, request.context.apiVersion))
-      }
-    }
-  }
-
-  private def handleOffsetFetchRequestV8AndAbove(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    val offsetFetchRequest = request.body[OffsetFetchRequest]
-    val requireStable = offsetFetchRequest.data.requireStable
-
-    val futures = new mutable.ArrayBuffer[CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]](
-      offsetFetchRequest.data.groups.size
-    )
-    offsetFetchRequest.data.groups.forEach { groupOffsetFetch =>
+    val futures = new mutable.ArrayBuffer[CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]](groups.size)
+    groups.forEach { groupOffsetFetch =>
       val isAllPartitions = groupOffsetFetch.topics == null
       val future = if (isAllPartitions) {
         fetchAllOffsets(
@@ -1474,11 +1417,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     CompletableFuture.allOf(futures.toArray: _*).handle[Unit] { (_, _) =>
-      val offsetFetchResponse = new OffsetFetchResponseData()
-      futures.foreach { future =>
-        offsetFetchResponse.groups.add(future.get())
-      }
-      requestHelper.sendMaybeThrottle(request, new OffsetFetchResponse(offsetFetchResponse, request.context.apiVersion))
+      val groupResponses = new ArrayBuffer[OffsetFetchResponseData.OffsetFetchResponseGroup](futures.size)
+      futures.foreach(future => groupResponses += future.get())
+      requestHelper.sendMaybeThrottle(request, new OffsetFetchResponse(groupResponses.asJava, request.context.apiVersion))
     }
   }
 
