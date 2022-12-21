@@ -18,16 +18,15 @@ package kafka.admin
 
 import java.util
 import java.util.Properties
-
 import kafka.controller.ReplicaAssignment
-import kafka.log._
+import kafka.log.LogConfig
 import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
-import kafka.zk.{AdminZkClient, KafkaZkClient, ConfigEntityTypeZNode}
+import kafka.zk.{AdminZkClient, ConfigEntityTypeZNode, KafkaZkClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.config.internals.QuotaConfigs
@@ -253,7 +252,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
 
     //Now delete the config
     adminZkClient.changeTopicConfig(topic, new Properties)
-    checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "", quotaManagerIsThrottled = false)
+    checkConfig(kafka.server.Defaults.MessageMaxBytes, kafka.log.Defaults.RetentionMs, "", "", quotaManagerIsThrottled = false)
 
     //Add config back
     adminZkClient.changeTopicConfig(topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
@@ -261,7 +260,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
 
     //Now ensure updating to "" removes the throttled replica list also
     adminZkClient.changeTopicConfig(topic, propsWith((LogConfig.FollowerReplicationThrottledReplicasProp, ""), (LogConfig.LeaderReplicationThrottledReplicasProp, "")))
-    checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "",  quotaManagerIsThrottled = false)
+    checkConfig(kafka.server.Defaults.MessageMaxBytes, kafka.log.Defaults.RetentionMs, "", "",  quotaManagerIsThrottled = false)
   }
 
   @Test

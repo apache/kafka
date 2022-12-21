@@ -21,8 +21,8 @@ import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
-import kafka.log.{Defaults, LogConfig, UnifiedLog}
-import kafka.server.{FetchDataInfo, FetchLogEnd, ReplicaManager, RequestLocal}
+import kafka.log.{LogConfig, UnifiedLog}
+import kafka.server.{Defaults, FetchDataInfo, FetchLogEnd, ReplicaManager, RequestLocal}
 import kafka.utils.{MockScheduler, Pool, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
@@ -932,7 +932,7 @@ class TransactionStateManagerTest {
     val partitionIds = 0 until numPartitions
 
     loadTransactionsForPartitions(partitionIds)
-    expectLogConfig(partitionIds, Defaults.MaxMessageSize)
+    expectLogConfig(partitionIds, Defaults.MessageMaxBytes)
 
     txnMetadata1.txnLastUpdateTimestamp = time.milliseconds() - txnConfig.transactionalIdExpirationMs
     txnMetadata1.state = txnState

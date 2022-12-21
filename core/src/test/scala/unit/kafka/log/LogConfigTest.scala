@@ -229,11 +229,11 @@ class LogConfigTest {
 
   @Test
   def testLocalLogRetentionDerivedDefaultProps(): Unit = {
-    val logConfig = new LogConfig( new Properties())
+    val logConfig = new LogConfig(new Properties())
 
     // Local retention defaults are derived from retention properties which can be default or custom.
     assertEquals(Defaults.RetentionMs, logConfig.remoteLogConfig.localRetentionMs)
-    assertEquals(Defaults.RetentionSize, logConfig.remoteLogConfig.localRetentionBytes)
+    assertEquals(kafka.server.Defaults.LogRetentionBytes, logConfig.remoteLogConfig.localRetentionBytes)
   }
 
   @Test

@@ -56,15 +56,15 @@ object LogTestUtils {
   }
 
   def createLogConfig(segmentMs: Long = Defaults.SegmentMs,
-                      segmentBytes: Int = Defaults.SegmentSize,
+                      segmentBytes: Int = kafka.server.Defaults.LogSegmentBytes,
                       retentionMs: Long = Defaults.RetentionMs,
-                      retentionBytes: Long = Defaults.RetentionSize,
+                      retentionBytes: Long = kafka.server.Defaults.LogRetentionBytes,
                       segmentJitterMs: Long = Defaults.SegmentJitterMs,
-                      cleanupPolicy: String = Defaults.CleanupPolicy,
-                      maxMessageBytes: Int = Defaults.MaxMessageSize,
-                      indexIntervalBytes: Int = Defaults.IndexInterval,
-                      segmentIndexBytes: Int = Defaults.MaxIndexSize,
-                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs,
+                      cleanupPolicy: String = kafka.server.Defaults.LogCleanupPolicy,
+                      maxMessageBytes: Int = kafka.server.Defaults.MessageMaxBytes,
+                      indexIntervalBytes: Int = kafka.server.Defaults.LogIndexIntervalBytes,
+                      segmentIndexBytes: Int = kafka.server.Defaults.LogIndexSizeMaxBytes,
+                      fileDeleteDelayMs: Long = kafka.server.Defaults.LogDeleteDelayMs,
                       remoteLogStorageEnable: Boolean = Defaults.RemoteLogStorageEnable): LogConfig = {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs: java.lang.Long)

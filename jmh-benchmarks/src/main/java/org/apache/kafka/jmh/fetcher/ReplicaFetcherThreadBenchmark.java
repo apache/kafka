@@ -22,7 +22,6 @@ import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
-import kafka.log.Defaults;
 import kafka.log.LogAppendInfo;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
@@ -55,7 +54,6 @@ import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
@@ -111,7 +109,6 @@ import scala.collection.Map;
 @Measurement(iterations = 15)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-
 public class ReplicaFetcherThreadBenchmark {
     @Param({"100", "500", "1000", "5000"})
     private int partitionCount;
@@ -289,18 +286,7 @@ public class ReplicaFetcherThreadBenchmark {
     }
 
     private static LogConfig createLogConfig() {
-        Properties logProps = new Properties();
-        logProps.put(TopicConfig.SEGMENT_MS_CONFIG, Defaults.SegmentMs());
-        logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, Defaults.SegmentSize());
-        logProps.put(TopicConfig.RETENTION_MS_CONFIG, Defaults.RetentionMs());
-        logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, Defaults.RetentionSize());
-        logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, Defaults.SegmentJitterMs());
-        logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, Defaults.CleanupPolicy());
-        logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Defaults.MaxMessageSize());
-        logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, Defaults.IndexInterval());
-        logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, Defaults.MaxIndexSize());
-        logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, Defaults.FileDeleteDelayMs());
-        return LogConfig.apply(logProps, new scala.collection.immutable.HashSet<>());
+        return LogConfig.apply(new Properties(), new scala.collection.immutable.HashSet<>());
     }
 
 

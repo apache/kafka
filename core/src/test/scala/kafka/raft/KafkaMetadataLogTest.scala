@@ -16,9 +16,9 @@
  */
 package kafka.raft
 
-import kafka.log.{Defaults, SegmentDeletion, UnifiedLog}
+import kafka.log.{SegmentDeletion, UnifiedLog}
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMillisProp, MetadataLogSegmentMinBytesProp, NodeIdProp, ProcessRolesProp, QuorumVotersProp}
-import kafka.server.{KafkaConfig, KafkaRaftServer}
+import kafka.server.{Defaults, KafkaConfig, KafkaRaftServer}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
 import org.apache.kafka.common.protocol
@@ -839,7 +839,7 @@ final class KafkaMetadataLogTest {
       retentionMillis = 60 * 1000,
       maxBatchSizeInBytes = 512,
       maxFetchSizeInBytes = DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      fileDeleteDelayMs = Defaults.FileDeleteDelayMs,
+      fileDeleteDelayMs = Defaults.LogDeleteDelayMs,
       nodeId = 1
     )
     config.copy()
@@ -988,7 +988,7 @@ final class KafkaMetadataLogTest {
     }
 
     // Sleep long enough to trigger a possible segment delete because of the default retention
-    val defaultLogRetentionMs = Defaults.RetentionMs * 2
+    val defaultLogRetentionMs = kafka.log.Defaults.RetentionMs * 2
     mockTime.sleep(defaultLogRetentionMs)
 
     assertTrue(log.maybeClean())
@@ -1021,7 +1021,7 @@ object KafkaMetadataLogTest {
     retentionMillis = 60 * 1000,
     maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
     maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-    fileDeleteDelayMs = Defaults.FileDeleteDelayMs,
+    fileDeleteDelayMs = Defaults.LogDeleteDelayMs,
     nodeId = 1
   )
 

@@ -21,9 +21,9 @@ import java.io.{ByteArrayOutputStream, File, PrintWriter}
 import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
-import kafka.log.{Defaults, LogConfig, LogTestUtils, ProducerStateManagerConfig, UnifiedLog}
+import kafka.log.{LogConfig, LogTestUtils, ProducerStateManagerConfig, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
-import kafka.server.{BrokerTopicStats, FetchLogEnd, KafkaRaftServer}
+import kafka.server.{BrokerTopicStats, Defaults, FetchLogEnd, KafkaRaftServer}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.Uuid
@@ -313,7 +313,7 @@ class DumpLogSegmentsTest {
         retentionMillis = 60 * 1000,
         maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
         maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        fileDeleteDelayMs = Defaults.FileDeleteDelayMs,
+        fileDeleteDelayMs = Defaults.LogDeleteDelayMs,
         nodeId = 1
       )
     )

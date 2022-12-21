@@ -39,39 +39,14 @@ import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
 object Defaults {
-  val SegmentSize = kafka.server.Defaults.LogSegmentBytes
   val SegmentMs = kafka.server.Defaults.LogRollHours * 60 * 60 * 1000L
   val SegmentJitterMs = kafka.server.Defaults.LogRollJitterHours * 60 * 60 * 1000L
-  val FlushInterval = kafka.server.Defaults.LogFlushIntervalMessages
-  val FlushMs = kafka.server.Defaults.LogFlushSchedulerIntervalMs
-  val RetentionSize = kafka.server.Defaults.LogRetentionBytes
   val RetentionMs = kafka.server.Defaults.LogRetentionHours * 60 * 60 * 1000L
   val RemoteLogStorageEnable = false
   val LocalRetentionBytes = -2 // It indicates the value to be derived from RetentionSize
   val LocalRetentionMs = -2 // It indicates the value to be derived from RetentionMs
-  val MaxMessageSize = kafka.server.Defaults.MessageMaxBytes
-  val MaxIndexSize = kafka.server.Defaults.LogIndexSizeMaxBytes
-  val IndexInterval = kafka.server.Defaults.LogIndexIntervalBytes
-  val FileDeleteDelayMs = kafka.server.Defaults.LogDeleteDelayMs
-  val DeleteRetentionMs = kafka.server.Defaults.LogCleanerDeleteRetentionMs
-  val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
-  val MaxCompactionLagMs = kafka.server.Defaults.LogCleanerMaxCompactionLagMs
-  val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
-  val CleanupPolicy = kafka.server.Defaults.LogCleanupPolicy
-  val UncleanLeaderElectionEnable = kafka.server.Defaults.UncleanLeaderElectionEnable
-  val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
-  val CompressionType = kafka.server.Defaults.CompressionType
-  val PreAllocateEnable = kafka.server.Defaults.LogPreAllocateEnable
-
-  /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
-  @deprecated("3.0")
-  val MessageFormatVersion = kafka.server.Defaults.LogMessageFormatVersion
-
-  val MessageTimestampType = kafka.server.Defaults.LogMessageTimestampType
-  val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
   val LeaderReplicationThrottledReplicas = Collections.emptyList[String]()
   val FollowerReplicationThrottledReplicas = Collections.emptyList[String]()
-  val MessageDownConversionEnable = kafka.server.Defaults.MessageDownConversionEnable
 }
 
 case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
@@ -262,59 +237,59 @@ object LogConfig {
 
     @nowarn("cat=deprecation")
     val logConfigDef = new LogConfigDef()
-      .define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, Defaults.SegmentSize, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
+      .define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, kafka.server.Defaults.LogSegmentBytes, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
         TopicConfig.SEGMENT_BYTES_DOC, KafkaConfig.LogSegmentBytesProp)
       .define(TopicConfig.SEGMENT_MS_CONFIG, LONG, Defaults.SegmentMs, atLeast(1), MEDIUM,
         TopicConfig.SEGMENT_MS_DOC, KafkaConfig.LogRollTimeMillisProp)
       .define(TopicConfig.SEGMENT_JITTER_MS_CONFIG, LONG, Defaults.SegmentJitterMs, atLeast(0), MEDIUM,
         TopicConfig.SEGMENT_JITTER_MS_DOC, KafkaConfig.LogRollTimeJitterMillisProp)
-      .define(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, INT, Defaults.MaxIndexSize, atLeast(4), MEDIUM,
+      .define(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, INT, kafka.server.Defaults.LogIndexSizeMaxBytes, atLeast(4), MEDIUM,
         TopicConfig.SEGMENT_INDEX_BYTES_DOC, KafkaConfig.LogIndexSizeMaxBytesProp)
-      .define(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, LONG, Defaults.FlushInterval, atLeast(1), MEDIUM,
+      .define(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, LONG, kafka.server.Defaults.LogFlushIntervalMessages, atLeast(1), MEDIUM,
         TopicConfig.FLUSH_MESSAGES_INTERVAL_DOC, KafkaConfig.LogFlushIntervalMessagesProp)
-      .define(TopicConfig.FLUSH_MS_CONFIG, LONG, Defaults.FlushMs, atLeast(0), MEDIUM,
+      .define(TopicConfig.FLUSH_MS_CONFIG, LONG, kafka.server.Defaults.LogFlushSchedulerIntervalMs, atLeast(0), MEDIUM,
         TopicConfig.FLUSH_MS_DOC, KafkaConfig.LogFlushIntervalMsProp)
       // can be negative. See kafka.log.LogManager.cleanupSegmentsToMaintainSize
-      .define(TopicConfig.RETENTION_BYTES_CONFIG, LONG, Defaults.RetentionSize, MEDIUM,
+      .define(TopicConfig.RETENTION_BYTES_CONFIG, LONG, kafka.server.Defaults.LogRetentionBytes, MEDIUM,
         TopicConfig.RETENTION_BYTES_DOC, KafkaConfig.LogRetentionBytesProp)
       // can be negative. See kafka.log.LogManager.cleanupExpiredSegments
       .define(TopicConfig.RETENTION_MS_CONFIG, LONG, Defaults.RetentionMs, atLeast(-1), MEDIUM,
         TopicConfig.RETENTION_MS_DOC, KafkaConfig.LogRetentionTimeMillisProp)
-      .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, Defaults.MaxMessageSize, atLeast(0), MEDIUM,
+      .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, kafka.server.Defaults.MessageMaxBytes, atLeast(0), MEDIUM,
         TopicConfig.MAX_MESSAGE_BYTES_DOC, KafkaConfig.MessageMaxBytesProp)
-      .define(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, INT, Defaults.IndexInterval, atLeast(0), MEDIUM,
+      .define(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, INT, kafka.server.Defaults.LogIndexIntervalBytes, atLeast(0), MEDIUM,
         TopicConfig.INDEX_INTERVAL_BYTES_DOC, KafkaConfig.LogIndexIntervalBytesProp)
-      .define(TopicConfig.DELETE_RETENTION_MS_CONFIG, LONG, Defaults.DeleteRetentionMs, atLeast(0), MEDIUM,
+      .define(TopicConfig.DELETE_RETENTION_MS_CONFIG, LONG, kafka.server.Defaults.LogCleanerDeleteRetentionMs, atLeast(0), MEDIUM,
         TopicConfig.DELETE_RETENTION_MS_DOC, KafkaConfig.LogCleanerDeleteRetentionMsProp)
-      .define(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, LONG, Defaults.MinCompactionLagMs, atLeast(0), MEDIUM,
+      .define(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, LONG, kafka.server.Defaults.LogCleanerMinCompactionLagMs, atLeast(0), MEDIUM,
         TopicConfig.MIN_COMPACTION_LAG_MS_DOC, KafkaConfig.LogCleanerMinCompactionLagMsProp)
-      .define(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, LONG, Defaults.MaxCompactionLagMs, atLeast(1), MEDIUM,
+      .define(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, LONG, kafka.server.Defaults.LogCleanerMaxCompactionLagMs, atLeast(1), MEDIUM,
         TopicConfig.MAX_COMPACTION_LAG_MS_DOC, KafkaConfig.LogCleanerMaxCompactionLagMsProp)
-      .define(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, LONG, Defaults.FileDeleteDelayMs, atLeast(0), MEDIUM,
+      .define(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, LONG, kafka.server.Defaults.LogDeleteDelayMs, atLeast(0), MEDIUM,
         TopicConfig.FILE_DELETE_DELAY_MS_DOC, KafkaConfig.LogDeleteDelayMsProp)
-      .define(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, DOUBLE, Defaults.MinCleanableDirtyRatio, between(0, 1), MEDIUM,
+      .define(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, DOUBLE, kafka.server.Defaults.LogCleanerMinCleanRatio, between(0, 1), MEDIUM,
         TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_DOC, KafkaConfig.LogCleanerMinCleanRatioProp)
-      .define(TopicConfig.CLEANUP_POLICY_CONFIG, LIST, Defaults.CleanupPolicy, ValidList.in(TopicConfig.CLEANUP_POLICY_COMPACT, TopicConfig.CLEANUP_POLICY_DELETE), MEDIUM,
+      .define(TopicConfig.CLEANUP_POLICY_CONFIG, LIST, kafka.server.Defaults.LogCleanupPolicy, ValidList.in(TopicConfig.CLEANUP_POLICY_COMPACT, TopicConfig.CLEANUP_POLICY_DELETE), MEDIUM,
         TopicConfig.CLEANUP_POLICY_DOC, KafkaConfig.LogCleanupPolicyProp)
-      .define(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, Defaults.UncleanLeaderElectionEnable,
+      .define(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, kafka.server.Defaults.UncleanLeaderElectionEnable,
         MEDIUM, TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC, KafkaConfig.UncleanLeaderElectionEnableProp)
-      .define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, INT, Defaults.MinInSyncReplicas, atLeast(1), MEDIUM,
+      .define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, INT, kafka.server.Defaults.MinInSyncReplicas, atLeast(1), MEDIUM,
         TopicConfig.MIN_IN_SYNC_REPLICAS_DOC, KafkaConfig.MinInSyncReplicasProp)
-      .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, Defaults.CompressionType, in(BrokerCompressionType.names.asScala.toSeq:_*),
+      .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, kafka.server.Defaults.CompressionType, in(BrokerCompressionType.names.asScala.toSeq:_*),
         MEDIUM, TopicConfig.COMPRESSION_TYPE_DOC, KafkaConfig.CompressionTypeProp)
-      .define(TopicConfig.PREALLOCATE_CONFIG, BOOLEAN, Defaults.PreAllocateEnable, MEDIUM, TopicConfig.PREALLOCATE_DOC,
+      .define(TopicConfig.PREALLOCATE_CONFIG, BOOLEAN, kafka.server.Defaults.LogPreAllocateEnable, MEDIUM, TopicConfig.PREALLOCATE_DOC,
         KafkaConfig.LogPreAllocateProp)
-      .define(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, STRING, Defaults.MessageFormatVersion, new MetadataVersionValidator(), MEDIUM,
+      .define(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, STRING, kafka.server.Defaults.LogMessageFormatVersion, new MetadataVersionValidator(), MEDIUM,
         TopicConfig.MESSAGE_FORMAT_VERSION_DOC, KafkaConfig.LogMessageFormatVersionProp)
-      .define(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, STRING, Defaults.MessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM,
+      .define(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, STRING, kafka.server.Defaults.LogMessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM,
         TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC, KafkaConfig.LogMessageTimestampTypeProp)
-      .define(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, LONG, Defaults.MessageTimestampDifferenceMaxMs,
+      .define(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, LONG, kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs,
         atLeast(0), MEDIUM, TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC, KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
       .define(LeaderReplicationThrottledReplicasProp, LIST, Defaults.LeaderReplicationThrottledReplicas, ThrottledReplicaListValidator, MEDIUM,
         LeaderReplicationThrottledReplicasDoc, LeaderReplicationThrottledReplicasProp)
       .define(FollowerReplicationThrottledReplicasProp, LIST, Defaults.FollowerReplicationThrottledReplicas, ThrottledReplicaListValidator, MEDIUM,
         FollowerReplicationThrottledReplicasDoc, FollowerReplicationThrottledReplicasProp)
-      .define(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, Defaults.MessageDownConversionEnable, LOW,
+      .define(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, kafka.server.Defaults.MessageDownConversionEnable, LOW,
         TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC, KafkaConfig.LogMessageDownConversionEnableProp)
 
     // RemoteLogStorageEnableProp, LocalLogRetentionMsProp, LocalLogRetentionBytesProp do not have server default

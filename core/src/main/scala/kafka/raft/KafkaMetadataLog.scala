@@ -16,9 +16,9 @@
  */
 package kafka.raft
 
-import kafka.log.{Defaults, LogConfig, LogOffsetSnapshot, ProducerStateManagerConfig, SnapshotGenerated, UnifiedLog}
+import kafka.log.{LogConfig, LogOffsetSnapshot, ProducerStateManagerConfig, SnapshotGenerated, UnifiedLog}
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
-import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, RequestLocal}
+import kafka.server.{BrokerTopicStats, Defaults, FetchHighWatermark, FetchLogEnd, KafkaConfig, RequestLocal}
 import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -531,7 +531,7 @@ object MetadataLogConfig {
       config.getLong(KafkaConfig.MetadataMaxRetentionMillisProp),
       maxBatchSizeInBytes,
       maxFetchSizeInBytes,
-      Defaults.FileDeleteDelayMs,
+      Defaults.LogDeleteDelayMs,
       config.getInt(KafkaConfig.NodeIdProp)
     )
   }
@@ -560,7 +560,7 @@ object KafkaMetadataLog extends Logging {
     props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.maxBatchSizeInBytes.toString)
     props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
     props.setProperty(TopicConfig.SEGMENT_MS_CONFIG, config.logSegmentMillis.toString)
-    props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, Defaults.FileDeleteDelayMs.toString)
+    props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, Defaults.LogDeleteDelayMs.toString)
 
     // Disable time and byte retention when deleting segments
     props.setProperty(TopicConfig.RETENTION_MS_CONFIG, "-1")
