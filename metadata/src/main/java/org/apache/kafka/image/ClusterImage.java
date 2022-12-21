@@ -34,15 +34,9 @@ public final class ClusterImage {
     public static final ClusterImage EMPTY = new ClusterImage(Collections.emptyMap());
 
     private final Map<Integer, BrokerRegistration> brokers;
-    private final Map<Integer, BrokerRegistration> zkBrokers;
 
     public ClusterImage(Map<Integer, BrokerRegistration> brokers) {
         this.brokers = Collections.unmodifiableMap(brokers);
-        this.zkBrokers = Collections.unmodifiableMap(brokers
-            .entrySet()
-            .stream()
-            .filter(x -> x.getValue().isMigratingZkBroker())
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 
     public boolean isEmpty() {
@@ -54,7 +48,12 @@ public final class ClusterImage {
     }
 
     public Map<Integer, BrokerRegistration> zkBrokers() {
-        return zkBrokers;
+        return Collections.unmodifiableMap(
+            brokers
+                .entrySet()
+                .stream()
+                .filter(x -> x.getValue().isMigratingZkBroker())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 
     public BrokerRegistration broker(int nodeId) {
