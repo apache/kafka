@@ -3506,8 +3506,7 @@ class KafkaApisTest {
       group2Future.complete(group2Response.topics)
       group3Future.completeExceptionally(Errors.INVALID_GROUP_ID.exception)
 
-      val capturedResponse = verifyNoThrottling(requestChannelRequest)
-      val response = capturedResponse.getValue.asInstanceOf[OffsetFetchResponse]
+      val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
       assertEquals(expectedOffsetFetchResponse, response.data)
     }
   }
@@ -3575,19 +3574,18 @@ class KafkaApisTest {
               new OffsetFetchResponseData.OffsetFetchResponsePartition()
                 .setPartitionIndex(0)
                 .setCommittedOffset(100)
-                .setCommittedLeaderEpoch(1),
+                .setCommittedLeaderEpoch(if (version >= 5) 1 else -1),
               new OffsetFetchResponseData.OffsetFetchResponsePartition()
                 .setPartitionIndex(1)
                 .setCommittedOffset(200)
-                .setCommittedLeaderEpoch(2)
+                .setCommittedLeaderEpoch(if (version >= 5) 2 else -1)
             ).asJava)
         ).asJava)
     }
 
     future.complete(group1Response.topics)
 
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[OffsetFetchResponse]
+    val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
     assertEquals(expectedOffsetFetchResponse, response.data)
   }
 
@@ -3738,8 +3736,7 @@ class KafkaApisTest {
     group1Future.complete(group1ResponseFromCoordinator.topics)
     group3Future.complete(group3ResponseFromCoordinator.topics)
 
-    val capturedResponse = verifyNoThrottling(requestChannelRequest)
-    val response = capturedResponse.getValue.asInstanceOf[OffsetFetchResponse]
+    val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
     assertEquals(expectedOffsetFetchResponse, response.data)
   }
 
