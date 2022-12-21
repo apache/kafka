@@ -14,24 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.metadata.migration;
+package kafka.controller
 
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
+import kafka.cluster.Broker
+import org.apache.kafka.common.{TopicPartition, Uuid}
 
-public interface BrokersRpcClient {
+trait ControllerBrokerRequestContext {
+  def isTopicDeletionInProgress(topicName: String): Boolean
 
-    void startup();
+  def topicIds: collection.Map[String, Uuid]
 
-    void shutdown();
+  def liveBrokerIdAndEpochs: collection.Map[Int, Long]
 
-    void publishMetadata(MetadataImage image);
+  def liveOrShuttingDownBrokers: collection.Set[Broker]
 
-    void sendRPCsToBrokersFromMetadataDelta(MetadataDelta delta,
-                                            MetadataImage image,
-                                            int zkControllerEpoch);
+  def isTopicQueuedUpForDeletion(topic: String): Boolean
 
-    void sendRPCsToBrokersFromMetadataImage(MetadataImage image, int zkControllerEpoch);
+  def isReplicaOnline(brokerId: Int, partition: TopicPartition): Boolean
 
-    void clear();
+  def partitionReplicaAssignment(partition: TopicPartition): collection.Seq[Int]
+
+  def leaderEpoch(topicPartition: TopicPartition): Int
+
+  def liveOrShuttingDownBrokerIds: collection.Set[Int]
+
+  def partitionLeadershipInfo(topicPartition: TopicPartition): Option[LeaderIsrAndControllerEpoch]
 }

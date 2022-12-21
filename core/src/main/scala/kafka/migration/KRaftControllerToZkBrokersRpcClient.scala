@@ -1,8 +1,24 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.migration
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import kafka.controller.{AbstractControllerBrokerRequestBatch, ControllerBrokerRequestMetadata, ControllerChannelManager, LeaderIsrAndControllerEpoch, ReplicaAssignment, StateChangeLogger}
+import kafka.controller.{AbstractControllerBrokerRequestBatch, ControllerBrokerRequestContext, ControllerChannelManager, LeaderIsrAndControllerEpoch, ReplicaAssignment, StateChangeLogger}
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
@@ -17,7 +33,7 @@ import java.util
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
-object KRaftControllerBrokerRequestMetadata {
+object KRaftControllerBrokerRequestContext {
   def isReplicaOnline(image: MetadataImage, brokerId: Int, replicaAssignment: Set[Int]): Boolean = {
     val brokerOnline = image.cluster().containsBroker(brokerId)
     brokerOnline && replicaAssignment.contains(brokerId)
@@ -47,8 +63,8 @@ object KRaftControllerBrokerRequestMetadata {
   }
 }
 
-sealed class KRaftControllerBrokerRequestMetadata(val image: MetadataImage) extends
-  ControllerBrokerRequestMetadata {
+sealed class KRaftControllerBrokerRequestContext(val image: MetadataImage) extends
+  ControllerBrokerRequestContext {
   override def isTopicDeletionInProgress(topicName: String): Boolean = {
     !image.topics().topicsByName().containsKey(topicName)
   }
@@ -76,12 +92,12 @@ sealed class KRaftControllerBrokerRequestMetadata(val image: MetadataImage) exte
   }
 
   override def isReplicaOnline(brokerId: Int, partition: TopicPartition): Boolean = {
-    KRaftControllerBrokerRequestMetadata.isReplicaOnline(
+    KRaftControllerBrokerRequestContext.isReplicaOnline(
       image, brokerId, partitionReplicaAssignment(partition).toSet)
   }
 
   override def partitionReplicaAssignment(tp: TopicPartition): collection.Seq[Int] = {
-    KRaftControllerBrokerRequestMetadata.partitionReplicaAssignment(image, tp)
+    KRaftControllerBrokerRequestContext.partitionReplicaAssignment(image, tp)
   }
 
   override def leaderEpoch(topicPartition: TopicPartition): Int = {
@@ -102,13 +118,13 @@ sealed class KRaftControllerBrokerRequestMetadata(val image: MetadataImage) exte
   override val liveOrShuttingDownBrokerIds: collection.Set[Int] = liveBrokerIdAndEpochs.keySet
 
   override def partitionLeadershipInfo(topicPartition: TopicPartition): Option[LeaderIsrAndControllerEpoch] = {
-    KRaftControllerBrokerRequestMetadata.partitionLeadershipInfo(image, topicPartition)
+    KRaftControllerBrokerRequestContext.partitionLeadershipInfo(image, topicPartition)
   }
 }
 
 sealed class KRaftControllerBrokerRequestBatch(
   config: KafkaConfig,
-  metadataProvider: () => ControllerBrokerRequestMetadata,
+  metadataProvider: () => ControllerBrokerRequestContext,
   metadataVersionProvider: () => MetadataVersion,
   controllerChannelManager: ControllerChannelManager,
   stateChangeLogger: StateChangeLogger
@@ -188,8 +204,8 @@ class KRaftControllerToZkBrokersRpcClient(
     stateChangeLogger
   )
 
-  private def metadataProvider(): ControllerBrokerRequestMetadata = {
-    new KRaftControllerBrokerRequestMetadata(_image)
+  private def metadataProvider(): ControllerBrokerRequestContext = {
+    new KRaftControllerBrokerRequestContext(_image)
   }
 
   def startup(): Unit = {
@@ -215,7 +231,7 @@ class KRaftControllerToZkBrokersRpcClient(
   }
 
   override def sendRPCsToBrokersFromMetadataDelta(delta: MetadataDelta, image: MetadataImage,
-                                                  controllerEpoch: Int): Unit = {
+                                                  zkControllerEpoch: Int): Unit = {
     publishMetadata(image)
     requestBatch.newBatch()
 
@@ -232,13 +248,13 @@ class KRaftControllerToZkBrokersRpcClient(
       requestBatch.addUpdateMetadataRequestForBrokers(changedZkBrokers.toSeq, image.topics().partitions().keySet().asScala)
       // Send these requests first to make sure, we don't add all the partition metadata to the
       // old brokers as well.
-      requestBatch.sendRequestsToBrokers(controllerEpoch)
+      requestBatch.sendRequestsToBrokers(zkControllerEpoch)
       requestBatch.newBatch()
 
       // For new the brokers, check if there are partition assignments and add LISR appropriately.
       image.topics().partitions().asScala.foreach { case (tp, partitionRegistration) =>
         val replicas = partitionRegistration.replicas.toSet
-        val leaderIsrAndControllerEpochOpt = KRaftControllerBrokerRequestMetadata.partitionLeadershipInfo(image, tp)
+        val leaderIsrAndControllerEpochOpt = KRaftControllerBrokerRequestContext.partitionLeadershipInfo(image, tp)
         val newBrokersWithReplicas = replicas.intersect(changedZkBrokers)
         if (newBrokersWithReplicas.nonEmpty) {
           leaderIsrAndControllerEpochOpt match {
@@ -265,12 +281,12 @@ class KRaftControllerToZkBrokersRpcClient(
       deletedTopic.partitions().asScala.foreach { case (partition, partitionRegistration) =>
         val tp = new TopicPartition(deletedTopic.name(), partition)
         val offlineReplicas = partitionRegistration.replicas.filter {
-          KRaftControllerBrokerRequestMetadata.isReplicaOnline(image, _, partitionRegistration.replicas.toSet)
+          KRaftControllerBrokerRequestContext.isReplicaOnline(image, _, partitionRegistration.replicas.toSet)
         }
         val deletedLeaderAndIsr = LeaderAndIsr.duringDelete(partitionRegistration.isr.toList)
         requestBatch.addStopReplicaRequestForBrokers(partitionRegistration.replicas, tp, deletePartition = true)
         requestBatch.addUpdateMetadataRequestForBrokers(
-          oldZkBrokers.toSeq, controllerEpoch, tp, deletedLeaderAndIsr.leader, deletedLeaderAndIsr.leaderEpoch,
+          oldZkBrokers.toSeq, zkControllerEpoch, tp, deletedLeaderAndIsr.leader, deletedLeaderAndIsr.leaderEpoch,
           deletedLeaderAndIsr.partitionEpoch, deletedLeaderAndIsr.isr, partitionRegistration.replicas, offlineReplicas)
       }
     }
@@ -282,7 +298,7 @@ class KRaftControllerToZkBrokersRpcClient(
         val tp = new TopicPartition(topicDelta.name(), partition)
 
         // Check for replica leadership changes.
-        val leaderIsrAndControllerEpochOpt = KRaftControllerBrokerRequestMetadata.partitionLeadershipInfo(image, tp)
+        val leaderIsrAndControllerEpochOpt = KRaftControllerBrokerRequestContext.partitionLeadershipInfo(image, tp)
         leaderIsrAndControllerEpochOpt match {
           case Some(leaderIsrAndControllerEpoch) =>
             val replicaAssignment = ReplicaAssignment(partitionRegistration.replicas,
@@ -305,10 +321,10 @@ class KRaftControllerToZkBrokersRpcClient(
       }
     }
     // Send all the accumulated requests to the broker.
-    requestBatch.sendRequestsToBrokers(controllerEpoch)
+    requestBatch.sendRequestsToBrokers(zkControllerEpoch)
   }
 
-  override def sendRPCsToBrokersFromMetadataImage(image: MetadataImage, controllerEpoch: Int): Unit = {
+  override def sendRPCsToBrokersFromMetadataImage(image: MetadataImage, zkControllerEpoch: Int): Unit = {
     publishMetadata(image)
     requestBatch.newBatch()
 
@@ -319,7 +335,7 @@ class KRaftControllerToZkBrokersRpcClient(
     val zkBrokers = image.cluster().zkBrokers().keySet().asScala.map(_.toInt).toSeq
     val partitions = image.topics().partitions()
     partitions.asScala.foreach{ case (tp, partitionRegistration) =>
-      val leaderIsrAndControllerEpochOpt = KRaftControllerBrokerRequestMetadata.partitionLeadershipInfo(image, tp)
+      val leaderIsrAndControllerEpochOpt = KRaftControllerBrokerRequestContext.partitionLeadershipInfo(image, tp)
       leaderIsrAndControllerEpochOpt match {
         case Some(leaderIsrAndControllerEpoch) =>
           val replicaAssignment = ReplicaAssignment(partitionRegistration.replicas,
@@ -330,7 +346,7 @@ class KRaftControllerToZkBrokersRpcClient(
       }
     }
     requestBatch.addUpdateMetadataRequestForBrokers(zkBrokers, partitions.keySet().asScala)
-    requestBatch.sendRequestsToBrokers(controllerEpoch)
+    requestBatch.sendRequestsToBrokers(zkControllerEpoch)
   }
 
   override def clear(): Unit = {

@@ -62,8 +62,9 @@ public final class ClusterDelta {
         return changedBrokers
             .values()
             .stream()
-            .filter(broker -> broker.isPresent() && broker.get().isMigratingZkBroker())
-            .map(broker -> broker.get().id())
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .map(BrokerRegistration::id)
             .collect(Collectors.toSet());
     }
 
