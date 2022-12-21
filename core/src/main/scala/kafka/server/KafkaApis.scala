@@ -1402,13 +1402,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       val isAllPartitions = groupOffsetFetch.topics == null
       val future = if (isAllPartitions) {
         fetchAllOffsets(
-          request,
+          request.context,
           groupOffsetFetch,
           requireStable
         )
       } else {
         fetchOffsets(
-          request,
+          request.context,
           groupOffsetFetch,
           requireStable
         )
@@ -1424,18 +1424,18 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def fetchAllOffsets(
-    request: RequestChannel.Request,
+    requestContext: RequestContext,
     groupOffsetFetch: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
-    if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupOffsetFetch.groupId)) {
+    if (!authHelper.authorize(requestContext, DESCRIBE, GROUP, groupOffsetFetch.groupId)) {
       return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
         .setGroupId(groupOffsetFetch.groupId)
         .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))
     }
 
     newGroupCoordinator.fetchAllOffsets(
-      request.context,
+      requestContext,
       groupOffsetFetch.groupId,
       requireStable
     ).handle[OffsetFetchResponseData.OffsetFetchResponseGroup] { (offsets, exception) =>
@@ -1446,7 +1446,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         // Clients are not allowed to see offsets for topics that are not authorized for Describe.
         val (authorizedOffsets, _) = authHelper.partitionSeqByAuthorized(
-          request.context,
+          requestContext,
           DESCRIBE,
           TOPIC,
           offsets.asScala
@@ -1459,11 +1459,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def fetchOffsets(
-    request: RequestChannel.Request,
+    requestContext: RequestContext,
     groupOffsetFetch: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
-    if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupOffsetFetch.groupId)) {
+    if (!authHelper.authorize(requestContext, DESCRIBE, GROUP, groupOffsetFetch.groupId)) {
       return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
         .setGroupId(groupOffsetFetch.groupId)
         .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))
@@ -1471,14 +1471,14 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // Clients are not allowed to see offsets for topics that are not authorized for Describe.
     val (authorizedTopics, unauthorizedTopics) = authHelper.partitionSeqByAuthorized(
-      request.context,
+      requestContext,
       DESCRIBE,
       TOPIC,
       groupOffsetFetch.topics.asScala
     )(_.name)
 
     newGroupCoordinator.fetchOffsets(
-      request.context,
+      requestContext,
       groupOffsetFetch.groupId,
       authorizedTopics.asJava,
       requireStable
