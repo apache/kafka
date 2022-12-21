@@ -187,16 +187,24 @@ final class KafkaMetadataLog private (
   }
 
   override def updateHighWatermark(offsetMetadata: LogOffsetMetadata): Unit = {
-    offsetMetadata.metadata.asScala match {
-      case Some(segmentPosition: SegmentPosition) => log.updateHighWatermark(
-        new kafka.server.LogOffsetMetadata(
-          offsetMetadata.offset,
-          segmentPosition.baseOffset,
-          segmentPosition.relativePosition)
-      )
+    // This API returns the new high watermark, which may be different from the passed offset
+    val logHighWatermark = offsetMetadata.metadata.asScala match {
+      case Some(segmentPosition: SegmentPosition) =>
+        log.updateHighWatermark(
+          new kafka.server.LogOffsetMetadata(
+            offsetMetadata.offset,
+            segmentPosition.baseOffset,
+            segmentPosition.relativePosition
+          )
+        )
       case _ =>
-        // FIXME: This API returns the new high watermark, which may be different from the passed offset
         log.updateHighWatermark(offsetMetadata.offset)
+    }
+
+    if (logHighWatermark != offsetMetadata.offset) {
+      warn(
+        s"Log's high watermark ($logHighWatermark) is different from the local replica's high watermark ($offsetMetadata)"
+      )
     }
   }
 
