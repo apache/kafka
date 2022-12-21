@@ -45,8 +45,11 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.RequestHeaderData;
+import org.apache.kafka.common.metadata.AbortTransactionRecord;
+import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Utils;
@@ -102,6 +105,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1317,5 +1322,63 @@ public class QuorumControllerTest {
                         ControllerResult.atomicOf(Arrays.asList(rec(0), rec(1), rec(2), rec(3), rec(4)), null),
                         2,
                         appender)).getMessage());
+    }
+
+    private final int END_TRANSACTION_STRATEGY = 0;
+    private final int ABORT_TRANSACTION_STRATEGY = 1;
+    private final int ABORT_TRANSACTION_WITH_NEW_TRANSACTION_STRATEGY = 2;
+
+    @ParameterizedTest
+    @ValueSource(ints = {
+        END_TRANSACTION_STRATEGY,
+        ABORT_TRANSACTION_STRATEGY,
+        ABORT_TRANSACTION_WITH_NEW_TRANSACTION_STRATEGY
+    })
+    public void testTransactions(int strategy) throws Throwable {
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                    setControllerBuilderInitializer(controllerBuilder -> {
+                        controllerBuilder.setConfigSchema(SCHEMA);
+                    }).
+                    build();
+        ) {
+            QuorumController active = controlEnv.activeController();
+            CompletableFuture<Void> future = active.appendWriteEvent("records",
+                OptionalLong.empty(), () -> {
+                    List<ApiMessageAndVersion> records = new ArrayList<>();
+                    records.add(new ApiMessageAndVersion(new BeginTransactionRecord(), (short) 0));
+                    records.add(new ApiMessageAndVersion(new TopicRecord().
+                            setName("foo").
+                            setTopicId(Uuid.fromString("4yFTiDI8QZmv9PaV01xllg")),
+                            (short) 0));
+                    switch (strategy) {
+                        case END_TRANSACTION_STRATEGY:
+                            records.add(new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
+                            break;
+                        case ABORT_TRANSACTION_STRATEGY:
+                            records.add(new ApiMessageAndVersion(new AbortTransactionRecord(), (short) 0));
+                            break;
+                        case ABORT_TRANSACTION_WITH_NEW_TRANSACTION_STRATEGY:
+                            records.add(new ApiMessageAndVersion(new BeginTransactionRecord(), (short) 0));
+                            records.add(new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
+                            break;
+                        default:
+                            throw new RuntimeException("unknown strategy " + strategy);
+                    }
+                    records.add(new ApiMessageAndVersion(new TopicRecord().
+                            setName("bar").
+                            setTopicId(Uuid.fromString("WyhmBjIyTem4qdiG_Inorw")),
+                            (short) 0));
+                    return ControllerResult.of(records, null);
+                });
+            future.get();
+            Map<String, Uuid> expected = new HashMap<>();
+            expected.put("bar", Uuid.fromString("WyhmBjIyTem4qdiG_Inorw"));
+            if (strategy == END_TRANSACTION_STRATEGY) {
+                expected.put("foo", Uuid.fromString("4yFTiDI8QZmv9PaV01xllg"));
+            }
+            assertEquals(expected, active.replicationControl().findAllTopicIds(Long.MAX_VALUE));
+        }
     }
 }
