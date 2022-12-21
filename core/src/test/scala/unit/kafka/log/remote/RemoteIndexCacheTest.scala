@@ -16,10 +16,10 @@
  */
 package kafka.log.remote
 
-import kafka.log.{TimeIndex, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.utils.MockTime
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.log.internals.{OffsetIndex, OffsetPosition}
+import org.apache.kafka.server.log.internals.{OffsetIndex, OffsetPosition, TimeIndex}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.test.TestUtils
@@ -65,7 +65,7 @@ class RemoteIndexCacheTest {
         val offsetIdx = new OffsetIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.IndexFileSuffix),
           metadata.startOffset(), maxEntries * 8)
         val timeIdx = new TimeIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.TimeIndexFileSuffix),
-          metadata.startOffset(), maxIndexSize = maxEntries * 12)
+          metadata.startOffset(), maxEntries * 12)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
@@ -229,7 +229,7 @@ class RemoteIndexCacheTest {
       for (i <- 0 until offsetIndex.maxEntries) {
         val offset = offsetIndex.baseOffset + i
         offsetIndex.append(offset, i)
-        timeIndex.maybeAppend(curTime + i, offset, skipFullCheck = true)
+        timeIndex.maybeAppend(curTime + i, offset, true)
       }
       offsetIndex.flush()
       timeIndex.flush()
