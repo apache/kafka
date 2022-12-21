@@ -21,6 +21,16 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class PrimitiveRefTest {
+
+    @Test
+    public void testIntRef() {
+        PrimitiveRef.IntRef ref = PrimitiveRef.ofInt(3);
+        assertEquals(3, ref.value++);
+        assertEquals(4, ref.value);
+        assertEquals(5, ++ref.value);
+        assertEquals(5, ref.value);
+    }
+
     @Test
     public void testLongRef() {
         PrimitiveRef.LongRef ref = PrimitiveRef.ofLong(5L);
@@ -29,4 +39,5 @@ public class PrimitiveRefTest {
         assertEquals(7L, ++ref.value);
         assertEquals(7L, ref.value);
     }
+
 }

@@ -40,7 +40,7 @@ class LogValidatorTest {
   val time = Time.SYSTEM
   val topicPartition = new TopicPartition("topic", 0)
   val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
-  val metricsRecorder = UnifiedLog.validatorMetricsRecorder(new BrokerTopicStats().allTopicsStats)
+  val metricsRecorder = UnifiedLog.newValidatorMetricsRecorder(new BrokerTopicStats().allTopicsStats)
 
   @Test
   def testOnlyOneBatch(): Unit = {

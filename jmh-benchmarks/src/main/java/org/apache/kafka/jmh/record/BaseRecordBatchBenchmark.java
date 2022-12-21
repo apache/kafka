@@ -77,7 +77,7 @@ public abstract class BaseRecordBatchBenchmark {
     // Used by measureVariableBatchSize
     ByteBuffer[] batchBuffers;
     RequestLocal requestLocal;
-    LogValidator.MetricsRecorder validatorMetricsRecorder = UnifiedLog.validatorMetricsRecorder(
+    LogValidator.MetricsRecorder validatorMetricsRecorder = UnifiedLog.newValidatorMetricsRecorder(
         new BrokerTopicStats().allTopicsStats());
 
     @Setup

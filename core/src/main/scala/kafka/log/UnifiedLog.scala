@@ -253,6 +253,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
+  private val validatorMetricsRecorder = newValidatorMetricsRecorder(brokerTopicStats.allTopicsStats)
 
   /* The earliest offset which is part of an incomplete transaction. This is used to compute the
    * last stable offset (LSO) in ReplicaManager. Note that it is possible that the "true" first unstable offset
@@ -845,7 +846,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                 interBrokerProtocolVersion
               )
               validator.validateMessagesAndAssignOffsets(offset,
-                validatorMetricsRecorder(brokerTopicStats.allTopicsStats),
+                validatorMetricsRecorder,
                 requestLocal.getOrElse(throw new IllegalArgumentException(
                   "requestLocal should be defined if assignOffsets is true")
                 ).bufferSupplier
@@ -2190,7 +2191,7 @@ object UnifiedLog extends Logging {
   }
 
   // Visible for benchmarking
-  def validatorMetricsRecorder(allTopicsStats: BrokerTopicMetrics): LogValidator.MetricsRecorder = {
+  def newValidatorMetricsRecorder(allTopicsStats: BrokerTopicMetrics): LogValidator.MetricsRecorder = {
     new LogValidator.MetricsRecorder {
       def recordInvalidMagic(): Unit =
         allTopicsStats.invalidMagicNumberRecordsPerSec.mark()
