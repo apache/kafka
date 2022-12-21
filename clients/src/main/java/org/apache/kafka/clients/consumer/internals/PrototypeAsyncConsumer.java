@@ -113,6 +113,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 valueDeserializer, metrics.reporters(), interceptorList);
         this.eventHandler = new DefaultEventHandler(
                 config,
+                groupRebalanceConfig,
                 logContext,
                 subscriptions,
                 new ApiVersions(),
@@ -478,11 +479,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         CompletableFuture<Void> commitFuture = new CompletableFuture<>();
 
         public CommitApplicationEvent() {
-        }
-
-        @Override
-        public boolean process() {
-            return true;
+            super(Type.COMMIT);
         }
     }
 

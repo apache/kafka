@@ -32,6 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
+import org.apache.kafka.server.log.internals.{OffsetIndex, TimeIndex, TransactionIndex}
 import org.apache.kafka.snapshot.Snapshots
 
 import scala.jdk.CollectionConverters._
@@ -94,7 +95,7 @@ object DumpLogSegments {
 
   private def dumpTxnIndex(file: File): Unit = {
     val index = new TransactionIndex(UnifiedLog.offsetFromFile(file), file)
-    for (abortedTxn <- index.allAbortedTxns) {
+    for (abortedTxn <- index.allAbortedTxns.asScala) {
       println(s"version: ${abortedTxn.version} producerId: ${abortedTxn.producerId} firstOffset: ${abortedTxn.firstOffset} " +
         s"lastOffset: ${abortedTxn.lastOffset} lastStableOffset: ${abortedTxn.lastStableOffset}")
     }
@@ -128,7 +129,7 @@ object DumpLogSegments {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
-    val index = new OffsetIndex(file, baseOffset = startOffset, writable = false)
+    val index = new OffsetIndex(file, startOffset, -1, false)
 
     if (index.entries == 0) {
       println(s"$file is empty.")
@@ -170,8 +171,8 @@ object DumpLogSegments {
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
     val indexFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.IndexFileSuffix)
-    val index = new OffsetIndex(indexFile, baseOffset = startOffset, writable = false)
-    val timeIndex = new TimeIndex(file, baseOffset = startOffset, writable = false)
+    val index = new OffsetIndex(indexFile, startOffset, -1, false)
+    val timeIndex = new TimeIndex(file, startOffset, -1, false)
 
     try {
       //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.

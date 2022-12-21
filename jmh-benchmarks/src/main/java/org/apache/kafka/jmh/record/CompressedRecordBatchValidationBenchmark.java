@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.record;
 import kafka.common.LongRef;
 import kafka.log.AppendOrigin;
 import kafka.log.LogValidator;
-import kafka.message.CompressionCodec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -54,8 +53,8 @@ public class CompressedRecordBatchValidationBenchmark extends BaseRecordBatchBen
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
         LogValidator.validateMessagesAndAssignOffsetsCompressed(records, new TopicPartition("a", 0),
                 new LongRef(startingOffset), Time.SYSTEM, System.currentTimeMillis(),
-                CompressionCodec.getCompressionCodec(compressionType.id),
-                CompressionCodec.getCompressionCodec(compressionType.id),
+                compressionType,
+                compressionType,
                 false,  messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, 0,
                 new AppendOrigin.Client$(),
                 MetadataVersion.latest(),

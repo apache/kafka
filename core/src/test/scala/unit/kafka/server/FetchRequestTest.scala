@@ -17,14 +17,14 @@
 package kafka.server
 
 import kafka.log.LogConfig
-import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.server.record.BrokerCompressionType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -609,7 +609,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
   @Test
   def testZStdCompressedTopic(): Unit = {
     // ZSTD compressed topic
-    val topicConfig = Map(LogConfig.CompressionTypeProp -> ZStdCompressionCodec.name)
+    val topicConfig = Map(LogConfig.CompressionTypeProp -> BrokerCompressionType.ZSTD.name)
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, configs = topicConfig).head
     val topicIds = getTopicIds().asJava
     val topicNames = topicIds.asScala.map(_.swap).asJava
@@ -656,14 +656,14 @@ class FetchRequestTest extends BaseFetchRequestTest {
   @Test
   def testZStdCompressedRecords(): Unit = {
     // Producer compressed topic
-    val topicConfig = Map(LogConfig.CompressionTypeProp -> ProducerCompressionCodec.name)
+    val topicConfig = Map(LogConfig.CompressionTypeProp -> BrokerCompressionType.PRODUCER.name)
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, configs = topicConfig).head
     val topicIds = getTopicIds().asJava
     val topicNames = topicIds.asScala.map(_.swap).asJava
 
     // Produce GZIP compressed messages (v2)
     val producer1 = TestUtils.createProducer(bootstrapServers(),
-      compressionType = GZIPCompressionCodec.name,
+      compressionType = CompressionType.GZIP.name,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
     producer1.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
@@ -671,7 +671,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     producer1.close()
     // Produce ZSTD compressed messages (v2)
     val producer2 = TestUtils.createProducer(bootstrapServers(),
-      compressionType = ZStdCompressionCodec.name,
+      compressionType = CompressionType.ZSTD.name,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
     producer2.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
