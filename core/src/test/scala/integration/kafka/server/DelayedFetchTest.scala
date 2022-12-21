@@ -27,6 +27,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.server.log.internals.LogOffsetMetadata
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 import org.mockito.ArgumentMatchers.{any, anyInt}
@@ -46,7 +47,7 @@ class DelayedFetchTest {
     val replicaId = 1
 
     val fetchStatus = FetchPartitionStatus(
-      startOffsetMetadata = LogOffsetMetadata(fetchOffset),
+      startOffsetMetadata = new LogOffsetMetadata(fetchOffset),
       fetchInfo = new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
     val fetchParams = buildFollowerFetchParams(replicaId, maxWaitMs = 500)
 
@@ -92,7 +93,7 @@ class DelayedFetchTest {
     val replicaId = 1
 
     val fetchStatus = FetchPartitionStatus(
-      startOffsetMetadata = LogOffsetMetadata(fetchOffset),
+      startOffsetMetadata = new LogOffsetMetadata(fetchOffset),
       fetchInfo = new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
     val fetchParams = buildFollowerFetchParams(replicaId, maxWaitMs = 500)
 
@@ -129,7 +130,7 @@ class DelayedFetchTest {
     val replicaId = 1
 
     val fetchStatus = FetchPartitionStatus(
-      startOffsetMetadata = LogOffsetMetadata(fetchOffset),
+      startOffsetMetadata = new LogOffsetMetadata(fetchOffset),
       fetchInfo = new FetchRequest.PartitionData(topicIdPartition.topicId, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch, lastFetchedEpoch))
     val fetchParams = buildFollowerFetchParams(replicaId, maxWaitMs = 500)
 
@@ -148,7 +149,7 @@ class DelayedFetchTest {
 
     val partition: Partition = mock(classOf[Partition])
     when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition)).thenReturn(partition)
-    val endOffsetMetadata = LogOffsetMetadata(messageOffset = 500L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
+    val endOffsetMetadata = new LogOffsetMetadata(500L, 0L, 500)
     when(partition.fetchOffsetSnapshot(
       currentLeaderEpoch,
       fetchOnlyFromLeader = true))
@@ -199,7 +200,7 @@ class DelayedFetchTest {
   private def buildReadResult(error: Errors): LogReadResult = {
     LogReadResult(
       exception = if (error != Errors.NONE) Some(error.exception) else None,
-      info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+      info = FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
       divergingEpoch = None,
       highWatermark = -1L,
       leaderLogStartOffset = -1L,

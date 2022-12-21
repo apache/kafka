@@ -190,7 +190,7 @@ final class KafkaMetadataLog private (
   override def updateHighWatermark(offsetMetadata: LogOffsetMetadata): Unit = {
     offsetMetadata.metadata.asScala match {
       case Some(segmentPosition: SegmentPosition) => log.updateHighWatermark(
-        new kafka.server.LogOffsetMetadata(
+        new org.apache.kafka.server.log.internals.LogOffsetMetadata(
           offsetMetadata.offset,
           segmentPosition.baseOffset,
           segmentPosition.relativePosition)
