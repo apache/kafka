@@ -326,7 +326,7 @@ object Defaults {
   val LiCombinedControlRequestEnabled = false
   val LiUpdateMetadataDelayMs = 0
   val LiDropFetchFollowerEnable = false
-  val LiAlterIsrEnabled = true
+  val LiDenyAlterIsr = false
   val LiAsyncFetcherEnabled = false
   val LiNumControllerInitThreads = 1
   val LiLogCleanerFineGrainedLockEnabled = true
@@ -446,7 +446,7 @@ object KafkaConfig {
   val LiCombinedControlRequestEnableProp = "li.combined.control.request.enable"
   val LiUpdateMetadataDelayMsProp = "li.update.metadata.delay.ms"
   val LiDropFetchFollowerEnableProp = "li.stop.replication.enable"
-  val LiAlterIsrEnableProp = "li.alter.isr.enable"
+  val LiDenyAlterIsrProp = "li.deny.alter.isr"
   val LiNumControllerInitThreadsProp = "li.num.controller.init.threads"
   val LiLogCleanerFineGrainedLockEnableProp = "li.log.cleaner.fine.grained.lock.enable"
   val LiDropCorruptedFilesEnableProp = "li.drop.corrupted.files.enable"
@@ -791,7 +791,7 @@ object KafkaConfig {
   val LiDropCorruptedFilesEnableDoc = "Specifies whether the broker should delete corrupted files during startup."
   val LiConsumerFetchSampleRatioDoc = "Specifies the ratio of consumer Fetch requests to sample, which must be a number in the range [0.0, 1.0]. For now, the sampling is used to derive the age of consumed data."
   val LiDropFetchFollowerEnableDoc = "Specifies whether a leader should drop Fetch requests from followers. This config is used to simulate a slow leader and test the leader initiated leadership transfer"
-  val LiAlterIsrEnabledDoc = "Specifies whether the brokers should use the AlterISR request to propagate ISR changes to the controller. If set to false, brokers will propagate the updates via Zookeeper."
+  val LiDenyAlterIsrDoc = "Test only config, and never enable this in a real cluster. Specifies whether controller should deny the AlterISRRequest."
   val LiNumControllerInitThreadsDoc = "Number of threads (and Zookeeper clients + connections) to be used while recursing the topic-partitions tree in Zookeeper during controller startup/failover."
   val LiLogCleanerFineGrainedLockEnableDoc = "Specifies whether the log cleaner should use fine grained locks when calculating the filthiest log to clean"
   // Although AllowPreferredControllerFallback is expected to be configured dynamically at per cluster level, providing a static configuration entry
@@ -1235,7 +1235,7 @@ object KafkaConfig {
       .define(LiCombinedControlRequestEnableProp, BOOLEAN, Defaults.LiCombinedControlRequestEnabled, HIGH, LiCombinedControlRequestEnableDoc)
       .define(LiUpdateMetadataDelayMsProp, LONG, Defaults.LiUpdateMetadataDelayMs, atLeast(0), LOW, LiUpdateMetadataDelayMsDoc)
       .define(LiDropFetchFollowerEnableProp, BOOLEAN, Defaults.LiDropFetchFollowerEnable, LOW, LiDropFetchFollowerEnableDoc)
-      .define(LiAlterIsrEnableProp, BOOLEAN, Defaults.LiAlterIsrEnabled, HIGH, LiAlterIsrEnabledDoc)
+      .define(LiDenyAlterIsrProp, BOOLEAN, Defaults.LiDenyAlterIsr, HIGH, LiDenyAlterIsrDoc)
       .define(LiNumControllerInitThreadsProp, INT, Defaults.LiNumControllerInitThreads, atLeast(1), LOW, LiNumControllerInitThreadsDoc)
       .define(LiLogCleanerFineGrainedLockEnableProp, BOOLEAN, Defaults.LiLogCleanerFineGrainedLockEnabled, LOW, LiLogCleanerFineGrainedLockEnableDoc)
       .define(LiDropCorruptedFilesEnableProp, BOOLEAN, Defaults.LiDropCorruptedFilesEnabled, HIGH, LiDropCorruptedFilesEnableDoc)
@@ -1779,7 +1779,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def liCombinedControlRequestEnable = getBoolean(KafkaConfig.LiCombinedControlRequestEnableProp)
   def liUpdateMetadataDelayMs = getLong(KafkaConfig.LiUpdateMetadataDelayMsProp)
   def liDropFetchFollowerEnable = getBoolean(KafkaConfig.LiDropFetchFollowerEnableProp)
-  def liAlterIsrEnable = getBoolean(KafkaConfig.LiAlterIsrEnableProp)
+  def liDenyAlterIsr = getBoolean(KafkaConfig.LiDenyAlterIsrProp)
   def liNumControllerInitThreads = getInt(KafkaConfig.LiNumControllerInitThreadsProp)
   def liLogCleanerFineGrainedLockEnable = getBoolean(KafkaConfig.LiLogCleanerFineGrainedLockEnableProp)
   val liDropCorruptedFilesEnable = getBoolean(KafkaConfig.LiDropCorruptedFilesEnableProp)

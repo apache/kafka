@@ -3284,6 +3284,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
     val alterIsrRequest = request.body[AlterIsrRequest]
+    if (config.liDenyAlterIsr) {
+      throw new ClusterAuthorizationException(s"Request $request is denied in controller "+
+        "due to the li.deny.alter.isr config being true, which is not expected in a real cluster. "+
+        "If this happens in a real cluster, set li.deny.alter.isr to false")
+    }
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
     if (!zkSupport.controller.isActive)
