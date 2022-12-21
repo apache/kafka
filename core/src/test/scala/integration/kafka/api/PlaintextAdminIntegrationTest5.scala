@@ -40,7 +40,7 @@ import scala.jdk.CollectionConverters._
  *
  * Also see [[org.apache.kafka.clients.admin.KafkaAdminClientTest]] for unit tests of the admin client.
  */
-class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
+class PlaintextAdminIntegrationTest5 extends BaseAdminIntegrationTest {
 
   val topic = "topic"
   val partition = 0
@@ -1829,7 +1829,7 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
 
 }
 
-object PlaintextAdminIntegrationTest2 {
+object PlaintextAdminIntegrationTest5 {
 
   @nowarn("cat=deprecation")
   def checkValidAlterConfigs(

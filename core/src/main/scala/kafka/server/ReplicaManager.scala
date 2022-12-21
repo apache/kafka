@@ -2114,7 +2114,7 @@ class ReplicaManager(val config: KafkaConfig,
 
       // Handle partitions which we are now the leader or follower for.
       if (!localChanges.leaders.isEmpty || !localChanges.followers.isEmpty) {
-        System.err.println(s"$localBrokerId with $localChanges")
+        System.err.println(s"$localBrokerId with ${localChanges.leaders().keySet()},${localChanges.followers().keySet()}")
         val lazyOffsetCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
         val changedPartitions = new mutable.HashSet[Partition]
         if (!localChanges.leaders.isEmpty) {
@@ -2128,7 +2128,8 @@ class ReplicaManager(val config: KafkaConfig,
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
-        System.err.println(s"$localBrokerId change done")
+        System.err.print(s"$localBrokerId d")
+        System.err.flush()
       }
     }
   }
