@@ -428,9 +428,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      val offsetCommitResponseData = new OffsetCommitResponseData()
-      val topicsPendingPartitions = new mutable.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
-
       val authorizedTopics = authHelper.filterByAuthorized(
         request.context,
         READ,
@@ -438,76 +435,39 @@ class KafkaApis(val requestChannel: RequestChannel,
         offsetCommitRequest.data.topics.asScala
       )(_.name)
 
-      def makePartitionResponse(
-        partitionIndex: Int,
-        error: Errors
-      ): OffsetCommitResponseData.OffsetCommitResponsePartition = {
-        new OffsetCommitResponseData.OffsetCommitResponsePartition()
-          .setPartitionIndex(partitionIndex)
-          .setErrorCode(error.code)
-      }
-
-      def addTopicToResponse(
-        topic: OffsetCommitRequestData.OffsetCommitRequestTopic,
-        error: Errors
-      ): Unit = {
-        val topicResponse = new OffsetCommitResponseData.OffsetCommitResponseTopic().setName(topic.name)
-        offsetCommitResponseData.topics.add(topicResponse)
-        topic.partitions.forEach { partition =>
-          topicResponse.partitions.add(makePartitionResponse(partition.partitionIndex, error))
-        }
-      }
-
+      val responseBuilder = new OffsetCommitResponse.Builder()
       val authorizedTopicsRequest = new util.ArrayList[OffsetCommitRequestData.OffsetCommitRequestTopic]()
       offsetCommitRequest.data.topics.forEach { topic =>
         if (!authorizedTopics.contains(topic.name)) {
           // If the topic is not authorized, we add the topic and all its partitions
           // to the response with TOPIC_AUTHORIZATION_FAILED.
-          addTopicToResponse(topic, Errors.TOPIC_AUTHORIZATION_FAILED)
+          responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
+            topic.name, topic.partitions, _.partitionIndex, Errors.TOPIC_AUTHORIZATION_FAILED)
         } else if (!metadataCache.contains(topic.name)) {
           // If the topic is unknown, we add the topic and all its partitions
           // to the response with UNKNOWN_TOPIC_OR_PARTITION.
-          addTopicToResponse(topic, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
+            topic.name, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         } else {
           // Otherwise, we check all partitions to ensure that they all exist.
-          var topicRequestWithValidPartitions: OffsetCommitRequestData.OffsetCommitRequestTopic = null
-          var topicResponseWithInvalidPartitions: OffsetCommitResponseData.OffsetCommitResponseTopic = null
+          val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
             if (metadataCache.getPartitionInfo(topic.name, partition.partitionIndex).nonEmpty) {
-              // If the partition exists, we copy it into the valid set.
-              if (topicRequestWithValidPartitions == null) {
-                topicRequestWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic().setName(topic.name)
-              }
-              topicRequestWithValidPartitions.partitions.add(partition)
+              topicWithValidPartitions.partitions.add(partition)
             } else {
-              // Otherwise, we add it to the response with UNKNOWN_TOPIC_OR_PARTITION.
-              if (topicResponseWithInvalidPartitions == null) {
-                topicResponseWithInvalidPartitions = new OffsetCommitResponseData.OffsetCommitResponseTopic().setName(topic.name)
-              }
-              topicResponseWithInvalidPartitions.partitions.add(makePartitionResponse(partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION))
+              responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
             }
           }
 
-          // Known partitions are added to the authorized set.
-          if (topicRequestWithValidPartitions != null) {
-            authorizedTopicsRequest.add(topicRequestWithValidPartitions)
-          }
-
-          // Unknown partitions are added to the response.
-          if (topicResponseWithInvalidPartitions != null) {
-            offsetCommitResponseData.topics.add(topicResponseWithInvalidPartitions)
-            // We keep track of topics with both known and unknown partitions such
-            // that we can merge the response from the coordinator into it later on.
-            if (topicRequestWithValidPartitions != null) {
-              topicsPendingPartitions += topic.name -> topicResponseWithInvalidPartitions
-            }
+          if (!topicWithValidPartitions.partitions.isEmpty) {
+            authorizedTopicsRequest.add(topicWithValidPartitions)
           }
         }
       }
 
       if (authorizedTopicsRequest.isEmpty) {
-        requestHelper.sendMaybeThrottle(request, new OffsetCommitResponse(offsetCommitResponseData))
+        requestHelper.sendMaybeThrottle(request, responseBuilder.build())
         CompletableFuture.completedFuture[Unit](())
       } else if (request.header.apiVersion == 0) {
         // For version 0, always store offsets to ZK.
@@ -515,39 +475,26 @@ class KafkaApis(val requestChannel: RequestChannel,
           KafkaApis.unsupported("Version 0 offset commit requests"))
 
         authorizedTopicsRequest.forEach { topic =>
-          val topicResponse = topicsPendingPartitions.get(topic.name) match {
-            case None =>
-              // If there is no pending topic response, we create
-              // a new one and add it to the response.
-              val newTopicResponse = new OffsetCommitResponseData.OffsetCommitResponseTopic().setName(topic.name)
-              offsetCommitResponseData.topics.add(newTopicResponse)
-              newTopicResponse
-
-            case Some(existingTopicResponse) =>
-              // Otherwise, we use the existing one.
-              existingTopicResponse
-          }
-
           topic.partitions.forEach { partition =>
             try {
               if (partition.committedMetadata != null && partition.committedMetadata.length > config.offsetMetadataMaxSize) {
-                topicResponse.partitions.add(makePartitionResponse(partition.partitionIndex, Errors.OFFSET_METADATA_TOO_LARGE))
+                responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.OFFSET_METADATA_TOO_LARGE)
               } else {
                 zkSupport.zkClient.setOrCreateConsumerOffset(
                   offsetCommitRequest.data.groupId,
                   new TopicPartition(topic.name, partition.partitionIndex),
                   partition.committedOffset
                 )
-                topicResponse.partitions.add(makePartitionResponse(partition.partitionIndex, Errors.NONE))
+                responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.NONE)
               }
             } catch {
               case e: Throwable =>
-                topicResponse.partitions.add(makePartitionResponse(partition.partitionIndex, Errors.forException(e)))
+                responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.forException(e))
             }
           }
         }
 
-        requestHelper.sendMaybeThrottle(request, new OffsetCommitResponse(offsetCommitResponseData))
+        requestHelper.sendMaybeThrottle(request, responseBuilder.build())
         CompletableFuture.completedFuture[Unit](())
       } else {
         // Create a new request data with the authorized topic-partitions.
@@ -567,28 +514,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (exception != null) {
             requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
           } else {
-            if (offsetCommitResponseData.topics.isEmpty) {
-              // If the pre-processed response is empty, we can directly
-              // send back the new one.
-              requestHelper.sendMaybeThrottle(request, new OffsetCommitResponse(results))
-            } else {
-              // Otherwise, we have to add the topic-partitions from new
-              // one into the pre-processed one.
-              results.topics.forEach { topic =>
-                topicsPendingPartitions.get(topic.name) match {
-                  case None =>
-                    // If there is no pending topic response, we just
-                    // add the one we've got to the response.
-                    offsetCommitResponseData.topics.add(topic)
-
-                  case Some(existingTopicResponse) =>
-                    // Otherwise, we copy partitions to the pending
-                    // topic response.
-                    existingTopicResponse.partitions.addAll(topic.partitions)
-                }
-              }
-              requestHelper.sendMaybeThrottle(request, new OffsetCommitResponse(offsetCommitResponseData))
-            }
+            requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build())
           }
         }
       }
