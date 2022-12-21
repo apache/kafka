@@ -38,11 +38,13 @@ import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
-case class ControllerInformation(node: Option[Node],
-                                 listenerName: ListenerName,
-                                 securityProtocol: SecurityProtocol,
-                                 saslMechanism: String,
-                                 isZkController: Boolean)
+case class ControllerInformation(
+  node: Option[Node],
+  listenerName: ListenerName,
+  securityProtocol: SecurityProtocol,
+  saslMechanism: String,
+  isZkController: Boolean
+)
 
 trait ControllerNodeProvider {
   def getControllerInfo(): ControllerInformation
@@ -190,7 +192,7 @@ class BrokerToControllerChannelManagerImpl(
   }
 
   private[server] def newRequestThread = {
-    def networkClient(controllerInfo: ControllerInformation) = {
+    def buildNetworkClient(controllerInfo: ControllerInformation) = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
         controllerInfo.securityProtocol,
         JaasContext.Type.SERVER,
@@ -239,8 +241,11 @@ class BrokerToControllerChannelManagerImpl(
       case Some(name) => s"$name:BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName"
     }
 
+    val controllerInformation = controllerNodeProvider.getControllerInfo()
     new BrokerToControllerRequestThread(
-      networkClient,
+      buildNetworkClient(controllerInformation),
+      controllerInformation.isZkController,
+      buildNetworkClient,
       manualMetadataUpdater,
       controllerNodeProvider,
       config,
@@ -290,6 +295,8 @@ case class BrokerToControllerQueueItem(
 )
 
 class BrokerToControllerRequestThread(
+  initialNetworkClient: KafkaClient,
+  var isNetworkClientForZkController: Boolean,
   networkClientFactory: ControllerInformation => KafkaClient,
   metadataUpdater: ManualMetadataUpdater,
   controllerNodeProvider: ControllerNodeProvider,
@@ -297,22 +304,24 @@ class BrokerToControllerRequestThread(
   time: Time,
   threadName: String,
   retryTimeoutMs: Long
-) extends InterBrokerSendThread(threadName, null, Math.min(Int.MaxValue, Math.min(config.controllerSocketTimeoutMs, retryTimeoutMs)).toInt, time, isInterruptible = false) {
+) extends InterBrokerSendThread(
+  threadName,
+  initialNetworkClient,
+  Math.min(Int.MaxValue, Math.min(config.controllerSocketTimeoutMs, retryTimeoutMs)).toInt,
+  time,
+  isInterruptible = false
+) {
 
-  var isZkController = false
-  private def maybeResetNetworkClient(controllerInformation: ControllerInformation,
-                                      initialize: Boolean = false): Unit = {
-    if (initialize || isZkController != controllerInformation.isZkController) {
-      if (!initialize) {
-        debug("Controller changed to " + (if (isZkController) "zk" else "kraft") + " mode. " +
-          "Resetting network client")
-      }
+  private def maybeResetNetworkClient(controllerInformation: ControllerInformation): Unit = {
+    if (isNetworkClientForZkController != controllerInformation.isZkController) {
+      debug("Controller changed to " + (if (isNetworkClientForZkController) "kraft" else "zk") + " mode. " +
+        "Resetting network client")
       // Close existing network client.
       if (networkClient != null) {
         networkClient.initiateClose()
         networkClient.close()
       }
-      isZkController = controllerInformation.isZkController
+      isNetworkClientForZkController = controllerInformation.isZkController
       updateControllerAddress(controllerInformation.node.orNull)
       controllerInformation.node.foreach(n => metadataUpdater.setNodes(Seq(n).asJava))
       networkClient = networkClientFactory(controllerInformation)
@@ -321,7 +330,6 @@ class BrokerToControllerRequestThread(
 
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)
-  maybeResetNetworkClient(controllerNodeProvider.getControllerInfo(), initialize = true)
 
   // Used for testing
   @volatile
