@@ -17,7 +17,7 @@
 package kafka.log.remote
 
 import kafka.cluster.Partition
-import kafka.log.{OffsetIndex, TimeIndex, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.server.checkpoints.LeaderEpochCheckpoint
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.server.log.internals.{OffsetIndex, TimeIndex}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.test.TestUtils
@@ -187,9 +188,9 @@ class RemoteLogManagerTest {
         val indexType = ans.getArgument[IndexType](1)
         val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
         val offsetIdx = new OffsetIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.IndexFileSuffix),
-          metadata.startOffset(), maxIndexSize = maxEntries * 8)
+          metadata.startOffset(), maxEntries * 8)
         val timeIdx = new TimeIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.TimeIndexFileSuffix),
-          metadata.startOffset(), maxIndexSize = maxEntries * 12)
+          metadata.startOffset(), maxEntries * 12)
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
           case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
