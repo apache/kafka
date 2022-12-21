@@ -84,7 +84,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         return version >= 2;
     }
 
-    public short zkMigrationReady() {
+    public boolean zkMigrationReady() {
         return data.zkMigrationReady();
     }
 
