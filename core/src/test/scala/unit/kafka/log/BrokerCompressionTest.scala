@@ -19,6 +19,7 @@ package kafka.log
 
 import kafka.server.{BrokerTopicStats, FetchLogEnd}
 import kafka.utils._
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.log.internals.LogDirFailureChannel
@@ -50,7 +51,7 @@ class BrokerCompressionTest {
   def testBrokerSideCompression(messageCompression: String, brokerCompression: String): Unit = {
     val messageCompressionType = CompressionType.forName(messageCompression)
     val logProps = new Properties()
-    logProps.put(LogConfig.CompressionTypeProp, brokerCompression)
+    logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, brokerCompression)
     /*configure broker-side compression  */
     val log = UnifiedLog(
       dir = logDir,

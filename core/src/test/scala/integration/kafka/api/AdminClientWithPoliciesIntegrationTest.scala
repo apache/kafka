@@ -16,7 +16,6 @@ package kafka.api
 import java.util
 import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
 import kafka.utils.TestUtils.assertFutureExceptionTypeEquals
 import kafka.utils.{Logging, TestInfoUtils, TestUtils}
@@ -86,8 +85,8 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     val topic1 = "describe-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
     val topicConfig1 = new Properties
-    topicConfig1.setProperty(LogConfig.MaxMessageBytesProp, "500000")
-    topicConfig1.setProperty(LogConfig.RetentionMsProp, "60000000")
+    topicConfig1.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "500000")
+    topicConfig1.setProperty(TopicConfig.RETENTION_MS_CONFIG, "60000000")
     createTopic(topic1, 1, 1, topicConfig1)
 
     val topic2 = "describe-alter-configs-topic-2"
@@ -132,13 +131,13 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     validations.clear()
 
     val topicConfigEntries1 = Seq(
-      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"),
-      new ConfigEntry(LogConfig.MinInSyncReplicasProp, "2") // policy doesn't allow this
+      new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"),
+      new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2") // policy doesn't allow this
     ).asJava
 
-    var topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.8")).asJava
+    var topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.8")).asJava
 
-    val topicConfigEntries3 = Seq(new ConfigEntry(LogConfig.MinInSyncReplicasProp, "-1")).asJava
+    val topicConfigEntries3 = Seq(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "-1")).asJava
 
     val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.SslTruststorePasswordProp, "12313")).asJava
 
@@ -165,15 +164,15 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     var configs = describeResult.all.get
     assertEquals(4, configs.size)
 
-    assertEquals(Defaults.LogCleanerMinCleanRatio.toString, configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals(Defaults.MinInSyncReplicas.toString, configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
+    assertEquals(Defaults.LogCleanerMinCleanRatio.toString, configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
+    assertEquals(Defaults.MinInSyncReplicas.toString, configs.get(topicResource1).get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value)
 
-    assertEquals("0.8", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
 
     assertNull(configs.get(brokerResource).get(KafkaConfig.SslTruststorePasswordProp).value)
 
     // Alter configs with validateOnly = true: only second is valid
-    topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.7")).asJava
+    topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.7")).asJava
 
     alterResult = client.alterConfigs(Map(
       topicResource1 -> new Config(topicConfigEntries1),
@@ -197,10 +196,10 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     configs = describeResult.all.get
     assertEquals(4, configs.size)
 
-    assertEquals(Defaults.LogCleanerMinCleanRatio.toString, configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals(Defaults.MinInSyncReplicas.toString, configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
+    assertEquals(Defaults.LogCleanerMinCleanRatio.toString, configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
+    assertEquals(Defaults.MinInSyncReplicas.toString, configs.get(topicResource1).get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value)
 
-    assertEquals("0.8", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
 
     assertNull(configs.get(brokerResource).get(KafkaConfig.SslTruststorePasswordProp).value)
 

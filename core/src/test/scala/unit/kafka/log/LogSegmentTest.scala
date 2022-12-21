@@ -17,12 +17,12 @@
 package kafka.log
 
 import java.io.File
-
 import kafka.server.checkpoints.LeaderEpochCheckpoint
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.junit.jupiter.api.Assertions._
@@ -467,9 +467,9 @@ class LogSegmentTest {
   private def createSegment(baseOffset: Long, fileAlreadyExists: Boolean, initFileSize: Int, preallocate: Boolean): LogSegment = {
     val tempDir = TestUtils.tempDir()
     val logConfig = LogConfig(Map(
-      LogConfig.IndexIntervalBytesProp -> 10,
-      LogConfig.SegmentIndexBytesProp -> 1000,
-      LogConfig.SegmentJitterMsProp -> 0
+      TopicConfig.INDEX_INTERVAL_BYTES_CONFIG -> 10,
+      TopicConfig.SEGMENT_INDEX_BYTES_CONFIG -> 1000,
+      TopicConfig.SEGMENT_JITTER_MS_CONFIG -> 0
     ).asJava)
     val seg = LogSegment.open(tempDir, baseOffset, logConfig, Time.SYSTEM, fileAlreadyExists = fileAlreadyExists,
       initFileSize = initFileSize, preallocate = preallocate)
@@ -494,9 +494,9 @@ class LogSegmentTest {
   def testCreateWithInitFileSizeClearShutdown(): Unit = {
     val tempDir = TestUtils.tempDir()
     val logConfig = LogConfig(Map(
-      LogConfig.IndexIntervalBytesProp -> 10,
-      LogConfig.SegmentIndexBytesProp -> 1000,
-      LogConfig.SegmentJitterMsProp -> 0
+      TopicConfig.INDEX_INTERVAL_BYTES_CONFIG -> 10,
+      TopicConfig.SEGMENT_INDEX_BYTES_CONFIG -> 1000,
+      TopicConfig.SEGMENT_JITTER_MS_CONFIG -> 0
     ).asJava)
 
     val seg = LogSegment.open(tempDir, baseOffset = 40, logConfig, Time.SYSTEM,

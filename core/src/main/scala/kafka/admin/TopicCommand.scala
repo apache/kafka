@@ -435,8 +435,8 @@ object TopicCommand extends Logging {
     val props = new Properties
     configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).trim))
     LogConfig.validate(props)
-    if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
-      println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
+    if (props.containsKey(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)) {
+      println(s"WARNING: The configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG}=${props.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)} is specified. " +
         "This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker or " +
         "if the inter.broker.protocol.version is 3.0 or newer. This configuration is deprecated and it will be removed in Apache Kafka 4.0.")
     }

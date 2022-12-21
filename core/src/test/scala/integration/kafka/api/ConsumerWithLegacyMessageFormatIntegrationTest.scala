@@ -16,10 +16,10 @@
  */
 package kafka.api
 
-import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.api.Test
 
@@ -43,7 +43,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     val topic2 = "part-test-topic-2"
     val topic3 = "part-test-topic-3"
     val props = new Properties()
-    props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
+    props.setProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")
     createTopic(topic1, numParts, 1)
     // Topic2 is in old message format.
     createTopic(topic2, numParts, 1, props)
@@ -108,7 +108,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     val producer = createProducer(configOverrides = prop)
     createTopicAndSendRecords(producer, topicName = topic0, numPartitions = 2, recordsPerPartition = 100)
     val props = new Properties()
-    props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
+    props.setProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")
     createTopic(topic1, numPartitions = 1, replicationFactor = 1, props)
     sendRecords(producer, numRecords = 100, new TopicPartition(topic1, 0))
 

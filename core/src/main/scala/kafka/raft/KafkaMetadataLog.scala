@@ -20,7 +20,7 @@ import kafka.log.{Defaults, LogConfig, LogOffsetSnapshot, ProducerStateManagerCo
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, RequestLocal}
 import kafka.utils.{CoreUtils, Logging, Scheduler}
-import org.apache.kafka.common.config.AbstractConfig
+import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.{ControlRecordUtils, MemoryRecords, Records}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
@@ -557,14 +557,14 @@ object KafkaMetadataLog extends Logging {
     config: MetadataLogConfig
   ): KafkaMetadataLog = {
     val props = new Properties()
-    props.setProperty(LogConfig.MaxMessageBytesProp, config.maxBatchSizeInBytes.toString)
-    props.setProperty(LogConfig.SegmentBytesProp, config.logSegmentBytes.toString)
-    props.setProperty(LogConfig.SegmentMsProp, config.logSegmentMillis.toString)
-    props.setProperty(LogConfig.FileDeleteDelayMsProp, Defaults.FileDeleteDelayMs.toString)
+    props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.maxBatchSizeInBytes.toString)
+    props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
+    props.setProperty(TopicConfig.SEGMENT_MS_CONFIG, config.logSegmentMillis.toString)
+    props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, Defaults.FileDeleteDelayMs.toString)
 
     // Disable time and byte retention when deleting segments
-    props.setProperty(LogConfig.RetentionMsProp, "-1")
-    props.setProperty(LogConfig.RetentionBytesProp, "-1")
+    props.setProperty(TopicConfig.RETENTION_MS_CONFIG, "-1")
+    props.setProperty(TopicConfig.RETENTION_BYTES_CONFIG, "-1")
     LogConfig.validate(props)
     val defaultLogConfig = LogConfig(props)
 
@@ -574,11 +574,11 @@ object KafkaMetadataLog extends Logging {
       )
     } else if (defaultLogConfig.retentionMs >= 0) {
       throw new InvalidConfigurationException(
-        s"Cannot set ${LogConfig.RetentionMsProp} above -1: ${defaultLogConfig.retentionMs}."
+        s"Cannot set ${TopicConfig.RETENTION_MS_CONFIG} above -1: ${defaultLogConfig.retentionMs}."
       )
     } else if (defaultLogConfig.retentionSize >= 0) {
       throw new InvalidConfigurationException(
-        s"Cannot set ${LogConfig.RetentionBytesProp} above -1: ${defaultLogConfig.retentionSize}."
+        s"Cannot set ${TopicConfig.RETENTION_BYTES_CONFIG} above -1: ${defaultLogConfig.retentionSize}."
       )
     }
 

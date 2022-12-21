@@ -200,8 +200,8 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
 
     def makeConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String) = {
       val props = new Properties()
-      props.setProperty(LogConfig.MaxMessageBytesProp, messageSize.toString)
-      props.setProperty(LogConfig.RetentionMsProp, retentionMs.toString)
+      props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, messageSize.toString)
+      props.setProperty(TopicConfig.RETENTION_MS_CONFIG, retentionMs.toString)
       props.setProperty(LogConfig.LeaderReplicationThrottledReplicasProp, throttledLeaders)
       props.setProperty(LogConfig.FollowerReplicationThrottledReplicasProp, throttledFollowers)
       props

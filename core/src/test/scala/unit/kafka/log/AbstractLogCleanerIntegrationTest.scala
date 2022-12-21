@@ -23,6 +23,7 @@ import kafka.server.BrokerTopicStats
 import kafka.utils.{MockTime, Pool, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.log.internals.LogDirFailureChannel
@@ -65,15 +66,15 @@ abstract class AbstractLogCleanerIntegrationTest {
                           segmentSize: Int = defaultSegmentSize,
                           maxCompactionLagMs: Long = defaultMaxCompactionLagMs): Properties = {
     val props = new Properties()
-    props.put(LogConfig.MaxMessageBytesProp, maxMessageSize: java.lang.Integer)
-    props.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
-    props.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
-    props.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
-    props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-    props.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
-    props.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
-    props.put(LogConfig.MinCompactionLagMsProp, minCompactionLagMs: java.lang.Long)
-    props.put(LogConfig.MaxCompactionLagMsProp, maxCompactionLagMs: java.lang.Long)
+    props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageSize: java.lang.Integer)
+    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentSize: java.lang.Integer)
+    props.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 100*1024: java.lang.Integer)
+    props.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, deleteDelay: java.lang.Integer)
+    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    props.put(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, minCleanableDirtyRatio: java.lang.Float)
+    props.put(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.MaxValue.toString)
+    props.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, minCompactionLagMs: java.lang.Long)
+    props.put(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, maxCompactionLagMs: java.lang.Long)
     props ++= propertyOverrides
     props
   }

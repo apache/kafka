@@ -16,18 +16,18 @@
  */
 package kafka.server
 
-import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.Record
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.AfterEach
+
 import java.util
 import java.util.{Optional, Properties}
-
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -85,7 +85,7 @@ class BaseFetchRequestTest extends BaseRequestTest {
   protected def createTopics(numTopics: Int, numPartitions: Int, configs: Map[String, String] = Map.empty): Map[TopicPartition, Int] = {
     val topics = (0 until numTopics).map(t => s"topic$t")
     val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 2.toString)
+    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
     configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
     topics.flatMap { topic =>
       val partitionToLeader = createTopic(topic, numPartitions = numPartitions, replicationFactor = 2,

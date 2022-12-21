@@ -30,7 +30,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
-import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
@@ -99,16 +99,16 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
   @nowarn("cat=deprecation")
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     // Verify message format version
-    Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
+    Option(topicConfig.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)).flatMap { versionString =>
       val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
       if (messageFormatVersion.shouldIgnore) {
         if (messageFormatVersion.shouldWarn)
           warn(messageFormatVersion.topicWarningMessage(topic))
-        Some(LogConfig.MessageFormatVersionProp)
+        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
       } else if (kafkaConfig.interBrokerProtocolVersion.isLessThan(messageFormatVersion.messageFormatVersion)) {
-        warn(s"Topic configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
+        warn(s"Topic configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG} is ignored for `$topic` because `$versionString` " +
           s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
-        Some(LogConfig.MessageFormatVersionProp)
+        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
       } else
         None
     }.toSet

@@ -16,8 +16,6 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.log.LogConfig
-
 import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.TimeUnit
@@ -27,6 +25,7 @@ import kafka.server.{Defaults, FetchLogEnd, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.utils.Implicits._
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ListTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
@@ -402,11 +401,11 @@ class TransactionStateManager(brokerId: Int,
     val props = new Properties
 
     // enforce disabled unclean leader election, no compression types, and compact cleanup policy
-    props.put(LogConfig.UncleanLeaderElectionEnableProp, "false")
-    props.put(LogConfig.CompressionTypeProp, BrokerCompressionType.UNCOMPRESSED.name)
-    props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-    props.put(LogConfig.MinInSyncReplicasProp, config.transactionLogMinInsyncReplicas.toString)
-    props.put(LogConfig.SegmentBytesProp, config.transactionLogSegmentBytes.toString)
+    props.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
+    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name)
+    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    props.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.transactionLogMinInsyncReplicas.toString)
+    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.transactionLogSegmentBytes.toString)
 
     props
   }

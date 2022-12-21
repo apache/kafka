@@ -22,6 +22,7 @@ import java.util.concurrent.{Callable, Executors}
 
 import kafka.server.{BrokerTopicStats, FetchHighWatermark}
 import kafka.utils.{KafkaScheduler, TestUtils}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.log.internals.LogDirFailureChannel
@@ -57,7 +58,7 @@ class LogConcurrencyTest {
   @Test
   def testUncommittedDataNotConsumedFrequentSegmentRolls(): Unit = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 237: Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 237: Integer)
     val logConfig = LogConfig(logProps)
     testUncommittedDataNotConsumed(createLog(logConfig))
   }

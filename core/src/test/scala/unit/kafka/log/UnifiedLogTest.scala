@@ -28,6 +28,7 @@ import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, PartitionMetadataFile}
 import kafka.utils._
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -985,7 +986,7 @@ class UnifiedLogTest {
 
   @Test
   def testCompactionDeletesProducerStateSnapshots(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5, cleanupPolicy = LogConfig.Compact, fileDeleteDelayMs = 0)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5, cleanupPolicy = TopicConfig.CLEANUP_POLICY_COMPACT, fileDeleteDelayMs = 0)
     val log = createLog(logDir, logConfig)
     val pid1 = 1L
     val epoch = 0.toShort
@@ -1779,7 +1780,7 @@ class UnifiedLogTest {
     val messageSetWithKeyedMessage = MemoryRecords.withRecords(CompressionType.NONE, keyedMessage)
     val messageSetWithKeyedMessages = MemoryRecords.withRecords(CompressionType.NONE, keyedMessage, anotherKeyedMessage)
 
-    val logConfig = LogTestUtils.createLogConfig(cleanupPolicy = LogConfig.Compact)
+    val logConfig = LogTestUtils.createLogConfig(cleanupPolicy = TopicConfig.CLEANUP_POLICY_COMPACT)
     val log = createLog(logDir, logConfig)
 
     val errorMsgPrefix = "Compacted topic cannot accept message without key"
@@ -2391,10 +2392,10 @@ class UnifiedLogTest {
     assertEquals(Some(5), log.latestEpoch)
 
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, "1000")
-    logProps.put(LogConfig.IndexIntervalBytesProp, "1")
-    logProps.put(LogConfig.MaxMessageBytesProp, "65536")
-    logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
+    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
+    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
     val downgradedLogConfig = LogConfig(logProps)
     log.updateConfig(downgradedLogConfig)
     LogTestUtils.assertLeaderEpochCacheEmpty(log)
@@ -2408,17 +2409,17 @@ class UnifiedLogTest {
   @Test
   def testLeaderEpochCacheCreatedAfterMessageFormatUpgrade(): Unit = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, "1000")
-    logProps.put(LogConfig.IndexIntervalBytesProp, "1")
-    logProps.put(LogConfig.MaxMessageBytesProp, "65536")
-    logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
+    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
+    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
     val logConfig = LogConfig(logProps)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
       magicValue = RecordVersion.V1.value), leaderEpoch = 5)
     LogTestUtils.assertLeaderEpochCacheEmpty(log)
 
-    logProps.put(LogConfig.MessageFormatVersionProp, "0.11.0")
+    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
     val upgradedLogConfig = LogConfig(logProps)
     log.updateConfig(upgradedLogConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
@@ -3549,11 +3550,11 @@ class UnifiedLogTest {
       log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
       assertTrue(log.remoteLogEnabled())
 
-      logConfig = LogTestUtils.createLogConfig(cleanupPolicy = LogConfig.Compact, remoteLogStorageEnable = true)
+      logConfig = LogTestUtils.createLogConfig(cleanupPolicy = TopicConfig.CLEANUP_POLICY_COMPACT, remoteLogStorageEnable = true)
       log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
       assertFalse(log.remoteLogEnabled())
 
-      logConfig = LogTestUtils.createLogConfig(cleanupPolicy = LogConfig.Compact + "," + LogConfig.Delete,
+      logConfig = LogTestUtils.createLogConfig(cleanupPolicy = TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE,
         remoteLogStorageEnable = true)
       log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
       assertFalse(log.remoteLogEnabled())

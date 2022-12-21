@@ -62,11 +62,11 @@ class LogConfigTest {
 
     val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
     val logProps = LogConfig.extractLogConfigMap(kafkaConfig)
-    assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentMsProp))
-    assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
-    assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))
+    assertEquals(2 * millisInHour, logProps.get(TopicConfig.SEGMENT_MS_CONFIG))
+    assertEquals(2 * millisInHour, logProps.get(TopicConfig.SEGMENT_JITTER_MS_CONFIG))
+    assertEquals(2 * millisInHour, logProps.get(TopicConfig.RETENTION_MS_CONFIG))
     // The message format version should always be 3.0 if the inter-broker protocol version is 3.0 or higher
-    assertEquals(IBP_3_0_IV1.version, logProps.get(LogConfig.MessageFormatVersionProp))
+    assertEquals(IBP_3_0_IV1.version, logProps.get(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG))
   }
 
   @Test
@@ -80,16 +80,16 @@ class LogConfigTest {
   @Test
   def testFromPropsInvalid(): Unit = {
     LogConfig.configNames.foreach(name => name match {
-      case LogConfig.UncleanLeaderElectionEnableProp => assertPropertyInvalid(name, "not a boolean")
-      case LogConfig.RetentionBytesProp => assertPropertyInvalid(name, "not_a_number")
-      case LogConfig.RetentionMsProp => assertPropertyInvalid(name, "not_a_number" )
-      case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar")
-      case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
-      case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
-      case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
-      case LogConfig.RemoteLogStorageEnableProp => assertPropertyInvalid(name, "not_a_boolean")
-      case LogConfig.LocalLogRetentionMsProp => assertPropertyInvalid(name, "not_a_number", "-3")
-      case LogConfig.LocalLogRetentionBytesProp => assertPropertyInvalid(name, "not_a_number", "-3")
+      case TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG => assertPropertyInvalid(name, "not a boolean")
+      case TopicConfig.RETENTION_BYTES_CONFIG => assertPropertyInvalid(name, "not_a_number")
+      case TopicConfig.RETENTION_MS_CONFIG => assertPropertyInvalid(name, "not_a_number" )
+      case TopicConfig.CLEANUP_POLICY_CONFIG => assertPropertyInvalid(name, "true", "foobar")
+      case TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
+      case TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG => assertPropertyInvalid(name, "not_a_number", "0", "-1")
+      case TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG => assertPropertyInvalid(name, "")
+      case TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG => assertPropertyInvalid(name, "not_a_boolean")
+      case TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG => assertPropertyInvalid(name, "not_a_number", "-3")
+      case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG => assertPropertyInvalid(name, "not_a_number", "-3")
 
       case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
@@ -98,8 +98,8 @@ class LogConfigTest {
   @Test
   def testInvalidCompactionLagConfig(): Unit = {
     val props = new Properties
-    props.setProperty(LogConfig.MaxCompactionLagMsProp, "100")
-    props.setProperty(LogConfig.MinCompactionLagMsProp, "200")
+    props.setProperty(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, "100")
+    props.setProperty(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, "200")
     assertThrows(classOf[Exception], () => LogConfig.validate(props))
   }
 
@@ -184,9 +184,9 @@ class LogConfigTest {
     val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
     val topicOverrides = new Properties
     // Only set as a topic config
-    topicOverrides.setProperty(LogConfig.MinInSyncReplicasProp, "2")
+    topicOverrides.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
     // Overrides value from broker config
-    topicOverrides.setProperty(LogConfig.RetentionBytesProp, "100")
+    topicOverrides.setProperty(TopicConfig.RETENTION_BYTES_CONFIG, "100")
     // Unknown topic config, but known broker config
     topicOverrides.setProperty(KafkaConfig.SslTruststorePasswordProp, "sometrustpasswrd")
     // Unknown config
@@ -219,8 +219,8 @@ class LogConfigTest {
     val props = new Properties()
     val retentionBytes = 1024
     val retentionMs = 1000L
-    props.put(LogConfig.RetentionBytesProp, retentionBytes.toString)
-    props.put(LogConfig.RetentionMsProp, retentionMs.toString)
+    props.put(TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes.toString)
+    props.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs.toString)
     val logConfig = new LogConfig(props)
 
     assertEquals(retentionMs, logConfig.remoteLogConfig.localRetentionMs)
@@ -241,11 +241,11 @@ class LogConfigTest {
     val props = new Properties()
     val localRetentionMs = 500
     val localRetentionBytes = 1000
-    props.put(LogConfig.RetentionBytesProp, 2000.toString)
-    props.put(LogConfig.RetentionMsProp, 1000.toString)
+    props.put(TopicConfig.RETENTION_BYTES_CONFIG, 2000.toString)
+    props.put(TopicConfig.RETENTION_MS_CONFIG, 1000.toString)
 
-    props.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs.toString)
-    props.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes.toString)
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs.toString)
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes.toString)
     val logConfig = new LogConfig(props)
 
     assertEquals(localRetentionMs, logConfig.remoteLogConfig.localRetentionMs)
@@ -275,11 +275,11 @@ class LogConfigTest {
 
   private def doTestInvalidLocalLogRetentionProps(localRetentionMs: Long, localRetentionBytes: Int, retentionBytes: Int, retentionMs: Long) = {
     val props = new Properties()
-    props.put(LogConfig.RetentionBytesProp, retentionBytes.toString)
-    props.put(LogConfig.RetentionMsProp, retentionMs.toString)
+    props.put(TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes.toString)
+    props.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs.toString)
 
-    props.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs.toString)
-    props.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes.toString)
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs.toString)
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes.toString)
     assertThrows(classOf[ConfigException], () => new LogConfig(props));
   }
 }

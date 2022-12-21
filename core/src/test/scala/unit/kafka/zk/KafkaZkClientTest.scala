@@ -30,6 +30,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
 import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
@@ -735,7 +736,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
     assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
 
-    logProps.remove(LogConfig.CleanupPolicyProp)
+    logProps.remove(TopicConfig.CLEANUP_POLICY_CONFIG)
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
     assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
 
@@ -765,9 +766,9 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
   private def createLogProps(bytesProp: Int): Properties = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, bytesProp.toString)
-    logProps.put(LogConfig.SegmentIndexBytesProp, bytesProp.toString)
-    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, bytesProp.toString)
+    logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, bytesProp.toString)
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
     logProps
   }
 
@@ -793,12 +794,12 @@ class KafkaZkClientTest extends QuorumTestHarness {
       "Two existing topics")
 
     val logProps1WithMoreValues = createLogProps(1024)
-    logProps1WithMoreValues.put(LogConfig.SegmentJitterMsProp, "100")
-    logProps1WithMoreValues.put(LogConfig.SegmentBytesProp, "1024")
+    logProps1WithMoreValues.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, "100")
+    logProps1WithMoreValues.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1024")
 
     assertEquals((Map(topic1 -> LogConfig(logProps1WithMoreValues)), Map.empty),
       zkClient.getLogConfigs(Set(topic1),
-        Map[String, AnyRef](LogConfig.SegmentJitterMsProp -> "100", LogConfig.SegmentBytesProp -> "128").asJava),
+        Map[String, AnyRef](TopicConfig.SEGMENT_JITTER_MS_CONFIG -> "100", TopicConfig.SEGMENT_BYTES_CONFIG -> "128").asJava),
       "Config with defaults")
   }
 

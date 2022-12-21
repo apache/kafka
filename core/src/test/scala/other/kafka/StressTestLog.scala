@@ -19,11 +19,11 @@ package kafka
 
 import java.util.Properties
 import java.util.concurrent.atomic._
-
 import kafka.log._
 import kafka.server.{BrokerTopicStats, FetchLogEnd}
 import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.log.internals.LogDirFailureChannel
@@ -39,9 +39,9 @@ object StressTestLog {
     val dir = TestUtils.randomPartitionLogDir(TestUtils.tempDir())
     val time = new MockTime
     val logProperties = new Properties()
-    logProperties.put(LogConfig.SegmentBytesProp, 64*1024*1024: java.lang.Integer)
-    logProperties.put(LogConfig.MaxMessageBytesProp, Int.MaxValue: java.lang.Integer)
-    logProperties.put(LogConfig.SegmentIndexBytesProp, 1024*1024: java.lang.Integer)
+    logProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, 64*1024*1024: java.lang.Integer)
+    logProperties.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Int.MaxValue: java.lang.Integer)
+    logProperties.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1024*1024: java.lang.Integer)
 
     val log = UnifiedLog(dir = dir,
       config = LogConfig(logProperties),

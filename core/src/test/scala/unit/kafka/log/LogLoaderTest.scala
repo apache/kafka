@@ -26,6 +26,7 @@ import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig}
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.{CoreUtils, MockTime, Scheduler, TestUtils}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, DefaultRecordBatch, MemoryRecords, RecordBatch, RecordVersion, SimpleRecord, TimestampType}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -293,8 +294,8 @@ class LogLoaderTest {
   @nowarn("cat=deprecation")
   private def testProducerSnapshotsRecoveryAfterUncleanShutdown(messageFormatVersion: String): Unit = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, "640")
-    logProps.put(LogConfig.MessageFormatVersionProp, messageFormatVersion)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "640")
+    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, messageFormatVersion)
     val logConfig = LogConfig(logProps)
     var log = createLog(logDir, logConfig)
     assertEquals(None, log.oldestProducerSnapshotOffset)
@@ -524,7 +525,7 @@ class LogLoaderTest {
 
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logProps = new Properties()
-    logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
+    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
     val config = LogConfig(logProps)
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
@@ -578,7 +579,7 @@ class LogLoaderTest {
 
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logProps = new Properties()
-    logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
+    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
     val config = LogConfig(logProps)
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
@@ -631,7 +632,7 @@ class LogLoaderTest {
 
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logProps = new Properties()
-    logProps.put(LogConfig.MessageFormatVersionProp, "0.11.0")
+    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
     val config = LogConfig(logProps)
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
@@ -863,9 +864,9 @@ class LogLoaderTest {
     val numMessages = 200
     val segmentSize = 200
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, segmentSize.toString)
-    logProps.put(LogConfig.IndexIntervalBytesProp, "1")
-    logProps.put(LogConfig.MessageFormatVersionProp, "0.9.0")
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentSize.toString)
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
+    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")
     val logConfig = LogConfig(logProps)
     var log = createLog(logDir, logConfig)
     for (i <- 0 until numMessages)
@@ -1091,10 +1092,10 @@ class LogLoaderTest {
 
     // reopen the log with an older message format version and check the cache
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, "1000")
-    logProps.put(LogConfig.IndexIntervalBytesProp, "1")
-    logProps.put(LogConfig.MaxMessageBytesProp, "65536")
-    logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
+    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
+    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
     val downgradedLogConfig = LogConfig(logProps)
     val reopened = createLog(logDir, downgradedLogConfig, lastShutdownClean = false)
     LogTestUtils.assertLeaderEpochCacheEmpty(reopened)

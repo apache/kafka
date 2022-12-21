@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import kafka.log
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, LazyIndex, TransactionIndex}
 
 import scala.collection.Iterable
@@ -66,17 +67,17 @@ object LogTestUtils {
                       fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs,
                       remoteLogStorageEnable: Boolean = Defaults.RemoteLogStorageEnable): LogConfig = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentMsProp, segmentMs: java.lang.Long)
-    logProps.put(LogConfig.SegmentBytesProp, segmentBytes: Integer)
-    logProps.put(LogConfig.RetentionMsProp, retentionMs: java.lang.Long)
-    logProps.put(LogConfig.RetentionBytesProp, retentionBytes: java.lang.Long)
-    logProps.put(LogConfig.SegmentJitterMsProp, segmentJitterMs: java.lang.Long)
-    logProps.put(LogConfig.CleanupPolicyProp, cleanupPolicy)
-    logProps.put(LogConfig.MaxMessageBytesProp, maxMessageBytes: Integer)
-    logProps.put(LogConfig.IndexIntervalBytesProp, indexIntervalBytes: Integer)
-    logProps.put(LogConfig.SegmentIndexBytesProp, segmentIndexBytes: Integer)
-    logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
-    logProps.put(LogConfig.RemoteLogStorageEnableProp, remoteLogStorageEnable: java.lang.Boolean)
+    logProps.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs: java.lang.Long)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentBytes: Integer)
+    logProps.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs: java.lang.Long)
+    logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes: java.lang.Long)
+    logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, segmentJitterMs: java.lang.Long)
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicy)
+    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes: Integer)
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, indexIntervalBytes: Integer)
+    logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, segmentIndexBytes: Integer)
+    logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, fileDeleteDelayMs: java.lang.Long)
+    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, remoteLogStorageEnable: java.lang.Boolean)
     LogConfig(logProps)
   }
 

@@ -27,6 +27,7 @@ import kafka.server.{BrokerTopicStats, FetchLogEnd, KafkaRaftServer}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
@@ -64,7 +65,7 @@ class DumpLogSegmentsTest {
   @BeforeEach
   def setUp(): Unit = {
     val props = new Properties
-    props.setProperty(LogConfig.IndexIntervalBytesProp, "128")
+    props.setProperty(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "128")
     log = UnifiedLog(
       dir = logDir,
       config = LogConfig(props),

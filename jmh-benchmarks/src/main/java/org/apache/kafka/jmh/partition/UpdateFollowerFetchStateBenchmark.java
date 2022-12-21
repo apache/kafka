@@ -34,6 +34,7 @@ import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.KafkaScheduler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -154,16 +155,16 @@ public class UpdateFollowerFetchStateBenchmark {
 
     private LogConfig createLogConfig() {
         Properties logProps = new Properties();
-        logProps.put(LogConfig.SegmentMsProp(), Defaults.SegmentMs());
-        logProps.put(LogConfig.SegmentBytesProp(), Defaults.SegmentSize());
-        logProps.put(LogConfig.RetentionMsProp(), Defaults.RetentionMs());
-        logProps.put(LogConfig.RetentionBytesProp(), Defaults.RetentionSize());
-        logProps.put(LogConfig.SegmentJitterMsProp(), Defaults.SegmentJitterMs());
-        logProps.put(LogConfig.CleanupPolicyProp(), Defaults.CleanupPolicy());
-        logProps.put(LogConfig.MaxMessageBytesProp(), Defaults.MaxMessageSize());
-        logProps.put(LogConfig.IndexIntervalBytesProp(), Defaults.IndexInterval());
-        logProps.put(LogConfig.SegmentIndexBytesProp(), Defaults.MaxIndexSize());
-        logProps.put(LogConfig.FileDeleteDelayMsProp(), Defaults.FileDeleteDelayMs());
+        logProps.put(TopicConfig.SEGMENT_MS_CONFIG, Defaults.SegmentMs());
+        logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, Defaults.SegmentSize());
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, Defaults.RetentionMs());
+        logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, Defaults.RetentionSize());
+        logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, Defaults.SegmentJitterMs());
+        logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, Defaults.CleanupPolicy());
+        logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Defaults.MaxMessageSize());
+        logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, Defaults.IndexInterval());
+        logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, Defaults.MaxIndexSize());
+        logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, Defaults.FileDeleteDelayMs());
         return LogConfig.apply(logProps, new scala.collection.immutable.HashSet<>());
     }
 
