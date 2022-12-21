@@ -354,27 +354,27 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
 
         while (reader.hasNext()) {
             Batch<ApiMessageAndVersion> batch = reader.next();
-            if (transactionEpoch != -1 && transactionEpoch != batch.epoch()) {
-                abortTransaction("the log epoch changed to " + batch.epoch(), batch.baseOffset());
-            }
-            int indexWithinBatch = 0;
+            int i = 0;
             for (ApiMessageAndVersion record : batch.records()) {
                 switch (MetadataRecordType.fromId(record.message().apiKey())) {
                     case BEGIN_TRANSACTION_RECORD:
-                        beginTransaction(batch.epoch(), batch.baseOffset() + indexWithinBatch);
+                        beginTransaction(batch.epoch(), batch.baseOffset() + i);
                         break;
                     case END_TRANSACTION_RECORD:
-                        endTransaction(delta, batch.baseOffset() + indexWithinBatch);
+                        endTransaction(delta, batch.baseOffset() + i);
+                        break;
+                    case ABORT_TRANSACTION_RECORD:
+                        abortTransaction("an abort transaction record appeared", batch.baseOffset() + i);
                         break;
                     default:
                         if (transactionEpoch == -1) {
-                            applyRecordToDelta(delta, record, batch.baseOffset() + indexWithinBatch);
+                            applyRecordToDelta(delta, record, batch.baseOffset() + i);
                         } else {
                             transactionRecords.add(record);
                         }
                         break;
                 }
-                indexWithinBatch++;
+                i++;
             }
             metrics.updateBatchSize(batch.records().size());
             lastOffset = batch.lastOffset();

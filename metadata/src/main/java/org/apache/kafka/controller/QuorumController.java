@@ -48,6 +48,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
+import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
@@ -846,17 +847,11 @@ public final class QuorumController implements Controller {
             appendRaftEvent("handleCommit[baseOffset=" + reader.baseOffset() + "]", () -> {
                 try {
                     maybeCompleteAuthorizerInitialLoad();
-                    long processedRecordsSize = 0;
                     boolean isActive = isActiveController();
                     while (reader.hasNext()) {
                         Batch<ApiMessageAndVersion> batch = reader.next();
                         long offset = batch.lastOffset();
                         int epoch = batch.epoch();
-                        if (transactionEpoch != -1) {
-                            if (epoch != transactionEpoch) {
-                                abortTransaction("the log epoch changed to " + epoch, batch.baseOffset());
-                            }
-                        }
                         List<ApiMessageAndVersion> messages = batch.records();
 
                         if (isActive) {
@@ -1141,9 +1136,16 @@ public final class QuorumController implements Controller {
                 records.addAll(bootstrapMetadata.records());
                 records.add(new ApiMessageAndVersion(
                         new EndTransactionRecord(), (short) 0));
-            } else if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
-                log.info("No metadata.version feature level record was found in the log. " +
-                        "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
+            } else {
+                if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
+                    log.info("No metadata.version feature level record was found in the log. " +
+                            "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
+                }
+                if (transactionEpoch != -1) {
+                    log.info("Generating AbortTransactionReccord for in-progress transaction {}_{}",
+                            transactionOffset, transactionOffset);
+                    records.add(new ApiMessageAndVersion(new AbortTransactionRecord(), (short) 0));
+                }
             }
             return ControllerResult.atomicOf(records, null);
         }
@@ -1422,6 +1424,9 @@ public final class QuorumController implements Controller {
                 break;
             case END_TRANSACTION_RECORD:
                 endTransaction(offset);
+                break;
+            case ABORT_TRANSACTION_RECORD:
+                abortTransaction("an abort transaction record appeared", offset);
                 break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);

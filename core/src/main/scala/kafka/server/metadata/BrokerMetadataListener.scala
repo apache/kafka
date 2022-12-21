@@ -20,7 +20,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.CompletableFuture
 import kafka.metrics.KafkaMetricsGroup
-import org.apache.kafka.common.metadata.{BeginTransactionRecord, EndTransactionRecord}
+import org.apache.kafka.common.metadata.MetadataRecordType
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.image.writer.{ImageWriterOptions, RecordListWriter}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
@@ -269,10 +269,6 @@ class BrokerMetadataListener(
 
     while (iterator.hasNext) {
       val batch = iterator.next()
-
-      if (_transactionEpoch != -1 && _transactionEpoch != batch.epoch) {
-        abortTransaction("the log epoch changed to " + batch.epoch, batch.baseOffset)
-      }
       _highestEpoch = lastCommittedEpoch.getOrElse(batch.epoch())
       _highestTimestamp = lastAppendTimestamp.getOrElse(batch.appendTimestamp())
 
@@ -283,24 +279,31 @@ class BrokerMetadataListener(
             s" ${messageAndVersion.message}")
         }
         _highestOffset = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
-        if (messageAndVersion.message().isInstanceOf[BeginTransactionRecord]) {
-          if (snapshotName.isDefined) {
-            metadataLoadingFaultHandler.handleFault("begin transaction record is not supported in snapshots.")
-          } else {
-            beginTransaction(batch.epoch, batch.baseOffset + index)
-          }
-        } else if (messageAndVersion.message().isInstanceOf[EndTransactionRecord]) {
-          if (snapshotName.isDefined) {
-            metadataLoadingFaultHandler.handleFault("end transaction record is not supported in snapshots.")
-          } else {
-            endTransaction(delta, batch.baseOffset + index)
-          }
-        } else {
-          if (_transactionEpoch == -1) {
-            applyRecordToDelta(delta, messageAndVersion, batch.baseOffset, index, snapshotName)
-          } else {
-            _transactionRecords.add(messageAndVersion)
-          }
+        MetadataRecordType.fromId(messageAndVersion.message().apiKey()) match {
+          case MetadataRecordType.BEGIN_TRANSACTION_RECORD =>
+            if (snapshotName.isDefined) {
+              metadataLoadingFaultHandler.handleFault("begin transaction record is not supported in snapshots.")
+            } else {
+              beginTransaction(batch.epoch, batch.baseOffset + index)
+            }
+          case MetadataRecordType.END_TRANSACTION_RECORD =>
+            if (snapshotName.isDefined) {
+              metadataLoadingFaultHandler.handleFault("end transaction record is not supported in snapshots.")
+            } else {
+              endTransaction(delta, batch.baseOffset + index)
+            }
+          case MetadataRecordType.ABORT_TRANSACTION_RECORD =>
+            if (snapshotName.isDefined) {
+              metadataLoadingFaultHandler.handleFault("abort transaction record is not supported in snapshots.")
+            } else {
+              abortTransaction("an abort transaction record appeared", batch.baseOffset + index)
+            }
+          case _ =>
+            if (_transactionEpoch == -1) {
+              applyRecordToDelta(delta, messageAndVersion, batch.baseOffset, index, snapshotName)
+            } else {
+              _transactionRecords.add(messageAndVersion)
+            }
         }
         numRecords += 1
         index += 1

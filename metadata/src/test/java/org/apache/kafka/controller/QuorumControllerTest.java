@@ -99,7 +99,6 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.snapshot.FileRawSnapshotReader;
-import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Disabled;
