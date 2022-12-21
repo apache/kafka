@@ -49,9 +49,11 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
+import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
+import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
@@ -686,7 +688,15 @@ public final class QuorumController implements Controller {
                             int i = 1;
                             for (ApiMessageAndVersion message : records) {
                                 try {
-                                    replay(message.message(), Optional.empty(), prevEndOffset + records.size());
+                                    // Note: the correctness of this code depends on the fact that
+                                    // no additional control records will be inserted between the
+                                    // last append and this one. This should be a safe assumption
+                                    // except in the case where we have lost leadership. (In which
+                                    // case, we have to revert to an in-memory snapshot anyway.)
+                                    replay(message.message(),
+                                            Optional.empty(),
+                                            prevEndOffset + i,
+                                            controllerEpoch);
                                 } catch (Throwable e) {
                                     String failureMessage = String.format("Unable to apply %s record, which was " +
                                             "%d of %d record(s) in the batch following last write offset %d.",
@@ -819,6 +829,17 @@ public final class QuorumController implements Controller {
         return event.future();
     }
 
+    /**
+     * Returns the lowest offset that we need to keep an in-memory snapshot for.
+     */
+    long lowestKeepOffset(long newCommittedOffset) {
+        if (transactionOffset != -1L && transactionOffset < newCommittedOffset) {
+            return transactionOffset;
+        } else {
+            return newCommittedOffset;
+        }
+    }
+
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
         @Override
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
@@ -831,6 +852,11 @@ public final class QuorumController implements Controller {
                         Batch<ApiMessageAndVersion> batch = reader.next();
                         long offset = batch.lastOffset();
                         int epoch = batch.epoch();
+                        if (transactionEpoch != -1) {
+                            if (epoch != transactionEpoch) {
+                                abortTransaction("the log epoch changed to " + epoch, batch.baseOffset());
+                            }
+                        }
                         List<ApiMessageAndVersion> messages = batch.records();
 
                         if (isActive) {
@@ -841,8 +867,8 @@ public final class QuorumController implements Controller {
                             // Complete any events in the purgatory that were waiting for this offset.
                             purgatory.completeUpTo(offset);
 
-                            // The active controller can delete up to the current committed offset.
-                            snapshotRegistry.deleteSnapshotsUpTo(offset);
+                            // Maybe purge some in-memory snapshots if they are not needed.
+                            snapshotRegistry.deleteSnapshotsUpTo(lowestKeepOffset(offset));
                         } else {
                             // If the controller is a standby, replay the records that were
                             // created by the active controller.
@@ -860,7 +886,7 @@ public final class QuorumController implements Controller {
                             int i = 1;
                             for (ApiMessageAndVersion message : messages) {
                                 try {
-                                    replay(message.message(), Optional.empty(), offset);
+                                    replay(message.message(), Optional.empty(), offset + i - 1, epoch);
                                 } catch (Throwable e) {
                                     String failureMessage = String.format("Unable to apply %s record on standby " +
                                             "controller, which was %d of %d record(s) in the batch with baseOffset %d.",
@@ -923,7 +949,10 @@ public final class QuorumController implements Controller {
                         int i = 1;
                         for (ApiMessageAndVersion message : messages) {
                             try {
-                                replay(message.message(), Optional.of(reader.snapshotId()), reader.lastContainedLogOffset());
+                                replay(message.message(),
+                                        Optional.of(reader.snapshotId()),
+                                        reader.lastContainedLogOffset(),
+                                        reader.snapshotId().epoch());
                             } catch (Throwable e) {
                                 String failureMessage = String.format("Unable to apply %s record " +
                                         "from snapshot %s on standby controller, which was %d of " +
@@ -994,6 +1023,42 @@ public final class QuorumController implements Controller {
             });
         }
     }
+
+    private void beginTransaction(
+        long newTransactionOffset,
+        int newTransactionEpoch
+    ) {
+        if (transactionEpoch != -1) {
+            abortTransaction("a new begin transaction record appeared", newTransactionOffset);
+        }
+        transactionOffset = newTransactionOffset;
+        transactionEpoch = newTransactionEpoch;
+        snapshotRegistry.getOrCreateSnapshot(transactionOffset);
+        log.debug("Beginning metadata transaction {}_{}.", transactionOffset, transactionEpoch);
+    }
+
+    private void endTransaction(long offset) {
+        if (transactionEpoch == -1) {
+            throw fatalFaultHandler.handleFault("Tried to end a transaction at offset " + offset +
+                " but there was no current transaction.");
+        }
+        transactionOffset = -1L;
+        transactionEpoch = -1;
+        log.debug("Completing metadata transaction {}_{}.", transactionOffset, transactionEpoch);
+    }
+
+    private void abortTransaction(String reason, long offset) {
+        if (transactionEpoch == -1) {
+            throw fatalFaultHandler.handleFault("Tried to abort a transaction because " + reason +
+                    " at offset " + offset + " but there was no current transaction.");
+        }
+        log.info("Aborting metadata transaction {}_{} because {} at offset {}.",
+                transactionOffset, transactionEpoch, reason, offset);
+        snapshotRegistry.revertToSnapshot(transactionOffset);
+        transactionOffset = -1L;
+        transactionEpoch = -1;
+    }
+
 
     private void maybeCompleteAuthorizerInitialLoad() {
         if (!needToCompleteAuthorizerLoad) return;
@@ -1071,7 +1136,11 @@ public final class QuorumController implements Controller {
                 log.info("The metadata log appears to be empty. Appending {} bootstrap record(s) " +
                         "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
                         bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
+                records.add(new ApiMessageAndVersion(
+                        new BeginTransactionRecord().setName("initial transaction"), (short) 0));
                 records.addAll(bootstrapMetadata.records());
+                records.add(new ApiMessageAndVersion(
+                        new EndTransactionRecord(), (short) 0));
             } else if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
                 log.info("No metadata.version feature level record was found in the log. " +
                         "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
@@ -1287,15 +1356,20 @@ public final class QuorumController implements Controller {
      *
      * @param message           The metadata record
      * @param snapshotId        The snapshotId if this record is from a snapshot
-     * @param batchLastOffset   The offset of the last record in the log batch, or the lastContainedLogOffset
-     *                          if this record is from a snapshot, this is used along with RegisterBrokerRecord
+     * @param offset            The record offset or snapshot offset.
+     * @param epoch             The log epoch of the record or snapshot offset.
      */
-    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long batchLastOffset) {
+    private void replay(
+        ApiMessage message,
+        Optional<OffsetAndEpoch> snapshotId,
+        long offset,
+        int epoch
+    ) {
         logReplayTracker.replay(message);
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
         switch (type) {
             case REGISTER_BROKER_RECORD:
-                clusterControl.replay((RegisterBrokerRecord) message, batchLastOffset);
+                clusterControl.replay((RegisterBrokerRecord) message, offset);
                 break;
             case UNREGISTER_BROKER_RECORD:
                 clusterControl.replay((UnregisterBrokerRecord) message);
@@ -1343,6 +1417,12 @@ public final class QuorumController implements Controller {
             case NO_OP_RECORD:
                 // NoOpRecord is an empty record and doesn't need to be replayed
                 break;
+            case BEGIN_TRANSACTION_RECORD:
+                beginTransaction(offset, epoch);
+                break;
+            case END_TRANSACTION_RECORD:
+                endTransaction(offset);
+                break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
         }
@@ -1355,6 +1435,9 @@ public final class QuorumController implements Controller {
         snapshotRegistry.reset();
 
         updateLastCommittedState(-1, -1, -1);
+
+        this.transactionOffset = -1L;
+        this.transactionEpoch = -1;
     }
 
     /**
@@ -1487,6 +1570,16 @@ public final class QuorumController implements Controller {
      * thread, but it can be read from other threads.
      */
     private volatile int curClaimEpoch;
+
+    /**
+     * If we are in a transaction, this is the log start offset. Otherwise, this is -1L.
+     */
+    private long transactionOffset;
+
+    /**
+     * If we are in a transaction, this is the log epoch. Otherwise, this is -1.
+     */
+    private int transactionEpoch;
 
     /**
      * The last offset we have committed, or -1 if we have not committed any offsets.

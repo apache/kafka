@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image.loader;
 
+import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
@@ -36,6 +37,7 @@ import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -182,6 +184,21 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
      * The current leader and epoch.
      */
     private LeaderAndEpoch currentLeaderAndEpoch = LeaderAndEpoch.UNKNOWN;
+
+    /**
+     * The log epoch of the current transaction, or -1 if there is none.
+     */
+    private int transactionEpoch = -1;
+
+    /**
+     * The log offset of the current transaction, or -1L if there is none.
+     */
+    private long transactionOffset = -1L;
+
+    /**
+     * Pending records in the current transaction, or null if there is none such.
+     */
+    private List<ApiMessageAndVersion> transactionRecords = null;
 
     /**
      * The current metadata image. Accessed only from the event queue thread.
@@ -337,13 +354,25 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
 
         while (reader.hasNext()) {
             Batch<ApiMessageAndVersion> batch = reader.next();
+            if (transactionEpoch != -1 && transactionEpoch != batch.epoch()) {
+                abortTransaction("the log epoch changed to " + batch.epoch(), batch.baseOffset());
+            }
             int indexWithinBatch = 0;
             for (ApiMessageAndVersion record : batch.records()) {
-                try {
-                    delta.replay(record.message());
-                } catch (Throwable e) {
-                    faultHandler.handleFault("Error loading metadata log record from offset " +
-                            batch.baseOffset() + indexWithinBatch, e);
+                switch (MetadataRecordType.fromId(record.message().apiKey())) {
+                    case BEGIN_TRANSACTION_RECORD:
+                        beginTransaction(batch.epoch(), batch.baseOffset() + indexWithinBatch);
+                        break;
+                    case END_TRANSACTION_RECORD:
+                        endTransaction(delta, batch.baseOffset() + indexWithinBatch);
+                        break;
+                    default:
+                        if (transactionEpoch == -1) {
+                            applyRecordToDelta(delta, record, batch.baseOffset() + indexWithinBatch);
+                        } else {
+                            transactionRecords.add(record);
+                        }
+                        break;
                 }
                 indexWithinBatch++;
             }
@@ -362,6 +391,63 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 numBatches,
                 elapsedNs,
                 numBytes);
+    }
+
+    void beginTransaction(
+        int newTransactionEpoch,
+        long newTransactionOffset
+    ) {
+        if (transactionEpoch != -1) {
+            abortTransaction("a new begin transaction record appeared", newTransactionOffset);
+        }
+        transactionEpoch = newTransactionEpoch;
+        transactionOffset = newTransactionOffset;
+        transactionRecords = new ArrayList<>();
+        log.debug("Beginning metadata transaction {}_{}.", transactionOffset, transactionEpoch);
+    }
+
+    void endTransaction(
+        MetadataDelta delta,
+        long endOffset
+    ) {
+        log.debug("Ending metadata transaction {}_{} at offset {}", transactionOffset,
+                transactionEpoch, endOffset);
+        long offset = transactionOffset;
+        for (ApiMessageAndVersion record : transactionRecords) {
+            applyRecordToDelta(delta, record, offset);
+            offset++;
+        }
+        transactionEpoch = -1;
+        transactionOffset = -1L;
+        transactionRecords = null;
+    }
+
+    void abortTransaction(
+        String reason,
+        long offset
+    ) {
+        if (transactionEpoch == -1) {
+            throw faultHandler.handleFault("Tried to abort a transaction because " + reason +
+                    " at offset " + offset + " but there was no current transaction.");
+        }
+        log.info("Aborting metadata transaction {}_{} because {} at offset {}.",
+                transactionOffset, transactionEpoch, reason, offset);
+        transactionEpoch = -1;
+        transactionOffset = -1L;
+        transactionRecords = null;
+    }
+
+    void applyRecordToDelta(
+        MetadataDelta delta,
+        ApiMessageAndVersion record,
+        long recordOffset
+    ) {
+        try {
+            delta.replay(record.message());
+        } catch (Throwable e) {
+            faultHandler.handleFault("Error loading metadata log record from offset " +
+                    recordOffset, e);
+        }
     }
 
     @Override

@@ -20,6 +20,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.CompletableFuture
 import kafka.metrics.KafkaMetricsGroup
+import org.apache.kafka.common.metadata.{BeginTransactionRecord, EndTransactionRecord}
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.image.writer.{ImageWriterOptions, RecordListWriter}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
@@ -75,6 +76,21 @@ class BrokerMetadataListener(
    * The highest metadata log time that we've seen. Written only from the event queue thread.
    */
   private var _highestTimestamp = -1L
+
+  /**
+   * The log epoch of the current transaction, or -1 if there is none.
+   */
+  private var _transactionEpoch = -1;
+
+  /**
+   * The log offset of the current transaction, or -1L if there is none.
+   */
+  private var _transactionOffset = -1L;
+
+  /**
+   * Pending records in the current transaction, or null if there is none such.
+   */
+  private var _transactionRecords: util.ArrayList[ApiMessageAndVersion] = _
 
   private def provenance(): MetadataProvenance =
     new MetadataProvenance(_highestOffset, _highestEpoch, _highestTimestamp)
@@ -254,6 +270,9 @@ class BrokerMetadataListener(
     while (iterator.hasNext) {
       val batch = iterator.next()
 
+      if (_transactionEpoch != -1 && _transactionEpoch != batch.epoch) {
+        abortTransaction("the log epoch changed to " + batch.epoch, batch.baseOffset)
+      }
       _highestEpoch = lastCommittedEpoch.getOrElse(batch.epoch())
       _highestTimestamp = lastAppendTimestamp.getOrElse(batch.appendTimestamp())
 
@@ -264,19 +283,27 @@ class BrokerMetadataListener(
             s" ${messageAndVersion.message}")
         }
         _highestOffset = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
-        try {
-          delta.replay(messageAndVersion.message())
-        } catch {
-          case e: Throwable => snapshotName match {
-            case None => metadataLoadingFaultHandler.handleFault(
-              s"Error replaying metadata log record at offset ${_highestOffset}", e)
-            case Some(name) => metadataLoadingFaultHandler.handleFault(
-              s"Error replaying record ${index} from snapshot ${name} at offset ${_highestOffset}", e)
+        if (messageAndVersion.message().isInstanceOf[BeginTransactionRecord]) {
+          if (snapshotName.isDefined) {
+            metadataLoadingFaultHandler.handleFault("begin transaction record is not supported in snapshots.")
+          } else {
+            beginTransaction(batch.epoch, batch.baseOffset + index)
           }
-        } finally {
-          numRecords += 1
-          index += 1
+        } else if (messageAndVersion.message().isInstanceOf[EndTransactionRecord]) {
+          if (snapshotName.isDefined) {
+            metadataLoadingFaultHandler.handleFault("end transaction record is not supported in snapshots.")
+          } else {
+            endTransaction(delta, batch.baseOffset + index)
+          }
+        } else {
+          if (_transactionEpoch == -1) {
+            applyRecordToDelta(delta, messageAndVersion, batch.baseOffset, index, snapshotName)
+          } else {
+            _transactionRecords.add(messageAndVersion)
+          }
         }
+        numRecords += 1
+        index += 1
       }
       numBytes = numBytes + batch.sizeInBytes()
       brokerMetrics.updateBatchSize(batch.records().size())
@@ -287,6 +314,59 @@ class BrokerMetadataListener(
     val elapsedNs = endTimeNs - startTimeNs
     brokerMetrics.updateBatchProcessingTime(elapsedNs)
     BatchLoadResults(numBatches, numRecords, NANOSECONDS.toMicros(elapsedNs), numBytes)
+  }
+
+  private def applyRecordToDelta(
+    delta: MetadataDelta,
+    messageAndVersion: ApiMessageAndVersion,
+    baseOffset: Long,
+    index: Int,
+    snapshotName: Option[String]
+  ): Unit = {
+    try {
+      delta.replay(messageAndVersion.message())
+    } catch {
+      case e: Throwable => snapshotName match {
+        case None => metadataLoadingFaultHandler.handleFault(
+          s"Error replaying metadata log record at offset ${baseOffset + index}", e)
+        case Some(name) => metadataLoadingFaultHandler.handleFault(
+          s"Error replaying record ${index} from snapshot ${name} at offset ${_highestOffset}", e)
+      }
+    }
+  }
+
+  private def beginTransaction(newTransactionEpoch: Int, newTransactionOffset: Long): Unit = {
+    if (_transactionEpoch != -1) {
+      abortTransaction("a new begin transaction record appeared", newTransactionOffset)
+    }
+    _transactionEpoch = newTransactionEpoch
+    _transactionOffset = newTransactionOffset
+    _transactionRecords = new util.ArrayList[ApiMessageAndVersion]
+    log.debug("Beginning metadata transaction {}_{}.", _transactionOffset, _transactionEpoch)
+  }
+
+  private def endTransaction(delta: MetadataDelta, endOffset: Long): Unit = {
+    log.debug("Ending metadata transaction {}_{} at offset {}", _transactionOffset, _transactionEpoch, endOffset)
+    var index = 0
+    _transactionRecords.forEach(record => {
+      applyRecordToDelta(delta, record, _transactionOffset, index, None)
+      index += 1
+    })
+    _transactionEpoch = -1
+    _transactionOffset = -1L
+    _transactionRecords = null
+  }
+
+  private def abortTransaction(reason: String, offset: Long): Unit = {
+    if (_transactionEpoch == -1) {
+      throw metadataLoadingFaultHandler.handleFault("Tried to abort a transaction because " +
+        reason + " at offset " + offset + " but there was no current transaction.")
+    }
+    log.info("Aborting metadata transaction {}_{} because {} at offset {}.",
+       _transactionOffset, _transactionEpoch, reason, offset)
+    _transactionEpoch = -1
+    _transactionOffset = -1L
+    _transactionRecords = null
   }
 
   def startPublishing(publisher: MetadataPublisher): CompletableFuture[Void] = {
