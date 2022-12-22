@@ -26,7 +26,7 @@ import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
-import kafka.server.LogDirFailureChannel;
+import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;

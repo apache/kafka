@@ -42,6 +42,7 @@ import kafka.utils.Implicits._
 import java.util.Properties
 
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
 
 import scala.annotation.nowarn
 
