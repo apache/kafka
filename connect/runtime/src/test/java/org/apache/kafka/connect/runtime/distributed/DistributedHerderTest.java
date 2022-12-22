@@ -3673,6 +3673,7 @@ public class DistributedHerderTest {
         // and immediately stop it.
         herder.stop();
 
+        PowerMock.verifyAll();
     }
 
     private void expectRebalance(final long offset,
