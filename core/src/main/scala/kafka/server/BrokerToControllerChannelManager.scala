@@ -304,7 +304,7 @@ class BrokerToControllerRequestThread(
                                       initialize: Boolean = false): Unit = {
     if (initialize || isZkController != controllerInformation.isZkController) {
       if (!initialize) {
-        debug("Controller changed to " + (if (isZkController) "zk" else "kraft") + " mode. " +
+        debug("Controller changed to " + (if (isZkController) "kraft" else "zk") + " mode. " +
           "Resetting network client")
       }
       // Close existing network client.
