@@ -412,7 +412,7 @@ subprojects {
       // connect tests
       "**/ConnectorPluginsResourceTest.*",
       "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
-      "**/ErrorHandlingTaskTest.*", "**/KafkaConfigBackingStoreTest.*",
+      "**/KafkaConfigBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
       "**/SourceTaskOffsetCommitterTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
