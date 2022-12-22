@@ -452,6 +452,7 @@ object TestUtils extends Logging {
     } catch {
       case e: ExecutionException => if (!(e.getCause != null &&
           e.getCause.isInstanceOf[TopicExistsException] &&
+          !waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions).isEmpty &&
           topicHasSameNumPartitionsAndReplicationFactor(admin, topic,
             effectiveNumPartitions, replicationFactor))) {
         throw e
