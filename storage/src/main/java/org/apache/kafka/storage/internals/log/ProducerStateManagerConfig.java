@@ -19,7 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import java.util.Collections;
 import java.util.Set;
 
-//todo-refactoring Add respective config changes once https://issues.apache.org/jira/browse/KAFKA-14478 is completed
+//todo-refactoring Add respective config changes once https://issues.apache.org/jira/browse/KAFKA-14613 is completed
 public class ProducerStateManagerConfig { // extends BrokerReconfigurable
     //todo-refactoring replace later with KafkaConfig.ProducerIdExpirationMsProp
     public static final Set<String> RECONFIGURABLE_CONFIGS = Collections.singleton("producer.id.expiration.ms");

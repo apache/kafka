@@ -34,7 +34,7 @@ import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
-import org.apache.kafka.storage.internals.log.{CorruptSnapshotException, OffsetIndex, TimeIndex, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{CorruptSnapshotException, OffsetIndex, ProducerStateManager, TimeIndex, TransactionIndex}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -104,7 +104,7 @@ object DumpLogSegments {
 
   private def dumpProducerIdSnapshot(file: File): Unit = {
     try {
-      ProducerStateManager.readSnapshot(file).foreach { entry =>
+      ProducerStateManager.readSnapshot(file).asScala.foreach { entry =>
         print(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} " +
           s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset} " +
           s"lastTimestamp: ${entry.lastTimestamp} ")
