@@ -189,14 +189,17 @@ public class MirrorCheckpointTask extends SourceTask {
 
     Optional<Checkpoint> checkpoint(String group, TopicPartition topicPartition,
                                     OffsetAndMetadata offsetAndMetadata) {
-        long upstreamOffset = offsetAndMetadata.offset();
-        OptionalLong downstreamOffset = offsetSyncStore.translateDownstream(topicPartition, upstreamOffset);
-        if (downstreamOffset.isPresent()) {
-            return Optional.of(new Checkpoint(group, renameTopicPartition(topicPartition),
+        if (offsetAndMetadata != null) {
+            long upstreamOffset = offsetAndMetadata.offset();
+            OptionalLong downstreamOffset =
+                offsetSyncStore.translateDownstream(topicPartition, upstreamOffset);
+            if (downstreamOffset.isPresent()) {
+                return Optional.of(new Checkpoint(group, renameTopicPartition(topicPartition),
                     upstreamOffset, downstreamOffset.getAsLong(), offsetAndMetadata.metadata()));
-        } else {
-            return Optional.empty();
+            }
         }
+        return Optional.empty();
+
     }
 
     SourceRecord checkpointRecord(Checkpoint checkpoint, long timestamp) {
