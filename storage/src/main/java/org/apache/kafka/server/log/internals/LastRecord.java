@@ -36,20 +36,25 @@ public final class LastRecord {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
+
         LastRecord that = (LastRecord) o;
-        return producerEpoch == that.producerEpoch && Objects.equals(lastDataOffset, that.lastDataOffset);
+
+        if (producerEpoch != that.producerEpoch) return false;
+        return Objects.equals(lastDataOffset, that.lastDataOffset);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(lastDataOffset, producerEpoch);
+        int result = lastDataOffset != null ? lastDataOffset.hashCode() : 0;
+        result = 31 * result + (int) producerEpoch;
+        return result;
     }
 
     @Override
     public String toString() {
-        return "LastRecord{" +
+        return "LastRecord(" +
                 "lastDataOffset=" + lastDataOffset +
                 ", producerEpoch=" + producerEpoch +
-                '}';
+                ')';
     }
 }

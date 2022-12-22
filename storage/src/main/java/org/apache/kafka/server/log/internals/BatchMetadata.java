@@ -18,8 +18,6 @@ package org.apache.kafka.server.log.internals;
 
 import org.apache.kafka.common.record.DefaultRecordBatch;
 
-import java.util.Objects;
-
 public class BatchMetadata {
 
     public final int lastSeq;
@@ -50,22 +48,31 @@ public class BatchMetadata {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
+
         BatchMetadata that = (BatchMetadata) o;
-        return lastSeq == that.lastSeq && lastOffset == that.lastOffset && offsetDelta == that.offsetDelta && timestamp == that.timestamp;
+
+        if (lastSeq != that.lastSeq) return false;
+        if (lastOffset != that.lastOffset) return false;
+        if (offsetDelta != that.offsetDelta) return false;
+        return timestamp == that.timestamp;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(lastSeq, lastOffset, offsetDelta, timestamp);
+        int result = lastSeq;
+        result = 31 * result + (int) (lastOffset ^ (lastOffset >>> 32));
+        result = 31 * result + offsetDelta;
+        result = 31 * result + (int) (timestamp ^ (timestamp >>> 32));
+        return result;
     }
 
     @Override
     public String toString() {
-        return "BatchMetadata{" +
+        return "BatchMetadata(" +
                 "lastSeq=" + lastSeq +
                 ", lastOffset=" + lastOffset +
                 ", offsetDelta=" + offsetDelta +
                 ", timestamp=" + timestamp +
-                '}';
+                ')';
     }
 }

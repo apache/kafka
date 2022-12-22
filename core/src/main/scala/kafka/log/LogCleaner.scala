@@ -681,7 +681,7 @@ private[log] class Cleaner(val id: Int,
           // 3) The last entry in the log is a transaction marker. We retain this marker since it has the
           //    last producer epoch, which is needed to ensure fencing.
           lastRecordsOfActiveProducers.get(batch.producerId).exists { lastRecord =>
-            if(lastRecord.lastDataOffset.isPresent) {
+            if (lastRecord.lastDataOffset.isPresent) {
               batch.lastOffset == lastRecord.lastDataOffset.getAsLong
             } else {
               batch.isControlBatch && batch.producerEpoch == lastRecord.producerEpoch

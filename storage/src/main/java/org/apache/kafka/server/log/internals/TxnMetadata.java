@@ -43,21 +43,28 @@ public final class TxnMetadata {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
+
         TxnMetadata that = (TxnMetadata) o;
-        return producerId == that.producerId && Objects.equals(firstOffset, that.firstOffset) && Objects.equals(lastOffset, that.lastOffset);
+
+        if (producerId != that.producerId) return false;
+        if (!Objects.equals(firstOffset, that.firstOffset)) return false;
+        return Objects.equals(lastOffset, that.lastOffset);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(producerId, firstOffset, lastOffset);
+        int result = (int) (producerId ^ (producerId >>> 32));
+        result = 31 * result + (firstOffset != null ? firstOffset.hashCode() : 0);
+        result = 31 * result + (lastOffset != null ? lastOffset.hashCode() : 0);
+        return result;
     }
 
     @Override
     public String toString() {
-        return "TxnMetadata{" +
+        return "TxnMetadata(" +
                 "producerId=" + producerId +
                 ", firstOffset=" + firstOffset +
                 ", lastOffset=" + lastOffset +
-                '}';
+                ')';
     }
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.server.log.internals;
 
 import org.apache.kafka.common.record.RecordBatch;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -26,20 +27,24 @@ import java.util.stream.Stream;
 
 /**
  * The batchMetadata is ordered such that the batch with the lowest sequence is at the head of the queue while the
- * batch with the highest sequence is at the tail of the queue. We will retain at most {@link ProducerStateEntry#NumBatchesToRetain}
+ * batch with the highest sequence is at the tail of the queue. We will retain at most {@link ProducerStateEntry#NUM_BATCHES_TO_RETAIN}
  * elements in the queue. When the queue is at capacity, we remove the first element to make space for the incoming batch.
  */
 public class ProducerStateEntry {
-    public static final int NumBatchesToRetain = 5;
+    public static final int NUM_BATCHES_TO_RETAIN = 5;
     public final long producerId;
     private final List<BatchMetadata> batchMetadata;
-    public short producerEpoch;
+    private short producerEpoch;
     public int coordinatorEpoch;
     public long lastTimestamp;
     public OptionalLong currentTxnFirstOffset;
 
     public ProducerStateEntry(long producerId) {
-        this(producerId, Collections.emptyList(), RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty());
+        this(producerId, new ArrayList<>(), RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty());
+    }
+
+    public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
+        this(producerId, new ArrayList<>(), producerEpoch, coordinatorEpoch, lastTimestamp, currentTxnFirstOffset);
     }
 
     public ProducerStateEntry(long producerId, List<BatchMetadata> batchMetadata, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
@@ -93,7 +98,7 @@ public class ProducerStateEntry {
     }
 
     private void addBatchMetadata(BatchMetadata batch) {
-        if (batchMetadata.size() == ProducerStateEntry.NumBatchesToRetain) batchMetadata.remove(0);
+        if (batchMetadata.size() == ProducerStateEntry.NUM_BATCHES_TO_RETAIN) batchMetadata.remove(0);
         batchMetadata.add(batch);
     }
 
@@ -124,15 +129,15 @@ public class ProducerStateEntry {
         return producerEpoch;
     }
 
-    public int coordinatorEpoch() {
-        return coordinatorEpoch;
-    }
-
-    public long lastTimestamp() {
-        return lastTimestamp;
-    }
-
-    public OptionalLong currentTxnFirstOffset() {
-        return currentTxnFirstOffset;
+    @Override
+    public String toString() {
+        return "ProducerStateEntry(" +
+                "producerId=" + producerId +
+                ", batchMetadata=" + batchMetadata +
+                ", producerEpoch=" + producerEpoch +
+                ", coordinatorEpoch=" + coordinatorEpoch +
+                ", lastTimestamp=" + lastTimestamp +
+                ", currentTxnFirstOffset=" + currentTxnFirstOffset +
+                ')';
     }
 }
