@@ -1668,8 +1668,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         } catch (RejectedExecutionException e) {
             // Shutting down. Just log the exception
             if (stopping.get()) {
-                log.debug("RejectedExecutionException thrown while herder is shutting down. This could be " +
-                        "because startAndStopExecutor is either already shutdown or is full.");
+                log.debug("Ignoring RejectedExecutionException thrown while starting/stopping connectors/tasks en masse " +
+                        "as the herder is already in the process of shutting down. This is not indicative of a problem and is normal behavior");
             } else {
                 throw e;
             }
