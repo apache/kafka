@@ -20,9 +20,8 @@ import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.locks.ReentrantLock
-
 import javax.management.ObjectName
-import kafka.log.{AppendOrigin, Defaults, LogConfig, UnifiedLog}
+import kafka.log.{Defaults, LogConfig, UnifiedLog}
 import kafka.server.{FetchDataInfo, FetchLogEnd, LogOffsetMetadata, ReplicaManager, RequestLocal}
 import kafka.utils.{MockScheduler, Pool, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -34,6 +33,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.server.log.internals.AppendOrigin
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -648,7 +648,7 @@ class TransactionStateManagerTest {
       anyLong(),
       ArgumentMatchers.eq((-1).toShort),
       ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
       any[Option[ReentrantLock]],
@@ -691,7 +691,7 @@ class TransactionStateManagerTest {
       anyLong(),
       ArgumentMatchers.eq((-1).toShort),
       ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
       any[Option[ReentrantLock]],
@@ -731,7 +731,7 @@ class TransactionStateManagerTest {
       anyLong(),
       ArgumentMatchers.eq((-1).toShort),
       ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
       any[Option[ReentrantLock]],
@@ -886,7 +886,7 @@ class TransactionStateManagerTest {
       anyLong(),
       ArgumentMatchers.eq((-1).toShort),
       ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
       callbackCapture.capture(),
       any[Option[ReentrantLock]],
@@ -1036,7 +1036,7 @@ class TransactionStateManagerTest {
     when(replicaManager.appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],

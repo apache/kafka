@@ -346,7 +346,7 @@ class LogSegmentTest {
 
     var abortedTxns = segment.txnIndex.allAbortedTxns
     assertEquals(1, abortedTxns.size)
-    var abortedTxn = abortedTxns.head
+    var abortedTxn = abortedTxns.get(0)
     assertEquals(pid2, abortedTxn.producerId)
     assertEquals(102L, abortedTxn.firstOffset)
     assertEquals(106L, abortedTxn.lastOffset)
@@ -362,7 +362,7 @@ class LogSegmentTest {
 
     abortedTxns = segment.txnIndex.allAbortedTxns
     assertEquals(1, abortedTxns.size)
-    abortedTxn = abortedTxns.head
+    abortedTxn = abortedTxns.get(0)
     assertEquals(pid2, abortedTxn.producerId)
     assertEquals(75L, abortedTxn.firstOffset)
     assertEquals(106L, abortedTxn.lastOffset)

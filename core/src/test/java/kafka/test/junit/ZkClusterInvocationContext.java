@@ -109,7 +109,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                     @Override
                     public Properties serverConfig() {
                         Properties props = clusterConfig.serverProperties();
-                        props.put(KafkaConfig.InterBrokerProtocolVersionProp(), metadataVersion().version());
+                        props.put(KafkaConfig.InterBrokerProtocolVersionProp(), clusterConfig.metadataVersion().version());
                         return props;
                     }
 

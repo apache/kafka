@@ -323,6 +323,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- False positive - the volatile read is guarded by a lock. -->
+        <Class name="org.apache.kafka.server.log.internals.AbstractIndex"/>
+        <Method name="incrementEntries"/>
+        <Bug pattern="VO_VOLATILE_INCREMENT"/>
+    </Match>
+
+    <Match>
         <!-- Suppress a spurious warning about a missing default case. -->
         <Or>
             <Class name="org.apache.kafka.common.utils.Crc32"/>
@@ -486,6 +493,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.common.config.AbstractConfig$ResolvingMap"/>
         <Method name="get"/>
         <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+
+    <Match>
+        <!-- False positive - the field is used in other modules and its unit test -->
+        <Class name="org.apache.kafka.common.utils.PrimitiveRef$LongRef"/>
+        <Field name="value"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
     </Match>
 
     <Match>

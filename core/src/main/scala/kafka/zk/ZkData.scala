@@ -59,14 +59,27 @@ object ControllerZNode {
   def path = "/controller"
   def encode(brokerId: Int, timestamp: Long, kraftControllerEpoch: Int = -1): Array[Byte] = {
     Json.encodeAsBytes(Map(
-      "version" -> 2, "brokerid" -> brokerId,
+      "version" -> 2,
+      "brokerid" -> brokerId,
       "timestamp" -> timestamp.toString,
       "kraftControllerEpoch" -> kraftControllerEpoch).asJava)
   }
   def decode(bytes: Array[Byte]): Option[Int] = Json.parseBytes(bytes).map { js =>
     js.asJsonObject("brokerid").to[Int]
   }
+  def decodeController(bytes: Array[Byte], zkVersion: Int): ZKControllerRegistration = Json.tryParseBytes(bytes) match {
+    case Right(json) =>
+      val controller = json.asJsonObject
+      val brokerId = controller("brokerid").to[Int]
+      val kraftControllerEpoch = controller.get("kraftControllerEpoch").map(j => j.to[Int])
+      ZKControllerRegistration(brokerId, kraftControllerEpoch, zkVersion)
+
+    case Left(err) =>
+      throw new KafkaException(s"Failed to parse ZooKeeper registration for controller: ${new String(bytes, UTF_8)}", err)
+  }
 }
+
+case class ZKControllerRegistration(broker: Int, kraftEpoch: Option[Int], zkVersion: Int)
 
 object ControllerEpochZNode {
   def path = "/controller_epoch"

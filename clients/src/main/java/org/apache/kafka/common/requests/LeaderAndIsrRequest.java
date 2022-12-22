@@ -51,7 +51,14 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
                        Collection<Node> liveLeaders) {
-            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch);
+            this(version, controllerId, controllerEpoch, brokerEpoch, partitionStates, topicIds,
+                liveLeaders, false);
+        }
+
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+                       List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
+                       Collection<Node> liveLeaders, boolean kraftController) {
+            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch, kraftController);
             this.partitionStates = partitionStates;
             this.topicIds = topicIds;
             this.liveLeaders = liveLeaders;
@@ -70,6 +77,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
                 .setLiveLeaders(leaders);
+
+            if (version >= 7) {
+                data.setIsKRaftController(kraftController);
+            }
 
             if (version >= 2) {
                 Map<String, LeaderAndIsrTopicState> topicStatesMap = groupByTopic(partitionStates, topicIds);
@@ -166,6 +177,11 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     @Override
     public int controllerId() {
         return data.controllerId();
+    }
+
+    @Override
+    public boolean isKRaftController() {
+        return data.isKRaftController();
     }
 
     @Override

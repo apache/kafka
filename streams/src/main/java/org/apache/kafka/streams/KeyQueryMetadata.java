@@ -43,20 +43,10 @@ public class KeyQueryMetadata {
 
     private final int partition;
 
-    private final Set<Integer> partitions;
-
     public KeyQueryMetadata(final HostInfo activeHost, final Set<HostInfo> standbyHosts, final int partition) {
         this.activeHost = activeHost;
         this.standbyHosts = standbyHosts;
         this.partition = partition;
-        this.partitions = Collections.singleton(partition);
-    }
-
-    public KeyQueryMetadata(final HostInfo activeHost, final Set<HostInfo> standbyHosts, final Set<Integer> partitions) {
-        this.activeHost = activeHost;
-        this.standbyHosts = standbyHosts;
-        this.partition = partitions.size() == 1 ? partitions.iterator().next() : -1;
-        this.partitions = partitions;
     }
 
     /**
@@ -119,16 +109,6 @@ public class KeyQueryMetadata {
         return partition;
     }
 
-    /**
-     * Get the store partitions corresponding to the key.
-     * A Key can be on multiple partitions if it has been
-     * multicasted using StreamPartitioner#partitions method
-     * @return store partition number
-     */
-    public Set<Integer> partitions() {
-        return partitions;
-    }
-
     @Override
     public boolean equals(final Object obj) {
         if (!(obj instanceof KeyQueryMetadata)) {
@@ -137,8 +117,7 @@ public class KeyQueryMetadata {
         final KeyQueryMetadata keyQueryMetadata = (KeyQueryMetadata) obj;
         return Objects.equals(keyQueryMetadata.activeHost, activeHost)
             && Objects.equals(keyQueryMetadata.standbyHosts, standbyHosts)
-            && (Objects.equals(keyQueryMetadata.partition, partition)
-                || Objects.equals(keyQueryMetadata.partitions, partitions));
+            && Objects.equals(keyQueryMetadata.partition, partition);
     }
 
     @Override
@@ -147,7 +126,6 @@ public class KeyQueryMetadata {
                 "activeHost=" + activeHost +
                 ", standbyHosts=" + standbyHosts +
                 ", partition=" + partition +
-                ", partitions=" + partitions +
                 '}';
     }
 

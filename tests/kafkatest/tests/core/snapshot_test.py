@@ -118,7 +118,7 @@ class TestSnapshots(ProduceConsumeValidateTest):
         cmd = "ls %s" % file_path
         files = node.account.ssh_output(cmd, allow_fail=True, combine_stderr=False)
 
-        if len(files) is 0:
+        if len(files) == 0:
             self.logger.debug("File %s does not exist" % file_path)
             return False
         else:

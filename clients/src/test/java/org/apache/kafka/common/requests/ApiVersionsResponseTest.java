@@ -188,7 +188,6 @@ public class ApiVersionsResponseTest {
 
         // Ensure that APIs needed for the KRaft mode are not exposed through ApiVersions until we are ready for them
         HashSet<ApiKeys> exposedApis = apiKeysInResponse(response);
-        assertFalse(exposedApis.contains(ApiKeys.ENVELOPE));
         assertFalse(exposedApis.contains(ApiKeys.VOTE));
         assertFalse(exposedApis.contains(ApiKeys.BEGIN_QUORUM_EPOCH));
         assertFalse(exposedApis.contains(ApiKeys.END_QUORUM_EPOCH));

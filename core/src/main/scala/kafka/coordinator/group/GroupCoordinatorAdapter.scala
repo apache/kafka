@@ -17,7 +17,8 @@
 package kafka.coordinator.group
 
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import kafka.utils.Implicits.MapExtensionMethods
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
@@ -215,5 +216,22 @@ class GroupCoordinatorAdapter(
     }
 
     CompletableFuture.completedFuture(groupIds.asScala.map(describeGroup).asJava)
+  }
+
+  override def deleteGroups(
+    context: RequestContext,
+    groupIds: util.List[String],
+    bufferSupplier: BufferSupplier
+  ): CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection] = {
+    val results = new DeleteGroupsResponseData.DeletableGroupResultCollection()
+    coordinator.handleDeleteGroups(
+      groupIds.asScala.toSet,
+      RequestLocal(bufferSupplier)
+    ).forKeyValue { (groupId, error) =>
+      results.add(new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId(groupId)
+        .setErrorCode(error.code))
+    }
+    CompletableFuture.completedFuture(results)
   }
 }

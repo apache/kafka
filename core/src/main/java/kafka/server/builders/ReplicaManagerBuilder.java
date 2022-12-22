@@ -19,6 +19,7 @@ package kafka.server.builders;
 
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
+import kafka.log.remote.RemoteLogManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.DelayedDeleteRecords;
 import kafka.server.DelayedElectLeader;
@@ -53,6 +54,7 @@ public class ReplicaManagerBuilder {
     private AlterPartitionManager alterPartitionManager = null;
     private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private AtomicBoolean isShuttingDown = new AtomicBoolean(false);
+    private Optional<RemoteLogManager> remoteLogManager = Optional.empty();
     private Optional<KafkaZkClient> zkClient = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedProduce>> delayedProducePurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedFetch>> delayedFetchPurgatory = Optional.empty();
@@ -82,6 +84,11 @@ public class ReplicaManagerBuilder {
 
     public ReplicaManagerBuilder setLogManager(LogManager logManager) {
         this.logManager = logManager;
+        return this;
+    }
+
+    public ReplicaManagerBuilder setRemoteLogManager(RemoteLogManager remoteLogManager) {
+        this.remoteLogManager = Optional.ofNullable(remoteLogManager);
         return this;
     }
 
@@ -157,6 +164,7 @@ public class ReplicaManagerBuilder {
                              time,
                              scheduler,
                              logManager,
+                             OptionConverters.toScala(remoteLogManager),
                              quotaManagers,
                              metadataCache,
                              logDirFailureChannel,

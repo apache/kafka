@@ -21,6 +21,7 @@ import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
@@ -28,6 +29,7 @@ import kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorAdapter}
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsReporter
+import kafka.log.remote.RemoteLogManager
 import kafka.network.{ControlPlaneAcceptor, DataPlaneAcceptor, RequestChannel, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
@@ -47,13 +49,14 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
-import org.apache.kafka.common.{Endpoint, Node}
+import org.apache.kafka.common.{Endpoint, KafkaException, Node}
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.collection.{Map, Seq}
@@ -121,6 +124,7 @@ class KafkaServer(
 
   var logDirFailureChannel: LogDirFailureChannel = _
   @volatile private var _logManager: LogManager = _
+  var remoteLogManager: Option[RemoteLogManager] = None
 
   @volatile private var _replicaManager: ReplicaManager = _
   var adminManager: ZkAdminManager = _
@@ -147,6 +151,7 @@ class KafkaServer(
 
   var kafkaScheduler: KafkaScheduler = _
 
+  var kraftControllerNodes: Seq[Node] = _
   @volatile var metadataCache: ZkMetadataCache = _
   var quotaManagers: QuotaFactory.QuotaManagers = _
 
@@ -272,8 +277,20 @@ class KafkaServer(
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
-        metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion, brokerFeatures)
-        val controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
+        remoteLogManager = createRemoteLogManager(config)
+
+        if (config.migrationEnabled) {
+          kraftControllerNodes = RaftConfig.voterConnectionsToNodes(
+            RaftConfig.parseVoterConnections(config.quorumVoters)).asScala
+        } else {
+          kraftControllerNodes = Seq.empty
+        }
+        metadataCache = MetadataCache.zkMetadataCache(
+          config.brokerId,
+          config.interBrokerProtocolVersion,
+          brokerFeatures,
+          kraftControllerNodes)
+        val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config)
 
         /* initialize feature change listener */
         _featureChangeListener = new FinalizedFeatureChangeListener(metadataCache, _zkClient)
@@ -468,6 +485,9 @@ class KafkaServer(
           new FetchSessionCache(config.maxIncrementalFetchSessionCacheSlots,
             KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
 
+        // Start RemoteLogManager before broker start serving the requests.
+        remoteLogManager.foreach(_.startup())
+
         /* start processing requests */
         val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache)
 
@@ -551,6 +571,19 @@ class KafkaServer(
     }
   }
 
+  protected def createRemoteLogManager(config: KafkaConfig): Option[RemoteLogManager] = {
+    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+    if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
+      if(config.logDirs.size > 1) {
+        throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
+      }
+
+      Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head))
+    } else {
+      None
+    }
+  }
+
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
     new ReplicaManager(
       metrics = metrics,
@@ -558,6 +591,7 @@ class KafkaServer(
       time = time,
       scheduler = kafkaScheduler,
       logManager = logManager,
+      remoteLogManager = remoteLogManager,
       quotaManagers = quotaManagers,
       metadataCache = metadataCache,
       logDirFailureChannel = logDirFailureChannel,
@@ -614,7 +648,14 @@ class KafkaServer(
   private def controlledShutdown(): Unit = {
     val socketTimeoutMs = config.controllerSocketTimeoutMs
 
+    // TODO (KAFKA-14447): Handle controlled shutdown for zkBroker when we have KRaft controller.
     def doControlledShutdown(retries: Int): Boolean = {
+      if (config.requiresZookeeper &&
+        metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])) {
+        info("ZkBroker currently has a KRaft controller. Controlled shutdown will be handled " +
+          "through broker life cycle manager")
+        return false
+      }
       val metadataUpdater = new ManualMetadataUpdater()
       val networkClient = {
         val channelBuilder = ChannelBuilders.clientChannelBuilder(
@@ -669,8 +710,8 @@ class KafkaServer(
           // 1. Find the controller and establish a connection to it.
           // If the controller id or the broker registration are missing, we sleep and retry (if there are remaining retries)
           metadataCache.getControllerId match {
-            case Some(controllerId) =>
-              metadataCache.getAliveBrokerNode(controllerId, config.interBrokerListenerName) match {
+            case Some(controllerId: ZkCachedControllerId)  =>
+              metadataCache.getAliveBrokerNode(controllerId.id, config.interBrokerListenerName) match {
                 case Some(broker) =>
                   // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
                   // attempt, connect to the most recent controller
@@ -687,8 +728,8 @@ class KafkaServer(
                 case None =>
                   info(s"Broker registration for controller $controllerId is not available in the metadata cache")
               }
-            case None =>
-              info("No controller present in the metadata cache")
+            case Some(_: KRaftCachedControllerId) | None =>
+              info("No zk controller present in the metadata cache")
           }
 
           // 2. issue a controlled shutdown to the controller
@@ -848,6 +889,11 @@ class KafkaServer(
 
         if (kafkaController != null)
           CoreUtils.swallow(kafkaController.shutdown(), this)
+
+        // Close remote log manager before stopping processing requests, to give a chance to any
+        // of its underlying clients (especially in RemoteStorageManager and RemoteLogMetadataManager)
+        // to close gracefully.
+        CoreUtils.swallow(remoteLogManager.foreach(_.close()), this)
 
         if (featureChangeListener != null)
           CoreUtils.swallow(featureChangeListener.close(), this)

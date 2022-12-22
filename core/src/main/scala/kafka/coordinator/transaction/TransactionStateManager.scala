@@ -16,14 +16,13 @@
  */
 package kafka.coordinator.transaction
 
+import kafka.log.LogConfig
+
 import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
-import kafka.log.{AppendOrigin, LogConfig}
-import kafka.message.UncompressedCodec
 import kafka.server.{Defaults, FetchLogEnd, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
@@ -38,6 +37,8 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.server.log.internals.AppendOrigin
+import org.apache.kafka.server.record.BrokerCompressionType
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -283,7 +284,7 @@ class TransactionStateManager(brokerId: Int,
         config.requestTimeoutMs,
         TransactionLog.EnforcedRequiredAcks,
         internalTopicsAllowed = true,
-        origin = AppendOrigin.Coordinator,
+        origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
         removeFromCacheCallback,
         requestLocal = RequestLocal.NoCaching)
@@ -402,7 +403,7 @@ class TransactionStateManager(brokerId: Int,
 
     // enforce disabled unclean leader election, no compression types, and compact cleanup policy
     props.put(LogConfig.UncleanLeaderElectionEnableProp, "false")
-    props.put(LogConfig.CompressionTypeProp, UncompressedCodec.name)
+    props.put(LogConfig.CompressionTypeProp, BrokerCompressionType.UNCOMPRESSED.name)
     props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
     props.put(LogConfig.MinInSyncReplicasProp, config.transactionLogMinInsyncReplicas.toString)
     props.put(LogConfig.SegmentBytesProp, config.transactionLogSegmentBytes.toString)
@@ -762,7 +763,7 @@ class TransactionStateManager(brokerId: Int,
                 newMetadata.txnTimeoutMs.toLong,
                 TransactionLog.EnforcedRequiredAcks,
                 internalTopicsAllowed = true,
-                origin = AppendOrigin.Coordinator,
+                origin = AppendOrigin.COORDINATOR,
                 recordsPerPartition,
                 updateCacheCallback,
                 requestLocal = requestLocal)
