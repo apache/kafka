@@ -30,7 +30,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C, Time, Utils}
-import org.apache.kafka.server.log.internals.CompletedTxn
+import org.apache.kafka.server.log.internals.{AppendOrigin, CompletedTxn}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -195,7 +195,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 
   private def maybeValidateDataBatch(producerEpoch: Short, firstSeq: Int, offset: Long): Unit = {
     checkProducerEpoch(producerEpoch, offset)
-    if (origin == AppendOrigin.Client) {
+    if (origin == AppendOrigin.CLIENT) {
       checkSequence(producerEpoch, firstSeq, offset)
     }
   }
@@ -205,7 +205,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       val message = s"Epoch of producer $producerId at offset $offset in $topicPartition is $producerEpoch, " +
         s"which is smaller than the last seen epoch ${updatedEntry.producerEpoch}"
 
-      if (origin == AppendOrigin.Replication) {
+      if (origin == AppendOrigin.REPLICATION) {
         warn(message)
       } else {
         // Starting from 2.7, we replaced ProducerFenced error with InvalidProducerEpoch in the
@@ -294,7 +294,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 
   private def checkCoordinatorEpoch(endTxnMarker: EndTransactionMarker, offset: Long): Unit = {
     if (updatedEntry.coordinatorEpoch > endTxnMarker.coordinatorEpoch) {
-      if (origin == AppendOrigin.Replication) {
+      if (origin == AppendOrigin.REPLICATION) {
         info(s"Detected invalid coordinator epoch for producerId $producerId at " +
           s"offset $offset in partition $topicPartition: ${endTxnMarker.coordinatorEpoch} " +
           s"is older than previously known coordinator epoch ${updatedEntry.coordinatorEpoch}")

@@ -318,9 +318,13 @@
     <suppress checks="AvoidStarImport"
               files="MetadataVersionTest.java"/>
 
-    <!-- Storage -->
-    <suppress checks="(CyclomaticComplexity|ParameterNumber)"
-              files="(RemoteLogManagerConfig).java"/>
+    <!-- storage -->
+    <suppress checks="CyclomaticComplexity"
+              files="(LogValidator|RemoteLogManagerConfig).java"/>
+    <suppress checks="NPathComplexity"
+              files="LogValidator.java"/>
+    <suppress checks="ParameterNumber"
+              files="RemoteLogManagerConfig.java"/>
 
     <!-- benchmarks -->
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"

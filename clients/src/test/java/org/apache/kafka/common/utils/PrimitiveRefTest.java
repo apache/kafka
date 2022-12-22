@@ -16,44 +16,28 @@
  */
 package org.apache.kafka.common.utils;
 
-/**
- * Primitive reference used to pass primitive typed values as parameter-by-reference.
- *
- * This is cheaper than using Atomic references.
- */
-public class PrimitiveRef {
-    public static IntRef ofInt(int value) {
-        return new IntRef(value);
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class PrimitiveRefTest {
+
+    @Test
+    public void testIntRef() {
+        PrimitiveRef.IntRef ref = PrimitiveRef.ofInt(3);
+        assertEquals(3, ref.value++);
+        assertEquals(4, ref.value);
+        assertEquals(5, ++ref.value);
+        assertEquals(5, ref.value);
     }
 
-    public static LongRef ofLong(long value) {
-        return new LongRef(value);
+    @Test
+    public void testLongRef() {
+        PrimitiveRef.LongRef ref = PrimitiveRef.ofLong(5L);
+        assertEquals(5L, ref.value++);
+        assertEquals(6L, ref.value);
+        assertEquals(7L, ++ref.value);
+        assertEquals(7L, ref.value);
     }
 
-    public static class IntRef {
-        public int value;
-
-        IntRef(int value) {
-            this.value = value;
-        }
-
-        @Override
-        public String toString() {
-            return "IntRef(" + value + ")";
-        }
-
-    }
-
-    public static class LongRef {
-        public long value;
-
-        LongRef(long value) {
-            this.value = value;
-        }
-
-        @Override
-        public String toString() {
-            return "LongRef(" + value + ")";
-        }
-    }
 }
