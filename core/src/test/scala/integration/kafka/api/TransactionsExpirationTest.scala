@@ -128,11 +128,10 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "2", "2", willBeCommitted = false))
     producer.flush()
 
-    TestUtils.waitUntilTrue(() => producerState.nonEmpty, s"Producer IDs for topic1 did not propagate quickly")
-
     // Ensure producer IDs are added.
-    val pState = producerState
-    assertEquals(1, pState.size, s"No producer visible via admin api")
+    var pState : List[ProducerState] = null
+    TestUtils.waitUntilTrue(() => { pState = producerState; pState.nonEmpty}, "Producer IDs for topic1 did not propagate quickly")
+    assertEquals(1, pState.size, "Unexpected producer to topic1")
     val oldProducerId = pState.head.producerId
     val oldProducerEpoch = pState.head.producerEpoch
 
@@ -152,11 +151,10 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 3, "3", "3", willBeCommitted = true))
     producer.commitTransaction()
 
-    TestUtils.waitUntilTrue(() => producerState.nonEmpty, s"Producer IDs for topic1 did not propagate quickly")
-
     // Producer IDs should repopulate.
-    val pState2 = producerState
-    assertEquals(1, pState2.size, "No producer visible via admin api")
+    var pState2 : List[ProducerState] = null
+    TestUtils.waitUntilTrue(() => {pState2 = producerState; pState2.nonEmpty}, "Producer IDs for topic1 did not propagate quickly")
+    assertEquals(1, pState2.size, "Unexpected producer to topic1")
     val newProducerId = pState2.head.producerId
     val newProducerEpoch = pState2.head.producerEpoch
 
@@ -213,9 +211,9 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
     serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
-    serverProps.put(KafkaConfig.TransactionalIdExpirationMsProp, "30000")
+    serverProps.put(KafkaConfig.TransactionalIdExpirationMsProp, "10000")
     serverProps.put(KafkaConfig.TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp, "500")
-    serverProps.put(KafkaConfig.ProducerIdExpirationMsProp, "10000")
+    serverProps.put(KafkaConfig.ProducerIdExpirationMsProp, "5000")
     serverProps.put(KafkaConfig.ProducerIdExpirationCheckIntervalMsProp, "500")
     serverProps
   }
