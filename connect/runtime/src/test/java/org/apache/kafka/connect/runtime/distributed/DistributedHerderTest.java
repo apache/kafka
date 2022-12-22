@@ -3661,18 +3661,6 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
         member.maybeLeaveGroup(anyString());
         PowerMock.expectLastCall();
-        worker.stopAndAwaitConnectors();
-        PowerMock.expectLastCall();
-        worker.stopAndAwaitTasks();
-        PowerMock.expectLastCall();
-        member.stop();
-        PowerMock.expectLastCall();
-        configBackingStore.stop();
-        PowerMock.expectLastCall();
-        statusBackingStore.stop();
-        PowerMock.expectLastCall();
-        worker.stop();
-        PowerMock.expectLastCall();
 
         // Read to config topic times out
         configBackingStore.refresh(anyLong(), EasyMock.anyObject(TimeUnit.class));
