@@ -357,7 +357,7 @@ class KafkaServer(
         lifecycleManager = new BrokerLifecycleManager(config,
           time,
           threadNamePrefix,
-          zkBrokerEpoch = Some(brokerEpoch))
+          zkBrokerEpochSupplier = Some(() => kafkaController.brokerEpoch))
 
         // Now that the broker is successfully registered, checkpoint its metadata
         val zkMetaProperties = ZkMetaProperties(clusterId, config.brokerId)
