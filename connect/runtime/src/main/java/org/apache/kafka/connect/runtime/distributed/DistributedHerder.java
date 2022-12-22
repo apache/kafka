@@ -161,9 +161,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private final String workerGroupId;
     private final int workerSyncTimeoutMs;
-    private final long workerTasksShutdownTimeoutMs;
-
-    private final long herderExecutorTerminationTimeoutMs;
     private final int workerUnsyncBackoffMs;
     private final int keyRotationIntervalMs;
     private final String requestSignatureAlgorithm;
@@ -274,10 +271,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.herderMetrics = new HerderMetrics(metrics);
         this.workerGroupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
         this.workerSyncTimeoutMs = config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
-        this.workerTasksShutdownTimeoutMs = config.getLong(DistributedConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
-        // Timeout for herderExecutor to gracefully terminate is set to a value to accommodate
-        // reading to the end of the config topic + successfully attempting to stop all connectors and tasks and a buffer of 10s
-        this.herderExecutorTerminationTimeoutMs = this.workerSyncTimeoutMs + this.workerTasksShutdownTimeoutMs + Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS + 10000;
         this.workerUnsyncBackoffMs = config.getInt(DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
         this.requestSignatureAlgorithm = config.getString(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG);
         this.keyRotationIntervalMs = config.getInt(DistributedConfig.INTER_WORKER_KEY_TTL_MS_CONFIG);
@@ -781,6 +774,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    // Timeout for herderExecutor to gracefully terminate is set to a value to accommodate
+    // reading to the end of the config topic + successfully attempting to stop all connectors and tasks and a buffer of 10s
+    private long getHerderExecutorTimeoutMs() {
+        return this.workerSyncTimeoutMs +
+                config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG) +
+                Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS + 10000;
+    }
+
     @Override
     public void stop() {
         log.info("Herder stopping");
@@ -789,7 +790,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         member.wakeup();
         herderExecutor.shutdown();
         try {
-            if (!herderExecutor.awaitTermination(herderExecutorTerminationTimeoutMs, TimeUnit.MILLISECONDS))
+            if (!herderExecutor.awaitTermination(getHerderExecutorTimeoutMs() , TimeUnit.MILLISECONDS))
                 herderExecutor.shutdownNow();
 
             forwardRequestExecutor.shutdown();

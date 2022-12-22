@@ -101,7 +101,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.Callable;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -118,7 +117,6 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CONNECTOR;
 import static org.easymock.EasyMock.anyLong;
-import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.leq;
@@ -3641,37 +3639,6 @@ public class DistributedHerderTest {
 
         herder.startAndStopExecutor.shutdown();
         assertThrows(RejectedExecutionException.class, herder::tick);
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void shouldHaltCleanlyWhenHerderStartsAndStopsAndConfigTopicReadTimesOut() throws TimeoutException {
-        connectProtocolVersion = CONNECT_PROTOCOL_V1;
-        EasyMock.expect(member.memberId()).andStubReturn("member");
-        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(connectProtocolVersion);
-        final int rebalanceDelayMs = 20000;
-
-        // Assign the connector to this worker, and have it start
-        expectRebalance(Collections.emptyList(), Collections.emptyList(), ConnectProtocol.Assignment.NO_ERROR, 1, singletonList(CONN1), Collections.emptyList(), rebalanceDelayMs);
-
-        member.wakeup();
-        PowerMock.expectLastCall();
-        member.requestRejoin();
-        PowerMock.expectLastCall();
-        member.maybeLeaveGroup(anyString());
-        PowerMock.expectLastCall();
-
-        // Read to config topic times out
-        configBackingStore.refresh(anyLong(), EasyMock.anyObject(TimeUnit.class));
-        EasyMock.expectLastCall().andThrow(new TimeoutException());
-
-        PowerMock.replayAll();
-
-        // Start the herder
-        herder.tick();
-        // and immediately stop it.
-        herder.stop();
 
         PowerMock.verifyAll();
     }
