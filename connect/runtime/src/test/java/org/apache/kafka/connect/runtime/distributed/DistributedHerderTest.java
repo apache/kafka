@@ -3630,20 +3630,19 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = RejectedExecutionException.class)
-    @SuppressWarnings("unchecked")
-    public void shouldThrowWhenStartAndStopExecutorThrowsRejectedExecutionExceptionAndHerderNotStopping() throws InterruptedException {
-        ExecutorService startAndStopExecutor = EasyMock.mock(ExecutorService.class);
-        herder.startAndStopExecutor = startAndStopExecutor;
+    @Test
+    public void shouldThrowWhenStartAndStopExecutorThrowsRejectedExecutionExceptionAndHerderNotStopping() {
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
 
-        Callable<Void> connectorStartingCallable = () -> null;
+        PowerMock.replayAll();
 
-        EasyMock.expect(startAndStopExecutor.invokeAll(EasyMock.anyObject(Collection.class))).andThrow(new RejectedExecutionException());
+        herder.startAndStopExecutor.shutdown();
+        assertThrows(RejectedExecutionException.class, herder::tick);
 
-        PowerMock.replayAll(startAndStopExecutor);
-
-        herder.startAndStop(Collections.singletonList(connectorStartingCallable));
-
+        PowerMock.verifyAll();
     }
 
     @Test
