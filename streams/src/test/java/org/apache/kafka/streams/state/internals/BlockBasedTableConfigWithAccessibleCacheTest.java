@@ -44,11 +44,12 @@ public class BlockBasedTableConfigWithAccessibleCacheTest {
     public void shouldSetBlockCacheAndMakeItAccessible() {
         final BlockBasedTableConfigWithAccessibleCache configWithAccessibleCache =
             new BlockBasedTableConfigWithAccessibleCache();
-        final Cache blockCache = new LRUCache(1024);
+        try (final Cache blockCache = new LRUCache(1024)) {
 
-        final BlockBasedTableConfig updatedConfig = configWithAccessibleCache.setBlockCache(blockCache);
+            final BlockBasedTableConfig updatedConfig = configWithAccessibleCache.setBlockCache(blockCache);
 
-        assertThat(updatedConfig, sameInstance(configWithAccessibleCache));
-        assertThat(configWithAccessibleCache.blockCache(), sameInstance(blockCache));
+            assertThat(updatedConfig, sameInstance(configWithAccessibleCache));
+            assertThat(configWithAccessibleCache.blockCache(), sameInstance(blockCache));
+        }
     }
 }

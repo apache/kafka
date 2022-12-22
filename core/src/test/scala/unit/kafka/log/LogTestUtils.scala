@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import kafka.log
-import org.apache.kafka.server.log.internals.{AbortedTxn, TransactionIndex}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, LazyIndex, TransactionIndex}
 
 import scala.collection.Iterable
 import scala.jdk.CollectionConverters._
@@ -46,8 +46,8 @@ object LogTestUtils {
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
     val ms = FileRecords.open(UnifiedLog.logFile(logDir, offset))
-    val idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
-    val timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
+    val idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(logDir, offset), offset, 1000, true)
+    val timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(logDir, offset), offset, 1500, true)
     val txnIndex = new TransactionIndex(offset, UnifiedLog.transactionIndexFile(logDir, offset))
 
     new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
@@ -215,7 +215,7 @@ object LogTestUtils {
                                  leaderEpoch: Int = 0): LogAppendInfo = {
     val records = endTxnRecords(controlType, producerId, producerEpoch,
       coordinatorEpoch = coordinatorEpoch, timestamp = timestamp)
-    log.appendAsLeader(records, origin = AppendOrigin.Coordinator, leaderEpoch = leaderEpoch)
+    log.appendAsLeader(records, origin = AppendOrigin.COORDINATOR, leaderEpoch = leaderEpoch)
   }
 
   private def endTxnRecords(controlRecordType: ControlRecordType,

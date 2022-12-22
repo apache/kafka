@@ -32,8 +32,9 @@ import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords.{LogOffsetPosition, TimestampAndOffset}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
-import org.apache.kafka.server.log.internals.{AbortedTxn, CompletedTxn, OffsetPosition, TimestampOffset, TransactionIndex, TxnIndexSearchResult}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CompletedTxn, LazyIndex, OffsetIndex, OffsetPosition, TimeIndex, TimestampOffset, TransactionIndex, TxnIndexSearchResult}
 
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 import scala.math._
 
@@ -247,7 +248,7 @@ class LogSegment private[log] (val log: FileRecords,
   private def updateProducerState(producerStateManager: ProducerStateManager, batch: RecordBatch): Unit = {
     if (batch.hasProducerId) {
       val producerId = batch.producerId
-      val appendInfo = producerStateManager.prepareUpdate(producerId, origin = AppendOrigin.Replication)
+      val appendInfo = producerStateManager.prepareUpdate(producerId, origin = AppendOrigin.REPLICATION)
       val maybeCompletedTxn = appendInfo.append(batch, firstOffsetMetadataOpt = None)
       producerStateManager.update(appendInfo)
       maybeCompletedTxn.foreach { completedTxn =>
@@ -321,7 +322,7 @@ class LogSegment private[log] (val log: FileRecords,
       firstEntryIncomplete = adjustedMaxSize < startOffsetAndSize.size)
   }
 
-   def fetchUpperBoundOffset(startOffsetPosition: OffsetPosition, fetchSize: Int): Option[Long] =
+   def fetchUpperBoundOffset(startOffsetPosition: OffsetPosition, fetchSize: Int): Optional[Long] =
      offsetIndex.fetchUpperBoundOffset(startOffsetPosition, fetchSize).map(_.offset)
 
   /**
@@ -380,7 +381,7 @@ class LogSegment private[log] (val log: FileRecords,
     log.truncateTo(validBytes)
     offsetIndex.trimToValidSize()
     // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
-    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, skipFullCheck = true)
+    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, true)
     timeIndex.trimToValidSize()
     truncated
   }
@@ -510,7 +511,7 @@ class LogSegment private[log] (val log: FileRecords,
    * The time index entry appended will be used to decide when to delete the segment.
    */
   def onBecomeInactiveSegment(): Unit = {
-    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, skipFullCheck = true)
+    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, true)
     offsetIndex.trimToValidSize()
     timeIndex.trimToValidSize()
     log.trim()
@@ -592,8 +593,7 @@ class LogSegment private[log] (val log: FileRecords,
    */
   def close(): Unit = {
     if (_maxTimestampAndOffsetSoFar != TimestampOffset.UNKNOWN)
-      CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar,
-        skipFullCheck = true), this)
+      CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, true), this)
     CoreUtils.swallow(lazyOffsetIndex.close(), this)
     CoreUtils.swallow(lazyTimeIndex.close(), this)
     CoreUtils.swallow(log.close(), this)
@@ -672,8 +672,8 @@ object LogSegment {
     val maxIndexSize = config.maxIndexSize
     new LogSegment(
       FileRecords.open(UnifiedLog.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate),
-      LazyIndex.forOffset(UnifiedLog.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
-      LazyIndex.forTime(UnifiedLog.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      LazyIndex.forOffset(UnifiedLog.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset, maxIndexSize, true),
+      LazyIndex.forTime(UnifiedLog.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset, maxIndexSize, true),
       new TransactionIndex(baseOffset, UnifiedLog.transactionIndexFile(dir, baseOffset, fileSuffix)),
       baseOffset,
       indexIntervalBytes = config.indexInterval,

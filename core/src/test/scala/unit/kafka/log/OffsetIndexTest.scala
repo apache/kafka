@@ -21,14 +21,14 @@ import java.io._
 import java.nio.file.Files
 import org.junit.jupiter.api.Assertions._
 
-import java.util.{Arrays, Collections}
+import java.util.{Arrays, Collections, Optional}
 import org.junit.jupiter.api._
 
 import scala.collection._
 import scala.util.Random
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
-import org.apache.kafka.server.log.internals.OffsetPosition
+import org.apache.kafka.server.log.internals.{OffsetIndex, OffsetPosition}
 
 import scala.annotation.nowarn
 
@@ -40,7 +40,7 @@ class OffsetIndexTest {
   
   @BeforeEach
   def setup(): Unit = {
-    this.idx = new OffsetIndex(nonExistentTempFile(), baseOffset, maxIndexSize = 30 * 8)
+    this.idx = new OffsetIndex(nonExistentTempFile(), baseOffset, 30 * 8)
   }
   
   @AfterEach
@@ -127,19 +127,19 @@ class OffsetIndexTest {
     val third = new OffsetPosition(baseOffset + 2, 23)
     val fourth = new OffsetPosition(baseOffset + 3, 37)
 
-    assertEquals(None, idx.fetchUpperBoundOffset(first, 5))
+    assertEquals(Optional.empty, idx.fetchUpperBoundOffset(first, 5))
 
     for (offsetPosition <- Seq(first, second, third, fourth))
       idx.append(offsetPosition.offset, offsetPosition.position)
 
-    assertEquals(Some(second), idx.fetchUpperBoundOffset(first, 5))
-    assertEquals(Some(second), idx.fetchUpperBoundOffset(first, 10))
-    assertEquals(Some(third), idx.fetchUpperBoundOffset(first, 23))
-    assertEquals(Some(third), idx.fetchUpperBoundOffset(first, 22))
-    assertEquals(Some(fourth), idx.fetchUpperBoundOffset(second, 24))
-    assertEquals(None, idx.fetchUpperBoundOffset(fourth, 1))
-    assertEquals(None, idx.fetchUpperBoundOffset(first, 200))
-    assertEquals(None, idx.fetchUpperBoundOffset(second, 200))
+    assertEquals(Optional.of(second), idx.fetchUpperBoundOffset(first, 5))
+    assertEquals(Optional.of(second), idx.fetchUpperBoundOffset(first, 10))
+    assertEquals(Optional.of(third), idx.fetchUpperBoundOffset(first, 23))
+    assertEquals(Optional.of(third), idx.fetchUpperBoundOffset(first, 22))
+    assertEquals(Optional.of(fourth), idx.fetchUpperBoundOffset(second, 24))
+    assertEquals(Optional.empty, idx.fetchUpperBoundOffset(fourth, 1))
+    assertEquals(Optional.empty, idx.fetchUpperBoundOffset(first, 200))
+    assertEquals(Optional.empty, idx.fetchUpperBoundOffset(second, 200))
   }
 
   @Test
@@ -149,7 +149,7 @@ class OffsetIndexTest {
     idx.append(first.offset, first.position)
     idx.append(sec.offset, sec.position)
     idx.close()
-    val idxRo = new OffsetIndex(idx.file, baseOffset = idx.baseOffset)
+    val idxRo = new OffsetIndex(idx.file, idx.baseOffset)
     assertEquals(first, idxRo.lookup(first.offset))
     assertEquals(sec, idxRo.lookup(sec.offset))
     assertEquals(sec.offset, idxRo.lastOffset)
@@ -159,8 +159,8 @@ class OffsetIndexTest {
   
   @Test
   def truncate(): Unit = {
-	val idx = new OffsetIndex(nonExistentTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
-	idx.truncate()
+    val idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 8)
+    idx.truncate()
     for(i <- 1 until 10)
       idx.append(i, i)
       
@@ -200,7 +200,7 @@ class OffsetIndexTest {
 
   @Test
   def forceUnmapTest(): Unit = {
-    val idx = new OffsetIndex(nonExistentTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
+    val idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 8)
     idx.forceUnmap()
     // mmap should be null after unmap causing lookup to throw a NPE
     assertThrows(classOf[NullPointerException], () => idx.lookup(1))
@@ -210,7 +210,7 @@ class OffsetIndexTest {
   def testSanityLastOffsetEqualToBaseOffset(): Unit = {
     // Test index sanity for the case where the last offset appended to the index is equal to the base offset
     val baseOffset = 20L
-    val idx = new OffsetIndex(nonExistentTempFile(), baseOffset = baseOffset, maxIndexSize = 10 * 8)
+    val idx = new OffsetIndex(nonExistentTempFile(), baseOffset, 10 * 8)
     idx.append(baseOffset, 0)
     idx.sanityCheck()
   }
