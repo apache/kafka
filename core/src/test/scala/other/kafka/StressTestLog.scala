@@ -21,11 +21,12 @@ import java.util.Properties
 import java.util.concurrent.atomic._
 
 import kafka.log._
-import kafka.server.{BrokerTopicStats, FetchLogEnd, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchLogEnd}
 import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
 
 /**
  * A stress test that instantiates a log and then runs continual appends against it from one thread and continual reads against it
