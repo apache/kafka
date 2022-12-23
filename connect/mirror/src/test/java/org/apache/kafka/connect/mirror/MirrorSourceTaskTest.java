@@ -20,24 +20,31 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.connect.mirror.MirrorSourceTask.PartitionState;
 import org.apache.kafka.connect.source.SourceRecord;
 
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Semaphore;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -55,7 +62,7 @@ public class MirrorSourceTaskTest {
         @SuppressWarnings("unchecked")
         KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(null, null, "cluster7",
-                new DefaultReplicationPolicy(), 50, producer);
+                new DefaultReplicationPolicy(), 50, producer, null, null, null);
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(consumerRecord);
         assertEquals("cluster7.topic1", sourceRecord.topic(),
                 "Failure on cluster7.topic1 consumerRecord serde");
@@ -81,61 +88,61 @@ public class MirrorSourceTaskTest {
 
         long upstreamOffset = 0;
         long downstreamOffset = 100;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "always emit offset sync on first update");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "always emit offset sync on first update");
 
         upstreamOffset = 2;
         downstreamOffset = 102;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "upstream offset skipped -> resync");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "upstream offset skipped -> resync");
 
         upstreamOffset = 3;
         downstreamOffset = 152;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertNotEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "no sync");
         assertNotEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "no sync");
 
         upstreamOffset = 4;
         downstreamOffset = 153;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertNotEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "no sync");
         assertNotEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "no sync");
 
         upstreamOffset = 5;
         downstreamOffset = 154;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertNotEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "no sync");
         assertNotEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "no sync");
 
         upstreamOffset = 6;
         downstreamOffset = 205;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "one past target offset");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "one past target offset");
 
         upstreamOffset = 2;
         downstreamOffset = 206;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "upstream reset");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "upstream reset");
 
         upstreamOffset = 3;
         downstreamOffset = 207;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertNotEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "no sync");
         assertNotEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "no sync");
 
         upstreamOffset = 4;
         downstreamOffset = 3;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "downstream reset");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "downstream reset");
 
         upstreamOffset = 5;
         downstreamOffset = 4;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertNotEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "no sync");
         assertNotEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "no sync");
     }
@@ -147,61 +154,61 @@ public class MirrorSourceTaskTest {
         // if max offset lag is zero, should always emit offset syncs
         long upstreamOffset = 0;
         long downstreamOffset = 100;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 100 is incorrect");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 100 is incorrect");
 
         upstreamOffset = 2;
         downstreamOffset = 102;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 102 is incorrect");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 102 is incorrect");
 
         upstreamOffset = 3;
         downstreamOffset = 153;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 153 is incorrect");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 153 is incorrect");
 
         upstreamOffset = 4;
         downstreamOffset = 154;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 154 is incorrect");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 154 is incorrect");
 
         upstreamOffset = 5;
         downstreamOffset = 155;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 155 is incorrect");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 155 is incorrect");
 
         upstreamOffset = 6;
         downstreamOffset = 207;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 207 is incorrect");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 207 is incorrect");
 
         upstreamOffset = 2;
         downstreamOffset = 208;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 208 is incorrect");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 208 is incorrect");
 
         upstreamOffset = 3;
         downstreamOffset = 209;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 209 is incorrect");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 209 is incorrect");
 
         upstreamOffset = 4;
         downstreamOffset = 3;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 3 is incorrect");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 3 is incorrect");
 
         upstreamOffset = 5;
         downstreamOffset = 4;
-        partitionState.update(upstreamOffset, downstreamOffset);
+        partitionState.syncOffsets(upstreamOffset, downstreamOffset);
         assertEquals(upstreamOffset, partitionState.lastSyncUpstreamOffset, "zeroOffsetSync downStreamOffset 4 is incorrect");
         assertEquals(downstreamOffset, partitionState.lastSyncDownstreamOffset, "zeroOffsetSync downStreamOffset 4 is incorrect");
     }
@@ -237,7 +244,7 @@ public class MirrorSourceTaskTest {
         String sourceClusterName = "cluster1";
         ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
-                replicationPolicy, 50, producer);
+                replicationPolicy, 50, producer, null, null, null);
         List<SourceRecord> sourceRecords = mirrorSourceTask.poll();
 
         assertEquals(2, sourceRecords.size());
@@ -283,7 +290,7 @@ public class MirrorSourceTaskTest {
         String sourceClusterName = "cluster1";
         ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
-                replicationPolicy, 50, producer);
+                replicationPolicy, 50, producer, null, null, null);
 
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, 0, 0, System.currentTimeMillis(),
                 TimestampType.CREATE_TIME, key1.length, value1.length, key1, value1, headers, Optional.empty()));
@@ -291,6 +298,70 @@ public class MirrorSourceTaskTest {
         // Expect that commitRecord will not throw an exception
         mirrorSourceTask.commitRecord(sourceRecord, null);
         verifyNoInteractions(producer);
+    }
+
+    @Test
+    public void testPartitionStateMutation() {
+        byte[] recordKey = "key".getBytes();
+        byte[] recordValue = "value".getBytes();
+        int maxOffsetLag = 50;
+        int recordPartition = 0;
+        int recordOffset = 0;
+        int metadataOffset = 100;
+        String topicName = "topic";
+        String sourceClusterName = "sourceCluster";
+
+        RecordHeaders headers = new RecordHeaders();
+        ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        @SuppressWarnings("unchecked")
+        KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        Semaphore outstandingOffsetSyncs = mock(Semaphore.class);
+        PartitionState partitionState = new PartitionState(maxOffsetLag);
+        Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
+                replicationPolicy, maxOffsetLag, producer, outstandingOffsetSyncs, partitionStates, topicName);
+
+        SourceRecord sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, recordPartition,
+                recordOffset, System.currentTimeMillis(), TimestampType.CREATE_TIME, recordKey.length,
+                recordValue.length, recordKey, recordValue, headers, Optional.empty()));
+
+        TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(sourceRecord.sourcePartition());
+        partitionStates.put(sourceTopicPartition, partitionState);
+        RecordMetadata recordMetadata = new RecordMetadata(sourceTopicPartition, metadataOffset, 0, 0, 0, recordPartition);
+
+        when(outstandingOffsetSyncs.tryAcquire()).thenReturn(true);
+        mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
+        assertEquals(recordOffset, partitionState.lastSyncUpstreamOffset, "sync offsets");
+        assertEquals(metadataOffset, partitionState.lastSyncDownstreamOffset, "sync offsets");
+        assertEquals(recordOffset, partitionState.previousUpstreamOffset, "sync offsets");
+        assertEquals(metadataOffset, partitionState.previousDownstreamOffset, "sync offsets");
+
+        int newRecordOffset = 2;
+        int newMetadataOffset = 102;
+        recordMetadata = new RecordMetadata(sourceTopicPartition, newMetadataOffset, 0, 0, 0, recordPartition);
+        sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, recordPartition,
+                newRecordOffset, System.currentTimeMillis(), TimestampType.CREATE_TIME, recordKey.length,
+                recordValue.length, recordKey, recordValue, headers, Optional.empty()));
+
+        when(outstandingOffsetSyncs.tryAcquire()).thenReturn(false);
+        mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
+        assertEquals(recordOffset, partitionState.lastSyncUpstreamOffset, "no sync");
+        assertEquals(metadataOffset, partitionState.lastSyncDownstreamOffset, "no sync");
+        assertEquals(newRecordOffset, partitionState.previousUpstreamOffset, "update previuos upstream offset");
+        assertEquals(newMetadataOffset, partitionState.previousDownstreamOffset, "update previuos upstream offset");
+
+        when(outstandingOffsetSyncs.tryAcquire()).thenReturn(true);
+        mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
+        assertEquals(newRecordOffset, partitionState.lastSyncUpstreamOffset, "sync offsets");
+        assertEquals(newMetadataOffset, partitionState.lastSyncDownstreamOffset, "sync offsets");
+        assertEquals(newRecordOffset, partitionState.previousUpstreamOffset, "sync offsets");
+        assertEquals(newMetadataOffset, partitionState.previousDownstreamOffset, "sync offsets");
+        verify(producer, times(2)).send(any(), any());
     }
 
     private void compareHeaders(List<Header> expectedHeaders, List<org.apache.kafka.connect.header.Header> taskHeaders) {
@@ -304,4 +375,5 @@ public class MirrorSourceTaskTest {
                     "taskHeader's value expected to equal " + taskHeader.value().toString());
         }
     }
+
 }

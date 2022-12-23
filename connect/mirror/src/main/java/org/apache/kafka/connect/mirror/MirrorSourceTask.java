@@ -69,7 +69,9 @@ public class MirrorSourceTask extends SourceTask {
 
     // for testing
     MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceMetrics metrics, String sourceClusterAlias,
-                     ReplicationPolicy replicationPolicy, long maxOffsetLag, KafkaProducer<byte[], byte[]> producer) {
+                     ReplicationPolicy replicationPolicy, long maxOffsetLag, KafkaProducer<byte[], byte[]> producer,
+                     Semaphore outstandingOffsetSyncs, Map<TopicPartition, PartitionState> partitionStates,
+                     String offsetSyncsTopic) {
         this.consumer = consumer;
         this.metrics = metrics;
         this.sourceClusterAlias = sourceClusterAlias;
@@ -77,6 +79,9 @@ public class MirrorSourceTask extends SourceTask {
         this.maxOffsetLag = maxOffsetLag;
         consumerAccess = new Semaphore(1);
         this.offsetProducer = producer;
+        this.outstandingOffsetSyncs = outstandingOffsetSyncs;
+        this.partitionStates = partitionStates;
+        this.offsetSyncsTopic = offsetSyncsTopic;
     }
 
     @Override
@@ -197,9 +202,9 @@ public class MirrorSourceTask extends SourceTask {
             long downstreamOffset) {
         PartitionState partitionState =
             partitionStates.computeIfAbsent(topicPartition, x -> new PartitionState(maxOffsetLag));
-        if (partitionState.shouldUpdate(upstreamOffset, downstreamOffset)) {
+        if (partitionState.shouldSyncOffsets(upstreamOffset, downstreamOffset)) {
             if (sendOffsetSync(topicPartition, upstreamOffset, downstreamOffset)) {
-                partitionState.update(upstreamOffset, downstreamOffset);
+                partitionState.syncOffsets(upstreamOffset, downstreamOffset);
             }
         }
     }
@@ -280,23 +285,24 @@ public class MirrorSourceTask extends SourceTask {
             this.maxOffsetLag = maxOffsetLag;
         }
 
-        void update(long upstreamOffset, long downstreamOffset) {
-            if (shouldUpdate(upstreamOffset, downstreamOffset)) {
+        void syncOffsets(long upstreamOffset, long downstreamOffset) {
+            if (shouldSyncOffsets(upstreamOffset, downstreamOffset)) {
                 lastSyncUpstreamOffset = upstreamOffset;
                 lastSyncDownstreamOffset = downstreamOffset;
             }
-            previousUpstreamOffset = upstreamOffset;
-            previousDownstreamOffset = downstreamOffset;
         }
 
         // true if we should emit an offset sync
-        boolean shouldUpdate(long upstreamOffset, long downstreamOffset) {
+        boolean shouldSyncOffsets(long upstreamOffset, long downstreamOffset) {
             long upstreamStep = upstreamOffset - lastSyncUpstreamOffset;
             long downstreamTargetOffset = lastSyncDownstreamOffset + upstreamStep;
-            return lastSyncDownstreamOffset == -1L
+            boolean shouldSyncOffsets = lastSyncDownstreamOffset == -1L
                     || downstreamOffset - downstreamTargetOffset >= maxOffsetLag
                     || upstreamOffset - previousUpstreamOffset != 1L
                     || downstreamOffset < previousDownstreamOffset;
+            previousUpstreamOffset = upstreamOffset;
+            previousDownstreamOffset = downstreamOffset;
+            return shouldSyncOffsets;
         }
     }
 }
