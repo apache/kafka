@@ -28,7 +28,7 @@ import java.util.Objects;
  */
 public class LogOffsetMetadata {
 
-    //TODO remove once UnifiedLog has been moved to the storage module
+    //TODO KAFKA-14484 remove once UnifiedLog has been moved to the storage module
     private static final long UNIFIED_LOG_UNKNOWN_OFFSET = -1L;
 
     public static final LogOffsetMetadata UNKNOWN_OFFSET_METADATA = new LogOffsetMetadata(-1L, 0L, 0);
