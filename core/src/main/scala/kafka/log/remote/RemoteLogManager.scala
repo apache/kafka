@@ -19,12 +19,12 @@ package kafka.log.remote
 import kafka.cluster.Partition
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.Logging
 import org.apache.kafka.common._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{RecordBatch, RemoteLogInputStream}
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, Utils}
+import org.apache.kafka.server.log.internals.LeaderEpochFileCache
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager
 import org.apache.kafka.server.log.remote.storage.{ClassLoaderAwareRemoteStorageManager, RemoteLogManagerConfig, RemoteLogMetadataManager, RemoteLogSegmentMetadata, RemoteStorageManager}
 
@@ -34,6 +34,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import scala.collection.Set
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 /**
@@ -255,7 +256,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
     }
 
     // Get the respective epoch in which the starting-offset exists.
-    var maybeEpoch = leaderEpochCache.epochForOffset(startingOffset)
+    var maybeEpoch = leaderEpochCache.epochForOffset(startingOffset).asScala
     while (maybeEpoch.nonEmpty) {
       val epoch = maybeEpoch.get
       remoteLogMetadataManager.listRemoteLogSegments(new TopicIdPartition(topicId, tp), epoch).asScala
@@ -268,7 +269,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
         )
 
       // Move to the next epoch if not found with the current epoch.
-      maybeEpoch = leaderEpochCache.nextEpoch(epoch)
+      maybeEpoch = leaderEpochCache.nextEpoch(epoch).asScala
     }
     None
   }

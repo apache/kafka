@@ -21,8 +21,6 @@ import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochCheckpointF
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import scala.jdk.CollectionConverters._
-
 class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
 
   @Test
@@ -32,22 +30,22 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
     val checkpoint = new LeaderEpochCheckpointFile(file)
 
     //Given
-    val epochs = Seq(new EpochEntry(0, 1L), new EpochEntry(1, 2L), new EpochEntry(2, 3L))
+    val epochs = java.util.Arrays.asList(new EpochEntry(0, 1L), new EpochEntry(1, 2L), new EpochEntry(2, 3L))
 
     //When
-    checkpoint.write(epochs.asJava)
+    checkpoint.write(epochs)
 
     //Then
     assertEquals(epochs, checkpoint.read())
 
     //Given overwrite
-    val epochs2 = Seq(new EpochEntry(3, 4L), new EpochEntry(4, 5L))
+    val epochs2 = java.util.Arrays.asList(new EpochEntry(3, 4L), new EpochEntry(4, 5L))
 
     //When
-    checkpoint.write(epochs2.asJava)
+    checkpoint.write(epochs2)
 
     //Then
-    assertEquals(epochs2, checkpoint.read().asScala.toSeq)
+    assertEquals(epochs2, checkpoint.read())
   }
 
   @Test
@@ -56,13 +54,13 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
 
     //Given a file with data in
     val checkpoint = new LeaderEpochCheckpointFile(file)
-    val epochs = Seq(new EpochEntry(0, 1L), new EpochEntry(1, 2L), new EpochEntry(2, 3L))
-    checkpoint.write(epochs.asJava)
+    val epochs = java.util.Arrays.asList(new EpochEntry(0, 1L), new EpochEntry(1, 2L), new EpochEntry(2, 3L))
+    checkpoint.write(epochs)
 
     //When we recreate
     val checkpoint2 = new LeaderEpochCheckpointFile(file)
 
     //The data should still be there
-    assertEquals(epochs, checkpoint2.read().asScala.toSeq)
+    assertEquals(epochs, checkpoint2.read())
   }
 }

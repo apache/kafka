@@ -17,7 +17,6 @@
 package kafka.log
 
 import java.io.File
-import kafka.server.epoch.LeaderEpochFileCache
 import java.util.OptionalLong
 
 import kafka.utils.TestUtils
@@ -26,7 +25,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
-import org.apache.kafka.server.log.internals.{BatchMetadata, EpochEntry, LeaderEpochCheckpoint, LogConfig, ProducerStateEntry}
+import org.apache.kafka.server.log.internals.{BatchMetadata, EpochEntry, LeaderEpochCheckpoint, LeaderEpochFileCache, LogConfig, ProducerStateEntry}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -405,7 +404,7 @@ class LogSegmentTest {
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     seg.recover(newProducerStateManager(), Some(cache))
-    assertEquals(ArrayBuffer(new EpochEntry(0, 104L),
+    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 104L),
                              new EpochEntry(1, 106),
                              new EpochEntry(2, 110)),
       cache.epochEntries)

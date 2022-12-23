@@ -26,7 +26,6 @@ import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, OffsetAndEpoch, PartitionMetadataFile, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.errors._
@@ -41,7 +40,7 @@ import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, FetchIsolation, LastRecord, LeaderEpochCheckpointFile, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator, ProducerAppendInfo}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderEpochCheckpointFile, LeaderEpochFileCache, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator, ProducerAppendInfo}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
@@ -1006,11 +1005,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  def latestEpoch: Option[Int] = leaderEpochCache.flatMap(_.latestEpoch)
+  def latestEpoch: Option[Int] = leaderEpochCache.flatMap(_.latestEpoch.asScala).map(Int.unbox(_))
 
   def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
     leaderEpochCache.flatMap { cache =>
-      val (foundEpoch, foundOffset) = cache.endOffsetFor(leaderEpoch, logEndOffset)
+      val entry = cache.endOffsetFor(leaderEpoch, logEndOffset)
+      val (foundEpoch, foundOffset) = (entry.getKey(), entry.getValue())
       if (foundOffset == UNDEFINED_EPOCH_OFFSET)
         None
       else
@@ -1297,7 +1297,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // The first cached epoch usually corresponds to the log start offset, but we have to verify this since
         // it may not be true following a message format version bump as the epoch will not be available for
         // log entries written in the older format.
-        val earliestEpochEntry = leaderEpochCache.flatMap(_.earliestEntry)
+        val earliestEpochEntry = leaderEpochCache.flatMap(_.earliestEntry().asScala)
         val epochOpt = earliestEpochEntry match {
           case Some(entry) if entry.startOffset <= logStartOffset => Optional.of[Integer](entry.epoch)
           case _ => Optional.empty[Integer]()
@@ -1305,15 +1305,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
         val curLocalLogStartOffset = localLogStartOffset()
-        val earliestLocalLogEpochEntry = leaderEpochCache.flatMap(cache =>
-          cache.epochForOffset(curLocalLogStartOffset).flatMap(cache.epochEntry))
+        val earliestLocalLogEpochEntry: Option[EpochEntry] = leaderEpochCache.flatMap(cache =>
+          cache.epochForOffset(curLocalLogStartOffset).flatMap(x => cache.epochEntry(x)).asScala)
         val epochOpt = earliestLocalLogEpochEntry match {
           case Some(entry) if entry.startOffset <= curLocalLogStartOffset => Optional.of[Integer](entry.epoch)
           case _ => Optional.empty[Integer]()
         }
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
-        val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
+        val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch.asScala)
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epochOptional))
       } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
@@ -1321,7 +1321,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // constant time access while being safe to use with concurrent collections unlike `toArray`.
         val segmentsCopy = logSegments.toBuffer
         val latestTimestampSegment = segmentsCopy.maxBy(_.maxTimestampSoFar)
-        val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
+        val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch.asScala)
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
         val latestTimestampAndOffset = latestTimestampSegment.maxTimestampAndOffsetSoFar
         Some(new TimestampAndOffset(latestTimestampAndOffset.timestamp,

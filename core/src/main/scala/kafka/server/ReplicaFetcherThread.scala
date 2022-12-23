@@ -292,7 +292,7 @@ class ReplicaFetcherThread(name: String,
           log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
           val epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata)
           log.leaderEpochCache.foreach { cache =>
-            cache.assign(epochs)
+            cache.assign(epochs.asJava)
           }
 
           debug(s"Updated the epoch cache from remote tier till offset: $leaderLocalLogStartOffset " +

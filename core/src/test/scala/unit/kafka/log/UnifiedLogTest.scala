@@ -24,7 +24,6 @@ import java.util.concurrent.{Callable, ConcurrentHashMap, Executors}
 import java.util.{Optional, Properties}
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicStats, KafkaConfig, PartitionMetadataFile}
 import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
@@ -37,7 +36,7 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, EpochEntry, LeaderEpochCheckpointFile, FetchIsolation, LogConfig, LogOffsetMetadata, RecordValidationException}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, EpochEntry, LeaderEpochCheckpointFile, FetchIsolation, LeaderEpochFileCache, LogConfig, LogOffsetMetadata, RecordValidationException}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
@@ -49,6 +48,7 @@ import org.mockito.Mockito.{mock, when}
 
 import scala.annotation.nowarn
 import scala.collection.Map
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 
@@ -596,14 +596,14 @@ class UnifiedLogTest {
       baseOffset = 27)
     appendAsFollower(log, records, leaderEpoch = 19)
     assertEquals(Some(new EpochEntry(19, 27)),
-      log.leaderEpochCache.flatMap(_.latestEntry))
+      log.leaderEpochCache.flatMap(_.latestEntry.asScala))
     assertEquals(29, log.logEndOffset)
 
     def verifyTruncationClearsEpochCache(epoch: Int, truncationOffset: Long): Unit = {
       // Simulate becoming a leader
       log.maybeAssignEpochStartOffset(leaderEpoch = epoch, startOffset = log.logEndOffset)
       assertEquals(Some(new EpochEntry(epoch, 29)),
-        log.leaderEpochCache.flatMap(_.latestEntry))
+        log.leaderEpochCache.flatMap(_.latestEntry.asScala))
       assertEquals(29, log.logEndOffset)
 
       // Now we become the follower and truncate to an offset greater
@@ -611,7 +611,7 @@ class UnifiedLogTest {
       // at the end of the log should be gone
       log.truncateTo(truncationOffset)
       assertEquals(Some(new EpochEntry(19, 27)),
-        log.leaderEpochCache.flatMap(_.latestEntry))
+        log.leaderEpochCache.flatMap(_.latestEntry.asScala))
       assertEquals(29, log.logEndOffset)
     }
 
@@ -2375,12 +2375,12 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
-    assertEquals(Some(5), log.leaderEpochCache.flatMap(_.latestEpoch))
+    assertEquals(Some(5), log.leaderEpochCache.flatMap(_.latestEpoch.asScala))
 
     log.appendAsFollower(TestUtils.records(List(new SimpleRecord("foo".getBytes())),
       baseOffset = 1L,
       magicValue = RecordVersion.V1.value))
-    assertEquals(None, log.leaderEpochCache.flatMap(_.latestEpoch))
+    assertEquals(None, log.leaderEpochCache.flatMap(_.latestEpoch.asScala))
   }
 
   @nowarn("cat=deprecation")
@@ -2539,7 +2539,7 @@ class UnifiedLogTest {
     log.deleteOldSegments()
     assertEquals(1, log.numberOfSegments, "The deleted segments should be gone.")
     assertEquals(1, epochCache(log).epochEntries.size, "Epoch entries should have gone.")
-    assertEquals(new EpochEntry(1, 100), epochCache(log).epochEntries.head, "Epoch entry should be the latest epoch and the leo.")
+    assertEquals(new EpochEntry(1, 100), epochCache(log).epochEntries.get(0), "Epoch entry should be the latest epoch and the leo.")
 
     // append some messages to create some segments
     for (_ <- 0 until 100)
@@ -2790,7 +2790,7 @@ class UnifiedLogTest {
     log.deleteOldSegments()
 
     //The oldest epoch entry should have been removed
-    assertEquals(ListBuffer(new EpochEntry(1, 5), new EpochEntry(2, 10)), cache.epochEntries)
+    assertEquals(java.util.Arrays.asList(new EpochEntry(1, 5), new EpochEntry(2, 10)), cache.epochEntries)
   }
 
   @Test
@@ -2815,7 +2815,7 @@ class UnifiedLogTest {
     log.deleteOldSegments()
 
     //The first entry should have gone from (0,0) => (0,5)
-    assertEquals(ListBuffer(new EpochEntry(0, 5), new EpochEntry(1, 7), new EpochEntry(2, 10)), cache.epochEntries)
+    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 5), new EpochEntry(1, 7), new EpochEntry(2, 10)), cache.epochEntries)
   }
 
   @Test

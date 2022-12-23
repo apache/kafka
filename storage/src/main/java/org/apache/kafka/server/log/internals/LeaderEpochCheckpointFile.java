@@ -42,13 +42,9 @@ public class LeaderEpochCheckpointFile implements LeaderEpochCheckpoint {
 
     public static final Formatter FORMATTER = new Formatter();
 
-    private final File file;
-    private final LogDirFailureChannel logDirFailureChannel;
     private final CheckpointFileWithFailureHandler<EpochEntry> checkpoint;
 
     public LeaderEpochCheckpointFile(File file, LogDirFailureChannel logDirFailureChannel) throws IOException {
-        this.file = file;
-        this.logDirFailureChannel = logDirFailureChannel;
         checkpoint = new CheckpointFileWithFailureHandler<>(file, CURRENT_VERSION, FORMATTER, logDirFailureChannel, file.getParentFile().getParent());
     }
 

@@ -117,21 +117,21 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val logStartOffset = partition.localLogOrException.logStartOffset
     val epoch = partition.localLogOrException.leaderEpochCache.get.epochForOffset(logStartOffset)
-    (epoch.getOrElse(0), logStartOffset)
+    (epoch.orElse(0), logStartOffset)
   }
 
   override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long) = {
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val logEndOffset = partition.localLogOrException.logEndOffset
     val epoch = partition.localLogOrException.leaderEpochCache.get.epochForOffset(logEndOffset)
-    (epoch.getOrElse(0), logEndOffset)
+    (epoch.orElse(0), logEndOffset)
   }
 
   override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long) = {
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val localLogStartOffset = partition.localLogOrException.localLogStartOffset()
     val epoch = partition.localLogOrException.leaderEpochCache.get.epochForOffset(localLogStartOffset)
-    (epoch.getOrElse(0), localLogStartOffset)
+    (epoch.orElse(0), localLogStartOffset)
   }
 
   override def fetchEpochEndOffsets(partitions: collection.Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {

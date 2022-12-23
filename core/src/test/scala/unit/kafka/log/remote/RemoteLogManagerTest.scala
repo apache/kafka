@@ -19,13 +19,12 @@ package kafka.log.remote
 import kafka.cluster.Partition
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.MockTime
 import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochCheckpoint, OffsetIndex, TimeIndex}
+import org.apache.kafka.server.log.internals._
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.test.TestUtils
@@ -226,9 +225,9 @@ class RemoteLogManagerTest {
       .thenAnswer(_ => new ByteArrayInputStream(records(ts, startOffset, targetLeaderEpoch).buffer().array()))
 
     val leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint)
-    leaderEpochFileCache.assign(epoch = 5, startOffset = 99L)
-    leaderEpochFileCache.assign(epoch = targetLeaderEpoch, startOffset = startOffset)
-    leaderEpochFileCache.assign(epoch = 12, startOffset = 500L)
+    leaderEpochFileCache.assign(5, 99L)
+    leaderEpochFileCache.assign(targetLeaderEpoch, startOffset)
+    leaderEpochFileCache.assign(12, 500L)
 
     remoteLogManager.onLeadershipChange(Set(mockPartition(leaderTopicIdPartition)), Set(), topicIds)
     // Fetching message for timestamp `ts` will return the message with startOffset+1, and `ts+1` as there are no

@@ -23,21 +23,19 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
-
 public class CheckpointFileWithFailureHandler<T> {
 
     public final File file;
     public final int version;
-    private final CheckpointFile.EntryFormatter<T> formatter;
     private final LogDirFailureChannel logDirFailureChannel;
     private final String logDir;
 
     private final CheckpointFile<T> checkpointFile;
 
-    public CheckpointFileWithFailureHandler(File file, int version, CheckpointFile.EntryFormatter<T> formatter, LogDirFailureChannel logDirFailureChannel, String logDir) throws IOException {
+    public CheckpointFileWithFailureHandler(File file, int version, CheckpointFile.EntryFormatter<T> formatter,
+                                            LogDirFailureChannel logDirFailureChannel, String logDir) throws IOException {
         this.file = file;
         this.version = version;
-        this.formatter = formatter;
         this.logDirFailureChannel = logDirFailureChannel;
         this.logDir = logDir;
         checkpointFile = new CheckpointFile<>(file, version, formatter);
@@ -47,7 +45,7 @@ public class CheckpointFileWithFailureHandler<T> {
         try {
             checkpointFile.write(entries);
         } catch (IOException e) {
-            String msg = "Error while writing to checkpoint file ${file.getAbsolutePath}";
+            String msg = "Error while writing to checkpoint file " + file.getAbsolutePath();
             logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e);
             throw new KafkaStorageException(msg, e);
         }
@@ -57,7 +55,7 @@ public class CheckpointFileWithFailureHandler<T> {
         try {
             return checkpointFile.read();
         } catch (IOException e) {
-            String msg = "Error while reading checkpoint file ${file.getAbsolutePath}";
+            String msg = "Error while reading checkpoint file " + file.getAbsolutePath();
             logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e);
             throw new KafkaStorageException(msg, e);
         }

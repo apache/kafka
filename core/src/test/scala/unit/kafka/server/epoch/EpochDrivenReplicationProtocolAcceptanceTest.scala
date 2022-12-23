@@ -17,28 +17,26 @@
 
 package kafka.server.epoch
 
-import java.io.{File, RandomAccessFile}
-import java.util.Properties
 import kafka.log.{LogLoader, UnifiedLog}
 import kafka.server.KafkaConfig._
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.tools.DumpLogSegments
-import kafka.utils.{CoreUtils, Logging, TestUtils}
 import kafka.utils.TestUtils._
-import kafka.server.QuorumTestHarness
+import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.EpochEntry
+import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochFileCache}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable.{ListBuffer => Buffer}
+import java.io.{File, RandomAccessFile}
+import java.util.{Collections, Properties}
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
 /**
   * These tests were written to assert the addition of leader epochs to the replication protocol fix the problems
@@ -90,23 +88,23 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(0, latestRecord(follower).partitionLeaderEpoch)
 
     //Both leader and follower should have recorded Epoch 0 at Offset 0
-    assertEquals(Buffer(new EpochEntry(0, 0)), epochCache(leader).epochEntries)
-    assertEquals(Buffer(new EpochEntry(0, 0)), epochCache(follower).epochEntries)
+    assertEquals(Collections.singletonList(new EpochEntry(0, 0)), epochCache(leader).epochEntries)
+    assertEquals(Collections.singletonList(new EpochEntry(0, 0)), epochCache(follower).epochEntries)
 
     //Bounce the follower
     bounce(follower)
     awaitISR(tp)
 
     //Nothing happens yet as we haven't sent any new messages.
-    assertEquals(Buffer(new EpochEntry(0, 0), new EpochEntry(1, 1)), epochCache(leader).epochEntries)
-    assertEquals(Buffer(new EpochEntry(0, 0)), epochCache(follower).epochEntries)
+    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1)), epochCache(leader).epochEntries)
+    assertEquals(Collections.singletonList(new EpochEntry(0, 0)), epochCache(follower).epochEntries)
 
     //Send a message
     producer.send(new ProducerRecord(topic, 0, null, msg)).get
 
     //Epoch1 should now propagate to the follower with the written message
-    assertEquals(Buffer(new EpochEntry(0, 0), new EpochEntry(1, 1)), epochCache(leader).epochEntries)
-    assertEquals(Buffer(new EpochEntry(0, 0), new EpochEntry(1, 1)), epochCache(follower).epochEntries)
+    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1)), epochCache(leader).epochEntries)
+    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1)), epochCache(follower).epochEntries)
 
     //The new message should have epoch 1 stamped
     assertEquals(1, latestRecord(leader).partitionLeaderEpoch())
@@ -117,8 +115,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     awaitISR(tp)
 
     //Epochs 2 should be added to the leader, but not on the follower (yet), as there has been no replication.
-    assertEquals(Buffer(new EpochEntry(0, 0), new EpochEntry(1, 1), new EpochEntry(2, 2)), epochCache(leader).epochEntries)
-    assertEquals(Buffer(new EpochEntry(0, 0), new EpochEntry(1, 1)), epochCache(follower).epochEntries)
+    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1), new EpochEntry(2, 2)), epochCache(leader).epochEntries)
+    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1)), epochCache(follower).epochEntries)
 
     //Send a message
     producer.send(new ProducerRecord(topic, 0, null, msg)).get
@@ -128,8 +126,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(2, latestRecord(follower).partitionLeaderEpoch())
 
     //The leader epoch files should now match on leader and follower
-    assertEquals(Buffer(new EpochEntry(0, 0), new EpochEntry(1, 1), new EpochEntry(2, 2)), epochCache(leader).epochEntries)
-    assertEquals(Buffer(new EpochEntry(0, 0), new EpochEntry(1, 1), new EpochEntry(2, 2)), epochCache(follower).epochEntries)
+    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1), new EpochEntry(2, 2)), epochCache(leader).epochEntries)
+    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1), new EpochEntry(2, 2)), epochCache(follower).epochEntries)
   }
 
   @Test
