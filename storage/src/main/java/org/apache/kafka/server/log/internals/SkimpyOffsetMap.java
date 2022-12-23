@@ -86,7 +86,7 @@ public class SkimpyOffsetMap implements OffsetMap {
         this.digest = MessageDigest.getInstance(hashAlgorithm);
 
         this.hashSize = digest.getDigestLength();
-        this.bytesPerEntry = hashSize * 8;
+        this.bytesPerEntry = hashSize + 8;
         this.slots = memory / bytesPerEntry;
 
         this.hash1 = new byte[hashSize];
@@ -134,7 +134,8 @@ public class SkimpyOffsetMap implements OffsetMap {
     @Override
     public void put(ByteBuffer key, long offset) throws DigestException {
         if (entries >= slots)
-            throw new IllegalArgumentException("Attempt to add a new entry to a full offset map.");
+            throw new IllegalArgumentException("Attempted to add a new entry to a full offset map, "
+                + "entries: " + entries + ", slots: " + slots);
 
         ++lookups;
         hashInto(key, hash1);
