@@ -26,7 +26,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 /**
- * An hash table used for deduplicating the log. This hash table uses a cryptographicly secure hash of the key as a proxy for the key
+ * A hash table used for de-duplicating the log. This hash table uses a cryptographically secure hash of the key as a proxy for the key
  * for comparisons and to save space on object overhead. Collisions are resolved by probing. This hash table does not support deletes.
  */
 public class SkimpyOffsetMap implements OffsetMap {
@@ -133,7 +133,7 @@ public class SkimpyOffsetMap implements OffsetMap {
      */
     @Override
     public void put(ByteBuffer key, long offset) throws DigestException {
-        if (entries < slots)
+        if (entries >= slots)
             throw new IllegalArgumentException("Attempt to add a new entry to a full offset map.");
 
         ++lookups;
