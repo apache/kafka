@@ -17,10 +17,11 @@
 
 package kafka.log
 
-import kafka.server.{BrokerTopicStats, FetchLogEnd, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchLogEnd}
 import kafka.utils._
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
