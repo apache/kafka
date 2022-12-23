@@ -444,12 +444,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def maybeUpdateHighWatermark(hw: Long): Option[Long] = {
     lock.synchronized {
-      val oldHighWatermark = highWatermarkMetadata.messageOffset()
-      val updatedHighWatermark = updateHighWatermark(new LogOffsetMetadata(hw))
-      if (updatedHighWatermark == oldHighWatermark)
-        None
-      else
-        Some(updatedHighWatermark)
+      val oldHighWatermark = highWatermarkMetadata
+      updateHighWatermark(new LogOffsetMetadata(hw)) match {
+        case oldHighWatermark.messageOffset =>
+          None
+        case newHighWatermark =>
+          Some(newHighWatermark)
+      }
     }
   }
 
@@ -953,7 +954,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             case None =>
               // Before appending update the first offset metadata to include segment information
               appendInfo.firstOffset = appendInfo.firstOffset.map { offsetMetadata =>
-                new LogOffsetMetadata(offsetMetadata.messageOffset(), segment.baseOffset, segment.size)
+                new LogOffsetMetadata(offsetMetadata.messageOffset, segment.baseOffset, segment.size)
               }
 
               // Append the records, and increment the local log end offset immediately after the append because a

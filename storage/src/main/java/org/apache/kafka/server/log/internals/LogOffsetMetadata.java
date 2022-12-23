@@ -18,15 +18,13 @@ package org.apache.kafka.server.log.internals;
 
 import org.apache.kafka.common.KafkaException;
 
-import java.util.Objects;
-
 /*
  * A log offset structure, including:
  *  1. the message offset
  *  2. the base message offset of the located segment
  *  3. the physical position on the located segment
  */
-public class LogOffsetMetadata {
+public final class LogOffsetMetadata {
 
     //TODO KAFKA-14484 remove once UnifiedLog has been moved to the storage module
     private static final long UNIFIED_LOG_UNKNOWN_OFFSET = -1L;
@@ -35,9 +33,9 @@ public class LogOffsetMetadata {
 
     private static final int UNKNOWN_FILE_POSITION = -1;
 
-    private final long messageOffset;
-    private final long segmentBaseOffset;
-    private final int relativePositionInSegment;
+    public final long messageOffset;
+    public final long segmentBaseOffset;
+    public final int relativePositionInSegment;
 
     public LogOffsetMetadata(long messageOffset) {
         this(messageOffset, UNIFIED_LOG_UNKNOWN_OFFSET, UNKNOWN_FILE_POSITION);
@@ -51,18 +49,6 @@ public class LogOffsetMetadata {
         this.relativePositionInSegment = relativePositionInSegment;
     }
 
-    public long messageOffset() {
-        return messageOffset;
-    }
-
-    public long segmentBaseOffset() {
-        return segmentBaseOffset;
-    }
-
-    public int relativePositionInSegment() {
-        return relativePositionInSegment;
-    }
-
     // check if this offset is already on an older segment compared with the given offset
     public boolean onOlderSegment(LogOffsetMetadata that) {
         if (messageOffsetOnly())
@@ -73,15 +59,14 @@ public class LogOffsetMetadata {
 
     // check if this offset is on the same segment with the given offset
     private boolean onSameSegment(LogOffsetMetadata that) {
-        if (messageOffsetOnly())
-            throw new KafkaException(this + " cannot compare its segment info with " + that + " since it only has message offset info");
-
         return this.segmentBaseOffset == that.segmentBaseOffset;
     }
 
     // compute the number of bytes between this offset to the given offset
     // if they are on the same segment and this offset precedes the given offset
     public int positionDiff(LogOffsetMetadata that) {
+        if (messageOffsetOnly())
+            throw new KafkaException(this + " cannot compare its segment info with " + that + " since it only has message offset info");
         if (!onSameSegment(that))
             throw new KafkaException(this + " cannot compare its segment position with " + that + " since they are not on the same segment");
 
@@ -95,11 +80,7 @@ public class LogOffsetMetadata {
 
     @Override
     public String toString() {
-        return "LogOffsetMetadata{" +
-                "messageOffset=" + messageOffset +
-                ", segmentBaseOffset=" + segmentBaseOffset +
-                ", relativePositionInSegment=" + relativePositionInSegment +
-                '}';
+        return "(offset=" + messageOffset + "segment=[" + segmentBaseOffset + ":" + relativePositionInSegment + "])";
     }
 
     @Override
@@ -107,11 +88,16 @@ public class LogOffsetMetadata {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         LogOffsetMetadata that = (LogOffsetMetadata) o;
-        return messageOffset == that.messageOffset && segmentBaseOffset == that.segmentBaseOffset && relativePositionInSegment == that.relativePositionInSegment;
+        return messageOffset == that.messageOffset
+                && segmentBaseOffset == that.segmentBaseOffset
+                && relativePositionInSegment == that.relativePositionInSegment;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(messageOffset, segmentBaseOffset, relativePositionInSegment);
+        int result = Long.hashCode(messageOffset);
+        result = 31 * result + Long.hashCode(segmentBaseOffset);
+        result = 31 * result + Integer.hashCode(relativePositionInSegment);
+        return result;
     }
 }
