@@ -19,8 +19,6 @@ package kafka.server
 
 import kafka.log.remote.RemoteLogManager
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo, UnifiedLog}
-import kafka.server.checkpoints.LeaderEpochCheckpointFile
-import kafka.server.epoch.EpochEntry
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
@@ -29,6 +27,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.common.CheckpointFile.CheckpointReadBuffer
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochCheckpointFile}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
 
 import java.io.{BufferedReader, File, InputStreamReader}
@@ -333,7 +332,7 @@ class ReplicaFetcherThread(name: String,
     val inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.LEADER_EPOCH)
     val bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     try {
-      val readBuffer = new CheckpointReadBuffer[EpochEntry]("", bufferedReader,  0, LeaderEpochCheckpointFile.Formatter)
+      val readBuffer = new CheckpointReadBuffer[EpochEntry]("", bufferedReader,  0, LeaderEpochCheckpointFile.FORMATTER)
       readBuffer.read().asScala.toSeq
     } finally {
       bufferedReader.close()

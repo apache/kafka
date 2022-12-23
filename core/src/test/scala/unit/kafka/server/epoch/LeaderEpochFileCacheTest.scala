@@ -17,17 +17,17 @@
 
 package kafka.server.epoch
 
-import java.io.File
-
-import scala.collection.Seq
-import scala.collection.mutable.ListBuffer
-
-import kafka.server.checkpoints.{LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
+import java.io.File
+import scala.collection.Seq
+import scala.collection.mutable.ListBuffer
+import scala.jdk.CollectionConverters._
 
 /**
   * Unit test for the LeaderEpochFileCache.
@@ -36,9 +36,10 @@ class LeaderEpochFileCacheTest {
   val tp = new TopicPartition("TestTopic", 5)
   private val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
     private var epochs: Seq[EpochEntry] = Seq()
-    override def write(epochs: Iterable[EpochEntry]): Unit = this.epochs = epochs.toSeq
-    override def read(): Seq[EpochEntry] = this.epochs
+    override def write(epochs: java.util.List[EpochEntry]): Unit = this.epochs = epochs.asScala.toSeq
+    override def read(): java.util.List[EpochEntry] = this.epochs.asJava
   }
+
   private val cache = new LeaderEpochFileCache(tp, checkpoint)
 
   @Test
@@ -66,7 +67,7 @@ class LeaderEpochFileCacheTest {
 
     //Then
     assertEquals(Some(2), cache.latestEpoch)
-    assertEquals(EpochEntry(2, 10), cache.epochEntries(0))
+    assertEquals(new EpochEntry(2, 10), cache.epochEntries(0))
     assertEquals((2, logEndOffset), cache.endOffsetFor(2, logEndOffset)) //should match logEndOffset
   }
 
@@ -109,7 +110,7 @@ class LeaderEpochFileCacheTest {
 
     //Then the offset should NOT have been updated
     assertEquals(logEndOffset, cache.epochEntries(0).startOffset)
-    assertEquals(ListBuffer(EpochEntry(2, 9)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(2, 9)), cache.epochEntries)
   }
 
   @Test
@@ -121,7 +122,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(3, 9)
 
     //Then epoch should have been updated
-    assertEquals(ListBuffer(EpochEntry(3, 9)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(3, 9)), cache.epochEntries)
   }
 
   @Test
@@ -212,7 +213,7 @@ class LeaderEpochFileCacheTest {
 
     //Then
     assertEquals(1, cache.epochEntries.size)
-    assertEquals(EpochEntry(2, 6), cache.epochEntries.toList(0))
+    assertEquals(new EpochEntry(2, 6), cache.epochEntries.toList(0))
   }
 
   @Test
@@ -233,7 +234,7 @@ class LeaderEpochFileCacheTest {
     //Then
     assertEquals((2, logEndOffset), cache.endOffsetFor(2, logEndOffset))
     assertEquals(1, cache.epochEntries.size)
-    assertEquals(EpochEntry(2, 6), cache.epochEntries(0))
+    assertEquals(new EpochEntry(2, 6), cache.epochEntries(0))
   }
 
   @Test
@@ -251,7 +252,7 @@ class LeaderEpochFileCacheTest {
 
     //Then
     assertEquals(1, cache2.epochEntries.size)
-    assertEquals(EpochEntry(2, 6), cache2.epochEntries.toList(0))
+    assertEquals(new EpochEntry(2, 6), cache2.epochEntries.toList(0))
   }
 
   @Test
@@ -278,7 +279,7 @@ class LeaderEpochFileCacheTest {
 
     //Then end offset for epoch 2 is now undefined
     assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), cache.endOffsetFor(2, logEndOffset))
-    assertEquals(EpochEntry(1, 7), cache.epochEntries(0))
+    assertEquals(new EpochEntry(1, 7), cache.epochEntries(0))
   }
 
   @Test
@@ -288,7 +289,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 3, startOffset = 5)
 
     //The last assignment wins and the conflicting one is removed from the log
-    assertEquals(EpochEntry(3, 5), cache.epochEntries.toList(0))
+    assertEquals(new EpochEntry(3, 5), cache.epochEntries.toList(0))
   }
 
   @Test
@@ -383,7 +384,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromEnd(endOffset = 8)
 
     //Then should remove two latest epochs (remove is inclusive)
-    assertEquals(ListBuffer(EpochEntry(2, 6)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(2, 6)), cache.epochEntries)
   }
 
   @Test
@@ -397,7 +398,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromStart(startOffset = 8)
 
     //Then should preserve (3, 8)
-    assertEquals(ListBuffer(EpochEntry(3, 8), EpochEntry(4, 11)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(3, 8), new EpochEntry(4, 11)), cache.epochEntries)
   }
 
   @Test
@@ -411,7 +412,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromStart(startOffset = 9)
 
     //Then we should retain epoch 3, but update it's offset to 9 as 8 has been removed
-    assertEquals(ListBuffer(EpochEntry(3, 9), EpochEntry(4, 11)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(3, 9), new EpochEntry(4, 11)), cache.epochEntries)
   }
 
   @Test
@@ -425,7 +426,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromStart(startOffset = 1)
 
     //Then nothing should change
-    assertEquals(ListBuffer(EpochEntry(2, 6),EpochEntry(3, 8), EpochEntry(4, 11)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(2, 6),new EpochEntry(3, 8), new EpochEntry(4, 11)), cache.epochEntries)
   }
 
   @Test
@@ -439,7 +440,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromStart(startOffset = 6)
 
     //Then nothing should change
-    assertEquals(ListBuffer(EpochEntry(2, 6),EpochEntry(3, 8), EpochEntry(4, 11)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(2, 6),new EpochEntry(3, 8), new EpochEntry(4, 11)), cache.epochEntries)
   }
 
   @Test
@@ -453,7 +454,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromStart(startOffset = 11)
 
     //Then retain the last
-    assertEquals(ListBuffer(EpochEntry(4, 11)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(4, 11)), cache.epochEntries)
   }
 
   @Test
@@ -467,7 +468,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromStart(startOffset = 9)
 
     //Then we should update the middle epoch entry's offset
-    assertEquals(ListBuffer(EpochEntry(3, 9), EpochEntry(4, 11)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(3, 9), new EpochEntry(4, 11)), cache.epochEntries)
   }
 
   @Test
@@ -481,7 +482,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromStart(startOffset = 5)
 
     //Then we should keep epoch 0 but update the offset appropriately
-    assertEquals(ListBuffer(EpochEntry(0,5), EpochEntry(1, 7), EpochEntry(2, 10)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(0,5), new EpochEntry(1, 7), new EpochEntry(2, 10)), cache.epochEntries)
   }
 
   @Test
@@ -495,7 +496,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromStart(startOffset = 15)
 
     //Then update the last
-    assertEquals(ListBuffer(EpochEntry(4, 15)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(4, 15)), cache.epochEntries)
   }
 
   @Test
@@ -510,7 +511,7 @@ class LeaderEpochFileCacheTest {
 
     //Then should keep the preceding epochs
     assertEquals(Some(3), cache.latestEpoch)
-    assertEquals(ListBuffer(EpochEntry(2, 6), EpochEntry(3, 8)), cache.epochEntries)
+    assertEquals(ListBuffer(new EpochEntry(2, 6), new EpochEntry(3, 8)), cache.epochEntries)
   }
 
   @Test
@@ -615,9 +616,9 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 3, startOffset = 500)
     cache.assign(epoch = 5, startOffset = 1000)
 
-    assertEquals(EpochEntry(2, 100), cache.epochEntry(2).get)
-    assertEquals(EpochEntry(3, 500), cache.epochEntry(3).get)
-    assertEquals(EpochEntry(5, 1000), cache.epochEntry(5).get)
+    assertEquals(new EpochEntry(2, 100), cache.epochEntry(2).get)
+    assertEquals(new EpochEntry(3, 500), cache.epochEntry(3).get)
+    assertEquals(new EpochEntry(5, 1000), cache.epochEntry(5).get)
   }
 
   @Test

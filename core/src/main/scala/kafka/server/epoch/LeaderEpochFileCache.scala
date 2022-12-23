@@ -16,15 +16,14 @@
   */
 package kafka.server.epoch
 
-import java.util
-import java.util.concurrent.locks.ReentrantReadWriteLock
-
-import kafka.server.checkpoints.LeaderEpochCheckpoint
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochCheckpoint}
 
+import java.util
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -45,7 +44,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   private val epochs = new util.TreeMap[Int, EpochEntry]()
 
   inWriteLock(lock) {
-    checkpoint.read().foreach(assign)
+    checkpoint.read().asScala.foreach(assign)
   }
 
   /**
@@ -53,7 +52,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     * Once the epoch is assigned it cannot be reassigned
     */
   def assign(epoch: Int, startOffset: Long): Unit = {
-    val entry = EpochEntry(epoch, startOffset)
+    val entry = new EpochEntry(epoch, startOffset)
     if (assign(entry)) {
       debug(s"Appended new epoch entry $entry. Cache now contains ${epochs.size} entries.")
       flush()
@@ -283,7 +282,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
       }
 
       removedEntries.lastOption.foreach { firstBeforeStartOffset =>
-        val updatedFirstEntry = EpochEntry(firstBeforeStartOffset.epoch, startOffset)
+        val updatedFirstEntry = new EpochEntry(firstBeforeStartOffset.epoch, startOffset)
         epochs.put(updatedFirstEntry.epoch, updatedFirstEntry)
 
         flush()
@@ -297,14 +296,15 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   def epochForOffset(offset: Long): Option[Int] = {
     inReadLock(lock) {
       var previousEpoch: Option[Int] = None
-      epochs.values().asScala.foreach {
-        case EpochEntry(epoch, startOffset) =>
-          if (startOffset == offset)
-            return Some(epoch)
-          if (startOffset > offset)
-            return previousEpoch
+      epochs.values().asScala.foreach { epochEntry: EpochEntry =>
+        val epoch = epochEntry.epoch
+        val startOffset = epochEntry.startOffset
+        if (startOffset == offset)
+          return Some(epoch)
+        if (startOffset > offset)
+          return previousEpoch
 
-          previousEpoch = Some(epoch)
+        previousEpoch = Some(epoch)
       }
       previousEpoch
     }
@@ -330,14 +330,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   def epochEntries: Seq[EpochEntry] = epochs.values.asScala.toSeq
 
   def flush(): Unit = {
-    checkpoint.write(epochs.values.asScala)
+    checkpoint.write(new util.ArrayList(epochs.values))
   }
 
-}
-
-// Mapping of epoch to the first offset of the subsequent epoch
-case class EpochEntry(epoch: Int, startOffset: Long) {
-  override def toString: String = {
-    s"EpochEntry(epoch=$epoch, startOffset=$startOffset)"
-  }
 }

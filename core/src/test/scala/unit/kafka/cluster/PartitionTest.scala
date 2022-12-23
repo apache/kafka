@@ -22,7 +22,6 @@ import kafka.common.UnexpectedAppendOffsetException
 import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.server.epoch.EpochEntry
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
@@ -54,7 +53,7 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.log.internals.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
 import org.junit.jupiter.params.ParameterizedTest
@@ -2651,7 +2650,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Some(0L), partition.leaderEpochStartOffsetOpt)
 
     val leaderLog = partition.localLogOrException
-    assertEquals(Some(EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.flatMap(_.latestEntry))
+    assertEquals(Some(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.flatMap(_.latestEntry))
 
     // Write to the log to increment the log end offset.
     leaderLog.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
@@ -2675,7 +2674,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
     assertEquals(Set(leaderId), partition.partitionState.isr)
     assertEquals(Some(0L), partition.leaderEpochStartOffsetOpt)
-    assertEquals(Some(EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.flatMap(_.latestEntry))
+    assertEquals(Some(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.flatMap(_.latestEntry))
   }
 
   @Test

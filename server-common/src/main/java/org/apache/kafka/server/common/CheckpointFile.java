@@ -30,7 +30,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -72,7 +71,7 @@ public class CheckpointFile<T> {
         tempPath = Paths.get(absolutePath.toString() + ".tmp");
     }
 
-    public void write(Collection<T> entries) throws IOException {
+    public void write(List<T> entries) throws IOException {
         synchronized (lock) {
             // write to temp file and then swap with the existing file
             try (FileOutputStream fileOutputStream = new FileOutputStream(tempPath.toFile());

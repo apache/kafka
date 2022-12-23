@@ -16,15 +16,15 @@
   */
 package kafka.server.checkpoints
 
-import kafka.server.epoch.EpochEntry
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.CheckpointFile.EntryFormatter
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.server.log.internals.{CheckpointFileWithFailureHandler, EpochEntry, LogDirFailureChannel}
 
 import java.io._
 import java.util.Optional
 import java.util.regex.Pattern
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 object OffsetCheckpointFile {
   private val WhiteSpacesPattern = Pattern.compile("\\s+")
@@ -62,12 +62,17 @@ trait OffsetCheckpoint {
  *  -----checkpoint file end----------
  */
 class OffsetCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureChannel = null) {
-  val checkpoint = new CheckpointFileWithFailureHandler[(TopicPartition, Long)](file, OffsetCheckpointFile.CurrentVersion,
+  val checkpoint = new CheckpointFileWithFailureHandler[Tuple2[TopicPartition, Long]](file, OffsetCheckpointFile.CurrentVersion,
     OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
 
-  def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets)
+  def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets.map{case (k, v)=> Tuple2(k, v)}.toSeq.asJava)
 
-  def read(): Map[TopicPartition, Long] = checkpoint.read().toMap
+  def read(): Map[TopicPartition, Long] = {
+    val list = checkpoint.read().asScala
+    val result = mutable.Map.empty[TopicPartition, Long]
+    list.foreach { case (tp, offset) => result += tp -> offset }
+    result.toMap
+  }
 
 }
 

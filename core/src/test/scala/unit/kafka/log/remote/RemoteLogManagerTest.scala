@@ -19,14 +19,13 @@ package kafka.log.remote
 import kafka.cluster.Partition
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
-import kafka.server.checkpoints.LeaderEpochCheckpoint
-import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
+import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.MockTime
 import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.log.internals.{OffsetIndex, TimeIndex}
+import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochCheckpoint, OffsetIndex, TimeIndex}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.test.TestUtils
@@ -63,8 +62,8 @@ class RemoteLogManagerTest {
 
   val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
     var epochs: Seq[EpochEntry] = Seq()
-    override def write(epochs: Iterable[EpochEntry]): Unit = this.epochs = epochs.toSeq
-    override def read(): Seq[EpochEntry] = this.epochs
+    override def write(epochs: util.List[EpochEntry]): Unit = this.epochs = epochs.asScala.toSeq
+    override def read(): util.List[EpochEntry] = this.epochs.asJava
   }
 
   @BeforeEach

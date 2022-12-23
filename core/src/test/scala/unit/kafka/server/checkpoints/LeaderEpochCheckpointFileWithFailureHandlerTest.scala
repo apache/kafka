@@ -16,10 +16,12 @@
   */
 package kafka.server.checkpoints
 
-import kafka.server.epoch.EpochEntry
 import kafka.utils.{Logging, TestUtils}
+import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochCheckpointFile}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
+import scala.jdk.CollectionConverters._
 
 class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
 
@@ -30,22 +32,22 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
     val checkpoint = new LeaderEpochCheckpointFile(file)
 
     //Given
-    val epochs = Seq(EpochEntry(0, 1L), EpochEntry(1, 2L), EpochEntry(2, 3L))
+    val epochs = Seq(new EpochEntry(0, 1L), new EpochEntry(1, 2L), new EpochEntry(2, 3L))
 
     //When
-    checkpoint.write(epochs)
+    checkpoint.write(epochs.asJava)
 
     //Then
     assertEquals(epochs, checkpoint.read())
 
     //Given overwrite
-    val epochs2 = Seq(EpochEntry(3, 4L), EpochEntry(4, 5L))
+    val epochs2 = Seq(new EpochEntry(3, 4L), new EpochEntry(4, 5L))
 
     //When
-    checkpoint.write(epochs2)
+    checkpoint.write(epochs2.asJava)
 
     //Then
-    assertEquals(epochs2, checkpoint.read())
+    assertEquals(epochs2, checkpoint.read().asScala.toSeq)
   }
 
   @Test
@@ -54,13 +56,13 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
 
     //Given a file with data in
     val checkpoint = new LeaderEpochCheckpointFile(file)
-    val epochs = Seq(EpochEntry(0, 1L), EpochEntry(1, 2L), EpochEntry(2, 3L))
-    checkpoint.write(epochs)
+    val epochs = Seq(new EpochEntry(0, 1L), new EpochEntry(1, 2L), new EpochEntry(2, 3L))
+    checkpoint.write(epochs.asJava)
 
     //When we recreate
     val checkpoint2 = new LeaderEpochCheckpointFile(file)
 
     //The data should still be there
-    assertEquals(epochs, checkpoint2.read())
+    assertEquals(epochs, checkpoint2.read().asScala.toSeq)
   }
 }

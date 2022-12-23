@@ -19,11 +19,12 @@ package kafka.server.checkpoints
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.server.log.internals.{CheckpointFileWithFailureHandler, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 
+import java.util.Collections
 import scala.collection.Map
 
 class OffsetCheckpointFileWithFailureHandlerTest extends Logging {
@@ -95,7 +96,7 @@ class OffsetCheckpointFileWithFailureHandlerTest extends Logging {
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val checkpointFile = new CheckpointFileWithFailureHandler(file, OffsetCheckpointFile.CurrentVersion + 1,
       OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
-    checkpointFile.write(Seq(new TopicPartition("foo", 5) -> 10L))
+    checkpointFile.write(Collections.singletonList(new TopicPartition("foo", 5) -> 10L))
     assertThrows(classOf[KafkaStorageException], () => new OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read())
   }
 
