@@ -384,7 +384,7 @@ object TestUtils extends Logging {
       config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)
   }
 
- def createAdminClient[B <: KafkaBroker](
+  def createAdminClient[B <: KafkaBroker](
     brokers: Seq[B],
     listenerName: ListenerName,
     adminConfig: Properties = new Properties
@@ -423,7 +423,24 @@ object TestUtils extends Logging {
     }
 
     result.topicId(topic).get()
-}
+  }
+
+  private def isTopicExistedAndHasSameNumPartitionsAndReplicationFactor[B <: KafkaBroker](
+    e: ExecutionException,
+    brokers: Seq[B],
+    topic: String,
+    effectiveNumPartitions: Int,
+    admin: Admin,
+    replicationFactor: Int): Boolean = {
+    // return true when:
+    //  (1) exception is `TopicExistsException`
+    //  (2) all partitions metadata are propagated
+    //  (3) topic has the expected partitions number and replication factor
+    e.getCause != null &&
+      e.getCause.isInstanceOf[TopicExistsException] &&
+      !waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions).isEmpty &&
+      topicHasSameNumPartitionsAndReplicationFactor(admin, topic, effectiveNumPartitions, replicationFactor)
+  }
 
   def createTopicWithAdmin[B <: KafkaBroker](
     admin: Admin,
@@ -450,13 +467,11 @@ object TestUtils extends Logging {
         topicConfig
       )
     } catch {
-      case e: ExecutionException => if (!(e.getCause != null &&
-          e.getCause.isInstanceOf[TopicExistsException] &&
-          !waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions).isEmpty &&
-          topicHasSameNumPartitionsAndReplicationFactor(admin, topic,
-            effectiveNumPartitions, replicationFactor))) {
-        throw e
-      }
+      case e: ExecutionException =>
+        // don't throw exception when topic is already existed and has the expected partition number and replication factor
+        if (!isTopicExistedAndHasSameNumPartitionsAndReplicationFactor(e, brokers, topic, effectiveNumPartitions, admin, replicationFactor)) {
+          throw e
+        }
     }
 
     // wait until we've propagated all partitions metadata to all brokers
