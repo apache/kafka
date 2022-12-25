@@ -36,11 +36,12 @@ import java.util.regex.Pattern;
  * -----checkpoint file end----------
  */
 public class LeaderEpochCheckpointFile implements LeaderEpochCheckpoint {
+
+    public static final Formatter FORMATTER = new Formatter();
+
     private static final String LEADER_EPOCH_CHECKPOINT_FILENAME = "leader-epoch-checkpoint";
     private static final Pattern WHITE_SPACES_PATTERN = Pattern.compile("\\s+");
     private static final int CURRENT_VERSION = 0;
-
-    public static final Formatter FORMATTER = new Formatter();
 
     private final CheckpointFileWithFailureHandler<EpochEntry> checkpoint;
 

@@ -18,10 +18,6 @@ package kafka.log
 
 import com.yammer.metrics.core.Timer
 
-import java.io.{File, IOException}
-import java.nio.file.{Files, NoSuchFileException}
-import java.nio.file.attribute.FileTime
-import java.util.concurrent.TimeUnit
 import kafka.common.LogSegmentOffsetOverflowException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
@@ -32,7 +28,11 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CompletedTxn, LazyIndex, LeaderEpochFileCache, LogConfig, LogOffsetMetadata, OffsetIndex, OffsetPosition, TimeIndex, TimestampOffset, TransactionIndex, TxnIndexSearchResult, FetchDataInfo}
 
+import java.io.{File, IOException}
+import java.nio.file.attribute.FileTime
+import java.nio.file.{Files, NoSuchFileException}
 import java.util.Optional
+import java.util.concurrent.TimeUnit
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 import scala.math._

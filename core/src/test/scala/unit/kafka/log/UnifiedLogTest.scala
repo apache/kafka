@@ -17,11 +17,6 @@
 
 package kafka.log
 
-import java.io._
-import java.nio.ByteBuffer
-import java.nio.file.Files
-import java.util.concurrent.{Callable, ConcurrentHashMap, Executors}
-import java.util.{Optional, Properties}
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
 import kafka.server.{BrokerTopicStats, KafkaConfig, PartitionMetadataFile}
@@ -46,11 +41,16 @@ import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.Mockito.{mock, when}
 
+import java.io._
+import java.nio.ByteBuffer
+import java.nio.file.Files
+import java.util.concurrent.{Callable, ConcurrentHashMap, Executors}
+import java.util.{Optional, Properties}
 import scala.annotation.nowarn
 import scala.collection.Map
+import scala.collection.mutable.ListBuffer
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.ListBuffer
 
 class UnifiedLogTest {
   var config: KafkaConfig = _

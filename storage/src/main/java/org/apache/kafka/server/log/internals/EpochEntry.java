@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.server.log.internals;
 
-import java.util.Objects;
-
 // Mapping of epoch to the first offset of the subsequent epoch
 public class EpochEntry {
     public final int epoch;
@@ -38,14 +36,16 @@ public class EpochEntry {
 
     @Override
     public int hashCode() {
-        return Objects.hash(epoch, startOffset);
+        int result = epoch;
+        result = 31 * result + (int) (startOffset ^ (startOffset >>> 32));
+        return result;
     }
 
     @Override
     public String toString() {
-        return "EpochEntry{" +
+        return "EpochEntry(" +
                 "epoch=" + epoch +
                 ", startOffset=" + startOffset +
-                '}';
+                ')';
     }
 }
