@@ -54,7 +54,6 @@ public interface GroupCoordinator {
     );
 
     /**
-<<<<<<< HEAD
      * Sync a Generic Group.
      *
      * @param context           The coordinator request context.
