@@ -270,9 +270,9 @@ class GroupCoordinatorAdapter(
     // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
     // expire timestamp is computed differently for v1 and v2.
     //   - If v1 and no explicit commit timestamp is provided we treat it the same as v5.
-    //   - If v1 and explicit retention time is provided we calculate expiration timestamp based on that
+    //   - If v1 and explicit retention time is provided we calculate expiration timestamp based on that.
     //   - If v2/v3/v4 (no explicit commit timestamp) we treat it the same as v5.
-    //   - For v5 and beyond there is no per partition expiration timestamp, so this field is no longer in effect
+    //   - For v5 and beyond there is no per partition expiration timestamp, so this field is no longer in effect.
     val currentTimestamp = time.milliseconds
     val partitions = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
 
