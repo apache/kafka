@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util.concurrent.{Callable, ConcurrentHashMap, Executors}
 import java.util.{Optional, Properties}
-import kafka.common.{OffsetsOutOfOrderException, RecordValidationException, UnexpectedAppendOffsetException}
+import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
@@ -37,7 +37,7 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
-import org.apache.kafka.server.log.internals.AbortedTxn
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, RecordValidationException}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
@@ -127,16 +127,16 @@ class UnifiedLogTest {
       new SimpleRecord(mockTime.milliseconds, "c".getBytes, "value".getBytes)
     ), baseOffset = offset, partitionLeaderEpoch = leaderEpoch)
 
-    log.appendAsLeader(records(0), leaderEpoch, AppendOrigin.RaftLeader)
+    log.appendAsLeader(records(0), leaderEpoch, AppendOrigin.RAFT_LEADER)
     assertEquals(0, log.logStartOffset)
     assertEquals(3L, log.logEndOffset)
 
     // Since raft leader is responsible for assigning offsets, and the LogValidator is bypassed from the performance perspective,
     // so the first offset of the MemoryRecords to be append should equal to the next offset in the log
-    assertThrows(classOf[UnexpectedAppendOffsetException], () => (log.appendAsLeader(records(1), leaderEpoch, AppendOrigin.RaftLeader)))
+    assertThrows(classOf[UnexpectedAppendOffsetException], () => log.appendAsLeader(records(1), leaderEpoch, AppendOrigin.RAFT_LEADER))
 
     // When the first offset of the MemoryRecords to be append equals to the next offset in the log, append will succeed
-    log.appendAsLeader(records(3), leaderEpoch, AppendOrigin.RaftLeader)
+    log.appendAsLeader(records(3), leaderEpoch, AppendOrigin.RAFT_LEADER)
     assertEquals(6, log.logEndOffset)
   }
 
@@ -1788,22 +1788,22 @@ class UnifiedLogTest {
       () => log.appendAsLeader(messageSetWithUnkeyedMessage, leaderEpoch = 0))
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertEquals(1, e.recordErrors.size)
-    assertEquals(0, e.recordErrors.head.batchIndex)
-    assertTrue(e.recordErrors.head.message.startsWith(errorMsgPrefix))
+    assertEquals(0, e.recordErrors.get(0).batchIndex)
+    assertTrue(e.recordErrors.get(0).message.startsWith(errorMsgPrefix))
 
     e = assertThrows(classOf[RecordValidationException],
       () => log.appendAsLeader(messageSetWithOneUnkeyedMessage, leaderEpoch = 0))
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertEquals(1, e.recordErrors.size)
-    assertEquals(0, e.recordErrors.head.batchIndex)
-    assertTrue(e.recordErrors.head.message.startsWith(errorMsgPrefix))
+    assertEquals(0, e.recordErrors.get(0).batchIndex)
+    assertTrue(e.recordErrors.get(0).message.startsWith(errorMsgPrefix))
 
     e = assertThrows(classOf[RecordValidationException],
       () => log.appendAsLeader(messageSetWithCompressedUnkeyedMessage, leaderEpoch = 0))
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertEquals(1, e.recordErrors.size)
-    assertEquals(1, e.recordErrors.head.batchIndex)     // batch index is 1
-    assertTrue(e.recordErrors.head.message.startsWith(errorMsgPrefix))
+    assertEquals(1, e.recordErrors.get(0).batchIndex)     // batch index is 1
+    assertTrue(e.recordErrors.get(0).message.startsWith(errorMsgPrefix))
 
     // check if metric for NoKeyCompactedTopicRecordsPerSec is logged
     assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec}")), 1)

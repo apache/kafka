@@ -24,7 +24,6 @@ import java.util.concurrent.locks.Lock
 import com.yammer.metrics.core.Meter
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
-import kafka.common.RecordValidationException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.log.remote.RemoteLogManager
@@ -62,6 +61,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel, RecordValidationException}
 
 import java.nio.file.{Files, Paths}
 import java.util
@@ -984,7 +984,7 @@ class ReplicaManager(val config: KafkaConfig,
             val logStartOffset = processFailedRecord(topicPartition, rve.invalidException)
             val recordErrors = rve.recordErrors
             (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(
-              logStartOffset, recordErrors, rve.invalidException.getMessage), Some(rve.invalidException)))
+              logStartOffset, recordErrors.asScala, rve.invalidException.getMessage), Some(rve.invalidException)))
           case t: Throwable =>
             val logStartOffset = processFailedRecord(topicPartition, t)
             (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset), Some(t)))

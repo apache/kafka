@@ -20,12 +20,12 @@ package kafka.log
 import java.io.File
 import java.nio.file.Files
 import java.util.Properties
-
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -678,7 +678,7 @@ class LogCleanerManagerTest extends Logging {
 
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(time.milliseconds(), producerId, producerEpoch,
       new EndTransactionMarker(ControlRecordType.ABORT, 15)), leaderEpoch = 0,
-      origin = AppendOrigin.Coordinator)
+      origin = AppendOrigin.COORDINATOR)
     log.roll()
     log.updateHighWatermark(4L)
 

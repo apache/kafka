@@ -31,13 +31,13 @@ import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, 
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kafka.cluster.Partition
-import kafka.log.AppendOrigin
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.server.log.internals.AppendOrigin
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -3854,7 +3854,7 @@ class GroupCoordinatorTest {
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
@@ -3888,7 +3888,7 @@ class GroupCoordinatorTest {
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
@@ -4032,7 +4032,7 @@ class GroupCoordinatorTest {
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
@@ -4065,7 +4065,7 @@ class GroupCoordinatorTest {
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],

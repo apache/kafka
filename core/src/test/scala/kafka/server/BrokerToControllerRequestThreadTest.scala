@@ -57,8 +57,9 @@ class BrokerToControllerRequestThreadTest {
     when(controllerNodeProvider.getControllerInfo()).thenReturn(emptyControllerInfo)
 
     val retryTimeoutMs = 30000
-    val testRequestThread = new BrokerToControllerRequestThread(_ => mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", retryTimeoutMs)
+    val testRequestThread = new BrokerToControllerRequestThread(
+      mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
+      controllerNodeProvider, config, time, "", retryTimeoutMs)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler(None)
@@ -94,8 +95,9 @@ class BrokerToControllerRequestThreadTest {
     when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(activeController)))
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
-    val testRequestThread = new BrokerToControllerRequestThread(_ => mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", retryTimeoutMs = Long.MaxValue)
+    val testRequestThread = new BrokerToControllerRequestThread(
+      mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
+      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
     mockClient.prepareResponse(expectedResponse)
 
@@ -134,10 +136,11 @@ class BrokerToControllerRequestThreadTest {
     val newController = new Node(newControllerId, "host2", 1234)
 
     when(controllerNodeProvider.getControllerInfo()).thenReturn(
-      emptyControllerInfo, controllerInfo(Some(oldController)), controllerInfo(Some(newController)))
+      controllerInfo(Some(oldController)), controllerInfo(Some(newController)))
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
-    val testRequestThread = new BrokerToControllerRequestThread(_ => mockClient, new ManualMetadataUpdater(),
+    val testRequestThread = new BrokerToControllerRequestThread(
+      mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
@@ -182,14 +185,15 @@ class BrokerToControllerRequestThreadTest {
     val newController = new Node(newControllerId, "host2", port)
 
     when(controllerNodeProvider.getControllerInfo()).thenReturn(
-      emptyControllerInfo, controllerInfo(Some(oldController)), controllerInfo(Some(newController)))
+      controllerInfo(Some(oldController)), controllerInfo(Some(newController)))
 
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
       Collections.singletonMap("a", 2))
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
-    val testRequestThread = new BrokerToControllerRequestThread(_ => mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", retryTimeoutMs = Long.MaxValue)
+    val testRequestThread = new BrokerToControllerRequestThread(
+      mockClient, isNetworkClientForZkController = true,_ => mockClient, new ManualMetadataUpdater(),
+      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
@@ -243,7 +247,6 @@ class BrokerToControllerRequestThreadTest {
     val newController = new Node(newControllerId, "host2", port)
 
     when(controllerNodeProvider.getControllerInfo()).thenReturn(
-      emptyControllerInfo,                  // call to create network client.
       controllerInfo(Some(oldController)),
       controllerInfo(Some(newController))
     )
@@ -255,8 +258,9 @@ class BrokerToControllerRequestThreadTest {
     // response for retry request after receiving NOT_CONTROLLER error
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
 
-    val testRequestThread = new BrokerToControllerRequestThread(_ => mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", retryTimeoutMs = Long.MaxValue)
+    val testRequestThread = new BrokerToControllerRequestThread(
+      mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
+      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
@@ -311,14 +315,15 @@ class BrokerToControllerRequestThreadTest {
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
     val controller = new Node(controllerId, "host1", 1234)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(emptyControllerInfo, controllerInfo(Some(controller)))
+    when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(controller)))
 
     val retryTimeoutMs = 30000
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
       Collections.singletonMap("a", 2))
-    val testRequestThread = new BrokerToControllerRequestThread(_ => mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", retryTimeoutMs)
+    val testRequestThread = new BrokerToControllerRequestThread(
+      mockClient, isNetworkClientForZkController = true,_ => mockClient, new ManualMetadataUpdater(),
+      controllerNodeProvider, config, time, "", retryTimeoutMs)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler()
@@ -375,8 +380,9 @@ class BrokerToControllerRequestThreadTest {
 
     mockClient.prepareUnsupportedVersionResponse(request => request.apiKey == ApiKeys.METADATA)
 
-    val testRequestThread = new BrokerToControllerRequestThread(_ => mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", retryTimeoutMs = Long.MaxValue)
+    val testRequestThread = new BrokerToControllerRequestThread(
+      mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
+      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
     testRequestThread.enqueue(queueItem)
@@ -412,8 +418,9 @@ class BrokerToControllerRequestThreadTest {
 
     mockClient.createPendingAuthenticationError(activeController, 50)
 
-    val testRequestThread = new BrokerToControllerRequestThread(_ => mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", retryTimeoutMs = Long.MaxValue)
+    val testRequestThread = new BrokerToControllerRequestThread(
+      mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
+      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
     testRequestThread.enqueue(queueItem)
@@ -433,8 +440,9 @@ class BrokerToControllerRequestThreadTest {
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
     when(controllerNodeProvider.getControllerInfo()).thenReturn(emptyControllerInfo)
 
-    val testRequestThread = new BrokerToControllerRequestThread(_ => mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", retryTimeoutMs = Long.MaxValue)
+    val testRequestThread = new BrokerToControllerRequestThread(
+      mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
+      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
 
     val completionHandler = new TestControllerRequestCompletionHandler(None)
     val queueItem = BrokerToControllerQueueItem(

@@ -268,7 +268,7 @@ public class BrokerRegistration {
             other.rack.equals(rack) &&
             other.fenced == fenced &&
             other.inControlledShutdown == inControlledShutdown &&
-            other.migratingZkBrokerEpoch == migratingZkBrokerEpoch;
+            other.migratingZkBrokerEpoch.equals(migratingZkBrokerEpoch);
     }
 
     @Override

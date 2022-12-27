@@ -54,6 +54,7 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -740,8 +741,8 @@ class PartitionTest extends AbstractPartitionTest {
     val requestLocal = RequestLocal.withThreadConfinedCaching
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
-    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
     assertEquals(partition.localLogOrException.logStartOffset, partition.localLogOrException.highWatermark,
       "Expected leader's HW not move")
 
@@ -949,7 +950,7 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L)
-    partition.appendRecordsToLeader(records, origin = AppendOrigin.Client, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
+    partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
 
     def fetchOffset(isolationLevel: Option[IsolationLevel], timestamp: Long): TimestampAndOffset = {
       val res = partition.fetchOffsetForTimestamp(timestamp,
@@ -1075,9 +1076,9 @@ class PartitionTest extends AbstractPartitionTest {
 
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
-    val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client,
+    val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, origin = AppendOrigin.CLIENT,
       requiredAcks = 0, requestLocal).lastOffset
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
     assertEquals(partition.localLogOrException.logStartOffset, partition.log.get.highWatermark, "Expected leader's HW not move")
 
     // let the follower in ISR move leader's HW to move further but below LEO
@@ -1109,7 +1110,7 @@ class PartitionTest extends AbstractPartitionTest {
     val currentLeaderEpochStartOffset = partition.localLogOrException.logEndOffset
 
     // append records with the latest leader epoch
-    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
 
     // fetch from follower not in ISR from log start offset should not add this follower to ISR
     fetchFollower(partition, replicaId = follower1, fetchOffset = 0)
