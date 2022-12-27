@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides classes for testing Streams applications with mocked inputs.
+ * Provides classes for testing Kafka Streams applications with mocked inputs.
  */
 package org.apache.kafka.streams.test;

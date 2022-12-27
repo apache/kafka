@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 /**
- * Provides low-level abstractions of streaming data and computation over that streaming data.
+ * Provides a low-level programming model (Processor API, aka, PAPI) to express a (stateful) data flow computation over input topics.
+ * Use {@link org.apache.kafka.streams.Topology} as the entry point for your program.
  */
 package org.apache.kafka.streams.processor.api;

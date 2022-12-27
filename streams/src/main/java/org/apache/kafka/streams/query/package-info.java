@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides API for extracting data from a Streams application.
+ * Provides a query API (aka Interactive Queries) over state stores, for extracting data from a stateful Kafka Streams application.
  */
 package org.apache.kafka.streams.query;

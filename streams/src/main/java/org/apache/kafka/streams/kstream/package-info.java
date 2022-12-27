@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 /**
- * Provides high-level abstractions of streaming data and computation over that streaming data.
+ * Provides a high-level programming model (DSL) to express a (stateful) data flow computation over input {@link org.apache.kafka.streams.kstream.KStream streams} and {@link org.apache.kafka.streams.kstream.KTable tables}.
+ * Use {@link org.apache.kafka.streams.StreamsBuilder} as entry for your program.
  */
 package org.apache.kafka.streams.kstream;
