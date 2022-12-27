@@ -425,23 +425,6 @@ object TestUtils extends Logging {
     result.topicId(topic).get()
   }
 
-  private def isTopicExistedAndHasSameNumPartitionsAndReplicationFactor[B <: KafkaBroker](
-    e: ExecutionException,
-    brokers: Seq[B],
-    topic: String,
-    effectiveNumPartitions: Int,
-    admin: Admin,
-    replicationFactor: Int): Boolean = {
-    // return true when:
-    //  (1) exception is `TopicExistsException`
-    //  (2) all partitions metadata are propagated
-    //  (3) topic has the expected partitions number and replication factor
-    e.getCause != null &&
-      e.getCause.isInstanceOf[TopicExistsException] &&
-      !waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions).isEmpty &&
-      topicHasSameNumPartitionsAndReplicationFactor(admin, topic, effectiveNumPartitions, replicationFactor)
-  }
-
   def createTopicWithAdmin[B <: KafkaBroker](
     admin: Admin,
     topic: String,
@@ -451,6 +434,23 @@ object TestUtils extends Logging {
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
     topicConfig: Properties = new Properties,
   ): scala.collection.immutable.Map[Int, Int] = {
+    def isTopicExistsAndHasSameNumPartitionsAndReplicationFactor[B <: KafkaBroker](
+      cause: Throwable,
+      brokers: Seq[B],
+      topic: String,
+      effectiveNumPartitions: Int,
+      admin: Admin,
+      replicationFactor: Int): Boolean = {
+      // return true when:
+      //  (1) the cause of exception is `TopicExistsException`
+      //  (2) all partitions metadata are propagated
+      //  (3) topic has the expected partitions number and replication factor
+      cause != null &&
+        cause.isInstanceOf[TopicExistsException] &&
+        !waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions).isEmpty &&
+        topicHasSameNumPartitionsAndReplicationFactor(admin, topic, effectiveNumPartitions, replicationFactor)
+    }
+
     val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
       numPartitions
     } else {
@@ -469,7 +469,7 @@ object TestUtils extends Logging {
     } catch {
       case e: ExecutionException =>
         // don't throw exception when topic is already existed and has the expected partition number and replication factor
-        if (!isTopicExistedAndHasSameNumPartitionsAndReplicationFactor(e, brokers, topic, effectiveNumPartitions, admin, replicationFactor)) {
+        if (!isTopicExistsAndHasSameNumPartitionsAndReplicationFactor(e.getCause, brokers, topic, effectiveNumPartitions, admin, replicationFactor)) {
           throw e
         }
     }
