@@ -270,8 +270,8 @@ class BrokerLifecycleManager(
       _clusterId = clusterId
       _advertisedListeners = advertisedListeners.duplicate()
       _supportedFeatures = new util.HashMap[String, VersionRange](supportedFeatures)
-      if (zkBrokerEpochSupplier.isDefined) {
-        // ZK brokers don't block on registration during startup
+      if (zkBrokerEpochSupplier.isEmpty) {
+        // Only KRaft brokers block on registration during startup
         eventQueue.scheduleDeferred("initialRegistrationTimeout",
           new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
           new RegistrationTimeoutEvent())
