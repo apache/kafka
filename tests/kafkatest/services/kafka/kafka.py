@@ -1425,7 +1425,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
 
     def search_data_files(self, topic, messages):
-        """Check if a set of messages made it into the Kakfa data files. Note that
+        """Check if a set of messages made it into the Kafka data files. Note that
         this method takes no account of replication. It simply looks for the
         payload in all the partition files of the specified topic. 'messages' should be
         an array of numbers. The list of missing messages is returned.

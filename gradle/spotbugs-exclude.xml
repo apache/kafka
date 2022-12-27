@@ -496,6 +496,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- False positive - the field is used in other modules and its unit test -->
+        <Class name="org.apache.kafka.common.utils.PrimitiveRef$LongRef"/>
+        <Field name="value"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+
+    <Match>
         <!-- Suppress warnings related to jmh generated code -->
         <Package name="org.apache.kafka.jmh.acl.generated"/>
     </Match>
