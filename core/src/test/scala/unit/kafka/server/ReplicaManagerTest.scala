@@ -54,11 +54,11 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, ProducerIdsImage, TopicsDelta, TopicsImage}
+import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, MetadataProvenance, ProducerIdsImage, TopicsDelta, TopicsImage}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.raft.{OffsetAndEpoch => RaftOffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -179,7 +179,7 @@ class ReplicaManagerTest {
         timeout = 0,
         requiredAcks = 3,
         internalTopicsAllowed = false,
-        origin = AppendOrigin.Client,
+        origin = AppendOrigin.CLIENT,
         entriesPerPartition = Map(new TopicPartition("test1", 0) -> MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord("first message".getBytes))),
         responseCallback = callback)
@@ -457,7 +457,7 @@ class ReplicaManagerTest {
       val abortTxnMarker = new EndTransactionMarker(ControlRecordType.ABORT, 0)
       val abortRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, abortTxnMarker)
       appendRecords(replicaManager, new TopicPartition(topic, 0),
-        abortRecordBatch, origin = AppendOrigin.Coordinator).onFire { response =>
+        abortRecordBatch, origin = AppendOrigin.COORDINATOR).onFire { response =>
         assertEquals(Errors.NONE, response.error)
       }
       assertLateTransactionCount(Some(0))
@@ -551,7 +551,7 @@ class ReplicaManagerTest {
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
       val commitRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
       appendRecords(replicaManager, new TopicPartition(topic, 0), commitRecordBatch,
-        origin = AppendOrigin.Coordinator)
+        origin = AppendOrigin.COORDINATOR)
         .onFire { response => assertEquals(Errors.NONE, response.error) }
 
       // the LSO has advanced, but the appended commit marker has not been replicated, so
@@ -636,7 +636,7 @@ class ReplicaManagerTest {
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.ABORT, 0)
       val abortRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
       appendRecords(replicaManager, new TopicPartition(topic, 0), abortRecordBatch,
-        origin = AppendOrigin.Coordinator)
+        origin = AppendOrigin.COORDINATOR)
         .onFire { response => assertEquals(Errors.NONE, response.error) }
 
       // fetch as follower to advance the high watermark
@@ -1324,6 +1324,17 @@ class ReplicaManagerTest {
 
       replicaManager.becomeLeaderOrFollower(2, leaderAndIsrRequest, (_, _) => ())
 
+      appendRecords(replicaManager, tp0, TestUtils.singletonRecords(s"message".getBytes)).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
+      // Fetch as follower to initialise the log end offset of the replica
+      fetchPartitionAsFollower(
+        replicaManager,
+        new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
+        replicaId = 1
+      )
+
       val metadata = new DefaultClientMetadata("rack-b", "client-id",
         InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
@@ -1338,7 +1349,7 @@ class ReplicaManagerTest {
       assertTrue(consumerResult.hasFired)
 
       // PartitionView passed to ReplicaSelector should not contain the follower as it's not in the ISR
-      val expectedReplicaViews = Set(new DefaultReplicaView(leaderNode, 0, 0))
+      val expectedReplicaViews = Set(new DefaultReplicaView(leaderNode, 1, 0))
       val partitionView = replicaManager.replicaSelectorOpt.get
         .asInstanceOf[MockReplicaSelector].getPartitionViewArgument
 
@@ -1500,7 +1511,7 @@ class ReplicaManagerTest {
 
     val simpleRecords = Seq(new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes))
     val appendResult = appendRecords(replicaManager, tp0,
-      MemoryRecords.withRecords(CompressionType.NONE, simpleRecords.toSeq: _*), AppendOrigin.Client)
+      MemoryRecords.withRecords(CompressionType.NONE, simpleRecords.toSeq: _*), AppendOrigin.CLIENT)
 
     // Increment the hw in the leader by fetching from the last offset
     val fetchOffset = simpleRecords.size
@@ -1919,7 +1930,7 @@ class ReplicaManagerTest {
       timeout = 10,
       requiredAcks = -1,
       internalTopicsAllowed = false,
-      origin = AppendOrigin.Client,
+      origin = AppendOrigin.CLIENT,
       entriesPerPartition = Map(topicPartition -> records),
       responseCallback = callback
     )
@@ -2139,7 +2150,7 @@ class ReplicaManagerTest {
   private def appendRecords(replicaManager: ReplicaManager,
                             partition: TopicPartition,
                             records: MemoryRecords,
-                            origin: AppendOrigin = AppendOrigin.Client,
+                            origin: AppendOrigin = AppendOrigin.CLIENT,
                             requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
     def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
@@ -2776,7 +2787,7 @@ class ReplicaManagerTest {
     val batch = TestUtils.records(records = List(
       new SimpleRecord(10, "k1".getBytes, "v1".getBytes),
       new SimpleRecord(11, "k2".getBytes, "v2".getBytes)))
-    partition.appendRecordsToLeader(batch, AppendOrigin.Client, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
+    partition.appendRecordsToLeader(batch, AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
     partition.log.get.updateHighWatermark(2L)
     partition.log.get.maybeIncrementLogStartOffset(1L, LeaderOffsetIncremented)
     replicaManager.logManager.checkpointLogRecoveryOffsets()
@@ -4111,7 +4122,7 @@ class ReplicaManagerTest {
 
   private def imageFromTopics(topicsImage: TopicsImage): MetadataImage = {
     new MetadataImage(
-      new RaftOffsetAndEpoch(100, 10),
+      new MetadataProvenance(100L, 10, 1000L),
       FeaturesImage.EMPTY,
       ClusterImageTest.IMAGE1,
       topicsImage,

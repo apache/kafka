@@ -109,7 +109,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                     @Override
                     public Properties serverConfig() {
                         Properties props = clusterConfig.serverProperties();
-                        props.put(KafkaConfig.InterBrokerProtocolVersionProp(), metadataVersion().version());
+                        props.put(KafkaConfig.InterBrokerProtocolVersionProp(), clusterConfig.metadataVersion().version());
                         return props;
                     }
 
@@ -237,7 +237,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 .filter(broker -> broker.kafkaController().isActive())
                 .map(KafkaServer::socketServer)
                 .findFirst()
-                .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
+                .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
         }
 
         @Override
@@ -246,6 +246,12 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 brokerServer -> brokerServer.config().nodeId(),
                 KafkaServer::brokerFeatures
             ));
+        }
+
+        @Override
+        public String clusterId() {
+            return servers().findFirst().map(KafkaServer::clusterId).orElseThrow(
+                () -> new RuntimeException("No broker instances found"));
         }
 
         @Override

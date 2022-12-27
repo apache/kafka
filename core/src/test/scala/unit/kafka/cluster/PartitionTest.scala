@@ -54,6 +54,7 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -740,8 +741,8 @@ class PartitionTest extends AbstractPartitionTest {
     val requestLocal = RequestLocal.withThreadConfinedCaching
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
-    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
     assertEquals(partition.localLogOrException.logStartOffset, partition.localLogOrException.highWatermark,
       "Expected leader's HW not move")
 
@@ -829,6 +830,13 @@ class PartitionTest extends AbstractPartitionTest {
 
     // If we request the earliest timestamp, we skip the check
     fetchOffsetsForTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+      case Right(Some(offsetAndTimestamp)) => assertEquals(0, offsetAndTimestamp.offset)
+      case Right(None) => fail("Should have seen some offsets")
+      case Left(e: ApiException) => fail(s"Got ApiException $e")
+    }
+
+    // If we request the earliest local timestamp, we skip the check
+    fetchOffsetsForTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
       case Right(Some(offsetAndTimestamp)) => assertEquals(0, offsetAndTimestamp.offset)
       case Right(None) => fail("Should have seen some offsets")
       case Left(e: ApiException) => fail(s"Got ApiException $e")
@@ -942,10 +950,10 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L)
-    partition.appendRecordsToLeader(records, origin = AppendOrigin.Client, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
+    partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
 
-    def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
-      val res = partition.fetchOffsetForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP,
+    def fetchOffset(isolationLevel: Option[IsolationLevel], timestamp: Long): TimestampAndOffset = {
+      val res = partition.fetchOffsetForTimestamp(timestamp,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
         fetchOnlyFromLeader = true)
@@ -953,13 +961,16 @@ class PartitionTest extends AbstractPartitionTest {
       res.get
     }
 
+    def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
+      fetchOffset(isolationLevel, ListOffsetsRequest.LATEST_TIMESTAMP)
+    }
+
     def fetchEarliestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
-      val res = partition.fetchOffsetForTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP,
-        isolationLevel = isolationLevel,
-        currentLeaderEpoch = Optional.empty(),
-        fetchOnlyFromLeader = true)
-      assertTrue(res.isDefined)
-      res.get
+      fetchOffset(isolationLevel, ListOffsetsRequest.EARLIEST_TIMESTAMP)
+    }
+
+    def fetchEarliestLocalOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
+      fetchOffset(isolationLevel, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP)
     }
 
     assertEquals(3L, fetchLatestOffset(isolationLevel = None).offset)
@@ -975,6 +986,10 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, fetchEarliestOffset(isolationLevel = None).offset)
     assertEquals(0L, fetchEarliestOffset(isolationLevel = Some(IsolationLevel.READ_UNCOMMITTED)).offset)
     assertEquals(0L, fetchEarliestOffset(isolationLevel = Some(IsolationLevel.READ_COMMITTED)).offset)
+
+    assertEquals(0L, fetchEarliestLocalOffset(isolationLevel = None).offset)
+    assertEquals(0L, fetchEarliestLocalOffset(isolationLevel = Some(IsolationLevel.READ_UNCOMMITTED)).offset)
+    assertEquals(0L, fetchEarliestLocalOffset(isolationLevel = Some(IsolationLevel.READ_COMMITTED)).offset)
   }
 
   @Test
@@ -1061,9 +1076,9 @@ class PartitionTest extends AbstractPartitionTest {
 
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
-    val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client,
+    val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, origin = AppendOrigin.CLIENT,
       requiredAcks = 0, requestLocal).lastOffset
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
     assertEquals(partition.localLogOrException.logStartOffset, partition.log.get.highWatermark, "Expected leader's HW not move")
 
     // let the follower in ISR move leader's HW to move further but below LEO
@@ -1095,7 +1110,7 @@ class PartitionTest extends AbstractPartitionTest {
     val currentLeaderEpochStartOffset = partition.localLogOrException.logEndOffset
 
     // append records with the latest leader epoch
-    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
 
     // fetch from follower not in ISR from log start offset should not add this follower to ISR
     fetchFollower(partition, replicaId = follower1, fetchOffset = 0)

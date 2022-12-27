@@ -24,9 +24,9 @@ import java.util.concurrent.locks.Lock
 import com.yammer.metrics.core.Meter
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
-import kafka.common.RecordValidationException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
+import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
@@ -61,8 +61,10 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel, RecordValidationException}
 
 import java.nio.file.{Files, Paths}
+import java.util
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.compat.java8.OptionConverters._
@@ -189,6 +191,7 @@ class ReplicaManager(val config: KafkaConfig,
                      time: Time,
                      scheduler: Scheduler,
                      val logManager: LogManager,
+                     val remoteLogManager: Option[RemoteLogManager] = None,
                      quotaManagers: QuotaManagers,
                      val metadataCache: MetadataCache,
                      logDirFailureChannel: LogDirFailureChannel,
@@ -981,7 +984,7 @@ class ReplicaManager(val config: KafkaConfig,
             val logStartOffset = processFailedRecord(topicPartition, rve.invalidException)
             val recordErrors = rve.recordErrors
             (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(
-              logStartOffset, recordErrors, rve.invalidException.getMessage), Some(rve.invalidException)))
+              logStartOffset, recordErrors.asScala, rve.invalidException.getMessage), Some(rve.invalidException)))
           case t: Throwable =>
             val logStartOffset = processFailedRecord(topicPartition, t)
             (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset), Some(t)))
@@ -1928,7 +1931,16 @@ class ReplicaManager(val config: KafkaConfig,
     if (checkpointHW)
       checkpointHighWatermarks()
     replicaSelectorOpt.foreach(_.close)
+    removeAllTopicMetrics()
     info("Shut down completely")
+  }
+
+  private def removeAllTopicMetrics(): Unit = {
+    val allTopics = new util.HashSet[String]
+    allPartitions.keys.foreach(partition =>
+      if (allTopics.add(partition.topic())) {
+        brokerTopicStats.removeMetrics(partition.topic())
+      })
   }
 
   protected def createReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String], quotaManager: ReplicationQuotaManager) = {

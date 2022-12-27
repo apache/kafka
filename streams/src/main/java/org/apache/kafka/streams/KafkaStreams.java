@@ -53,7 +53,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
-import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -741,7 +740,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public KafkaStreams(final Topology topology,
                         final Properties props) {
-        this(topology, new StreamsConfig(props), new DefaultKafkaClientSupplier());
+        this(topology, new StreamsConfig(props));
     }
 
     /**
@@ -776,7 +775,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final Time time) {
-        this(topology, new StreamsConfig(props), new DefaultKafkaClientSupplier(), time);
+        this(topology, new StreamsConfig(props), time);
     }
 
     /**
@@ -811,7 +810,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public KafkaStreams(final Topology topology,
                         final StreamsConfig applicationConfigs) {
-        this(topology, applicationConfigs, new DefaultKafkaClientSupplier());
+        this(topology, applicationConfigs, applicationConfigs.getKafkaClientSupplier());
     }
 
     /**
@@ -846,7 +845,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig applicationConfigs,
                         final Time time) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, new DefaultKafkaClientSupplier(), time);
+        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, applicationConfigs.getKafkaClientSupplier(), time);
     }
 
     private KafkaStreams(final Topology topology,

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.lang.reflect.Field;
 import java.util.Optional;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -230,12 +231,18 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         public RocksDBConfigSetterWithUserProvidedStatistics(){}
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
-            options.setStatistics(new Statistics());
+            lastStatistics = new Statistics();
+            options.setStatistics(lastStatistics);
         }
 
         public void close(final String storeName, final Options options) {
-            options.statistics().close();
+            // We want to be in charge of closing our statistics ourselves.
+            assertTrue(lastStatistics.isOwningHandle());
+            lastStatistics.close();
+            lastStatistics = null;
         }
+
+        protected static Statistics lastStatistics = null;
     }
 
     @Test
@@ -247,6 +254,49 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
     }
+
+
+    @Test
+    public void shouldCloseStatisticsWhenUserProvidesStatistics() throws Exception {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
+
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        final Statistics userStatistics = RocksDBConfigSetterWithUserProvidedStatistics.lastStatistics;
+        final Statistics statisticsHandle = getStatistics(rocksDBStore);
+        rocksDBStore.close();
+
+        // Both statistics handles must be closed now.
+        assertFalse(userStatistics.isOwningHandle());
+        assertFalse(statisticsHandle.isOwningHandle());
+        assertNull(getStatistics(rocksDBStore));
+        assertNull(RocksDBConfigSetterWithUserProvidedStatistics.lastStatistics);
+    }
+
+    @Test
+    public void shouldSetStatisticsInValueProvidersWhenUserProvidesNoStatistics() throws Exception {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG);
+
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+
+        verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), eq(getStatistics(rocksDBStore)));
+    }
+
+    @Test
+    public void shouldCloseStatisticsWhenUserProvidesNoStatistics() throws Exception {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG);
+
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        final Statistics statisticsHandle = getStatistics(rocksDBStore);
+        rocksDBStore.close();
+
+        // Statistics handles must be closed now.
+        assertFalse(statisticsHandle.isOwningHandle());
+        assertNull(getStatistics(rocksDBStore));
+    }
+
 
     public static class RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig implements RocksDBConfigSetter {
         public RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig(){}
@@ -1165,5 +1215,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         return result;
     }
 
-
+    private Statistics getStatistics(final RocksDBStore rocksDBStore) throws Exception {
+        final Field statisticsField = rocksDBStore.getClass().getDeclaredField("statistics");
+        statisticsField.setAccessible(true);
+        final Statistics statistics = (Statistics) statisticsField.get(rocksDBStore);
+        statisticsField.setAccessible(false);
+        return statistics;
+    }
 }

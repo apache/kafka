@@ -24,7 +24,7 @@ import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
-import kafka.server.LogDirFailureChannel;
+import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -112,7 +112,9 @@ public class CheckpointBench {
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
-                MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(), this.brokerProperties.interBrokerProtocolVersion(), BrokerFeatures.createEmpty());
+                MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
+                    this.brokerProperties.interBrokerProtocolVersion(),
+                    BrokerFeatures.createEmpty(), null);
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,

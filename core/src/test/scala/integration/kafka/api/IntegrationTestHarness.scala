@@ -47,6 +47,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   val adminClientConfig = new Properties
   val superuserClientConfig = new Properties
   val serverConfig = new Properties
+  val controllerConfig = new Properties
 
   private val consumers = mutable.Buffer[KafkaConsumer[_, _]]()
   private val producers = mutable.Buffer[KafkaProducer[_, _]]()
@@ -59,12 +60,20 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   override def generateConfigs: Seq[KafkaConfig] = {
+
     val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     configureListeners(cfgs)
     modifyConfigs(cfgs)
+    if (isZkMigrationTest()) {
+      cfgs.foreach(_.setProperty(KafkaConfig.MigrationEnabledProp, "true"))
+    }
     insertControllerListenersIfNeeded(cfgs)
     cfgs.map(KafkaConfig.fromProps)
+  }
+
+  override protected def kraftControllerConfigs(): Seq[Properties] = {
+    Seq(controllerConfig)
   }
 
   protected def configureListeners(props: Seq[Properties]): Unit = {

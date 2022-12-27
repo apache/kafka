@@ -32,7 +32,6 @@ import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
 import kafka.server.KafkaConfig;
-import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.OffsetAndEpoch;
 import kafka.server.OffsetTruncationState;
@@ -73,6 +72,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -100,6 +100,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import scala.Option;
+import scala.Tuple2;
 import scala.collection.Iterator;
 import scala.collection.Map;
 
@@ -218,7 +219,8 @@ public class ReplicaFetcherThreadBenchmark {
                 0, 0, 0, updatePartitionState, Collections.emptyList(), topicIds).build();
 
         // TODO: fix to support raft
-        ZkMetadataCache metadataCache = new ZkMetadataCache(0, config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty());
+        ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(0,
+            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(), null);
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
         replicaManager = new ReplicaManagerBuilder().
@@ -329,8 +331,8 @@ public class ReplicaFetcherThreadBenchmark {
                             config::interBrokerProtocolVersion
                     ) {
                         @Override
-                        public long fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
-                            return 0;
+                        public Tuple2<Object, Object> fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
+                            return Tuple2.apply(0, 0);
                         }
 
                         @Override

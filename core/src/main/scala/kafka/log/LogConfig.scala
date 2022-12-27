@@ -18,7 +18,6 @@
 package kafka.log
 
 import kafka.log.LogConfig.configDef
-import kafka.message.BrokerCompressionCodec
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
@@ -28,11 +27,12 @@ import org.apache.kafka.common.record.{LegacyRecord, RecordVersion, TimestampTyp
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 import org.apache.kafka.metadata.ConfigSynonym
 import org.apache.kafka.metadata.ConfigSynonym.{HOURS_TO_MILLISECONDS, MINUTES_TO_MILLISECONDS}
+
 import java.util.Arrays.asList
 import java.util.{Collections, Locale, Properties}
-
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
+import org.apache.kafka.server.record.BrokerCompressionType
 
 import scala.annotation.nowarn
 import scala.collection.{Map, mutable}
@@ -217,7 +217,7 @@ object LogConfig {
   val PreAllocateEnableProp = TopicConfig.PREALLOCATE_CONFIG
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
-  @deprecated("3.0") @nowarn("cat=deprecation")
+  @deprecated("3.0")
   val MessageFormatVersionProp = TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG
   val MessageTimestampTypeProp = TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG
   val MessageTimestampDifferenceMaxMsProp = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG
@@ -252,7 +252,7 @@ object LogConfig {
   val PreAllocateEnableDoc = TopicConfig.PREALLOCATE_DOC
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
-  @deprecated("3.0") @nowarn("cat=deprecation")
+  @deprecated("3.0")
   val MessageFormatVersionDoc = TopicConfig.MESSAGE_FORMAT_VERSION_DOC
 
   val MessageTimestampTypeDoc = TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC
@@ -365,7 +365,7 @@ object LogConfig {
         MEDIUM, UncleanLeaderElectionEnableDoc, KafkaConfig.UncleanLeaderElectionEnableProp)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), MEDIUM, MinInSyncReplicasDoc,
         KafkaConfig.MinInSyncReplicasProp)
-      .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(BrokerCompressionCodec.brokerCompressionOptions:_*),
+      .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(BrokerCompressionType.names.asScala.toSeq:_*),
         MEDIUM, CompressionTypeDoc, KafkaConfig.CompressionTypeProp)
       .define(PreAllocateEnableProp, BOOLEAN, Defaults.PreAllocateEnable, MEDIUM, PreAllocateEnableDoc,
         KafkaConfig.LogPreAllocateProp)

@@ -121,4 +121,13 @@ class ReplicaAlterLogDirsThread(name: String,
     partition.truncateFullyAndStartAt(offset, isFuture = true)
   }
 
+  override protected def buildRemoteLogAuxState(partition: TopicPartition,
+                                                currentLeaderEpoch: Int,
+                                                fetchOffset: Long,
+                                                epochForFetchOffset: Int,
+                                                leaderLogStartOffset: Long): Long = {
+    // JBOD is not supported with tiered storage.
+    throw new UnsupportedOperationException();
+  }
+
 }

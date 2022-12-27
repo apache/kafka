@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util.Properties
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
-import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig}
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.{CoreUtils, MockTime, Scheduler, TestUtils}
 import org.apache.kafka.common.TopicPartition
@@ -31,6 +31,7 @@ import org.apache.kafka.common.record.{CompressionType, ControlRecordType, Defau
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV0
+import org.apache.kafka.server.log.internals.{AbortedTxn, LogDirFailureChannel, OffsetIndex}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}

@@ -18,9 +18,10 @@
 package kafka.log
 
 import com.yammer.metrics.core.{Gauge, MetricName}
+import kafka.log.remote.RemoteIndexCache
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
-import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchLogEnd, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchLogEnd}
 import kafka.utils._
 import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
@@ -36,6 +37,7 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Properties}
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import scala.collection.{Map, mutable}
@@ -364,6 +366,18 @@ class LogManagerTest {
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
       assertTrue(counts.max <= counts.min + 1, "Load should balance evenly")
     }
+  }
+
+  /**
+   * Tests that the log manager skips the remote-log-index-cache directory when loading the logs from disk
+   */
+  @Test
+  def testLoadLogsSkipRemoteIndexCache(): Unit = {
+    val logDir = TestUtils.tempDir()
+    val remoteIndexCache = new File(logDir, RemoteIndexCache.DirName)
+    remoteIndexCache.mkdir()
+    logManager = createLogManager(Seq(logDir))
+    logManager.loadLogs(logConfig, Map.empty)
   }
 
   /**
@@ -906,6 +920,8 @@ class LogManagerTest {
     // Replace the current log with the future one and verify that only one set of metrics are present
     logManager.replaceCurrentWithFutureLog(tp)
     verifyMetrics(1)
+    // the future log is gone, so we have to make sure the metrics gets gone also.
+    assertEquals(0, logMetrics.count(m => m.getMBeanName.contains("is-future")))
 
     // Trigger the deletion of the former current directory and verify that one set of metrics is still present
     time.sleep(logConfig.fileDeleteDelayMs + 1)

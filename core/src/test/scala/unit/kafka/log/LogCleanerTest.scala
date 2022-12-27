@@ -24,12 +24,13 @@ import java.nio.file.Paths
 import java.util.Properties
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import kafka.common._
-import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, LogDirFailureChannel, OffsetMap}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -302,11 +303,11 @@ class LogCleanerTest {
     val appendProducer2 = appendTransactionalAsLeader(log, producerId2, producerEpoch)
 
     def abort(producerId: Long): Unit = {
-      log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
+      log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.REPLICATION)
     }
 
     def commit(producerId: Long): Unit = {
-      log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
+      log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.REPLICATION)
     }
 
     // Append some transaction data (offset range in parenthesis)
@@ -328,8 +329,8 @@ class LogCleanerTest {
     assertEquals(20L, log.logEndOffset)
 
     val expectedAbortedTxns = List(
-      new AbortedTxn(producerId=producerId1, firstOffset=8, lastOffset=10, lastStableOffset=11),
-      new AbortedTxn(producerId=producerId2, firstOffset=11, lastOffset=16, lastStableOffset=17)
+      new AbortedTxn(producerId1, 8, 10, 11),
+      new AbortedTxn(producerId2, 11, 16, 17)
     )
 
     assertAllTransactionsComplete(log)
@@ -392,10 +393,10 @@ class LogCleanerTest {
     appendProducer1(Seq(1, 2))
     appendProducer2(Seq(2, 3))
     appendProducer1(Seq(3, 4))
-    log.appendAsLeader(abortMarker(pid1, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
-    log.appendAsLeader(commitMarker(pid2, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(abortMarker(pid1, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
+    log.appendAsLeader(commitMarker(pid2, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     appendProducer1(Seq(2))
-    log.appendAsLeader(commitMarker(pid1, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(commitMarker(pid1, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
 
     val abortedTransactions = log.collectAbortedTransactions(log.logStartOffset, log.logEndOffset)
 
@@ -433,11 +434,11 @@ class LogCleanerTest {
     appendProducer2(Seq(5, 6))
     appendProducer3(Seq(6, 7))
     appendProducer1(Seq(7, 8))
-    log.appendAsLeader(abortMarker(pid2, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(abortMarker(pid2, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     appendProducer3(Seq(8, 9))
-    log.appendAsLeader(commitMarker(pid3, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(commitMarker(pid3, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     appendProducer1(Seq(9, 10))
-    log.appendAsLeader(abortMarker(pid1, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(abortMarker(pid1, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
 
     // we have only cleaned the records in the first segment
     val dirtyOffset = cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))._1
@@ -468,9 +469,9 @@ class LogCleanerTest {
 
     appendProducer(Seq(1))
     appendProducer(Seq(2, 3))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     appendProducer(Seq(2))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     log.roll()
 
     // cannot remove the marker in this pass because there are still valid records
@@ -479,7 +480,7 @@ class LogCleanerTest {
     assertEquals(List(0, 2, 3, 4, 5), offsetsInLog(log))
 
     appendProducer(Seq(1, 3))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     log.roll()
 
     // the first cleaning preserves the commit marker (at offset 3) since there were still records for the transaction
@@ -516,10 +517,10 @@ class LogCleanerTest {
     val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
 
     appendProducer(Seq(1))
-    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     appendProducer(Seq(2))
     appendProducer(Seq(2))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     log.roll()
 
     cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), currentTime = largeTimestamp)
@@ -551,7 +552,7 @@ class LogCleanerTest {
     // [{Producer1: 2, 3}], [{Producer2: 2, 3}, {Producer2: Commit}]
     producer2(Seq(2, 3)) // offsets 2, 3
     log.appendAsLeader(commitMarker(2L, producerEpoch), leaderEpoch = 0,
-      origin = AppendOrigin.Coordinator) // offset 4
+      origin = AppendOrigin.COORDINATOR) // offset 4
     log.roll()
 
     // [{Producer1: 2, 3}], [{Producer2: 2, 3}, {Producer2: Commit}], [{2}, {3}, {Producer1: Commit}]
@@ -559,7 +560,7 @@ class LogCleanerTest {
     log.appendAsLeader(record(2, 2), leaderEpoch = 0) // offset 5
     log.appendAsLeader(record(3, 3), leaderEpoch = 0) // offset 6
     log.appendAsLeader(commitMarker(1L, producerEpoch), leaderEpoch = 0,
-      origin = AppendOrigin.Coordinator) // offset 7
+      origin = AppendOrigin.COORDINATOR) // offset 7
     log.roll()
 
     // first time through the records are removed
@@ -581,7 +582,7 @@ class LogCleanerTest {
     //  {1},                     {3},                     {4},                 {5}, {6}, {7},                 {8},            {9} ==> Offsets
     producer2(Seq(1)) // offset 8
     log.appendAsLeader(commitMarker(2L, producerEpoch), leaderEpoch = 0,
-      origin = AppendOrigin.Coordinator) // offset 9
+      origin = AppendOrigin.COORDINATOR) // offset 9
     log.roll()
 
     // Expected State: [{Producer1: EmptyBatch}, {Producer2: Commit}, {2}, {3}, {Producer1: Commit}, {Producer2: 1}, {Producer2: Commit}]
@@ -611,7 +612,7 @@ class LogCleanerTest {
 
     // [{Producer1: Commit}, {2}, {3}]
     log.appendAsLeader(commitMarker(1L, producerEpoch), leaderEpoch = 0,
-      origin = AppendOrigin.Coordinator) // offset 1
+      origin = AppendOrigin.COORDINATOR) // offset 1
     log.appendAsLeader(record(2, 2), leaderEpoch = 0) // offset 2
     log.appendAsLeader(record(3, 3), leaderEpoch = 0) // offset 3
     log.roll()
@@ -647,7 +648,7 @@ class LogCleanerTest {
     appendTransaction(Seq(1))
     log.roll()
 
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     log.roll()
 
     // Both the record and the marker should remain after cleaning
@@ -670,7 +671,7 @@ class LogCleanerTest {
     appendTransaction(Seq(1))
     log.roll()
 
-    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     log.roll()
 
     // Both the batch and the marker should remain after cleaning. The batch is retained
@@ -700,9 +701,9 @@ class LogCleanerTest {
 
     appendProducer(Seq(1))
     appendProducer(Seq(2, 3))
-    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     appendProducer(Seq(3))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     log.roll()
 
     // Aborted records are removed, but the abort marker is still preserved.
@@ -730,14 +731,14 @@ class LogCleanerTest {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val appendFirstTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch,
-      origin = AppendOrigin.Replication)
+      origin = AppendOrigin.REPLICATION)
     appendFirstTransaction(Seq(1))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
 
     val appendSecondTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch,
-      origin = AppendOrigin.Replication)
+      origin = AppendOrigin.REPLICATION)
     appendSecondTransaction(Seq(2))
-    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
 
     log.appendAsLeader(record(1, 1), leaderEpoch = 0)
     log.appendAsLeader(record(2, 1), leaderEpoch = 0)
@@ -770,7 +771,7 @@ class LogCleanerTest {
     val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
 
     appendProducer(Seq(2, 3)) // batch last offset is 1
-    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     log.roll()
 
     def assertAbortedTransactionIndexed(): Unit = {
@@ -1011,7 +1012,7 @@ class LogCleanerTest {
 
     appendProducer(Seq(1))
     appendProducer(Seq(2, 3))
-    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.COORDINATOR)
     log.roll()
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
@@ -1045,7 +1046,7 @@ class LogCleanerTest {
     val producerId1 = 1L
     val appendProducer = appendTransactionalAsLeader(log, producerId1, producerEpoch, leaderEpoch)
     appendProducer(Seq(1))
-    log.appendAsLeader(commitMarker(producerId1, producerEpoch), leaderEpoch, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(commitMarker(producerId1, producerEpoch), leaderEpoch, origin = AppendOrigin.COORDINATOR)
 
     // Now we append one transaction with a key which conflicts with the COMMIT marker appended above
     def commitRecordKey(): ByteBuffer = {
@@ -1064,8 +1065,8 @@ class LogCleanerTest {
       0,
       new SimpleRecord(time.milliseconds(), commitRecordKey(), ByteBuffer.wrap("foo".getBytes))
     )
-    log.appendAsLeader(records, leaderEpoch, origin = AppendOrigin.Client)
-    log.appendAsLeader(commitMarker(producerId2, producerEpoch), leaderEpoch, origin = AppendOrigin.Coordinator)
+    log.appendAsLeader(records, leaderEpoch, origin = AppendOrigin.CLIENT)
+    log.appendAsLeader(commitMarker(producerId2, producerEpoch), leaderEpoch, origin = AppendOrigin.COORDINATOR)
     log.roll()
     assertEquals(List(0, 1, 2, 3), offsetsInLog(log))
 
@@ -2012,7 +2013,7 @@ class LogCleanerTest {
     producerId: Long,
     producerEpoch: Short,
     leaderEpoch: Int = 0,
-    origin: AppendOrigin = AppendOrigin.Client
+    origin: AppendOrigin = AppendOrigin.CLIENT
   ): Seq[Int] => LogAppendInfo = {
     appendIdempotentAsLeader(
       log,
@@ -2030,7 +2031,7 @@ class LogCleanerTest {
     producerEpoch: Short,
     isTransactional: Boolean = false,
     leaderEpoch: Int = 0,
-    origin: AppendOrigin = AppendOrigin.Client
+    origin: AppendOrigin = AppendOrigin.CLIENT
   ): Seq[Int] => LogAppendInfo = {
     var sequence = 0
     keys: Seq[Int] => {

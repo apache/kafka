@@ -16,6 +16,8 @@
  */
 package kafka.controller
 
+import com.yammer.metrics.core.Timer
+
 import java.util.concurrent.TimeUnit
 import kafka.admin.AdminOperationException
 import kafka.api._
@@ -23,7 +25,7 @@ import kafka.common._
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFeaturesCallback}
 import kafka.coordinator.transaction.ZkProducerIdManager
-import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
+import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.metadata.ZkFinalizedFeatureCache
 import kafka.utils._
@@ -2721,9 +2723,9 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
 private[controller] class ControllerStats extends KafkaMetricsGroup {
   val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
 
-  val rateAndTimeMetrics: Map[ControllerState, KafkaTimer] = ControllerState.values.flatMap { state =>
+  val rateAndTimeMetrics: Map[ControllerState, Timer] = ControllerState.values.flatMap { state =>
     state.rateAndTimeMetricName.map { metricName =>
-      state -> new KafkaTimer(newTimer(metricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+      state -> newTimer(metricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
     }
   }.toMap
 

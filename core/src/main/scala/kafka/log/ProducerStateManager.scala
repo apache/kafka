@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C, Time, Utils}
+import org.apache.kafka.server.log.internals.{AppendOrigin, CompletedTxn}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -194,7 +195,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 
   private def maybeValidateDataBatch(producerEpoch: Short, firstSeq: Int, offset: Long): Unit = {
     checkProducerEpoch(producerEpoch, offset)
-    if (origin == AppendOrigin.Client) {
+    if (origin == AppendOrigin.CLIENT) {
       checkSequence(producerEpoch, firstSeq, offset)
     }
   }
@@ -204,7 +205,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       val message = s"Epoch of producer $producerId at offset $offset in $topicPartition is $producerEpoch, " +
         s"which is smaller than the last seen epoch ${updatedEntry.producerEpoch}"
 
-      if (origin == AppendOrigin.Replication) {
+      if (origin == AppendOrigin.REPLICATION) {
         warn(message)
       } else {
         // Starting from 2.7, we replaced ProducerFenced error with InvalidProducerEpoch in the
@@ -293,7 +294,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 
   private def checkCoordinatorEpoch(endTxnMarker: EndTransactionMarker, offset: Long): Unit = {
     if (updatedEntry.coordinatorEpoch > endTxnMarker.coordinatorEpoch) {
-      if (origin == AppendOrigin.Replication) {
+      if (origin == AppendOrigin.REPLICATION) {
         info(s"Detected invalid coordinator epoch for producerId $producerId at " +
           s"offset $offset in partition $topicPartition: ${endTxnMarker.coordinatorEpoch} " +
           s"is older than previously known coordinator epoch ${updatedEntry.coordinatorEpoch}")
@@ -318,7 +319,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
     // without any associated data will not have any impact on the last stable offset
     // and would not need to be reflected in the transaction index.
     val completedTxn = updatedEntry.currentTxnFirstOffset.map { firstOffset =>
-      CompletedTxn(producerId, firstOffset, offset, endTxnMarker.controlType == ControlRecordType.ABORT)
+      new CompletedTxn(producerId, firstOffset, offset, endTxnMarker.controlType == ControlRecordType.ABORT)
     }
 
     updatedEntry.maybeUpdateProducerEpoch(producerEpoch)
@@ -520,16 +521,22 @@ class ProducerStateManager(
     val lastTimestamp = oldestTxnLastTimestamp
     lastTimestamp > 0 && (currentTimeMs - lastTimestamp) > maxTransactionTimeoutMs + ProducerStateManager.LateTransactionBufferMs
   }
+  
+  def truncateFullyAndReloadSnapshots(): Unit = {
+    info("Reloading the producer state snapshots")
+    truncateFullyAndStartAt(0L)
+    snapshots = loadSnapshots()
+  }
 
   /**
    * Load producer state snapshots by scanning the _logDir.
    */
   private def loadSnapshots(): ConcurrentSkipListMap[java.lang.Long, SnapshotFile] = {
-    val tm = new ConcurrentSkipListMap[java.lang.Long, SnapshotFile]()
-    for (f <- listSnapshotFiles(_logDir)) {
-      tm.put(f.offset, f)
+    val offsetToSnapshots = new ConcurrentSkipListMap[java.lang.Long, SnapshotFile]()
+    for (snapshotFile <- listSnapshotFiles(_logDir)) {
+      offsetToSnapshots.put(snapshotFile.offset, snapshotFile)
     }
-    tm
+    offsetToSnapshots
   }
 
   /**

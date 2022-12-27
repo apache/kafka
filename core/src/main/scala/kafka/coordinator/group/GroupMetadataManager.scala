@@ -24,11 +24,9 @@ import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
-
 import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
 import kafka.internals.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
-import kafka.log.AppendOrigin
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{FetchLogEnd, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.inLock
@@ -48,6 +46,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicPartition}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
+import org.apache.kafka.server.log.internals.AppendOrigin
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -60,7 +59,7 @@ class GroupMetadataManager(brokerId: Int,
                            time: Time,
                            metrics: Metrics) extends Logging with KafkaMetricsGroup {
 
-  private val compressionType: CompressionType = CompressionType.forId(config.offsetsTopicCompressionCodec.codec)
+  private val compressionType: CompressionType = config.offsetsTopicCompressionType
 
   private val groupMetadataCache = new Pool[String, GroupMetadata]
 
@@ -331,7 +330,7 @@ class GroupMetadataManager(brokerId: Int,
       timeout = config.offsetCommitTimeoutMs.toLong,
       requiredAcks = config.offsetCommitRequiredAcks,
       internalTopicsAllowed = true,
-      origin = AppendOrigin.Coordinator,
+      origin = AppendOrigin.COORDINATOR,
       entriesPerPartition = records,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback,
@@ -890,7 +889,7 @@ class GroupMetadataManager(brokerId: Int,
                 // do not need to require acks since even if the tombstone is lost,
                 // it will be appended again in the next purge cycle
                 val records = MemoryRecords.withRecords(magicValue, 0L, compressionType, timestampType, tombstones.toArray: _*)
-                partition.appendRecordsToLeader(records, origin = AppendOrigin.Coordinator, requiredAcks = 0,
+                partition.appendRecordsToLeader(records, origin = AppendOrigin.COORDINATOR, requiredAcks = 0,
                   requestLocal = requestLocal)
 
                 offsetsRemoved += removedOffsets.size

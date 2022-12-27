@@ -123,7 +123,7 @@ object RequestChannel extends Logging {
 
     private def shouldReturnNotController(response: AbstractResponse): Boolean = {
       response match {
-        case describeQuorumResponse: DescribeQuorumResponse => response.errorCounts.containsKey(Errors.NOT_LEADER_OR_FOLLOWER)
+        case _: DescribeQuorumResponse => response.errorCounts.containsKey(Errors.NOT_LEADER_OR_FOLLOWER)
         case _ => response.errorCounts.containsKey(Errors.NOT_CONTROLLER)
       }
     }

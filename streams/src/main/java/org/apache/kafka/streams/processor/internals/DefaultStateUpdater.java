@@ -106,6 +106,7 @@ public class DefaultStateUpdater implements StateUpdater {
             } catch (final RuntimeException anyOtherException) {
                 handleRuntimeException(anyOtherException);
             } finally {
+                Thread.interrupted(); // Clear the interrupted flag.
                 removeAddedTasksFromInputQueue();
                 removeUpdatingAndPausedTasks();
                 shutdownGate.countDown();
@@ -443,8 +444,8 @@ public class DefaultStateUpdater implements StateUpdater {
     @Override
     public void shutdown(final Duration timeout) {
         if (stateUpdaterThread != null) {
-            stateUpdaterThread.isRunning.set(false);
             stateUpdaterThread.interrupt();
+            stateUpdaterThread.isRunning.set(false);
             try {
                 if (!shutdownGate.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                     throw new StreamsException("State updater thread did not shutdown within the timeout");

@@ -25,11 +25,11 @@ import java.util.{Properties, Random}
 
 import joptsimple._
 import kafka.log._
-import kafka.message._
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
 
 import scala.math._
 
@@ -82,7 +82,7 @@ object TestLinearWriteSpeed {
                             .withRequiredArg
                             .describedAs("codec")
                             .ofType(classOf[java.lang.String])
-                            .defaultsTo(NoCompressionCodec.name)
+                            .defaultsTo(CompressionType.NONE.name)
    val mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.")
    val channelOpt = parser.accepts("channel", "Do writes to file channels.")
    val logOpt = parser.accepts("log", "Do writes to kafka logs.")
@@ -100,13 +100,12 @@ object TestLinearWriteSpeed {
     val buffer = ByteBuffer.allocate(bufferSize)
     val messageSize = options.valueOf(messageSizeOpt).intValue
     val flushInterval = options.valueOf(flushIntervalOpt).longValue
-    val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOpt))
+    val compressionType = CompressionType.forName(options.valueOf(compressionCodecOpt))
     val rand = new Random
     rand.nextBytes(buffer.array)
     val numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD)
     val createTime = System.currentTimeMillis
     val messageSet = {
-      val compressionType = CompressionType.forId(compressionCodec.codec)
       val records = (0 until numMessages).map(_ => new SimpleRecord(createTime, null, new Array[Byte](messageSize)))
       MemoryRecords.withRecords(compressionType, records: _*)
     }

@@ -216,28 +216,29 @@ public interface RaftClient<T> extends AutoCloseable {
     /**
      * Create a writable snapshot file for a committed offset and epoch.
      *
-     * The RaftClient assumes that the snapshot returned will contain the records up to and
-     * including the committed offset and epoch. See {@link SnapshotWriter} for details on
-     * how to use this object. If a snapshot already exists then returns an
-     * {@link Optional#empty()}.
+     * The RaftClient assumes that the snapshot returned will contain the records up to, but not
+     * including the committed offset and epoch. If no records have been committed, it is possible
+     * to generate an empty snapshot using 0 for both the offset and epoch.
      *
-     * @param committedEpoch the epoch of the committed offset
-     * @param committedOffset the last committed offset that will be included in the snapshot
+     * See {@link SnapshotWriter} for details on how to use this object. If a snapshot already
+     * exists then returns an {@link Optional#empty()}.
+     *
+     * @param snapshotId The ID of the new snapshot, which includes the (exclusive) last committed offset
+     *                   and the last committed epoch.
      * @param lastContainedLogTime The append time of the highest record contained in this snapshot
      * @return a writable snapshot if it doesn't already exists
      * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
      *         or less than the log start offset.
      */
-    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
-
+    Optional<SnapshotWriter<T>> createSnapshot(OffsetAndEpoch snapshotId, long lastContainedLogTime);
 
     /**
-     * The snapshot id for the lastest snapshot.
+     * The snapshot id for the latest snapshot.
      *
-     * Returns the snapshot id of the latest snapshot, if it exists. If a snapshot doesn't exists, returns an
+     * Returns the snapshot id of the latest snapshot, if it exists. If a snapshot doesn't exist, returns an
      * {@link Optional#empty()}.
      *
-     * @return the id of the latest snaphost, if it exists
+     * @return the id of the latest snapshot, if it exists
      */
     Optional<OffsetAndEpoch> latestSnapshotId();
 }

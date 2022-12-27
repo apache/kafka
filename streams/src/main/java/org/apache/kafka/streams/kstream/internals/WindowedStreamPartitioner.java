@@ -40,6 +40,7 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
      * @return an integer between 0 and {@code numPartitions-1}, or {@code null} if the default partitioning logic should be used
      */
     @Override
+    @Deprecated
     public Integer partition(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
         // for windowed key, the key bytes should never be null
         final byte[] keyBytes = serializer.serializeBaseKey(topic, windowedKey);

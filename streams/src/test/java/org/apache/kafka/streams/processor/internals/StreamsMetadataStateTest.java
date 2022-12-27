@@ -45,6 +45,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Optional;
+import java.util.HashSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -134,6 +136,23 @@ public class StreamsMetadataStateTest {
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, cluster);
         partitioner = (topic, key, value, numPartitions) -> 1;
         storeNames = mkSet("table-one", "table-two", "merged-table", globalTable);
+    }
+
+    static class MultiValuedPartitioner implements StreamPartitioner<String, Object> {
+
+        @Override
+        @Deprecated
+        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
+            return null;
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+            final Set<Integer> partitions = new HashSet<>();
+            partitions.add(0);
+            partitions.add(1);
+            return Optional.of(partitions);
+        }
     }
 
     @Test
@@ -251,6 +270,20 @@ public class StreamsMetadataStateTest {
                 partitioner);
         assertEquals(expected, actual);
         assertEquals(1, actual.partition());
+    }
+
+    @Test
+    public void shouldFailWhenIqQueriedWithCustomPartitionerReturningMultiplePartitions() {
+        final TopicPartition tp4 = new TopicPartition("topic-three", 1);
+        hostToActivePartitions.put(hostTwo, mkSet(topic2P0, tp4));
+
+        metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions,
+                cluster.withPartitions(Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null))));
+
+
+        assertThrows(IllegalArgumentException.class, () -> metadataState.getKeyQueryMetadataForKey("table-three",
+                "the-key",
+                new MultiValuedPartitioner()));
     }
 
     @Test

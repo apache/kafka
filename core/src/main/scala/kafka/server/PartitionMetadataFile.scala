@@ -26,7 +26,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException}
 import org.apache.kafka.common.utils.Utils
-
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
 
 
 object PartitionMetadataFile {

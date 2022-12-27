@@ -70,6 +70,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -179,7 +180,12 @@ object TestUtils extends Logging {
   }
 
   def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], startup: Boolean): KafkaServer = {
-    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding = false)
+    createServer(config, time, threadNamePrefix, startup, enableZkApiForwarding = false)
+  }
+
+  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String],
+                   startup: Boolean, enableZkApiForwarding: Boolean) = {
+    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding = enableZkApiForwarding)
     if (startup) server.startup()
     server
   }

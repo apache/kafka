@@ -2342,12 +2342,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public Optional<SnapshotWriter<T>> createSnapshot(
-        long committedOffset,
-        int committedEpoch,
+        OffsetAndEpoch snapshotId,
         long lastContainedLogTime
     ) {
         return RecordsSnapshotWriter.createWithHeader(
-                () -> log.createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, committedEpoch)),
+                () -> log.createNewSnapshot(snapshotId),
                 MAX_BATCH_SIZE_BYTES,
                 memoryPool,
                 time,
@@ -2367,6 +2366,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         log.flush(true);
         if (kafkaRaftMetrics != null) {
             kafkaRaftMetrics.close();
+        }
+        if (memoryPool instanceof BatchMemoryPool) {
+            BatchMemoryPool batchMemoryPool = (BatchMemoryPool) memoryPool;
+            batchMemoryPool.releaseRetained();
         }
     }
 

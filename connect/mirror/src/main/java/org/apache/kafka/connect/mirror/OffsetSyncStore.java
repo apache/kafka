@@ -36,7 +36,7 @@ class OffsetSyncStore implements AutoCloseable {
     private final Map<TopicPartition, OffsetSync> offsetSyncs = new HashMap<>();
     private final TopicPartition offsetSyncTopicPartition;
 
-    OffsetSyncStore(MirrorConnectorConfig config) {
+    OffsetSyncStore(MirrorCheckpointConfig config) {
         consumer = new KafkaConsumer<>(config.offsetSyncsTopicConsumerConfig(),
             new ByteArrayDeserializer(), new ByteArrayDeserializer());
         offsetSyncTopicPartition = new TopicPartition(config.offsetSyncsTopic(), 0);

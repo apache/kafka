@@ -21,13 +21,14 @@ import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import kafka.common.LogSegmentOffsetOverflowException
 import kafka.log.UnifiedLog.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
-import kafka.server.{LogDirFailureChannel, LogOffsetMetadata}
+import kafka.server.LogOffsetMetadata
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.snapshot.Snapshots
+import org.apache.kafka.server.log.internals.{CorruptIndexException, LogDirFailureChannel}
 
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import scala.collection.{Set, mutable}

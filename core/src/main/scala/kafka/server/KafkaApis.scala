@@ -23,8 +23,6 @@ import kafka.common.OffsetAndMetadata
 import kafka.controller.ReplicaAssignment
 import kafka.coordinator.group._
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
-import kafka.log.AppendOrigin
-import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.metadata.ConfigRepository
@@ -43,11 +41,9 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
-import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsPartitionResult, DeleteRecordsTopicResult}
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.ElectLeadersResponseData.{PartitionResult, ReplicaElectionResult}
-import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -72,17 +68,19 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
+import org.apache.kafka.server.log.internals.AppendOrigin
+import org.apache.kafka.server.record.BrokerCompressionType
+
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
-
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
-
 import scala.annotation.nowarn
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -94,6 +92,9 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val metadataSupport: MetadataSupport,
                 val replicaManager: ReplicaManager,
                 val groupCoordinator: GroupCoordinator,
+                // newGroupCoordinator is temporary here. It will be removed when
+                // the migration to the new interface is completed in this class.
+                val newGroupCoordinator: org.apache.kafka.coordinator.group.GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
                 val autoTopicCreationManager: AutoTopicCreationManager,
                 val brokerId: Int,
@@ -108,7 +109,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val clusterId: String,
                 time: Time,
                 val tokenManager: DelegationTokenManager,
-                val apiVersionManager: ApiVersionManager) extends ApiRequestHandler with Logging {
+                val apiVersionManager: ApiVersionManager
+) extends ApiRequestHandler with Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
@@ -161,6 +163,12 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Top-level method that handles all requests and multiplexes to the right api
    */
   override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+    def handleError(e: Throwable): Unit = {
+      error(s"Unexpected error handling request ${request.requestDesc(true)} " +
+        s"with context ${request.context}", e)
+      requestHelper.handleError(request, e)
+    }
+
     try {
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
@@ -183,12 +191,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request, requestLocal)
         case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
         case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
-        case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request, requestLocal)
-        case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
-        case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
-        case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request, requestLocal)
-        case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
-        case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
+        case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request, requestLocal).exceptionally(handleError)
+        case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request).exceptionally(handleError)
+        case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request).exceptionally(handleError)
+        case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request, requestLocal).exceptionally(handleError)
+        case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupsRequest(request).exceptionally(handleError)
+        case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request).exceptionally(handleError)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.CREATE_TOPICS => maybeForwardToController(request, handleCreateTopicsRequest)
@@ -214,7 +222,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.RENEW_DELEGATION_TOKEN => maybeForwardToController(request, handleRenewTokenRequest)
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => maybeForwardToController(request, handleExpireTokenRequest)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
-        case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request, requestLocal)
+        case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request, requestLocal).exceptionally(handleError)
         case ApiKeys.ELECT_LEADERS => maybeForwardToController(request, handleElectLeaders)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigsRequest(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleAlterPartitionReassignmentsRequest)
@@ -238,10 +246,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     } catch {
       case e: FatalExitError => throw e
-      case e: Throwable =>
-        error(s"Unexpected error handling request ${request.requestDesc(true)} " +
-          s"with context ${request.context}", e)
-        requestHelper.handleError(request, e)
+      case e: Throwable => handleError(e)
     } finally {
       // try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
       // are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle() and the
@@ -664,7 +669,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         timeout = produceRequest.timeout.toLong,
         requiredAcks = produceRequest.acks,
         internalTopicsAllowed = internalTopicsAllowed,
-        origin = AppendOrigin.Client,
+        origin = AppendOrigin.CLIENT,
         entriesPerPartition = authorizedRequestInfo,
         requestLocal = requestLocal,
         responseCallback = sendResponseCallback,
@@ -755,7 +760,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // We will never return a logConfig when the topic is unresolved and the name is null. This is ok since we won't have any records to convert.
       val logConfig = replicaManager.getLogConfig(tp.topicPartition)
 
-      if (logConfig.exists(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
+      if (logConfig.exists(_.compressionType == BrokerCompressionType.ZSTD.name) && versionId < 10) {
         trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
         FetchResponse.partitionResponse(tp, Errors.UNSUPPORTED_COMPRESSION_TYPE)
       } else {
@@ -1311,6 +1316,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
+    val controllerId = {
+      metadataCache.getControllerId.flatMap {
+        case ZkCachedControllerId(id) => Some(id)
+        case KRaftCachedControllerId(_) => metadataCache.getRandomAliveBrokerId
+      }
+    }
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
        MetadataResponse.prepareResponse(
@@ -1318,7 +1329,7 @@ class KafkaApis(val requestChannel: RequestChannel,
          requestThrottleMs,
          brokers.toList.asJava,
          clusterId,
-         metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
          completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
@@ -1565,299 +1576,225 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleDescribeGroupRequest(request: RequestChannel.Request): Unit = {
-
-    def sendResponseCallback(describeGroupsResponseData: DescribeGroupsResponseData): Unit = {
-      def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        describeGroupsResponseData.setThrottleTimeMs(requestThrottleMs)
-        new DescribeGroupsResponse(describeGroupsResponseData)
-      }
-      requestHelper.sendResponseMaybeThrottle(request, createResponse)
-    }
-
+  def handleDescribeGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val describeRequest = request.body[DescribeGroupsRequest]
-    val describeGroupsResponseData = new DescribeGroupsResponseData()
+    val includeAuthorizedOperations = describeRequest.data.includeAuthorizedOperations
+    val response = new DescribeGroupsResponseData()
+    val authorizedGroups = new ArrayBuffer[String]()
 
     describeRequest.data.groups.forEach { groupId =>
       if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupId)) {
-        describeGroupsResponseData.groups.add(DescribeGroupsResponse.forError(groupId, Errors.GROUP_AUTHORIZATION_FAILED))
+        response.groups.add(DescribeGroupsResponse.groupError(
+          groupId,
+          Errors.GROUP_AUTHORIZATION_FAILED
+        ))
       } else {
-        val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
-        val members = summary.members.map { member =>
-          new DescribeGroupsResponseData.DescribedGroupMember()
-            .setMemberId(member.memberId)
-            .setGroupInstanceId(member.groupInstanceId.orNull)
-            .setClientId(member.clientId)
-            .setClientHost(member.clientHost)
-            .setMemberAssignment(member.assignment)
-            .setMemberMetadata(member.metadata)
-        }
+        authorizedGroups += groupId
+      }
+    }
 
-        val describedGroup = new DescribeGroupsResponseData.DescribedGroup()
-          .setErrorCode(error.code)
-          .setGroupId(groupId)
-          .setGroupState(summary.state)
-          .setProtocolType(summary.protocolType)
-          .setProtocolData(summary.protocol)
-          .setMembers(members.asJava)
-
-        if (request.header.apiVersion >= 3) {
-          if (error == Errors.NONE && describeRequest.data.includeAuthorizedOperations) {
-            describedGroup.setAuthorizedOperations(authHelper.authorizedOperations(request, new Resource(ResourceType.GROUP, groupId)))
+    newGroupCoordinator.describeGroups(
+      request.context,
+      authorizedGroups.asJava
+    ).handle[Unit] { (results, exception) =>
+      if (exception != null) {
+        requestHelper.sendMaybeThrottle(request, describeRequest.getErrorResponse(exception))
+      } else {
+        if (request.header.apiVersion >= 3 && includeAuthorizedOperations) {
+          results.forEach { groupResult =>
+            if (groupResult.errorCode == Errors.NONE.code) {
+              groupResult.setAuthorizedOperations(authHelper.authorizedOperations(
+                request,
+                new Resource(ResourceType.GROUP, groupResult.groupId)
+              ))
+            }
           }
         }
 
-        describeGroupsResponseData.groups.add(describedGroup)
+        if (response.groups.isEmpty) {
+          // If the response is empty, we can directly reuse the results.
+          response.setGroups(results)
+        } else {
+          // Otherwise, we have to copy the results into the existing ones.
+          response.groups.addAll(results)
+        }
+
+        requestHelper.sendMaybeThrottle(request, new DescribeGroupsResponse(response))
       }
     }
-
-    sendResponseCallback(describeGroupsResponseData)
   }
 
-  def handleListGroupsRequest(request: RequestChannel.Request): Unit = {
+  def handleListGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val listGroupsRequest = request.body[ListGroupsRequest]
-    val states = if (listGroupsRequest.data.statesFilter == null)
-      // Handle a null array the same as empty
-      immutable.Set[String]()
-    else
-      listGroupsRequest.data.statesFilter.asScala.toSet
+    val hasClusterDescribe = authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
 
-    def createResponse(throttleMs: Int, groups: List[GroupOverview], error: Errors): AbstractResponse = {
-       new ListGroupsResponse(new ListGroupsResponseData()
-            .setErrorCode(error.code)
-            .setGroups(groups.map { group =>
-                val listedGroup = new ListGroupsResponseData.ListedGroup()
-                  .setGroupId(group.groupId)
-                  .setProtocolType(group.protocolType)
-                  .setGroupState(group.state)
-                listedGroup
-            }.asJava)
-            .setThrottleTimeMs(throttleMs)
-        )
-    }
-    val (error, groups) = groupCoordinator.handleListGroups(states)
-    if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME, logIfDenied = false))
-      // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        createResponse(requestThrottleMs, groups, error))
-    else {
-      val filteredGroups = groups.filter(group => authHelper.authorize(request.context, DESCRIBE, GROUP, group.groupId, logIfDenied = false))
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        createResponse(requestThrottleMs, filteredGroups, error))
+    newGroupCoordinator.listGroups(
+      request.context,
+      listGroupsRequest.data
+    ).handle[Unit] { (response, exception) =>
+      if (exception != null) {
+        requestHelper.sendMaybeThrottle(request, listGroupsRequest.getErrorResponse(exception))
+      } else {
+        val listGroupsResponse = if (hasClusterDescribe) {
+          // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
+          new ListGroupsResponse(response)
+        } else {
+          // Otherwise, only groups with described group are returned.
+          val authorizedGroups = response.groups.asScala.filter { group =>
+            authHelper.authorize(request.context, DESCRIBE, GROUP, group.groupId, logIfDenied = false)
+          }
+          new ListGroupsResponse(response.setGroups(authorizedGroups.asJava))
+        }
+        requestHelper.sendMaybeThrottle(request, listGroupsResponse)
+      }
     }
   }
 
-  def handleJoinGroupRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+  def handleJoinGroupRequest(
+    request: RequestChannel.Request,
+    requestLocal: RequestLocal
+  ): CompletableFuture[Unit] = {
     val joinGroupRequest = request.body[JoinGroupRequest]
-
-    // the callback for sending a join-group response
-    def sendResponseCallback(joinResult: JoinGroupResult): Unit = {
-      def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val responseBody = new JoinGroupResponse(
-          new JoinGroupResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-            .setErrorCode(joinResult.error.code)
-            .setGenerationId(joinResult.generationId)
-            .setProtocolType(joinResult.protocolType.orNull)
-            .setProtocolName(joinResult.protocolName.orNull)
-            .setLeader(joinResult.leaderId)
-            .setSkipAssignment(joinResult.skipAssignment)
-            .setMemberId(joinResult.memberId)
-            .setMembers(joinResult.members.asJava),
-          request.context.apiVersion
-        )
-
-        trace("Sending join group response %s for correlation id %d to client %s."
-          .format(responseBody, request.header.correlationId, request.header.clientId))
-        responseBody
-      }
-      requestHelper.sendResponseMaybeThrottle(request, createResponse)
-    }
 
     if (joinGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNSUPPORTED_VERSION))
+      requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, joinGroupRequest.data.groupId)) {
-      sendResponseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_AUTHORIZATION_FAILED))
+      requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else {
-      val groupInstanceId = Option(joinGroupRequest.data.groupInstanceId)
-
-      // Only return MEMBER_ID_REQUIRED error if joinGroupRequest version is >= 4
-      // and groupInstanceId is configured to unknown.
-      val requireKnownMemberId = joinGroupRequest.version >= 4 && groupInstanceId.isEmpty
-
-      // let the coordinator handle join-group
-      val protocols = joinGroupRequest.data.protocols.valuesList.asScala.map { protocol =>
-        (protocol.name, protocol.metadata)
-      }.toList
-
-      val supportSkippingAssignment = joinGroupRequest.version >= 9
-
-      groupCoordinator.handleJoinGroup(
-        joinGroupRequest.data.groupId,
-        joinGroupRequest.data.memberId,
-        groupInstanceId,
-        requireKnownMemberId,
-        supportSkippingAssignment,
-        request.header.clientId,
-        request.context.clientAddress.toString,
-        joinGroupRequest.data.rebalanceTimeoutMs,
-        joinGroupRequest.data.sessionTimeoutMs,
-        joinGroupRequest.data.protocolType,
-        protocols,
-        sendResponseCallback,
-        Option(joinGroupRequest.data.reason),
-        requestLocal)
+      newGroupCoordinator.joinGroup(
+        request.context,
+        joinGroupRequest.data,
+        requestLocal.bufferSupplier
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new JoinGroupResponse(response, request.context.apiVersion))
+        }
+      }
     }
   }
 
-  def handleSyncGroupRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+  def handleSyncGroupRequest(
+    request: RequestChannel.Request,
+    requestLocal: RequestLocal
+  ): CompletableFuture[Unit] = {
     val syncGroupRequest = request.body[SyncGroupRequest]
-
-    def sendResponseCallback(syncGroupResult: SyncGroupResult): Unit = {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new SyncGroupResponse(
-          new SyncGroupResponseData()
-            .setErrorCode(syncGroupResult.error.code)
-            .setProtocolType(syncGroupResult.protocolType.orNull)
-            .setProtocolName(syncGroupResult.protocolName.orNull)
-            .setAssignment(syncGroupResult.memberAssignment)
-            .setThrottleTimeMs(requestThrottleMs)
-        ))
-    }
 
     if (syncGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponseCallback(SyncGroupResult(Errors.UNSUPPORTED_VERSION))
+      requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else if (!syncGroupRequest.areMandatoryProtocolTypeAndNamePresent()) {
       // Starting from version 5, ProtocolType and ProtocolName fields are mandatory.
-      sendResponseCallback(SyncGroupResult(Errors.INCONSISTENT_GROUP_PROTOCOL))
+      requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.INCONSISTENT_GROUP_PROTOCOL.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, syncGroupRequest.data.groupId)) {
-      sendResponseCallback(SyncGroupResult(Errors.GROUP_AUTHORIZATION_FAILED))
+      requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else {
-      val assignmentMap = immutable.Map.newBuilder[String, Array[Byte]]
-      syncGroupRequest.data.assignments.forEach { assignment =>
-        assignmentMap += (assignment.memberId -> assignment.assignment)
+      newGroupCoordinator.syncGroup(
+        request.context,
+        syncGroupRequest.data,
+        requestLocal.bufferSupplier
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new SyncGroupResponse(response))
+        }
       }
-
-      groupCoordinator.handleSyncGroup(
-        syncGroupRequest.data.groupId,
-        syncGroupRequest.data.generationId,
-        syncGroupRequest.data.memberId,
-        Option(syncGroupRequest.data.protocolType),
-        Option(syncGroupRequest.data.protocolName),
-        Option(syncGroupRequest.data.groupInstanceId),
-        assignmentMap.result(),
-        sendResponseCallback,
-        requestLocal
-      )
     }
   }
 
-  def handleDeleteGroupsRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+  def handleDeleteGroupsRequest(
+    request: RequestChannel.Request,
+    requestLocal: RequestLocal
+  ): CompletableFuture[Unit] = {
     val deleteGroupsRequest = request.body[DeleteGroupsRequest]
     val groups = deleteGroupsRequest.data.groupsNames.asScala.distinct
 
-    val (authorizedGroups, unauthorizedGroups) = authHelper.partitionSeqByAuthorized(request.context, DELETE, GROUP,
-      groups)(identity)
+    val (authorizedGroups, unauthorizedGroups) =
+      authHelper.partitionSeqByAuthorized(request.context, DELETE, GROUP, groups)(identity)
 
-    val groupDeletionResult = groupCoordinator.handleDeleteGroups(authorizedGroups.toSet, requestLocal) ++
-      unauthorizedGroups.map(_ -> Errors.GROUP_AUTHORIZATION_FAILED)
+    newGroupCoordinator.deleteGroups(
+      request.context,
+      authorizedGroups.toList.asJava,
+      requestLocal.bufferSupplier
+    ).handle[Unit] { (results, exception) =>
+      val response = new DeleteGroupsResponseData()
 
-    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-      val deletionCollections = new DeletableGroupResultCollection()
-      groupDeletionResult.forKeyValue { (groupId, error) =>
-        deletionCollections.add(new DeletableGroupResult()
-          .setGroupId(groupId)
-          .setErrorCode(error.code)
-        )
+      if (exception != null) {
+        val error = Errors.forException(exception)
+        authorizedGroups.foreach { groupId =>
+          response.results.add(new DeleteGroupsResponseData.DeletableGroupResult()
+            .setGroupId(groupId)
+            .setErrorCode(error.code))
+        }
+      } else {
+        response.setResults(results)
       }
 
-      new DeleteGroupsResponse(new DeleteGroupsResponseData()
-        .setResults(deletionCollections)
-        .setThrottleTimeMs(requestThrottleMs)
-      )
-    })
+      unauthorizedGroups.foreach { groupId =>
+        response.results.add(new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId(groupId)
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))
+      }
+
+      requestHelper.sendMaybeThrottle(request, new DeleteGroupsResponse(response))
+    }
   }
 
-  def handleHeartbeatRequest(request: RequestChannel.Request): Unit = {
+  def handleHeartbeatRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val heartbeatRequest = request.body[HeartbeatRequest]
-
-    // the callback for sending a heartbeat response
-    def sendResponseCallback(error: Errors): Unit = {
-      def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val response = new HeartbeatResponse(
-          new HeartbeatResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-            .setErrorCode(error.code))
-        trace("Sending heartbeat response %s for correlation id %d to client %s."
-          .format(response, request.header.correlationId, request.header.clientId))
-        response
-      }
-      requestHelper.sendResponseMaybeThrottle(request, createResponse)
-    }
 
     if (heartbeatRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponseCallback(Errors.UNSUPPORTED_VERSION)
+      requestHelper.sendMaybeThrottle(request, heartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, heartbeatRequest.data.groupId)) {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new HeartbeatResponse(
-            new HeartbeatResponseData()
-              .setThrottleTimeMs(requestThrottleMs)
-              .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)))
+      requestHelper.sendMaybeThrottle(request, heartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else {
-      // let the coordinator to handle heartbeat
-      groupCoordinator.handleHeartbeat(
-        heartbeatRequest.data.groupId,
-        heartbeatRequest.data.memberId,
-        Option(heartbeatRequest.data.groupInstanceId),
-        heartbeatRequest.data.generationId,
-        sendResponseCallback)
+      newGroupCoordinator.heartbeat(
+        request.context,
+        heartbeatRequest.data
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, heartbeatRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new HeartbeatResponse(response))
+        }
+      }
     }
   }
 
-  def handleLeaveGroupRequest(request: RequestChannel.Request): Unit = {
+  def handleLeaveGroupRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val leaveGroupRequest = request.body[LeaveGroupRequest]
 
-    val members = leaveGroupRequest.members.asScala.toList
-
     if (!authHelper.authorize(request.context, READ, GROUP, leaveGroupRequest.data.groupId)) {
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        new LeaveGroupResponse(new LeaveGroupResponseData()
-          .setThrottleTimeMs(requestThrottleMs)
-          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
-        )
-      })
+      requestHelper.sendMaybeThrottle(request, leaveGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else {
-      def sendResponseCallback(leaveGroupResult : LeaveGroupResult): Unit = {
-        val memberResponses = leaveGroupResult.memberResponses.map(
-          leaveGroupResult =>
-            new MemberResponse()
-              .setErrorCode(leaveGroupResult.error.code)
-              .setMemberId(leaveGroupResult.memberId)
-              .setGroupInstanceId(leaveGroupResult.groupInstanceId.orNull)
-        )
-        def createResponse(requestThrottleMs: Int): AbstractResponse = {
-          new LeaveGroupResponse(
-            memberResponses.asJava,
-            leaveGroupResult.topLevelError,
-            requestThrottleMs,
-            leaveGroupRequest.version)
+      newGroupCoordinator.leaveGroup(
+        request.context,
+        leaveGroupRequest.normalizedData()
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, leaveGroupRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new LeaveGroupResponse(response, leaveGroupRequest.version))
         }
-        requestHelper.sendResponseMaybeThrottle(request, createResponse)
       }
-
-      groupCoordinator.handleLeaveGroup(
-        leaveGroupRequest.data.groupId,
-        members,
-        sendResponseCallback)
     }
   }
 
@@ -1924,12 +1861,36 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       val hasClusterAuthorization = authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
         logIfDenied = false)
-      val topics = createTopicsRequest.data.topics.asScala.map(_.name)
-      val authorizedTopics =
-        if (hasClusterAuthorization) topics.toSet
-        else authHelper.filterByAuthorized(request.context, CREATE, TOPIC, topics)(identity)
-      val authorizedForDescribeConfigs = authHelper.filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
-        topics, logIfDenied = false)(identity).map(name => name -> results.find(name)).toMap
+
+      val allowedTopicNames = {
+        val topicNames = createTopicsRequest
+          .data
+          .topics
+          .asScala
+          .map(_.name)
+          .toSet
+
+          /* The cluster metatdata topic is an internal topic with a different implementation. The user should not be
+           * allowed to create it as a regular topic.
+           */
+          if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {
+            info(s"Rejecting creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME}")
+          }
+          topicNames.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
+      }
+
+      val authorizedTopics = if (hasClusterAuthorization) {
+        allowedTopicNames.toSet
+      } else {
+        authHelper.filterByAuthorized(request.context, CREATE, TOPIC, allowedTopicNames)(identity)
+      }
+      val authorizedForDescribeConfigs = authHelper.filterByAuthorized(
+        request.context,
+        DESCRIBE_CONFIGS,
+        TOPIC,
+        allowedTopicNames,
+        logIfDenied = false
+      )(identity).map(name => name -> results.find(name)).toMap
 
       results.forEach { topic =>
         if (results.findAll(topic.name).size > 1) {
@@ -2372,7 +2333,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           timeout = config.requestTimeoutMs.toLong,
           requiredAcks = -1,
           internalTopicsAllowed = true,
-          origin = AppendOrigin.Coordinator,
+          origin = AppendOrigin.COORDINATOR,
           entriesPerPartition = controlRecords,
           requestLocal = requestLocal,
           responseCallback = maybeSendResponseCallback(producerId, marker.transactionResult))
@@ -2769,13 +2730,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       )
     }
 
-    val partitionsOpt = listPartitionReassignmentsRequest.data.topics match {
-      case topics: Any =>
-        Some(topics.iterator().asScala.flatMap { topic =>
-          topic.partitionIndexes.iterator().asScala
-            .map { tp => new TopicPartition(topic.name(), tp) }
-        }.toSet)
-      case _ => None
+    val partitionsOpt = Option(listPartitionReassignmentsRequest.data.topics).map { topics =>
+      topics.iterator().asScala.flatMap { topic =>
+        topic.partitionIndexes.iterator().asScala.map { partitionIndex =>
+          new TopicPartition(topic.name(), partitionIndex)
+        }
+      }.toSet
     }
 
     zkSupport.controller.listPartitionReassignments(partitionsOpt, sendResponseCallback)
@@ -3374,13 +3334,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
-    val controllerId = metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
+    val controllerId = {
+      metadataCache.getControllerId.flatMap {
+        case ZkCachedControllerId(id) => Some(id)
+        case KRaftCachedControllerId(_) => metadataCache.getRandomAliveBrokerId
+      }
+    }
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
       val data = new DescribeClusterResponseData()
         .setThrottleTimeMs(requestThrottleMs)
         .setClusterId(clusterId)
-        .setControllerId(controllerId)
+        .setControllerId(controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID))
         .setClusterAuthorizedOperations(clusterAuthorizedOperations)
 
 

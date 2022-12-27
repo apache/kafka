@@ -23,7 +23,7 @@ import java.util.Date
 import java.util.concurrent.TimeUnit
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{BrokerReconfigurable, KafkaConfig, LogDirFailureChannel}
+import kafka.server.{BrokerReconfigurable, KafkaConfig}
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.config.ConfigException
@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.server.log.internals.{AbortedTxn, LogDirFailureChannel, OffsetMap, SkimpyOffsetMap, TransactionIndex}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -306,8 +307,8 @@ class LogCleaner(initialConfig: CleanerConfig,
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
 
     val cleaner = new Cleaner(id = threadId,
-                              offsetMap = new SkimpyOffsetMap(memory = math.min(config.dedupeBufferSize / config.numThreads, Int.MaxValue).toInt,
-                                                              hashAlgorithm = config.hashAlgorithm),
+                              offsetMap = new SkimpyOffsetMap(math.min(config.dedupeBufferSize / config.numThreads, Int.MaxValue).toInt,
+                                                              config.hashAlgorithm),
                               ioBufferSize = config.ioBufferSize / config.numThreads / 2,
                               maxIoBufferSize = config.maxMessageSize,
                               dupBufferLoadFactor = config.dedupeBufferLoadFactor,
@@ -788,7 +789,7 @@ private[log] class Cleaner(val id: Int,
       transactionMetadata.onBatchRead(batch)
   }
 
-  private def shouldRetainRecord(map: kafka.log.OffsetMap,
+  private def shouldRetainRecord(map: OffsetMap,
                                  retainDeletesForLegacyRecords: Boolean,
                                  batch: RecordBatch,
                                  record: Record,
@@ -1123,7 +1124,7 @@ private[log] class CleanedTransactionMetadata {
   private val ongoingAbortedTxns = mutable.Map.empty[Long, AbortedTransactionMetadata]
   // Minheap of aborted transactions sorted by the transaction first offset
   private val abortedTransactions = mutable.PriorityQueue.empty[AbortedTxn](new Ordering[AbortedTxn] {
-    override def compare(x: AbortedTxn, y: AbortedTxn): Int = x.firstOffset compare y.firstOffset
+    override def compare(x: AbortedTxn, y: AbortedTxn): Int = java.lang.Long.compare(x.firstOffset, y.firstOffset)
   }.reverse)
 
   // Output cleaned index to write retained aborted transactions

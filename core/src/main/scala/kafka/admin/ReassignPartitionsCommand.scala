@@ -1341,7 +1341,7 @@ object ReassignPartitionsCommand extends Logging {
       CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: %s".format(
         validActions.map("--" + _.options().get(0)).mkString(", ")))
     }
-    val action = allActions(0)
+    val action = allActions.head
 
     if (!opts.options.has(opts.bootstrapServerOpt))
       CommandLineUtils.printUsageAndDie(opts.parser, "Please specify --bootstrap-server")

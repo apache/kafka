@@ -17,20 +17,23 @@
 
 package kafka.log
 
+import kafka.log.remote.RemoteLogManager
+
 import java.io.File
 import java.util.Properties
-
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
-import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd}
 import kafka.utils.{Scheduler, TestUtils}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
+
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
-
 import kafka.log
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, LazyIndex, TransactionIndex}
 
 import scala.collection.Iterable
 import scala.jdk.CollectionConverters._
@@ -44,8 +47,8 @@ object LogTestUtils {
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
     val ms = FileRecords.open(UnifiedLog.logFile(logDir, offset))
-    val idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
-    val timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
+    val idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(logDir, offset), offset, 1000, true)
+    val timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(logDir, offset), offset, 1500, true)
     val txnIndex = new TransactionIndex(offset, UnifiedLog.transactionIndexFile(logDir, offset))
 
     new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
@@ -60,7 +63,8 @@ object LogTestUtils {
                       maxMessageBytes: Int = Defaults.MaxMessageSize,
                       indexIntervalBytes: Int = Defaults.IndexInterval,
                       segmentIndexBytes: Int = Defaults.MaxIndexSize,
-                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs): LogConfig = {
+                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs,
+                      remoteLogStorageEnable: Boolean = Defaults.RemoteLogStorageEnable): LogConfig = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentMsProp, segmentMs: java.lang.Long)
     logProps.put(LogConfig.SegmentBytesProp, segmentBytes: Integer)
@@ -72,6 +76,7 @@ object LogTestUtils {
     logProps.put(LogConfig.IndexIntervalBytesProp, indexIntervalBytes: Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, segmentIndexBytes: Integer)
     logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
+    logProps.put(LogConfig.RemoteLogStorageEnableProp, remoteLogStorageEnable: java.lang.Boolean)
     LogConfig(logProps)
   }
 
@@ -88,7 +93,9 @@ object LogTestUtils {
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
                 keepPartitionMetadataFile: Boolean = true,
-                numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]): UnifiedLog = {
+                numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
+                remoteStorageSystemEnable: Boolean = false,
+                remoteLogManager: Option[RemoteLogManager] = None): UnifiedLog = {
     UnifiedLog(
       dir = dir,
       config = config,
@@ -104,7 +111,9 @@ object LogTestUtils {
       lastShutdownClean = lastShutdownClean,
       topicId = topicId,
       keepPartitionMetadataFile = keepPartitionMetadataFile,
-      numRemainingSegments = numRemainingSegments
+      numRemainingSegments = numRemainingSegments,
+      remoteStorageSystemEnable = remoteStorageSystemEnable,
+      remoteLogManager = remoteLogManager
     )
   }
 
@@ -207,7 +216,7 @@ object LogTestUtils {
                                  leaderEpoch: Int = 0): LogAppendInfo = {
     val records = endTxnRecords(controlType, producerId, producerEpoch,
       coordinatorEpoch = coordinatorEpoch, timestamp = timestamp)
-    log.appendAsLeader(records, origin = AppendOrigin.Coordinator, leaderEpoch = leaderEpoch)
+    log.appendAsLeader(records, origin = AppendOrigin.COORDINATOR, leaderEpoch = leaderEpoch)
   }
 
   private def endTxnRecords(controlRecordType: ControlRecordType,
@@ -229,7 +238,7 @@ object LogTestUtils {
     log.read(startOffset, maxLength, isolation, minOneMessage)
   }
 
-  def allAbortedTransactions(log: UnifiedLog): Iterable[AbortedTxn] = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
+  def allAbortedTransactions(log: UnifiedLog): Iterable[AbortedTxn] = log.logSegments.flatMap(_.txnIndex.allAbortedTxns.asScala)
 
   def deleteProducerSnapshotFiles(logDir: File): Unit = {
     val files = logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(UnifiedLog.ProducerSnapshotFileSuffix))

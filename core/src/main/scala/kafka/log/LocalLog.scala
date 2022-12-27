@@ -23,13 +23,14 @@ import java.text.NumberFormat
 import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
+import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils.{Logging, Scheduler}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.log.internals.{AbortedTxn, LogDirFailureChannel, OffsetPosition}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, immutable}
@@ -440,14 +441,14 @@ class LocalLog(@volatile private var _dir: File,
   private def addAbortedTransactions(startOffset: Long, segment: LogSegment,
                                      fetchInfo: FetchDataInfo): FetchDataInfo = {
     val fetchSize = fetchInfo.records.sizeInBytes
-    val startOffsetPosition = OffsetPosition(fetchInfo.fetchOffsetMetadata.messageOffset,
+    val startOffsetPosition = new OffsetPosition(fetchInfo.fetchOffsetMetadata.messageOffset,
       fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
-    val upperBoundOffset = segment.fetchUpperBoundOffset(startOffsetPosition, fetchSize).getOrElse {
+    val upperBoundOffset = segment.fetchUpperBoundOffset(startOffsetPosition, fetchSize).orElse {
       segments.higherSegment(segment.baseOffset).map(_.baseOffset).getOrElse(logEndOffset)
     }
 
     val abortedTransactions = ListBuffer.empty[FetchResponseData.AbortedTransaction]
-    def accumulator(abortedTxns: List[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)
+    def accumulator(abortedTxns: Seq[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)
     collectAbortedTransactions(startOffset, upperBoundOffset, segment, accumulator)
 
     FetchDataInfo(fetchOffsetMetadata = fetchInfo.fetchOffsetMetadata,
@@ -458,13 +459,13 @@ class LocalLog(@volatile private var _dir: File,
 
   private def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long,
                                          startingSegment: LogSegment,
-                                         accumulator: List[AbortedTxn] => Unit): Unit = {
+                                         accumulator: Seq[AbortedTxn] => Unit): Unit = {
     val higherSegments = segments.higherSegments(startingSegment.baseOffset).iterator
     var segmentEntryOpt = Option(startingSegment)
     while (segmentEntryOpt.isDefined) {
       val segment = segmentEntryOpt.get
       val searchResult = segment.collectAbortedTxns(startOffset, upperBoundOffset)
-      accumulator(searchResult.abortedTransactions)
+      accumulator(searchResult.abortedTransactions.asScala)
       if (searchResult.isComplete)
         return
       segmentEntryOpt = nextOption(higherSegments)
@@ -474,7 +475,7 @@ class LocalLog(@volatile private var _dir: File,
   private[log] def collectAbortedTransactions(logStartOffset: Long, baseOffset: Long, upperBoundOffset: Long): List[AbortedTxn] = {
     val segmentEntry = segments.floorSegment(baseOffset)
     val allAbortedTxns = ListBuffer.empty[AbortedTxn]
-    def accumulator(abortedTxns: List[AbortedTxn]): Unit = allAbortedTxns ++= abortedTxns
+    def accumulator(abortedTxns: Seq[AbortedTxn]): Unit = allAbortedTxns ++= abortedTxns
     segmentEntry.foreach(segment => collectAbortedTransactions(logStartOffset, upperBoundOffset, segment, accumulator))
     allAbortedTxns.toList
   }

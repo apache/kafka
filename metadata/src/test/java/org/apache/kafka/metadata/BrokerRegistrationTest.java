@@ -80,13 +80,13 @@ public class BrokerRegistrationTest {
             "incarnationId=3MfdxWlNSn2UDYsmDP1pYg, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9091)], supportedFeatures={foo: 1-2}, " +
-            "rack=Optional.empty, fenced=true, inControlledShutdown=false)",
+            "rack=Optional.empty, fenced=true, inControlledShutdown=false, isMigratingZkBroker=false)",
             REGISTRATIONS.get(1).toString());
         assertEquals("BrokerRegistration(id=2, epoch=0, " +
             "incarnationId=eY7oaG1RREie5Kk9uy1l6g, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9092)], supportedFeatures={bar: 1-4, foo: 2-3}, " +
-            "rack=Optional[myrack], fenced=false, inControlledShutdown=true)",
+            "rack=Optional[myrack], fenced=false, inControlledShutdown=true, isMigratingZkBroker=false)",
             REGISTRATIONS.get(2).toString());
     }
 
