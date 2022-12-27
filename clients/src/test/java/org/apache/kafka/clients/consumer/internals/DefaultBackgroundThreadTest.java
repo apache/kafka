@@ -54,11 +54,13 @@ public class DefaultBackgroundThreadTest {
     private final Properties properties = new Properties();
     private MockTime time;
     private ConsumerMetadata metadata;
+    private SubscriptionState subscriptions;
     private NetworkClientDelegate networkClient;
     private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private ApplicationEventProcessor processor;
     private CoordinatorRequestManager coordinatorManager;
+    private FetchRequestManager<?, ?> fetchRequestManager;
     private ErrorEventHandler errorEventHandler;
     private int requestTimeoutMs = 500;
 
@@ -67,11 +69,13 @@ public class DefaultBackgroundThreadTest {
     public void setup() {
         this.time = new MockTime(0);
         this.metadata = mock(ConsumerMetadata.class);
+        this.subscriptions = mock(SubscriptionState.class);
         this.networkClient = mock(NetworkClientDelegate.class);
         this.applicationEventsQueue = (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
         this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
         this.processor = mock(ApplicationEventProcessor.class);
         this.coordinatorManager = mock(CoordinatorRequestManager.class);
+        this.fetchRequestManager = mock(FetchRequestManager.class);
         this.errorEventHandler = mock(ErrorEventHandler.class);
     }
 
@@ -149,8 +153,10 @@ public class DefaultBackgroundThreadTest {
                 this.errorEventHandler,
                 processor,
                 this.metadata,
+                this.subscriptions,
                 this.networkClient,
-                this.coordinatorManager);
+                this.coordinatorManager,
+                this.fetchRequestManager);
     }
 
     private NetworkClientDelegate.PollResult mockPollResult() {

@@ -28,8 +28,10 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.FetchContext;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.MetadataFetcher;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -2617,27 +2619,32 @@ public class KafkaConsumerTest {
                 throwOnStableOffsetNotSupported,
                 null);
         }
-        Fetcher<String, String> fetcher = new Fetcher<>(
-                loggerFactory,
-                consumerClient,
-                minBytes,
-                maxBytes,
-                maxWaitMs,
-                fetchSize,
-                maxPollRecords,
-                checkCrcs,
-                "",
-                keyDeserializer,
-                deserializer,
-                metadata,
-                subscription,
-                metrics,
-                metricsRegistry.fetcherMetrics,
-                time,
-                retryBackoffMs,
-                requestTimeoutMs,
-                IsolationLevel.READ_UNCOMMITTED,
-                new ApiVersions());
+        IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
+        FetchContext<String, String> fetchContext = new FetchContext<>(loggerFactory,
+            time,
+            minBytes,
+            maxBytes,
+            maxWaitMs,
+            fetchSize,
+            maxPollRecords,
+            checkCrcs,
+            "",
+            keyDeserializer,
+            deserializer,
+            retryBackoffMs,
+            requestTimeoutMs,
+            isolationLevel,
+            metrics,
+            metricsRegistry.fetcherMetrics);
+        ApiVersions apiVersions = new ApiVersions();
+        Fetcher<String, String> fetcher = new Fetcher<>(fetchContext, apiVersions, consumerClient);
+        MetadataFetcher metadataFetcher = new MetadataFetcher(loggerFactory,
+            consumerClient,
+            time,
+            retryBackoffMs,
+            requestTimeoutMs,
+            isolationLevel,
+            apiVersions);
 
         return new KafkaConsumer<>(
                 loggerFactory,
@@ -2646,6 +2653,7 @@ public class KafkaConsumerTest {
                 keyDeserializer,
                 deserializer,
                 fetcher,
+                metadataFetcher,
                 interceptors,
                 time,
                 consumerClient,

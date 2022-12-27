@@ -16,9 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
@@ -54,9 +59,11 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final ConsumerMetadata metadata;
+    private final SubscriptionState subscriptions;
     private final ConsumerConfig config;
     // empty if groupId is null
     private final Optional<CoordinatorRequestManager> coordinatorManager;
+    private final FetchRequestManager<?, ?> fetchRequestManager;
     private final ApplicationEventProcessor applicationEventProcessor;
     private final NetworkClientDelegate networkClientDelegate;
     private final ErrorEventHandler errorEventHandler;
@@ -72,8 +79,10 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final ErrorEventHandler errorEventHandler,
                             final ApplicationEventProcessor processor,
                             final ConsumerMetadata metadata,
+                            final SubscriptionState subscriptions,
                             final NetworkClientDelegate networkClient,
-                            final CoordinatorRequestManager coordinatorManager) {
+                            final CoordinatorRequestManager coordinatorManager,
+                            final FetchRequestManager<?, ?> fetchRequestManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.running = true;
@@ -83,8 +92,10 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.applicationEventProcessor = processor;
         this.config = config;
         this.metadata = metadata;
+        this.subscriptions = subscriptions;
         this.networkClientDelegate = networkClient;
         this.coordinatorManager = Optional.ofNullable(coordinatorManager);
+        this.fetchRequestManager = fetchRequestManager;
         this.errorEventHandler = errorEventHandler;
     }
     public DefaultBackgroundThread(final Time time,
@@ -121,7 +132,23 @@ public class DefaultBackgroundThread extends KafkaThread {
                         errorEventHandler,
                         groupId
                     ));
-            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue);
+
+            // TODO: KIRK - Need to make sure this configuration is legit.
+            this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.NONE);
+            final FetchContext<?, ?> fetchContext = new FetchContext<>(logContext,
+                                                                       time,
+                                                                       config,
+                                                                       null,
+                                                                       null,
+                                                                       -1,
+                                                                       -1,
+                                                                       null,
+                                                                       null,
+                                                                       null);
+
+            // TODO: KIRK - Do we need a shared ApiVersions or should there be multiple?
+            this.fetchRequestManager = new FetchRequestManager<>(fetchContext, new ApiVersions(), errorEventHandler, new RequestState(1));
+            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, metadata, subscriptions, fetchRequestManager);
         } catch (final Exception e) {
             close();
             throw new KafkaException("Failed to construct background processor", e.getCause());
@@ -159,15 +186,26 @@ public class DefaultBackgroundThread extends KafkaThread {
         drainAndProcess();
 
         final long currentTimeMs = time.milliseconds();
+
+        List<RequestManager> requestManagers = new ArrayList<>();
+        coordinatorManager.ifPresent(requestManagers::add);
+        requestManagers.add(fetchRequestManager);
+
         long pollWaitTimeMs = MAX_POLL_TIMEOUT_MS;
 
-        if (coordinatorManager.isPresent()) {
-            pollWaitTimeMs = Math.min(
-                    pollWaitTimeMs,
-                    handlePollResult(coordinatorManager.get().poll(currentTimeMs)));
+        for (final RequestManager requestManager : requestManagers) {
+            final PollResult pollResult = requestManager.poll(currentTimeMs);
+            final long timeUntilNextPollMs = handlePollResult(pollResult);
+            pollWaitTimeMs = Math.min(pollWaitTimeMs, timeUntilNextPollMs);
         }
 
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
+
+        // Handle any fetch responses that may be available.
+        Optional<? extends Fetch<?, ?>> fetchOpt = fetchRequestManager.fetch(metadata, subscriptions);
+        fetchOpt.ifPresent(fetch -> {
+            // TODO: KIRK - How do we make this available for the polling thread?
+        });
     }
 
     private void drainAndProcess() {

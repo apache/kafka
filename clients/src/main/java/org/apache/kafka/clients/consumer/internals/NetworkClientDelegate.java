@@ -193,6 +193,14 @@ public class NetworkClientDelegate implements AutoCloseable {
             this.timeUntilNextPollMs = timeMsTillNextPoll;
             this.unsentRequests = Collections.unmodifiableList(unsentRequests);
         }
+
+        public PollResult(final long timeMsTillNextPoll, final UnsentRequest unsentRequest) {
+            this(timeMsTillNextPoll, Collections.singletonList(unsentRequest));
+        }
+
+        public PollResult(final long timeMsTillNextPoll) {
+            this(timeMsTillNextPoll, Collections.emptyList());
+        }
     }
     public static class UnsentRequest {
         private final AbstractRequest.Builder<?> requestBuilder;

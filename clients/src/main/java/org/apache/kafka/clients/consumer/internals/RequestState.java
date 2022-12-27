@@ -66,8 +66,7 @@ class RequestState {
             return true;
         }
 
-        if (this.lastReceivedMs == -1 ||
-                this.lastReceivedMs < this.lastSentMs) {
+        if (this.lastReceivedMs == -1 || this.lastReceivedMs < this.lastSentMs) {
             // there is an inflight request
             return false;
         }

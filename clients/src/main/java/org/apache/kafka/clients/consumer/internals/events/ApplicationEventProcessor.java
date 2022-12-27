@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
+import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
 import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
@@ -24,20 +27,34 @@ import java.util.concurrent.BlockingQueue;
 public class ApplicationEventProcessor {
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
-    public ApplicationEventProcessor(final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+    private final ConsumerMetadata metadata;
+
+    private final SubscriptionState subscriptions;
+
+    private final FetchRequestManager<?, ?> fetchRequestManager;
+
+    public ApplicationEventProcessor(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                     final ConsumerMetadata metadata,
+                                     final SubscriptionState subscriptions,
+                                     final FetchRequestManager<?, ?> fetchRequestManager) {
         this.backgroundEventQueue = backgroundEventQueue;
+        this.subscriptions = subscriptions;
+        this.metadata = metadata;
+        this.fetchRequestManager = fetchRequestManager;
     }
     public boolean process(final ApplicationEvent event) {
         Objects.requireNonNull(event);
         switch (event.type) {
             case NOOP:
                 return process((NoopApplicationEvent) event);
+            case FETCH:
+                return process((FetchApplicationEvent) event);
         }
         return false;
     }
 
     /**
-     * Processes {@link NoopApplicationEvent} and equeue a
+     * Processes {@link NoopApplicationEvent} and enqueue a
      * {@link NoopBackgroundEvent}. This is intentionally left here for
      * demonstration purpose.
      *
@@ -45,5 +62,9 @@ public class ApplicationEventProcessor {
      */
     private boolean process(final NoopApplicationEvent event) {
         return backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
+    }
+    private boolean process(final FetchApplicationEvent event) {
+        fetchRequestManager.fetch(metadata, subscriptions);
+        return true;
     }
 }

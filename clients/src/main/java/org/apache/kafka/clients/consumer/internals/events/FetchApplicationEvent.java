@@ -14,26 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
-
-import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
+package org.apache.kafka.clients.consumer.internals.events;
 
 /**
- * {@code PollResult} consist of {@code UnsentRequest} if there are requests to send; otherwise, return the time till
- * the next poll event.
+ * The event is NoOp. This is intentionally left here for demonstration purpose.
  */
-public interface RequestManager {
-    default PollResult poll(long currentTimeMs) {
-        // Do nothing
-        return null;
-    }
+public class FetchApplicationEvent extends ApplicationEvent {
 
-    default PollResult poll(final Metadata metadata,
-                            final SubscriptionState subscriptions,
-                            final long currentTimeMs) {
-        // Do nothing
-        return null;
+    public FetchApplicationEvent() {
+        super(Type.FETCH);
     }
 }

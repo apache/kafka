@@ -17,126 +17,106 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.clients.FetchSessionHandler.FetchRequestData;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.AbstractRequestFutureCompletionHandler;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.requests.FetchRequest;
-
-import java.util.Map;
 import org.apache.kafka.common.requests.FetchResponse;
 
-/**
- * This class manages the fetching process with the brokers.
- * <p>
- * Thread-safety:
- * Requests and responses of Fetcher may be processed by different threads since heartbeat
- * thread may process responses. Other operations are single-threaded and invoked only from
- * the thread polling the consumer.
- * <ul>
- *     <li>If a response handler accesses any shared state of the Fetcher (e.g. FetchSessionHandler),
- *     all access to that state must be synchronized on the Fetcher instance.</li>
- *     <li>If a response handler accesses any shared state of the coordinator (e.g. SubscriptionState),
- *     it is assumed that all access to that state is synchronized on the coordinator instance by
- *     the caller.</li>
- *     <li>Responses that collate partial responses from multiple brokers (e.g. to list offsets) are
- *     synchronized on the response future.</li>
- *     <li>At most one request is pending for each node at any time. Nodes with pending requests are
- *     tracked and updated after processing the response. This ensures that any state (e.g. epoch)
- *     updated while processing responses on one thread are visible while creating the subsequent request
- *     on a different thread.</li>
- * </ul>
- */
-public class Fetcher<K, V> extends AbstractFetcher<K, V> {
-    private final ConsumerNetworkClient client;
+public class FetchRequestManager<K, V> extends AbstractFetcher<K, V> implements RequestManager {
 
-    public Fetcher(FetchContext<K, V> fetchContext,
-                   ApiVersions apiVersions,
-                   ConsumerNetworkClient client) {
+    private final ErrorEventHandler nonRetriableErrorHandler;
+
+    private final RequestState requestState;
+
+    FetchRequestManager(final FetchContext<K, V> fetchContext,
+                        final ApiVersions apiVersions,
+                        final ErrorEventHandler nonRetriableErrorHandler,
+                        final RequestState requestState) {
         super(fetchContext, apiVersions);
-        this.client = client;
+        this.nonRetriableErrorHandler = nonRetriableErrorHandler;
+        this.requestState = requestState;
     }
 
     @Override
     protected boolean isUnavailable(final Node node) {
-        return client.isUnavailable(node);
+        return false;
     }
 
     @Override
     protected void maybeThrowAuthFailure(final Node node) {
-        client.maybeThrowAuthFailure(node);
+        // Do nothing...
     }
 
-    /**
-     * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
-     * visibility for testing.
-     * @return true if there are completed fetches, false otherwise
-     */
-    protected boolean hasCompletedFetches() {
-        return !completedFetches.isEmpty();
-    }
+    @Override
+    public PollResult poll(final Metadata metadata,
+                           final SubscriptionState subscriptions,
+                           final long currentTimeMs) {
+        if (!requestState.canSendRequest(currentTimeMs))
+            return new NetworkClientDelegate.PollResult(requestState.remainingBackoffMs(currentTimeMs));
 
-    /**
-     * Return whether we have any completed fetches that are fetchable. This method is thread-safe.
-     * @return true if there are completed fetches that can be returned, false otherwise
-     */
-    public boolean hasAvailableFetches(SubscriptionState subscriptions) {
-        return completedFetches.stream().anyMatch(fetch -> subscriptions.isFetchable(fetch.partition()));
-    }
+        List<UnsentRequest> requests = new ArrayList<>();
+        requestState.updateLastSend(currentTimeMs);
 
-    /**
-     * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
-     * an in-flight fetch or pending fetch data.
-     * @return number of fetches sent
-     */
-    public synchronized int sendFetches(Metadata metadata, SubscriptionState subscriptions) {
-        Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareFetchRequests(metadata, subscriptions);
+        Map<Node, FetchRequestData> fetchRequestMap = prepareFetchRequests(metadata, subscriptions);
 
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
             final Node fetchTarget = entry.getKey();
             final FetchSessionHandler.FetchRequestData data = entry.getValue();
             final FetchRequest.Builder request = createFetchRequest(data);
+            nodesWithPendingFetchRequests.add(fetchTarget.id());
 
-            if (log.isDebugEnabled())
-                log.debug("Sending {} {} to broker {}", fetchContext.isolationLevel, data, fetchTarget);
-
-            RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
-            // We add the node to the set of nodes with pending fetch requests before adding the
-            // listener because the future may have been fulfilled on another thread (e.g. during a
-            // disconnection being handled by the heartbeat thread) which will mean the listener
-            // will be invoked synchronously.
-            this.nodesWithPendingFetchRequests.add(fetchTarget.id());
-            future.addListener(new RequestFutureListener<ClientResponse>() {
+            AbstractRequestFutureCompletionHandler handler = new AbstractRequestFutureCompletionHandler() {
                 @Override
-                public void onSuccess(final ClientResponse resp) {
-                    synchronized (Fetcher.this) {
-                        try {
-                            handleSuccess(metadata, fetchTarget, resp, data);
-                        } finally {
-                            nodesWithPendingFetchRequests.remove(fetchTarget.id());
-                        }
-                    }
-                }
+                public void handleResponse(final ClientResponse r, final RuntimeException e) {
+                    try {
+                        if (e != null) {
+                            long currentTimeMs = r.receivedTimeMs();
+                            requestState.updateLastFailedAttempt(currentTimeMs);
 
-                @Override
-                public void onFailure(final RuntimeException e) {
-                    synchronized (Fetcher.this) {
-                        try {
+                            if (e instanceof RetriableException) {
+                                log.debug("FetchResponse request failed due to retriable exception", e);
+                                return;
+                            }
+
                             handleError(subscriptions, fetchTarget, e);
-                        } finally {
-                            nodesWithPendingFetchRequests.remove(fetchTarget.id());
+
+                            log.warn("FetchResponse request failed due to fatal exception", e);
+                            nonRetriableErrorHandler.handle(e);
+                        } else {
+                            handleSuccess(metadata, fetchTarget, r, data);
+                            requestState.reset();
                         }
+                    } finally {
+                        nodesWithPendingFetchRequests.remove(fetchTarget.id());
                     }
                 }
-            });
+            };
+
+            UnsentRequest unsentRequest = NetworkClientDelegate.UnsentRequest.makeUnsentRequest(
+                request,
+                handler,
+                fetchTarget);
+            requests.add(unsentRequest);
         }
-        return fetchRequestMap.size();
+
+        return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, requests);
     }
 
     /**
@@ -149,8 +129,8 @@ public class Fetcher<K, V> extends AbstractFetcher<K, V> {
      *         the defaultResetPolicy is NONE
      * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
-    public Fetch<K, V> collectFetch(Metadata metadata, SubscriptionState subscriptions) {
-        Fetch<K, V> fetch = Fetch.empty();
+    public Optional<Fetch<K, V>> fetch(Metadata metadata, SubscriptionState subscriptions) {
+        Optional<Fetch<K, V>> fetch = Optional.empty();
         Queue<CompletedFetch<K, V>> pausedCompletedFetches = new ArrayDeque<>();
         int recordsRemaining = fetchContext.maxPollRecords;
 
@@ -170,7 +150,7 @@ public class Fetcher<K, V> extends AbstractFetcher<K, V> {
                             // in cases such as the TopicAuthorizationException, and the second condition ensures that no
                             // potential data loss due to an exception in a following record.
                             FetchResponseData.PartitionData partition = records.partitionData();
-                            if (fetch.isEmpty() && FetchResponse.recordsOrFail(partition).sizeInBytes() == 0) {
+                            if (!fetch.isPresent() && FetchResponse.recordsOrFail(partition).sizeInBytes() == 0) {
                                 completedFetches.poll();
                             }
                             throw e;
@@ -188,11 +168,15 @@ public class Fetcher<K, V> extends AbstractFetcher<K, V> {
                 } else {
                     Fetch<K, V> nextFetch = fetchRecords(subscriptions, nextInLineFetch, recordsRemaining);
                     recordsRemaining -= nextFetch.numRecords();
-                    fetch.add(nextFetch);
+
+                    if (fetch.isPresent())
+                        fetch.get().add(nextFetch);
+                    else
+                        fetch = Optional.of(nextFetch);
                 }
             }
         } catch (KafkaException e) {
-            if (fetch.isEmpty())
+            if (!fetch.isPresent())
                 throw e;
         } finally {
             // add any polled completed fetches for paused partitions back to the completed fetches queue to be
