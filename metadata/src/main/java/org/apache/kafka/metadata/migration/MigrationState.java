@@ -38,8 +38,8 @@ public enum MigrationState {
     UNINITIALIZED(false),                  // Initial state.
     INACTIVE(false),                       // State when not the active controller.
     WAIT_FOR_CONTROLLER_QUORUM(false),     // Ensure all the quorum nodes are ready for migration.
+    WAIT_FOR_BROKERS(false),                // Wait for Zk brokers to be ready for migration.
     BECOME_CONTROLLER(false),              // Become controller for the Zk Brokers.
-    WAIT_FOR_BROKERS(true),                // Wait for Zk brokers to be ready for migration.
     ZK_MIGRATION(true),                    // The cluster has satisfied the migration criteria
     KRAFT_CONTROLLER_TO_BROKER_COMM(true), // First communication from Controller to send full RPCs to the Zk brokers.
     DUAL_WRITE(true);                      // The data has been migrated

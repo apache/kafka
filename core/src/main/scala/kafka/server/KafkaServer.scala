@@ -357,16 +357,25 @@ class KafkaServer(
         val brokerInfo = createBrokerInfo
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
 
-        lifecycleManager = new BrokerLifecycleManager(config,
-          time,
-          threadNamePrefix,
-          zkBrokerEpochSupplier = Some(() => kafkaController.brokerEpoch))
-
         // Now that the broker is successfully registered, checkpoint its metadata
         val zkMetaProperties = ZkMetaProperties(clusterId, config.brokerId)
         checkpointBrokerMetadata(zkMetaProperties)
 
+        /* start token manager */
+        tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
+        tokenManager.startup()
+
+        /* start kafka controller */
+        _kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, metadataCache, threadNamePrefix)
+        kafkaController.startup()
+
         if (config.migrationEnabled) {
+          logger.info("Starting up additional components for ZooKeeper migration")
+          lifecycleManager = new BrokerLifecycleManager(config,
+            time,
+            threadNamePrefix,
+            zkBrokerEpochSupplier = Some(() => kafkaController.brokerEpoch))
+
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
           val kraftMetaProps = MetaProperties(zkMetaProperties.clusterId, zkMetaProperties.brokerId)
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
@@ -396,6 +405,7 @@ class KafkaServer(
 
           val listener = new OffsetTrackingListener()
           raftManager.register(listener)
+          raftManager.startup()
 
           val networkListeners = new ListenerCollection()
           config.effectiveAdvertisedListeners.foreach { ep =>
@@ -419,17 +429,8 @@ class KafkaServer(
             networkListeners,
             ibpAsFeature
           )
-
-          raftManager.startup()
+          logger.debug("Start RaftManager")
         }
-
-        /* start token manager */
-        tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
-        tokenManager.startup()
-
-        /* start kafka controller */
-        _kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, metadataCache, threadNamePrefix)
-        kafkaController.startup()
 
         adminManager = new ZkAdminManager(config, metrics, metadataCache, zkClient)
 

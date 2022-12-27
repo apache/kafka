@@ -32,7 +32,9 @@ import org.apache.kafka.server.fault.FaultHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -147,16 +149,16 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             case WAIT_FOR_CONTROLLER_QUORUM:
                 return
                     newState == MigrationState.INACTIVE ||
+                    newState == MigrationState.WAIT_FOR_BROKERS;
+            case WAIT_FOR_BROKERS:
+                return
+                    newState == MigrationState.INACTIVE ||
                     newState == MigrationState.BECOME_CONTROLLER;
             case BECOME_CONTROLLER:
                 return
                     newState == MigrationState.INACTIVE ||
-                    newState == MigrationState.WAIT_FOR_BROKERS ||
+                    newState == MigrationState.ZK_MIGRATION ||
                     newState == MigrationState.KRAFT_CONTROLLER_TO_BROKER_COMM;
-            case WAIT_FOR_BROKERS:
-                return
-                    newState == MigrationState.INACTIVE ||
-                    newState == MigrationState.ZK_MIGRATION;
             case ZK_MIGRATION:
                 return
                     newState == MigrationState.INACTIVE ||
@@ -228,6 +230,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class PollEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
+            log.info("Poll");
+
             switch (migrationState) {
                 case UNINITIALIZED:
                     initializeMigrationState();
@@ -323,7 +327,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         log.debug("Controller Quorum is ready for Zk to KRaft migration");
                         // Note that leadership would not change here. Hence we do not need to
                         // `apply` any leadership state change.
-                        transitionTo(MigrationState.BECOME_CONTROLLER);
+                        transitionTo(MigrationState.WAIT_FOR_BROKERS);
                     }
                     break;
                 default:
@@ -349,7 +353,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         // We could not claim leadership, stay in BECOME_CONTROLLER to retry
                     } else {
                         if (!migrationLeadershipState.zkMigrationComplete()) {
-                            transitionTo(MigrationState.WAIT_FOR_BROKERS);
+                            transitionTo(MigrationState.ZK_MIGRATION);
                         } else {
                             transitionTo(MigrationState.KRAFT_CONTROLLER_TO_BROKER_COMM);
                         }
@@ -374,7 +378,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 case WAIT_FOR_BROKERS:
                     if (areZkBrokersReadyForMigration()) {
                         log.debug("Zk brokers are registered and ready for migration");
-                        transitionTo(MigrationState.ZK_MIGRATION);
+                        transitionTo(MigrationState.BECOME_CONTROLLER);
                     }
                     break;
                 default:
