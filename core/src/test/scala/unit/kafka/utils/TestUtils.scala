@@ -70,6 +70,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -434,13 +435,13 @@ object TestUtils extends Logging {
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
     topicConfig: Properties = new Properties,
   ): scala.collection.immutable.Map[Int, Int] = {
-    def isTopicExistsAndHasSameNumPartitionsAndReplicationFactor[B <: KafkaBroker](
-      cause: Throwable,
-      brokers: Seq[B],
-      topic: String,
-      effectiveNumPartitions: Int,
-      admin: Admin,
-      replicationFactor: Int): Boolean = {
+    val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
+      numPartitions
+    } else {
+      replicaAssignment.size
+    }
+
+    def isTopicExistsAndHasSameNumPartitionsAndReplicationFactor(cause: Throwable): Boolean = {
       // return true when:
       //  (1) the cause of exception is `TopicExistsException`
       //  (2) all partitions metadata are propagated
@@ -449,12 +450,6 @@ object TestUtils extends Logging {
         cause.isInstanceOf[TopicExistsException] &&
         !waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions).isEmpty &&
         topicHasSameNumPartitionsAndReplicationFactor(admin, topic, effectiveNumPartitions, replicationFactor)
-    }
-
-    val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
-      numPartitions
-    } else {
-      replicaAssignment.size
     }
 
     try {
@@ -469,7 +464,7 @@ object TestUtils extends Logging {
     } catch {
       case e: ExecutionException =>
         // don't throw exception when topic is already existed and has the expected partition number and replication factor
-        if (!isTopicExistsAndHasSameNumPartitionsAndReplicationFactor(e.getCause, brokers, topic, effectiveNumPartitions, admin, replicationFactor)) {
+        if (!isTopicExistsAndHasSameNumPartitionsAndReplicationFactor(e.getCause)) {
           throw e
         }
     }

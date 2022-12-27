@@ -25,10 +25,11 @@ import java.util.{Properties, Random}
 
 import joptsimple._
 import kafka.log._
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
 
 import scala.math._
 
