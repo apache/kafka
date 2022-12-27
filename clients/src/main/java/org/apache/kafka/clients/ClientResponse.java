@@ -41,8 +41,8 @@ public class ClientResponse {
     /**
      * @param requestHeader The header of the corresponding request
      * @param callback The callback to be invoked
-     * @param createdTimeMs The unix timestamp when the corresponding request was created
      * @param destination The node the corresponding request was sent to
+     * @param createdTimeMs The unix timestamp when the corresponding request was created
      * @param receivedTimeMs The unix timestamp when this response was received
      * @param disconnected Whether the client disconnected before fully reading a response
      * @param versionMismatch Whether there was a version mismatch that prevented sending the request.
@@ -58,16 +58,28 @@ public class ClientResponse {
                           UnsupportedVersionException versionMismatch,
                           AuthenticationException authenticationException,
                           AbstractResponse responseBody) {
-        this(requestHeader, callback, destination, createdTimeMs, receivedTimeMs, disconnected, false, versionMismatch, authenticationException, responseBody);
+        this(requestHeader,
+             callback,
+             destination,
+             createdTimeMs,
+             receivedTimeMs,
+             disconnected,
+             false,
+             versionMismatch,
+             authenticationException,
+             responseBody);
     }
 
     /**
      * @param requestHeader The header of the corresponding request
      * @param callback The callback to be invoked
-     * @param createdTimeMs The unix timestamp when the corresponding request was created
      * @param destination The node the corresponding request was sent to
+     * @param createdTimeMs The unix timestamp when the corresponding request was created
      * @param receivedTimeMs The unix timestamp when this response was received
      * @param disconnected Whether the client disconnected before fully reading a response
+     * @param timedOut Whether the client was disconnected because of a timeout; when setting this
+     *                 to <code>true</code>, <code>disconnected</code> must be <code>true</code>
+     *                 or an {@link IllegalStateException} will be thrown
      * @param versionMismatch Whether there was a version mismatch that prevented sending the request.
      * @param responseBody The response contents (or null) if we disconnected, no response was expected,
      *                     or if there was a version mismatch.
@@ -82,6 +94,9 @@ public class ClientResponse {
                           UnsupportedVersionException versionMismatch,
                           AuthenticationException authenticationException,
                           AbstractResponse responseBody) {
+        if (!disconnected && timedOut)
+            throw new IllegalStateException("The client response can't be in the state of connected, yet timed out");
+
         this.requestHeader = requestHeader;
         this.callback = callback;
         this.destination = destination;

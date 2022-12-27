@@ -324,11 +324,14 @@ public class NetworkClient implements KafkaClient {
         log.info("Client requested disconnect from node {}", nodeId);
         selector.close(nodeId);
         long now = time.milliseconds();
-        cancelInFlightRequests(nodeId, now, abortedSends);
+        cancelInFlightRequests(nodeId, now, abortedSends, false);
         connectionStates.disconnected(nodeId, now);
     }
 
-    private void cancelInFlightRequests(String nodeId, long now, Collection<ClientResponse> responses) {
+    private void cancelInFlightRequests(String nodeId,
+                                        long now,
+                                        Collection<ClientResponse> responses,
+                                        boolean timedOut) {
         Iterable<InFlightRequest> inFlightRequests = this.inFlightRequests.clearAll(nodeId);
         for (InFlightRequest request : inFlightRequests) {
             if (log.isDebugEnabled()) {
@@ -347,14 +350,7 @@ public class NetworkClient implements KafkaClient {
 
             if (!request.isInternalRequest) {
                 if (responses != null) {
-                    ClientResponse disconnected;
-
-                    if (request.timeElapsedSinceSendMs(now) > request.requestTimeoutMs)
-                        disconnected = request.timedOut(now, null);
-                    else
-                        disconnected = request.disconnected(now, null);
-
-                    responses.add(disconnected);
+                    responses.add(request.disconnected(now, null, timedOut));
                 }
             } else if (request.header.apiKey() == ApiKeys.METADATA) {
                 metadataUpdater.handleFailedRequest(now, Optional.empty());
@@ -374,7 +370,7 @@ public class NetworkClient implements KafkaClient {
         log.info("Client requested connection close from node {}", nodeId);
         selector.close(nodeId);
         long now = time.milliseconds();
-        cancelInFlightRequests(nodeId, now, null);
+        cancelInFlightRequests(nodeId, now, null, false);
         connectionStates.remove(nodeId);
     }
 
@@ -513,7 +509,7 @@ public class NetworkClient implements KafkaClient {
                     clientRequest.correlationId(), clientRequest.destination(), unsupportedVersionException);
             ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(builder.latestAllowedVersion()),
                     clientRequest.callback(), clientRequest.destination(), now, now,
-                    false, unsupportedVersionException, null, null);
+                    false, false, unsupportedVersionException, null, null);
 
             if (!isInternalRequest)
                 abortedSends.add(clientResponse);
@@ -761,7 +757,8 @@ public class NetworkClient implements KafkaClient {
     private void processDisconnection(List<ClientResponse> responses,
                                       String nodeId,
                                       long now,
-                                      ChannelState disconnectState) {
+                                      ChannelState disconnectState,
+                                      boolean timedOut) {
         connectionStates.disconnected(nodeId, now);
         apiVersions.remove(nodeId);
         nodesNeedingApiVersionsFetch.remove(nodeId);
@@ -786,7 +783,7 @@ public class NetworkClient implements KafkaClient {
                 break; // Disconnections in other states are logged at debug level in Selector
         }
 
-        cancelInFlightRequests(nodeId, now, responses);
+        cancelInFlightRequests(nodeId, now, responses, timedOut);
         metadataUpdater.handleServerDisconnect(now, nodeId, Optional.ofNullable(disconnectState.exception()));
     }
 
@@ -803,7 +800,7 @@ public class NetworkClient implements KafkaClient {
             // close connection to the node
             this.selector.close(nodeId);
             log.info("Disconnecting from node {} due to request timeout.", nodeId);
-            processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
+            processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE, true);
         }
     }
 
@@ -829,7 +826,7 @@ public class NetworkClient implements KafkaClient {
                 "The timeout value is {} ms.",
                 nodeId,
                 connectionStates.connectionSetupTimeoutMs(nodeId));
-            processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
+            processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE, true);
         }
     }
 
@@ -907,7 +904,7 @@ public class NetworkClient implements KafkaClient {
                 log.warn("Received error {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
                         Errors.forCode(apiVersionsResponse.data().errorCode()), node, req.header.correlationId());
                 this.selector.close(node);
-                processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
+                processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE, false);
             } else {
                 // Starting from Apache Kafka 2.4, ApiKeys field is populated with the supported versions of
                 // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
@@ -943,7 +940,7 @@ public class NetworkClient implements KafkaClient {
         for (Map.Entry<String, ChannelState> entry : this.selector.disconnected().entrySet()) {
             String node = entry.getKey();
             log.info("Node {} disconnected.", node);
-            processDisconnection(responses, node, now, entry.getValue());
+            processDisconnection(responses, node, now, entry.getValue(), false);
         }
     }
 
@@ -1288,13 +1285,13 @@ public class NetworkClient implements KafkaClient {
         }
 
         public ClientResponse disconnected(long timeMs, AuthenticationException authenticationException) {
-            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
-                    true, null, authenticationException, null);
+            return disconnected(timeMs, authenticationException, false);
         }
 
-        public ClientResponse timedOut(long timeMs, AuthenticationException authenticationException) {
+        public ClientResponse disconnected(long timeMs, AuthenticationException authenticationException, boolean timedOut) {
+            // A timed out request is considered disconnected as well
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
-                    true, true, null, authenticationException, null);
+                true, timedOut, null, authenticationException, null);
         }
 
         @Override
