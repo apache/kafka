@@ -84,6 +84,7 @@ object Defaults {
   val MetadataSnapshotMaxIntervalMs = TimeUnit.HOURS.toMillis(1);
   val MetadataMaxIdleIntervalMs = 500
   val MetadataMaxRetentionBytes = 100 * 1024 * 1024
+  val DeleteTopicEnable = true
 
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
@@ -154,6 +155,7 @@ object Defaults {
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
   val MessageDownConversionEnable = true
+  val CompressionType = BrokerCompressionType.PRODUCER.name
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
@@ -230,14 +232,6 @@ object Defaults {
   val NumControllerQuotaSamples: Int = ClientQuotaManagerConfig.DefaultNumQuotaSamples
   val ControllerQuotaWindowSizeSeconds: Int = ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
 
-  /** ********* Transaction Configuration ***********/
-  val TransactionalIdExpirationMsDefault = 604800000
-
-  val DeleteTopicEnable = true
-
-  val CompressionType = BrokerCompressionType.PRODUCER.name
-
-  val MaxIdMapSnapshots = 2
   /** ********* Kafka Metrics Configuration ***********/
   val MetricNumSamples = 2
   val MetricSampleWindowMs = 30000
@@ -483,7 +477,6 @@ object KafkaConfig {
 
   val LogMessageTimestampTypeProp = LogConfigPrefix + "message.timestamp.type"
   val LogMessageTimestampDifferenceMaxMsProp = LogConfigPrefix + "message.timestamp.difference.max.ms"
-  val LogMaxIdMapSnapshotsProp = LogConfigPrefix + "max.id.map.snapshots"
   val NumRecoveryThreadsPerDataDirProp = "num.recovery.threads.per.data.dir"
   val AutoCreateTopicsEnableProp = "auto.create.topics.enable"
   val MinInSyncReplicasProp = "min.insync.replicas"
