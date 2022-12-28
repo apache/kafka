@@ -270,8 +270,6 @@ object Defaults {
   val QuorumLingerMs = RaftConfig.DEFAULT_QUORUM_LINGER_MS
   val QuorumRequestTimeoutMs = RaftConfig.DEFAULT_QUORUM_REQUEST_TIMEOUT_MS
   val QuorumRetryBackoffMs = RaftConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS
-
-  val RemoteLogStorageEnable = false
 }
 
 object KafkaConfig {

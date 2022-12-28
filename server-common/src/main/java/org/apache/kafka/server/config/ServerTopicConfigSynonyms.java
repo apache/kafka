@@ -48,7 +48,7 @@ public final class ServerTopicConfigSynonyms {
      * both the first and the second synonyms are configured, we will use only the value of
      * the first synonym and ignore the second.
      */
-    // RemoteLogStorageEnableProp, LocalLogRetentionMsProp, LocalLogRetentionBytesProp do not have server default config names yet
+    // Topic configs with no mapping to a server config can be found in `LogConfig.CONFIGS_WITH_NO_SERVER_DEFAULTS`
     @SuppressWarnings("deprecation")
     public static final Map<String, List<ConfigSynonym>> ALL_TOPIC_CONFIG_SYNONYMS = Collections.unmodifiableMap(Utils.mkMap(
         sameNameWithLogPrefix(TopicConfig.SEGMENT_BYTES_CONFIG),
@@ -87,8 +87,8 @@ public final class ServerTopicConfigSynonyms {
     ));
 
     /**
-     * Map topic config to the broker config with highest priority. Some of these have additional synonyms
-     * that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]
+     * Map topic config to the server config with the highest priority. Some of these have additional
+     * synonyms that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]
      * or using [[AllTopicConfigSynonyms]]
      */
     public static final Map<String, String> TOPIC_CONFIG_SYNONYMS = Collections.unmodifiableMap(
@@ -96,6 +96,10 @@ public final class ServerTopicConfigSynonyms {
         .stream()
         .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().get(0).name())));
 
+    /**
+     * Return the server config with the highest priority for `topicConfigName` if it exists. Otherwise,
+     * throw NoSuchElementException.
+     */
     public static String serverSynonym(String topicConfigName) {
         String serverSynonym = TOPIC_CONFIG_SYNONYMS.get(topicConfigName);
         if (serverSynonym == null)
