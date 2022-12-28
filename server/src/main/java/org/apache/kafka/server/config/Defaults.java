@@ -31,6 +31,7 @@ public class Defaults {
     public static final int REQUEST_TIMEOUT_MS = 30000;
     public static final long CONNECTION_SETUP_TIMEOUT_MS = CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS;
     public static final long CONNECTION_SETUP_TIMEOUT_MAX_MS = CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS;
+    public static final String METADATA_RECOVERY_STRATEGY = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY;
 
     /** ********* KRaft mode configs *********/
     public static final int EMPTY_NODE_ID = -1;

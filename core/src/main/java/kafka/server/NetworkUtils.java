@@ -84,7 +84,8 @@ public class NetworkUtils {
             time,
             true,
             new ApiVersions(),
-            logContext
+            logContext,
+            config.metadataRecoveryStrategy()
         );
     }
 }

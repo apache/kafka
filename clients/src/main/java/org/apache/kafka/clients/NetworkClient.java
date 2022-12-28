@@ -114,6 +114,8 @@ public class NetworkClient implements KafkaClient {
     /* time in ms to wait before retrying to create connection to a server */
     private final long reconnectBackoffMs;
 
+    private final MetadataRecoveryStrategy metadataRecoveryStrategy;
+
     private final Time time;
 
     /**
@@ -180,6 +182,41 @@ public class NetworkClient implements KafkaClient {
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
+                         LogContext logContext,
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+        this(selector,
+             metadata,
+             clientId,
+             maxInFlightRequestsPerConnection,
+             reconnectBackoffMs,
+             reconnectBackoffMax,
+             socketSendBuffer,
+             socketReceiveBuffer,
+             defaultRequestTimeoutMs,
+             connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
+             time,
+             discoverBrokerVersions,
+             apiVersions,
+             null,
+             logContext,
+             metadataRecoveryStrategy);
+    }
+
+    public NetworkClient(Selectable selector,
+                         Metadata metadata,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         long reconnectBackoffMax,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer,
+                         int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
+                         Time time,
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions,
                          Sensor throttleTimeSensor,
                          LogContext logContext) {
         this(null,
@@ -201,6 +238,45 @@ public class NetworkClient implements KafkaClient {
              logContext,
              new DefaultHostResolver(),
              null);
+    }
+
+    public NetworkClient(Selectable selector,
+                         Metadata metadata,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         long reconnectBackoffMax,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer,
+                         int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
+                         Time time,
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions,
+                         Sensor throttleTimeSensor,
+                         LogContext logContext,
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+        this(null,
+             metadata,
+             selector,
+             clientId,
+             maxInFlightRequestsPerConnection,
+             reconnectBackoffMs,
+             reconnectBackoffMax,
+             socketSendBuffer,
+             socketReceiveBuffer,
+             defaultRequestTimeoutMs,
+             connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
+             time,
+             discoverBrokerVersions,
+             apiVersions,
+             throttleTimeSensor,
+             logContext,
+             new DefaultHostResolver(),
+             null,
+             metadataRecoveryStrategy);
     }
 
     public NetworkClient(Selectable selector,
@@ -239,6 +315,44 @@ public class NetworkClient implements KafkaClient {
              null);
     }
 
+    public NetworkClient(Selectable selector,
+                         MetadataUpdater metadataUpdater,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         long reconnectBackoffMax,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer,
+                         int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
+                         Time time,
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions,
+                         LogContext logContext,
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+        this(metadataUpdater,
+             null,
+             selector,
+             clientId,
+             maxInFlightRequestsPerConnection,
+             reconnectBackoffMs,
+             reconnectBackoffMax,
+             socketSendBuffer,
+             socketReceiveBuffer,
+             defaultRequestTimeoutMs,
+             connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
+             time,
+             discoverBrokerVersions,
+             apiVersions,
+             null,
+             logContext,
+             new DefaultHostResolver(),
+             null,
+             metadataRecoveryStrategy);
+    }
+
     public NetworkClient(MetadataUpdater metadataUpdater,
                          Metadata metadata,
                          Selectable selector,
@@ -258,6 +372,33 @@ public class NetworkClient implements KafkaClient {
                          LogContext logContext,
                          HostResolver hostResolver,
                          ClientTelemetrySender clientTelemetrySender) {
+        this(metadataUpdater, metadata, selector, clientId, maxInFlightRequestsPerConnection,
+                reconnectBackoffMs, reconnectBackoffMax, socketSendBuffer, socketReceiveBuffer, defaultRequestTimeoutMs,
+                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, time, discoverBrokerVersions, apiVersions,
+                throttleTimeSensor, logContext, hostResolver, clientTelemetrySender,
+                MetadataRecoveryStrategy.NONE);
+    }
+
+    public NetworkClient(MetadataUpdater metadataUpdater,
+                         Metadata metadata,
+                         Selectable selector,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         long reconnectBackoffMax,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer,
+                         int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
+                         Time time,
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions,
+                         Sensor throttleTimeSensor,
+                         LogContext logContext,
+                         HostResolver hostResolver,
+                         ClientTelemetrySender clientTelemetrySender,
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -288,6 +429,7 @@ public class NetworkClient implements KafkaClient {
         this.log = logContext.logger(NetworkClient.class);
         this.state = new AtomicReference<>(State.ACTIVE);
         this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
+        this.metadataRecoveryStrategy = metadataRecoveryStrategy;
     }
 
     /**
@@ -1123,6 +1265,17 @@ public class NetworkClient implements KafkaClient {
             // Beware that the behavior of this method and the computation of timeouts for poll() are
             // highly dependent on the behavior of leastLoadedNode.
             Node node = leastLoadedNode(now);
+
+            // Rebootstrap if needed and configured.
+            if (node == null && metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
+                for (final Node oldNode : metadata.fetch().nodes()) {
+                    NetworkClient.this.close(oldNode.idString());
+                }
+                metadata.rebootstrap();
+
+                node = leastLoadedNode(now);
+            }
+
             if (node == null) {
                 log.debug("Give up sending metadata request since no node is available");
                 return reconnectBackoffMs;
