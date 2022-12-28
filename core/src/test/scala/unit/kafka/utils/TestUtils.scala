@@ -442,12 +442,9 @@ object TestUtils extends Logging {
     }
 
     def isTopicExistsAndHasSameNumPartitionsAndReplicationFactor(cause: Throwable): Boolean = {
-      // return true when:
-      //  (1) the cause of exception is `TopicExistsException`
-      //  (2) all partitions metadata are propagated
-      //  (3) topic has the expected partitions number and replication factor
       cause != null &&
         cause.isInstanceOf[TopicExistsException] &&
+        // wait until all partitions metadata are propagated before verifying partitions number and replication factor
         !waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions).isEmpty &&
         topicHasSameNumPartitionsAndReplicationFactor(admin, topic, effectiveNumPartitions, replicationFactor)
     }
@@ -463,7 +460,6 @@ object TestUtils extends Logging {
       )
     } catch {
       case e: ExecutionException =>
-        // don't throw exception when topic is already existed and has the expected partition number and replication factor
         if (!isTopicExistsAndHasSameNumPartitionsAndReplicationFactor(e.getCause)) {
           throw e
         }
