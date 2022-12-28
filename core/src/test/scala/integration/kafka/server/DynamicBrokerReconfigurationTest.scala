@@ -31,7 +31,7 @@ import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
-import kafka.log.{CleanerConfig, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.network.{Processor, RequestChannel}
 import kafka.utils._
 import kafka.utils.Implicits._
@@ -59,7 +59,7 @@ import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
-import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
@@ -553,7 +553,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     assertEquals(300000, newCleanerConfig.ioBufferSize)
     assertEquals(40000, newCleanerConfig.maxMessageSize)
     assertEquals(50000000, newCleanerConfig.maxIoBytesPerSecond, 50000000)
-    assertEquals(6000, newCleanerConfig.backOffMs)
+    assertEquals(6000, newCleanerConfig.backoffMs)
 
     // Verify thread count
     verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 2)

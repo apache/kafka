@@ -17,7 +17,6 @@
 
 package kafka.server.builders;
 
-import kafka.log.CleanerConfig;
 import kafka.log.LogManager;
 import kafka.log.ProducerStateManagerConfig;
 import kafka.server.BrokerTopicStats;
@@ -25,6 +24,7 @@ import kafka.server.metadata.ConfigRepository;
 import kafka.utils.Scheduler;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.log.internals.CleanerConfig;
 import org.apache.kafka.server.log.internals.LogConfig;
 import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 import scala.collection.JavaConverters;

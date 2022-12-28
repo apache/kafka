@@ -17,7 +17,6 @@
 package org.apache.kafka.jmh.server;
 
 import kafka.cluster.Partition;
-import kafka.log.CleanerConfig;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerFeatures;
@@ -42,6 +41,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.log.internals.CleanerConfig;
 import org.apache.kafka.server.log.internals.LogConfig;
 import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -116,10 +116,10 @@ public class PartitionCreationBench {
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final List<File> files =
                 JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
-        CleanerConfig cleanerConfig = CleanerConfig.apply(1,
+        CleanerConfig cleanerConfig = new CleanerConfig(1,
                 4 * 1024 * 1024L, 0.9d,
                 1024 * 1024, 32 * 1024 * 1024,
-                Double.MAX_VALUE, 15 * 1000, true, "MD5");
+                Double.MAX_VALUE, 15 * 1000, true);
 
         ConfigRepository configRepository = new MockConfigRepository();
         this.logManager = new LogManagerBuilder().

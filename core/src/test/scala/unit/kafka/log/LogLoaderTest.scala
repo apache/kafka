@@ -32,7 +32,7 @@ import org.apache.kafka.common.record.{CompressionType, ControlRecordType, Defau
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV0
-import org.apache.kafka.server.log.internals.{AbortedTxn, LogConfig, LogDirFailureChannel, OffsetIndex}
+import org.apache.kafka.server.log.internals.{AbortedTxn, CleanerConfig, LogConfig, LogDirFailureChannel, OffsetIndex}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -104,7 +104,7 @@ class LogLoaderTest {
         initialOfflineDirs = Array.empty[File],
         configRepository = new MockConfigRepository(),
         initialDefaultConfig = logConfig,
-        cleanerConfig = CleanerConfig(enableCleaner = false),
+        cleanerConfig = new CleanerConfig(false),
         recoveryThreadsPerDataDir = 4,
         flushCheckMs = 1000L,
         flushRecoveryOffsetCheckpointMs = 10000L,

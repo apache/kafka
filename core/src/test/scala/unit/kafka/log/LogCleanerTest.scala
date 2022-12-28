@@ -31,7 +31,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, LogConfig, LogDirFailureChannel, OffsetMap}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CleanerConfig, LogConfig, LogDirFailureChannel, OffsetMap}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -1881,7 +1881,7 @@ class LogCleanerTest {
 
   @Test
   def testMaxCleanTimeSecs(): Unit = {
-    val logCleaner = new LogCleaner(new CleanerConfig,
+    val logCleaner = new LogCleaner(new CleanerConfig(true),
       logDirs = Array(TestUtils.tempDir()),
       logs = new Pool[TopicPartition, UnifiedLog](),
       logDirFailureChannel = new LogDirFailureChannel(1),

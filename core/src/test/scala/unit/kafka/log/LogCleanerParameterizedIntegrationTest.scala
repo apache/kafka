@@ -26,7 +26,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_11_0_IV0, IBP_0_9_0}
-import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
@@ -97,7 +97,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact,delete")
 
     def runCleanerAndCheckCompacted(numKeys: Int): (UnifiedLog, Seq[(Int, String, Long)]) = {
-      cleaner = makeCleaner(partitions = topicPartitions.take(1), propertyOverrides = logProps, backOffMs = 100L)
+      cleaner = makeCleaner(partitions = topicPartitions.take(1), propertyOverrides = logProps, backoffMs = 100L)
       val log = cleaner.logs.get(topicPartitions(0))
 
       val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
@@ -232,7 +232,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
     val maxMessageSize = largeMessageSet.sizeInBytes
 
-    cleaner = makeCleaner(partitions = topicPartitions, backOffMs = 1, maxMessageSize = maxMessageSize,
+    cleaner = makeCleaner(partitions = topicPartitions, backoffMs = 1, maxMessageSize = maxMessageSize,
       cleanerIoBufferSize = Some(1))
     val log = cleaner.logs.get(topicPartitions(0))
 
@@ -254,20 +254,21 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
       props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, cleanerConfig.dedupeBufferLoadFactor.toString)
       props.put(KafkaConfig.LogCleanerIoBufferSizeProp, cleanerConfig.ioBufferSize.toString)
       props.put(KafkaConfig.MessageMaxBytesProp, cleanerConfig.maxMessageSize.toString)
-      props.put(KafkaConfig.LogCleanerBackoffMsProp, cleanerConfig.backOffMs.toString)
+      props.put(KafkaConfig.LogCleanerBackoffMsProp, cleanerConfig.backoffMs.toString)
       props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, cleanerConfig.maxIoBytesPerSecond.toString)
       KafkaConfig.fromProps(props)
     }
 
     // Verify cleaning done with larger LogCleanerIoBufferSizeProp
     val oldConfig = kafkaConfigWithCleanerConfig(cleaner.currentConfig)
-    val newConfig = kafkaConfigWithCleanerConfig(CleanerConfig(numThreads = 2,
-      dedupeBufferSize = cleaner.currentConfig.dedupeBufferSize,
-      dedupeBufferLoadFactor = cleaner.currentConfig.dedupeBufferLoadFactor,
-      ioBufferSize = 100000,
-      maxMessageSize = cleaner.currentConfig.maxMessageSize,
-      maxIoBytesPerSecond = cleaner.currentConfig.maxIoBytesPerSecond,
-      backOffMs = cleaner.currentConfig.backOffMs))
+    val newConfig = kafkaConfigWithCleanerConfig(new CleanerConfig(2,
+      cleaner.currentConfig.dedupeBufferSize,
+      cleaner.currentConfig.dedupeBufferLoadFactor,
+      100000,
+      cleaner.currentConfig.maxMessageSize,
+      cleaner.currentConfig.maxIoBytesPerSecond,
+      cleaner.currentConfig.backoffMs,
+      true))
     cleaner.reconfigure(oldConfig, newConfig)
 
     assertEquals(2, cleaner.cleanerCount)

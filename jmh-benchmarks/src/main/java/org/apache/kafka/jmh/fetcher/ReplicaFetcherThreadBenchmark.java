@@ -21,7 +21,6 @@ import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
-import kafka.log.CleanerConfig;
 import kafka.log.LogAppendInfo;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
@@ -70,6 +69,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.log.internals.CleanerConfig;
 import org.apache.kafka.server.log.internals.LogConfig;
 import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 import org.mockito.Mockito;
@@ -142,7 +142,7 @@ public class ReplicaFetcherThreadBenchmark {
             setInitialOfflineDirs(Collections.emptyList()).
             setConfigRepository(new MockConfigRepository()).
             setInitialDefaultConfig(logConfig).
-            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5")).
+            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
             setRecoveryThreadsPerDataDir(1).
             setFlushCheckMs(1000L).
             setFlushRecoveryOffsetCheckpointMs(10000L).

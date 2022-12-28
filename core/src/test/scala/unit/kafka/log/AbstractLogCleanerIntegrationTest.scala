@@ -26,7 +26,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.{AfterEach, Tag}
 
 import scala.collection.Seq
@@ -82,7 +82,7 @@ abstract class AbstractLogCleanerIntegrationTest {
   def makeCleaner(partitions: Iterable[TopicPartition],
                   minCleanableDirtyRatio: Float = defaultMinCleanableDirtyRatio,
                   numThreads: Int = 1,
-                  backOffMs: Long = 15000L,
+                  backoffMs: Long = 15000L,
                   maxMessageSize: Int = defaultMaxMessageSize,
                   minCompactionLagMs: Long = defaultMinCompactionLagMS,
                   deleteDelay: Int = defaultDeleteDelay,
@@ -121,11 +121,15 @@ abstract class AbstractLogCleanerIntegrationTest {
       this.logs += log
     }
 
-    val cleanerConfig = CleanerConfig(
-      numThreads = numThreads,
-      ioBufferSize = cleanerIoBufferSize.getOrElse(maxMessageSize / 2),
-      maxMessageSize = maxMessageSize,
-      backOffMs = backOffMs)
+    val cleanerConfig = new CleanerConfig(
+      numThreads,
+      4 * 1024 * 1024L,
+      0.9,
+      cleanerIoBufferSize.getOrElse(maxMessageSize / 2),
+      maxMessageSize,
+      Double.MaxValue,
+      backoffMs,
+      true)
     new LogCleaner(cleanerConfig,
       logDirs = Array(logDir),
       logs = logMap,

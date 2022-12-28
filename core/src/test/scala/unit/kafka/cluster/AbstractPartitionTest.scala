@@ -16,7 +16,7 @@
   */
 package kafka.cluster
 
-import kafka.log.{CleanerConfig, LogManager}
+import kafka.log.LogManager
 import kafka.server.{Defaults, MetadataCache}
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.MockConfigRepository
@@ -34,7 +34,7 @@ import org.mockito.Mockito.{mock, when}
 import java.io.File
 import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig}
 
 import scala.jdk.CollectionConverters._
 
@@ -73,7 +73,7 @@ class AbstractPartitionTest {
     logDir1 = TestUtils.randomPartitionLogDir(tmpDir)
     logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
     logManager = TestUtils.createLogManager(Seq(logDir1, logDir2), logConfig, configRepository,
-      CleanerConfig(enableCleaner = false), time, interBrokerProtocolVersion)
+      new CleanerConfig(false), time, interBrokerProtocolVersion)
     logManager.startup(Set.empty)
 
     alterPartitionManager = TestUtils.createAlterIsrManager()
