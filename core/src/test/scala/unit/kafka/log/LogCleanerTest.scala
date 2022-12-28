@@ -31,7 +31,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, LogDirFailureChannel, OffsetMap}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, LogConfig, LogDirFailureChannel, OffsetMap}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -50,7 +50,7 @@ class LogCleanerTest {
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
   logProps.put(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.MaxValue.toString)
-  val logConfig = LogConfig(logProps)
+  val logConfig = new LogConfig(logProps)
   val time = new MockTime()
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
   val tombstoneRetentionMs = 86400000
@@ -1698,7 +1698,7 @@ class LogCleanerTest {
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 120: java.lang.Integer)
     logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 120: java.lang.Integer)
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-    val logConfig = LogConfig(logProps)
+    val logConfig = new LogConfig(logProps)
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(Int.MaxValue)
     val keyStart = 0
@@ -1750,7 +1750,7 @@ class LogCleanerTest {
 
     val logProps = new Properties()
     logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, codec.name)
-    val logConfig = LogConfig(logProps)
+    val logConfig = new LogConfig(logProps)
 
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(10)
@@ -1804,7 +1804,7 @@ class LogCleanerTest {
 
   @Test
   def testCleanTombstone(): Unit = {
-    val logConfig = LogConfig(new Properties())
+    val logConfig = new LogConfig(new Properties())
 
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(10)
@@ -1842,7 +1842,7 @@ class LogCleanerTest {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024*1024: java.lang.Integer)
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-    val logConfig = LogConfig(logProps)
+    val logConfig = new LogConfig(logProps)
     val cleaner = makeCleaner(Int.MaxValue)
 
     {

@@ -23,7 +23,6 @@ import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.LogAppendInfo;
-import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerFeatures;
@@ -71,6 +70,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.log.internals.LogConfig;
 import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -286,7 +286,7 @@ public class ReplicaFetcherThreadBenchmark {
     }
 
     private static LogConfig createLogConfig() {
-        return LogConfig.apply(new Properties(), new scala.collection.immutable.HashSet<>());
+        return new LogConfig(new Properties());
     }
 
 

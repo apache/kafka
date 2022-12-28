@@ -32,7 +32,7 @@ import org.apache.kafka.common.record.{CompressionType, ControlRecordType, Defau
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV0
-import org.apache.kafka.server.log.internals.{AbortedTxn, LogDirFailureChannel, OffsetIndex}
+import org.apache.kafka.server.log.internals.{AbortedTxn, LogConfig, LogDirFailureChannel, OffsetIndex}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -80,7 +80,7 @@ class LogLoaderTest {
     // to run recovery while loading upon subsequent broker boot up.
     val logDir: File = TestUtils.tempDir()
     val logProps = new Properties()
-    val logConfig = LogConfig(logProps)
+    val logConfig = new LogConfig(logProps)
     val logDirs = Seq(logDir)
     val topicPartition = new TopicPartition("foo", 0)
     var log: UnifiedLog = null
@@ -296,7 +296,7 @@ class LogLoaderTest {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "640")
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, messageFormatVersion)
-    val logConfig = LogConfig(logProps)
+    val logConfig = new LogConfig(logProps)
     var log = createLog(logDir, logConfig)
     assertEquals(None, log.oldestProducerSnapshotOffset)
 
@@ -418,7 +418,7 @@ class LogLoaderTest {
 
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(1)
-    val config = LogConfig(new Properties())
+    val config = new LogConfig(new Properties())
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val offsets = new LogLoader(
@@ -526,7 +526,7 @@ class LogLoaderTest {
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logProps = new Properties()
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
-    val config = LogConfig(logProps)
+    val config = new LogConfig(logProps)
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
@@ -580,7 +580,7 @@ class LogLoaderTest {
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logProps = new Properties()
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
-    val config = LogConfig(logProps)
+    val config = new LogConfig(logProps)
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
@@ -633,7 +633,7 @@ class LogLoaderTest {
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logProps = new Properties()
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
-    val config = LogConfig(logProps)
+    val config = new LogConfig(logProps)
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
@@ -867,7 +867,7 @@ class LogLoaderTest {
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentSize.toString)
     logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")
-    val logConfig = LogConfig(logProps)
+    val logConfig = new LogConfig(logProps)
     var log = createLog(logDir, logConfig)
     for (i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10),
@@ -1096,7 +1096,7 @@ class LogLoaderTest {
     logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
     logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
-    val downgradedLogConfig = LogConfig(logProps)
+    val downgradedLogConfig = new LogConfig(logProps)
     val reopened = createLog(logDir, downgradedLogConfig, lastShutdownClean = false)
     LogTestUtils.assertLeaderEpochCacheEmpty(reopened)
 
@@ -1359,7 +1359,7 @@ class LogLoaderTest {
    */
   @Test
   def testLogRecoversForLeaderEpoch(): Unit = {
-    val log = createLog(logDir, LogConfig())
+    val log = createLog(logDir, new LogConfig(new Properties))
     val leaderEpochCache = log.leaderEpochCache.get
     val firstBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1, offset = 0)
     log.appendAsFollower(records = firstBatch)
@@ -1381,7 +1381,7 @@ class LogLoaderTest {
     log.close()
 
     // reopen the log and recover from the beginning
-    val recoveredLog = createLog(logDir, LogConfig(), lastShutdownClean = false)
+    val recoveredLog = createLog(logDir, new LogConfig(new Properties), lastShutdownClean = false)
     val recoveredLeaderEpochCache = recoveredLog.leaderEpochCache.get
 
     // epoch entries should be recovered

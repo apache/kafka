@@ -17,18 +17,20 @@
 
 package kafka.log
 
-import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
+import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import java.util.{Collections, Properties}
 
+import java.util.{Collections, Properties}
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
+import org.apache.kafka.server.log.internals.{LogConfig, ThrottledReplicaListValidator}
 
 import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 
 class LogConfigTest {
 
@@ -43,10 +45,11 @@ class LogConfigTest {
   def ensureNoStaticInitializationOrderDependency(): Unit = {
     // Access any KafkaConfig val to load KafkaConfig object before LogConfig.
     assertNotNull(KafkaConfig.LogRetentionTimeMillisProp)
-    assertTrue(LogConfig.configNames.filter(config => !LogConfig.configsWithNoServerDefaults.contains(config))
+    assertTrue(LogConfig.configNames.asScala
+      .filter(config => !LogConfig.CONFIGS_WITH_NO_SERVER_DEFAULTS.contains(config))
       .forall { config =>
         val serverConfigOpt = LogConfig.serverConfigName(config)
-        serverConfigOpt.isDefined && (serverConfigOpt.get != null)
+        serverConfigOpt.isPresent && (serverConfigOpt.get != null)
       })
   }
 
@@ -60,8 +63,7 @@ class LogConfigTest {
     kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
     kafkaProps.put(KafkaConfig.LogMessageFormatVersionProp, "0.11.0")
 
-    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
-    val logProps = LogConfig.extractLogConfigMap(kafkaConfig)
+    val logProps = KafkaConfig.fromProps(kafkaProps).extractLogConfigMap
     assertEquals(2 * millisInHour, logProps.get(TopicConfig.SEGMENT_MS_CONFIG))
     assertEquals(2 * millisInHour, logProps.get(TopicConfig.SEGMENT_JITTER_MS_CONFIG))
     assertEquals(2 * millisInHour, logProps.get(TopicConfig.RETENTION_MS_CONFIG))
@@ -69,17 +71,10 @@ class LogConfigTest {
     assertEquals(IBP_3_0_IV1.version, logProps.get(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG))
   }
 
-  @Test
-  def testFromPropsEmpty(): Unit = {
-    val p = new Properties()
-    val config = LogConfig(p)
-    assertEquals(LogConfig(), config)
-  }
-
   @nowarn("cat=deprecation")
   @Test
   def testFromPropsInvalid(): Unit = {
-    LogConfig.configNames.foreach(name => name match {
+    LogConfig.configNames.forEach(name => name match {
       case TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG => assertPropertyInvalid(name, "not a boolean")
       case TopicConfig.RETENTION_BYTES_CONFIG => assertPropertyInvalid(name, "not_a_number")
       case TopicConfig.RETENTION_MS_CONFIG => assertPropertyInvalid(name, "not_a_number" )
@@ -167,11 +162,11 @@ class LogConfigTest {
     configDef.define(configNameWithNoServerMapping, INT, 1, MEDIUM, s"$configNameWithNoServerMapping doc")
 
     val deleteDelayKey = configDef.configKeys.get(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG)
-    val deleteDelayServerDefault = configDef.getConfigValue(deleteDelayKey, LogConfig.ServerDefaultHeaderName)
+    val deleteDelayServerDefault = configDef.getConfigValue(deleteDelayKey, LogConfig.SERVER_DEFAULT_HEADER_NAME)
     assertEquals(KafkaConfig.LogDeleteDelayMsProp, deleteDelayServerDefault)
 
     val keyWithNoServerMapping = configDef.configKeys.get(configNameWithNoServerMapping)
-    val nullServerDefault = configDef.getConfigValue(keyWithNoServerMapping, LogConfig.ServerDefaultHeaderName)
+    val nullServerDefault = configDef.getConfigValue(keyWithNoServerMapping, LogConfig.SERVER_DEFAULT_HEADER_NAME)
     assertNull(nullServerDefault)
   }
 
@@ -192,7 +187,7 @@ class LogConfigTest {
     // Unknown config
     topicOverrides.setProperty("unknown.topic.password.config", "bbbb")
     // We don't currently have any sensitive topic configs, if we add them, we should set one here
-    val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(kafkaConfig), topicOverrides)
+    val logConfig = LogConfig.fromProps(kafkaConfig.extractLogConfigMap, topicOverrides)
     assertEquals("{min.insync.replicas=2, retention.bytes=100, ssl.truststore.password=(redacted), unknown.topic.password.config=(redacted)}",
       logConfig.overriddenConfigsAsLoggableString)
   }
@@ -210,7 +205,7 @@ class LogConfigTest {
     values.foreach((value) => {
       val props = new Properties
       props.setProperty(name, value.toString)
-      assertThrows(classOf[Exception], () => LogConfig(props))
+      assertThrows(classOf[Exception], () => new LogConfig(props))
     })
   }
 
@@ -232,8 +227,8 @@ class LogConfigTest {
     val logConfig = new LogConfig(new Properties())
 
     // Local retention defaults are derived from retention properties which can be default or custom.
-    assertEquals(Defaults.RetentionMs, logConfig.remoteLogConfig.localRetentionMs)
-    assertEquals(kafka.server.Defaults.LogRetentionBytes, logConfig.remoteLogConfig.localRetentionBytes)
+    assertEquals(LogConfig.DEFAULT_RETENTION_MS, logConfig.remoteLogConfig.localRetentionMs)
+    assertEquals(LogConfig.DEFAULT_RETENTION_BYTES, logConfig.remoteLogConfig.localRetentionBytes)
   }
 
   @Test

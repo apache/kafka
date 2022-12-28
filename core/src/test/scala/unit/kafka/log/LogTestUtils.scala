@@ -27,14 +27,13 @@ import kafka.utils.{Scheduler, TestUtils}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, LazyIndex, LogConfig, LogDirFailureChannel, TransactionIndex}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import kafka.log
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, LazyIndex, TransactionIndex}
 
 import scala.collection.Iterable
 import scala.jdk.CollectionConverters._
@@ -55,17 +54,17 @@ object LogTestUtils {
     new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
   }
 
-  def createLogConfig(segmentMs: Long = Defaults.SegmentMs,
-                      segmentBytes: Int = kafka.server.Defaults.LogSegmentBytes,
-                      retentionMs: Long = Defaults.RetentionMs,
-                      retentionBytes: Long = kafka.server.Defaults.LogRetentionBytes,
-                      segmentJitterMs: Long = Defaults.SegmentJitterMs,
-                      cleanupPolicy: String = kafka.server.Defaults.LogCleanupPolicy,
-                      maxMessageBytes: Int = kafka.server.Defaults.MessageMaxBytes,
-                      indexIntervalBytes: Int = kafka.server.Defaults.LogIndexIntervalBytes,
-                      segmentIndexBytes: Int = kafka.server.Defaults.LogIndexSizeMaxBytes,
-                      fileDeleteDelayMs: Long = kafka.server.Defaults.LogDeleteDelayMs,
-                      remoteLogStorageEnable: Boolean = Defaults.RemoteLogStorageEnable): LogConfig = {
+  def createLogConfig(segmentMs: Long = LogConfig.DEFAULT_SEGMENT_MS,
+                      segmentBytes: Int = LogConfig.DEFAULT_SEGMENT_BYTES,
+                      retentionMs: Long = LogConfig.DEFAULT_RETENTION_MS,
+                      retentionBytes: Long = LogConfig.DEFAULT_RETENTION_BYTES,
+                      segmentJitterMs: Long = LogConfig.DEFAULT_SEGMENT_JITTER_MS,
+                      cleanupPolicy: String = LogConfig.DEFAULT_CLEANUP_POLICY,
+                      maxMessageBytes: Int = LogConfig.DEFAULT_MAX_MESSAGE_BYTES,
+                      indexIntervalBytes: Int = LogConfig.DEFAULT_INDEX_INTERVAL_BYTES,
+                      segmentIndexBytes: Int = LogConfig.DEFAULT_SEGMENT_INDEX_BYTES,
+                      fileDeleteDelayMs: Long = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
+                      remoteLogStorageEnable: Boolean = LogConfig.DEFAULT_REMOTE_STORAGE_ENABLE): LogConfig = {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs: java.lang.Long)
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentBytes: Integer)
@@ -78,7 +77,7 @@ object LogTestUtils {
     logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, segmentIndexBytes: Integer)
     logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, fileDeleteDelayMs: java.lang.Long)
     logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, remoteLogStorageEnable: java.lang.Boolean)
-    LogConfig(logProps)
+    new LogConfig(logProps)
   }
 
   def createLog(dir: File,

@@ -38,7 +38,7 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Properties}
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import scala.collection.{Map, mutable}
@@ -56,7 +56,7 @@ class LogManagerTest {
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 4096: java.lang.Integer)
   logProps.put(TopicConfig.RETENTION_MS_CONFIG, maxLogAgeMs: java.lang.Integer)
   logProps.put(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.MaxValue.toString)
-  val logConfig = LogConfig(logProps)
+  val logConfig = new LogConfig(logProps)
   var logDir: File = _
   var logManager: LogManager = _
   val name = "kafka"

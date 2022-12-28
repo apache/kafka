@@ -21,7 +21,6 @@ import java.util
 import java.util.{Collections, Properties}
 import joptsimple._
 import kafka.common.AdminCommandFailedException
-import kafka.log.LogConfig
 import kafka.utils._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.CreatePartitionsOptions
@@ -34,6 +33,7 @@ import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, TopicExistsException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.log.internals.LogConfig
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -518,7 +518,7 @@ object TopicCommand extends Logging {
     private val kafkaConfigsCanAlterTopicConfigsViaBootstrapServer =
       " (the kafka-configs CLI supports altering topic configs with a --bootstrap-server option)"
     private val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered." +
-                                             " The following is a list of valid configurations: " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
+                                             " The following is a list of valid configurations: " + nl + LogConfig.configNames.asScala.map("\t" + _).mkString(nl) + nl +
                                              "See the Kafka documentation for full details on the topic configs." +
                                              " It is supported only in combination with --create if --bootstrap-server option is used" +
                                              kafkaConfigsCanAlterTopicConfigsViaBootstrapServer + ".")

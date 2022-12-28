@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.log.LogConfig.MessageFormatVersion
 import kafka.log.remote.RemoteIndexCache
 
 import java.io._
@@ -42,6 +41,8 @@ import org.apache.kafka.common.config.TopicConfig
 
 import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.server.log.internals.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.log.internals.LogDirFailureChannel
 
 import scala.annotation.nowarn
@@ -1368,10 +1369,10 @@ object LogManager {
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel,
             keepPartitionMetadataFile: Boolean): LogManager = {
-    val defaultProps = LogConfig.extractLogConfigMap(config)
+    val defaultProps = config.extractLogConfigMap
 
     LogConfig.validateValues(defaultProps)
-    val defaultLogConfig = LogConfig(defaultProps)
+    val defaultLogConfig = new LogConfig(defaultProps)
 
     val cleanerConfig = LogCleaner.cleanerConfig(config)
 

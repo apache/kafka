@@ -18,7 +18,7 @@ package kafka.raft
 
 import kafka.log.{SegmentDeletion, UnifiedLog}
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMillisProp, MetadataLogSegmentMinBytesProp, NodeIdProp, ProcessRolesProp, QuorumVotersProp}
-import kafka.server.{Defaults, KafkaConfig, KafkaRaftServer}
+import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
 import org.apache.kafka.common.protocol
@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.raft._
 import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.test.TestUtils.assertOptional
 import org.junit.jupiter.api.Assertions._
@@ -839,7 +840,7 @@ final class KafkaMetadataLogTest {
       retentionMillis = 60 * 1000,
       maxBatchSizeInBytes = 512,
       maxFetchSizeInBytes = DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      fileDeleteDelayMs = Defaults.LogDeleteDelayMs,
+      fileDeleteDelayMs = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
       nodeId = 1
     )
     config.copy()
@@ -988,7 +989,7 @@ final class KafkaMetadataLogTest {
     }
 
     // Sleep long enough to trigger a possible segment delete because of the default retention
-    val defaultLogRetentionMs = kafka.log.Defaults.RetentionMs * 2
+    val defaultLogRetentionMs = LogConfig.DEFAULT_RETENTION_MS * 2
     mockTime.sleep(defaultLogRetentionMs)
 
     assertTrue(log.maybeClean())
@@ -1021,7 +1022,7 @@ object KafkaMetadataLogTest {
     retentionMillis = 60 * 1000,
     maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
     maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-    fileDeleteDelayMs = Defaults.LogDeleteDelayMs,
+    fileDeleteDelayMs = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
     nodeId = 1
   )
 

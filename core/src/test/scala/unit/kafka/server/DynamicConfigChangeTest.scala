@@ -23,7 +23,6 @@ import java.util.Collections.{singletonList, singletonMap}
 import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.LogConfig
 import kafka.utils._
 import kafka.server.Constants._
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -41,6 +40,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
+import org.apache.kafka.server.log.internals.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -488,11 +488,11 @@ class DynamicConfigChangeUnitTest {
     val props: Properties = new Properties()
 
     //Given
-    props.put(LogConfig.LeaderReplicationThrottledReplicasProp, "0:101,0:102,1:101,1:102")
+    props.put(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:101,0:102,1:101,1:102")
 
     //When/Then
-    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102, LogConfig.LeaderReplicationThrottledReplicasProp))
-    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, LogConfig.LeaderReplicationThrottledReplicasProp))
+    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102, LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG))
+    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG))
   }
 
   @Test
@@ -501,10 +501,10 @@ class DynamicConfigChangeUnitTest {
     val props: Properties = new Properties()
 
     //Given
-    props.put(LogConfig.LeaderReplicationThrottledReplicasProp, "*")
+    props.put(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "*")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102, LogConfig.LeaderReplicationThrottledReplicasProp)
+    val result = configHandler.parseThrottledPartitions(props, 102, LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
 
     //Then
     assertEquals(AllReplicas, result)
@@ -514,8 +514,8 @@ class DynamicConfigChangeUnitTest {
   def shouldParseRegardlessOfWhitespaceAroundValues(): Unit = {
     def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
       configHandler.parseThrottledPartitions(
-        CoreUtils.propsWith(LogConfig.LeaderReplicationThrottledReplicasProp, value),
-        102, LogConfig.LeaderReplicationThrottledReplicasProp)
+        CoreUtils.propsWith(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, value),
+        102, LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
     }
     val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
     assertEquals(AllReplicas, parse(configHandler, "* "))
@@ -531,10 +531,10 @@ class DynamicConfigChangeUnitTest {
     val props: Properties = new Properties()
 
     //Given
-    props.put(LogConfig.FollowerReplicationThrottledReplicasProp, "")
+    props.put(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102, LogConfig.FollowerReplicationThrottledReplicasProp)
+    val result = configHandler.parseThrottledPartitions(props, 102, LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
 
     //Then
     assertEquals(Seq(), result)

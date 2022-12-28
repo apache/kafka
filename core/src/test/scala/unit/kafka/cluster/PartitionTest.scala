@@ -19,7 +19,7 @@ package kafka.cluster
 import java.net.InetAddress
 import com.yammer.metrics.core.Metric
 import kafka.common.UnexpectedAppendOffsetException
-import kafka.log.{Defaults => _, _}
+import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.epoch.EpochEntry

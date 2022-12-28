@@ -19,7 +19,6 @@ package kafka.admin
 import java.util
 import java.util.Properties
 import kafka.controller.ReplicaAssignment
-import kafka.log.LogConfig
 import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer, QuorumTestHarness}
@@ -32,6 +31,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
+import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -201,8 +201,8 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
       val props = new Properties()
       props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, messageSize.toString)
       props.setProperty(TopicConfig.RETENTION_MS_CONFIG, retentionMs.toString)
-      props.setProperty(LogConfig.LeaderReplicationThrottledReplicasProp, throttledLeaders)
-      props.setProperty(LogConfig.FollowerReplicationThrottledReplicasProp, throttledFollowers)
+      props.setProperty(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, throttledLeaders)
+      props.setProperty(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, throttledFollowers)
       props
     }
 
@@ -221,8 +221,8 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
           assertTrue(log.isDefined)
           assertEquals(retentionMs, log.get.config.retentionMs)
           assertEquals(messageSize, log.get.config.maxMessageSize)
-          checkList(log.get.config.LeaderReplicationThrottledReplicas, throttledLeaders)
-          checkList(log.get.config.FollowerReplicationThrottledReplicas, throttledFollowers)
+          checkList(log.get.config.leaderReplicationThrottledReplicas, throttledLeaders)
+          checkList(log.get.config.followerReplicationThrottledReplicas, throttledFollowers)
           assertEquals(quotaManagerIsThrottled, server.quotaManagers.leader.isThrottled(tp))
         }
       }
@@ -252,15 +252,15 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
 
     //Now delete the config
     adminZkClient.changeTopicConfig(topic, new Properties)
-    checkConfig(kafka.server.Defaults.MessageMaxBytes, kafka.log.Defaults.RetentionMs, "", "", quotaManagerIsThrottled = false)
+    checkConfig(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, LogConfig.DEFAULT_RETENTION_MS, "", "", quotaManagerIsThrottled = false)
 
     //Add config back
     adminZkClient.changeTopicConfig(topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
     checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
 
     //Now ensure updating to "" removes the throttled replica list also
-    adminZkClient.changeTopicConfig(topic, propsWith((LogConfig.FollowerReplicationThrottledReplicasProp, ""), (LogConfig.LeaderReplicationThrottledReplicasProp, "")))
-    checkConfig(kafka.server.Defaults.MessageMaxBytes, kafka.log.Defaults.RetentionMs, "", "",  quotaManagerIsThrottled = false)
+    adminZkClient.changeTopicConfig(topic, propsWith((LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), (LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "")))
+    checkConfig(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, LogConfig.DEFAULT_RETENTION_MS, "", "",  quotaManagerIsThrottled = false)
   }
 
   @Test

@@ -26,7 +26,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.{AfterEach, Tag}
 
 import scala.collection.Seq
@@ -96,7 +96,7 @@ abstract class AbstractLogCleanerIntegrationTest {
       val dir = new File(logDir, s"${partition.topic}-${partition.partition}")
       Files.createDirectories(dir.toPath)
 
-      val logConfig = LogConfig(logConfigProperties(propertyOverrides,
+      val logConfig = new LogConfig(logConfigProperties(propertyOverrides,
         maxMessageSize = maxMessageSize,
         minCleanableDirtyRatio = minCleanableDirtyRatio,
         minCompactionLagMs = minCompactionLagMs,

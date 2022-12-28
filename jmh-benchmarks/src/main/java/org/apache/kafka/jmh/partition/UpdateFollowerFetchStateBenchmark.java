@@ -22,7 +22,6 @@ import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
 import kafka.cluster.Replica;
 import kafka.log.CleanerConfig;
-import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
@@ -36,6 +35,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.log.internals.LogConfig;
 import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 import org.apache.kafka.server.log.internals.LogOffsetMetadata;
 import org.mockito.Mockito;
@@ -152,7 +152,7 @@ public class UpdateFollowerFetchStateBenchmark {
     }
 
     private LogConfig createLogConfig() {
-        return LogConfig.apply(new Properties(), new scala.collection.immutable.HashSet<>());
+        return new LogConfig(new Properties());
     }
 
     @Benchmark

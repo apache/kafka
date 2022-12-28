@@ -20,13 +20,13 @@ package kafka.log
 import java.io.File
 import java.nio.file.Files
 import java.util.Properties
-import kafka.server.{BrokerTopicStats}
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -47,7 +47,7 @@ class LogCleanerManagerTest extends Logging {
   logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-  val logConfig: LogConfig = LogConfig(logProps)
+  val logConfig: LogConfig = new LogConfig(logProps)
   val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
   val offset = 999
   val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
@@ -358,11 +358,11 @@ class LogCleanerManagerTest extends Logging {
 
     // change cleanup policy from delete to compact
     val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, log.config.segmentSize)
-    logProps.put(TopicConfig.RETENTION_MS_CONFIG, log.config.retentionMs)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, log.config.segmentSize: Integer)
+    logProps.put(TopicConfig.RETENTION_MS_CONFIG, log.config.retentionMs: java.lang.Long)
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
     logProps.put(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, 0: Integer)
-    val config = LogConfig(logProps)
+    val config = new LogConfig(logProps)
     log.updateConfig(config)
 
     // log cleanup inprogress, the log is not available for compaction
@@ -376,7 +376,7 @@ class LogCleanerManagerTest extends Logging {
 
     // update cleanup policy to delete
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
-    val config2 = LogConfig(logProps)
+    val config2 = new LogConfig(logProps)
     log.updateConfig(config2)
 
     // compaction in progress, should have 0 log eligible for log cleanup
@@ -823,7 +823,7 @@ class LogCleanerManagerTest extends Logging {
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicy)
     logProps.put(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, 0.05: java.lang.Double) // small for easier and clearer tests
 
-    LogConfig(logProps)
+    new LogConfig(logProps)
   }
 
   private def writeRecords(log: UnifiedLog,

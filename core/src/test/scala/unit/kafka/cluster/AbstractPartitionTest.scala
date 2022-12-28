@@ -16,7 +16,7 @@
   */
 package kafka.cluster
 
-import kafka.log.{CleanerConfig, LogConfig, LogManager}
+import kafka.log.{CleanerConfig, LogManager}
 import kafka.server.{Defaults, MetadataCache}
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.MockConfigRepository
@@ -34,6 +34,7 @@ import org.mockito.Mockito.{mock, when}
 import java.io.File
 import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.LogConfig
 
 import scala.jdk.CollectionConverters._
 
@@ -65,7 +66,7 @@ class AbstractPartitionTest {
     TestUtils.clearYammerMetrics()
 
     val logProps = createLogProperties(Map.empty)
-    logConfig = LogConfig(logProps)
+    logConfig = new LogConfig(logProps)
     configRepository = MockConfigRepository.forTopic(topicPartition.topic, logProps)
 
     tmpDir = TestUtils.tempDir()

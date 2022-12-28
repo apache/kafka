@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.cluster.EndPoint
-import kafka.log.LogConfig
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
@@ -37,6 +36,8 @@ import java.util.{Collections, Properties}
 import org.apache.kafka.common.Node
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
+import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.junit.jupiter.api.function.Executable
 
@@ -1005,10 +1006,10 @@ class KafkaConfigTest {
     // Every log config prop must be explicitly accounted for here.
     // A value other than the default value for this config should be set to ensure that we can check whether
     // the value is dynamically updatable.
-    LogConfig.TopicConfigSynonyms.foreach { case (logConfig, kafkaConfigProp) =>
+    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.forEach { case (logConfig, kafkaConfigProp) =>
       logConfig match {
         case TopicConfig.CLEANUP_POLICY_CONFIG =>
-          assertDynamic(kafkaConfigProp, Defaults.Compact, () => config.logCleanupPolicy)
+          assertDynamic(kafkaConfigProp, TopicConfig.CLEANUP_POLICY_COMPACT, () => config.logCleanupPolicy)
         case TopicConfig.COMPRESSION_TYPE_CONFIG =>
           assertDynamic(kafkaConfigProp, "lz4", () => config.compressionType)
         case TopicConfig.SEGMENT_BYTES_CONFIG =>
@@ -1055,9 +1056,9 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, true, () => config.uncleanLeaderElectionEnable)
         case TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG =>
         // not dynamically updatable
-        case LogConfig.FollowerReplicationThrottledReplicasProp =>
+        case LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
-        case LogConfig.LeaderReplicationThrottledReplicasProp =>
+        case LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
         case prop =>
           fail(prop + " must be explicitly checked for dynamic updatability. Note that LogConfig(s) require that KafkaConfig value lookups are dynamic and not static values.")

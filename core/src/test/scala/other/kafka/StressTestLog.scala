@@ -26,7 +26,7 @@ import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
 
 /**
  * A stress test that instantiates a log and then runs continual appends against it from one thread and continual reads against it
@@ -44,7 +44,7 @@ object StressTestLog {
     logProperties.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1024*1024: java.lang.Integer)
 
     val log = UnifiedLog(dir = dir,
-      config = LogConfig(logProperties),
+      config = new LogConfig(logProperties),
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
