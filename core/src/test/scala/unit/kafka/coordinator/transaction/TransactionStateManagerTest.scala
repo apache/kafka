@@ -22,7 +22,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
 import kafka.log.{Defaults, LogConfig, UnifiedLog}
-import kafka.server.{FetchDataInfo, FetchLogEnd, LogOffsetMetadata, ReplicaManager, RequestLocal}
+import kafka.server.{FetchDataInfo, FetchLogEnd, ReplicaManager, RequestLocal}
 import kafka.utils.{MockScheduler, Pool, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
@@ -33,7 +33,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.server.log.internals.AppendOrigin
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -156,7 +156,7 @@ class TransactionStateManagerTest {
       maxLength = anyInt(),
       isolation = ArgumentMatchers.eq(FetchLogEnd),
       minOneMessage = ArgumentMatchers.eq(true))
-    ).thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
+    ).thenReturn(FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
     when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
 
     txnMetadata1.state = PrepareCommit
@@ -822,7 +822,7 @@ class TransactionStateManagerTest {
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _) => ())
     assertEquals(0, transactionManager.loadingPartitions.size)
     assertTrue(transactionManager.transactionMetadataCache.contains(partitionId))
-    assertEquals(1, transactionManager.transactionMetadataCache.get(partitionId).get.coordinatorEpoch)
+    assertEquals(1, transactionManager.transactionMetadataCache(partitionId).coordinatorEpoch)
   }
 
   @Test
@@ -840,7 +840,7 @@ class TransactionStateManagerTest {
       maxLength = anyInt(),
       isolation = ArgumentMatchers.eq(FetchLogEnd),
       minOneMessage = ArgumentMatchers.eq(true))
-    ).thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), MemoryRecords.EMPTY))
+    ).thenReturn(FetchDataInfo(new LogOffsetMetadata(startOffset), MemoryRecords.EMPTY))
     when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
 
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 0, (_, _, _, _) => ())
@@ -1017,7 +1017,7 @@ class TransactionStateManagerTest {
       maxLength = anyInt(),
       isolation = ArgumentMatchers.eq(FetchLogEnd),
       minOneMessage = ArgumentMatchers.eq(true)))
-      .thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
+      .thenReturn(FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
 
     when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)
 

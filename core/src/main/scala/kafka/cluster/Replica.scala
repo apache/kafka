@@ -18,9 +18,9 @@
 package kafka.cluster
 
 import kafka.log.UnifiedLog
-import kafka.server.LogOffsetMetadata
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.log.internals.LogOffsetMetadata
 
 import java.util.concurrent.atomic.AtomicReference
 
@@ -69,7 +69,7 @@ case class ReplicaState(
 
 object ReplicaState {
   val Empty: ReplicaState = ReplicaState(
-    logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
+    logEndOffsetMetadata = LogOffsetMetadata.UNKNOWN_OFFSET_METADATA,
     logStartOffset = UnifiedLog.UnknownOffset,
     lastFetchLeaderLogEndOffset = 0L,
     lastFetchTimeMs = 0L,
@@ -139,7 +139,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
       if (isNewLeader) {
         ReplicaState(
           logStartOffset = UnifiedLog.UnknownOffset,
-          logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
+          logEndOffsetMetadata = LogOffsetMetadata.UNKNOWN_OFFSET_METADATA,
           lastFetchLeaderLogEndOffset = UnifiedLog.UnknownOffset,
           lastFetchTimeMs = 0L,
           lastCaughtUpTimeMs = lastCaughtUpTimeMs

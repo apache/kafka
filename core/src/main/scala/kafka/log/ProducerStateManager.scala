@@ -22,7 +22,7 @@ import java.nio.channels.FileChannel
 import java.nio.file.{Files, NoSuchFileException, StandardOpenOption}
 import java.util.concurrent.ConcurrentSkipListMap
 import kafka.log.UnifiedLog.offsetFromFile
-import kafka.server.{BrokerReconfigurable, KafkaConfig, LogOffsetMetadata}
+import kafka.server.{BrokerReconfigurable, KafkaConfig}
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe, threadsafe}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -30,7 +30,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C, Time, Utils}
-import org.apache.kafka.server.log.internals.{AppendOrigin, CompletedTxn}
+import org.apache.kafka.server.log.internals.{AppendOrigin, CompletedTxn, LogOffsetMetadata}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -50,7 +50,7 @@ private[log] case class TxnMetadata(
   firstOffset: LogOffsetMetadata,
   var lastOffset: Option[Long] = None
 ) {
-  def this(producerId: Long, firstOffset: Long) = this(producerId, LogOffsetMetadata(firstOffset))
+  def this(producerId: Long, firstOffset: Long) = this(producerId, new LogOffsetMetadata(firstOffset))
 
   override def toString: String = {
     "TxnMetadata(" +
@@ -259,7 +259,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
         None
       }
     } else {
-      val firstOffsetMetadata = firstOffsetMetadataOpt.getOrElse(LogOffsetMetadata(batch.baseOffset))
+      val firstOffsetMetadata = firstOffsetMetadataOpt.getOrElse(new LogOffsetMetadata(batch.baseOffset))
       appendDataBatch(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp,
         firstOffsetMetadata, batch.lastOffset, batch.isTransactional)
       None
