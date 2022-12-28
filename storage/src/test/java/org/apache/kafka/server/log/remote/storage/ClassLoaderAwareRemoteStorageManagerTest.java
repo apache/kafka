@@ -42,5 +42,5 @@ public class ClassLoaderAwareRemoteStorageManagerTest {
         assertNotEquals(dummyClassLoader, Thread.currentThread().getContextClassLoader());
     }
 
-    private class DummyClassLoader extends ClassLoader { }
+    private static class DummyClassLoader extends ClassLoader { }
 }
