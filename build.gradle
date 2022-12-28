@@ -214,7 +214,9 @@ subprojects {
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
-  def shouldPublish = !project.name.equals('jmh-benchmarks')
+  // We also don't publish artifacts for kafka-streams-upgrade-system-tests since they are not necessary,
+  // and were resulting in conflicts due to duplicate artifacts
+  def shouldPublish = !project.name.equals('jmh-benchmarks') && !project.name.startsWith("kafka-streams-upgrade-system-tests")
 
   if (shouldPublish) {
     apply plugin: 'maven-publish'
