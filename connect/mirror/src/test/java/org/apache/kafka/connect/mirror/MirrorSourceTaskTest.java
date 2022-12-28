@@ -352,8 +352,8 @@ public class MirrorSourceTaskTest {
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
         assertEquals(recordOffset, partitionState.lastSyncUpstreamOffset, "no sync");
         assertEquals(metadataOffset, partitionState.lastSyncDownstreamOffset, "no sync");
-        assertEquals(newRecordOffset, partitionState.previousUpstreamOffset, "update previuos upstream offset");
-        assertEquals(newMetadataOffset, partitionState.previousDownstreamOffset, "update previuos upstream offset");
+        assertEquals(newRecordOffset, partitionState.previousUpstreamOffset, "update previous upstream offset");
+        assertEquals(newMetadataOffset, partitionState.previousDownstreamOffset, "update previous upstream offset");
 
         when(outstandingOffsetSyncs.tryAcquire()).thenReturn(true);
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
@@ -375,5 +375,4 @@ public class MirrorSourceTaskTest {
                     "taskHeader's value expected to equal " + taskHeader.value().toString());
         }
     }
-
 }
