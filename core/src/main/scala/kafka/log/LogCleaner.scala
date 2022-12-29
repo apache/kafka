@@ -36,7 +36,7 @@ import org.apache.kafka.server.log.internals.{AbortedTxn, LogDirFailureChannel, 
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
-import scala.collection.{Iterable, Seq, Set, mutable}
+import scala.collection.{Iterable, Map, Seq, Set, mutable}
 import scala.util.control.ControlThrowable
 
 /**
@@ -105,12 +105,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   private[log] val cleanerManager = new LogCleanerManager(logDirs, logs, logDirFailureChannel)
 
   /* a throttle used to limit the I/O of all the cleaner threads to a user-specified maximum rate */
-  private[log] val throttler = new Throttler(desiredRatePerSec = config.maxIoBytesPerSecond,
-                                        checkIntervalMs = 300,
-                                        throttleDown = true,
-                                        "cleaner-io",
-                                        "bytes",
-                                        time = time)
+  private[log] val throttler = new Throttler(desiredRatePerSec = config.maxIoBytesPerSecond, time = time)
 
   private[log] val cleaners = mutable.ArrayBuffer[CleanerThread]()
 
@@ -413,21 +408,25 @@ class LogCleaner(initialConfig: CleanerConfig,
     def recordStats(id: Int, name: String, from: Long, to: Long, stats: CleanerStats): Unit = {
       this.lastStats = stats
       def mb(bytes: Double) = bytes / (1024*1024)
+      val bytesReadMb = mb(stats.bytesRead.toDouble)
+      val mapBytesReadMb = mb(stats.mapBytesRead.toDouble)
+      val bytesWrittenMb = mb(stats.bytesWritten.toDouble)
+
       val message =
         "%n\tLog cleaner thread %d cleaned log %s (dirty section = [%d, %d])%n".format(id, name, from, to) +
-        "\t%,.1f MB of log processed in %,.1f seconds (%,.1f MB/sec).%n".format(mb(stats.bytesRead.toDouble),
+        "\t%,.1f MB of log processed in %,.1f seconds (%,.1f MB/sec).%n".format(bytesReadMb,
                                                                                 stats.elapsedSecs,
-                                                                                mb(stats.bytesRead.toDouble / stats.elapsedSecs)) +
-        "\tIndexed %,.1f MB in %.1f seconds (%,.1f Mb/sec, %.1f%% of total time)%n".format(mb(stats.mapBytesRead.toDouble),
+                                                                                bytesReadMb / stats.elapsedSecs) +
+        "\tIndexed %,.1f MB in %.1f seconds (%,.1f Mb/sec, %.1f%% of total time)%n".format(mapBytesReadMb,
                                                                                            stats.elapsedIndexSecs,
-                                                                                           mb(stats.mapBytesRead.toDouble) / stats.elapsedIndexSecs,
+                                                                                           mapBytesReadMb / stats.elapsedIndexSecs,
                                                                                            100 * stats.elapsedIndexSecs / stats.elapsedSecs) +
         "\tBuffer utilization: %.1f%%%n".format(100 * stats.bufferUtilization) +
-        "\tCleaned %,.1f MB in %.1f seconds (%,.1f Mb/sec, %.1f%% of total time)%n".format(mb(stats.bytesRead.toDouble),
+        "\tCleaned %,.1f MB in %.1f seconds (%,.1f Mb/sec, %.1f%% of total time)%n".format(bytesReadMb,
                                                                                            stats.elapsedSecs - stats.elapsedIndexSecs,
-                                                                                           mb(stats.bytesRead.toDouble) / (stats.elapsedSecs - stats.elapsedIndexSecs), 100 * (stats.elapsedSecs - stats.elapsedIndexSecs) / stats.elapsedSecs) +
-        "\tStart size: %,.1f MB (%,d messages)%n".format(mb(stats.bytesRead.toDouble), stats.messagesRead) +
-        "\tEnd size: %,.1f MB (%,d messages)%n".format(mb(stats.bytesWritten.toDouble), stats.messagesWritten) +
+                                                                                           bytesReadMb / (stats.elapsedSecs - stats.elapsedIndexSecs), 100 * (stats.elapsedSecs - stats.elapsedIndexSecs) / stats.elapsedSecs) +
+        "\tStart size: %,.1f MB (%,d messages)%n".format(bytesReadMb, stats.messagesRead) +
+        "\tEnd size: %,.1f MB (%,d messages)%n".format(bytesWrittenMb, stats.messagesWritten) +
         "\t%.1f%% size reduction (%.1f%% fewer messages)%n".format(100.0 * (1.0 - stats.bytesWritten.toDouble/stats.bytesRead),
                                                                    100.0 * (1.0 - stats.messagesWritten.toDouble/stats.messagesRead))
       info(message)
@@ -525,6 +524,7 @@ private[log] class Cleaner(val id: Int,
 
     val log = cleanable.log
     val stats = new CleanerStats()
+    throttler.initStartTimeNs(time.nanoseconds())
 
     // build the offset map
     info("Building offset map for %s...".format(cleanable.log.name))
@@ -1202,3 +1202,4 @@ private class AbortedTransactionMetadata(val abortedTxn: AbortedTxn) {
 
   override def toString: String = s"(txn: $abortedTxn, lastOffset: $lastObservedBatchOffset)"
 }
+

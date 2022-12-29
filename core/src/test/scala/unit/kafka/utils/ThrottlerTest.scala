@@ -33,6 +33,7 @@ class ThrottlerTest {
                                   checkIntervalMs = throttleCheckIntervalMs,
                                   time = mockTime)
 
+    throttler.initStartTimeNs(mockTime.nanoseconds)
     // Observe desiredCountPerInterval at t1
     val t1 = mockTime.milliseconds()
     throttler.maybeThrottle(desiredCountPerInterval)
@@ -72,6 +73,7 @@ class ThrottlerTest {
       checkIntervalMs = throttleCheckIntervalMs,
       time = mockTime)
 
+    throttler.initStartTimeNs(mockTime.nanoseconds)
     // Observe desiredCountPerInterval at t1
     val t1 = mockTime.milliseconds()
     throttler.maybeThrottle(desiredCountPerInterval)

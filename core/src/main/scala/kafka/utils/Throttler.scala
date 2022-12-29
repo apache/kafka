@@ -27,32 +27,39 @@ import scala.math._
 
 /**
  * A class to measure and throttle the rate of some process. The throttler takes a desired rate-per-second
- * (the units of the process don't matter, it could be bytes or a count of some other thing), and will sleep for 
- * an appropriate amount of time when maybeThrottle() is called to attain the desired rate.
- * 
+ * (the units of the process don't matter, it could be bytes or a count of some other thing), and will sleep for
+ * an appropriate amount of time when {@link maybeThrottle(double)} is called to attain the desired rate.
+ *
  * @param desiredRatePerSec: The rate we want to hit in units/sec
  * @param checkIntervalMs: The interval at which to check our rate
  * @param throttleDown: Does throttling increase or decrease our rate?
+ * @param metricName: The metric name for this throttler
  * @param time: The time implementation to use
+ * @param units: The units of the {@code time}
  */
 @threadsafe
 class Throttler(@volatile var desiredRatePerSec: Double,
-                checkIntervalMs: Long = 100L,
+                checkIntervalMs: Long = 300L,
                 throttleDown: Boolean = true,
-                metricName: String = "throttler",
-                units: String = "entries",
+                metricName: String = "cleaner-io",
+                units: String = "bytes",
                 time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
-  
+
   private val lock = new Object
-  private val meter = newMeter(metricName, units, TimeUnit.SECONDS)
+  private val logCleanerThrottlerMetricName = explicitMetricName(
+    "kafka.log",
+    "LogCleaner",
+    metricName,
+    Map.empty)
+  private val meter = newMeter(logCleanerThrottlerMetricName, units, TimeUnit.SECONDS)
   private val checkIntervalNs = TimeUnit.MILLISECONDS.toNanos(checkIntervalMs)
-  private var periodStartNs: Long = time.nanoseconds
+  private var periodStartNs: Long = 0
   private var observedSoFar: Double = 0.0
-  
+  private val msPerSec = TimeUnit.SECONDS.toMillis(1)
+  private val nsPerSec = TimeUnit.SECONDS.toNanos(1)
+
   def maybeThrottle(observed: Double): Unit = {
-    val msPerSec = TimeUnit.SECONDS.toMillis(1)
-    val nsPerSec = TimeUnit.SECONDS.toNanos(1)
-    val currentDesiredRatePerSec = desiredRatePerSec;
+    val currentDesiredRatePerSec = desiredRatePerSec
 
     meter.mark(observed.toLong)
     lock synchronized {
@@ -70,7 +77,7 @@ class Throttler(@volatile var desiredRatePerSec: Double,
           val elapsedMs = TimeUnit.NANOSECONDS.toMillis(elapsedNs)
           val sleepTime = round(observedSoFar / desiredRateMs - elapsedMs)
           if (sleepTime > 0) {
-            trace("Natural rate is %f per second but desired rate is %f, sleeping for %d ms to compensate.".format(rateInSecs, currentDesiredRatePerSec, sleepTime))
+            debug("Natural rate is %f per second but desired rate is %f, sleeping for %d ms to compensate.".format(rateInSecs, currentDesiredRatePerSec, sleepTime))
             time.sleep(sleepTime)
           }
         }
@@ -82,6 +89,17 @@ class Throttler(@volatile var desiredRatePerSec: Double,
 
   def updateDesiredRatePerSec(updatedDesiredRatePerSec: Double): Unit = {
     desiredRatePerSec = updatedDesiredRatePerSec;
+  }
+
+  // initial start time if it haven't been set. This method should be called when starting do disk IO works.
+  def initStartTimeNs(startTimeNs: Long): Unit = {
+    if (periodStartNs == 0) {
+      lock synchronized {
+        if (periodStartNs == 0) {
+          periodStartNs = startTimeNs
+        }
+      }
+    }
   }
 }
 
