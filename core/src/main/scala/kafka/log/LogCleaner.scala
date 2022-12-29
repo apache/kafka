@@ -524,7 +524,7 @@ private[log] class Cleaner(val id: Int,
 
     val log = cleanable.log
     val stats = new CleanerStats()
-    throttler.initStartTimeNs(time.nanoseconds())
+    throttler.initStartTimeNs()
 
     // build the offset map
     info("Building offset map for %s...".format(cleanable.log.name))
@@ -1202,4 +1202,3 @@ private class AbortedTransactionMetadata(val abortedTxn: AbortedTxn) {
 
   override def toString: String = s"(txn: $abortedTxn, lastOffset: $lastObservedBatchOffset)"
 }
-

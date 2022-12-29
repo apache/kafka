@@ -26,6 +26,7 @@ class ThrottlerTest {
   def testThrottleDesiredRate(): Unit = {
     val throttleCheckIntervalMs = 100
     val desiredCountPerSec = 1000.0
+    val longSleep = 10000
     val desiredCountPerInterval = desiredCountPerSec * throttleCheckIntervalMs / 1000.0
 
     val mockTime = new MockTime()
@@ -33,7 +34,10 @@ class ThrottlerTest {
                                   checkIntervalMs = throttleCheckIntervalMs,
                                   time = mockTime)
 
-    throttler.initStartTimeNs(mockTime.nanoseconds)
+    // Even if throttler started long time ago, as long as start time is initialized, everything should work well
+    mockTime.sleep(longSleep)
+
+    throttler.initStartTimeNs()
     // Observe desiredCountPerInterval at t1
     val t1 = mockTime.milliseconds()
     throttler.maybeThrottle(desiredCountPerInterval)
@@ -73,7 +77,7 @@ class ThrottlerTest {
       checkIntervalMs = throttleCheckIntervalMs,
       time = mockTime)
 
-    throttler.initStartTimeNs(mockTime.nanoseconds)
+    throttler.initStartTimeNs()
     // Observe desiredCountPerInterval at t1
     val t1 = mockTime.milliseconds()
     throttler.maybeThrottle(desiredCountPerInterval)

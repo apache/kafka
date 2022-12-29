@@ -46,12 +46,7 @@ class Throttler(@volatile var desiredRatePerSec: Double,
                 time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
 
   private val lock = new Object
-  private val logCleanerThrottlerMetricName = explicitMetricName(
-    "kafka.log",
-    "LogCleaner",
-    metricName,
-    Map.empty)
-  private val meter = newMeter(logCleanerThrottlerMetricName, units, TimeUnit.SECONDS)
+  private val meter = newMeter(metricName, units, TimeUnit.SECONDS)
   private val checkIntervalNs = TimeUnit.MILLISECONDS.toNanos(checkIntervalMs)
   private var periodStartNs: Long = 0
   private var observedSoFar: Double = 0.0
@@ -92,11 +87,11 @@ class Throttler(@volatile var desiredRatePerSec: Double,
   }
 
   // initial start time if it haven't been set. This method should be called when starting do disk IO works.
-  def initStartTimeNs(startTimeNs: Long): Unit = {
+  def initStartTimeNs(): Unit = {
     if (periodStartNs == 0) {
       lock synchronized {
         if (periodStartNs == 0) {
-          periodStartNs = startTimeNs
+          periodStartNs = time.nanoseconds()
         }
       }
     }
