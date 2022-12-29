@@ -29,7 +29,7 @@ import scala.math._
  * A class to measure and throttle the rate of some process. The throttler takes a desired rate-per-second
  * (the units of the process don't matter, it could be bytes or a count of some other thing), and will sleep for
  * an appropriate amount of time when {@link maybeThrottle(double)} is called to attain the desired rate.
- *
+ * 
  * @param desiredRatePerSec: The rate we want to hit in units/sec
  * @param checkIntervalMs: The interval at which to check our rate
  * @param throttleDown: Does throttling increase or decrease our rate?
@@ -53,6 +53,7 @@ class Throttler(@volatile var desiredRatePerSec: Double,
   private val msPerSec = TimeUnit.SECONDS.toMillis(1)
   private val nsPerSec = TimeUnit.SECONDS.toNanos(1)
 
+  // Before calling maybeThrottle(), remember to run initStartTimeNs() once to make sure the periodStartNs is correct
   def maybeThrottle(observed: Double): Unit = {
     val currentDesiredRatePerSec = desiredRatePerSec
 
