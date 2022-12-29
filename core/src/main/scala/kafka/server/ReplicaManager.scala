@@ -61,7 +61,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel, RecordValidationException}
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel, LogOffsetMetadata, RecordValidationException}
 
 import java.nio.file.{Files, Paths}
 import java.util
@@ -128,7 +128,7 @@ case class LogReadResult(info: FetchDataInfo,
     isReassignmentFetch)
 
   def withEmptyFetchInfo: LogReadResult =
-    copy(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY))
+    copy(info = FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY))
 
   override def toString = {
     "LogReadResult(" +
@@ -1125,7 +1125,7 @@ class ReplicaManager(val config: KafkaConfig,
           }
           // If a preferred read-replica is set, skip the read
           val offsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, fetchOnlyFromLeader = false)
-          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
             divergingEpoch = None,
             highWatermark = offsetSnapshot.highWatermark.messageOffset,
             leaderLogStartOffset = offsetSnapshot.logStartOffset,
@@ -1180,7 +1180,7 @@ class ReplicaManager(val config: KafkaConfig,
                  _: KafkaStorageException |
                  _: OffsetOutOfRangeException |
                  _: InconsistentTopicIdException) =>
-          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
             divergingEpoch = None,
             highWatermark = UnifiedLog.UnknownOffset,
             leaderLogStartOffset = UnifiedLog.UnknownOffset,
@@ -1197,7 +1197,7 @@ class ReplicaManager(val config: KafkaConfig,
           error(s"Error processing fetch with max size $adjustedMaxBytes from $fetchSource " +
             s"on partition $tp: $fetchInfo", e)
 
-          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
             divergingEpoch = None,
             highWatermark = UnifiedLog.UnknownOffset,
             leaderLogStartOffset = UnifiedLog.UnknownOffset,

@@ -190,7 +190,7 @@ final class KafkaMetadataLog private (
   override def updateHighWatermark(offsetMetadata: LogOffsetMetadata): Unit = {
     offsetMetadata.metadata.asScala match {
       case Some(segmentPosition: SegmentPosition) => log.updateHighWatermark(
-        new kafka.server.LogOffsetMetadata(
+        new org.apache.kafka.server.log.internals.LogOffsetMetadata(
           offsetMetadata.offset,
           segmentPosition.baseOffset,
           segmentPosition.relativePosition)
@@ -565,7 +565,7 @@ object KafkaMetadataLog extends Logging {
     // Disable time and byte retention when deleting segments
     props.setProperty(LogConfig.RetentionMsProp, "-1")
     props.setProperty(LogConfig.RetentionBytesProp, "-1")
-    LogConfig.validateValues(props)
+    LogConfig.validate(props)
     val defaultLogConfig = LogConfig(props)
 
     if (config.logSegmentBytes < config.logSegmentMinBytes) {

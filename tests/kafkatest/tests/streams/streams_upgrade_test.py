@@ -511,6 +511,8 @@ class StreamsUpgradeTest(Test):
         first_other_node = first_other_processor.node
         second_other_node = second_other_processor.node
 
+        kafka_version_str = self.get_version_string(str(DEV_VERSION))
+
         with first_other_node.account.monitor_log(first_other_processor.LOG_FILE) as first_other_monitor:
             with second_other_node.account.monitor_log(second_other_processor.LOG_FILE) as second_other_monitor:
                 # stop processor
@@ -527,8 +529,8 @@ class StreamsUpgradeTest(Test):
                     self.old_processors.remove(processor)
                     self.upgraded_processors.append(processor)
 
-                    # checking for the dev version
-                    log_monitor.wait_until("Kafka version.*" + self.base_version_number + ".*",
+                    # checking for the dev version which should be the only SNAPSHOT
+                    log_monitor.wait_until(kafka_version_str,
                                            timeout_sec=60,
                                            err_msg="Could not detect Kafka Streams version " + str(DEV_VERSION) + " in " + str(node.account))
                     log_monitor.offset = 5
