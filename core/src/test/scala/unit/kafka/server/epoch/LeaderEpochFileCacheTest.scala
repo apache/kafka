@@ -283,7 +283,7 @@ class LeaderEpochFileCacheTest {
     assertEquals(new EpochEntry(1, 7), cache.epochEntries.get(0))
   }
 
-  def toTuple[K, V](entry: java.util.Map.Entry[K, V]): (K, V) = {
+  private def toTuple[K, V](entry: java.util.Map.Entry[K, V]): (K, V) = {
     (entry.getKey, entry.getValue)
   }
 
