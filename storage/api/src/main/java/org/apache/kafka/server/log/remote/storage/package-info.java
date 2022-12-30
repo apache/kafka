@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides an pluggable API for defining remote storage and retrieval of Kafka log segments.
+ * Provides a pluggable API for defining remote storage and retrieval of Kafka log segments.
  */
 package org.apache.kafka.server.log.remote.storage;
