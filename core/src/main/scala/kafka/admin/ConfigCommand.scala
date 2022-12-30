@@ -579,7 +579,7 @@ object ConfigCommand extends Logging {
       .filter(entry => configSourceFilter match {
         case Some(configSource) => entry.source == configSource
         case None => true
-      }).toSeq
+      }).toSeq.sortBy(entry => entry.name())
   }
 
   private def describeQuotaConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]): Unit = {
