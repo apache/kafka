@@ -202,9 +202,9 @@ public class MirrorSourceTask extends SourceTask {
             long downstreamOffset) {
         PartitionState partitionState =
             partitionStates.computeIfAbsent(topicPartition, x -> new PartitionState(maxOffsetLag));
-        if (partitionState.shouldSyncOffsets(upstreamOffset, downstreamOffset)) {
+        if (partitionState.update(upstreamOffset, downstreamOffset)) {
             if (sendOffsetSync(topicPartition, upstreamOffset, downstreamOffset)) {
-                partitionState.syncOffsets(upstreamOffset, downstreamOffset);
+                partitionState.reset();
             }
         }
     }
@@ -280,29 +280,31 @@ public class MirrorSourceTask extends SourceTask {
         long lastSyncUpstreamOffset = -1L;
         long lastSyncDownstreamOffset = -1L;
         long maxOffsetLag;
+        boolean shouldSyncOffsets;
 
         PartitionState(long maxOffsetLag) {
             this.maxOffsetLag = maxOffsetLag;
         }
 
-        void syncOffsets(long upstreamOffset, long downstreamOffset) {
-            if (shouldSyncOffsets(upstreamOffset, downstreamOffset)) {
-                lastSyncUpstreamOffset = upstreamOffset;
-                lastSyncDownstreamOffset = downstreamOffset;
-            }
-        }
-
         // true if we should emit an offset sync
-        boolean shouldSyncOffsets(long upstreamOffset, long downstreamOffset) {
+        boolean update(long upstreamOffset, long downstreamOffset) {
             long upstreamStep = upstreamOffset - lastSyncUpstreamOffset;
             long downstreamTargetOffset = lastSyncDownstreamOffset + upstreamStep;
-            boolean shouldSyncOffsets = lastSyncDownstreamOffset == -1L
+            if (lastSyncDownstreamOffset == -1L
                     || downstreamOffset - downstreamTargetOffset >= maxOffsetLag
                     || upstreamOffset - previousUpstreamOffset != 1L
-                    || downstreamOffset < previousDownstreamOffset;
+                    || downstreamOffset < previousDownstreamOffset) {
+                lastSyncUpstreamOffset = upstreamOffset;
+                lastSyncDownstreamOffset = downstreamOffset;
+                shouldSyncOffsets = true;
+            }
             previousUpstreamOffset = upstreamOffset;
             previousDownstreamOffset = downstreamOffset;
             return shouldSyncOffsets;
+        }
+
+        void reset() {
+            shouldSyncOffsets = false;
         }
     }
 }
