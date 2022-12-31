@@ -19,7 +19,7 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
-    <h4><a id="upgrade_3_4_0" href="#upgrade_3_4_0">Upgrading to 3.4.0 from any version 0.8.x through 3.3.x</a></h4>
+<h4><a id="upgrade_3_4_0" href="#upgrade_3_4_0">Upgrading to 3.4.0 from any version 0.8.x through 3.3.x</a></h4>
 
     <p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
         Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
@@ -59,6 +59,25 @@
             (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
             the newer Java clients must be used.
         </li>
+    </ol>
+
+<h4><a id="upgrade_3_4_0" href="#upgrade_3_4_0">Upgrading a KRaft-based cluster to 3.4.0 from any version 3.0.x through 3.3.x</a></h4>
+
+    <p><b>If you are upgrading from a version prior to 3.4.0, please see the note below. Once you have changed the metadata.version to the latest version, it will not be possible to downgrade to a version prior to 3.4-IV0.</b></p>
+
+    <p><b>For a rolling upgrade:</b></p>
+
+    <ol>
+        <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+            brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        </li>
+        <li>Once the cluster's behavior and performance has been verified, bump the metadata.version by running
+            <code>
+                ./bin/kafka-features.sh upgrade --metadata 3.4
+            </code>
+        </li>
+        <li>Note that the cluster metadata version cannot be downgraded to a pre-production 3.0.x, 3.1.x, 3.2.x, or 3.3.x version once it has been upgraded.
+            However, it is possible to downgrade to production versions such as 3.3-IV0, 3.3-IV1, etc.</li>
     </ol>
 
 <h4><a id="upgrade_3_3_1" href="#upgrade_3_3_1">Upgrading to 3.3.1 from any version 0.8.x through 3.2.x</a></h4>
