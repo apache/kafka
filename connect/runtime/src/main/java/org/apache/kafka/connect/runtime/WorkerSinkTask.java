@@ -287,6 +287,7 @@ class WorkerSinkTask extends WorkerTask {
             }
             committing = false;
         }
+        task.postCommit(error, committedOffsets);
     }
 
     public int commitFailures() {

@@ -127,6 +127,17 @@ public abstract class SinkTask implements Task {
     }
 
     /**
+     * Respond to a previous commit attempt that may or may not have succeeded. Note that due to our use of async commits,
+     * these invocations may come out of order.
+     *
+     * @param error            the error resulting from the commit, or null if the commit succeeded without error
+     * @param committedOffsets the offsets that were committed; may be null if the commit did not complete successfully
+     *                         or if no new offsets were committed
+     */
+    public void postCommit(Throwable error, Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
+    }
+
+    /**
      * The SinkTask use this method to create writers for newly assigned partitions in case of partition
      * rebalance. This method will be called after partition re-assignment completes and before the SinkTask starts
      * fetching data. Note that any errors raised from this method will cause the task to stop.
