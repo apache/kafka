@@ -434,20 +434,24 @@ public class ConnectorsResource implements ConnectResource {
                     // we should find the right target for the query within two hops, so if
                     // we don't, it probably means that a rebalance has taken place.
                     throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
-                            "Cannot complete request because of a conflicting operation (e.g. worker rebalance)");
+                            String.format("Cannot complete request(path = %s, method = %s, body = %s) "
+                                            + "because of a conflicting operation (e.g. worker rebalance)", path, method, body));
                 }
             } else if (cause instanceof RebalanceNeededException) {
                 throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
-                        "Cannot complete request momentarily due to stale configuration (typically caused by a concurrent config change)");
+                        String.format("Cannot complete request(path = %s, method = %s, body = %s) momentarily "
+                                        + "due to stale configuration (typically caused by a concurrent config change)", path, method, body));
             }
 
             throw cause;
         } catch (TimeoutException e) {
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option
-            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request timed out");
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
+                    String.format("Request(path = %s, method = %s, body = %s) timed out", path, method, body));
         } catch (InterruptedException e) {
-            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request interrupted");
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
+                    String.format("Request(path = %s, method = %s, body = %s) interrupted", path, method, body));
         }
     }
 
