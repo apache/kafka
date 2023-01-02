@@ -32,7 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
-import org.apache.kafka.server.log.internals.{OffsetIndex, TimeIndex, TransactionIndex}
+import org.apache.kafka.server.log.internals.{CorruptSnapshotException, OffsetIndex, TimeIndex, TransactionIndex}
 import org.apache.kafka.snapshot.Snapshots
 
 import scala.jdk.CollectionConverters._
