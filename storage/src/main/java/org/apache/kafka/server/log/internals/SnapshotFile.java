@@ -31,8 +31,8 @@ public class SnapshotFile {
         return Long.parseLong(fileName.substring(0, fileName.indexOf('.')));
     }
 
-    private volatile File file;
     public final long offset;
+    private volatile File file;
 
     public SnapshotFile(File file) {
         this(file, offsetFromFileName(file.getName()));

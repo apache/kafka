@@ -1491,9 +1491,9 @@ public final class Utils {
     /**
      * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
      */
-    public static String replaceSuffix(String name, String oldSuffix, String newSuffix) {
-        if (!name.endsWith(oldSuffix))
-            throw new IllegalArgumentException("Expected string to end with " + oldSuffix + " but string is " + name);
-        return name.substring(0, name.length() - oldSuffix.length()) + newSuffix;
+    public static String replaceSuffix(String str, String oldSuffix, String newSuffix) {
+        if (!str.endsWith(oldSuffix))
+            throw new IllegalArgumentException("Expected string to end with " + oldSuffix + " but string is " + str);
+        return str.substring(0, str.length() - oldSuffix.length()) + newSuffix;
     }
 }
