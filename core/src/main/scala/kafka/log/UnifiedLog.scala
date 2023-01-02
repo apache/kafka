@@ -1943,8 +1943,6 @@ object UnifiedLog extends Logging {
 
   def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.transactionIndexFile(dir, offset, suffix)
 
-  def offsetFromFileName(filename: String): Long = LocalLog.offsetFromFileName(filename)
-
   def offsetFromFile(file: File): Long = LocalLog.offsetFromFile(file)
 
   def sizeInBytes(segments: Iterable[LogSegment]): Long = LogSegments.sizeInBytes(segments)
