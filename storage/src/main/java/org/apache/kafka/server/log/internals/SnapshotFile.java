@@ -24,12 +24,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 
+import static org.apache.kafka.server.log.internals.LogFileUtils.offsetFromFileName;
+
 public class SnapshotFile {
     private static final Logger log = LoggerFactory.getLogger(SnapshotFile.class);
-
-    public static long offsetFromFileName(String fileName) {
-        return Long.parseLong(fileName.substring(0, fileName.indexOf('.')));
-    }
 
     public final long offset;
     private volatile File file;
