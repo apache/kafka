@@ -2567,7 +2567,7 @@ Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
 Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
 
 // Java 8+ example, using lambda expressions
-                KTable&lt;String, String&gt; joined = left.join(right, foreignKeyExtractor,
+                KTable&lt;String, String&gt; joined = left.leftJoin(right, foreignKeyExtractor,
                     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue /* ValueJoiner */
                   );</code></pre>
                               <p>Detailed behavior:</p>

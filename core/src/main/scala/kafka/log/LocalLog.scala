@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeEx
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.log.internals.LogFileUtils.offsetFromFileName
 import org.apache.kafka.server.log.internals.{AbortedTxn, LogConfig, LogDirFailureChannel, LogOffsetMetadata, OffsetPosition}
 
 import scala.jdk.CollectionConverters._
@@ -713,10 +714,6 @@ object LocalLog extends Logging {
    */
   private[log] def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File =
     new File(dir, filenamePrefixFromOffset(offset) + TxnIndexFileSuffix + suffix)
-
-  private[log] def offsetFromFileName(filename: String): Long = {
-    filename.substring(0, filename.indexOf('.')).toLong
-  }
 
   private[log] def offsetFromFile(file: File): Long = {
     offsetFromFileName(file.getName)

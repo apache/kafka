@@ -14,12 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.server.log.internals;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.KafkaException;
 
-public interface RestoringTasks {
+public class CorruptSnapshotException extends KafkaException {
 
-    StreamTask restoringTaskFor(final TopicPartition partition);
-
+    public CorruptSnapshotException(String message) {
+        super(message);
+    }
 }
