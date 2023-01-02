@@ -179,7 +179,12 @@ object KafkaRaftServer {
    *         be consistent across all log dirs) and the offline directories
    */
   def initializeLogDirs(config: KafkaConfig): (MetaProperties, BootstrapMetadata, Seq[String]) = {
-    val logDirs = (config.logDirs.toSet + config.metadataLogDir).toSeq
+    val logDirs = if (config.processRoles.equals(Set(BrokerRole, ControllerRole)))
+      (config.logDirs.toSet + config.metadataLogDir).toSeq
+    else if (config.processRoles.equals(Set(ControllerRole)))
+      Seq(config.metadataLogDir)
+    else
+      config.logDirs
     val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
       getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
 
