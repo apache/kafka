@@ -30,6 +30,7 @@ public final class LastRecord {
     public LastRecord(OptionalLong lastDataOffset, short producerEpoch) {
         this.lastDataOffset = lastDataOffset;
         this.producerEpoch = producerEpoch;
+        Objects.requireNonNull(lastDataOffset, "lastDataOffset must be non null");
     }
 
     @Override
@@ -39,15 +40,13 @@ public final class LastRecord {
 
         LastRecord that = (LastRecord) o;
 
-        if (producerEpoch != that.producerEpoch) return false;
-        return Objects.equals(lastDataOffset, that.lastDataOffset);
+        return producerEpoch == that.producerEpoch &&
+                lastDataOffset.equals(that.lastDataOffset);
     }
 
     @Override
     public int hashCode() {
-        int result = lastDataOffset != null ? lastDataOffset.hashCode() : 0;
-        result = 31 * result + (int) producerEpoch;
-        return result;
+        return 31 * lastDataOffset.hashCode() + (int) producerEpoch;
     }
 
     @Override

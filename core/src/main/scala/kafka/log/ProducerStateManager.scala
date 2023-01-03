@@ -101,11 +101,11 @@ object ProducerStateManager {
         val offsetDelta = producerEntryStruct.getInt(OffsetDeltaField)
         val coordinatorEpoch = producerEntryStruct.getInt(CoordinatorEpochField)
         val currentTxnFirstOffset = producerEntryStruct.getLong(CurrentTxnFirstOffsetField)
-        val lastAppendedDataBatches = new java.util.ArrayList[BatchMetadata]
+        val lastAppendedDataBatches = new java.util.ArrayDeque[BatchMetadata]
         if (offset >= 0)
           lastAppendedDataBatches.add(new BatchMetadata(seq, offset, offsetDelta, timestamp))
 
-        val currentTxnFirstOffsetValue:OptionalLong = if (currentTxnFirstOffset >= 0) OptionalLong.of(currentTxnFirstOffset) else OptionalLong.empty()
+        val currentTxnFirstOffsetValue = if (currentTxnFirstOffset >= 0) OptionalLong.of(currentTxnFirstOffset) else OptionalLong.empty()
         new ProducerStateEntry(producerId, lastAppendedDataBatches, producerEpoch,
           coordinatorEpoch, timestamp, currentTxnFirstOffsetValue)
       }
@@ -402,8 +402,8 @@ class ProducerStateManager(
    * Update the mapping with the given append information
    */
   def update(appendInfo: ProducerAppendInfo): Unit = {
-    if (appendInfo.producerId == RecordBatch.NO_PRODUCER_ID)
-      throw new IllegalArgumentException(s"Invalid producer id ${appendInfo.producerId} passed to update " +
+    if (appendInfo.producerId() == RecordBatch.NO_PRODUCER_ID)
+      throw new IllegalArgumentException(s"Invalid producer id ${appendInfo.producerId()} passed to update " +
         s"for partition $topicPartition")
 
     trace(s"Updated producer ${appendInfo.producerId} state to $appendInfo")

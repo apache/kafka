@@ -30,6 +30,7 @@ public final class TxnMetadata {
         this.producerId = producerId;
         this.firstOffset = firstOffset;
         this.lastOffset = lastOffset;
+        Objects.requireNonNull(firstOffset, "firstOffset must be non null");
     }
     public TxnMetadata(long producerId, long firstOffset) {
         this(producerId, new LogOffsetMetadata(firstOffset));

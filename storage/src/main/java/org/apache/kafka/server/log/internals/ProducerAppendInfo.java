@@ -44,7 +44,7 @@ import java.util.OptionalLong;
 public class ProducerAppendInfo {
     private static final Logger log = LoggerFactory.getLogger(ProducerAppendInfo.class);
     private final TopicPartition topicPartition;
-    public final long producerId;
+    private final long producerId;
     private final ProducerStateEntry currentEntry;
     private final AppendOrigin origin;
 
@@ -52,6 +52,8 @@ public class ProducerAppendInfo {
     private final ProducerStateEntry updatedEntry;
 
     /**
+     * Creates a new instance with the provided parameters.
+     *
      * @param topicPartition topic partition
      * @param producerId     The id of the producer appending to the log
      * @param currentEntry   The current entry associated with the producer id which contains metadata for a fixed number of
@@ -76,6 +78,10 @@ public class ProducerAppendInfo {
                 currentEntry.coordinatorEpoch,
                 currentEntry.lastTimestamp,
                 currentEntry.currentTxnFirstOffset);
+    }
+
+    public long producerId() {
+        return producerId;
     }
 
     private void maybeValidateDataBatch(short producerEpoch, int firstSeq, long offset) {
@@ -181,9 +187,8 @@ public class ProducerAppendInfo {
     private void checkCoordinatorEpoch(EndTransactionMarker endTxnMarker, long offset) {
         if (updatedEntry.coordinatorEpoch > endTxnMarker.coordinatorEpoch()) {
             if (origin == AppendOrigin.REPLICATION) {
-                log.info("Detected invalid coordinator epoch for producerId " + producerId + " at " +
-                        "offset " + offset + " in partition $topicPartition: " + endTxnMarker.coordinatorEpoch() +
-                        " is older than previously known coordinator epoch " + updatedEntry.coordinatorEpoch);
+                log.info("Detected invalid coordinator epoch for producerId {} at offset {} in partition {}: {} is older than previously known coordinator epoch {}",
+                        producerId, offset, topicPartition, endTxnMarker.coordinatorEpoch(), updatedEntry.coordinatorEpoch);
             } else {
                 throw new TransactionCoordinatorFencedException("Invalid coordinator epoch for producerId " + producerId + " at " +
                         "offset " + offset + " in partition " + topicPartition + ": " + endTxnMarker.coordinatorEpoch() +
@@ -227,12 +232,14 @@ public class ProducerAppendInfo {
     @Override
     public String toString() {
         return "ProducerAppendInfo(" +
-                "topicPartition=" + topicPartition +
-                ", producerId=" + producerId +
-                ", currentEntry=" + currentEntry +
-                ", origin=" + origin +
-                ", transactions=" + transactions +
-                ", updatedEntry=" + updatedEntry +
+                "producerId=" + producerId +
+                ", producerEpoch=" + updatedEntry.producerEpoch() +
+                ", firstSequence=" + updatedEntry.firstSeq() +
+                ", lastSequence=" + updatedEntry.lastSeq() +
+                ", currentTxnFirstOffset=" + updatedEntry.currentTxnFirstOffset +
+                ", coordinatorEpoch=" + updatedEntry.coordinatorEpoch +
+                ", lastTimestamp=" + updatedEntry.lastTimestamp +
+                ", startedTransactions=" + transactions +
                 ')';
     }
 }

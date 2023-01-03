@@ -358,7 +358,7 @@ class LogSegmentTest {
 
     // recover again, but this time assuming the transaction from pid2 began on a previous segment
     stateManager = newProducerStateManager()
-    val batchMetadata = new util.ArrayList[BatchMetadata]()
+    val batchMetadata = new util.ArrayDeque[BatchMetadata]()
     batchMetadata.add(new BatchMetadata(10, 10L, 5, RecordBatch.NO_TIMESTAMP))
     stateManager.loadProducerEntry(new ProducerStateEntry(pid2, batchMetadata, producerEpoch,0,
       RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L)))

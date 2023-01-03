@@ -51,27 +51,28 @@ public class BatchMetadata {
 
         BatchMetadata that = (BatchMetadata) o;
 
-        if (lastSeq != that.lastSeq) return false;
-        if (lastOffset != that.lastOffset) return false;
-        if (offsetDelta != that.offsetDelta) return false;
-        return timestamp == that.timestamp;
+        return lastSeq == that.lastSeq &&
+                lastOffset == that.lastOffset &&
+                offsetDelta == that.offsetDelta &&
+                timestamp == that.timestamp;
     }
 
     @Override
     public int hashCode() {
         int result = lastSeq;
-        result = 31 * result + (int) (lastOffset ^ (lastOffset >>> 32));
+        result = 31 * result + Long.hashCode(lastOffset);
         result = 31 * result + offsetDelta;
-        result = 31 * result + (int) (timestamp ^ (timestamp >>> 32));
+        result = 31 * result + Long.hashCode(timestamp);
         return result;
     }
 
     @Override
     public String toString() {
         return "BatchMetadata(" +
+                "firstSeq=" + firstSeq() +
                 "lastSeq=" + lastSeq +
+                "firstOffset=" + firstOffset() +
                 ", lastOffset=" + lastOffset +
-                ", offsetDelta=" + offsetDelta +
                 ", timestamp=" + timestamp +
                 ')';
     }

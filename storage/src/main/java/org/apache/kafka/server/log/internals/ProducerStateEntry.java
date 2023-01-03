@@ -18,9 +18,10 @@ package org.apache.kafka.server.log.internals;
 
 import org.apache.kafka.common.record.RecordBatch;
 
-import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
+import java.util.Deque;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.stream.Stream;
@@ -33,21 +34,21 @@ import java.util.stream.Stream;
 public class ProducerStateEntry {
     public static final int NUM_BATCHES_TO_RETAIN = 5;
     public final long producerId;
-    private final List<BatchMetadata> batchMetadata;
+    private final Deque<BatchMetadata> batchMetadata;
     private short producerEpoch;
     public int coordinatorEpoch;
     public long lastTimestamp;
     public OptionalLong currentTxnFirstOffset;
 
     public ProducerStateEntry(long producerId) {
-        this(producerId, new ArrayList<>(), RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty());
+        this(producerId, new ArrayDeque<>(), RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty());
     }
 
     public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
-        this(producerId, new ArrayList<>(), producerEpoch, coordinatorEpoch, lastTimestamp, currentTxnFirstOffset);
+        this(producerId, new ArrayDeque<>(), producerEpoch, coordinatorEpoch, lastTimestamp, currentTxnFirstOffset);
     }
 
-    public ProducerStateEntry(long producerId, List<BatchMetadata> batchMetadata, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
+    public ProducerStateEntry(long producerId, Deque<BatchMetadata> batchMetadata, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
         this.producerId = producerId;
         this.batchMetadata = batchMetadata;
         this.producerEpoch = producerEpoch;
@@ -57,24 +58,23 @@ public class ProducerStateEntry {
     }
 
     public int firstSeq() {
-        return isEmpty() ? RecordBatch.NO_SEQUENCE : batchMetadata.get(0).firstSeq();
-    }
-
-
-    public long firstDataOffset() {
-        return isEmpty() ? -1L : batchMetadata.get(0).firstOffset();
+        return isEmpty() ? RecordBatch.NO_SEQUENCE : batchMetadata.getFirst().firstSeq();
     }
 
     public int lastSeq() {
-        return isEmpty() ? RecordBatch.NO_SEQUENCE : batchMetadata.get(batchMetadata.size() - 1).lastSeq;
+        return isEmpty() ? RecordBatch.NO_SEQUENCE : batchMetadata.getLast().lastSeq;
+    }
+
+    public long firstDataOffset() {
+        return isEmpty() ? -1L : batchMetadata.getFirst().firstOffset();
     }
 
     public long lastDataOffset() {
-        return isEmpty() ? -1L : batchMetadata.get(batchMetadata.size() - 1).lastOffset;
+        return isEmpty() ? -1L : batchMetadata.getLast().lastOffset;
     }
 
     public int lastOffsetDelta() {
-        return isEmpty() ? 0 : batchMetadata.get(batchMetadata.size() - 1).offsetDelta;
+        return isEmpty() ? 0 : batchMetadata.getLast().offsetDelta;
     }
 
     public boolean isEmpty() {
@@ -98,13 +98,13 @@ public class ProducerStateEntry {
     }
 
     private void addBatchMetadata(BatchMetadata batch) {
-        if (batchMetadata.size() == ProducerStateEntry.NUM_BATCHES_TO_RETAIN) batchMetadata.remove(0);
+        if (batchMetadata.size() == ProducerStateEntry.NUM_BATCHES_TO_RETAIN) batchMetadata.removeFirst();
         batchMetadata.add(batch);
     }
 
     public void update(ProducerStateEntry nextEntry) {
         maybeUpdateProducerEpoch(nextEntry.producerEpoch);
-        while (!nextEntry.batchMetadata.isEmpty()) addBatchMetadata(nextEntry.batchMetadata.remove(0));
+        while (!nextEntry.batchMetadata.isEmpty()) addBatchMetadata(nextEntry.batchMetadata.removeFirst());
         this.coordinatorEpoch = nextEntry.coordinatorEpoch;
         this.currentTxnFirstOffset = nextEntry.currentTxnFirstOffset;
         this.lastTimestamp = nextEntry.lastTimestamp;
@@ -121,8 +121,8 @@ public class ProducerStateEntry {
         return duplicate.findFirst();
     }
 
-    public List<BatchMetadata> batchMetadata() {
-        return Collections.unmodifiableList(batchMetadata);
+    public Collection<BatchMetadata> batchMetadata() {
+        return Collections.unmodifiableCollection(batchMetadata);
     }
 
     public short producerEpoch() {
@@ -133,11 +133,11 @@ public class ProducerStateEntry {
     public String toString() {
         return "ProducerStateEntry(" +
                 "producerId=" + producerId +
-                ", batchMetadata=" + batchMetadata +
                 ", producerEpoch=" + producerEpoch +
+                ", currentTxnFirstOffset=" + currentTxnFirstOffset +
                 ", coordinatorEpoch=" + coordinatorEpoch +
                 ", lastTimestamp=" + lastTimestamp +
-                ", currentTxnFirstOffset=" + currentTxnFirstOffset +
+                ", batchMetadata=" + batchMetadata +
                 ')';
     }
 }
