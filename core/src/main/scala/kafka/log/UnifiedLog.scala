@@ -28,7 +28,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.LeaderEpochFileCache
-import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogOffsetMetadata, OffsetAndEpoch, PartitionMetadataFile, RequestLocal}
+import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, OffsetAndEpoch, PartitionMetadataFile, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -42,7 +42,7 @@ import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CompletedTxn, LogDirFailureChannel, LogValidator}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CompletedTxn, LogDirFailureChannel, LogOffsetMetadata, LogValidator}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 
@@ -273,7 +273,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * equals the log end offset (which may never happen for a partition under consistent load). This is needed to
    * prevent the log start offset (which is exposed in fetch responses) from getting ahead of the high watermark.
    */
-  @volatile private var highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(logStartOffset)
+  @volatile private var highWatermarkMetadata: LogOffsetMetadata = new LogOffsetMetadata(logStartOffset)
 
   @volatile var partitionMetadataFile: Option[PartitionMetadataFile] = None
 
@@ -324,7 +324,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         try partMetadataFile.delete()
         catch {
           case e: IOException =>
-            error(s"Error while trying to delete partition metadata file ${partMetadataFile}", e)
+            error(s"Error while trying to delete partition metadata file $partMetadataFile", e)
         }
       }
     } else if (keepPartitionMetadataFile) {
@@ -380,7 +380,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @return the updated high watermark offset
    */
   def updateHighWatermark(hw: Long): Long = {
-    updateHighWatermark(LogOffsetMetadata(hw))
+    updateHighWatermark(new LogOffsetMetadata(hw))
   }
 
   /**
@@ -393,7 +393,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def updateHighWatermark(highWatermarkMetadata: LogOffsetMetadata): Long = {
     val endOffsetMetadata = localLog.logEndOffsetMetadata
     val newHighWatermarkMetadata = if (highWatermarkMetadata.messageOffset < logStartOffset) {
-      LogOffsetMetadata(logStartOffset)
+      new LogOffsetMetadata(logStartOffset)
     } else if (highWatermarkMetadata.messageOffset >= endOffsetMetadata.messageOffset) {
       endOffsetMetadata
     } else {
@@ -445,7 +445,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def maybeUpdateHighWatermark(hw: Long): Option[Long] = {
     lock.synchronized {
       val oldHighWatermark = highWatermarkMetadata
-      updateHighWatermark(LogOffsetMetadata(hw)) match {
+      updateHighWatermark(new LogOffsetMetadata(hw)) match {
         case oldHighWatermark.messageOffset =>
           None
         case newHighWatermark =>
@@ -838,7 +838,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           if (validateAndAssignOffsets) {
             // assign offsets to the message set
             val offset = PrimitiveRef.ofLong(localLog.logEndOffset)
-            appendInfo.firstOffset = Some(LogOffsetMetadata(offset.value))
+            appendInfo.firstOffset = Some(new LogOffsetMetadata(offset.value))
             val validateAndOffsetAssignResult = try {
               val validator = new LogValidator(validRecords,
                 topicPartition,
@@ -935,10 +935,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // maybe roll the log if this segment is full
           val segment = maybeRoll(validRecords.sizeInBytes, appendInfo)
 
-          val logOffsetMetadata = LogOffsetMetadata(
-            messageOffset = appendInfo.firstOrLastOffsetOfFirstBatch,
-            segmentBaseOffset = segment.baseOffset,
-            relativePositionInSegment = segment.size)
+          val logOffsetMetadata = new LogOffsetMetadata(
+            appendInfo.firstOrLastOffsetOfFirstBatch,
+            segment.baseOffset,
+            segment.size)
 
           // now that we have valid records, offsets assigned, and timestamps updated, we need to
           // validate the idempotent/transactional state of the producers and collect some metadata
@@ -947,14 +947,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
           maybeDuplicate match {
             case Some(duplicate) =>
-              appendInfo.firstOffset = Some(LogOffsetMetadata(duplicate.firstOffset))
+              appendInfo.firstOffset = Some(new LogOffsetMetadata(duplicate.firstOffset))
               appendInfo.lastOffset = duplicate.lastOffset
               appendInfo.logAppendTime = duplicate.timestamp
               appendInfo.logStartOffset = logStartOffset
             case None =>
               // Before appending update the first offset metadata to include segment information
               appendInfo.firstOffset = appendInfo.firstOffset.map { offsetMetadata =>
-                offsetMetadata.copy(segmentBaseOffset = segment.baseOffset, relativePositionInSegment = segment.size)
+                new LogOffsetMetadata(offsetMetadata.messageOffset, segment.baseOffset, segment.size)
               }
 
               // Append the records, and increment the local log end offset immediately after the append because a
@@ -1091,7 +1091,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // We cache offset metadata for the start of each transaction. This allows us to
         // compute the last stable offset without relying on additional index lookups.
         val firstOffsetMetadata = if (batch.isTransactional)
-          Some(LogOffsetMetadata(batch.baseOffset, appendOffsetMetadata.segmentBaseOffset, relativePositionInSegment))
+          Some(new LogOffsetMetadata(batch.baseOffset, appendOffsetMetadata.segmentBaseOffset, relativePositionInSegment))
         else
           None
 
@@ -1155,7 +1155,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       // Also indicate whether we have the accurate first offset or not
       if (!readFirstMessage) {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          firstOffset = Some(LogOffsetMetadata(batch.baseOffset))
+          firstOffset = Some(new LogOffsetMetadata(batch.baseOffset))
         lastOffsetOfFirstBatch = batch.lastOffset
         readFirstMessage = true
       }
@@ -1328,7 +1328,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
         val remoteOffset = if (remoteLogEnabled()) {
           if (remoteLogManager.isEmpty) {
-            throw new KafkaException("RemoteLogManager is empty even though the remote log storage is enabled.");
+            throw new KafkaException("RemoteLogManager is empty even though the remote log storage is enabled.")
           }
           if (recordVersion.value < RecordVersion.V2.value) {
             throw new KafkaException("Tiered storage is supported only with versions supporting leader epochs, that means RecordVersion must be >= 2.")
@@ -1942,8 +1942,6 @@ object UnifiedLog extends Logging {
     new File(dir, LocalLog.filenamePrefixFromOffset(offset) + ProducerSnapshotFileSuffix)
 
   def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.transactionIndexFile(dir, offset, suffix)
-
-  def offsetFromFileName(filename: String): Long = LocalLog.offsetFromFileName(filename)
 
   def offsetFromFile(file: File): Long = LocalLog.offsetFromFile(file)
 

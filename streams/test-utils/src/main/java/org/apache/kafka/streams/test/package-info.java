@@ -14,12 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
-
-import org.apache.kafka.common.TopicPartition;
-
-public interface RestoringTasks {
-
-    StreamTask restoringTaskFor(final TopicPartition partition);
-
-}
+/**
+ * Provides classes for testing Kafka Streams applications with mocked inputs.
+ */
+package org.apache.kafka.streams.test;
