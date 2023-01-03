@@ -17,6 +17,7 @@
 
 package kafka.utils
 
+import org.apache.kafka.server.log.internals.Throttler
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.{assertTrue, assertEquals}
 
@@ -29,9 +30,9 @@ class ThrottlerTest {
     val desiredCountPerInterval = desiredCountPerSec * throttleCheckIntervalMs / 1000.0
 
     val mockTime = new MockTime()
-    val throttler = new Throttler(desiredRatePerSec = desiredCountPerSec,
-                                  checkIntervalMs = throttleCheckIntervalMs,
-                                  time = mockTime)
+    val throttler = new Throttler(desiredCountPerSec,
+                                  throttleCheckIntervalMs,
+                                  mockTime)
 
     // Observe desiredCountPerInterval at t1
     val t1 = mockTime.milliseconds()
@@ -68,9 +69,7 @@ class ThrottlerTest {
     val updatedDesiredCountPerInterval = updatedDesiredCountPerSec * throttleCheckIntervalMs / 1000.0
 
     val mockTime = new MockTime()
-    val throttler = new Throttler(desiredRatePerSec = desiredCountPerSec,
-      checkIntervalMs = throttleCheckIntervalMs,
-      time = mockTime)
+    val throttler = new Throttler(desiredCountPerSec, throttleCheckIntervalMs, mockTime)
 
     // Observe desiredCountPerInterval at t1
     val t1 = mockTime.milliseconds()
