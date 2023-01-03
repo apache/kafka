@@ -441,6 +441,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.port_mappings[kraft_quorum.controller_listener_names] = kraft_quorum.port_mappings.get(kraft_quorum.controller_listener_names)
 
     def reconfigure_zk_as_kraft(self, kraft_quorum):
+        # Remove the configs we set in reconfigure_zk_for_migration
+        props = []
+        for prop in self.server_prop_overrides:
+            if not prop[0].startswith("controller"):
+                props.append(prop)
+        self.server_prop_overrides.clear()
+        self.server_prop_overrides.extend(props)
+        del self.port_mappings[kraft_quorum.controller_listener_names]
+
+        # Set the quorum info to remote KRaft
         self.quorum_info = quorum.ServiceQuorumInfo(quorum.remote_kraft, self)
         self.remote_controller_quorum = kraft_quorum
         self.controller_quorum = kraft_quorum

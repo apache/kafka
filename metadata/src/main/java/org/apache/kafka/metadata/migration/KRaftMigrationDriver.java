@@ -230,8 +230,6 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class PollEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            log.info("Poll");
-
             switch (migrationState) {
                 case UNINITIALIZED:
                     initializeMigrationState();

@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from functools import partial
+import time
 
 from ducktape.utils.util import wait_until
 
@@ -66,6 +67,15 @@ class TestMigration(ProduceConsumeValidateTest):
             self.kafka.start_node(node)
             self.wait_until_rejoin()
 
+        self.logger.info("Restarting ZK brokers as KRaft brokers")
+        time.sleep(10)
+        self.kafka.reconfigure_zk_as_kraft(controller)
+
+        for node in self.kafka.nodes:
+            self.kafka.stop_node(node)
+            self.kafka.start_node(node)
+            self.wait_until_rejoin()
+
     def test_online_migration(self):
         zk_quorum = partial(ServiceQuorumInfo, zk)
         self.zk = ZookeeperService(self.test_context, num_nodes=1, version=DEV_BRANCH)
@@ -105,4 +115,3 @@ class TestMigration(ProduceConsumeValidateTest):
                                         message_validator=is_int, version=DEV_BRANCH)
 
         self.run_produce_consume_validate(core_test_action=self.do_migration)
-        # self.kafka.reconfigure_zk_as_kraft(controller)
