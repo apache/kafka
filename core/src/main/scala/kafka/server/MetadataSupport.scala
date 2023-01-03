@@ -69,13 +69,16 @@ sealed trait MetadataSupport {
       handler(request)
     }
   }
+
+  def brokerEpoch(): Long
 }
 
 case class ZkSupport(adminManager: ZkAdminManager,
                      controller: KafkaController,
                      zkClient: KafkaZkClient,
                      forwardingManager: Option[ForwardingManager],
-                     metadataCache: ZkMetadataCache) extends MetadataSupport {
+                     metadataCache: ZkMetadataCache,
+                     brokerEpochSupplier: () => Long) extends MetadataSupport {
   override def requireZkOrThrow(createException: => Exception): ZkSupport = this
   override def requireRaftOrThrow(createException: => Exception): RaftSupport = throw createException
 
@@ -86,9 +89,13 @@ case class ZkSupport(adminManager: ZkAdminManager,
   }
 
   override def canForward(): Boolean = forwardingManager.isDefined && (!controller.isActive)
+
+  override def brokerEpoch(): Long = brokerEpochSupplier.apply()
 }
 
-case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: KRaftMetadataCache)
+case class RaftSupport(fwdMgr: ForwardingManager,
+                       metadataCache: KRaftMetadataCache,
+                       brokerEpochSupplier: () => Long)
     extends MetadataSupport {
   override val forwardingManager: Option[ForwardingManager] = Some(fwdMgr)
   override def requireZkOrThrow(createException: => Exception): ZkSupport = throw createException
@@ -101,4 +108,6 @@ case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: KRaftMetadataCa
   }
 
   override def canForward(): Boolean = true
+
+  override def brokerEpoch(): Long = brokerEpochSupplier.apply()
 }

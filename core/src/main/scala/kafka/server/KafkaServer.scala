@@ -192,6 +192,8 @@ class KafkaServer(
 
   var lifecycleManager: BrokerLifecycleManager = _
 
+  var brokerEpochManager: BrokerEpochManager = _
+
   /**
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
@@ -343,7 +345,7 @@ class KafkaServer(
             time = time,
             metrics = metrics,
             threadNamePrefix = threadNamePrefix,
-            brokerEpochSupplier = () => kafkaController.brokerEpoch
+            brokerEpochSupplier = () => brokerEpochManager.get()
           )
         } else {
           AlterPartitionManager(kafkaScheduler, time, zkClient)
@@ -432,6 +434,10 @@ class KafkaServer(
           logger.debug("Start RaftManager")
         }
 
+        // Used by ZK brokers during a KRaft migration. When talking to a KRaft controller, we need to use the epoch
+        // from BrokerLifecycleManager rather than ZK (via KafkaController)
+        brokerEpochManager = new BrokerEpochManager(metadataCache, kafkaController, Option(lifecycleManager))
+
         adminManager = new ZkAdminManager(config, metrics, metadataCache, zkClient)
 
         /* start group coordinator */
@@ -443,7 +449,7 @@ class KafkaServer(
         val producerIdManager = if (config.interBrokerProtocolVersion.isAllocateProducerIdsSupported) {
           ProducerIdManager.rpc(
             config.brokerId,
-            brokerEpochSupplier = () => kafkaController.brokerEpoch,
+            brokerEpochSupplier = () => brokerEpochManager.get(),
             clientToControllerChannelManager,
             config.requestTimeoutMs
           )
@@ -513,7 +519,8 @@ class KafkaServer(
           clusterId = clusterId,
           time = time,
           tokenManager = tokenManager,
-          apiVersionManager = apiVersionManager)
+          apiVersionManager = apiVersionManager,
+          brokerEpochManager = brokerEpochManager)
 
         dataPlaneRequestProcessor = createKafkaApis(socketServer.dataPlaneRequestChannel)
 
