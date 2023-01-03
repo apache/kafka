@@ -258,29 +258,30 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void addTask(final Task task) {
+            final TaskId taskId = task.id();
             if (isStateless(task)) {
                 addToRestoredTasks((StreamTask) task);
-                log.info("Stateless active task " + task.id() + " was added to the restored tasks of the state updater");
+                log.info("Stateless active task " + taskId + " was added to the restored tasks of the state updater");
+            } else if (topologyMetadata.isPaused(taskId.topologyName())) {
+                pausedTasks.put(taskId, task);
+                changelogReader.register(task.changelogPartitions(), task.stateManager());
+                log.debug((task.isActive() ? "Active" : "Standby")
+                    + " task " + taskId + " was directly added to the paused tasks.");
             } else {
-                final Task existingTask = updatingTasks.putIfAbsent(task.id(), task);
+                final Task existingTask = updatingTasks.putIfAbsent(taskId, task);
                 if (existingTask != null) {
-                    throw new IllegalStateException((existingTask.isActive() ? "Active" : "Standby") + " task " + task.id() + " already exist, " +
+                    throw new IllegalStateException((existingTask.isActive() ? "Active" : "Standby") + " task " + taskId + " already exist, " +
                         "should not try to add another " + (task.isActive() ? "active" : "standby") + " task with the same id. " + BUG_ERROR_MESSAGE);
                 }
                 changelogReader.register(task.changelogPartitions(), task.stateManager());
                 if (task.isActive()) {
-                    log.info("Stateful active task " + task.id() + " was added to the state updater");
+                    log.info("Stateful active task " + taskId + " was added to the state updater");
                     changelogReader.enforceRestoreActive();
                 } else {
-                    log.info("Standby task " + task.id() + " was added to the state updater");
+                    log.info("Standby task " + taskId + " was added to the state updater");
                     if (updatingTasks.size() == 1) {
                         changelogReader.transitToUpdateStandby();
                     }
-                }
-
-                // Move task to paused tasks immediately to not make any progress
-                if (topologyMetadata.isPaused(task.id().topologyName())) {
-                    pauseTask(task);
                 }
             }
         }
