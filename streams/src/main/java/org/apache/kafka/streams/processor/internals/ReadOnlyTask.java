@@ -190,7 +190,7 @@ public class ReadOnlyTask implements Task {
 
     @Override
     public boolean commitNeeded() {
-        throw new UnsupportedOperationException("This task is read-only");
+        return task.commitNeeded();
     }
 
     @Override
@@ -200,7 +200,7 @@ public class ReadOnlyTask implements Task {
 
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
-        throw new UnsupportedOperationException("This task is read-only");
+        return task.changelogOffsets();
     }
 
     @Override
