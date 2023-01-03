@@ -16,6 +16,7 @@
  */
 package kafka.log
 
+import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerReconfigurable, KafkaConfig}
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
 import org.apache.kafka.common.TopicPartition
@@ -488,7 +489,7 @@ class ProducerStateManager(
   val maxTransactionTimeoutMs: Int,
   val producerStateManagerConfig: ProducerStateManagerConfig,
   val time: Time
-) extends Logging {
+) extends Logging with KafkaMetricsGroup {
   import ProducerStateManager._
   import java.util
 
@@ -501,6 +502,8 @@ class ProducerStateManager(
   private val producers = mutable.Map.empty[Long, ProducerStateEntry]
   private var lastMapOffset = 0L
   private var lastSnapOffset = 0L
+
+  newGauge("ProducerIdCount", () => producers.size)
 
   // Keep track of the last timestamp from the oldest transaction. This is used
   // to detect (approximately) when a transaction has been left hanging on a partition.
