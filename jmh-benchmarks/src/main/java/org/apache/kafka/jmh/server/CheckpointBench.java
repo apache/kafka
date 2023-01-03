@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.jmh.server;
 
-import java.util.Properties;
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
@@ -57,6 +56,7 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 

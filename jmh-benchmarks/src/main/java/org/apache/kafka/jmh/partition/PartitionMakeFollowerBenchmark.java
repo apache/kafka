@@ -92,7 +92,7 @@ public class PartitionMakeFollowerBenchmark {
             throw new IOException("error creating test directory");
 
         scheduler.startup();
-        LogConfig logConfig = createLogConfig();
+        LogConfig logConfig = new LogConfig(new Properties());
 
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
@@ -159,9 +159,5 @@ public class PartitionMakeFollowerBenchmark {
             .setReplicas(replicas)
             .setIsNew(true);
         return partition.makeFollower(partitionState, offsetCheckpoints, topicId);
-    }
-
-    private static LogConfig createLogConfig() {
-        return new LogConfig(new Properties());
     }
 }
