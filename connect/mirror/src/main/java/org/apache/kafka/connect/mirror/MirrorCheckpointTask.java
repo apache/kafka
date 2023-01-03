@@ -199,7 +199,6 @@ public class MirrorCheckpointTask extends SourceTask {
             }
         }
         return Optional.empty();
-
     }
 
     SourceRecord checkpointRecord(Checkpoint checkpoint, long timestamp) {
