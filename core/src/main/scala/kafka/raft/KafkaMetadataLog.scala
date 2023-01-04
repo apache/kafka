@@ -565,7 +565,7 @@ object KafkaMetadataLog extends Logging {
     // Disable time and byte retention when deleting segments
     props.setProperty(LogConfig.RetentionMsProp, "-1")
     props.setProperty(LogConfig.RetentionBytesProp, "-1")
-    LogConfig.validateValues(props)
+    LogConfig.validate(props)
     val defaultLogConfig = LogConfig(props)
 
     if (config.logSegmentBytes < config.logSegmentMinBytes) {
