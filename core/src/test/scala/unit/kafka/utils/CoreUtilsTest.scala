@@ -132,14 +132,6 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testReplaceSuffix(): Unit = {
-    assertEquals("blah.foo.text", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ".text"))
-    assertEquals("blah.foo", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ""))
-    assertEquals("txt.txt", CoreUtils.replaceSuffix("txt.txt.txt", ".txt", ""))
-    assertEquals("foo.txt", CoreUtils.replaceSuffix("foo", "", ".txt"))
-  }
-
-  @Test
   def testCsvList(): Unit = {
     val emptyString:String = ""
     val nullString:String = null

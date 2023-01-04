@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.server.log.internals.LogOffsetMetadata
 
 sealed trait FetchIsolation
 case object FetchLogEnd extends FetchIsolation
@@ -78,7 +79,7 @@ case class FetchParams(
 object FetchDataInfo {
   def empty(fetchOffset: Long): FetchDataInfo = {
     FetchDataInfo(
-      fetchOffsetMetadata = LogOffsetMetadata(fetchOffset),
+      fetchOffsetMetadata = new LogOffsetMetadata(fetchOffset),
       records = MemoryRecords.EMPTY,
       firstEntryIncomplete = false,
       abortedTransactions = None
