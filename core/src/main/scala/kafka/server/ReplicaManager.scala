@@ -1540,8 +1540,8 @@ class ReplicaManager(val config: KafkaConfig,
     val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
     for (partition <- partitions) {
       val topicPartition = partition.topicPartition
-      if (logManager.getLog(topicPartition, isFuture = true).isDefined) {
-        partition.log.foreach { log =>
+      logManager.getLog(topicPartition, isFuture = true).foreach { futureLog =>
+        partition.log.foreach { _ =>
           val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
 
           // Add future replica log to partition's map
@@ -1556,7 +1556,7 @@ class ReplicaManager(val config: KafkaConfig,
           logManager.abortAndPauseCleaning(topicPartition)
 
           futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(topicIds(topicPartition.topic), leader,
-            partition.getLeaderEpoch, log.highWatermark))
+            partition.getLeaderEpoch, futureLog.highWatermark))
         }
       }
     }
