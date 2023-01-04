@@ -662,7 +662,7 @@ class KafkaServer(
         metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])) {
         info("ZkBroker currently has a KRaft controller. Controlled shutdown will be handled " +
           "through broker life cycle manager")
-        return false
+        return true
       }
       val metadataUpdater = new ManualMetadataUpdater()
       val networkClient = {
@@ -815,6 +815,15 @@ class KafkaServer(
         // shutting down without waiting for the heartbeat to time out.
         info("Notifying KRaft of controlled shutdown")
         lifecycleManager.beginControlledShutdown()
+        try {
+          lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)
+        } catch {
+          case _: TimeoutException =>
+            error("Timed out waiting for the controller to approve controlled shutdown")
+          case e: Throwable =>
+            error("Got unexpected exception waiting for controlled shutdown future", e)
+        }
+        // TODO fix this ^
       }
 
       val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)

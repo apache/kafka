@@ -24,7 +24,7 @@ class BrokerEpochManager(metadataCache: MetadataCache,
       if (lifecycleManagerOpt.isDefined) {
         brokerEpochInRequest < lifecycleManagerOpt.get.brokerEpoch
       } else {
-        throw new IllegalStateException("Expected BrokerLifecycleManager to not be null.")
+        throw new IllegalStateException("Expected BrokerLifecycleManager to be non-null.")
       }
     } else {
       // brokerEpochInRequest > controller.brokerEpoch is possible in rare scenarios where the controller gets notified

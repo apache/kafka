@@ -41,7 +41,7 @@ public final class ClusterImage {
         this.zkBrokers = Collections.unmodifiableMap(brokers
             .entrySet()
             .stream()
-            .filter(x -> x.getValue().isMigratingZkBroker())
+            .filter(entry -> entry.getValue().isMigratingZkBroker())
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 
