@@ -27,6 +27,7 @@ import kafka.log.UnifiedLog
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.{KafkaConfig, MetaProperties}
+import kafka.utils.CoreUtils
 import kafka.utils.FileLock
 import kafka.utils.KafkaScheduler
 import kafka.utils.Logging
@@ -185,15 +186,14 @@ class KafkaRaftManager[T](
   }
 
   def shutdown(): Unit = {
-    expirationService.shutdown()
-    expirationTimer.shutdown()
-    raftIoThread.shutdown()
-    client.close()
-    scheduler.shutdown()
-    netChannel.close()
-    replicatedLog.close()
-
-    dataDirLock.foreach(_.destroy())
+    CoreUtils.swallow(expirationService.shutdown(), this)
+    CoreUtils.swallow(expirationTimer.shutdown(), this)
+    CoreUtils.swallow(raftIoThread.shutdown(), this)
+    CoreUtils.swallow(client.close(), this)
+    CoreUtils.swallow(scheduler.shutdown(), this)
+    CoreUtils.swallow(netChannel.close(), this)
+    CoreUtils.swallow(replicatedLog.close(), this)
+    CoreUtils.swallow(dataDirLock.foreach(_.destroy()), this)
   }
 
   override def register(
