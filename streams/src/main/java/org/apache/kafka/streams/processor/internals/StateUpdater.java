@@ -95,6 +95,11 @@ public interface StateUpdater {
     void remove(final TaskId taskId);
 
     /**
+     * Wakes up the state updater if it is currently dormant, to check if a paused task should be resumed.
+     */
+    void signalResume();
+
+    /**
      * Drains the restored active tasks from the state updater.
      *
      * The returned active tasks are removed from the state updater.

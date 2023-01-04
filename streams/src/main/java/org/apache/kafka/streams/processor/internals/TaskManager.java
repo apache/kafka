@@ -1115,6 +1115,12 @@ public class TaskManager {
         }
     }
 
+    public void signalResume() {
+        if (stateUpdater != null) {
+            stateUpdater.signalResume();
+        }
+    }
+
     /**
      * Compute the offset total summed across all stores in a task. Includes offset sum for any tasks we own the
      * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllNonEmptyTaskDirectories()}.

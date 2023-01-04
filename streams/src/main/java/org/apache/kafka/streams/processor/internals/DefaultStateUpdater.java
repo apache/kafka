@@ -116,6 +116,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void runOnce() throws InterruptedException {
             performActionsOnTasks();
+            resumeTasks();
             restoreTasks();
             checkAllUpdatingTaskStates(time.milliseconds());
             waitIfAllChangelogsCompletelyRead();
@@ -137,6 +138,16 @@ public class DefaultStateUpdater implements StateUpdater {
                 }
             } finally {
                 tasksAndActionsLock.unlock();
+            }
+        }
+
+        private void resumeTasks() {
+            if (needsResumeCheck.compareAndSet(true, false)) {
+                for (final Task task : pausedTasks.values()) {
+                    if (!topologyMetadata.isPaused(task.id().topologyName())) {
+                        resumeTask(task);
+                    }
+                }
             }
         }
 
@@ -229,7 +240,7 @@ public class DefaultStateUpdater implements StateUpdater {
             if (isRunning.get() && changelogReader.allChangelogsCompleted()) {
                 tasksAndActionsLock.lock();
                 try {
-                    while (tasksAndActions.isEmpty()) {
+                    while (tasksAndActions.isEmpty() && !needsResumeCheck.get()) {
                         tasksAndActionsCondition.await();
                     }
                 } finally {
@@ -394,12 +405,6 @@ public class DefaultStateUpdater implements StateUpdater {
                     }
                 }
 
-                for (final Task task : pausedTasks.values()) {
-                    if (!topologyMetadata.isPaused(task.id().topologyName())) {
-                        resumeTask(task);
-                    }
-                }
-
                 lastCommitMs = now;
             }
         }
@@ -417,6 +422,7 @@ public class DefaultStateUpdater implements StateUpdater {
     private final Condition restoredActiveTasksCondition = restoredActiveTasksLock.newCondition();
     private final BlockingQueue<ExceptionAndTasks> exceptionsAndFailedTasks = new LinkedBlockingQueue<>();
     private final BlockingQueue<Task> removedTasks = new LinkedBlockingQueue<>();
+    private final AtomicBoolean needsResumeCheck = new AtomicBoolean(false);
 
     private final long commitIntervalMs;
     private long lastCommitMs;
@@ -506,6 +512,17 @@ public class DefaultStateUpdater implements StateUpdater {
         tasksAndActionsLock.lock();
         try {
             tasksAndActions.add(TaskAndAction.createRemoveTask(taskId));
+            tasksAndActionsCondition.signalAll();
+        } finally {
+            tasksAndActionsLock.unlock();
+        }
+    }
+
+    @Override
+    public void signalResume() {
+        tasksAndActionsLock.lock();
+        try {
+            needsResumeCheck.set(true);
             tasksAndActionsCondition.signalAll();
         } finally {
             tasksAndActionsLock.unlock();

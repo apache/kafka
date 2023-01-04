@@ -1090,6 +1090,11 @@ public class StreamThread extends Thread {
         return isAlive();
     }
 
+    // Call method when a topology is resumed
+    public void signalResume() {
+        taskManager.signalResume();
+    }
+
     /**
      * Try to commit all active tasks owned by this thread.
      *

@@ -40,6 +40,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.slf4j.Logger;
@@ -276,6 +277,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      */
     public void resumeNamedTopology(final String topologyName) {
         topologyMetadata.resumeTopology(topologyName);
+        threads.forEach(StreamThread::signalResume);
     }
 
     /**
