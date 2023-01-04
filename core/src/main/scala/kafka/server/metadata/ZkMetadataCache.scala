@@ -398,7 +398,7 @@ class ZkMetadataCache(
         broker.endpoints.forEach { ep =>
           val listenerName = new ListenerName(ep.listener)
           endPoints += new EndPoint(ep.host, ep.port, listenerName, SecurityProtocol.forId(ep.securityProtocol))
-          nodes.put(listenerName, new Node(broker.id, ep.host, ep.port))
+          nodes.put(listenerName, new Node(broker.id, ep.host, ep.port, broker.rack()))
         }
         aliveBrokers(broker.id) = Broker(broker.id, endPoints, Option(broker.rack))
         aliveNodes(broker.id) = nodes.asScala
