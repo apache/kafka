@@ -18,8 +18,6 @@
 package kafka.server
 
 import java.util.{Collections, Properties}
-
-import kafka.log.LogConfig
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.{Log4jController, Logging}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigResource}
@@ -30,8 +28,11 @@ import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ApiError, DescribeConfigsResponse}
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
+import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.log.internals.LogConfig
 
 import scala.collection.{Map, mutable}
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
@@ -66,7 +67,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             Topic.validate(topic)
             if (metadataCache.contains(topic)) {
               val topicProps = configRepository.topicConfig(topic)
-              val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), topicProps)
+              val logConfig = LogConfig.fromProps(config.extractLogConfigMap, topicProps)
               createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
@@ -117,11 +118,11 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
   def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
                             (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
-    val configEntryType = LogConfig.configType(name)
+    val configEntryType = LogConfig.configType(name).asScala
     val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
     val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
-      val list = LogConfig.TopicConfigSynonyms.get(name)
+      val list = Option(ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.get(name))
         .map(s => configSynonyms(s, brokerSynonyms(s), isSensitive))
         .getOrElse(List.empty)
       if (!topicProps.containsKey(name))

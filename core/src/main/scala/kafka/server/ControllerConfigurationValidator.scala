@@ -19,13 +19,12 @@ package kafka.server
 
 import java.util
 import java.util.Properties
-
-import kafka.log.LogConfig
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.server.log.internals.LogConfig
 
 import scala.collection.mutable
 

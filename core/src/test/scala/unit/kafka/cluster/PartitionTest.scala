@@ -19,7 +19,7 @@ package kafka.cluster
 import java.net.InetAddress
 import com.yammer.metrics.core.Metric
 import kafka.common.UnexpectedAppendOffsetException
-import kafka.log.{Defaults => _, _}
+import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.epoch.EpochEntry
@@ -54,7 +54,7 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{AppendOrigin, CleanerConfig, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -2458,7 +2458,7 @@ class PartitionTest extends AbstractPartitionTest {
     val spyConfigRepository = spy(configRepository)
     logManager = TestUtils.createLogManager(
       logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, configRepository = spyConfigRepository,
-      cleanerConfig = CleanerConfig(enableCleaner = false), time = time)
+      cleanerConfig = new CleanerConfig(false), time = time)
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
@@ -2491,7 +2491,7 @@ class PartitionTest extends AbstractPartitionTest {
     val spyConfigRepository = spy(configRepository)
     logManager = TestUtils.createLogManager(
       logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, configRepository = spyConfigRepository,
-      cleanerConfig = CleanerConfig(enableCleaner = false), time = time)
+      cleanerConfig = new CleanerConfig(false), time = time)
     val spyLogManager = spy(logManager)
     doAnswer((_: InvocationOnMock) => {
       logManager.initializingLog(topicPartition)
@@ -2530,7 +2530,7 @@ class PartitionTest extends AbstractPartitionTest {
     val spyConfigRepository = spy(configRepository)
     logManager = TestUtils.createLogManager(
       logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, configRepository = spyConfigRepository,
-      cleanerConfig = CleanerConfig(enableCleaner = false), time = time)
+      cleanerConfig = new CleanerConfig(false), time = time)
     logManager.startup(Set.empty)
 
     val spyLogManager = spy(logManager)
