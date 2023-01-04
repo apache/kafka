@@ -18,10 +18,9 @@ package kafka.server
 
 import java.util
 import java.util.{Optional, Properties}
-
-import kafka.log.LogConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -65,7 +64,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
                            configs: Map[String, String] = Map.empty, topicSuffixStart: Int = 0): Map[TopicPartition, Int] = {
     val topics = (0 until numTopics).map(t => s"topic${t + topicSuffixStart}")
     val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 1.toString)
+    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 1.toString)
     configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
     topics.flatMap { topic =>
       val partitionToLeader = createTopic(
@@ -179,7 +178,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     )
 
     val topicConfig = new Properties
-    topicConfig.put(LogConfig.MessageDownConversionEnableProp, "true")
+    topicConfig.put(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, "true")
     val topicWithDownConversionEnabledId = TestUtils.createTopicWithAdminRaw(
       admin,
       topicWithDownConversionEnabled,

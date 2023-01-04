@@ -16,21 +16,18 @@
 */
 package kafka.server
 
-import kafka.log._
 import java.io.File
-
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
-
 import kafka.cluster.Partition
 import kafka.server.metadata.MockConfigRepository
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.SimpleRecord
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.server.log.internals.{CleanerConfig, LogDirFailureChannel}
 
 class HighwatermarkPersistenceTest {
 
@@ -40,7 +37,7 @@ class HighwatermarkPersistenceTest {
   val logManagers = configs map { config =>
     TestUtils.createLogManager(
       logDirs = config.logDirs.map(new File(_)),
-      cleanerConfig = CleanerConfig())
+      cleanerConfig = new CleanerConfig(true))
   }
 
   val logDirFailureChannels = configs map { config =>

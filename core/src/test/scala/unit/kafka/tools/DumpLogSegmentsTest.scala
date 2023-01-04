@@ -21,12 +21,13 @@ import java.io.{ByteArrayOutputStream, File, PrintWriter}
 import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
-import kafka.log.{Defaults, LogConfig, LogTestUtils, ProducerStateManagerConfig, UnifiedLog}
+import kafka.log.{LogTestUtils, ProducerStateManagerConfig, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, FetchLogEnd, KafkaRaftServer}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
@@ -35,7 +36,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogConfig, LogDirFailureChannel}
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -64,10 +65,10 @@ class DumpLogSegmentsTest {
   @BeforeEach
   def setUp(): Unit = {
     val props = new Properties
-    props.setProperty(LogConfig.IndexIntervalBytesProp, "128")
+    props.setProperty(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "128")
     log = UnifiedLog(
       dir = logDir,
-      config = LogConfig(props),
+      config = new LogConfig(props),
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
@@ -312,7 +313,7 @@ class DumpLogSegmentsTest {
         retentionMillis = 60 * 1000,
         maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
         maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        fileDeleteDelayMs = Defaults.FileDeleteDelayMs,
+        fileDeleteDelayMs = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
         nodeId = 1
       )
     )

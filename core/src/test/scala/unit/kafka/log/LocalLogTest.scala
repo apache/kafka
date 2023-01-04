@@ -28,7 +28,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Record, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.server.log.internals.{LogDirFailureChannel, LogOffsetMetadata}
+import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions.{assertFalse, _}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 

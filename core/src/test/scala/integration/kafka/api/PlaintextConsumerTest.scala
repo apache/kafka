@@ -17,7 +17,6 @@ import java.util
 import java.util.Arrays.asList
 import java.util.regex.Pattern
 import java.util.{Locale, Optional, Properties}
-import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -37,6 +36,7 @@ import kafka.server.QuotaType
 import kafka.server.KafkaServer
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.clients.admin.NewTopic
+import org.apache.kafka.common.config.TopicConfig
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -1305,7 +1305,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testConsumeMessagesWithLogAppendTime(): Unit = {
     val topicName = "testConsumeMessagesWithLogAppendTime"
     val topicProps = new Properties()
-    topicProps.setProperty(LogConfig.MessageTimestampTypeProp, "LogAppendTime")
+    topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
     createTopic(topicName, 2, 2, topicProps)
 
     val startTime = System.currentTimeMillis()
