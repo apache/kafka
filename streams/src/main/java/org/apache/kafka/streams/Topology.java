@@ -739,7 +739,7 @@ public class Topology {
     }
 
     /**
-     * Adds a Read Only {@link StateStore} to the topology.
+     * Adds a read-only {@link StateStore} to the topology.
      *
      * A Read Only StateStore can use any compacted topic as a changelog.
      * <p>
