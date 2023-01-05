@@ -478,7 +478,7 @@ StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier = Store
                     before going into the readonly state store. Therefor we can optimize what the data within our readonly state
                     store should look like, depending on the use-case it needs to serve.</p>
 
-                <p><b>note:</b> beware of the partitioning requirements when using readonly statestores for lookups during
+                <p><b>note:</b> beware of the partitioning requirements when using read-only state stores for lookups during
                     processing. You might want to make sure the original changelog topic is co-partitioned with the processors
                     reading the readonly statestore.</p>
             </div>
