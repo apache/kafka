@@ -275,6 +275,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.quorum_info = quorum_info_provider(self)
         self.controller_quorum = None # will define below if necessary
         self.remote_controller_quorum = None # will define below if necessary
+        self.configured_for_zk_migration = False
 
         if num_nodes < 1:
             raise Exception("Must set a positive number of nodes: %i" % num_nodes)
@@ -432,15 +433,23 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.nodes_to_start = self.nodes
 
     def reconfigure_zk_for_migration(self, kraft_quorum):
-        #self.remote_controller_quorum = kraft_quorum
+        self.configured_for_zk_migration = True
+        self.controller_quorum = kraft_quorum
+
+        # Set the migration properties
         self.server_prop_overrides.extend([
             ["zookeeper.metadata.migration.enable", "true"],
             ["controller.quorum.voters", kraft_quorum.controller_quorum_voters],
             ["controller.listener.names", kraft_quorum.controller_listener_names]
         ])
+
+        # Add a port mapping for the controller listener.
+        # This is not added to "advertised.listeners" because of configured_for_zk_migration=True
         self.port_mappings[kraft_quorum.controller_listener_names] = kraft_quorum.port_mappings.get(kraft_quorum.controller_listener_names)
 
     def reconfigure_zk_as_kraft(self, kraft_quorum):
+        self.configured_for_zk_migration = True
+
         # Remove the configs we set in reconfigure_zk_for_migration
         props = []
         for prop in self.server_prop_overrides:
@@ -794,7 +803,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return cmd
 
     def controller_listener_name_list(self, node):
-        if self.quorum_info.using_zk:
+        if self.quorum_info.using_zk and self.configured_for_zk_migration:
+            return [self.controller_listener_name(self.controller_quorum.controller_security_protocol)]
+        elif self.quorum_info.using_zk:
             return []
         broker_to_controller_listener_name = self.controller_listener_name(self.controller_quorum.controller_security_protocol)
         # Brokers always use the first controller listener, so include a second, inter-controller listener if and only if:
