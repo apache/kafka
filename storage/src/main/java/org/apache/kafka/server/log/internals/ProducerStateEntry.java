@@ -27,13 +27,14 @@ import java.util.OptionalLong;
 import java.util.stream.Stream;
 
 /**
- * The batchMetadata is ordered such that the batch with the lowest sequence is at the head of the queue while the
- * batch with the highest sequence is at the tail of the queue. We will retain at most {@link ProducerStateEntry#NUM_BATCHES_TO_RETAIN}
+ * This class represents the state of a specific producer-id.
+ * It contains batchMetadata queue which is ordered such that the batch with the lowest sequence is at the head of the
+ * queue while the batch with the highest sequence is at the tail of the queue. We will retain at most {@link ProducerStateEntry#NUM_BATCHES_TO_RETAIN}
  * elements in the queue. When the queue is at capacity, we remove the first element to make space for the incoming batch.
  */
 public class ProducerStateEntry {
     public static final int NUM_BATCHES_TO_RETAIN = 5;
-    public final long producerId;
+    private final long producerId;
     private final Deque<BatchMetadata> batchMetadata;
     private short producerEpoch;
     public int coordinatorEpoch;
@@ -127,6 +128,10 @@ public class ProducerStateEntry {
 
     public short producerEpoch() {
         return producerEpoch;
+    }
+
+    public long producerId() {
+        return producerId;
     }
 
     @Override

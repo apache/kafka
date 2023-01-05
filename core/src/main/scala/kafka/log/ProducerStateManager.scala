@@ -101,12 +101,12 @@ object ProducerStateManager {
         val offsetDelta = producerEntryStruct.getInt(OffsetDeltaField)
         val coordinatorEpoch = producerEntryStruct.getInt(CoordinatorEpochField)
         val currentTxnFirstOffset = producerEntryStruct.getLong(CurrentTxnFirstOffsetField)
-        val lastAppendedDataBatches = new java.util.ArrayDeque[BatchMetadata]
+        val batchMetadata = new java.util.ArrayDeque[BatchMetadata]
         if (offset >= 0)
-          lastAppendedDataBatches.add(new BatchMetadata(seq, offset, offsetDelta, timestamp))
+          batchMetadata.add(new BatchMetadata(seq, offset, offsetDelta, timestamp))
 
         val currentTxnFirstOffsetValue = if (currentTxnFirstOffset >= 0) OptionalLong.of(currentTxnFirstOffset) else OptionalLong.empty()
-        new ProducerStateEntry(producerId, lastAppendedDataBatches, producerEpoch,
+        new ProducerStateEntry(producerId, batchMetadata, producerEpoch,
           coordinatorEpoch, timestamp, currentTxnFirstOffsetValue)
       }
     } catch {
