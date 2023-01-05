@@ -778,10 +778,21 @@ rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cl
           <span id="streams-developer-guide-max-warmup-replicas"></span><h4><a class="toc-backref" href="#id29">max.warmup.replicas</a><a class="headerlink" href="#max-warmup-replicas" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div>
-              The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once for the purpose of keeping
-              the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker
-              traffic and cluster state can be used for high availability. Increasing this will allow Streams to warm up more tasks at once, speeding up the time
-              for the reassigned warmups to restore sufficient state for them to be transitioned to active tasks. Must be at least 1.
+              <p>
+                The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once for the purpose of keeping
+                the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker
+                traffic and cluster state can be used for high availability. Increasing this will allow Streams to warm up more tasks at once, speeding up the time
+                for the reassigned warmups to restore sufficient state for them to be transitioned to active tasks. Must be at least 1.
+              </p>
+              <p>
+                Note that one warmup replica corresponds to one Stream Task. Furthermore, note that each warmup replica can only be promoted to an active Task during
+                a rebalance (normally a Probing Rebalance, which occur at a frequency specified by the
+                <code class="docutils literal"><span class="pre">probing.rebalance.interval.ms</span></code> config). This means that the
+                maximum rate at which Stream Tasks can be migrated from over-burdened Streams Instances to fresher Streams Instances can be determined by
+                (<code class="docutils literal"><span class="pre">max.warmup.replicas</span></code> /
+                <code class="docutils literal"><span class="pre">probing.rebalance.interval.ms</span></code>). If it takes longer than the probing rebalance interval
+                for the data for a Task to be migrated, then that rate will be lower.
+              </p>
             </div>
           </blockquote>
         </div>
