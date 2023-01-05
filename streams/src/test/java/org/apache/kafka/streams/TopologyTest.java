@@ -2353,7 +2353,7 @@ public class TopologyTest {
     }
 
     @Test
-    public void readonlyStateStoresShouldHaveTheirOwnSubTopology() {
+    public void readOnlyStateStoresShouldHaveTheirOwnSubTopology() {
         final String sourceName = "source";
         final String storeName = "store";
         final String topicName = "topic";
