@@ -58,7 +58,7 @@ public final class ClusterDelta {
         return image.broker(nodeId);
     }
 
-    public Set<Integer> newZkBrokers() {
+    public Set<Integer> liveZkBrokerIdChanges() {
         return changedBrokers
             .values()
             .stream()
@@ -66,15 +66,6 @@ public final class ClusterDelta {
             .map(Optional::get)
             .filter(registration -> registration.isMigratingZkBroker() && !registration.fenced())
             .map(BrokerRegistration::id)
-            .collect(Collectors.toSet());
-    }
-
-    public Set<Integer> newBrokers() {
-        return changedBrokers
-            .entrySet()
-            .stream()
-            .filter(entry -> !image.containsBroker(entry.getKey()) && entry.getValue().isPresent())
-            .map(Entry::getKey)
             .collect(Collectors.toSet());
     }
 

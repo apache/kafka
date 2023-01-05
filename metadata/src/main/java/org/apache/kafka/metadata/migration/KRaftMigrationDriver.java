@@ -53,7 +53,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private final Logger log;
     private final int nodeId;
     private final MigrationClient zkMigrationClient;
-    private final BrokersRpcClient rpcClient;
+    private final LegacyPropagator rpcClient;
     private final ZkRecordConsumer zkRecordConsumer;
     private final KafkaEventQueue eventQueue;
     private final FaultHandler faultHandler;
@@ -71,7 +71,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         int nodeId,
         ZkRecordConsumer zkRecordConsumer,
         MigrationClient zkMigrationClient,
-        BrokersRpcClient rpcClient,
+        LegacyPropagator rpcClient,
         Consumer<KRaftMigrationDriver> initialZkLoadHandler,
         FaultHandler faultHandler
     ) {

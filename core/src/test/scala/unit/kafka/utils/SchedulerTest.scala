@@ -19,10 +19,10 @@ package kafka.utils
 import java.util.Properties
 import java.util.concurrent.atomic._
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
-import kafka.log.{LocalLog, LogConfig, LogLoader, LogSegments, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
+import kafka.log.{LocalLog, LogLoader, LogSegments, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
 import kafka.server.BrokerTopicStats
 import kafka.utils.TestUtils.retry
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 
@@ -127,7 +127,7 @@ class SchedulerTest {
   def testUnscheduleProducerTask(): Unit = {
     val tmpDir = TestUtils.tempDir()
     val logDir = TestUtils.randomPartitionLogDir(tmpDir)
-    val logConfig = LogConfig(new Properties())
+    val logConfig = new LogConfig(new Properties())
     val brokerTopicStats = new BrokerTopicStats
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val maxProducerIdExpirationMs = kafka.server.Defaults.ProducerIdExpirationMs

@@ -19,13 +19,13 @@ package kafka.api
 
 import java.util.Properties
 import java.util.concurrent.{ExecutionException, Future, TimeUnit}
-import kafka.log.LogConfig
-import kafka.server.Defaults
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.{BufferExhaustedException, KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidTimestampException, RecordTooLargeException, SerializationException, TimeoutException}
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch, Records, TimestampType}
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.apache.kafka.server.log.internals.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
@@ -124,7 +124,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testSendWithInvalidCreateTime(quorum: String): Unit = {
     val topicProps = new Properties()
-    topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
+    topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
     TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
 
     val producer = createProducer()
@@ -218,7 +218,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val valueLengthSize = 3
     val overhead = Records.LOG_OVERHEAD + DefaultRecordBatch.RECORD_BATCH_OVERHEAD + DefaultRecord.MAX_RECORD_OVERHEAD +
       keyLengthSize + headerLengthSize + valueLengthSize
-    val valueSize = Defaults.MessageMaxBytes - overhead
+    val valueSize = LogConfig.DEFAULT_MAX_MESSAGE_BYTES - overhead
 
     val record0 = new ProducerRecord(topic, new Array[Byte](0), new Array[Byte](valueSize))
     assertEquals(record0.value.length, producer.send(record0).get.serializedValueSize)

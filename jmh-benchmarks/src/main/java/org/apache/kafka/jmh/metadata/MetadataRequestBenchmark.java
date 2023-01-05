@@ -23,6 +23,7 @@ import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.network.RequestConvertToJson;
 import kafka.server.AutoTopicCreationManager;
+import kafka.server.BrokerEpochManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
@@ -180,7 +181,8 @@ public class MetadataRequestBenchmark {
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().
             setRequestChannel(requestChannel).
-            setMetadataSupport(new ZkSupport(adminManager, kafkaController, kafkaZkClient, Option.empty(), metadataCache)).
+            setMetadataSupport(new ZkSupport(adminManager, kafkaController, kafkaZkClient,
+                Option.empty(), metadataCache, new BrokerEpochManager(metadataCache, kafkaController, Option.empty()))).
             setReplicaManager(replicaManager).
             setGroupCoordinator(groupCoordinator).
             setTxnCoordinator(transactionCoordinator).
