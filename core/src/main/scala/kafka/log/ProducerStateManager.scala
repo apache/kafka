@@ -34,14 +34,6 @@ import java.util.concurrent.ConcurrentSkipListMap
 import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
 
-
-
-
-
-
-
-
-
 object ProducerStateManager {
   val LateTransactionBufferMs = 5 * 60 * 1000
 
@@ -101,13 +93,13 @@ object ProducerStateManager {
         val offsetDelta = producerEntryStruct.getInt(OffsetDeltaField)
         val coordinatorEpoch = producerEntryStruct.getInt(CoordinatorEpochField)
         val currentTxnFirstOffset = producerEntryStruct.getLong(CurrentTxnFirstOffsetField)
-        val batchMetadata = new java.util.ArrayDeque[BatchMetadata]
-        if (offset >= 0)
-          batchMetadata.add(new BatchMetadata(seq, offset, offsetDelta, timestamp))
+        val batchMetadata: java.util.List[BatchMetadata] =
+          if (offset >= 0)
+            java.util.Collections.singletonList[BatchMetadata](new BatchMetadata(seq, offset, offsetDelta, timestamp))
+          else java.util.Collections.emptyList[BatchMetadata]()
 
         val currentTxnFirstOffsetValue = if (currentTxnFirstOffset >= 0) OptionalLong.of(currentTxnFirstOffset) else OptionalLong.empty()
-        new ProducerStateEntry(producerId, batchMetadata, producerEpoch,
-          coordinatorEpoch, timestamp, currentTxnFirstOffsetValue)
+        new ProducerStateEntry(producerId, batchMetadata, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetValue)
       }
     } catch {
       case e: SchemaException =>

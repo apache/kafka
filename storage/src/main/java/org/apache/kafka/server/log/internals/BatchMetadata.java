@@ -70,8 +70,8 @@ public class BatchMetadata {
     public String toString() {
         return "BatchMetadata(" +
                 "firstSeq=" + firstSeq() +
-                "lastSeq=" + lastSeq +
-                "firstOffset=" + firstOffset() +
+                ", lastSeq=" + lastSeq +
+                ", firstOffset=" + firstOffset() +
                 ", lastOffset=" + lastOffset +
                 ", timestamp=" + timestamp +
                 ')';

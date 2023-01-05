@@ -22,6 +22,7 @@ import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.stream.Stream;
@@ -42,16 +43,16 @@ public class ProducerStateEntry {
     public OptionalLong currentTxnFirstOffset;
 
     public ProducerStateEntry(long producerId) {
-        this(producerId, new ArrayDeque<>(), RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty());
+        this(producerId, Collections.emptyList(), RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty());
     }
 
     public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
-        this(producerId, new ArrayDeque<>(), producerEpoch, coordinatorEpoch, lastTimestamp, currentTxnFirstOffset);
+        this(producerId, Collections.emptyList(), producerEpoch, coordinatorEpoch, lastTimestamp, currentTxnFirstOffset);
     }
 
-    public ProducerStateEntry(long producerId, Deque<BatchMetadata> batchMetadata, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
+    public ProducerStateEntry(long producerId, List<BatchMetadata> batchMetadata, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
         this.producerId = producerId;
-        this.batchMetadata = batchMetadata;
+        this.batchMetadata = new ArrayDeque<>(batchMetadata);
         this.producerEpoch = producerEpoch;
         this.coordinatorEpoch = coordinatorEpoch;
         this.lastTimestamp = lastTimestamp;

@@ -27,10 +27,10 @@ public final class TxnMetadata {
     public TxnMetadata(long producerId,
                        LogOffsetMetadata firstOffset,
                        OptionalLong lastOffset) {
+        Objects.requireNonNull(firstOffset, "firstOffset must be non null");
         this.producerId = producerId;
         this.firstOffset = firstOffset;
         this.lastOffset = lastOffset;
-        Objects.requireNonNull(firstOffset, "firstOffset must be non null");
     }
     public TxnMetadata(long producerId, long firstOffset) {
         this(producerId, new LogOffsetMetadata(firstOffset));
@@ -38,26 +38,6 @@ public final class TxnMetadata {
 
     public TxnMetadata(long producerId, LogOffsetMetadata firstOffset) {
         this(producerId, firstOffset, OptionalLong.empty());
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        TxnMetadata that = (TxnMetadata) o;
-
-        if (producerId != that.producerId) return false;
-        if (!Objects.equals(firstOffset, that.firstOffset)) return false;
-        return Objects.equals(lastOffset, that.lastOffset);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = (int) (producerId ^ (producerId >>> 32));
-        result = 31 * result + (firstOffset != null ? firstOffset.hashCode() : 0);
-        result = 31 * result + (lastOffset != null ? lastOffset.hashCode() : 0);
-        return result;
     }
 
     @Override
