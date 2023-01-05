@@ -56,7 +56,7 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{FetchRequestUtils, Utils}
 import org.apache.kafka.common.{ElectionType, IsolationLevel, KafkaException, Node, TopicPartition, Uuid, requests}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.test.{TestUtils => JTestUtils}
@@ -1339,7 +1339,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumer.poll(Duration.ofMillis(50L))
       brokers.forall { broker =>
         broker.metadataCache.getPartitionInfo(newTopic, 0) match {
-          case Some(partitionState) => Request.isValidBrokerId(partitionState.leader)
+          case Some(partitionState) => FetchRequestUtils.isValidBrokerId(partitionState.leader)
           case _ => false
         }
       }

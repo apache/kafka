@@ -52,13 +52,13 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{LogContext, Time, Utils}
+import org.apache.kafka.common.utils.{FetchRequestUtils, LogContext, Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, MetadataProvenance, ProducerIdsImage, TopicsDelta, TopicsImage}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.log.internals.{AppendOrigin, LogConfig, LogDirFailureChannel, LogOffsetMetadata}
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchParams, FetchTxnCommitted, LogConfig, LogDirFailureChannel, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -70,6 +70,7 @@ import org.mockito.ArgumentMatchers.{any, anyInt, anyString}
 import org.mockito.Mockito.{mock, never, reset, times, verify, when}
 
 import scala.collection.{Map, Seq, mutable}
+import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
 class ReplicaManagerTest {
@@ -1164,7 +1165,7 @@ class ReplicaManagerTest {
 
     // We expect to select the leader, which means we return None
     val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(
-      partition, metadata, Request.OrdinaryConsumerId, 1L, System.currentTimeMillis)
+      partition, metadata, FetchRequestUtils.ORDINARY_CONSUMER_ID, 1L, System.currentTimeMillis)
     assertFalse(preferredReadReplica.isDefined)
   }
 
@@ -2181,13 +2182,13 @@ class ReplicaManagerTest {
     clientMetadata: Option[ClientMetadata] = None,
   ): CallbackResult[FetchPartitionData] = {
     val isolation = isolationLevel match {
-      case IsolationLevel.READ_COMMITTED => FetchTxnCommitted
-      case IsolationLevel.READ_UNCOMMITTED => FetchHighWatermark
+      case IsolationLevel.READ_COMMITTED => new FetchTxnCommitted()
+      case IsolationLevel.READ_UNCOMMITTED => new FetchHighWatermark()
     }
 
     fetchPartition(
       replicaManager,
-      replicaId = Request.OrdinaryConsumerId,
+      replicaId = FetchRequestUtils.ORDINARY_CONSUMER_ID,
       partition,
       partitionData,
       minBytes,
@@ -2214,7 +2215,7 @@ class ReplicaManagerTest {
       partitionData,
       minBytes = minBytes,
       maxBytes = maxBytes,
-      isolation = FetchLogEnd,
+      isolation = new FetchLogEnd(),
       clientMetadata = None,
       maxWaitMs = maxWaitMs
     )
@@ -2264,17 +2265,17 @@ class ReplicaManagerTest {
     minBytes: Int = 1,
     maxBytes: Int = 1024 * 1024,
     quota: ReplicaQuota = UnboundedQuota,
-    isolation: FetchIsolation = FetchLogEnd,
+    isolation: FetchIsolation = new FetchLogEnd(),
     clientMetadata: Option[ClientMetadata] = None
   ): Unit = {
-    val params = FetchParams(
-      requestVersion = requestVersion,
-      replicaId = replicaId,
-      maxWaitMs = maxWaitMs,
-      minBytes = minBytes,
-      maxBytes = maxBytes,
-      isolation = isolation,
-      clientMetadata = clientMetadata
+    val params = new FetchParams(
+      requestVersion,
+      replicaId,
+      maxWaitMs,
+      minBytes,
+      maxBytes,
+      isolation,
+      clientMetadata.asJava
     )
 
     replicaManager.fetchMessages(

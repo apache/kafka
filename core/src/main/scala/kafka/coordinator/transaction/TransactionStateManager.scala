@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.server.{Defaults, FetchLogEnd, ReplicaManager, RequestLocal}
+import kafka.server.{Defaults, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.utils.Implicits._
@@ -36,7 +36,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.server.log.internals.AppendOrigin
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchLogEnd}
 import org.apache.kafka.server.record.BrokerCompressionType
 
 import scala.jdk.CollectionConverters._
@@ -437,7 +437,7 @@ class TransactionStateManager(brokerId: Int,
               idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
             val fetchDataInfo = log.read(currOffset,
               maxLength = config.transactionLogLoadBufferSize,
-              isolation = FetchLogEnd,
+              isolation = new FetchLogEnd(),
               minOneMessage = true)
 
             readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0

@@ -38,7 +38,7 @@ import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
-import org.apache.kafka.server.log.internals.{AppendOrigin, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation, FetchParams, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.Mockito
@@ -227,14 +227,14 @@ class ReplicaManagerConcurrencyTest {
         }
       }
 
-      val fetchParams = FetchParams(
-        requestVersion = ApiKeys.FETCH.latestVersion,
-        replicaId = replicaId,
-        maxWaitMs = random.nextInt(100),
-        minBytes = 1,
-        maxBytes = 1024 * 1024,
-        isolation = FetchIsolation(replicaId, IsolationLevel.READ_UNCOMMITTED),
-        clientMetadata = Some(clientMetadata)
+      val fetchParams = new FetchParams(
+        ApiKeys.FETCH.latestVersion,
+        replicaId,
+        random.nextLong(100),
+        1,
+        1024 * 1024,
+        FetchIsolation.apply(replicaId, IsolationLevel.READ_UNCOMMITTED),
+        Optional.of(clientMetadata)
       )
 
       replicaManager.fetchMessages(

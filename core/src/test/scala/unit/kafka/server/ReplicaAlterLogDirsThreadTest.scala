@@ -16,7 +16,6 @@
   */
 package kafka.server
 
-import kafka.api.Request
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
@@ -30,8 +29,10 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.utils.FetchRequestUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.{FetchLogEnd, FetchParams}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.{any, anyBoolean}
@@ -276,14 +277,14 @@ class ReplicaAlterLogDirsThreadTest {
     val callbackCaptor: ArgumentCaptor[Seq[(TopicIdPartition, FetchPartitionData)] => Unit] =
       ArgumentCaptor.forClass(classOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit])
 
-    val expectedFetchParams = FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = Request.FutureLocalReplicaId,
-      maxWaitMs = 0L,
-      minBytes = 0,
-      maxBytes = config.replicaFetchResponseMaxBytes,
-      isolation = FetchLogEnd,
-      clientMetadata = None
+    val expectedFetchParams = new FetchParams(
+      ApiKeys.FETCH.latestVersion,
+      FetchRequestUtils.FUTURE_LOCAL_REPLICA_ID,
+      0L,
+      0,
+      config.replicaFetchResponseMaxBytes,
+      new FetchLogEnd(),
+      Optional.empty()
     )
 
     println(expectedFetchParams)

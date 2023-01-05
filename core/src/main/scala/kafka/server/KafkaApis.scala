@@ -70,7 +70,7 @@ import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
-import org.apache.kafka.server.log.internals.AppendOrigin
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation, FetchParams}
 import org.apache.kafka.server.record.BrokerCompressionType
 
 import java.lang.{Long => JLong}
@@ -82,6 +82,7 @@ import java.util.{Collections, Optional}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
+import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -967,14 +968,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         None
       }
 
-      val params = FetchParams(
-        requestVersion = versionId,
-        replicaId = fetchRequest.replicaId,
-        maxWaitMs = fetchRequest.maxWait,
-        minBytes = fetchMinBytes,
-        maxBytes = fetchMaxBytes,
-        isolation = FetchIsolation(fetchRequest),
-        clientMetadata = clientMetadata
+      val params = new FetchParams(
+        versionId,
+        fetchRequest.replicaId,
+        fetchRequest.maxWait,
+        fetchMinBytes,
+        fetchMaxBytes,
+        FetchIsolation.apply(fetchRequest),
+        clientMetadata.asJava
       )
 
       // call the replica manager to fetch messages from the local replica

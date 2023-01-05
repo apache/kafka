@@ -66,7 +66,7 @@ import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.Utils._
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{FetchRequestUtils, Time, Utils}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.MetadataVersion
@@ -1218,7 +1218,7 @@ object TestUtils extends Logging {
     waitUntilTrue(
       () => brokers.forall { broker =>
         broker.metadataCache.getPartitionInfo(topic, partition) match {
-          case Some(partitionState) => Request.isValidBrokerId(partitionState.leader)
+          case Some(partitionState) => FetchRequestUtils.isValidBrokerId(partitionState.leader)
           case _ => false
         }
       },

@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.server.QuotaFactory.UnboundedQuota
@@ -28,7 +27,9 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
+import org.apache.kafka.common.utils.FetchRequestUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.server.log.internals.{FetchLogEnd, FetchParams}
 
 import java.util
 import java.util.Optional
@@ -90,14 +91,14 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
     val fetchData = request.fetchData(topicNames.asJava)
 
-    val fetchParams = FetchParams(
-      requestVersion = request.version,
-      maxWaitMs = 0L, // timeout is 0 so that the callback will be executed immediately
-      replicaId = Request.FutureLocalReplicaId,
-      minBytes = request.minBytes,
-      maxBytes = request.maxBytes,
-      isolation = FetchLogEnd,
-      clientMetadata = None
+    val fetchParams = new FetchParams(
+      request.version,
+      FetchRequestUtils.FUTURE_LOCAL_REPLICA_ID,
+      0L, // timeout is 0 so that the callback will be executed immediately
+      request.minBytes,
+      request.maxBytes,
+      new FetchLogEnd(),
+      Optional.empty()
     )
 
     replicaManager.fetchMessages(

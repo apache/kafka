@@ -28,7 +28,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.LeaderEpochFileCache
-import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, OffsetAndEpoch, PartitionMetadataFile, RequestLocal}
+import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, OffsetAndEpoch, PartitionMetadataFile, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -42,7 +42,7 @@ import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CompletedTxn, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CompletedTxn, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchTxnCommitted, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 
@@ -1249,12 +1249,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
            isolation: FetchIsolation,
            minOneMessage: Boolean): FetchDataInfo = {
     checkLogStartOffset(startOffset)
-    val maxOffsetMetadata = isolation match {
-      case FetchLogEnd => localLog.logEndOffsetMetadata
-      case FetchHighWatermark => fetchHighWatermarkMetadata
-      case FetchTxnCommitted => fetchLastStableOffsetMetadata
-    }
-    localLog.read(startOffset, maxLength, minOneMessage, maxOffsetMetadata, isolation == FetchTxnCommitted)
+    var maxOffsetMetadata = localLog.logEndOffsetMetadata
+    if (isolation.isInstanceOf[FetchHighWatermark]) maxOffsetMetadata = fetchHighWatermarkMetadata
+    else if (isolation.isInstanceOf[FetchTxnCommitted]) maxOffsetMetadata = fetchLastStableOffsetMetadata
+    localLog.read(startOffset, maxLength, minOneMessage, maxOffsetMetadata, isolation.isInstanceOf[FetchTxnCommitted])
   }
 
   private[log] def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long): List[AbortedTxn] = {

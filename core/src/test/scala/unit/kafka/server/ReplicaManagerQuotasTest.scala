@@ -29,7 +29,7 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.server.log.internals.{LogDirFailureChannel, LogOffsetMetadata}
+import org.apache.kafka.server.log.internals.{FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchParams, LogDirFailureChannel, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
@@ -170,14 +170,14 @@ class ReplicaManagerQuotasTest {
       val fetchPartitionStatus = FetchPartitionStatus(
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
-      val fetchParams = FetchParams(
-        requestVersion = ApiKeys.FETCH.latestVersion,
-        replicaId = 1,
-        maxWaitMs = 600,
-        minBytes = 1,
-        maxBytes = 1000,
-        isolation = FetchLogEnd,
-        clientMetadata = None
+      val fetchParams = new FetchParams(
+        ApiKeys.FETCH.latestVersion,
+        1,
+        600,
+        1,
+        1000,
+        new FetchLogEnd(),
+        Optional.empty()
       )
 
       new DelayedFetch(
@@ -221,14 +221,14 @@ class ReplicaManagerQuotasTest {
       val fetchPartitionStatus = FetchPartitionStatus(
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
-      val fetchParams = FetchParams(
-        requestVersion = ApiKeys.FETCH.latestVersion,
-        replicaId = FetchRequest.CONSUMER_REPLICA_ID,
-        maxWaitMs = 600,
-        minBytes = 1,
-        maxBytes = 1000,
-        isolation = FetchHighWatermark,
-        clientMetadata = None
+      val fetchParams = new FetchParams(
+        ApiKeys.FETCH.latestVersion,
+        FetchRequest.CONSUMER_REPLICA_ID,
+        600L,
+        1,
+        1000,
+        new FetchHighWatermark(),
+        Optional.empty()
       )
 
       new DelayedFetch(
@@ -264,7 +264,7 @@ class ReplicaManagerQuotasTest {
       maxLength = AdditionalMatchers.geq(1),
       isolation = any[FetchIsolation],
       minOneMessage = anyBoolean)).thenReturn(
-      FetchDataInfo(
+      new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(CompressionType.NONE, record)
       ))
@@ -274,7 +274,7 @@ class ReplicaManagerQuotasTest {
       maxLength = ArgumentMatchers.eq(0),
       isolation = any[FetchIsolation],
       minOneMessage = anyBoolean)).thenReturn(
-      FetchDataInfo(
+      new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.EMPTY
       ))

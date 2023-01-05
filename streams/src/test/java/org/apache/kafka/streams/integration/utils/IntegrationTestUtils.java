@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
 import org.apache.kafka.clients.admin.Admin;
@@ -37,6 +36,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.FetchRequestUtils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
@@ -949,7 +949,7 @@ public class IntegrationTestUtils {
                 }
 
                 final UpdateMetadataPartitionState metadataPartitionState = partitionInfo.get();
-                if (!Request.isValidBrokerId(metadataPartitionState.leader())) {
+                if (!FetchRequestUtils.isValidBrokerId(metadataPartitionState.leader())) {
                     invalidBrokerIds.add(server);
                 }
             }
