@@ -243,7 +243,7 @@ class ControllerServer(
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
         val migrationClient = new ZkMigrationClient(zkClient)
         val rpcClient: LegacyPropagator = new MigrationPropagator(config.nodeId, config, () =>
-          config.interBrokerProtocolVersion)
+          controller.asInstanceOf[QuorumController].metadataVersion())
         val migrationDriver = new KRaftMigrationDriver(
           config.nodeId,
           controller.asInstanceOf[QuorumController].zkRecordConsumer(),

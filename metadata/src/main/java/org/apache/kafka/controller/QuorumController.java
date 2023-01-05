@@ -2099,7 +2099,7 @@ public final class QuorumController implements Controller {
     }
 
     // Visible for testing
-    MetadataVersion metadataVersion() {
+    public MetadataVersion metadataVersion() {
         return featureControl.metadataVersion();
     }
 
