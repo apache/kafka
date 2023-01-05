@@ -2387,7 +2387,7 @@ public class TopologyTest {
     }
 
     @Test
-    public void readonlyStateStoresShouldNotLog() {
+    public void readOnlyStateStoresShouldNotLog() {
         final String sourceName = "source";
         final String storeName = "store";
         final String topicName = "topic";
