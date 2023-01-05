@@ -47,7 +47,7 @@ public class SmokeTestUtil {
             @Override
             public void init(final ProcessorContext<Void, Void> context) {
                 super.init(context);
-                System.out.println("[3.2] initializing processor: topic=" + topic + " taskId=" + context.taskId());
+                System.out.println("[3.3] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                 System.out.flush();
                 numRecordsProcessed = 0;
                 smallestOffset = Long.MAX_VALUE;
