@@ -17,12 +17,9 @@
 
 package kafka.server
 
-import java.util.OptionalLong
-import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.{CompletableFuture, TimeUnit}
 import kafka.cluster.Broker.ServerInfo
 import kafka.metrics.{KafkaMetricsGroup, LinuxIoMetricsCollector}
-import kafka.migration.KRaftControllerToZkBrokersRpcClient
+import kafka.migration.MigrationPropagator
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
@@ -31,6 +28,7 @@ import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -38,24 +36,26 @@ import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
 import org.apache.kafka.metadata.KafkaConfigSchema
+import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
+import org.apache.kafka.metadata.migration.{KRaftMigrationDriver, LegacyPropagator}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
-import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.metadata.migration.{BrokersRpcClient, KRaftMigrationDriver}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
-import scala.jdk.CollectionConverters._
+import java.util.OptionalLong
+import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 
 case class ControllerMigrationSupport(
   zkClient: KafkaZkClient,
   migrationDriver: KRaftMigrationDriver,
-  brokersRpcClient: BrokersRpcClient
+  brokersRpcClient: LegacyPropagator
 ) {
   def shutdown(logging: Logging): Unit = {
     if (migrationDriver != null) {
@@ -242,7 +242,8 @@ class ControllerServer(
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
         val migrationClient = new ZkMigrationClient(zkClient)
-        val rpcClient: BrokersRpcClient = new KRaftControllerToZkBrokersRpcClient(config.nodeId, config)
+        val rpcClient: LegacyPropagator = new MigrationPropagator(config.nodeId, config, () =>
+          config.interBrokerProtocolVersion)
         val migrationDriver = new KRaftMigrationDriver(
           config.nodeId,
           controller.asInstanceOf[QuorumController].zkRecordConsumer(),

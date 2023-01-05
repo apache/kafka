@@ -54,7 +54,12 @@ public final class ClusterImage {
     }
 
     public Map<Integer, BrokerRegistration> zkBrokers() {
-        return zkBrokers;
+        return Collections.unmodifiableMap(
+            brokers
+                .entrySet()
+                .stream()
+                .filter(x -> x.getValue().isMigratingZkBroker() && !x.getValue().fenced())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 
     public BrokerRegistration broker(int nodeId) {
