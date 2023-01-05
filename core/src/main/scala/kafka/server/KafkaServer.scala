@@ -192,7 +192,9 @@ class KafkaServer(
 
   var lifecycleManager: BrokerLifecycleManager = _
 
-  var brokerEpochManager: BrokerEpochManager = _
+  @volatile var brokerEpochManager: ZkBrokerEpochManager = _
+
+  def brokerEpochSupplier(): Long = Option(brokerEpochManager).map(_.get()).getOrElse(-1)
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -345,7 +347,7 @@ class KafkaServer(
             time = time,
             metrics = metrics,
             threadNamePrefix = threadNamePrefix,
-            brokerEpochSupplier = () => brokerEpochManager.get()
+            brokerEpochSupplier = brokerEpochSupplier
           )
         } else {
           AlterPartitionManager(kafkaScheduler, time, zkClient)
@@ -376,7 +378,8 @@ class KafkaServer(
           lifecycleManager = new BrokerLifecycleManager(config,
             time,
             threadNamePrefix,
-            zkBrokerEpochSupplier = Some(() => kafkaController.brokerEpoch))
+            isZkBroker = true,
+            () => kafkaController.brokerEpoch)
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
           val kraftMetaProps = MetaProperties(zkMetaProperties.clusterId, zkMetaProperties.brokerId)
@@ -436,7 +439,7 @@ class KafkaServer(
 
         // Used by ZK brokers during a KRaft migration. When talking to a KRaft controller, we need to use the epoch
         // from BrokerLifecycleManager rather than ZK (via KafkaController)
-        brokerEpochManager = new BrokerEpochManager(metadataCache, kafkaController, Option(lifecycleManager))
+        brokerEpochManager = new ZkBrokerEpochManager(metadataCache, kafkaController, Option(lifecycleManager))
 
         adminManager = new ZkAdminManager(config, metrics, metadataCache, zkClient)
 
@@ -449,7 +452,7 @@ class KafkaServer(
         val producerIdManager = if (config.interBrokerProtocolVersion.isAllocateProducerIdsSupported) {
           ProducerIdManager.rpc(
             config.brokerId,
-            brokerEpochSupplier = () => brokerEpochManager.get(),
+            brokerEpochSupplier = brokerEpochSupplier,
             clientToControllerChannelManager,
             config.requestTimeoutMs
           )

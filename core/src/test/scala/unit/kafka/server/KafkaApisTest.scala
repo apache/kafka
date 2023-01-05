@@ -106,7 +106,7 @@ class KafkaApisTest {
   private val controller: KafkaController = mock(classOf[KafkaController])
   private val forwardingManager: ForwardingManager = mock(classOf[ForwardingManager])
   private val autoTopicCreationManager: AutoTopicCreationManager = mock(classOf[AutoTopicCreationManager])
-  private val brokerEpochManager: BrokerEpochManager = mock(classOf[BrokerEpochManager])
+  private val brokerEpochManager: ZkBrokerEpochManager = mock(classOf[ZkBrokerEpochManager])
 
   private val kafkaPrincipalSerde = new KafkaPrincipalSerde {
     override def serialize(principal: KafkaPrincipal): Array[Byte] = Utils.utf8(principal.toString)

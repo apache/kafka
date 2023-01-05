@@ -55,7 +55,8 @@ class BrokerLifecycleManager(
   val config: KafkaConfig,
   val time: Time,
   val threadNamePrefix: Option[String],
-  val zkBrokerEpochSupplier: Option[() => Long] = None
+  val isZkBroker: Boolean,
+  val zkBrokerEpochSupplier: () => Long
 ) extends Logging {
 
   val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.nodeId}] ")
@@ -270,7 +271,7 @@ class BrokerLifecycleManager(
       _clusterId = clusterId
       _advertisedListeners = advertisedListeners.duplicate()
       _supportedFeatures = new util.HashMap[String, VersionRange](supportedFeatures)
-      if (zkBrokerEpochSupplier.isEmpty) {
+      if (!isZkBroker) {
         // Only KRaft brokers block on registration during startup
         eventQueue.scheduleDeferred("initialRegistrationTimeout",
           new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
@@ -290,9 +291,20 @@ class BrokerLifecycleManager(
         setMinSupportedVersion(range.min()).
         setMaxSupportedVersion(range.max()))
     }
+    val migrationZkBrokerEpoch: Long = {
+      if (isZkBroker) {
+        val zkBrokerEpoch: Long = Option(zkBrokerEpochSupplier).map(_.apply()).getOrElse(-1)
+        if (zkBrokerEpoch < 0) {
+          throw new IllegalStateException("Trying to sending BrokerRegistration in migration Zk " +
+            "broker without valid zk broker epoch")
+        }
+        zkBrokerEpoch
+      } else
+        -1
+    }
     val data = new BrokerRegistrationRequestData().
         setBrokerId(nodeId).
-        setMigratingZkBrokerEpoch(zkBrokerEpochSupplier.map(_.apply()).getOrElse(-1)).
+        setMigratingZkBrokerEpoch(migrationZkBrokerEpoch).
         setClusterId(_clusterId).
         setFeatures(features).
         setIncarnationId(incarnationId).

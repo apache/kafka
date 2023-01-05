@@ -20,9 +20,9 @@ package kafka.server
 import kafka.controller.KafkaController
 import org.apache.kafka.common.requests.AbstractControlRequest
 
-class BrokerEpochManager(metadataCache: MetadataCache,
-                         controller: KafkaController,
-                         lifecycleManagerOpt: Option[BrokerLifecycleManager]) {
+class ZkBrokerEpochManager(metadataCache: MetadataCache,
+                           controller: KafkaController,
+                           lifecycleManagerOpt: Option[BrokerLifecycleManager]) {
   def get(): Long = {
     lifecycleManagerOpt match {
       case Some(lifecycleManager) => metadataCache.getControllerId match {
