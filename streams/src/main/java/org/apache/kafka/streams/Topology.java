@@ -741,7 +741,7 @@ public class Topology {
     /**
      * Adds a read-only {@link StateStore} to the topology.
      * <p>
-     * A Read Only StateStore can use any compacted topic as a changelog.
+     * A read-only StateStore can use any compacted topic as a changelog.
      * <p>
      * A {@link SourceNode} will be added to consume the data arriving from the partitions of the input topic.
      * <p>
