@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Version 1 adds Zk broker epoch to the request if the broker is migrating from Zk mode to KRaft mode.
 {
   "apiKey":62,
   "type": "request",

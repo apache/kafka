@@ -28,7 +28,7 @@ public class MigrationControlManager {
         zkMigrationState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.NONE);
     }
 
-    public ZkMigrationState zkMigrationState() {
+    ZkMigrationState zkMigrationState() {
         return zkMigrationState.get();
     }
 

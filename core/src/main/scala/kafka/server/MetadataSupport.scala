@@ -76,7 +76,7 @@ case class ZkSupport(adminManager: ZkAdminManager,
                      zkClient: KafkaZkClient,
                      forwardingManager: Option[ForwardingManager],
                      metadataCache: ZkMetadataCache,
-                     brokerEpochManager: BrokerEpochManager) extends MetadataSupport {
+                     brokerEpochManager: ZkBrokerEpochManager) extends MetadataSupport {
   override def requireZkOrThrow(createException: => Exception): ZkSupport = this
 
   override def requireRaftOrThrow(createException: => Exception): RaftSupport = throw createException
