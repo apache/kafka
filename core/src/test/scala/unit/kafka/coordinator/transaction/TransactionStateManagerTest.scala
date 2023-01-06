@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
-import kafka.log.{Defaults, LogConfig, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.server.{FetchDataInfo, FetchLogEnd, ReplicaManager, RequestLocal}
 import kafka.utils.{MockScheduler, Pool, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -33,7 +33,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.server.log.internals.{AppendOrigin, LogOffsetMetadata}
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogConfig, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -932,7 +932,7 @@ class TransactionStateManagerTest {
     val partitionIds = 0 until numPartitions
 
     loadTransactionsForPartitions(partitionIds)
-    expectLogConfig(partitionIds, Defaults.MaxMessageSize)
+    expectLogConfig(partitionIds, LogConfig.DEFAULT_MAX_MESSAGE_BYTES)
 
     txnMetadata1.txnLastUpdateTimestamp = time.milliseconds() - txnConfig.transactionalIdExpirationMs
     txnMetadata1.state = txnState

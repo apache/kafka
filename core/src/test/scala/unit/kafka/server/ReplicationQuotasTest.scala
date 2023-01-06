@@ -18,16 +18,14 @@
 package kafka.server
 
 import java.util.Properties
-
-import kafka.log.LogConfig._
 import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils
-import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.log.internals.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -109,9 +107,9 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
     //Either throttle the six leaders or the two followers
     if (leaderThrottle)
-      adminZkClient.changeTopicConfig(topic, propsWith(LeaderReplicationThrottledReplicasProp, "0:100,1:101,2:102,3:103,4:104,5:105" ))
+      adminZkClient.changeTopicConfig(topic, propsWith(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100,1:101,2:102,3:103,4:104,5:105" ))
     else
-      adminZkClient.changeTopicConfig(topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
+      adminZkClient.changeTopicConfig(topic, propsWith(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:106,1:106,2:106,3:107,4:107,5:107"))
 
     //Add data equally to each partition
     producer = createProducer(plaintextBootstrapServers(brokers), acks = 1)
@@ -189,7 +187,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
     //Set the throttle to only limit leader
     adminZkClient.changeBrokerConfig(Seq(100), propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString))
-    adminZkClient.changeTopicConfig(topic, propsWith(LeaderReplicationThrottledReplicasProp, "0:100"))
+    adminZkClient.changeTopicConfig(topic, propsWith(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100"))
 
     //Add data
     addData(msgCount, msg)

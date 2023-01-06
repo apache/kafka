@@ -27,10 +27,11 @@ import kafka.common._
 import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, LogDirFailureChannel, OffsetMap}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CleanerConfig, LogConfig, LogDirFailureChannel, OffsetMap}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -45,11 +46,11 @@ class LogCleanerTest {
   val tmpdir = TestUtils.tempDir()
   val dir = TestUtils.randomPartitionLogDir(tmpdir)
   val logProps = new Properties()
-  logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
-  logProps.put(LogConfig.SegmentIndexBytesProp, 1024: java.lang.Integer)
-  logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-  logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
-  val logConfig = LogConfig(logProps)
+  logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+  logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1024: java.lang.Integer)
+  logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+  logProps.put(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.MaxValue.toString)
+  val logConfig = new LogConfig(logProps)
   val time = new MockTime()
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
   val tombstoneRetentionMs = 86400000
@@ -68,7 +69,7 @@ class LogCleanerTest {
   def testCleanSegments(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -101,8 +102,8 @@ class LogCleanerTest {
     // Construct a log instance. The replaceSegments() method of the log instance is overridden so that
     // it waits for another thread to execute deleteOldSegments()
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024 : java.lang.Integer)
-    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024 : java.lang.Integer)
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE)
     val config = LogConfig.fromProps(logConfig.originals, logProps)
     val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
@@ -187,9 +188,9 @@ class LogCleanerTest {
     val originalMaxFileSize = 1024;
     val cleaner = makeCleaner(2)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, originalMaxFileSize: java.lang.Integer)
-    logProps.put(LogConfig.CleanupPolicyProp, "compact": java.lang.String)
-    logProps.put(LogConfig.PreAllocateEnableProp, "true": java.lang.String)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, originalMaxFileSize: java.lang.Integer)
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact": java.lang.String)
+    logProps.put(TopicConfig.PREALLOCATE_CONFIG, "true": java.lang.String)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 0
@@ -211,7 +212,7 @@ class LogCleanerTest {
   def testDuplicateCheckAfterCleaning(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 2048: java.lang.Integer)
     var log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -292,7 +293,7 @@ class LogCleanerTest {
     val offsetMapSlots = 4
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.DeleteRetentionMsProp, deleteRetentionMs.toString)
+    logProps.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, deleteRetentionMs.toString)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -380,7 +381,7 @@ class LogCleanerTest {
   def testBasicTransactionAwareCleaning(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 2048: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -413,7 +414,7 @@ class LogCleanerTest {
   def testCleanWithTransactionsSpanningSegments(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -460,7 +461,7 @@ class LogCleanerTest {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 256: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -508,8 +509,8 @@ class LogCleanerTest {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(capacity = Int.MaxValue, maxMessageSize = 100)
     val logProps = new Properties()
-    logProps.put(LogConfig.MaxMessageBytesProp, 100: java.lang.Integer)
-    logProps.put(LogConfig.SegmentBytesProp, 1000: java.lang.Integer)
+    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, 100: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1000: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -538,7 +539,7 @@ class LogCleanerTest {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 256: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -605,7 +606,7 @@ class LogCleanerTest {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 256: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -639,7 +640,7 @@ class LogCleanerTest {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 128: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 128: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     val producerEpoch = 0.toShort
     val producerId = 1L
@@ -662,7 +663,7 @@ class LogCleanerTest {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 128: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 128: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     val producerEpoch = 0.toShort
     val producerId = 1L
@@ -692,7 +693,7 @@ class LogCleanerTest {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 256: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -727,7 +728,7 @@ class LogCleanerTest {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 2048: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val appendFirstTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch,
@@ -763,7 +764,7 @@ class LogCleanerTest {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 256: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -827,8 +828,8 @@ class LogCleanerTest {
     // Create cleaner with very small default max message size
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, largeMessageSize * 16: java.lang.Integer)
-    logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize * 2: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, largeMessageSize * 16: java.lang.Integer)
+    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, largeMessageSize * 2: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -899,8 +900,8 @@ class LogCleanerTest {
 
   def createLogWithMessagesLargerThanMaxSize(largeMessageSize: Int): (UnifiedLog, FakeOffsetMap) = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, largeMessageSize * 16: java.lang.Integer)
-    logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize * 2: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, largeMessageSize * 16: java.lang.Integer)
+    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, largeMessageSize * 2: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -910,7 +911,7 @@ class LogCleanerTest {
     assertEquals(0L until log.logEndOffset, keysFound)
 
     // Decrease the log's max message size
-    logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize / 2: java.lang.Integer)
+    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, largeMessageSize / 2: java.lang.Integer)
     log.updateConfig(LogConfig.fromProps(logConfig.originals, logProps))
 
     // pretend we have the following keys
@@ -925,7 +926,7 @@ class LogCleanerTest {
   def testCleaningWithDeletes(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -952,7 +953,7 @@ class LogCleanerTest {
     // because loadFactor is 0.75, this means we can fit 3 messages in the map
     val cleaner = makeCleaner(4)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -980,7 +981,7 @@ class LogCleanerTest {
   def testLogCleanerRetainsProducerLastSequence(): Unit = {
     val cleaner = makeCleaner(10)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     log.appendAsLeader(record(0, 0), leaderEpoch = 0) // offset 0
@@ -1003,7 +1004,7 @@ class LogCleanerTest {
   def testLogCleanerRetainsLastSequenceEvenIfTransactionAborted(): Unit = {
     val cleaner = makeCleaner(10)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -1037,7 +1038,7 @@ class LogCleanerTest {
   def testCleaningWithKeysConflictingWithTxnMarkerKeys(): Unit = {
     val cleaner = makeCleaner(10)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     val leaderEpoch = 5
     val producerEpoch = 0.toShort
@@ -1081,7 +1082,7 @@ class LogCleanerTest {
     // because loadFactor is 0.75, this means we can fit 1 message in the map
     val cleaner = makeCleaner(2)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -1112,7 +1113,7 @@ class LogCleanerTest {
   def testCleaningWithUncleanableSection(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -1155,7 +1156,7 @@ class LogCleanerTest {
   def testLogToClean(): Unit = {
     // create a log with small segment size
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 100: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 100: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // create 6 segments with only one message in each segment
@@ -1173,7 +1174,7 @@ class LogCleanerTest {
   def testLogToCleanWithUncleanableSection(): Unit = {
     // create a log with small segment size
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 100: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 100: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // create 6 segments with only one message in each segment
@@ -1206,8 +1207,8 @@ class LogCleanerTest {
 
     // create a log with compaction turned off so we can append unkeyed messages
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
-    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -1264,7 +1265,7 @@ class LogCleanerTest {
   def testCleanSegmentsWithAbort(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue, abortCheckDone)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -1288,8 +1289,8 @@ class LogCleanerTest {
   def testSegmentGrouping(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
-    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 300: java.lang.Integer)
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 1: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -1389,8 +1390,8 @@ class LogCleanerTest {
     val cleaner = makeCleaner(Int.MaxValue)
 
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 400: java.lang.Integer)
-    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 400: java.lang.Integer)
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 1: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -1441,10 +1442,10 @@ class LogCleanerTest {
     val cleaner = makeCleaner(Int.MaxValue)
 
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 400: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 400: java.lang.Integer)
 
     //mimic the effect of loading an empty index file
-    logProps.put(LogConfig.IndexIntervalBytesProp, 400: java.lang.Integer)
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 400: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -1512,8 +1513,8 @@ class LogCleanerTest {
   def testSegmentWithOffsetOverflow(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
-    logProps.put(LogConfig.FileDeleteDelayMsProp, 1000: java.lang.Integer)
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 1: java.lang.Integer)
+    logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, 1000: java.lang.Integer)
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
     LogTestUtils.initializeLogDirWithOverflowedSegment(dir)
@@ -1565,9 +1566,9 @@ class LogCleanerTest {
   def testRecoveryAfterCrash(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
-    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
-    logProps.put(LogConfig.FileDeleteDelayMsProp, 10: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 300: java.lang.Integer)
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 1: java.lang.Integer)
+    logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, 10: java.lang.Integer)
 
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
@@ -1694,10 +1695,10 @@ class LogCleanerTest {
   def testBuildOffsetMapFakeLarge(): Unit = {
     val map = new FakeOffsetMap(1000)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 120: java.lang.Integer)
-    logProps.put(LogConfig.SegmentIndexBytesProp, 120: java.lang.Integer)
-    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-    val logConfig = LogConfig(logProps)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 120: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 120: java.lang.Integer)
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    val logConfig = new LogConfig(logProps)
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(Int.MaxValue)
     val keyStart = 0
@@ -1748,8 +1749,8 @@ class LogCleanerTest {
     val codec = CompressionType.GZIP
 
     val logProps = new Properties()
-    logProps.put(LogConfig.CompressionTypeProp, codec.name)
-    val logConfig = LogConfig(logProps)
+    logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, codec.name)
+    val logConfig = new LogConfig(logProps)
 
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(10)
@@ -1803,7 +1804,7 @@ class LogCleanerTest {
 
   @Test
   def testCleanTombstone(): Unit = {
-    val logConfig = LogConfig(new Properties())
+    val logConfig = new LogConfig(new Properties())
 
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(10)
@@ -1839,9 +1840,9 @@ class LogCleanerTest {
   @Test
   def testCleaningBeyondMissingOffsets(): Unit = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024*1024: java.lang.Integer)
-    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-    val logConfig = LogConfig(logProps)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024*1024: java.lang.Integer)
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    val logConfig = new LogConfig(logProps)
     val cleaner = makeCleaner(Int.MaxValue)
 
     {
@@ -1880,7 +1881,7 @@ class LogCleanerTest {
 
   @Test
   def testMaxCleanTimeSecs(): Unit = {
-    val logCleaner = new LogCleaner(new CleanerConfig,
+    val logCleaner = new LogCleaner(new CleanerConfig(true),
       logDirs = Array(TestUtils.tempDir()),
       logs = new Pool[TopicPartition, UnifiedLog](),
       logDirFailureChannel = new LogDirFailureChannel(1),

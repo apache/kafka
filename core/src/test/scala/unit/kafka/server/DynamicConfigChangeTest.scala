@@ -23,7 +23,6 @@ import java.util.Collections.{singletonList, singletonMap}
 import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.LogConfig._
 import kafka.utils._
 import kafka.server.Constants._
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -31,7 +30,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, Config, ConfigEntry}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidRequestException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.metrics.Quota
@@ -41,6 +40,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
+import org.apache.kafka.server.log.internals.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -67,7 +67,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val newVal: java.lang.Long = 200000L
     val tp = new TopicPartition("test", 0)
     val logProps = new Properties()
-    logProps.put(FlushMessagesProp, oldVal.toString)
+    logProps.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, oldVal.toString)
     createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
@@ -78,7 +78,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val admin = createAdminClient()
       try {
         val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
-        val op = new AlterConfigOp(new ConfigEntry(FlushMessagesProp, newVal.toString()),
+        val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, newVal.toString()),
           SET)
         val resource2 = new ConfigResource(ConfigResource.Type.BROKER, "")
         val op2 = new AlterConfigOp(new ConfigEntry(KafkaConfig.LogFlushIntervalMsProp, newVal.toString()),
@@ -92,7 +92,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       }
     } else {
       val newProps = new Properties()
-      newProps.setProperty(FlushMessagesProp, newVal.toString())
+      newProps.setProperty(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, newVal.toString())
       adminZkClient.changeTopicConfig(tp.topic, newProps)
     }
     TestUtils.retry(10000) {
@@ -106,7 +106,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val tp = new TopicPartition("test", 0)
     val oldSegmentSize = 1000
     val logProps = new Properties()
-    logProps.put(SegmentBytesProp, oldSegmentSize.toString)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, oldSegmentSize.toString)
     createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
@@ -119,7 +119,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val admin = createAdminClient()
       try {
         val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
-        val op = new AlterConfigOp(new ConfigEntry(SegmentBytesProp, newSegmentSize.toString()),
+        val op = new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_BYTES_CONFIG, newSegmentSize.toString()),
           SET)
         admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
       } finally {
@@ -127,7 +127,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       }
     } else {
       val newProps = new Properties()
-      newProps.put(SegmentBytesProp, newSegmentSize.toString)
+      newProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, newSegmentSize.toString)
       adminZkClient.changeTopicConfig(tp.topic, newProps)
     }
 
@@ -147,7 +147,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def testMessageFormatVersionChange(quorum: String): Unit = {
     val tp = new TopicPartition("test", 0)
     val logProps = new Properties()
-    logProps.put(MessageFormatVersionProp, "0.10.2")
+    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
     createTopic(tp.topic, 1, 1, logProps)
     val server = servers.head
     TestUtils.waitUntilTrue(() => server.logManager.getLog(tp).isDefined,
@@ -158,9 +158,9 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertEquals(RecordVersion.V2, log.config.recordVersion)
 
     val compressionType = CompressionType.LZ4.name
-    logProps.put(MessageFormatVersionProp, "0.11.0")
+    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
     // set compression type so that we can detect when the config change has propagated
-    logProps.put(CompressionTypeProp, compressionType)
+    logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType)
     adminZkClient.changeTopicConfig(tp.topic, logProps)
     TestUtils.waitUntilTrue(() =>
       server.logManager.getLog(tp).get.config.compressionType == compressionType,
@@ -381,7 +381,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def testConfigChangeOnNonExistingTopic(quorum: String): Unit = {
     val topic = TestUtils.tempTopic()
     val logProps = new Properties()
-    logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
+    logProps.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, 10000: java.lang.Integer)
     assertThrows(classOf[UnknownTopicOrPartitionException], () => adminZkClient.changeTopicConfig(topic, logProps))
   }
 
@@ -392,7 +392,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
-      val op = new AlterConfigOp(new ConfigEntry(FlushMessagesProp, "10000"), SET)
+      val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "10000"), SET)
       admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
       fail("Should fail with UnknownTopicOrPartitionException for topic doesn't exist")
     } catch {
@@ -442,7 +442,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, "")
-      val op = new AlterConfigOp(new ConfigEntry(FlushMessagesProp, "200000"), SET)
+      val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "200000"), SET)
       val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
       TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidRequestException])
     } finally {
@@ -457,7 +457,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, "")
-      val config = new Config(Collections.singleton(new ConfigEntry(FlushMessagesProp, "200000")))
+      val config = new Config(Collections.singleton(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "200000")))
       val future = admin.alterConfigs(Map(resource -> config).asJava).all
       TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidRequestException])
     } finally {
@@ -488,11 +488,11 @@ class DynamicConfigChangeUnitTest {
     val props: Properties = new Properties()
 
     //Given
-    props.put(LeaderReplicationThrottledReplicasProp, "0:101,0:102,1:101,1:102")
+    props.put(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:101,0:102,1:101,1:102")
 
     //When/Then
-    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102, LeaderReplicationThrottledReplicasProp))
-    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, LeaderReplicationThrottledReplicasProp))
+    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102, LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG))
+    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG))
   }
 
   @Test
@@ -501,10 +501,10 @@ class DynamicConfigChangeUnitTest {
     val props: Properties = new Properties()
 
     //Given
-    props.put(LeaderReplicationThrottledReplicasProp, "*")
+    props.put(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "*")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102, LeaderReplicationThrottledReplicasProp)
+    val result = configHandler.parseThrottledPartitions(props, 102, LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
 
     //Then
     assertEquals(AllReplicas, result)
@@ -514,8 +514,8 @@ class DynamicConfigChangeUnitTest {
   def shouldParseRegardlessOfWhitespaceAroundValues(): Unit = {
     def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
       configHandler.parseThrottledPartitions(
-        CoreUtils.propsWith(LeaderReplicationThrottledReplicasProp, value),
-        102, LeaderReplicationThrottledReplicasProp)
+        CoreUtils.propsWith(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, value),
+        102, LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
     }
     val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
     assertEquals(AllReplicas, parse(configHandler, "* "))
@@ -531,10 +531,10 @@ class DynamicConfigChangeUnitTest {
     val props: Properties = new Properties()
 
     //Given
-    props.put(FollowerReplicationThrottledReplicasProp, "")
+    props.put(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102, FollowerReplicationThrottledReplicasProp)
+    val result = configHandler.parseThrottledPartitions(props, 102, LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
 
     //Then
     assertEquals(Seq(), result)

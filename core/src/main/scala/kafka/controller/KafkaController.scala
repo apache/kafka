@@ -90,8 +90,14 @@ class KafkaController(val config: KafkaConfig,
   private val isAlterPartitionEnabled = config.interBrokerProtocolVersion.isAlterPartitionSupported
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)
   val controllerContext = new ControllerContext
-  var controllerChannelManager = new ControllerChannelManager(controllerContext, config, time, metrics,
-    stateChangeLogger, threadNamePrefix)
+  var controllerChannelManager = new ControllerChannelManager(
+    () => controllerContext.epoch,
+    config,
+    time,
+    metrics,
+    stateChangeLogger,
+    threadNamePrefix
+  )
 
   // have a separate scheduler for the controller to be able to start and stop independently of the kafka server
   // visible for testing
@@ -928,7 +934,7 @@ class KafkaController(val config: KafkaConfig,
     // update the leader and isr cache for all existing partitions from Zookeeper
     updateLeaderAndIsrCache()
     // start the channel manager
-    controllerChannelManager.startup()
+    controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
     info(s"Currently active brokers in the cluster: ${controllerContext.liveBrokerIds}")
     info(s"Currently shutting brokers in the cluster: ${controllerContext.shuttingDownBrokerIds}")
     info(s"Current list of topics in the cluster: ${controllerContext.allTopics}")
