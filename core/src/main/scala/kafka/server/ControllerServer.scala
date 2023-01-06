@@ -242,12 +242,12 @@ class ControllerServer(
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
         val migrationClient = new ZkMigrationClient(zkClient)
-        val rpcClient: LegacyPropagator = new MigrationPropagator(config.nodeId, config)
+        val propagator: LegacyPropagator = new MigrationPropagator(config.nodeId, config)
         val migrationDriver = new KRaftMigrationDriver(
           config.nodeId,
           controller.asInstanceOf[QuorumController].zkRecordConsumer(),
           migrationClient,
-          rpcClient,
+          propagator,
           publisher => sharedServer.loader.installPublishers(java.util.Collections.singletonList(publisher)),
           sharedServer.faultHandlerFactory.build(
             "zk migration",
@@ -256,7 +256,7 @@ class ControllerServer(
           )
         )
         migrationDriver.start()
-        migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, rpcClient))
+        migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, propagator))
       }
 
       quotaManagers = QuotaFactory.instantiate(config,

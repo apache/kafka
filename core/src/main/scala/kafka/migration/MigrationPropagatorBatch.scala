@@ -29,12 +29,13 @@ import scala.jdk.CollectionConverters._
 sealed class MigrationPropagatorBatch(
   config: KafkaConfig,
   metadataProvider: () => ControllerChannelContext,
+  metadataVersionProvider: () => MetadataVersion,
   controllerChannelManager: ControllerChannelManager,
   stateChangeLogger: StateChangeLogger
 ) extends AbstractControllerBrokerRequestBatch(
   config,
   metadataProvider,
-  () => MetadataVersion.IBP_3_4_IV0,
+  metadataVersionProvider,
   stateChangeLogger,
   kraftController = true,
 ) {
