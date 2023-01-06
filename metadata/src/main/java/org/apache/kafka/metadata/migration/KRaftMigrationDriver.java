@@ -28,6 +28,7 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +54,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private final Logger log;
     private final int nodeId;
     private final MigrationClient zkMigrationClient;
-    private final LegacyPropagator rpcClient;
+    private final LegacyPropagator propagator;
     private final ZkRecordConsumer zkRecordConsumer;
     private final KafkaEventQueue eventQueue;
     private final FaultHandler faultHandler;
@@ -71,14 +72,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         int nodeId,
         ZkRecordConsumer zkRecordConsumer,
         MigrationClient zkMigrationClient,
-        LegacyPropagator rpcClient,
+        LegacyPropagator propagator,
         Consumer<KRaftMigrationDriver> initialZkLoadHandler,
         FaultHandler faultHandler
     ) {
         this.nodeId = nodeId;
         this.zkRecordConsumer = zkRecordConsumer;
         this.zkMigrationClient = zkMigrationClient;
-        this.rpcClient = rpcClient;
+        this.propagator = propagator;
         this.time = Time.SYSTEM;
         this.log = LoggerFactory.getLogger(KRaftMigrationDriver.class);
         this.migrationState = MigrationState.UNINITIALIZED;
@@ -444,7 +445,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             // Ignore sending RPCs to the brokers since we're no longer in the state.
             if (migrationState == MigrationState.KRAFT_CONTROLLER_TO_BROKER_COMM) {
                 if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
-                    rpcClient.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.zkControllerEpoch());
+                    propagator.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.zkControllerEpoch());
                     // Migration leadership state doesn't change since we're not doing any Zk writes.
                     transitionTo(MigrationState.DUAL_WRITE);
                 }
@@ -474,6 +475,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         "mode. Ignoring the change to be replicated to Zookeeper");
                 return;
             }
+            if (delta.featuresDelta() != null) {
+                propagator.setMetadataVersion(image.features().metadataVersion());
+            }
 
             if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
                 if (delta.topicsDelta() != null) {
@@ -498,7 +502,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 apply("Write MetadataDelta to Zk", state -> zkMigrationClient.writeMetadataDeltaToZookeeper(delta, image, state));
                 // TODO: Unhappy path: Probably relinquish leadership and let new controller
                 //  retry the write?
-                rpcClient.sendRPCsToBrokersFromMetadataDelta(delta, image,
+                propagator.sendRPCsToBrokersFromMetadataDelta(delta, image,
                         migrationLeadershipState.zkControllerEpoch());
             } else {
                 String metadataType = isSnapshot ? "snapshot" : "delta";

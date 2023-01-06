@@ -2098,11 +2098,6 @@ public final class QuorumController implements Controller {
         return curClaimEpoch;
     }
 
-    // Visible for testing
-    public MetadataVersion metadataVersion() {
-        return featureControl.metadataVersion();
-    }
-
     @Override
     public void close() throws InterruptedException {
         queue.close();
