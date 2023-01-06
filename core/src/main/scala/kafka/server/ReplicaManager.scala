@@ -1536,7 +1536,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   protected[server] def maybeAddLogDirFetchers(partitions: Set[Partition],
                                        offsetCheckpoints: OffsetCheckpoints,
-                                       topicIds: String => Option[Uuid]): Unit = {
+                                       topicIds: String => Option[Uuid]): Map[TopicPartition, InitialFetchState] = {
     val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
     for (partition <- partitions) {
       val topicPartition = partition.topicPartition
@@ -1563,6 +1563,8 @@ class ReplicaManager(val config: KafkaConfig,
 
     if (futureReplicasAndInitialOffset.nonEmpty)
       replicaAlterLogDirsManager.addFetcherForPartitions(futureReplicasAndInitialOffset)
+
+    futureReplicasAndInitialOffset
   }
 
   /*

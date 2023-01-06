@@ -253,7 +253,9 @@ class ReplicaManagerTest {
     partition.futureLog.get.leaderEpochCache = None
 
     // this method should use hw of future log to create log dir fetcher. Otherwise, it causes offset mismatch error
-    rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), _ => None)
+    val result = rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), _ => None)
+    assertEquals(1, result.size)
+    assertEquals(0L, result(new TopicPartition(topic, 0)).initOffset)
     assertNotEquals(0, rm.replicaAlterLogDirsManager.fetcherThreadMap.size)
     // make sure alter folder thread has processed the data
     rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.doWork())
