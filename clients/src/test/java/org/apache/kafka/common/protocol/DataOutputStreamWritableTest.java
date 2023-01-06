@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.DataOutputStream;
@@ -40,7 +41,7 @@ public class DataOutputStreamWritableTest {
         writable.writeByteBuffer(slicedBuffer);
 
         assertEquals(2, resultBuffer.position(), "Writing to the buffer moves the position forward");
-        assertEquals(expectedArray, resultBuffer.array(), "Result buffer should have expected elements");
+        assertArrayEquals(expectedArray, resultBuffer.array(), "Result buffer should have expected elements");
     }
 
     @Test
@@ -61,6 +62,6 @@ public class DataOutputStreamWritableTest {
         writable.writeByteBuffer(slicedBuffer);
 
         assertEquals(1, resultBuffer.position(), "Writing to the buffer moves the position forward");
-        assertEquals(expectedArray, resultBuffer.array(), "Result buffer should have expected elements");
+        assertArrayEquals(expectedArray, resultBuffer.array(), "Result buffer should have expected elements");
     }
 }
