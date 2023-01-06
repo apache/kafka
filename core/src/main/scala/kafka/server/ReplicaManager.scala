@@ -1534,7 +1534,7 @@ class ReplicaManager(val config: KafkaConfig,
     leaderTopicSet.diff(newFollowerTopics).foreach(brokerTopicStats.removeOldFollowerMetrics)
   }
 
-  protected def maybeAddLogDirFetchers(partitions: Set[Partition],
+  protected[server] def maybeAddLogDirFetchers(partitions: Set[Partition],
                                        offsetCheckpoints: OffsetCheckpoints,
                                        topicIds: String => Option[Uuid]): Unit = {
     val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]

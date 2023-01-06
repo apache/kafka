@@ -206,6 +206,61 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testMaybeAddLogDirFetchersForV1MessageFormat(): Unit = {
+    val dir1 = TestUtils.tempDir()
+    val dir2 = TestUtils.tempDir()
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put("log.message.format.version", "0.10.2")
+    props.put("inter.broker.protocol.version", "2.8")
+    props.put("log.dirs", dir1.getAbsolutePath + "," + dir2.getAbsolutePath)
+    val config = KafkaConfig.fromProps(props)
+    val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(new Properties()))
+    val metadataCache: MetadataCache = mock(classOf[MetadataCache])
+    mockGetAliveBrokerFunctions(metadataCache, Seq(new Node(0, "host0", 0)))
+    when(metadataCache.metadataVersion()).thenReturn(config.interBrokerProtocolVersion)
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+    val partition = rm.createPartition(new TopicPartition(topic, 0))
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+
+    rm.becomeLeaderOrFollower(0, new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+      Seq(new LeaderAndIsrPartitionState()
+        .setTopicName(topic)
+        .setPartitionIndex(0)
+        .setControllerEpoch(0)
+        .setLeader(0)
+        .setLeaderEpoch(0)
+        .setIsr(Seq[Integer](0).asJava)
+        .setPartitionEpoch(0)
+        .setReplicas(Seq[Integer](0).asJava)
+        .setIsNew(false)).asJava,
+      Collections.singletonMap(topic, Uuid.randomUuid()),
+      Set(new Node(0, "host1", 0)).asJava).build(), (_, _) => ())
+    appendRecords(rm, new TopicPartition(topic, 0),
+      MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("first message".getBytes()), new SimpleRecord("second message".getBytes())))
+    logManager.maybeUpdatePreferredLogDir(new TopicPartition(topic, 0), dir2.getAbsolutePath)
+
+    partition.createLogIfNotExists(isNew = true, isFutureReplica = true,
+      new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+
+    // this method should use hw of future log to create log dir fetcher. Otherwise, it causes offset mismatch error
+    rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), _ => None)
+    assertNotEquals(0, rm.replicaAlterLogDirsManager.fetcherThreadMap.size)
+    // wait for the log dir fetcher thread
+    TimeUnit.SECONDS.sleep(3)
+    assertEquals(Set.empty, rm.replicaAlterLogDirsManager.failedPartitions.partitions())
+  }
+
+  @Test
   def testClearPurgatoryOnBecomingFollower(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
