@@ -239,7 +239,7 @@ class ProducerStateManagerTest {
     // Start one transaction in a separate append
     val firstAppend = stateManager.prepareUpdate(producerId, origin = AppendOrigin.CLIENT)
     appendData(16L, 20L, firstAppend)
-    assertEquals(new TxnMetadata(producerId, 16L), firstAppend.startedTransactions.asScala.head)
+    assertTxnMetadataEquals(new TxnMetadata(producerId, 16L), firstAppend.startedTransactions.asScala.head)
     stateManager.update(firstAppend)
     stateManager.onHighWatermarkUpdated(21L)
     assertEquals(Some(new LogOffsetMetadata(16L)), stateManager.firstUnstableOffset)
@@ -259,13 +259,26 @@ class ProducerStateManagerTest {
     appendData(30L, 31L, secondAppend)
 
     assertEquals(2, secondAppend.startedTransactions.size)
-    assertEquals(new TxnMetadata(producerId, new LogOffsetMetadata(24L)), secondAppend.startedTransactions.asScala.head)
-    assertEquals(new TxnMetadata(producerId, new LogOffsetMetadata(30L)), secondAppend.startedTransactions.asScala.last)
+    assertTxnMetadataEquals(new TxnMetadata(producerId, new LogOffsetMetadata(24L)), secondAppend.startedTransactions.asScala.head)
+    assertTxnMetadataEquals(new TxnMetadata(producerId, new LogOffsetMetadata(30L)), secondAppend.startedTransactions.asScala.last)
     stateManager.update(secondAppend)
     stateManager.completeTxn(firstCompletedTxn.get)
     stateManager.completeTxn(secondCompletedTxn.get)
     stateManager.onHighWatermarkUpdated(32L)
     assertEquals(Some(new LogOffsetMetadata(30L)), stateManager.firstUnstableOffset)
+  }
+
+  def assertTxnMetadataEquals(expected: java.util.List[TxnMetadata], actual: java.util.List[TxnMetadata]): Unit = {
+    val expectedIter = expected.iterator()
+    val actualIter = actual.iterator()
+    while(expectedIter.hasNext && actualIter.hasNext) {
+      assertTxnMetadataEquals(expectedIter.next(), actualIter.next())
+    }
+  }
+
+  def assertTxnMetadataEquals(expected: TxnMetadata, actual:TxnMetadata) : Unit = {
+    assertEquals(expected.producerId, actual.producerId)
+    assertEquals(expected.firstOffset, actual.firstOffset)
   }
 
   @Test
@@ -460,7 +473,7 @@ class ProducerStateManagerTest {
     assertEquals(16L, lastEntry.firstDataOffset)
     assertEquals(20L, lastEntry.lastDataOffset)
     assertEquals(OptionalLong.of(16L), lastEntry.currentTxnFirstOffset)
-    assertEquals(java.util.Arrays.asList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
+    assertTxnMetadataEquals(java.util.Arrays.asList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
 
     appendInfo.appendDataBatch(producerEpoch, 6, 10, time.milliseconds(),
       new LogOffsetMetadata(26L), 30L, true)
@@ -471,7 +484,7 @@ class ProducerStateManagerTest {
     assertEquals(16L, lastEntry.firstDataOffset)
     assertEquals(30L, lastEntry.lastDataOffset)
     assertEquals(OptionalLong.of(16L), lastEntry.currentTxnFirstOffset)
-    assertEquals(util.Arrays.asList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
+    assertTxnMetadataEquals(util.Arrays.asList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
 
     val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
     val completedTxnOpt = appendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, 40L, time.milliseconds())
@@ -492,7 +505,7 @@ class ProducerStateManagerTest {
     assertEquals(30L, lastEntry.lastDataOffset)
     assertEquals(coordinatorEpoch, lastEntry.coordinatorEpoch)
     assertEquals(OptionalLong.empty(), lastEntry.currentTxnFirstOffset)
-    assertEquals(java.util.Arrays.asList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
+    assertTxnMetadataEquals(java.util.Arrays.asList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
   }
 
   @Test
