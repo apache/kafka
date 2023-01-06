@@ -22,7 +22,6 @@ import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.stream.Stream;
@@ -36,27 +35,27 @@ import java.util.stream.Stream;
 public class ProducerStateEntry {
     public static final int NUM_BATCHES_TO_RETAIN = 5;
     private final long producerId;
-    private final Deque<BatchMetadata> batchMetadata;
+    private final Deque<BatchMetadata> batchMetadata = new ArrayDeque<>();
     private short producerEpoch;
     public int coordinatorEpoch;
     public long lastTimestamp;
     public OptionalLong currentTxnFirstOffset;
 
     public ProducerStateEntry(long producerId) {
-        this(producerId, Collections.emptyList(), RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty());
+        this(producerId, null, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty());
     }
 
     public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
-        this(producerId, Collections.emptyList(), producerEpoch, coordinatorEpoch, lastTimestamp, currentTxnFirstOffset);
+        this(producerId, null, producerEpoch, coordinatorEpoch, lastTimestamp, currentTxnFirstOffset);
     }
 
-    public ProducerStateEntry(long producerId, List<BatchMetadata> batchMetadata, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
+    public ProducerStateEntry(long producerId, BatchMetadata firstBatchMetadata, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
         this.producerId = producerId;
-        this.batchMetadata = new ArrayDeque<>(batchMetadata);
         this.producerEpoch = producerEpoch;
         this.coordinatorEpoch = coordinatorEpoch;
         this.lastTimestamp = lastTimestamp;
         this.currentTxnFirstOffset = currentTxnFirstOffset;
+        if (firstBatchMetadata != null) batchMetadata.add(firstBatchMetadata);
     }
 
     public int firstSeq() {
