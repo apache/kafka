@@ -2193,7 +2193,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       if (migrationEnabled) {
         validateNonEmptyQuorumVotersForKRaft()
         require(controllerListenerNames.nonEmpty,
-          s"${KafkaConfig.ControllerListenerNamesProp} must not be empty when running in ZK migration mode: ${controllerListenerNames.asJava}")
+          s"${KafkaConfig.ControllerListenerNamesProp} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")
+        require(interBrokerProtocolVersion.isMigrationSupported, s"Cannot enable ZooKeeper migration without setting " +
+          s"'${KafkaConfig.InterBrokerProtocolVersionProp}' to 3.4 or higher")
       } else {
         // controller listener names must be empty when not in KRaft mode
         require(controllerListenerNames.isEmpty,

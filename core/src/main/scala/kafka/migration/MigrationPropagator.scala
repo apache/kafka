@@ -33,7 +33,6 @@ import scala.jdk.CollectionConverters._
 class MigrationPropagator(
   nodeId: Int,
   config: KafkaConfig,
-  metadataVersionProvider: () => MetadataVersion,
 ) extends LegacyPropagator {
   @volatile private var _image = MetadataImage.EMPTY
   val stateChangeLogger = new StateChangeLogger(nodeId, inControllerContext = true, None)
@@ -48,7 +47,6 @@ class MigrationPropagator(
   val requestBatch = new MigrationPropagatorBatch(
     config,
     metadataProvider,
-    metadataVersionProvider,
     channelManager,
     stateChangeLogger
   )
