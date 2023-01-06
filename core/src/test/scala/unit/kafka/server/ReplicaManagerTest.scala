@@ -206,12 +206,10 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testMaybeAddLogDirFetchersForV1MessageFormat(): Unit = {
+  def testMaybeAddLogDirFetchersWithoutEpochCache(): Unit = {
     val dir1 = TestUtils.tempDir()
     val dir2 = TestUtils.tempDir()
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put("log.message.format.version", "0.10.2")
-    props.put("inter.broker.protocol.version", "2.8")
     props.put("log.dirs", dir1.getAbsolutePath + "," + dir2.getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(new Properties()))
@@ -251,12 +249,14 @@ class ReplicaManagerTest {
 
     partition.createLogIfNotExists(isNew = true, isFutureReplica = true,
       new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+    // remove cache to disable OffsetsForLeaderEpoch API
+    partition.futureLog.get.leaderEpochCache = None
 
     // this method should use hw of future log to create log dir fetcher. Otherwise, it causes offset mismatch error
     rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), _ => None)
     assertNotEquals(0, rm.replicaAlterLogDirsManager.fetcherThreadMap.size)
-    // wait for the log dir fetcher thread
-    TimeUnit.SECONDS.sleep(3)
+    // make sure alter folder thread has processed the data
+    rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.doWork())
     assertEquals(Set.empty, rm.replicaAlterLogDirsManager.failedPartitions.partitions())
   }
 

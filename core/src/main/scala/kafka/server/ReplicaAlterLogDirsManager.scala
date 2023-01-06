@@ -21,7 +21,7 @@ import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.TopicPartition
 
 class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
-                                 replicaManager: ReplicaManager,
+                                 val replicaManager: ReplicaManager,
                                  quotaManager: ReplicationQuotaManager,
                                  brokerTopicStats: BrokerTopicStats)
   extends AbstractFetcherManager[ReplicaAlterLogDirsThread](
