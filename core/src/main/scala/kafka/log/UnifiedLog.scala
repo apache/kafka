@@ -470,11 +470,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   }
 
-  val producerExpireCheck = scheduler.schedule("PeriodicProducerExpirationCheck", () => {
-    lock synchronized {
-      producerStateManager.removeExpiredProducers(time.milliseconds)
-    }
-  }, producerIdExpirationCheckIntervalMs, producerIdExpirationCheckIntervalMs)
+  val producerExpireCheck = scheduler.schedule("PeriodicProducerExpirationCheck", () => removeExpiredProducers(time.milliseconds),
+    producerIdExpirationCheckIntervalMs, producerIdExpirationCheckIntervalMs)
 
   // Visible for testing
   def removeExpiredProducers(currentTimeMs: Long): Unit = {
