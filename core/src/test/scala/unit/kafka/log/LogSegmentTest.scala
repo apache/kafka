@@ -25,12 +25,12 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
-import org.apache.kafka.server.log.internals.{BatchMetadata, EpochEntry, LeaderEpochCheckpoint, LeaderEpochFileCache, LogConfig, ProducerStateEntry}
+import org.apache.kafka.server.log.internals.{BatchMetadata, EpochEntry, LeaderEpochFileCache, LogConfig, ProducerStateEntry}
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection._
-import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
 class LogSegmentTest {

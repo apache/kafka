@@ -18,6 +18,7 @@ package org.apache.kafka.server.log.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint;
 import org.slf4j.Logger;
 
 import java.util.AbstractMap;

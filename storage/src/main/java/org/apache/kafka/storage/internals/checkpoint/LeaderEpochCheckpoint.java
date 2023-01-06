@@ -14,7 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.log.internals;
+package org.apache.kafka.storage.internals.checkpoint;
+
+import org.apache.kafka.server.log.internals.EpochEntry;
 
 import java.util.List;
 

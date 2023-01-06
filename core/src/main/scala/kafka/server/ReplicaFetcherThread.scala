@@ -27,8 +27,9 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.common.CheckpointFile.CheckpointReadBuffer
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochCheckpointFile}
+import org.apache.kafka.server.log.internals.EpochEntry
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 
 import java.io.{BufferedReader, File, InputStreamReader}
 import java.nio.charset.StandardCharsets

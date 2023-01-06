@@ -35,6 +35,7 @@ import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, EpochEnt
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers

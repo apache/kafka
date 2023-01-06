@@ -17,7 +17,8 @@
 package kafka.server.checkpoints
 
 import kafka.utils.{Logging, TestUtils}
-import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochCheckpointFile}
+import org.apache.kafka.server.log.internals.EpochEntry
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
