@@ -54,7 +54,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * The consumer configuration keys
  */
 public class ConsumerConfig extends AbstractConfig {
-    private static final ConfigDef CONFIG;
+    protected static final ConfigDef CONFIG;
 
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
     // This is to help optimize ConsumerCoordinator#performAssignment method

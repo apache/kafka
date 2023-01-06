@@ -741,15 +741,13 @@ public class Topology {
     /**
      * Adds a read-only {@link StateStore} to the topology.
      * <p>
-     * A read-only StateStore can use any compacted topic as a changelog.
+     * A read-only StateStore can use any compacted topic as a changelog. The <code>auto.offset.reset</code> property
+     * will be set to <code>earliest</code> for this topic.
      * <p>
-     * A {@link SourceNode} will be added to consume the data arriving from the partitions of the input topic.
-     * <p>
-     * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
-     * records forwarded from the {@link SourceNode}.
-     * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
+     * The provided {@link ProcessorSupplier} will be used to create a processor for all messages received
+     * from the given topic. This processor should contain logic to keep the {@link StateStore} up-to-date.
      *
-     * @param storeBuilder          user defined key value store builder
+     * @param storeBuilder          user defined store builder
      * @param sourceName            name of the {@link SourceNode} that will be automatically added
      * @param timestampExtractor    the stateless timestamp extractor used for this source,
      *                              if not specified the default extractor defined in the configs will be used
@@ -769,10 +767,8 @@ public class Topology {
                                                                   final String topic,
                                                                   final String processorName,
                                                                   final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
-        if (storeBuilder.loggingEnabled()) {
-            // -- disabling logging. We might want to print some logging.
-            storeBuilder.withLoggingDisabled();
-        }
+        // -- disabling logging. We might want to print some logging.
+        storeBuilder.withLoggingDisabled();
 
         internalTopologyBuilder.addSource(AutoOffsetReset.EARLIEST, sourceName, timestampExtractor, keyDeserializer, valueDeserializer, topic);
         internalTopologyBuilder.addProcessor(processorName, stateUpdateSupplier, sourceName);
@@ -785,16 +781,14 @@ public class Topology {
     /**
      * Adds a Read Only {@link StateStore} to the topology.
      *
-     * A Read Only StateStore can use any compacted topic as a changelog.
+     * A Read Only StateStore can use any compacted topic as a changelog. The <code>auto.offset.reset</code> property
+     * will be set to <code>earliest</code> for this topic.
      * <p>
-     * A {@link SourceNode} will be added to consume the data arriving from the partitions of the input topic.
-     * <p>
-     * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
-     * records forwarded from the {@link SourceNode}.
-     * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
+     * The provided {@link ProcessorSupplier} will be used to create a processor for all messages received
+     * from the given topic. This processor should contain logic to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
-     * @param storeBuilder          user defined key value store builder
+     * @param storeBuilder          user defined store builder
      * @param sourceName            name of the {@link SourceNode} that will be automatically added
      * @param keyDeserializer       the {@link Deserializer} to deserialize keys with
      * @param valueDeserializer     the {@link Deserializer} to deserialize values with

@@ -469,18 +469,16 @@ StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier = Store
                 </p>
             <div class="section" id="readonly-state-stores">
                 <span id="streams-developer-guide-state-store-readonly"></span><h3><a class="toc-backref" href="#id12">ReadOnly State Stores</a><a class="headerlink" href="#readonly-state-stores" title="Permalink to this headline"></a></h3>
-                <p>The changelog topic for a fault-tolerant state store can also be used to perform lookups against. It is
-                    crucial to understand that there can be only one writer to this state store, but there can be multiple
-                    readers.</p>
-
-                <p>This allows you to use a read-only state store for looking up reference data managed by another processor
-                    or even another process all together. The messages within the compacted topic may be projected (subset of data extracted)
-                    before going into the readonly state store. Therefor we can optimize what the data within our readonly state
-                    store should look like, depending on the use-case it needs to serve.</p>
+                <p>A read-only state store materialized the data from its input topic. It also uses the input topic
+                    for fault-tolerance, and thus does not have an additional changelog topic (the input topic is
+                    re-used as changelog). Thus, the input topic should be configured with <a class="reference external" href="https://kafka.apache.org/documentation.html#compaction">log compaction</a>.
+                    Note that no other processor should modify the content of the state store, and the only writer
+                    should be the associated "state update processor"; other processors may read the content of the
+                    read-only store.</p>
 
                 <p><b>note:</b> beware of the partitioning requirements when using read-only state stores for lookups during
                     processing. You might want to make sure the original changelog topic is co-partitioned with the processors
-                    reading the readonly statestore.</p>
+                    reading the read-only statestore.</p>
             </div>
             <div class="section" id="implementing-custom-state-stores">
                 <span id="streams-developer-guide-state-store-custom"></span><h3><a class="toc-backref" href="#id7">Implementing Custom State Stores</a><a class="headerlink" href="#implementing-custom-state-stores" title="Permalink to this headline"></a></h3>
