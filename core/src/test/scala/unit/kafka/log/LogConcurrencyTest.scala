@@ -24,7 +24,7 @@ import kafka.utils.{KafkaScheduler, TestUtils}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.server.log.internals.{FetchHighWatermark, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{FetchIsolation, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -92,7 +92,7 @@ class LogConcurrencyTest {
         val readInfo = log.read(
           startOffset = fetchOffset,
           maxLength = 1,
-          isolation = new FetchHighWatermark(),
+          isolation = FetchIsolation.FETCH_HIGH_WATERMARK,
           minOneMessage = true
         )
         readInfo.records.batches().forEach { batch =>

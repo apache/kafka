@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.server.log.internals.{FetchDataInfo, FetchLogEnd, FetchParams, LogOffsetMetadata}
+import org.apache.kafka.server.log.internals.{FetchDataInfo, FetchIsolation, FetchParams, LogOffsetMetadata}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 import org.mockito.ArgumentMatchers.{any, anyInt}
@@ -177,7 +177,7 @@ class DelayedFetchTest {
       maxWaitMs,
       1,
       maxBytes,
-      new FetchLogEnd(),
+      FetchIsolation.FETCH_LOG_END,
       Optional.empty()
     )
   }

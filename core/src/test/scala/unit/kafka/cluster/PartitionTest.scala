@@ -54,7 +54,7 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.log.internals.{AppendOrigin, CleanerConfig, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchParams, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -75,7 +75,7 @@ object PartitionTest {
       maxWaitMs,
       minBytes,
       maxBytes,
-      new FetchLogEnd(),
+      FetchIsolation.FETCH_LOG_END,
       Optional.empty()
     )
   }
@@ -85,7 +85,7 @@ object PartitionTest {
     minBytes: Int = 1,
     maxBytes: Int = Int.MaxValue,
     clientMetadata: Option[ClientMetadata] = None,
-    isolation: FetchIsolation = new FetchHighWatermark()
+    isolation: FetchIsolation = FetchIsolation.FETCH_HIGH_WATERMARK
   ): FetchParams = {
     new FetchParams(
       ApiKeys.FETCH.latestVersion,
@@ -2899,7 +2899,7 @@ class PartitionTest extends AbstractPartitionTest {
     lastFetchedEpoch: Option[Int] = None,
     fetchTimeMs: Long = time.milliseconds(),
     topicId: Uuid = Uuid.ZERO_UUID,
-    isolation: FetchIsolation = new FetchHighWatermark()
+    isolation: FetchIsolation = FetchIsolation.FETCH_HIGH_WATERMARK
   ): LogReadInfo = {
     val fetchParams = consumerFetchParams(
       maxBytes = maxBytes,

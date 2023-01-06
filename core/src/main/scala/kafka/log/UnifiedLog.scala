@@ -42,7 +42,7 @@ import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CompletedTxn, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchTxnCommitted, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CompletedTxn, FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 
@@ -1250,9 +1250,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
            minOneMessage: Boolean): FetchDataInfo = {
     checkLogStartOffset(startOffset)
     var maxOffsetMetadata = localLog.logEndOffsetMetadata
-    if (isolation.isInstanceOf[FetchHighWatermark]) maxOffsetMetadata = fetchHighWatermarkMetadata
-    else if (isolation.isInstanceOf[FetchTxnCommitted]) maxOffsetMetadata = fetchLastStableOffsetMetadata
-    localLog.read(startOffset, maxLength, minOneMessage, maxOffsetMetadata, isolation.isInstanceOf[FetchTxnCommitted])
+    if (isolation == FetchIsolation.FETCH_HIGH_WATERMARK) maxOffsetMetadata = fetchHighWatermarkMetadata
+    else if (isolation == FetchIsolation.FETCH_TXN_COMMITTED) maxOffsetMetadata = fetchLastStableOffsetMetadata
+    localLog.read(startOffset, maxLength, minOneMessage, maxOffsetMetadata, isolation == FetchIsolation.FETCH_TXN_COMMITTED)
   }
 
   private[log] def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long): List[AbortedTxn] = {

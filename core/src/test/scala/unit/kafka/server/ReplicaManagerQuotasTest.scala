@@ -29,7 +29,7 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.server.log.internals.{FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchParams, LogDirFailureChannel, LogOffsetMetadata}
+import org.apache.kafka.server.log.internals.{FetchDataInfo, FetchIsolation, FetchParams, LogDirFailureChannel, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
@@ -176,7 +176,7 @@ class ReplicaManagerQuotasTest {
         600,
         1,
         1000,
-        new FetchLogEnd(),
+        FetchIsolation.FETCH_LOG_END,
         Optional.empty()
       )
 
@@ -227,7 +227,7 @@ class ReplicaManagerQuotasTest {
         600L,
         1,
         1000,
-        new FetchHighWatermark(),
+        FetchIsolation.FETCH_HIGH_WATERMARK,
         Optional.empty()
       )
 

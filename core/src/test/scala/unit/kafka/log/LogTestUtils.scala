@@ -27,7 +27,7 @@ import kafka.utils.{Scheduler, TestUtils}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, FetchDataInfo, FetchIsolation, FetchLogEnd, LazyIndex, LogConfig, LogDirFailureChannel, TransactionIndex}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, FetchDataInfo, FetchIsolation, LazyIndex, LogConfig, LogDirFailureChannel, TransactionIndex}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
 import java.nio.file.Files
@@ -233,7 +233,7 @@ object LogTestUtils {
   def readLog(log: UnifiedLog,
               startOffset: Long,
               maxLength: Int,
-              isolation: FetchIsolation = new FetchLogEnd(),
+              isolation: FetchIsolation = FetchIsolation.FETCH_LOG_END,
               minOneMessage: Boolean = true): FetchDataInfo = {
     log.read(startOffset, maxLength, isolation, minOneMessage)
   }

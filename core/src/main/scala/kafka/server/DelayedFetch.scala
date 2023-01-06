@@ -24,7 +24,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.server.log.internals.{FetchHighWatermark, FetchParams, FetchTxnCommitted, LogOffsetMetadata}
+import org.apache.kafka.server.log.internals.{FetchIsolation, FetchParams, LogOffsetMetadata}
 
 import scala.collection._
 
@@ -80,8 +80,8 @@ class DelayedFetch(
             val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, params.fetchOnlyLeader)
 
             var endOffset = offsetSnapshot.logEndOffset
-            if (params.isolation.isInstanceOf[FetchHighWatermark]) endOffset = offsetSnapshot.highWatermark
-            else if (params.isolation.isInstanceOf[FetchTxnCommitted]) endOffset = offsetSnapshot.lastStableOffset
+            if (params.isolation == FetchIsolation.FETCH_HIGH_WATERMARK) endOffset = offsetSnapshot.highWatermark
+            else if (params.isolation == FetchIsolation.FETCH_TXN_COMMITTED) endOffset = offsetSnapshot.lastStableOffset
 
             // Go directly to the check for Case G if the message offsets are the same. If the log segment
             // has just rolled, then the high watermark offset will remain the same but be on the old segment,

@@ -58,7 +58,7 @@ import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, C
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.log.internals.{AppendOrigin, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchParams, FetchTxnCommitted, LogConfig, LogDirFailureChannel, LogOffsetMetadata}
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation, FetchParams, LogConfig, LogDirFailureChannel, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -2182,8 +2182,8 @@ class ReplicaManagerTest {
     clientMetadata: Option[ClientMetadata] = None,
   ): CallbackResult[FetchPartitionData] = {
     val isolation = isolationLevel match {
-      case IsolationLevel.READ_COMMITTED => new FetchTxnCommitted()
-      case IsolationLevel.READ_UNCOMMITTED => new FetchHighWatermark()
+      case IsolationLevel.READ_COMMITTED => FetchIsolation.FETCH_TXN_COMMITTED
+      case IsolationLevel.READ_UNCOMMITTED => FetchIsolation.FETCH_HIGH_WATERMARK
     }
 
     fetchPartition(
@@ -2215,7 +2215,7 @@ class ReplicaManagerTest {
       partitionData,
       minBytes = minBytes,
       maxBytes = maxBytes,
-      isolation = new FetchLogEnd(),
+      isolation = FetchIsolation.FETCH_LOG_END,
       clientMetadata = None,
       maxWaitMs = maxWaitMs
     )
@@ -2256,17 +2256,17 @@ class ReplicaManagerTest {
   }
 
   private def fetchPartitions(
-    replicaManager: ReplicaManager,
-    replicaId: Int,
-    fetchInfos: Seq[(TopicIdPartition, PartitionData)],
-    responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
-    requestVersion: Short = ApiKeys.FETCH.latestVersion,
-    maxWaitMs: Long = 0,
-    minBytes: Int = 1,
-    maxBytes: Int = 1024 * 1024,
-    quota: ReplicaQuota = UnboundedQuota,
-    isolation: FetchIsolation = new FetchLogEnd(),
-    clientMetadata: Option[ClientMetadata] = None
+                               replicaManager: ReplicaManager,
+                               replicaId: Int,
+                               fetchInfos: Seq[(TopicIdPartition, PartitionData)],
+                               responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
+                               requestVersion: Short = ApiKeys.FETCH.latestVersion,
+                               maxWaitMs: Long = 0,
+                               minBytes: Int = 1,
+                               maxBytes: Int = 1024 * 1024,
+                               quota: ReplicaQuota = UnboundedQuota,
+                               isolation: FetchIsolation = FetchIsolation.FETCH_LOG_END,
+                               clientMetadata: Option[ClientMetadata] = None
   ): Unit = {
     val params = new FetchParams(
       requestVersion,

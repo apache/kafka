@@ -29,7 +29,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
 import org.apache.kafka.common.utils.FetchRequestUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.log.internals.{FetchLogEnd, FetchParams}
+import org.apache.kafka.server.log.internals.{FetchIsolation, FetchParams}
 
 import java.util
 import java.util.Optional
@@ -97,7 +97,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
       0L, // timeout is 0 so that the callback will be executed immediately
       request.minBytes,
       request.maxBytes,
-      new FetchLogEnd(),
+      FetchIsolation.FETCH_LOG_END,
       Optional.empty()
     )
 

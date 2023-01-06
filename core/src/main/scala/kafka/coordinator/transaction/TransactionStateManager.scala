@@ -36,7 +36,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.server.log.internals.{AppendOrigin, FetchLogEnd}
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation}
 import org.apache.kafka.server.record.BrokerCompressionType
 
 import scala.jdk.CollectionConverters._
@@ -437,7 +437,7 @@ class TransactionStateManager(brokerId: Int,
               idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
             val fetchDataInfo = log.read(currOffset,
               maxLength = config.transactionLogLoadBufferSize,
-              isolation = new FetchLogEnd(),
+              isolation = FetchIsolation.FETCH_LOG_END,
               minOneMessage = true)
 
             readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0

@@ -34,7 +34,7 @@ import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecor
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.server.log.internals.{FetchDataInfo, FetchLogEnd, LogConfig, LogOffsetMetadata}
+import org.apache.kafka.server.log.internals.{FetchDataInfo, FetchIsolation, LogConfig, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -467,7 +467,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
       maxLength = anyInt,
-      isolation = ArgumentMatchers.isA(classOf[FetchLogEnd]),
+      isolation = ArgumentMatchers.eq(FetchIsolation.FETCH_LOG_END),
       minOneMessage = ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
 

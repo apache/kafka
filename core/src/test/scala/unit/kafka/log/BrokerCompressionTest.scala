@@ -22,7 +22,7 @@ import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.{FetchLogEnd, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{FetchIsolation, LogConfig, LogDirFailureChannel}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
@@ -76,7 +76,7 @@ class BrokerCompressionTest {
     def readBatch(offset: Int): RecordBatch = {
       val fetchInfo = log.read(offset,
         maxLength = 4096,
-        isolation = new FetchLogEnd(),
+        isolation = FetchIsolation.FETCH_LOG_END,
         minOneMessage = true)
       fetchInfo.records.batches.iterator.next()
     }

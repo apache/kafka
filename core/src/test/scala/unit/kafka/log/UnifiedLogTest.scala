@@ -38,7 +38,7 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogConfig, LogOffsetMetadata, RecordValidationException}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, FetchIsolation, LogConfig, LogOffsetMetadata, RecordValidationException}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
@@ -91,7 +91,7 @@ class UnifiedLogTest {
       val readInfo = log.read(
         startOffset = fetchOffset,
         maxLength = 2048,
-        isolation = new FetchHighWatermark(),
+        isolation = FetchIsolation.FETCH_HIGH_WATERMARK,
         minOneMessage = false)
       assertEquals(expectedSize, readInfo.records.sizeInBytes)
       assertEquals(expectedOffsets, readInfo.records.records.asScala.map(_.offset))
@@ -284,8 +284,8 @@ class UnifiedLogTest {
     assertTrue(readInfo.records.sizeInBytes > 0)
 
     var upperBoundOffset = log.logEndOffset
-    if (isolation.isInstanceOf[FetchHighWatermark]) upperBoundOffset = log.highWatermark
-    else if (isolation.isInstanceOf[FetchTxnCommitted]) upperBoundOffset = log.lastStableOffset
+    if (isolation == FetchIsolation.FETCH_HIGH_WATERMARK) upperBoundOffset = log.highWatermark
+    else if (isolation == FetchIsolation.FETCH_TXN_COMMITTED) upperBoundOffset = log.lastStableOffset
 
     for (record <- readInfo.records.records.asScala)
       assertTrue(record.offset < upperBoundOffset)
@@ -321,7 +321,7 @@ class UnifiedLogTest {
     )), leaderEpoch = 0)
 
     (log.logStartOffset until log.logEndOffset).foreach { offset =>
-      assertNonEmptyFetch(log, offset, new FetchLogEnd())
+      assertNonEmptyFetch(log, offset, FetchIsolation.FETCH_LOG_END)
     }
   }
 
@@ -342,11 +342,11 @@ class UnifiedLogTest {
 
     def assertHighWatermarkBoundedFetches(): Unit = {
       (log.logStartOffset until log.highWatermark).foreach { offset =>
-        assertNonEmptyFetch(log, offset, new FetchHighWatermark())
+        assertNonEmptyFetch(log, offset, FetchIsolation.FETCH_HIGH_WATERMARK)
       }
 
       (log.highWatermark to log.logEndOffset).foreach { offset =>
-        assertEmptyFetch(log, offset, new FetchHighWatermark())
+        assertEmptyFetch(log, offset, FetchIsolation.FETCH_HIGH_WATERMARK)
       }
     }
 
@@ -438,11 +438,11 @@ class UnifiedLogTest {
 
     def assertLsoBoundedFetches(): Unit = {
       (log.logStartOffset until log.lastStableOffset).foreach { offset =>
-        assertNonEmptyFetch(log, offset, new FetchTxnCommitted())
+        assertNonEmptyFetch(log, offset, FetchIsolation.FETCH_TXN_COMMITTED)
       }
 
       (log.lastStableOffset to log.logEndOffset).foreach { offset =>
-        assertEmptyFetch(log, offset, new FetchTxnCommitted())
+        assertEmptyFetch(log, offset, FetchIsolation.FETCH_TXN_COMMITTED)
       }
     }
 
@@ -2938,7 +2938,7 @@ class UnifiedLogTest {
         val readInfo = log.read(
           startOffset = currentLogEndOffset,
           maxLength = Int.MaxValue,
-          isolation = new FetchTxnCommitted(),
+          isolation = FetchIsolation.FETCH_TXN_COMMITTED,
           minOneMessage = false)
 
         if (readInfo.records.sizeInBytes() > 0)
@@ -3368,7 +3368,7 @@ class UnifiedLogTest {
     // now check that a fetch includes the aborted transaction
     val fetchDataInfo = log.read(0L,
       maxLength = 2048,
-      isolation = new FetchTxnCommitted(),
+      isolation = FetchIsolation.FETCH_TXN_COMMITTED,
       minOneMessage = true)
 
     assertTrue(fetchDataInfo.abortedTransactions.isPresent)

@@ -46,7 +46,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicPartition}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
-import org.apache.kafka.server.log.internals.{AppendOrigin, FetchLogEnd}
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation}
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -598,7 +598,7 @@ class GroupMetadataManager(brokerId: Int,
         while (currOffset < logEndOffset && readAtLeastOneRecord && !shuttingDown.get()) {
           val fetchDataInfo = log.read(currOffset,
             maxLength = config.loadBufferSize,
-            isolation = new FetchLogEnd(),
+            isolation = FetchIsolation.FETCH_LOG_END,
             minOneMessage = true)
 
           readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0

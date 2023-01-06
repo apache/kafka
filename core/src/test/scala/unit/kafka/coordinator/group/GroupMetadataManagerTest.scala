@@ -42,7 +42,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.log.internals.{AppendOrigin, FetchDataInfo, FetchLogEnd, LogOffsetMetadata}
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchDataInfo, FetchIsolation, LogOffsetMetadata}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -807,7 +807,7 @@ class GroupMetadataManagerTest {
     verify(logMock).logStartOffset
     verify(logMock).read(ArgumentMatchers.eq(startOffset),
       maxLength = anyInt(),
-      isolation = ArgumentMatchers.isA(classOf[FetchLogEnd]),
+      isolation = ArgumentMatchers.eq(FetchIsolation.FETCH_LOG_END),
       minOneMessage = ArgumentMatchers.eq(true))
     verify(replicaManager).getLog(groupTopicPartition)
     verify(replicaManager, times(2)).getLogEndOffset(groupTopicPartition)
@@ -888,12 +888,12 @@ class GroupMetadataManagerTest {
       .thenReturn(segment2End)
     when(logMock.read(ArgumentMatchers.eq(segment1End),
       maxLength = anyInt(),
-      isolation = ArgumentMatchers.isA(classOf[FetchLogEnd]),
+      isolation = ArgumentMatchers.eq(FetchIsolation.FETCH_LOG_END),
       minOneMessage = ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(segment1End), fileRecordsMock))
     when(logMock.read(ArgumentMatchers.eq(segment2End),
       maxLength = anyInt(),
-      isolation = ArgumentMatchers.isA(classOf[FetchLogEnd]),
+      isolation = ArgumentMatchers.eq(FetchIsolation.FETCH_LOG_END),
       minOneMessage = ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(segment2End), fileRecordsMock))
     when(fileRecordsMock.sizeInBytes())
@@ -2374,7 +2374,7 @@ class GroupMetadataManagerTest {
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
       maxLength = anyInt(),
-      isolation = ArgumentMatchers.isA(classOf[FetchLogEnd]),
+      isolation = ArgumentMatchers.eq(FetchIsolation.FETCH_LOG_END),
       minOneMessage = ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), mockRecords))
     when(replicaManager.getLog(groupMetadataTopicPartition)).thenReturn(Some(logMock))
@@ -2531,7 +2531,7 @@ class GroupMetadataManagerTest {
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
       maxLength = anyInt(),
-      isolation = ArgumentMatchers.isA(classOf[FetchLogEnd]),
+      isolation = ArgumentMatchers.eq(FetchIsolation.FETCH_LOG_END),
       minOneMessage = ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
 

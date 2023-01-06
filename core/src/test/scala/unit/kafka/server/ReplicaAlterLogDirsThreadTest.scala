@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.FetchRequestUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.{FetchLogEnd, FetchParams}
+import org.apache.kafka.server.log.internals.{FetchIsolation, FetchParams}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.{any, anyBoolean}
@@ -283,7 +283,7 @@ class ReplicaAlterLogDirsThreadTest {
       0L,
       0,
       config.replicaFetchResponseMaxBytes,
-      new FetchLogEnd(),
+      FetchIsolation.FETCH_LOG_END,
       Optional.empty()
     )
 

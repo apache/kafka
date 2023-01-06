@@ -26,7 +26,7 @@ import org.apache.kafka.common.record.{ControlRecordUtils, MemoryRecords, Record
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
-import org.apache.kafka.server.log.internals.{AppendOrigin, FetchHighWatermark, FetchLogEnd, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel}
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 
 import java.io.File
@@ -51,8 +51,8 @@ final class KafkaMetadataLog private (
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
-      case Isolation.COMMITTED => new FetchHighWatermark()
-      case Isolation.UNCOMMITTED => new FetchLogEnd()
+      case Isolation.COMMITTED => FetchIsolation.FETCH_HIGH_WATERMARK
+      case Isolation.UNCOMMITTED => FetchIsolation.FETCH_LOG_END
       case _ => throw new IllegalArgumentException(s"Unhandled read isolation $readIsolation")
     }
 

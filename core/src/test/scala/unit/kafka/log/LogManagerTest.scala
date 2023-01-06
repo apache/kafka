@@ -38,7 +38,7 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Properties}
-import org.apache.kafka.server.log.internals.{FetchDataInfo, FetchLogEnd, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import scala.collection.{Map, mutable}
@@ -517,7 +517,7 @@ class LogManagerTest {
   }
 
   private def readLog(log: UnifiedLog, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
-    log.read(offset, maxLength, isolation = new FetchLogEnd(), minOneMessage = true)
+    log.read(offset, maxLength, isolation = FetchIsolation.FETCH_LOG_END, minOneMessage = true)
   }
 
   /**

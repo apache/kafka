@@ -20,17 +20,22 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.FetchRequestUtils;
 
-public interface FetchIsolation {
-    static FetchIsolation apply(int replicaId, IsolationLevel isolationLevel) {
-        if (!FetchRequestUtils.isConsumer(replicaId)) {
-            return new FetchLogEnd();
-        } else if (isolationLevel == IsolationLevel.READ_COMMITTED) {
-            return new FetchTxnCommitted();
-        } else {
-            return new FetchHighWatermark();
-        }
-    }
-    static FetchIsolation apply(FetchRequest request) {
+public enum FetchIsolation {
+    FETCH_LOG_END,
+    FETCH_HIGH_WATERMARK,
+    FETCH_TXN_COMMITTED;
+
+    public static FetchIsolation apply(FetchRequest request) {
         return apply(request.replicaId(), request.isolationLevel());
+    }
+
+    public static FetchIsolation apply(int replicaId, IsolationLevel isolationLevel) {
+        if (!FetchRequestUtils.isConsumer(replicaId)) {
+            return FETCH_LOG_END;
+        } else if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+            return FETCH_TXN_COMMITTED;
+        } else {
+            return FETCH_HIGH_WATERMARK;
+        }
     }
 }
