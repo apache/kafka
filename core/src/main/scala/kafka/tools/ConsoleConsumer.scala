@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
-import java.util.{Collections, Locale, Map, Optional, Properties, Random, Arrays}
+import java.util.{Collections, Locale, Map, Optional, Properties, Random}
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.utils.Implicits._
@@ -220,7 +220,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("consumer_prop")
       .ofType(classOf[String])
-    val consumerConfigOpt = parser.acceptsAll(Arrays.asList("consumer.config", "command-config"), s"Consumer config properties file. Note that $consumerPropertyOpt takes precedence over this config.")
+    val consumerConfigOpt = parser.accepts("consumer.config", s"Consumer config properties file. Note that $consumerPropertyOpt takes precedence over this config.")
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])

@@ -19,7 +19,7 @@ package kafka.tools
 
 import java.io._
 import java.nio.charset.StandardCharsets
-import java.util.{Properties, Arrays}
+import java.util.Properties
 import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common._
@@ -244,7 +244,7 @@ object ConsoleProducer {
             .withRequiredArg
             .describedAs("producer_prop")
             .ofType(classOf[String])
-    val producerConfigOpt = parser.acceptsAll(Arrays.asList("producer.config", "command-config"), s"Producer config properties file. Note that $producerPropertyOpt takes precedence over this config.")
+    val producerConfigOpt = parser.accepts("producer.config", s"Producer config properties file. Note that $producerPropertyOpt takes precedence over this config.")
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
