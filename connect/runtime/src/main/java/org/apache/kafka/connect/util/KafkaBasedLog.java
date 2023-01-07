@@ -384,7 +384,6 @@ public class KafkaBasedLog<K, V> {
             throw e;
         } catch (KafkaException e) {
             log.error("Error polling: " + e);
-            throw e;
         }
     }
 

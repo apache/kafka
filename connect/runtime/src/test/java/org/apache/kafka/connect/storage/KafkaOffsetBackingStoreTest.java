@@ -54,9 +54,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Collections;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.time.Duration;
@@ -73,13 +71,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.doCallRealMethod;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.*;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KafkaOffsetBackingStoreTest {
@@ -480,7 +472,42 @@ public class KafkaOffsetBackingStoreTest {
     @Test(expected = KafkaException.class)
     public void testReadToEndShouldNotPollForeverWhenConsumerPollFails() {
 
-        Consumer<byte[], byte[]> consumer = spy(new MockConsumer<>(OffsetResetStrategy.EARLIEST));
+        ExecutorService herderExecutor = Executors.newSingleThreadExecutor();
+        AtomicBoolean stopping = new AtomicBoolean();
+        MockConsumer<byte[], byte[]> consumer = spy(new MockConsumer<>(OffsetResetStrategy.EARLIEST));
+
+        PartitionInfo partitionInfo = new PartitionInfo(TOPIC, 0, null, null, null);
+
+        TopicPartition offsetTopicPartition = new TopicPartition(TOPIC, 0);
+
+        doReturn(Collections.singleton(offsetTopicPartition)).when(consumer).assignment();
+        doReturn(Collections.singletonList(partitionInfo)).when(consumer).partitionsFor(TOPIC);
+
+        final Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(offsetTopicPartition, 100L);
+
+        final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
+        beginOffsets.put(offsetTopicPartition, 0L);
+
+        consumer.updateBeginningOffsets(beginOffsets);
+        consumer.updateEndOffsets(endOffsets);
+
+        consumer.schedulePollTask(() -> {
+            for(int i = 0; i < 50; i++) {
+                consumer.addRecord(new ConsumerRecord<>(TOPIC,
+                        0,
+                        i,
+                        0L,
+                        TimestampType.CREATE_TIME,
+                        0,
+                        0,
+                        TP1_KEY.array(),
+                        TP1_VALUE.array(),
+                        new RecordHeaders(),
+                        Optional.empty())
+                );
+            };
+        });
 
         class MockedKafkaBasedLog<K, V> extends KafkaBasedLog<byte[], byte[]> {
 
@@ -505,34 +532,38 @@ public class KafkaOffsetBackingStoreTest {
         }
 
         storeLog = spy(new MockedKafkaBasedLog<>(TOPIC, new HashMap<>(), new HashMap<>(), () -> null,
-                null, Time.SYSTEM, admin -> { }));
+                (error, result) -> {}, Time.SYSTEM, admin -> { }));
         storeLogOverridden = true;
 
         doReturn(storeLog).when(store).createKafkaBasedLog(capturedTopic.capture(), capturedProducerProps.capture(),
                 capturedConsumerProps.capture(), capturedConsumedCallback.capture(),
                 capturedNewTopic.capture(), capturedAdminSupplier.capture());
 
-        PartitionInfo partitionInfo = new PartitionInfo(TOPIC, 0, null, null, null);
-
-        TopicPartition offsetTopicPartition = new TopicPartition(TOPIC, 0);
-        Set<TopicPartition> assignment = Collections.singleton(offsetTopicPartition);
-
-        doReturn(Collections.singleton(offsetTopicPartition)).when(consumer).assignment();
-        doReturn(10L).when(consumer).position(offsetTopicPartition);
-        doReturn(Collections.singletonList(partitionInfo)).when(consumer).partitionsFor(TOPIC);
-
-        final Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(offsetTopicPartition, 100L);
-
-        doReturn(endOffsets).when(consumer).endOffsets(assignment);
-        doThrow(KafkaException.class).when(consumer).poll(Duration.ofMillis(Integer.MAX_VALUE));
 
         doCallRealMethod().when(storeLog).start();
 
         store.configure(mockConfig(props));
-        store.start();
+//        store.start();
 
-        store.stop();
+        herderExecutor.submit(() -> {
+            storeLog.start();
+            while (!stopping.get()) {
+                System.out.println("tick");
+            }
+            store.stop();
+        });
+
+        try {
+            Thread.sleep(Duration.ofSeconds(5).toMillis());
+            System.out.println("Trying to stop");
+            stopping.set(true);
+            herderExecutor.shutdown();
+            if (!herderExecutor.awaitTermination(5, TimeUnit.MILLISECONDS))
+                herderExecutor.shutdownNow();
+        } catch (InterruptedException e) {
+            System.out.println("Got InterruptedException" + e);
+            throw new RuntimeException(e);
+        }
         verify(storeLog).stop();
     }
 

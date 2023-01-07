@@ -17,12 +17,23 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
@@ -62,10 +73,9 @@ import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
-import org.apache.kafka.connect.util.Callback;
-import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.FutureCallback;
+import org.apache.kafka.connect.util.*;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
@@ -101,6 +111,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -125,6 +136,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.*;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({DistributedHerder.class})
@@ -265,6 +277,92 @@ public class DistributedHerderTest {
             herderExecutor.shutdownNow();
             herderExecutor = null;
         }
+    }
+
+    @Test
+    public void testReadToEndShouldNotPollForeverWhenConsumerPollFails() {
+        MockConsumer<byte[], byte[]> consumer = spy(new MockConsumer<>(OffsetResetStrategy.EARLIEST));
+
+        PartitionInfo partitionInfo = new PartitionInfo(FOO_TOPIC, 0, null, null, null);
+
+        TopicPartition offsetTopicPartition = new TopicPartition(FOO_TOPIC, 0);
+
+        doReturn(Collections.singleton(offsetTopicPartition)).when(consumer).assignment();
+        doReturn(Collections.singletonList(partitionInfo)).when(consumer).partitionsFor(FOO_TOPIC);
+
+        final Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(offsetTopicPartition, 100L);
+
+        final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
+        beginOffsets.put(offsetTopicPartition, 0L);
+
+        consumer.updateBeginningOffsets(beginOffsets);
+        consumer.updateEndOffsets(endOffsets);
+
+        consumer.schedulePollTask(() -> {
+            for(int i = 0; i < 50; i++) {
+                consumer.addRecord(new ConsumerRecord<>(FOO_TOPIC,
+                        0,
+                        i,
+                        0L,
+                        TimestampType.CREATE_TIME,
+                        0,
+                        0,
+                        "key".getBytes(),
+                        "value".getBytes(),
+                        new RecordHeaders(),
+                        Optional.empty())
+                );
+            };
+        });
+
+        class MockedKafkaBasedLog<K, V> extends KafkaBasedLog<byte[], byte[]> {
+
+            public MockedKafkaBasedLog(String topic, Map<String, Object> producerConfigs,
+                                       Map<String, Object> consumerConfigs,
+                                       Supplier<TopicAdmin> topicAdminSupplier,
+                                       Callback<ConsumerRecord<byte[], byte[]>> consumedCallback,
+                                       Time time,
+                                       java.util.function.Consumer<TopicAdmin> initializer) {
+                super(topic, producerConfigs, consumerConfigs, topicAdminSupplier, consumedCallback, time, initializer);
+            }
+
+            @Override
+            protected Producer<byte[], byte[]> createProducer() {
+                return null;
+            }
+
+            @Override
+            protected Consumer<byte[], byte[]> createConsumer() {
+                return consumer;
+            }
+        }
+
+        KafkaBasedLog<byte[], byte[]> storeLog = spy(new MockedKafkaBasedLog<>(FOO_TOPIC, new HashMap<>(), new HashMap<>(), () -> null,
+                (error, result) -> {}, Time.SYSTEM, admin -> { }));
+
+        Supplier<TopicAdmin> adminSupplier = () -> {
+            fail("Should not attempt to instantiate admin in these tests");
+            // Should never be reached; only add this thrown exception to satisfy the compiler
+            throw new AssertionError();
+        };
+        Supplier<String> clientIdBase = () -> "test-client-id-";
+
+        KafkaOffsetBackingStore store = spy(new KafkaOffsetBackingStore(adminSupplier, clientIdBase));
+
+        doReturn(storeLog).when(store).createKafkaBasedLog(FOO_TOPIC, new HashMap<>(),
+                new HashMap<>(),
+                (a, b) -> {},
+                new NewTopic(FOO_TOPIC, 1, (short) 1),
+                adminSupplier
+        );
+
+        doCallRealMethod().when(storeLog).start();
+        worker.globalOffsetBackingStore = store;
+
+        herder.start();
+
+
     }
 
     @Test

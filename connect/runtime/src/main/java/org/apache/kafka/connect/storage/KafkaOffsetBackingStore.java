@@ -232,7 +232,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     }
 
     // Visible for testing
-    KafkaBasedLog<byte[], byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
+    public KafkaBasedLog<byte[], byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
                                                               Map<String, Object> consumerProps,
                                                               Callback<ConsumerRecord<byte[], byte[]>> consumedCallback,
                                                               final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
@@ -268,7 +268,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
 
     @Override
     public void start() {
-        log.info("Starting KafkaOffsetBackingStore");
+        log.info("Starting KafkaOffsetBackingStore on Thread:{}", Thread.currentThread().getName());
         try {
             offsetLog.start();
         } catch (UnsupportedVersionException e) {
