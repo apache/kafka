@@ -109,7 +109,8 @@ public class TaggedFields extends DocumentedType {
                 objects.put(tag, field.type.read(buffer));
             }
         }
-        return objects;
+        throw new IllegalStateException("should not enter here!");
+//        return objects;
     }
 
     @SuppressWarnings("unchecked")
