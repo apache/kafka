@@ -257,7 +257,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
     // Get the respective epoch in which the starting-offset exists.
     var maybeEpoch = leaderEpochCache.epochForOffset(startingOffset)
     while (maybeEpoch.isPresent) {
-      val epoch = maybeEpoch.get
+      val epoch = maybeEpoch.getAsInt
       remoteLogMetadataManager.listRemoteLogSegments(new TopicIdPartition(topicId, tp), epoch).asScala
         .foreach(rlsMetadata =>
           if (rlsMetadata.maxTimestampMs() >= timestamp && rlsMetadata.endOffset() >= startingOffset) {

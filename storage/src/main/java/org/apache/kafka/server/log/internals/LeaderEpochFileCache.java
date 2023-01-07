@@ -27,6 +27,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.TreeMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Predicate;
@@ -194,22 +195,26 @@ public class LeaderEpochFileCache {
         }
     }
 
-    public Optional<Integer> previousEpoch(int epoch) {
+    public OptionalInt previousEpoch(int epoch) {
         lock.readLock().lock();
         try {
-            return Optional.ofNullable(epochs.lowerKey(epoch));
+            return toOptionalInt(epochs.lowerKey(epoch));
         } finally {
             lock.readLock().unlock();
         }
     }
 
-    public Optional<Integer> nextEpoch(int epoch) {
+    public OptionalInt nextEpoch(int epoch) {
         lock.readLock().lock();
         try {
-            return Optional.ofNullable(epochs.higherKey(epoch));
+            return toOptionalInt(epochs.higherKey(epoch));
         } finally {
             lock.readLock().unlock();
         }
+    }
+
+    private static OptionalInt toOptionalInt(Integer value) {
+        return (value != null) ? OptionalInt.of(value) : OptionalInt.empty();
     }
 
     public Optional<EpochEntry> epochEntry(int epoch) {
@@ -327,17 +332,17 @@ public class LeaderEpochFileCache {
         }
     }
 
-    public Optional<Integer> epochForOffset(long offset) {
+    public OptionalInt epochForOffset(long offset) {
         lock.readLock().lock();
         try {
-            Optional<Integer> previousEpoch = Optional.empty();
+            OptionalInt previousEpoch = OptionalInt.empty();
             for (EpochEntry epochEntry : epochs.values()) {
                 int epoch = epochEntry.epoch;
                 long startOffset = epochEntry.startOffset;
-                if (startOffset == offset) return Optional.of(epoch);
+                if (startOffset == offset) return OptionalInt.of(epoch);
                 if (startOffset > offset) return previousEpoch;
 
-                previousEpoch = Optional.of(epoch);
+                previousEpoch = OptionalInt.of(epoch);
             }
 
             return previousEpoch;

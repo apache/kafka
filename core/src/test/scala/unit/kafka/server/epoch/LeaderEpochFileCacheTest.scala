@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.io.File
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, OptionalInt}
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -589,19 +589,19 @@ class LeaderEpochFileCacheTest {
 
   @Test
   def testFindPreviousEpoch(): Unit = {
-    assertEquals(Optional.empty[Integer](), cache.previousEpoch(2))
+    assertEquals(OptionalInt.empty(), cache.previousEpoch(2))
 
     cache.assign(2, 10)
-    assertEquals(Optional.empty[Integer](), cache.previousEpoch(2))
+    assertEquals(OptionalInt.empty(), cache.previousEpoch(2))
 
     cache.assign(4, 15)
-    assertEquals(Optional.of(2), cache.previousEpoch(4))
+    assertEquals(OptionalInt.of(2), cache.previousEpoch(4))
 
     cache.assign(10, 20)
-    assertEquals(Optional.of(4), cache.previousEpoch(10))
+    assertEquals(OptionalInt.of(4), cache.previousEpoch(10))
 
     cache.truncateFromEnd(18)
-    assertEquals(Optional.of(2), cache.previousEpoch(cache.latestEpoch.get))
+    assertEquals(OptionalInt.of(2), cache.previousEpoch(cache.latestEpoch.get))
   }
 
   @Test
@@ -610,11 +610,11 @@ class LeaderEpochFileCacheTest {
     cache.assign(1, 100)
     cache.assign(2, 200)
 
-    assertEquals(Optional.of(0), cache.nextEpoch(-1))
-    assertEquals(Optional.of(1), cache.nextEpoch(0))
-    assertEquals(Optional.of(2), cache.nextEpoch(1))
-    assertEquals(Optional.empty[Integer](), cache.nextEpoch(2))
-    assertEquals(Optional.empty[Integer](), cache.nextEpoch(100))
+    assertEquals(OptionalInt.of(0), cache.nextEpoch(-1))
+    assertEquals(OptionalInt.of(1), cache.nextEpoch(0))
+    assertEquals(OptionalInt.of(2), cache.nextEpoch(1))
+    assertEquals(OptionalInt.empty(), cache.nextEpoch(2))
+    assertEquals(OptionalInt.empty(), cache.nextEpoch(100))
   }
 
   @Test
@@ -634,11 +634,11 @@ class LeaderEpochFileCacheTest {
     cache.assign(1, 20)
     cache.assign(5, 30)
 
-    assertEquals(Optional.of(1), cache.epochForOffset(25))
-    assertEquals(Optional.of(1), cache.epochForOffset(20))
-    assertEquals(Optional.of(5), cache.epochForOffset(30))
-    assertEquals(Optional.of(5), cache.epochForOffset(50))
-    assertEquals(Optional.empty[Integer](), cache.epochForOffset(5))
+    assertEquals(OptionalInt.of(1), cache.epochForOffset(25))
+    assertEquals(OptionalInt.of(1), cache.epochForOffset(20))
+    assertEquals(OptionalInt.of(5), cache.epochForOffset(30))
+    assertEquals(OptionalInt.of(5), cache.epochForOffset(50))
+    assertEquals(OptionalInt.empty(), cache.epochForOffset(5))
   }
 
 }

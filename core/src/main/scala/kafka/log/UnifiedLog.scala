@@ -1307,8 +1307,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
         val curLocalLogStartOffset = localLogStartOffset()
 
-        val earliestLocalLogEpochEntry: Optional[EpochEntry] = leaderEpochCache.asJava.flatMap(cache =>
-          cache.epochForOffset(curLocalLogStartOffset).flatMap(cache.epochEntry(_)))
+        val earliestLocalLogEpochEntry = leaderEpochCache.asJava.flatMap(cache => {
+          val epoch = cache.epochForOffset(curLocalLogStartOffset)
+          if (epoch.isPresent) (cache.epochEntry(epoch.getAsInt)) else Optional.empty[EpochEntry]()
+        })
 
         val epochOpt = if (earliestLocalLogEpochEntry.isPresent && earliestLocalLogEpochEntry.get().startOffset <= curLocalLogStartOffset)
           Optional.of[Integer](earliestLocalLogEpochEntry.get().epoch)
