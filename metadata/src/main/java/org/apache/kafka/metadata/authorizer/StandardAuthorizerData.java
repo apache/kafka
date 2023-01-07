@@ -317,7 +317,7 @@ public class StandardAuthorizerData {
                 // In this case, log at debug level. If false, no access is actually granted, the result is used
                 // only to determine authorized operations. So log only at trace level.
                 if (action.logIfAllowed() && auditLog.isDebugEnabled()) {
-                    auditLog.debug(buildAuditMessage(principal, requestContext, action, rule));
+                    auditLog.info(buildAuditMessage(principal, requestContext, action, rule));
                 } else if (auditLog.isTraceEnabled()) {
                     auditLog.trace(buildAuditMessage(principal, requestContext, action, rule));
                 }
@@ -329,7 +329,7 @@ public class StandardAuthorizerData {
                 // authorized operations or a filter (e.g for regex subscriptions) to filter out authorized resources.
                 // In this case, log only at trace level.
                 if (action.logIfDenied()) {
-                    auditLog.info(buildAuditMessage(principal, requestContext, action, rule));
+                    auditLog.warn(buildAuditMessage(principal, requestContext, action, rule));
                 } else if (auditLog.isTraceEnabled()) {
                     auditLog.trace(buildAuditMessage(principal, requestContext, action, rule));
                 }
