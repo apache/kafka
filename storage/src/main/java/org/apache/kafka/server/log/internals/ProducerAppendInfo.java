@@ -74,7 +74,7 @@ public class ProducerAppendInfo {
         this.currentEntry = currentEntry;
         this.origin = origin;
 
-        updatedEntry = new ProducerStateEntry(producerId, currentEntry.producerEpoch(), currentEntry.coordinatorEpoch, currentEntry.lastTimestamp, currentEntry.currentTxnFirstOffset, Optional.empty());
+        updatedEntry = currentEntry.withProducerIdAndBatchMetadata(producerId, Optional.empty());
     }
 
     public long producerId() {
@@ -166,27 +166,27 @@ public class ProducerAppendInfo {
         maybeValidateDataBatch(epoch, firstSeq, firstOffset);
         updatedEntry.addBatch(epoch, lastSeq, lastOffset, (int) (lastOffset - firstOffset), lastTimestamp);
 
-        OptionalLong currentTxnFirstOffset = updatedEntry.currentTxnFirstOffset;
+        OptionalLong currentTxnFirstOffset = updatedEntry.currentTxnFirstOffset();
         if (currentTxnFirstOffset.isPresent() && !isTransactional) {
             // Received a non-transactional message while a transaction is active
             throw new InvalidTxnStateException("Expected transactional write from producer " + producerId + " at " +
                     "offset " + firstOffsetMetadata + " in partition " + topicPartition);
         } else if (!currentTxnFirstOffset.isPresent() && isTransactional) {
             // Began a new transaction
-            updatedEntry.currentTxnFirstOffset = OptionalLong.of(firstOffset);
+            updatedEntry.setCurrentTxnFirstOffset(firstOffset);
             transactions.add(new TxnMetadata(producerId, firstOffsetMetadata));
         }
     }
 
     private void checkCoordinatorEpoch(EndTransactionMarker endTxnMarker, long offset) {
-        if (updatedEntry.coordinatorEpoch > endTxnMarker.coordinatorEpoch()) {
+        if (updatedEntry.coordinatorEpoch() > endTxnMarker.coordinatorEpoch()) {
             if (origin == AppendOrigin.REPLICATION) {
                 log.info("Detected invalid coordinator epoch for producerId {} at offset {} in partition {}: {} is older than previously known coordinator epoch {}",
-                        producerId, offset, topicPartition, endTxnMarker.coordinatorEpoch(), updatedEntry.coordinatorEpoch);
+                        producerId, offset, topicPartition, endTxnMarker.coordinatorEpoch(), updatedEntry.coordinatorEpoch());
             } else {
                 throw new TransactionCoordinatorFencedException("Invalid coordinator epoch for producerId " + producerId + " at " +
                         "offset " + offset + " in partition " + topicPartition + ": " + endTxnMarker.coordinatorEpoch() +
-                        " (zombie), " + updatedEntry.coordinatorEpoch + " (current)");
+                        " (zombie), " + updatedEntry.coordinatorEpoch() + " (current)");
             }
         }
     }
@@ -202,16 +202,11 @@ public class ProducerAppendInfo {
         // Only emit the `CompletedTxn` for non-empty transactions. A transaction marker
         // without any associated data will not have any impact on the last stable offset
         // and would not need to be reflected in the transaction index.
-        Optional<CompletedTxn> completedTxn = updatedEntry.currentTxnFirstOffset.isPresent() ?
-                Optional.of(new CompletedTxn(producerId, updatedEntry.currentTxnFirstOffset.getAsLong(), offset,
+        Optional<CompletedTxn> completedTxn = updatedEntry.currentTxnFirstOffset().isPresent() ?
+                Optional.of(new CompletedTxn(producerId, updatedEntry.currentTxnFirstOffset().getAsLong(), offset,
                         endTxnMarker.controlType() == ControlRecordType.ABORT))
                 : Optional.empty();
-
-        updatedEntry.maybeUpdateProducerEpoch(producerEpoch);
-        updatedEntry.currentTxnFirstOffset = OptionalLong.empty();
-        updatedEntry.coordinatorEpoch = endTxnMarker.coordinatorEpoch();
-        updatedEntry.lastTimestamp = timestamp;
-
+        updatedEntry.update(producerEpoch, endTxnMarker.coordinatorEpoch(), timestamp);
         return completedTxn;
     }
 
@@ -230,9 +225,9 @@ public class ProducerAppendInfo {
                 ", producerEpoch=" + updatedEntry.producerEpoch() +
                 ", firstSequence=" + updatedEntry.firstSeq() +
                 ", lastSequence=" + updatedEntry.lastSeq() +
-                ", currentTxnFirstOffset=" + updatedEntry.currentTxnFirstOffset +
-                ", coordinatorEpoch=" + updatedEntry.coordinatorEpoch +
-                ", lastTimestamp=" + updatedEntry.lastTimestamp +
+                ", currentTxnFirstOffset=" + updatedEntry.currentTxnFirstOffset() +
+                ", coordinatorEpoch=" + updatedEntry.coordinatorEpoch() +
+                ", lastTimestamp=" + updatedEntry.lastTimestamp() +
                 ", startedTransactions=" + transactions +
                 ')';
     }
