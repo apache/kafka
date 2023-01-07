@@ -91,7 +91,7 @@ class UnifiedLogTest {
       val readInfo = log.read(
         startOffset = fetchOffset,
         maxLength = 2048,
-        isolation = FetchIsolation.FETCH_HIGH_WATERMARK,
+        isolation = FetchIsolation.HIGH_WATERMARK,
         minOneMessage = false)
       assertEquals(expectedSize, readInfo.records.sizeInBytes)
       assertEquals(expectedOffsets, readInfo.records.records.asScala.map(_.offset))
@@ -283,9 +283,11 @@ class UnifiedLogTest {
     assertFalse(readInfo.firstEntryIncomplete)
     assertTrue(readInfo.records.sizeInBytes > 0)
 
-    var upperBoundOffset = log.logEndOffset
-    if (isolation == FetchIsolation.FETCH_HIGH_WATERMARK) upperBoundOffset = log.highWatermark
-    else if (isolation == FetchIsolation.FETCH_TXN_COMMITTED) upperBoundOffset = log.lastStableOffset
+    val upperBoundOffset = isolation match {
+      case FetchIsolation.LOG_END => log.logEndOffset
+      case FetchIsolation.HIGH_WATERMARK => log.highWatermark
+      case FetchIsolation.TXN_COMMITTED => log.lastStableOffset
+    }
 
     for (record <- readInfo.records.records.asScala)
       assertTrue(record.offset < upperBoundOffset)
@@ -321,7 +323,7 @@ class UnifiedLogTest {
     )), leaderEpoch = 0)
 
     (log.logStartOffset until log.logEndOffset).foreach { offset =>
-      assertNonEmptyFetch(log, offset, FetchIsolation.FETCH_LOG_END)
+      assertNonEmptyFetch(log, offset, FetchIsolation.LOG_END)
     }
   }
 
@@ -342,11 +344,11 @@ class UnifiedLogTest {
 
     def assertHighWatermarkBoundedFetches(): Unit = {
       (log.logStartOffset until log.highWatermark).foreach { offset =>
-        assertNonEmptyFetch(log, offset, FetchIsolation.FETCH_HIGH_WATERMARK)
+        assertNonEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK)
       }
 
       (log.highWatermark to log.logEndOffset).foreach { offset =>
-        assertEmptyFetch(log, offset, FetchIsolation.FETCH_HIGH_WATERMARK)
+        assertEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK)
       }
     }
 
@@ -438,11 +440,11 @@ class UnifiedLogTest {
 
     def assertLsoBoundedFetches(): Unit = {
       (log.logStartOffset until log.lastStableOffset).foreach { offset =>
-        assertNonEmptyFetch(log, offset, FetchIsolation.FETCH_TXN_COMMITTED)
+        assertNonEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED)
       }
 
       (log.lastStableOffset to log.logEndOffset).foreach { offset =>
-        assertEmptyFetch(log, offset, FetchIsolation.FETCH_TXN_COMMITTED)
+        assertEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED)
       }
     }
 
@@ -2938,7 +2940,7 @@ class UnifiedLogTest {
         val readInfo = log.read(
           startOffset = currentLogEndOffset,
           maxLength = Int.MaxValue,
-          isolation = FetchIsolation.FETCH_TXN_COMMITTED,
+          isolation = FetchIsolation.TXN_COMMITTED,
           minOneMessage = false)
 
         if (readInfo.records.sizeInBytes() > 0)
@@ -3368,7 +3370,7 @@ class UnifiedLogTest {
     // now check that a fetch includes the aborted transaction
     val fetchDataInfo = log.read(0L,
       maxLength = 2048,
-      isolation = FetchIsolation.FETCH_TXN_COMMITTED,
+      isolation = FetchIsolation.TXN_COMMITTED,
       minOneMessage = true)
 
     assertTrue(fetchDataInfo.abortedTransactions.isPresent)

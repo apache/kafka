@@ -598,7 +598,7 @@ class GroupMetadataManager(brokerId: Int,
         while (currOffset < logEndOffset && readAtLeastOneRecord && !shuttingDown.get()) {
           val fetchDataInfo = log.read(currOffset,
             maxLength = config.loadBufferSize,
-            isolation = FetchIsolation.FETCH_LOG_END,
+            isolation = FetchIsolation.LOG_END,
             minOneMessage = true)
 
           readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0

@@ -176,7 +176,7 @@ class ReplicaManagerQuotasTest {
         600,
         1,
         1000,
-        FetchIsolation.FETCH_LOG_END,
+        FetchIsolation.LOG_END,
         Optional.empty()
       )
 
@@ -227,7 +227,7 @@ class ReplicaManagerQuotasTest {
         600L,
         1,
         1000,
-        FetchIsolation.FETCH_HIGH_WATERMARK,
+        FetchIsolation.HIGH_WATERMARK,
         Optional.empty()
       )
 

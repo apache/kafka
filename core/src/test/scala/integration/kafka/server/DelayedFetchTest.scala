@@ -177,7 +177,7 @@ class DelayedFetchTest {
       maxWaitMs,
       1,
       maxBytes,
-      FetchIsolation.FETCH_LOG_END,
+      FetchIsolation.LOG_END,
       Optional.empty()
     )
   }

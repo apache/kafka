@@ -97,7 +97,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
       0L, // timeout is 0 so that the callback will be executed immediately
       request.minBytes,
       request.maxBytes,
-      FetchIsolation.FETCH_LOG_END,
+      FetchIsolation.LOG_END,
       Optional.empty()
     )
 

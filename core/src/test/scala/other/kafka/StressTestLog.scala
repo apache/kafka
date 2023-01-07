@@ -135,7 +135,7 @@ object StressTestLog {
       try {
         log.read(currentOffset,
           maxLength = 1,
-          isolation = FetchIsolation.FETCH_LOG_END,
+          isolation = FetchIsolation.LOG_END,
           minOneMessage = true).records match {
           case read: FileRecords if read.sizeInBytes > 0 => {
             val first = read.batches.iterator.next()

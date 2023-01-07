@@ -21,9 +21,9 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.FetchRequestUtils;
 
 public enum FetchIsolation {
-    FETCH_LOG_END,
-    FETCH_HIGH_WATERMARK,
-    FETCH_TXN_COMMITTED;
+    LOG_END,
+    HIGH_WATERMARK,
+    TXN_COMMITTED;
 
     public static FetchIsolation apply(FetchRequest request) {
         return apply(request.replicaId(), request.isolationLevel());
@@ -31,11 +31,11 @@ public enum FetchIsolation {
 
     public static FetchIsolation apply(int replicaId, IsolationLevel isolationLevel) {
         if (!FetchRequestUtils.isConsumer(replicaId)) {
-            return FETCH_LOG_END;
+            return LOG_END;
         } else if (isolationLevel == IsolationLevel.READ_COMMITTED) {
-            return FETCH_TXN_COMMITTED;
+            return TXN_COMMITTED;
         } else {
-            return FETCH_HIGH_WATERMARK;
+            return HIGH_WATERMARK;
         }
     }
 }

@@ -480,7 +480,7 @@ class DumpLogSegmentsTest {
     val logReadInfo = log.read(
       startOffset = 0,
       maxLength = Int.MaxValue,
-      isolation = FetchIsolation.FETCH_LOG_END,
+      isolation = FetchIsolation.LOG_END,
       minOneMessage = true
     )
 

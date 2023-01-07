@@ -283,7 +283,7 @@ class ReplicaAlterLogDirsThreadTest {
       0L,
       0,
       config.replicaFetchResponseMaxBytes,
-      FetchIsolation.FETCH_LOG_END,
+      FetchIsolation.LOG_END,
       Optional.empty()
     )
 

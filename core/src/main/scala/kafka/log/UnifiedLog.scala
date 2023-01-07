@@ -1249,10 +1249,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
            isolation: FetchIsolation,
            minOneMessage: Boolean): FetchDataInfo = {
     checkLogStartOffset(startOffset)
-    var maxOffsetMetadata = localLog.logEndOffsetMetadata
-    if (isolation == FetchIsolation.FETCH_HIGH_WATERMARK) maxOffsetMetadata = fetchHighWatermarkMetadata
-    else if (isolation == FetchIsolation.FETCH_TXN_COMMITTED) maxOffsetMetadata = fetchLastStableOffsetMetadata
-    localLog.read(startOffset, maxLength, minOneMessage, maxOffsetMetadata, isolation == FetchIsolation.FETCH_TXN_COMMITTED)
+    val maxOffsetMetadata = isolation match {
+      case FetchIsolation.LOG_END => localLog.logEndOffsetMetadata
+      case FetchIsolation.HIGH_WATERMARK => fetchHighWatermarkMetadata
+      case FetchIsolation.TXN_COMMITTED => fetchLastStableOffsetMetadata
+    }
+    localLog.read(startOffset, maxLength, minOneMessage, maxOffsetMetadata, isolation == FetchIsolation.TXN_COMMITTED)
   }
 
   private[log] def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long): List[AbortedTxn] = {

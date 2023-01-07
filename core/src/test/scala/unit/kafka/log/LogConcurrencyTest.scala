@@ -92,7 +92,7 @@ class LogConcurrencyTest {
         val readInfo = log.read(
           startOffset = fetchOffset,
           maxLength = 1,
-          isolation = FetchIsolation.FETCH_HIGH_WATERMARK,
+          isolation = FetchIsolation.HIGH_WATERMARK,
           minOneMessage = true
         )
         readInfo.records.batches().forEach { batch =>

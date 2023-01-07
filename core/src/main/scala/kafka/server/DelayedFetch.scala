@@ -79,9 +79,11 @@ class DelayedFetch(
             val partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition)
             val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, params.fetchOnlyLeader)
 
-            var endOffset = offsetSnapshot.logEndOffset
-            if (params.isolation == FetchIsolation.FETCH_HIGH_WATERMARK) endOffset = offsetSnapshot.highWatermark
-            else if (params.isolation == FetchIsolation.FETCH_TXN_COMMITTED) endOffset = offsetSnapshot.lastStableOffset
+            val endOffset = params.isolation match {
+              case FetchIsolation.LOG_END => offsetSnapshot.logEndOffset
+              case FetchIsolation.HIGH_WATERMARK => offsetSnapshot.highWatermark
+              case FetchIsolation.TXN_COMMITTED => offsetSnapshot.lastStableOffset
+            }
 
             // Go directly to the check for Case G if the message offsets are the same. If the log segment
             // has just rolled, then the high watermark offset will remain the same but be on the old segment,

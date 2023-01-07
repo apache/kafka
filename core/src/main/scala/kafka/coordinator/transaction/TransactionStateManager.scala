@@ -437,7 +437,7 @@ class TransactionStateManager(brokerId: Int,
               idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
             val fetchDataInfo = log.read(currOffset,
               maxLength = config.transactionLogLoadBufferSize,
-              isolation = FetchIsolation.FETCH_LOG_END,
+              isolation = FetchIsolation.LOG_END,
               minOneMessage = true)
 
             readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0

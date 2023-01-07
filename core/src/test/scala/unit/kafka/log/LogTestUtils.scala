@@ -233,7 +233,7 @@ object LogTestUtils {
   def readLog(log: UnifiedLog,
               startOffset: Long,
               maxLength: Int,
-              isolation: FetchIsolation = FetchIsolation.FETCH_LOG_END,
+              isolation: FetchIsolation = FetchIsolation.LOG_END,
               minOneMessage: Boolean = true): FetchDataInfo = {
     log.read(startOffset, maxLength, isolation, minOneMessage)
   }

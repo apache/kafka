@@ -76,7 +76,7 @@ class BrokerCompressionTest {
     def readBatch(offset: Int): RecordBatch = {
       val fetchInfo = log.read(offset,
         maxLength = 4096,
-        isolation = FetchIsolation.FETCH_LOG_END,
+        isolation = FetchIsolation.LOG_END,
         minOneMessage = true)
       fetchInfo.records.batches.iterator.next()
     }

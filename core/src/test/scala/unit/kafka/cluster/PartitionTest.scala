@@ -75,7 +75,7 @@ object PartitionTest {
       maxWaitMs,
       minBytes,
       maxBytes,
-      FetchIsolation.FETCH_LOG_END,
+      FetchIsolation.LOG_END,
       Optional.empty()
     )
   }
@@ -85,7 +85,7 @@ object PartitionTest {
     minBytes: Int = 1,
     maxBytes: Int = Int.MaxValue,
     clientMetadata: Option[ClientMetadata] = None,
-    isolation: FetchIsolation = FetchIsolation.FETCH_HIGH_WATERMARK
+    isolation: FetchIsolation = FetchIsolation.HIGH_WATERMARK
   ): FetchParams = {
     new FetchParams(
       ApiKeys.FETCH.latestVersion,
@@ -2899,7 +2899,7 @@ class PartitionTest extends AbstractPartitionTest {
     lastFetchedEpoch: Option[Int] = None,
     fetchTimeMs: Long = time.milliseconds(),
     topicId: Uuid = Uuid.ZERO_UUID,
-    isolation: FetchIsolation = FetchIsolation.FETCH_HIGH_WATERMARK
+    isolation: FetchIsolation = FetchIsolation.HIGH_WATERMARK
   ): LogReadInfo = {
     val fetchParams = consumerFetchParams(
       maxBytes = maxBytes,

@@ -393,7 +393,7 @@ class PartitionLockTest extends Logging {
         0L,
         1,
         maxBytes,
-        FetchIsolation.FETCH_LOG_END,
+        FetchIsolation.LOG_END,
         Optional.empty()
       )
 

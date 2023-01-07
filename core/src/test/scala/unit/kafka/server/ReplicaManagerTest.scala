@@ -2182,8 +2182,8 @@ class ReplicaManagerTest {
     clientMetadata: Option[ClientMetadata] = None,
   ): CallbackResult[FetchPartitionData] = {
     val isolation = isolationLevel match {
-      case IsolationLevel.READ_COMMITTED => FetchIsolation.FETCH_TXN_COMMITTED
-      case IsolationLevel.READ_UNCOMMITTED => FetchIsolation.FETCH_HIGH_WATERMARK
+      case IsolationLevel.READ_COMMITTED => FetchIsolation.TXN_COMMITTED
+      case IsolationLevel.READ_UNCOMMITTED => FetchIsolation.HIGH_WATERMARK
     }
 
     fetchPartition(
@@ -2215,7 +2215,7 @@ class ReplicaManagerTest {
       partitionData,
       minBytes = minBytes,
       maxBytes = maxBytes,
-      isolation = FetchIsolation.FETCH_LOG_END,
+      isolation = FetchIsolation.LOG_END,
       clientMetadata = None,
       maxWaitMs = maxWaitMs
     )
@@ -2265,7 +2265,7 @@ class ReplicaManagerTest {
                                minBytes: Int = 1,
                                maxBytes: Int = 1024 * 1024,
                                quota: ReplicaQuota = UnboundedQuota,
-                               isolation: FetchIsolation = FetchIsolation.FETCH_LOG_END,
+                               isolation: FetchIsolation = FetchIsolation.LOG_END,
                                clientMetadata: Option[ClientMetadata] = None
   ): Unit = {
     val params = new FetchParams(
