@@ -271,14 +271,16 @@ class ProducerStateManagerTest {
   def assertTxnMetadataEquals(expected: java.util.List[TxnMetadata], actual: java.util.List[TxnMetadata]): Unit = {
     val expectedIter = expected.iterator()
     val actualIter = actual.iterator()
-    while(expectedIter.hasNext && actualIter.hasNext) {
+    assertEquals(expected.size(), actual.size())
+    while (expectedIter.hasNext && actualIter.hasNext) {
       assertTxnMetadataEquals(expectedIter.next(), actualIter.next())
     }
   }
 
-  def assertTxnMetadataEquals(expected: TxnMetadata, actual:TxnMetadata) : Unit = {
+  def assertTxnMetadataEquals(expected: TxnMetadata, actual: TxnMetadata): Unit = {
     assertEquals(expected.producerId, actual.producerId)
     assertEquals(expected.firstOffset, actual.firstOffset)
+    assertEquals(expected.lastOffset, actual.lastOffset)
   }
 
   @Test

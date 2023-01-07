@@ -174,8 +174,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-    val newCleanerConfig = LogCleaner.cleanerConfig(newConfig)
-    val numThreads = newCleanerConfig.numThreads
+    val numThreads = LogCleaner.cleanerConfig(newConfig).numThreads
     val currentThreads = config.numThreads
     if (numThreads < 1)
       throw new ConfigException(s"Log cleaner threads should be at least 1")

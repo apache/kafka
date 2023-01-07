@@ -74,10 +74,8 @@ public class ProducerAppendInfo {
         this.currentEntry = currentEntry;
         this.origin = origin;
 
-        updatedEntry = new ProducerStateEntry(producerId, currentEntry.producerEpoch(),
-                currentEntry.coordinatorEpoch,
-                currentEntry.lastTimestamp,
-                currentEntry.currentTxnFirstOffset);
+        updatedEntry = new ProducerStateEntry(producerId, currentEntry.producerEpoch(), currentEntry.coordinatorEpoch, currentEntry.lastTimestamp, currentEntry.currentTxnFirstOffset, Optional.empty()
+        );
     }
 
     public long producerId() {
@@ -93,8 +91,8 @@ public class ProducerAppendInfo {
 
     private void checkProducerEpoch(short producerEpoch, long offset) {
         if (producerEpoch < updatedEntry.producerEpoch()) {
-            String message = String.format("Epoch of producer %d at offset %d in %s is %d, " +
-                    "which is smaller than the last seen epoch %d", producerId, offset, topicPartition, producerEpoch, updatedEntry.producerEpoch());
+            String message = "Epoch of producer " + producerId + " at offset " + offset + " in " + topicPartition +
+                    " is " + producerEpoch + ", " + "which is smaller than the last seen epoch " + updatedEntry.producerEpoch();
 
             if (origin == AppendOrigin.REPLICATION) {
                 log.warn(message);

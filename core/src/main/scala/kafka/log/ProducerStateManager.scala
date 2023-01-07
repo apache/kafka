@@ -29,7 +29,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, NoSuchFileException, StandardOpenOption}
-import java.util.OptionalLong
+import java.util.{Optional, OptionalLong}
 import java.util.concurrent.ConcurrentSkipListMap
 import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
@@ -93,9 +93,11 @@ object ProducerStateManager {
         val offsetDelta = producerEntryStruct.getInt(OffsetDeltaField)
         val coordinatorEpoch = producerEntryStruct.getInt(CoordinatorEpochField)
         val currentTxnFirstOffset = producerEntryStruct.getLong(CurrentTxnFirstOffsetField)
-        val batchMetadata: BatchMetadata = if (offset >= 0) new BatchMetadata(seq, offset, offsetDelta, timestamp) else null
+        val batchMetadata =
+          if (offset >= 0) Optional.of(new BatchMetadata(seq, offset, offsetDelta, timestamp))
+          else Optional.empty[BatchMetadata]()
         val currentTxnFirstOffsetValue = if (currentTxnFirstOffset >= 0) OptionalLong.of(currentTxnFirstOffset) else OptionalLong.empty()
-        new ProducerStateEntry(producerId, batchMetadata, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetValue)
+        new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetValue, batchMetadata)
       }
     } catch {
       case e: SchemaException =>

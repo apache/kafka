@@ -42,20 +42,16 @@ public class ProducerStateEntry {
     public OptionalLong currentTxnFirstOffset;
 
     public ProducerStateEntry(long producerId) {
-        this(producerId, null, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty());
+        this(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty());
     }
 
-    public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
-        this(producerId, null, producerEpoch, coordinatorEpoch, lastTimestamp, currentTxnFirstOffset);
-    }
-
-    public ProducerStateEntry(long producerId, BatchMetadata firstBatchMetadata, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset) {
+    public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset, Optional<BatchMetadata> firstBatchMetadata) {
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
         this.coordinatorEpoch = coordinatorEpoch;
         this.lastTimestamp = lastTimestamp;
         this.currentTxnFirstOffset = currentTxnFirstOffset;
-        if (firstBatchMetadata != null) batchMetadata.add(firstBatchMetadata);
+        firstBatchMetadata.ifPresent(batchMetadata::add);
     }
 
     public int firstSeq() {
