@@ -34,12 +34,18 @@ import java.util.stream.Stream;
  */
 public class ProducerStateEntry {
     public static final int NUM_BATCHES_TO_RETAIN = 5;
-    private final long producerId;
-    private final Deque<BatchMetadata> batchMetadata = new ArrayDeque<>();
-    private short producerEpoch;
+
     public int coordinatorEpoch;
     public long lastTimestamp;
     public OptionalLong currentTxnFirstOffset;
+
+    private final long producerId;
+    private final Deque<BatchMetadata> batchMetadata = new ArrayDeque<>();
+    private short producerEpoch;
+
+    public static ProducerStateEntry empty(long producerId) {
+        return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty());
+    }
 
     public ProducerStateEntry(long producerId) {
         this(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty());

@@ -200,7 +200,7 @@ class ProducerStateManagerTest {
     val producerEpoch = 0.toShort
     val offset = 992342L
     val seq = 0
-    val producerAppendInfo = new ProducerAppendInfo(partition, producerId, new ProducerStateEntry(producerId), AppendOrigin.CLIENT)
+    val producerAppendInfo = new ProducerAppendInfo(partition, producerId, ProducerStateEntry.empty(producerId), AppendOrigin.CLIENT)
 
     val firstOffsetMetadata = new LogOffsetMetadata(offset, 990000L, 234224)
     producerAppendInfo.appendDataBatch(producerEpoch, seq, seq, time.milliseconds(),
@@ -387,7 +387,7 @@ class ProducerStateManagerTest {
       val producerAppendInfo = new ProducerAppendInfo(
         partition,
         producerId,
-        new ProducerStateEntry(producerId),
+        ProducerStateEntry.empty(producerId),
         AppendOrigin.CLIENT
       )
       val firstOffsetMetadata = new LogOffsetMetadata(startOffset, segmentBaseOffset, 50 * relativeOffset)

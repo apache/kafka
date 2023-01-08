@@ -384,7 +384,7 @@ class ProducerStateManager(
   }
 
   def prepareUpdate(producerId: Long, origin: AppendOrigin): ProducerAppendInfo = {
-    val currentEntry = lastEntry(producerId).getOrElse(new ProducerStateEntry(producerId))
+    val currentEntry = lastEntry(producerId).getOrElse(ProducerStateEntry.empty(producerId))
     new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin)
   }
 
