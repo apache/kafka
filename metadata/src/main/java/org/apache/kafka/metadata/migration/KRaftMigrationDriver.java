@@ -95,6 +95,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     public void shutdown() throws InterruptedException {
+        eventQueue.beginShutdown("KRaftMigrationDriver#shutdown");
+        log.debug("Shutting down KRaftMigrationDriver");
         eventQueue.close();
     }
 

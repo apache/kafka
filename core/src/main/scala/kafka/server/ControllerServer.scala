@@ -58,14 +58,14 @@ case class ControllerMigrationSupport(
   brokersRpcClient: LegacyPropagator
 ) {
   def shutdown(logging: Logging): Unit = {
-    if (migrationDriver != null) {
-      CoreUtils.swallow(migrationDriver.close(), logging)
-    }
     if (zkClient != null) {
       CoreUtils.swallow(zkClient.close(), logging)
     }
     if (brokersRpcClient != null) {
       CoreUtils.swallow(brokersRpcClient.shutdown(), logging)
+    }
+    if (migrationDriver != null) {
+      CoreUtils.swallow(migrationDriver.close(), logging)
     }
   }
 }
