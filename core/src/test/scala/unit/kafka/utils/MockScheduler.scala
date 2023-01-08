@@ -18,8 +18,8 @@ package kafka.utils
 
 import scala.collection.mutable.PriorityQueue
 import java.util.concurrent.{Delayed, ScheduledFuture, TimeUnit}
-
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.util.Scheduler
 
 /**
  * A mock scheduler that executes tasks synchronously using a mock time instance. Tasks are executed synchronously when
@@ -47,7 +47,7 @@ class MockScheduler(val time: Time) extends Scheduler {
     var currTask: Option[MockTask] = None
     do {
       currTask = poll(_ => true)
-      currTask.foreach(_.fun())
+      currTask.foreach(_.task.run())
     } while (currTask.nonEmpty)
   }
   
@@ -63,7 +63,7 @@ class MockScheduler(val time: Time) extends Scheduler {
     do {
       currTask = poll(_.nextExecution <= now)
       currTask.foreach { curr =>
-        curr.fun()
+        curr.task.run()
         /* if the task is periodic, reschedule it and re-enqueue */
         if(curr.periodic) {
           curr.nextExecution += curr.period
@@ -73,11 +73,11 @@ class MockScheduler(val time: Time) extends Scheduler {
     } while (currTask.nonEmpty)
   }
 
-  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): ScheduledFuture[Unit] = {
-    val task = MockTask(name, fun, time.milliseconds + delay, period = period, time=time)
-    add(task)
+  def schedule(name: String, task: Runnable, delayMs: Long = 0, periodMs: Long = -1): ScheduledFuture[Unit] = {
+    val mockTask = MockTask(name, task, time.milliseconds + delayMs, period = periodMs, time = time)
+    add(mockTask)
     tick()
-    task
+    mockTask
   }
 
   def clear(): Unit = {
@@ -102,7 +102,7 @@ class MockScheduler(val time: Time) extends Scheduler {
   }
 }
 
-case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long, time: Time) extends ScheduledFuture[Unit] {
+case class MockTask(name: String, task: Runnable, var nextExecution: Long, period: Long, time: Time) extends ScheduledFuture[Unit] {
   def periodic = period >= 0
   def compare(t: MockTask): Int = {
     if(t.nextExecution == nextExecution)

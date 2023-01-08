@@ -30,6 +30,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.util.Scheduler
 
 import scala.math._
 

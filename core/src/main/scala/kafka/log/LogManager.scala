@@ -43,6 +43,7 @@ import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig, LogDirFailureChannel}
 import org.apache.kafka.server.log.internals.LogConfig.MessageFormatVersion
+import org.apache.kafka.server.util.Scheduler
 
 import scala.annotation.nowarn
 
@@ -534,29 +535,24 @@ class LogManager(logDirs: Seq[File],
       info("Starting log cleanup with a period of %d ms.".format(retentionCheckMs))
       scheduler.schedule("kafka-log-retention",
                          cleanupLogs _,
-                         delay = InitialTaskDelayMs,
-                         period = retentionCheckMs,
-                         TimeUnit.MILLISECONDS)
+                         InitialTaskDelayMs,
+                         retentionCheckMs)
       info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
       scheduler.schedule("kafka-log-flusher",
                          flushDirtyLogs _,
-                         delay = InitialTaskDelayMs,
-                         period = flushCheckMs,
-                         TimeUnit.MILLISECONDS)
+                         InitialTaskDelayMs,
+                         flushCheckMs)
       scheduler.schedule("kafka-recovery-point-checkpoint",
                          checkpointLogRecoveryOffsets _,
-                         delay = InitialTaskDelayMs,
-                         period = flushRecoveryOffsetCheckpointMs,
-                         TimeUnit.MILLISECONDS)
+                         InitialTaskDelayMs,
+                         flushRecoveryOffsetCheckpointMs)
       scheduler.schedule("kafka-log-start-offset-checkpoint",
                          checkpointLogStartOffsets _,
-                         delay = InitialTaskDelayMs,
-                         period = flushStartOffsetCheckpointMs,
-                         TimeUnit.MILLISECONDS)
-      scheduler.schedule("kafka-delete-logs", // will be rescheduled after each delete logs with a dynamic period
+                         InitialTaskDelayMs,
+                         flushStartOffsetCheckpointMs)
+      scheduler.scheduleOnce("kafka-delete-logs", // will be rescheduled after each delete logs with a dynamic period
                          deleteLogs _,
-                         delay = InitialTaskDelayMs,
-                         unit = TimeUnit.MILLISECONDS)
+                         InitialTaskDelayMs)
     }
     if (cleanerConfig.enableCleaner) {
       _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
@@ -1049,10 +1045,9 @@ class LogManager(logDirs: Seq[File],
         error(s"Exception in kafka-delete-logs thread.", e)
     } finally {
       try {
-        scheduler.schedule("kafka-delete-logs",
+        scheduler.scheduleOnce("kafka-delete-logs",
           deleteLogs _,
-          delay = nextDelayMs,
-          unit = TimeUnit.MILLISECONDS)
+          nextDelayMs)
       } catch {
         case e: Throwable =>
           if (scheduler.isStarted) {

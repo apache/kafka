@@ -413,10 +413,10 @@ class ZooKeeperClient(connectString: String,
 
   // Visibility for testing
   private[zookeeper] def scheduleReinitialize(name: String, message: String, delayMs: Long): Unit = {
-    reinitializeScheduler.schedule(name, () => {
+    reinitializeScheduler.scheduleOnce(name, () => {
       info(message)
       reinitialize()
-    }, delayMs, period = -1L, unit = TimeUnit.MILLISECONDS)
+    }, delayMs)
   }
 
   private def threadPrefix: String = name.replaceAll("\\s", "") + "-"

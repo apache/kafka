@@ -20,43 +20,9 @@ package kafka.utils
 import java.util.concurrent._
 import atomic._
 import org.apache.kafka.common.utils.KafkaThread
+import org.apache.kafka.server.util.Scheduler
 
 import java.util.concurrent.TimeUnit.NANOSECONDS
-
-/**
- * A scheduler for running jobs
- * 
- * This interface controls a job scheduler that allows scheduling either repeating background jobs 
- * that execute periodically or delayed one-time actions that are scheduled in the future.
- */
-trait Scheduler {
-  
-  /**
-   * Initialize this scheduler so it is ready to accept scheduling of tasks
-   */
-  def startup(): Unit
-  
-  /**
-   * Shutdown this scheduler. When this method is complete no more executions of background tasks will occur. 
-   * This includes tasks scheduled with a delayed execution.
-   */
-  def shutdown(): Unit
-  
-  /**
-   * Check if the scheduler has been started
-   */
-  def isStarted: Boolean
-  
-  /**
-   * Schedule a task
-   * @param name The name of this task
-   * @param delay The amount of time to wait before the first execution
-   * @param period The period with which to execute the task. If < 0 the task will execute only once.
-   * @param unit The unit for the preceding times.
-   * @return A Future object to manage the task scheduled.
-   */
-  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : ScheduledFuture[_]
-}
 
 /**
  * A scheduler based on java.util.concurrent.ScheduledThreadPoolExecutor
@@ -101,29 +67,24 @@ class KafkaScheduler(val threads: Int,
     }
   }
 
-  def scheduleOnce(name: String, fun: () => Unit): Unit = {
-    schedule(name, fun, delay = 0L, period = -1L, unit = TimeUnit.MILLISECONDS)
-  }
-
-  def schedule(name: String, fun: () => Unit, delay: Long, period: Long, unit: TimeUnit): ScheduledFuture[_] = {
-    debug("Scheduling task %s with initial delay %d ms and period %d ms."
-        .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
+  def schedule(name: String, task: Runnable, delayMs: Long, periodMs: Long): ScheduledFuture[_] = {
+    debug("Scheduling task %s with initial delay %d ms and period %d ms.".format(name, delayMs, periodMs))
     this synchronized {
       if (isStarted) {
         val runnable: Runnable = () => {
           try {
             trace("Beginning execution of scheduled task '%s'.".format(name))
-            fun()
+            task.run()
           } catch {
             case t: Throwable => error(s"Uncaught exception in scheduled task '$name'", t)
           } finally {
             trace("Completed execution of scheduled task '%s'.".format(name))
           }
         }
-        if (period > 0)
-          executor.scheduleAtFixedRate(runnable, delay, period, unit)
+        if (periodMs > 0)
+          executor.scheduleAtFixedRate(runnable, delayMs, periodMs, TimeUnit.MILLISECONDS)
         else
-          executor.schedule(runnable, delay, unit)
+          executor.schedule(runnable, delayMs, TimeUnit.MILLISECONDS)
       } else {
         info("Kafka scheduler is not running at the time task '%s' is scheduled. The task is ignored.".format(name))
         new NoOpScheduledFutureTask

@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.FetchDataInfo
-import kafka.utils.{Logging, Scheduler}
+import kafka.utils.Logging
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeException}
 import org.apache.kafka.common.message.FetchResponseData
@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.log.internals.LogFileUtils.offsetFromFileName
 import org.apache.kafka.server.log.internals.{AbortedTxn, LogConfig, LogDirFailureChannel, LogOffsetMetadata, OffsetPosition}
+import org.apache.kafka.server.util.Scheduler
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, immutable}
@@ -998,7 +999,7 @@ object LocalLog extends Logging {
     }
 
     if (asyncDelete)
-      scheduler.schedule("delete-file", () => deleteSegments(), delay = config.fileDeleteDelayMs)
+      scheduler.scheduleOnce("delete-file", () => deleteSegments(), config.fileDeleteDelayMs)
     else
       deleteSegments()
   }

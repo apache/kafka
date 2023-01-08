@@ -45,8 +45,8 @@ class SchedulerTest {
 
   @Test
   def testMockSchedulerNonPeriodicTask(): Unit = {
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1)
-    mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=100)
+    mockTime.scheduler.scheduleOnce("test1", counter1.getAndIncrement _, 1)
+    mockTime.scheduler.scheduleOnce("test2", counter2.getAndIncrement _, 100)
     assertEquals(0, counter1.get, "Counter1 should not be incremented prior to task running.")
     assertEquals(0, counter2.get, "Counter2 should not be incremented prior to task running.")
     mockTime.sleep(1)
@@ -59,8 +59,8 @@ class SchedulerTest {
 
   @Test
   def testMockSchedulerPeriodicTask(): Unit = {
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1, period=1)
-    mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=100, period=100)
+    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, 1, 1)
+    mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, 100, 100)
     assertEquals(0, counter1.get, "Counter1 should not be incremented prior to task running.")
     assertEquals(0, counter2.get, "Counter2 should not be incremented prior to task running.")
     mockTime.sleep(1)
@@ -73,14 +73,14 @@ class SchedulerTest {
 
   @Test
   def testReentrantTaskInMockScheduler(): Unit = {
-    mockTime.scheduler.schedule("test1", () => mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=0), delay=1)
+    mockTime.scheduler.scheduleOnce("test1", () => mockTime.scheduler.scheduleOnce("test2", counter2.getAndIncrement _, 0), 1)
     mockTime.sleep(1)
     assertEquals(1, counter2.get)
   }
 
   @Test
   def testNonPeriodicTask(): Unit = {
-    scheduler.schedule("test", counter1.getAndIncrement _, delay = 0)
+    scheduler.scheduleOnce("test", counter1.getAndIncrement _)
     retry(30000) {
       assertEquals(counter1.get, 1)
     }
@@ -90,7 +90,7 @@ class SchedulerTest {
 
   @Test
   def testNonPeriodicTaskWhenPeriodIsZero(): Unit = {
-    scheduler.schedule("test", counter1.getAndIncrement _, delay = 0, period = 0)
+    scheduler.schedule("test", counter1.getAndIncrement _, 0, 0)
     retry(30000) {
       assertEquals(counter1.get, 1)
     }
@@ -100,7 +100,7 @@ class SchedulerTest {
 
   @Test
   def testPeriodicTask(): Unit = {
-    scheduler.schedule("test", counter1.getAndIncrement _, delay = 0, period = 5)
+    scheduler.schedule("test", counter1.getAndIncrement _, 0, 5)
     retry(30000){
       assertTrue(counter1.get >= 20, "Should count to 20")
     }
@@ -109,7 +109,7 @@ class SchedulerTest {
   @Test
   def testRestart(): Unit = {
     // schedule a task to increment a counter
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1)
+    mockTime.scheduler.scheduleOnce("test1", counter1.getAndIncrement _, 1)
     mockTime.sleep(1)
     assertEquals(1, counter1.get())
 
@@ -118,7 +118,7 @@ class SchedulerTest {
     mockTime.scheduler.startup()
 
     // schedule another task to increment the counter
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1)
+    mockTime.scheduler.scheduleOnce("test1", counter1.getAndIncrement _, 1)
     mockTime.sleep(1)
     assertEquals(2, counter1.get())
   }
@@ -181,14 +181,14 @@ class SchedulerTest {
       assertTrue(taskLatch.await(30, TimeUnit.SECONDS), "Timed out waiting for latch")
       completionLatch.countDown()
     }
-    mockTime.scheduler.schedule("test1", () => scheduledTask(taskLatches.head), delay=1)
+    mockTime.scheduler.scheduleOnce("test1", () => scheduledTask(taskLatches.head), 1)
     val tickExecutor = Executors.newSingleThreadScheduledExecutor()
     try {
       tickExecutor.scheduleWithFixedDelay(() => mockTime.sleep(1), 0, 1, TimeUnit.MILLISECONDS)
 
       // wait for first task to execute and then schedule the next task while the first one is running
       assertTrue(initLatch.await(10, TimeUnit.SECONDS))
-      mockTime.scheduler.schedule("test2", () => scheduledTask(taskLatches(1)), delay = 1)
+      mockTime.scheduler.scheduleOnce("test2", () => scheduledTask(taskLatches(1)), 1)
 
       taskLatches.foreach(_.countDown())
       assertTrue(completionLatch.await(10, TimeUnit.SECONDS), "Tasks did not complete")

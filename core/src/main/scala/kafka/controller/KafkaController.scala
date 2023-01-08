@@ -293,9 +293,9 @@ class KafkaController(val config: KafkaConfig,
       info("starting the token expiry check scheduler")
       tokenCleanScheduler.startup()
       tokenCleanScheduler.schedule(name = "delete-expired-tokens",
-        fun = () => tokenManager.expireTokens(),
-        period = config.delegationTokenExpiryCheckIntervalMs,
-        unit = TimeUnit.MILLISECONDS)
+        () => tokenManager.expireTokens(),
+        0L,
+        config.delegationTokenExpiryCheckIntervalMs)
     }
   }
 
@@ -458,8 +458,9 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def scheduleAutoLeaderRebalanceTask(delay: Long, unit: TimeUnit): Unit = {
-    kafkaScheduler.schedule("auto-leader-rebalance-task", () => eventManager.put(AutoPreferredReplicaLeaderElection),
-      delay = delay, unit = unit)
+    kafkaScheduler.scheduleOnce("auto-leader-rebalance-task",
+      () => eventManager.put(AutoPreferredReplicaLeaderElection),
+      unit.toMillis(delay))
   }
 
   /**

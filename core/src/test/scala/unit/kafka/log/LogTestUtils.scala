@@ -23,7 +23,7 @@ import java.io.File
 import java.util.Properties
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd}
-import kafka.utils.{Scheduler, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -34,6 +34,7 @@ import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import kafka.log
 import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.server.util.Scheduler
 
 import scala.collection.Iterable
 import scala.jdk.CollectionConverters._
