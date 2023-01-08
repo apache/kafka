@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CompletedTxn, LazyIndex, LogConfig, LogOffsetMetadata, OffsetIndex, OffsetPosition, TimeIndex, TimestampOffset, TransactionIndex, TxnIndexSearchResult}
 
 import java.util.Optional
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 import scala.math._
 
@@ -249,7 +250,7 @@ class LogSegment private[log] (val log: FileRecords,
     if (batch.hasProducerId) {
       val producerId = batch.producerId
       val appendInfo = producerStateManager.prepareUpdate(producerId, origin = AppendOrigin.REPLICATION)
-      val maybeCompletedTxn = appendInfo.append(batch, firstOffsetMetadataOpt = None)
+      val maybeCompletedTxn = appendInfo.append(batch, Optional.empty()).asScala
       producerStateManager.update(appendInfo)
       maybeCompletedTxn.foreach { completedTxn =>
         val lastStableOffset = producerStateManager.lastStableOffset(completedTxn)

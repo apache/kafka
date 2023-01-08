@@ -107,7 +107,7 @@ object DumpLogSegments {
         print(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} " +
           s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset} " +
           s"lastTimestamp: ${entry.lastTimestamp} ")
-        entry.batchMetadata.headOption.foreach { metadata =>
+        entry.batchMetadata.asScala.headOption.foreach { metadata =>
           print(s"firstSequence: ${metadata.firstSeq} lastSequence: ${metadata.lastSeq} " +
             s"lastOffset: ${metadata.lastOffset} offsetDelta: ${metadata.offsetDelta} timestamp: ${metadata.timestamp}")
         }
