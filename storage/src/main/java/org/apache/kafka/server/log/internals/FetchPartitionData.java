@@ -21,7 +21,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.Records;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 public class FetchPartitionData {
