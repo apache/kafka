@@ -432,8 +432,8 @@ public final class QuorumController implements Controller {
                                            OptionalLong startProcessingTimeNs,
                                            Throwable exception) {
         if (!startProcessingTimeNs.isPresent()) {
-            log.error("{}: unable to start processing because of {}.", name,
-                exception.getClass().getSimpleName());
+            log.error("{}: unable to start processing because of {}. Reason: {}", name,
+                exception.getClass().getSimpleName(), exception.getMessage());
             if (exception instanceof ApiException) {
                 return exception;
             } else {
@@ -444,8 +444,8 @@ public final class QuorumController implements Controller {
         long deltaNs = endProcessingTime - startProcessingTimeNs.getAsLong();
         long deltaUs = MICROSECONDS.convert(deltaNs, NANOSECONDS);
         if (exception instanceof ApiException) {
-            log.info("{}: failed with {} in {} us", name,
-                exception.getClass().getSimpleName(), deltaUs);
+            log.info("{}: failed with {} in {} us. Reason: {}", name,
+                exception.getClass().getSimpleName(), deltaUs, exception.getMessage());
             return exception;
         }
         if (isActiveController()) {
