@@ -17,19 +17,19 @@
 package org.apache.kafka.server.log.internals;
 
 import org.apache.kafka.common.replica.ClientMetadata;
-import org.apache.kafka.common.utils.FetchRequestUtils;
+import org.apache.kafka.common.requests.FetchRequest;
 
 import java.util.Objects;
 import java.util.Optional;
 
 public class FetchParams {
-    private final short requestVersion;
-    private final int replicaId;
-    private final long maxWaitMs;
-    private final int minBytes;
-    private final int maxBytes;
-    private final FetchIsolation isolation;
-    private Optional<ClientMetadata> clientMetadata;
+    public final short requestVersion;
+    public final int replicaId;
+    public final long maxWaitMs;
+    public final int minBytes;
+    public final int maxBytes;
+    public final FetchIsolation isolation;
+    public final Optional<ClientMetadata> clientMetadata;
 
     public FetchParams(short requestVersion,
                        int replicaId,
@@ -48,11 +48,11 @@ public class FetchParams {
     }
 
     public boolean isFromFollower() {
-        return FetchRequestUtils.isValidBrokerId(replicaId);
+        return FetchRequest.isValidBrokerId(replicaId);
     }
 
     public boolean isFromConsumer() {
-        return FetchRequestUtils.isConsumer(replicaId);
+        return FetchRequest.isConsumer(replicaId);
     }
 
     public boolean fetchOnlyLeader() {
@@ -61,34 +61,6 @@ public class FetchParams {
 
     public boolean hardMaxBytesLimit() {
         return requestVersion <= 2;
-    }
-
-    public short requestVersion() {
-        return requestVersion;
-    }
-
-    public int replicaId() {
-        return replicaId;
-    }
-
-    public long maxWaitMs() {
-        return maxWaitMs;
-    }
-
-    public int minBytes() {
-        return minBytes;
-    }
-
-    public int maxBytes() {
-        return maxBytes;
-    }
-
-    public FetchIsolation isolation() {
-        return isolation;
-    }
-
-    public Optional<ClientMetadata> clientMetadata() {
-        return clientMetadata;
     }
 
     @Override
@@ -101,7 +73,7 @@ public class FetchParams {
                 && maxWaitMs == that.maxWaitMs
                 && minBytes == that.minBytes
                 && maxBytes == that.maxBytes
-                && Objects.equals(isolation.getClass(), that.isolation.getClass())
+                && Objects.equals(isolation, that.isolation)
                 && Objects.equals(clientMetadata, that.clientMetadata);
     }
 

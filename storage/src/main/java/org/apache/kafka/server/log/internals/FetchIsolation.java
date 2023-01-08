@@ -18,19 +18,18 @@ package org.apache.kafka.server.log.internals;
 
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.common.utils.FetchRequestUtils;
 
 public enum FetchIsolation {
     LOG_END,
     HIGH_WATERMARK,
     TXN_COMMITTED;
 
-    public static FetchIsolation apply(FetchRequest request) {
-        return apply(request.replicaId(), request.isolationLevel());
+    public static FetchIsolation of(FetchRequest request) {
+        return of(request.replicaId(), request.isolationLevel());
     }
 
-    public static FetchIsolation apply(int replicaId, IsolationLevel isolationLevel) {
-        if (!FetchRequestUtils.isConsumer(replicaId)) {
+    public static FetchIsolation of(int replicaId, IsolationLevel isolationLevel) {
+        if (!FetchRequest.isConsumer(replicaId)) {
             return LOG_END;
         } else if (isolationLevel == IsolationLevel.READ_COMMITTED) {
             return TXN_COMMITTED;

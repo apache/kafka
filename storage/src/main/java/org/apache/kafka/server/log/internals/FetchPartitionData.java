@@ -21,18 +21,19 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.Records;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 public class FetchPartitionData {
-    private final Errors error;
-    private final long highWatermark;
-    private final long logStartOffset;
-    private final Records records;
-    private final Optional<FetchResponseData.EpochEndOffset> divergingEpoch;
-    private final Optional<Long> lastStableOffset;
-    private final Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions;
-    private final Optional<Integer> preferredReadReplica;
-    private final boolean isReassignmentFetch;
+    public final Errors error;
+    public final long highWatermark;
+    public final long logStartOffset;
+    public final Records records;
+    public final Optional<FetchResponseData.EpochEndOffset> divergingEpoch;
+    public final Optional<Long> lastStableOffset;
+    public final Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions;
+    public final Optional<Integer> preferredReadReplica;
+    public final boolean isReassignmentFetch;
 
     public FetchPartitionData(Errors error,
                               long highWatermark,
@@ -52,41 +53,5 @@ public class FetchPartitionData {
         this.abortedTransactions = abortedTransactions;
         this.preferredReadReplica = preferredReadReplica;
         this.isReassignmentFetch = isReassignmentFetch;
-    }
-
-    public Errors error() {
-        return error;
-    }
-
-    public long highWatermark() {
-        return highWatermark;
-    }
-
-    public long logStartOffset() {
-        return logStartOffset;
-    }
-
-    public Records records() {
-        return records;
-    }
-
-    public Optional<FetchResponseData.EpochEndOffset> divergingEpoch() {
-        return divergingEpoch;
-    }
-
-    public Optional<Long> lastStableOffset() {
-        return lastStableOffset;
-    }
-
-    public Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions() {
-        return abortedTransactions;
-    }
-
-    public Optional<Integer> preferredReadReplica() {
-        return preferredReadReplica;
-    }
-
-    public boolean isReassignmentFetch() {
-        return isReassignmentFetch;
     }
 }

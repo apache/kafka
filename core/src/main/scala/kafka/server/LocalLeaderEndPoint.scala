@@ -27,9 +27,8 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
-import org.apache.kafka.common.utils.FetchRequestUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.log.internals.{FetchIsolation, FetchParams}
+import org.apache.kafka.server.log.internals.{FetchIsolation, FetchParams, FetchPartitionData}
 
 import java.util
 import java.util.Optional
@@ -76,8 +75,8 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
     def processResponseCallback(responsePartitionData: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
       partitionData = responsePartitionData.map { case (tp, data) =>
-        val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
-        val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+        val abortedTransactions =  if (data.abortedTransactions.isPresent) data.abortedTransactions.get else null
+        val lastStableOffset: Long = if (data.lastStableOffset.isPresent) data.lastStableOffset.get else FetchResponse.INVALID_LAST_STABLE_OFFSET
         tp.topicPartition -> new FetchResponseData.PartitionData()
           .setPartitionIndex(tp.topicPartition.partition)
           .setErrorCode(data.error.code)
@@ -93,7 +92,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
     val fetchParams = new FetchParams(
       request.version,
-      FetchRequestUtils.FUTURE_LOCAL_REPLICA_ID,
+      FetchRequest.FUTURE_LOCAL_REPLICA_ID,
       0L, // timeout is 0 so that the callback will be executed immediately
       request.minBytes,
       request.maxBytes,

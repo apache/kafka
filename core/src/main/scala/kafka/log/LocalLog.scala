@@ -32,7 +32,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.log.internals.LogFileUtils.offsetFromFileName
 import org.apache.kafka.server.log.internals.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, OffsetPosition}
 
-import java.util.Optional
+import java.util.{Collections, Optional}
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, immutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -1006,7 +1006,7 @@ object LocalLog extends Logging {
   private[log] def emptyFetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
                                       includeAbortedTxns: Boolean): FetchDataInfo = {
     val abortedTransactions: Optional[java.util.List[FetchResponseData.AbortedTransaction]] =
-      if (includeAbortedTxns) Optional.of(List.empty[FetchResponseData.AbortedTransaction].asJava)
+      if (includeAbortedTxns) Optional.of(Collections.emptyList())
       else Optional.empty()
     new FetchDataInfo(fetchOffsetMetadata,
       MemoryRecords.EMPTY,

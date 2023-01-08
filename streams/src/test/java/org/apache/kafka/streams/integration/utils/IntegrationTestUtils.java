@@ -36,7 +36,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.utils.FetchRequestUtils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
@@ -949,7 +948,7 @@ public class IntegrationTestUtils {
                 }
 
                 final UpdateMetadataPartitionState metadataPartitionState = partitionInfo.get();
-                if (!FetchRequestUtils.isValidBrokerId(metadataPartitionState.leader())) {
+                if (!FetchRequest.isValidBrokerId(metadataPartitionState.leader())) {
                     invalidBrokerIds.add(server);
                 }
             }
