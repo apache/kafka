@@ -2472,20 +2472,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     val txnOffsetCommitRequest = request.body[TxnOffsetCommitRequest]
 
     def sendResponse(response: TxnOffsetCommitResponse): Unit = {
-      trace(s"Sending tnx offset commit response $response for correlation id ${request.header.correlationId} to " +
-        s"client ${request.header.clientId}.")
-
-      if (isDebugEnabled) {
-        response.data.topics.forEach { topic =>
-          topic.partitions.forEach { partition =>
-            if (partition.errorCode != Errors.NONE.code) {
-              debug(s"TxnOffsetCommit with correlation id ${request.header.correlationId} from client ${request.header.clientId} " +
-                s"on partition ${topic.name}-${partition.partitionIndex} failed due to ${Errors.forCode(partition.errorCode)}")
-            }
-          }
-        }
-      }
-
       // We need to replace COORDINATOR_LOAD_IN_PROGRESS with COORDINATOR_NOT_AVAILABLE
       // for older producer client from 0.11 to prior 2.0, which could potentially crash due
       // to unexpected loading error. This bug is fixed later by KAFKA-7296. Clients using
@@ -2501,10 +2487,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-        response.maybeSetThrottleTimeMs(requestThrottleMs)
-        response
-      })
+      requestHelper.sendMaybeThrottle(request, response)
     }
 
     // authorize for the transactionalId and the consumer group. Note that we skip producerId authorization
@@ -2516,29 +2499,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponse(txnOffsetCommitRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      val txnOffsetCommitResponseData = new TxnOffsetCommitResponseData()
-      val topicsPendingPartitions = new mutable.HashMap[String, TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic]()
-
-      def makePartitionResponse(
-        partitionIndex: Int,
-        error: Errors
-      ): TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition = {
-        new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
-          .setPartitionIndex(partitionIndex)
-          .setErrorCode(error.code)
-      }
-
-      def addTopicToResponse(
-        topic: TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic,
-        error: Errors
-      ): Unit = {
-        val topicResponse = new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setName(topic.name)
-        txnOffsetCommitResponseData.topics.add(topicResponse)
-        topic.partitions.forEach { partition =>
-          topicResponse.partitions.add(makePartitionResponse(partition.partitionIndex, error))
-        }
-      }
-
       val authorizedTopics = authHelper.filterByAuthorized(
         request.context,
         READ,
@@ -2546,47 +2506,39 @@ class KafkaApis(val requestChannel: RequestChannel,
         txnOffsetCommitRequest.data.topics.asScala
       )(_.name)
 
-      val authorizedTopicCommittedOffsets = new util.ArrayList[TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic]()
+      val responseBuilder = new TxnOffsetCommitResponse.Builder()
+      val authorizedTopicCommittedOffsets = new mutable.ArrayBuffer[TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic]()
       txnOffsetCommitRequest.data.topics.forEach { topic =>
         if (!authorizedTopics.contains(topic.name)) {
-          addTopicToResponse(topic, Errors.TOPIC_AUTHORIZATION_FAILED)
+          // If the topic is not authorized, we add the topic and all its partitions
+          // to the response with TOPIC_AUTHORIZATION_FAILED.
+          responseBuilder.addPartitions[TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition](
+            topic.name, topic.partitions, _.partitionIndex, Errors.TOPIC_AUTHORIZATION_FAILED)
         } else if (!metadataCache.contains(topic.name)) {
-          addTopicToResponse(topic, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          // If the topic is unknown, we add the topic and all its partitions
+          // to the response with UNKNOWN_TOPIC_OR_PARTITION.
+          responseBuilder.addPartitions[TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition](
+            topic.name, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         } else {
-          var topicRequestWithValidPartitions: TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic = null
-          var topicResponseWithInvalidPartitions: TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic = null
+          // Otherwise, we check all partitions to ensure that they all exist.
+          val topicWithValidPartitions = new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
             if (metadataCache.getPartitionInfo(topic.name, partition.partitionIndex).nonEmpty) {
-              if (topicRequestWithValidPartitions == null) {
-                topicRequestWithValidPartitions = new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic().setName(topic.name)
-              }
-              topicRequestWithValidPartitions.partitions.add(partition)
+              topicWithValidPartitions.partitions.add(partition)
             } else {
-              if (topicResponseWithInvalidPartitions == null) {
-                topicResponseWithInvalidPartitions = new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setName(topic.name)
-              }
-              topicResponseWithInvalidPartitions.partitions.add(makePartitionResponse(partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION))
+              responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
             }
           }
 
-          if (topicRequestWithValidPartitions != null) {
-            authorizedTopicCommittedOffsets.add(topicRequestWithValidPartitions)
-          }
-
-          if (topicResponseWithInvalidPartitions != null) {
-            txnOffsetCommitResponseData.topics.add(topicResponseWithInvalidPartitions)
-            // We keep track of topics with both known and unknown partitions such
-            // that we can merge the response from the coordinator into it later on.
-            if (topicRequestWithValidPartitions != null) {
-              topicsPendingPartitions += topic.name -> topicResponseWithInvalidPartitions
-            }
+          if (!topicWithValidPartitions.partitions.isEmpty) {
+            authorizedTopicCommittedOffsets += topicWithValidPartitions
           }
         }
       }
 
       if (authorizedTopicCommittedOffsets.isEmpty) {
-        sendResponse(new TxnOffsetCommitResponse(txnOffsetCommitResponseData))
+        sendResponse(responseBuilder.build())
         CompletableFuture.completedFuture[Unit](())
       } else {
         val txnOffsetCommitRequestData = new TxnOffsetCommitRequestData()
@@ -2597,7 +2549,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setProducerEpoch(txnOffsetCommitRequest.data.producerEpoch)
           .setProducerId(txnOffsetCommitRequest.data.producerId)
           .setTransactionalId(txnOffsetCommitRequest.data.transactionalId)
-          .setTopics(authorizedTopicCommittedOffsets)
+          .setTopics(authorizedTopicCommittedOffsets.asJava)
 
         newGroupCoordinator.commitTransactionalOffsets(
           request.context,
@@ -2607,20 +2559,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (exception != null) {
             sendResponse(txnOffsetCommitRequest.getErrorResponse(exception))
           } else {
-            if (txnOffsetCommitResponseData.topics.isEmpty) {
-              sendResponse(new TxnOffsetCommitResponse(response))
-            } else {
-              response.topics.forEach { topic =>
-                topicsPendingPartitions.get(topic.name) match {
-                  case None =>
-                    txnOffsetCommitResponseData.topics.add(topic)
-
-                  case Some(existingTopicResponse) =>
-                    existingTopicResponse.partitions.addAll(topic.partitions)
-                }
-              }
-              sendResponse(new TxnOffsetCommitResponse(txnOffsetCommitResponseData))
-            }
+            sendResponse(responseBuilder.merge(response).build())
           }
         }
       }
