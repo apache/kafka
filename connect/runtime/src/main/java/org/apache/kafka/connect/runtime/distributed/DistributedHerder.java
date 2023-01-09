@@ -778,7 +778,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // reading to the end of the config topic + successfully attempting to stop all connectors and tasks and a buffer of 10s
     private long herderExecutorTimeoutMs() {
         return this.workerSyncTimeoutMs +
-                config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG) +
+                config.getLong(DistributedConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG) +
                 Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS + 10000;
     }
 
