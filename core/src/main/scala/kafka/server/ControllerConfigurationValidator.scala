@@ -99,7 +99,7 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
           if (e.getValue == null) {
             nullTopicConfigs += e.getKey
           } else {
-            properties.setProperty(e.getKey, e.getValue
+            properties.setProperty(e.getKey, e.getValue)
           }
         })
         if (nullTopicConfigs.nonEmpty) {
