@@ -87,28 +87,28 @@ public class TaggedFields extends DocumentedType {
     @SuppressWarnings("unchecked")
     @Override
     public NavigableMap<Integer, Object> read(ByteBuffer buffer) {
-        int numTaggedFields = ByteUtils.readUnsignedVarint(buffer);
-        if (numTaggedFields == 0) {
-            return Collections.emptyNavigableMap();
-        }
-        NavigableMap<Integer, Object> objects = new TreeMap<>();
-        int prevTag = -1;
-        for (int i = 0; i < numTaggedFields; i++) {
-            int tag = ByteUtils.readUnsignedVarint(buffer);
-            if (tag <= prevTag) {
-                throw new RuntimeException("Invalid or out-of-order tag " + tag);
-            }
-            prevTag = tag;
-            int size = ByteUtils.readUnsignedVarint(buffer);
-            Field field = fields.get(tag);
-            if (field == null) {
-                byte[] bytes = new byte[size];
-                buffer.get(bytes);
-                objects.put(tag, new RawTaggedField(tag, bytes));
-            } else {
-                objects.put(tag, field.type.read(buffer));
-            }
-        }
+//         int numTaggedFields = ByteUtils.readUnsignedVarint(buffer);
+//         if (numTaggedFields == 0) {
+//             return Collections.emptyNavigableMap();
+//         }
+//         NavigableMap<Integer, Object> objects = new TreeMap<>();
+//         int prevTag = -1;
+//         for (int i = 0; i < numTaggedFields; i++) {
+//             int tag = ByteUtils.readUnsignedVarint(buffer);
+//             if (tag <= prevTag) {
+//                 throw new RuntimeException("Invalid or out-of-order tag " + tag);
+//             }
+//             prevTag = tag;
+//             int size = ByteUtils.readUnsignedVarint(buffer);
+//             Field field = fields.get(tag);
+//             if (field == null) {
+//                 byte[] bytes = new byte[size];
+//                 buffer.get(bytes);
+//                 objects.put(tag, new RawTaggedField(tag, bytes));
+//             } else {
+//                 objects.put(tag, field.type.read(buffer));
+//             }
+//         }
         throw new IllegalStateException("should not enter here!");
 //        return objects;
     }
