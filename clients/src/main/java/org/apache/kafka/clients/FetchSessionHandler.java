@@ -266,7 +266,14 @@ public class FetchSessionHandler {
             }
         }
 
+        /**
+         * Build a FetchRequestData for the provided partitions
+         * @throws IllegalStateException if it has already been called
+         */
         public FetchRequestData build() {
+            if (next == null) {
+                throw new IllegalStateException("build() has already been called.");
+            }
             boolean canUseTopicIds = partitionsWithoutTopicIds == 0;
 
             if (nextMetadata.isFull()) {

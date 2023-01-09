@@ -52,6 +52,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -312,12 +313,7 @@ public class FetchSessionHandlerTest {
         builder.add(new TopicPartition("foo", 0),
             new FetchRequest.PartitionData(Uuid.randomUuid(), 0, 100, 200, Optional.empty()));
         builder.build();
-        try {
-            builder.build();
-            fail("Expected calling build twice to fail.");
-        } catch (NullPointerException npe) {
-            // expected
-        }
+        assertThrows(IllegalStateException.class, builder::build, "Expected calling build twice to fail.");
     }
 
     @Test
