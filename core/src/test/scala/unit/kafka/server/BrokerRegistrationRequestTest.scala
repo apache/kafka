@@ -92,7 +92,7 @@ class BrokerRegistrationRequestTest {
     channelManager: BrokerToControllerChannelManager,
     clusterId: String,
     brokerId: Int,
-    zk: Boolean,
+    zkEpoch: Option[Long],
     ibpToSend: Option[(MetadataVersion, MetadataVersion)]
   ): Errors = {
     val features = new BrokerRegistrationRequestData.FeatureCollection()
@@ -110,7 +110,7 @@ class BrokerRegistrationRequestTest {
       .setBrokerId(brokerId)
       .setClusterId(clusterId)
       .setIncarnationId(Uuid.randomUuid())
-      .setIsMigratingZkBroker(zk)
+      .setMigratingZkBrokerEpoch(zkEpoch.getOrElse(-1L))
       .setFeatures(features)
 
     Errors.forCode(sendAndRecieve(channelManager, req).errorCode())
@@ -126,19 +126,19 @@ class BrokerRegistrationRequestTest {
 
       assertEquals(
         Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, true, Some((MetadataVersion.IBP_3_3_IV0, MetadataVersion.IBP_3_3_IV0))))
+        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_3_IV0, MetadataVersion.IBP_3_3_IV0))))
 
       assertEquals(
         Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, true, None))
+        registerBroker(channelManager, clusterId, 100, Some(1), None))
 
       assertEquals(
         Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, true, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
+        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
 
       assertEquals(
         Errors.NONE,
-        registerBroker(channelManager, clusterId, 100, false, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
+        registerBroker(channelManager, clusterId, 100, None, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
     } finally {
       channelManager.shutdown()
     }
@@ -154,19 +154,19 @@ class BrokerRegistrationRequestTest {
 
       assertEquals(
         Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, true, Some((MetadataVersion.IBP_3_3_IV0, MetadataVersion.IBP_3_3_IV0))))
+        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_3_IV0, MetadataVersion.IBP_3_3_IV0))))
 
       assertEquals(
         Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, true, None))
+        registerBroker(channelManager, clusterId, 100, Some(1), None))
 
       assertEquals(
         Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, true, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
+        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
 
       assertEquals(
         Errors.NONE,
-        registerBroker(channelManager, clusterId, 100, false, Some((MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_4_IV0))))
+        registerBroker(channelManager, clusterId, 100, None, Some((MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_4_IV0))))
     } finally {
       channelManager.shutdown()
     }
@@ -182,19 +182,19 @@ class BrokerRegistrationRequestTest {
 
       assertEquals(
         Errors.NONE,
-        registerBroker(channelManager, clusterId, 100, true, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
+        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
 
       assertEquals(
         Errors.UNSUPPORTED_VERSION,
-        registerBroker(channelManager, clusterId, 100, true, None))
+        registerBroker(channelManager, clusterId, 100, Some(1), None))
 
       assertEquals(
         Errors.UNSUPPORTED_VERSION,
-        registerBroker(channelManager, clusterId, 100, true, Some((MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_3_IV3))))
+        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_3_IV3))))
 
       assertEquals(
         Errors.NONE,
-        registerBroker(channelManager, clusterId, 100, false, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
+        registerBroker(channelManager, clusterId, 100, None, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
     } finally {
       channelManager.shutdown()
     }

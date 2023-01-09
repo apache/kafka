@@ -23,6 +23,7 @@ import java.text.NumberFormat
 import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
 import kafka.metrics.KafkaMetricsGroup
+
 import kafka.server.FetchDataInfo
 import kafka.utils.{Logging, Scheduler}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
