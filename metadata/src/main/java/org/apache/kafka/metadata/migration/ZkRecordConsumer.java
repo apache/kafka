@@ -16,25 +16,15 @@
  */
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-public interface LegacyPropagator {
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
-    void startup();
-
-    void shutdown();
-
-    void publishMetadata(MetadataImage image);
-
-    void sendRPCsToBrokersFromMetadataDelta(MetadataDelta delta,
-                                            MetadataImage image,
-                                            int zkControllerEpoch);
-
-    void sendRPCsToBrokersFromMetadataImage(MetadataImage image, int zkControllerEpoch);
-
-    void clear();
-
-    void setMetadataVersion(MetadataVersion metadataVersion);
+public interface ZkRecordConsumer {
+    void beginMigration();
+    CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch);
+    OffsetAndEpoch completeMigration();
+    void abortMigration();
 }

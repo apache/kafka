@@ -14,27 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.metadata.migration;
+package org.apache.kafka.controller;
 
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
+import org.apache.kafka.metadata.migration.ZkMigrationState;
+import org.apache.kafka.timeline.SnapshotRegistry;
+import org.apache.kafka.timeline.TimelineObject;
 
-public interface LegacyPropagator {
+public class MigrationControlManager {
+    private final TimelineObject<ZkMigrationState> zkMigrationState;
 
-    void startup();
+    MigrationControlManager(SnapshotRegistry snapshotRegistry) {
+        zkMigrationState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.NONE);
+    }
 
-    void shutdown();
+    ZkMigrationState zkMigrationState() {
+        return zkMigrationState.get();
+    }
 
-    void publishMetadata(MetadataImage image);
-
-    void sendRPCsToBrokersFromMetadataDelta(MetadataDelta delta,
-                                            MetadataImage image,
-                                            int zkControllerEpoch);
-
-    void sendRPCsToBrokersFromMetadataImage(MetadataImage image, int zkControllerEpoch);
-
-    void clear();
-
-    void setMetadataVersion(MetadataVersion metadataVersion);
+    void replay(ZkMigrationStateRecord record) {
+        zkMigrationState.set(ZkMigrationState.of(record.zkMigrationState()));
+    }
 }
