@@ -1068,7 +1068,8 @@ object MigrationZNode {
         metadataEpoch,
         modifyTimeMs,
         zkVersion,
-        ZkVersion.UnknownVersion))
+        ZkMigrationLeadershipState.EMPTY.zkControllerEpoch(),
+        ZkMigrationLeadershipState.EMPTY.zkControllerEpochZkVersion()))
     }.getOrElse(throw new KafkaException(s"Failed to parse the migration json $jsonDataAsString"))
   }
 }

@@ -68,13 +68,13 @@ sealed class MigrationControllerChannelContext(
   }
 
   override val liveBrokerIdAndEpochs: collection.Map[Int, Long] = {
-    image.cluster().zkBrokers().asScala.map {
+    image.cluster().brokers().asScala.map {
       case (brokerId, broker) => brokerId.intValue() -> broker.epoch()
     }
   }
 
   override val liveOrShuttingDownBrokers: collection.Set[Broker] = {
-    image.cluster().zkBrokers().asScala.values.map { registration =>
+    image.cluster().brokers().asScala.values.map { registration =>
       Broker.fromBrokerRegistration(registration)
     }.toSet
   }

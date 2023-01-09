@@ -50,8 +50,8 @@ import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
-import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
@@ -65,6 +65,7 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -78,6 +79,8 @@ import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.metadata.migration.ZkMigrationState;
+import org.apache.kafka.metadata.migration.ZkRecordConsumer;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
@@ -566,6 +569,10 @@ public final class QuorumController implements Controller {
         return configurationControl;
     }
 
+    public ZkRecordConsumer zkRecordConsumer() {
+        return zkRecordConsumer;
+    }
+
     <T> CompletableFuture<T> appendReadEvent(
         String name,
         OptionalLong deadlineNs,
@@ -817,6 +824,62 @@ public final class QuorumController implements Controller {
             queue.append(event);
         }
         return event.future();
+    }
+
+    class MigrationRecordConsumer implements ZkRecordConsumer {
+        private volatile OffsetAndEpoch highestMigrationRecordOffset;
+
+        class MigrationWriteOperation implements ControllerWriteOperation<Void> {
+            private final List<ApiMessageAndVersion> batch;
+
+            MigrationWriteOperation(List<ApiMessageAndVersion> batch) {
+                this.batch = batch;
+            }
+            @Override
+            public ControllerResult<Void> generateRecordsAndResult() {
+                return ControllerResult.atomicOf(batch, null);
+            }
+
+            public void processBatchEndOffset(long offset) {
+                highestMigrationRecordOffset = new OffsetAndEpoch(offset, curClaimEpoch);
+            }
+        }
+        @Override
+        public void beginMigration() {
+            // TODO use KIP-868 transaction
+            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>("Begin ZK Migration",
+                new MigrationWriteOperation(
+                    Collections.singletonList(
+                        new ApiMessageAndVersion(
+                            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.PRE_MIGRATION.value()),
+                            ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION)
+                    )));
+            queue.append(event);
+        }
+
+        @Override
+        public CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch) {
+            if (queue.size() > 100) { // TODO configure this
+                CompletableFuture<Void> future = new CompletableFuture<>();
+                future.completeExceptionally(new NotControllerException("Cannot accept migration record batch. Controller queue is too large"));
+                return future;
+            }
+            ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>("ZK Migration Batch",
+                new MigrationWriteOperation(recordBatch));
+            queue.append(batchEvent);
+            return batchEvent.future;
+        }
+
+        @Override
+        public OffsetAndEpoch completeMigration() {
+            // TODO write migration record, use KIP-868 transaction
+            return highestMigrationRecordOffset;
+        }
+
+        @Override
+        public void abortMigration() {
+            // TODO use KIP-868 transaction
+        }
     }
 
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
@@ -1349,6 +1412,9 @@ public final class QuorumController implements Controller {
             case NO_OP_RECORD:
                 // NoOpRecord is an empty record and doesn't need to be replayed
                 break;
+            case ZK_MIGRATION_STATE_RECORD:
+                // TODO handle this
+                break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
         }
@@ -1571,6 +1637,8 @@ public final class QuorumController implements Controller {
      */
     private final BootstrapMetadata bootstrapMetadata;
 
+    private final ZkRecordConsumer zkRecordConsumer;
+
     /**
      * The maximum number of records per batch to allow.
      */
@@ -1672,6 +1740,7 @@ public final class QuorumController implements Controller {
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
         this.needToCompleteAuthorizerLoad = authorizer.isPresent();
+        this.zkRecordConsumer = new MigrationRecordConsumer();
         updateWriteOffset(-1);
 
         resetToEmptyState();
@@ -2027,11 +2096,6 @@ public final class QuorumController implements Controller {
     @Override
     public int curClaimEpoch() {
         return curClaimEpoch;
-    }
-
-    // Visible for testing
-    MetadataVersion metadataVersion() {
-        return featureControl.metadataVersion();
     }
 
     @Override
