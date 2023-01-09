@@ -217,7 +217,7 @@ public class OffsetFetchResponse extends AbstractResponse {
         } else {
             if (groups.size() != 1) {
                 throw new UnsupportedVersionException(
-                    "Version " + version + " of OffsetFetchResponse only support one group."
+                    "Version " + version + " of OffsetFetchResponse only supports one group."
                 );
             }
 
@@ -233,11 +233,14 @@ public class OffsetFetchResponse extends AbstractResponse {
                     OffsetFetchResponsePartition newPartition;
 
                     if (version < 2 && group.errorCode() != Errors.NONE.code()) {
-                        // Versions prior to version 2 does not support a top level error. Therefore
+                        // Versions prior to version 2 do not support a top level error. Therefore,
                         // we put it at the partition level.
                         newPartition = new OffsetFetchResponsePartition()
                             .setPartitionIndex(partition.partitionIndex())
-                            .setErrorCode(group.errorCode());
+                            .setErrorCode(group.errorCode())
+                            .setCommittedOffset(INVALID_OFFSET)
+                            .setMetadata(NO_METADATA)
+                            .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH);
                     } else {
                         newPartition = new OffsetFetchResponsePartition()
                             .setPartitionIndex(partition.partitionIndex())

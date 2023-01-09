@@ -3425,7 +3425,7 @@ class KafkaApisTest {
     }
 
     if (version < 8) {
-      // Request version earlier than version 8 do not support batching.
+      // Request version earlier than version 8 do not support batching groups.
       assertThrows(classOf[UnsupportedVersionException], () => makeRequest(version))
     } else {
       val requestChannelRequest = makeRequest(version)
@@ -3642,7 +3642,7 @@ class KafkaApisTest {
       false
     )).thenReturn(group1Future)
 
-    // group-3 is allows and bar is allowed.
+    // group-3 is allowed and bar is allowed.
     val group3Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
     when(newGroupCoordinator.fetchAllOffsets(
       requestChannelRequest.context,
