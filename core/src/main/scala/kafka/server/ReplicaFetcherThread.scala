@@ -126,7 +126,7 @@ class ReplicaFetcherThread(name: String,
         topicPartition, fetchOffset, log.logEndOffset))
 
     if (logTrace)
-      trace("Follower has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
+      trace("Follower has replica log end offset %d for partition %s. Received %d bytes of messages and leader hw %d"
         .format(log.logEndOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
     // Append the leader's messages to the log

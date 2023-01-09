@@ -284,6 +284,19 @@ public class ByteUtilsTest {
         assertEquals(simpleImplementation.apply(0), ByteUtils.sizeOfVarlong(0));
     }
 
+    @Test
+    public void testReadInt() {
+        int[] values = {
+            0, 1, -1, Byte.MAX_VALUE, Short.MAX_VALUE, 2 * Short.MAX_VALUE, Integer.MAX_VALUE / 2,
+            Integer.MIN_VALUE / 2, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE
+        };
+        ByteBuffer buffer = ByteBuffer.allocate(4 * values.length);
+        for (int i = 0; i < values.length; ++i) {
+            buffer.putInt(i * 4, values[i]);
+            assertEquals(values[i], ByteUtils.readIntBE(buffer.array(), i * 4), "Written value should match read value.");
+        }
+    }
+
     private void assertUnsignedVarintSerde(int value, byte[] expectedEncoding) throws IOException {
         ByteBuffer buf = ByteBuffer.allocate(32);
         ByteUtils.writeUnsignedVarint(value, buf);

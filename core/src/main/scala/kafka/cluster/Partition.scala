@@ -44,6 +44,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogOffsetMetadata}
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._

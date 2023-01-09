@@ -62,8 +62,8 @@ class Entry(val offsetIndex: LazyIndex[OffsetIndex], val timeIndex: LazyIndex[Ti
       if (!markedForCleanup) {
         markedForCleanup = true
         Array(offsetIndex, timeIndex).foreach(index =>
-          index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, "", UnifiedLog.DeletedFileSuffix))))
-        txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, "",
+          index.renameTo(new File(Utils.replaceSuffix(index.file.getPath, "", UnifiedLog.DeletedFileSuffix))))
+        txnIndex.renameTo(new File(Utils.replaceSuffix(txnIndex.file.getPath, "",
           UnifiedLog.DeletedFileSuffix)))
       }
     }

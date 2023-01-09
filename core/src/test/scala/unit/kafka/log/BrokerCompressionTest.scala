@@ -17,10 +17,12 @@
 
 package kafka.log
 
-import kafka.server.{BrokerTopicStats, FetchLogEnd, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchLogEnd}
 import kafka.utils._
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
@@ -34,7 +36,7 @@ class BrokerCompressionTest {
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val time = new MockTime(0, 0)
-  val logConfig = LogConfig()
+  val logConfig = new LogConfig(new Properties)
 
   @AfterEach
   def tearDown(): Unit = {
@@ -49,11 +51,11 @@ class BrokerCompressionTest {
   def testBrokerSideCompression(messageCompression: String, brokerCompression: String): Unit = {
     val messageCompressionType = CompressionType.forName(messageCompression)
     val logProps = new Properties()
-    logProps.put(LogConfig.CompressionTypeProp, brokerCompression)
+    logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, brokerCompression)
     /*configure broker-side compression  */
     val log = UnifiedLog(
       dir = logDir,
-      config = LogConfig(logProps),
+      config = new LogConfig(logProps),
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,

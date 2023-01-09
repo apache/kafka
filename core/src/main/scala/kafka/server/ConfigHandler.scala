@@ -21,20 +21,20 @@ import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import DynamicConfig.Broker._
 import kafka.controller.KafkaController
-import kafka.log.LogConfig.MessageFormatVersion
-import kafka.log.{LogConfig, LogManager}
+import kafka.log.LogManager
 import kafka.network.ConnectionQuotas
 import kafka.security.CredentialProvider
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.common.config.ConfigDef.Validator
-import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.log.internals.{LogConfig, ThrottledReplicaListValidator}
+import org.apache.kafka.server.log.internals.LogConfig.MessageFormatVersion
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -74,8 +74,8 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
       }
     }
-    updateThrottledList(LogConfig.LeaderReplicationThrottledReplicasProp, quotas.leader)
-    updateThrottledList(LogConfig.FollowerReplicationThrottledReplicasProp, quotas.follower)
+    updateThrottledList(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
+    updateThrottledList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
 
     if (Try(topicConfig.getProperty(KafkaConfig.UncleanLeaderElectionEnableProp).toBoolean).getOrElse(false)) {
       kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
@@ -99,16 +99,16 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
   @nowarn("cat=deprecation")
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     // Verify message format version
-    Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
+    Option(topicConfig.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)).flatMap { versionString =>
       val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
       if (messageFormatVersion.shouldIgnore) {
         if (messageFormatVersion.shouldWarn)
           warn(messageFormatVersion.topicWarningMessage(topic))
-        Some(LogConfig.MessageFormatVersionProp)
+        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
       } else if (kafkaConfig.interBrokerProtocolVersion.isLessThan(messageFormatVersion.messageFormatVersion)) {
-        warn(s"Topic configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
+        warn(s"Topic configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG} is ignored for `$topic` because `$versionString` " +
           s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
-        Some(LogConfig.MessageFormatVersionProp)
+        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
       } else
         None
     }.toSet
@@ -224,26 +224,4 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp).toDouble))
     }
   }
-}
-
-object ThrottledReplicaListValidator extends Validator {
-  def ensureValidString(name: String, value: String): Unit =
-    ensureValid(name, value.split(",").map(_.trim).toSeq)
-
-  override def ensureValid(name: String, value: Any): Unit = {
-    def check(proposed: Seq[Any]): Unit = {
-      if (!(proposed.forall(_.toString.trim.matches("([0-9]+:[0-9]+)?"))
-        || proposed.mkString.trim.equals("*")))
-        throw new ConfigException(name, value,
-          s"$name must be the literal '*' or a list of replicas in the following format: [partitionId]:[brokerId],[partitionId]:[brokerId],...")
-    }
-    value match {
-      case scalaSeq: Seq[_] => check(scalaSeq)
-      case javaList: java.util.List[_] => check(javaList.asScala)
-      case _ => throw new ConfigException(name, value, s"$name must be a List but was ${value.getClass.getName}")
-    }
-  }
-
-  override def toString: String = "[partitionId]:[brokerId],[partitionId]:[brokerId],..."
-
 }

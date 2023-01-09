@@ -6,6 +6,7 @@ build/
 build_eclipse/
 out/
 .gradle/
+.vscode/
 lib_managed/
 src_managed/
 project/boot/

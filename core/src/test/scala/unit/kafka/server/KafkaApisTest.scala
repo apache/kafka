@@ -28,7 +28,6 @@ import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.group._
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
-import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
@@ -93,6 +92,7 @@ import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartiti
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
+import org.apache.kafka.server.log.internals.AppendOrigin
 
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -1645,7 +1645,7 @@ class KafkaApisTest {
       when(replicaManager.appendRecords(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
-        ArgumentMatchers.eq(AppendOrigin.Client),
+        ArgumentMatchers.eq(AppendOrigin.CLIENT),
         any(),
         responseCallback.capture(),
         any(),
@@ -1786,7 +1786,7 @@ class KafkaApisTest {
     when(replicaManager.appendRecords(anyLong,
       anyShort,
       ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       responseCallback.capture(),
       any(),
@@ -1916,7 +1916,7 @@ class KafkaApisTest {
     when(replicaManager.appendRecords(anyLong,
       anyShort,
       ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       responseCallback.capture(),
       any(),
@@ -1948,7 +1948,7 @@ class KafkaApisTest {
     verify(replicaManager).appendRecords(anyLong,
       anyShort,
       ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
       any(),
