@@ -1050,10 +1050,8 @@ class LogManager(logDirs: Seq[File],
           nextDelayMs)
       } catch {
         case e: Throwable =>
-          if (scheduler.isStarted) {
-            // No errors should occur unless scheduler has been shutdown
-            error(s"Failed to schedule next delete in kafka-delete-logs thread", e)
-          }
+          // No errors should occur unless scheduler has been shutdown
+          error(s"Failed to schedule next delete in kafka-delete-logs thread", e)
       }
     }
   }
@@ -1358,7 +1356,7 @@ object LogManager {
   def apply(config: KafkaConfig,
             initialOfflineDirs: Seq[String],
             configRepository: ConfigRepository,
-            kafkaScheduler: KafkaScheduler,
+            kafkaScheduler: Scheduler,
             time: Time,
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel,

@@ -80,6 +80,8 @@ class MockScheduler(val time: Time) extends Scheduler {
     mockTask
   }
 
+  def resizeThreadPool(newSize: Int): Unit = ()
+
   def clear(): Unit = {
     this synchronized {
       tasks.clear()
@@ -100,6 +102,7 @@ class MockScheduler(val time: Time) extends Scheduler {
       tasks += task
     }
   }
+
 }
 
 case class MockTask(name: String, task: Runnable, var nextExecution: Long, period: Long, time: Time) extends ScheduledFuture[Unit] {

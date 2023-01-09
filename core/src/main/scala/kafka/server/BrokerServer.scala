@@ -27,7 +27,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCache, SnapshotWriterBuilder}
-import kafka.utils.{CoreUtils, KafkaScheduler}
+import kafka.utils.CoreUtils
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
@@ -46,6 +46,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.log.internals.LogDirFailureChannel
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.snapshot.SnapshotWriter
 
 import java.net.InetAddress
@@ -293,7 +294,7 @@ class BrokerServer(
       // Create transaction coordinator, but don't start it until we've started replica manager.
       // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       transactionCoordinator = TransactionCoordinator(config, replicaManager,
-        new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
+        new KafkaScheduler(1, true, "transaction-log-manager-"),
         producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM)
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(

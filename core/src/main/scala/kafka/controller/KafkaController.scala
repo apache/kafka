@@ -47,6 +47,7 @@ import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, Leade
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.ProducerIdsBlock
+import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
@@ -139,7 +140,7 @@ class KafkaController(val config: KafkaConfig,
   @volatile private var activeBrokerCount = 0
 
   /* single-thread scheduler to clean expired tokens */
-  private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
+  private val tokenCleanScheduler = new KafkaScheduler(1, true, "delegation-token-cleaner")
 
   newGauge("ActiveControllerCount", () => if (isActive) 1 else 0)
   newGauge("OfflinePartitionsCount", () => offlinePartitionCount)
@@ -292,7 +293,7 @@ class KafkaController(val config: KafkaConfig,
     if (config.tokenAuthEnabled) {
       info("starting the token expiry check scheduler")
       tokenCleanScheduler.startup()
-      tokenCleanScheduler.schedule(name = "delete-expired-tokens",
+      tokenCleanScheduler.schedule("delete-expired-tokens",
         () => tokenManager.expireTokens(),
         0L,
         config.delegationTokenExpiryCheckIntervalMs)
@@ -480,8 +481,7 @@ class KafkaController(val config: KafkaConfig,
     kafkaScheduler.shutdown()
 
     // stop token expiry check scheduler
-    if (tokenCleanScheduler.isStarted)
-      tokenCleanScheduler.shutdown()
+    tokenCleanScheduler.shutdown()
 
     // de-register partition ISR listener for on-going partition reassignment task
     unregisterPartitionReassignmentIsrChangeHandlers()

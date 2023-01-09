@@ -47,6 +47,7 @@ import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicPartition
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
 import org.apache.kafka.server.log.internals.AppendOrigin
+import org.apache.kafka.server.util.KafkaScheduler
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -79,7 +80,7 @@ class GroupMetadataManager(brokerId: Int,
   @volatile private var groupMetadataTopicPartitionCount: Int = _
 
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
-  private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
+  private val scheduler = new KafkaScheduler(1, true, "group-metadata-manager-")
 
   /* The groups with open transactional offsets commits per producer. We need this because when the commit or abort
    * marker comes in for a transaction, it is for a particular partition on the offsets topic and a particular producerId.
@@ -175,7 +176,7 @@ class GroupMetadataManager(brokerId: Int,
     groupMetadataTopicPartitionCount = retrieveGroupMetadataTopicPartitionCount()
     scheduler.startup()
     if (enableMetadataExpiration) {
-      scheduler.schedule(name = "delete-expired-group-metadata",
+      scheduler.schedule("delete-expired-group-metadata",
         () => cleanupGroupMetadata(),
         0L,
         config.offsetsRetentionCheckIntervalMs)
@@ -974,8 +975,7 @@ class GroupMetadataManager(brokerId: Int,
 
   def shutdown(): Unit = {
     shuttingDown.set(true)
-    if (scheduler.isStarted)
-      scheduler.shutdown()
+    scheduler.shutdown()
     metrics.removeSensor(GroupMetadataManager.LoadTimeSensor)
     metrics.removeSensor(GroupMetadataManager.OffsetCommitsSensor)
     metrics.removeSensor(GroupMetadataManager.OffsetExpiredSensor)

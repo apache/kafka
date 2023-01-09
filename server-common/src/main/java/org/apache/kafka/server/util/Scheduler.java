@@ -35,12 +35,7 @@ public interface Scheduler {
      * Shutdown this scheduler. When this method is complete no more executions of background tasks will occur.
      * This includes tasks scheduled with a delayed execution.
      */
-    void shutdown();
-
-    /**
-     * Check if the scheduler has been started
-     */
-    boolean isStarted();
+    void shutdown() throws InterruptedException;
 
     default ScheduledFuture<?> scheduleOnce(String name, Runnable task) {
         return scheduleOnce(name, task, 0L);
@@ -59,4 +54,6 @@ public interface Scheduler {
      * @return A Future object to manage the task scheduled.
      */
     ScheduledFuture<?> schedule(String name, Runnable task, long delayMs, long periodMs);
+
+    void resizeThreadPool(int newSize);
 }

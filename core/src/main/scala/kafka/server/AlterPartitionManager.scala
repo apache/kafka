@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.{KafkaScheduler, Logging}
+import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicIdPartition
@@ -78,7 +78,7 @@ object AlterPartitionManager {
   def apply(
     config: KafkaConfig,
     metadataCache: MetadataCache,
-    scheduler: KafkaScheduler,
+    scheduler: Scheduler,
     controllerNodeProvider: ControllerNodeProvider,
     time: Time,
     metrics: Metrics,
