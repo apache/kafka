@@ -67,10 +67,10 @@ public class ClusterTool {
         for (Subparser subpparser : Arrays.asList(clusterIdParser, unregisterParser)) {
             subpparser.addArgument("--bootstrap-server", "-b")
                     .action(store())
-                    .help("A list of host/port pairs to use for establishing the connection to the kafka cluster.");
+                    .help("A list of host/port pairs to use for establishing the connection to the Kafka cluster.");
             subpparser.addArgument("--config", "-c")
                     .action(store())
-                    .help("A property file containing configs to passed to AdminClient.");
+                    .help("A property file containing configurations for the Admin client.");
         }
         unregisterParser.addArgument("--id", "-i")
                 .type(Integer.class)
