@@ -558,7 +558,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     // Use the last digit of the index to decide between commit and abort.
     private def transactionResult(txn: Transaction): TransactionResult = {
       val txnId = txn.transactionalId
-      val lastDigit = txnId(txnId.length - 1).toInt
+      val lastDigit = txnId.last.toInt
       if (lastDigit % 2 == 0) TransactionResult.COMMIT else TransactionResult.ABORT
     }
   }

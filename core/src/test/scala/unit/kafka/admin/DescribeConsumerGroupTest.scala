@@ -472,7 +472,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }, "Expected rows for consumers with no assigned partitions in describe group results")
 
     val (state, assignments) = service.collectGroupMembers(group, true)
-    assertTrue(state.contains("Stable") && assignments.get.count(_.assignment.nonEmpty) > 0,
+    assertTrue(state.contains("Stable") && assignments.get.exists(_.assignment.nonEmpty),
       "Expected additional columns in verbose version of describe members")
   }
 
