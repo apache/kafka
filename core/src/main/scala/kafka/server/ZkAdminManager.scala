@@ -982,7 +982,7 @@ class ZkAdminManager(val config: KafkaConfig,
     val configsByPotentiallyValidUser = potentiallyValidUsers.map(user => (user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user)))).toMap
 
     // check for deletion of a credential that does not exist
-    val invalidDeletions = deletions.filter(deletion => potentiallyValidUsers.contains(deletion.name)).filter(deletion =>
+    val invalidDeletions = deletions.filter(deletion => potentiallyValidUsers.contains(deletion.name) &&
       configsByPotentiallyValidUser(deletion.name).getProperty(mechanismName(deletion.mechanism)) == null)
     val invalidUsersDueToInvalidDeletions = invalidDeletions.map(_.name).toSet
     invalidUsersDueToInvalidDeletions.foreach { user =>
