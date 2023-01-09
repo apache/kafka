@@ -20,7 +20,7 @@ import org.apache.kafka.common.protocol.types.Type.DocumentedType;
 import org.apache.kafka.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
+//import java.util.Collections;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
