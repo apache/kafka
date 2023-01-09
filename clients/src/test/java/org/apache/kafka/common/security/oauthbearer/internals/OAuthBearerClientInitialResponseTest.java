@@ -57,7 +57,7 @@ public class OAuthBearerClientInitialResponseTest {
     }
 
     @Test
-    public void testThrowsSaslExceptionOnInvalidExtensionKey() throws Exception {
+    public void testThrowsSaslExceptionOnInvalidExtensionKey() {
         Map<String, String> extensions = new HashMap<>();
         extensions.put("19", "42"); // keys can only be a-z
         assertThrows(SaslException.class, () -> new OAuthBearerClientInitialResponse("123.345.567", new SaslExtensions(extensions)));

@@ -67,12 +67,7 @@ public class FetchSessionHandlerTest {
      * ordering for test purposes.
      */
     private static Set<TopicPartition> toSet(TopicPartition... arr) {
-        TreeSet<TopicPartition> set = new TreeSet<>(new Comparator<TopicPartition>() {
-            @Override
-            public int compare(TopicPartition o1, TopicPartition o2) {
-                return o1.toString().compareTo(o2.toString());
-            }
-        });
+        TreeSet<TopicPartition> set = new TreeSet<>(Comparator.comparing(TopicPartition::toString));
         set.addAll(Arrays.asList(arr));
         return set;
     }
@@ -320,7 +315,7 @@ public class FetchSessionHandlerTest {
         try {
             builder.build();
             fail("Expected calling build twice to fail.");
-        } catch (Throwable t) {
+        } catch (NullPointerException npe) {
             // expected
         }
     }

@@ -120,7 +120,7 @@ public class RecordAccumulatorTest {
         accum.append(topic, partition4, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
 
         // drain batches from 2 nodes: node1 => tp1, node2 => tp3, because the max request size is full after the first batch drained
-        Map<Integer, List<ProducerBatch>> batches1 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
+        Map<Integer, List<ProducerBatch>> batches1 = accum.drain(cluster, new HashSet<>(Arrays.asList(node1, node2)), (int) batchSize, 0);
         verifyTopicPartitionInBatches(batches1, tp1, tp3);
 
         // add record for tp1, tp3
@@ -129,11 +129,11 @@ public class RecordAccumulatorTest {
 
         // drain batches from 2 nodes: node1 => tp2, node2 => tp4, because the max request size is full after the first batch drained
         // The drain index should start from next topic partition, that is, node1 => tp2, node2 => tp4
-        Map<Integer, List<ProducerBatch>> batches2 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
+        Map<Integer, List<ProducerBatch>> batches2 = accum.drain(cluster, new HashSet<>(Arrays.asList(node1, node2)), (int) batchSize, 0);
         verifyTopicPartitionInBatches(batches2, tp2, tp4);
 
         // make sure in next run, the drain index will start from the beginning
-        Map<Integer, List<ProducerBatch>> batches3 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
+        Map<Integer, List<ProducerBatch>> batches3 = accum.drain(cluster, new HashSet<>(Arrays.asList(node1, node2)), (int) batchSize, 0);
         verifyTopicPartitionInBatches(batches3, tp1, tp3);
 
         // add record for tp2, tp3, tp4 and mute the tp4
@@ -142,7 +142,7 @@ public class RecordAccumulatorTest {
         accum.append(topic, partition4, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
         accum.mutePartition(tp4);
         // drain batches from 2 nodes: node1 => tp2, node2 => tp3 (because tp4 is muted)
-        Map<Integer, List<ProducerBatch>> batches4 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), (int) batchSize, 0);
+        Map<Integer, List<ProducerBatch>> batches4 = accum.drain(cluster, new HashSet<>(Arrays.asList(node1, node2)), (int) batchSize, 0);
         verifyTopicPartitionInBatches(batches4, tp2, tp3);
 
         // add record for tp1, tp2, tp3, and unmute tp4
@@ -151,14 +151,14 @@ public class RecordAccumulatorTest {
         accum.append(topic, partition3, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
         accum.unmutePartition(tp4);
         // set maxSize as a max value, so that the all partitions in 2 nodes should be drained: node1 => [tp1, tp2], node2 => [tp3, tp4]
-        Map<Integer, List<ProducerBatch>> batches5 = accum.drain(cluster, new HashSet<Node>(Arrays.asList(node1, node2)), Integer.MAX_VALUE, 0);
+        Map<Integer, List<ProducerBatch>> batches5 = accum.drain(cluster, new HashSet<>(Arrays.asList(node1, node2)), Integer.MAX_VALUE, 0);
         verifyTopicPartitionInBatches(batches5, tp1, tp2, tp3, tp4);
     }
 
     private void verifyTopicPartitionInBatches(Map<Integer, List<ProducerBatch>> nodeBatches, TopicPartition... tp) {
-        int allTpBatchCount = nodeBatches.values().stream().flatMap(Collection::stream).collect(Collectors.toList()).size();
+        int allTpBatchCount = (int) nodeBatches.values().stream().flatMap(Collection::stream).count();
         assertEquals(tp.length, allTpBatchCount);
-        List<TopicPartition> topicPartitionsInBatch = new ArrayList<TopicPartition>();
+        List<TopicPartition> topicPartitionsInBatch = new ArrayList<>();
         for (Map.Entry<Integer, List<ProducerBatch>> entry : nodeBatches.entrySet()) {
             List<ProducerBatch> tpBatchList = entry.getValue();
             List<TopicPartition> tpList = tpBatchList.stream().map(producerBatch -> producerBatch.topicPartition).collect(Collectors.toList());
@@ -331,17 +331,15 @@ public class RecordAccumulatorTest {
             1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, CompressionType.NONE, 0);
         List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < numThreads; i++) {
-            threads.add(new Thread() {
-                public void run() {
-                    for (int i = 0; i < msgs; i++) {
-                        try {
-                            accum.append(topic, i % numParts, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+            threads.add(new Thread(() -> {
+                for (int i1 = 0; i1 < msgs; i1++) {
+                    try {
+                        accum.append(topic, i1 % numParts, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
                 }
-            });
+            }));
         }
         for (Thread t : threads)
             t.start();
@@ -480,12 +478,10 @@ public class RecordAccumulatorTest {
 
 
     private void delayedInterrupt(final Thread thread, final long delayMs) {
-        Thread t = new Thread() {
-            public void run() {
-                Time.SYSTEM.sleep(delayMs);
-                thread.interrupt();
-            }
-        };
+        Thread t = new Thread(() -> {
+            Time.SYSTEM.sleep(delayMs);
+            thread.interrupt();
+        });
         t.start();
     }
 
@@ -517,7 +513,7 @@ public class RecordAccumulatorTest {
         class TestCallback implements RecordAccumulator.AppendCallbacks {
             @Override
             public void onCompletion(RecordMetadata metadata, Exception exception) {
-                assertTrue(exception.getMessage().equals("Producer is closed forcefully."));
+                assertEquals("Producer is closed forcefully.", exception.getMessage());
                 numExceptionReceivedInCallback.incrementAndGet();
             }
 
@@ -599,7 +595,7 @@ public class RecordAccumulatorTest {
     private void doExpireBatchSingle(int deliveryTimeoutMs) throws InterruptedException {
         int lingerMs = 300;
         List<Boolean> muteStates = Arrays.asList(false, true);
-        Set<Node> readyNodes = null;
+        Set<Node> readyNodes;
         List<ProducerBatch> expiredBatches = new ArrayList<>();
         // test case assumes that the records do not fill the batch completely
         int batchSize = 1025;
@@ -854,12 +850,7 @@ public class RecordAccumulatorTest {
 
         byte[] value = new byte[1024];
         final AtomicInteger acked = new AtomicInteger(0);
-        Callback cb = new Callback() {
-            @Override
-            public void onCompletion(RecordMetadata metadata, Exception exception) {
-                acked.incrementAndGet();
-            }
-        };
+        Callback cb = (metadata, exception) -> acked.incrementAndGet();
         // Append two messages so the batch is too big.
         Future<RecordMetadata> future1 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);
         Future<RecordMetadata> future2 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);

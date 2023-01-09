@@ -34,7 +34,7 @@ public class ExitTest {
         });
         try {
             int statusCode = 0;
-            String message = "mesaage";
+            String message = "message";
             Exit.halt(statusCode);
             Exit.halt(statusCode, message);
             assertEquals(Arrays.asList(statusCode, null, statusCode, message), list);
@@ -52,7 +52,7 @@ public class ExitTest {
         });
         try {
             int statusCode = 0;
-            String message = "mesaage";
+            String message = "message";
             Exit.exit(statusCode);
             Exit.exit(statusCode, message);
             assertEquals(Arrays.asList(statusCode, null, statusCode, message), list);
