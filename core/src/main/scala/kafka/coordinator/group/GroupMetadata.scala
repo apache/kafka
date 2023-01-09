@@ -805,7 +805,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         getExpiredOffsets(_.offsetAndMetadata.commitTimestamp)
 
       case _ =>
-        Map()
+        Map.empty
     }
 
     if (expiredOffsets.nonEmpty)

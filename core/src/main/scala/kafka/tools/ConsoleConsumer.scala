@@ -593,7 +593,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   private def propertiesWithKeyPrefixStripped(prefix: String, configs: Map[String, _]): Map[String, _] = {
     val newConfigs = collection.mutable.Map[String, Any]()
     configs.asScala.foreach { case (key, value) =>
-      if (key.startsWith(prefix) && key.length > prefix.length)
+      if (key.startsWith(prefix) && key.lengthCompare(prefix.length) > 0)
         newConfigs.put(key.substring(prefix.length), value)
     }
     newConfigs.asJava

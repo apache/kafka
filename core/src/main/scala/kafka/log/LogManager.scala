@@ -429,7 +429,7 @@ class LogManager(logDirs: Seq[File],
           runnable
         }
 
-        jobs += jobsForDir.map(pool.submit)
+        jobs += jobsForDir.foreach(pool.submit)
       } catch {
         case e: IOException =>
           handleIOException(logDirAbsolutePath, e)

@@ -483,7 +483,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case (topicPartition, partitionData) =>
             try {
               if (partitionData.committedMetadata() != null
-                && partitionData.committedMetadata().length > config.offsetMetadataMaxSize)
+                && partitionData.committedMetadata().lengthCompare(config.offsetMetadataMaxSize) > 0)
                 (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE)
               else {
                 zkSupport.zkClient.setOrCreateConsumerOffset(

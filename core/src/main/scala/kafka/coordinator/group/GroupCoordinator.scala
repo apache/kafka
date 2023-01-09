@@ -755,8 +755,8 @@ class GroupCoordinator(val brokerId: Int,
   def handleDeleteOffsets(groupId: String, partitions: Seq[TopicPartition],
                           requestLocal: RequestLocal): (Errors, Map[TopicPartition, Errors]) = {
     var groupError: Errors = Errors.NONE
-    var partitionErrors: Map[TopicPartition, Errors] = Map()
-    var partitionsEligibleForDeletion: Seq[TopicPartition] = Seq()
+    var partitionErrors: Map[TopicPartition, Errors] = Map.empty
+    var partitionsEligibleForDeletion: Seq[TopicPartition] = Seq.empty
 
     validateGroupStatus(groupId, ApiKeys.OFFSET_DELETE) match {
       case Some(error) =>
