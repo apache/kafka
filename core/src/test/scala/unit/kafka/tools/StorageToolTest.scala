@@ -26,10 +26,12 @@ import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 
 @Timeout(value = 40)
@@ -162,11 +164,11 @@ Found problem:
         clusterId = "XcZZOzUqS4yHOjhMQB6JLQ", nodeId = 2)
       val stream = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), ignoreFormatted = false))
+        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), None, ignoreFormatted = false))
       assertTrue(stream.toString().startsWith("Formatting %s".format(tempDir)))
 
       try assertEquals(1, StorageTool.
-        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), ignoreFormatted = false)) catch {
+        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), None, ignoreFormatted = false)) catch {
         case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
           "formatted. Use --ignore-formatted to ignore this directory and format the " +
           "others.", e.getMessage)
@@ -174,7 +176,7 @@ Found problem:
 
       val stream2 = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), ignoreFormatted = true))
+        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), None, ignoreFormatted = true))
       assertEquals("All of the log directories are already formatted.%n".format(), stream2.toString())
     } finally Utils.delete(tempDir)
   }
@@ -220,5 +222,79 @@ Found problem:
     assertEquals(MetadataVersion.IBP_3_0_IV1, mv)
 
     assertThrows(classOf[IllegalArgumentException], () => parseMetadataVersion("--release-version", "0.0"))
+  }
+
+  @Test
+  def testAddScram():Unit = {
+    def parseAddScram(strings: String*): Option[ArrayBuffer[UserScramCredentialRecord]] = {
+      var args = mutable.Seq("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ")
+      args ++= strings
+      val namespace = StorageTool.parseArguments(args.toArray)
+      StorageTool.getUserScramCredentialRecords(namespace)
+    }
+
+    var scramRecords = parseAddScram()
+    assertEquals(None, scramRecords)
+
+    // Validate we can add multiple SCRAM creds.
+    scramRecords = parseAddScram("-S",
+    "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]",
+    "-S",
+    "SCRAM-SHA-256=[name=george,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")
+    
+    assertEquals(2, scramRecords.get.size)
+
+    // Require name subfield.
+    try assertEquals(1, parseAddScram("-S", 
+      "SCRAM-SHA-256=[salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")) catch {
+      case e: TerseFailure => assertEquals(s"You must supply 'name' to add-scram", e.getMessage)
+    }
+
+    // Require password xor saltedpassword
+    try assertEquals(1, parseAddScram("-S", 
+      "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]"))
+    catch {
+      case e: TerseFailure => assertEquals(s"You must only supply one of 'password' or 'saltedpassword' to add-scram", e.getMessage)
+    }
+
+    try assertEquals(1, parseAddScram("-S", 
+      "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",iterations=8192]"))
+    catch {
+      case e: TerseFailure => assertEquals(s"You must supply one of 'password' or 'saltedpassword' to add-scram", e.getMessage)
+    }
+
+    // Validate salt is required with saltedpassword
+    try assertEquals(1, parseAddScram("-S", 
+      "SCRAM-SHA-256=[name=alice,saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]"))
+    catch {
+      case e: TerseFailure => assertEquals(s"You must supply 'salt' with 'saltedpassword' to add-scram", e.getMessage)
+    }
+
+    // Validate salt is optional with password
+    assertEquals(1, parseAddScram("-S", "SCRAM-SHA-256=[name=alice,password=alice,iterations=4096]").get.size)
+
+    // Require 4096 <= iterations <= 16384
+    try assertEquals(1, parseAddScram("-S", 
+      "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=16385]"))
+    catch {
+      case e: TerseFailure => assertEquals(s"The 'iterations' value must be <= 16384 for add-scram", e.getMessage)
+    }
+
+    assertEquals(1, parseAddScram("-S",
+      "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=16384]")
+      .get.size)
+
+    try assertEquals(1, parseAddScram("-S", 
+      "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=4095]"))
+    catch {
+      case e: TerseFailure => assertEquals(s"The 'iterations' value must be >= 4096 for add-scram", e.getMessage)
+    }
+
+    assertEquals(1, parseAddScram("-S",
+      "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=4096]")
+      .get.size)
+
+    // Validate iterations is optional
+    assertEquals(1, parseAddScram("-S", "SCRAM-SHA-256=[name=alice,password=alice]") .get.size)
   }
 }
