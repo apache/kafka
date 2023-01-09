@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.jmh.record;
 
+import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
 import kafka.server.RequestLocal;
 import org.apache.kafka.common.header.Header;
@@ -26,6 +27,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.server.log.internals.LogValidator;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
@@ -75,7 +77,8 @@ public abstract class BaseRecordBatchBenchmark {
     // Used by measureVariableBatchSize
     ByteBuffer[] batchBuffers;
     RequestLocal requestLocal;
-    final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+    LogValidator.MetricsRecorder validatorMetricsRecorder = UnifiedLog.newValidatorMetricsRecorder(
+        new BrokerTopicStats().allTopicsStats());
 
     @Setup
     public void init() {

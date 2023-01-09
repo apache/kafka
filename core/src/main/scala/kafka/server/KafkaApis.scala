@@ -23,7 +23,6 @@ import kafka.common.OffsetAndMetadata
 import kafka.controller.ReplicaAssignment
 import kafka.coordinator.group._
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
-import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.metadata.ConfigRepository
@@ -71,6 +70,7 @@ import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
+import org.apache.kafka.server.log.internals.AppendOrigin
 import org.apache.kafka.server.record.BrokerCompressionType
 
 import java.lang.{Long => JLong}
@@ -676,7 +676,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         timeout = produceRequest.timeout.toLong,
         requiredAcks = produceRequest.acks,
         internalTopicsAllowed = internalTopicsAllowed,
-        origin = AppendOrigin.Client,
+        origin = AppendOrigin.CLIENT,
         entriesPerPartition = authorizedRequestInfo,
         requestLocal = requestLocal,
         responseCallback = sendResponseCallback,
@@ -2340,7 +2340,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           timeout = config.requestTimeoutMs.toLong,
           requiredAcks = -1,
           internalTopicsAllowed = true,
-          origin = AppendOrigin.Coordinator,
+          origin = AppendOrigin.COORDINATOR,
           entriesPerPartition = controlRecords,
           requestLocal = requestLocal,
           responseCallback = maybeSendResponseCallback(producerId, marker.transactionResult))

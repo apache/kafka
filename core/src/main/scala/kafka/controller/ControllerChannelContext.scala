@@ -14,12 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package kafka.controller
 
-import org.apache.kafka.common.TopicPartition;
+import kafka.cluster.Broker
+import org.apache.kafka.common.{TopicPartition, Uuid}
 
-public interface RestoringTasks {
+trait ControllerChannelContext {
+  def isTopicDeletionInProgress(topicName: String): Boolean
 
-    StreamTask restoringTaskFor(final TopicPartition partition);
+  def topicIds: collection.Map[String, Uuid]
 
+  def liveBrokerIdAndEpochs: collection.Map[Int, Long]
+
+  def liveOrShuttingDownBrokers: collection.Set[Broker]
+
+  def isTopicQueuedUpForDeletion(topic: String): Boolean
+
+  def isReplicaOnline(brokerId: Int, partition: TopicPartition): Boolean
+
+  def partitionReplicaAssignment(partition: TopicPartition): collection.Seq[Int]
+
+  def leaderEpoch(topicPartition: TopicPartition): Int
+
+  def liveOrShuttingDownBrokerIds: collection.Set[Int]
+
+  def partitionLeadershipInfo(topicPartition: TopicPartition): Option[LeaderIsrAndControllerEpoch]
 }

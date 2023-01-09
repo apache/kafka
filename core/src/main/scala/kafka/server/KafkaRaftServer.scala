@@ -19,7 +19,7 @@ package kafka.server
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import kafka.common.InconsistentNodeIdException
-import kafka.log.{LogConfig, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.metrics.KafkaMetricsReporter
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
@@ -27,9 +27,11 @@ import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{KafkaException, Uuid}
-import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.KafkaConfigSchema
+import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import java.util.Optional
@@ -172,5 +174,5 @@ object KafkaRaftServer {
   val configSchema = new KafkaConfigSchema(Map(
     ConfigResource.Type.BROKER -> new ConfigDef(KafkaConfig.configDef),
     ConfigResource.Type.TOPIC -> LogConfig.configDefCopy,
-  ).asJava, LogConfig.AllTopicConfigSynonyms)
+  ).asJava, ServerTopicConfigSynonyms.ALL_TOPIC_CONFIG_SYNONYMS)
 }

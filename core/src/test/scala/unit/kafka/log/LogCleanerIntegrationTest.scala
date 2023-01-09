@@ -51,7 +51,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val largeMessageKey = 20
     val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
     val maxMessageSize = largeMessageSet.sizeInBytes
-    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, backOffMs = 100)
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, backoffMs = 100)
 
     def breakPartitionLog(tp: TopicPartition): Unit = {
       val log = cleaner.logs.get(tp)
@@ -134,7 +134,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val minCleanableDirtyRatio = 1.0F
 
     cleaner = makeCleaner(partitions = topicPartitions,
-      backOffMs = cleanerBackOffMs,
+      backoffMs = cleanerBackOffMs,
       minCompactionLagMs = minCompactionLagMs,
       segmentSize = segmentSize,
       maxCompactionLagMs= maxCompactionLagMs,
@@ -217,7 +217,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   @Test
   def testIsThreadFailed(): Unit = {
     val metricName = "DeadThreadCount"
-    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backOffMs = 100)
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backoffMs = 100)
     cleaner.startup()
     assertEquals(0, cleaner.deadThreadCount)
     // we simulate the unexpected error with an interrupt
