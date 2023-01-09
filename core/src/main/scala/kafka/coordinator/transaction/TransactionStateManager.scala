@@ -294,7 +294,7 @@ class TransactionStateManager(brokerId: Int,
   def enableTransactionalIdExpiration(): Unit = {
     scheduler.schedule(
       "transactionalId-expiration",
-      removeExpiredTransactionalIds _,
+      () => removeExpiredTransactionalIds(),
       config.removeExpiredTransactionalIdsIntervalMs,
       config.removeExpiredTransactionalIdsIntervalMs
     )

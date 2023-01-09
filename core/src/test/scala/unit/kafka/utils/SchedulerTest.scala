@@ -46,8 +46,8 @@ class SchedulerTest {
 
   @Test
   def testMockSchedulerNonPeriodicTask(): Unit = {
-    mockTime.scheduler.scheduleOnce("test1", counter1.getAndIncrement _, 1)
-    mockTime.scheduler.scheduleOnce("test2", counter2.getAndIncrement _, 100)
+    mockTime.scheduler.scheduleOnce("test1", () => counter1.getAndIncrement(), 1)
+    mockTime.scheduler.scheduleOnce("test2", () => counter2.getAndIncrement(), 100)
     assertEquals(0, counter1.get, "Counter1 should not be incremented prior to task running.")
     assertEquals(0, counter2.get, "Counter2 should not be incremented prior to task running.")
     mockTime.sleep(1)
@@ -60,8 +60,8 @@ class SchedulerTest {
 
   @Test
   def testMockSchedulerPeriodicTask(): Unit = {
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, 1, 1)
-    mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, 100, 100)
+    mockTime.scheduler.schedule("test1", () => counter1.getAndIncrement(), 1, 1)
+    mockTime.scheduler.schedule("test2", () => counter2.getAndIncrement(), 100, 100)
     assertEquals(0, counter1.get, "Counter1 should not be incremented prior to task running.")
     assertEquals(0, counter2.get, "Counter2 should not be incremented prior to task running.")
     mockTime.sleep(1)
@@ -74,14 +74,14 @@ class SchedulerTest {
 
   @Test
   def testReentrantTaskInMockScheduler(): Unit = {
-    mockTime.scheduler.scheduleOnce("test1", () => mockTime.scheduler.scheduleOnce("test2", counter2.getAndIncrement _, 0), 1)
+    mockTime.scheduler.scheduleOnce("test1", () => mockTime.scheduler.scheduleOnce("test2", () => counter2.getAndIncrement(), 0), 1)
     mockTime.sleep(1)
     assertEquals(1, counter2.get)
   }
 
   @Test
   def testNonPeriodicTask(): Unit = {
-    scheduler.scheduleOnce("test", counter1.getAndIncrement _)
+    scheduler.scheduleOnce("test", () => counter1.getAndIncrement())
     retry(30000) {
       assertEquals(counter1.get, 1)
     }
@@ -91,7 +91,7 @@ class SchedulerTest {
 
   @Test
   def testNonPeriodicTaskWhenPeriodIsZero(): Unit = {
-    scheduler.schedule("test", counter1.getAndIncrement _, 0, 0)
+    scheduler.schedule("test", () => counter1.getAndIncrement(), 0, 0)
     retry(30000) {
       assertEquals(counter1.get, 1)
     }
@@ -101,7 +101,7 @@ class SchedulerTest {
 
   @Test
   def testPeriodicTask(): Unit = {
-    scheduler.schedule("test", counter1.getAndIncrement _, 0, 5)
+    scheduler.schedule("test", () => counter1.getAndIncrement(), 0, 5)
     retry(30000){
       assertTrue(counter1.get >= 20, "Should count to 20")
     }
@@ -110,7 +110,7 @@ class SchedulerTest {
   @Test
   def testRestart(): Unit = {
     // schedule a task to increment a counter
-    mockTime.scheduler.scheduleOnce("test1", counter1.getAndIncrement _, 1)
+    mockTime.scheduler.scheduleOnce("test1", () => counter1.getAndIncrement(), 1)
     mockTime.sleep(1)
     assertEquals(1, counter1.get())
 
@@ -119,7 +119,7 @@ class SchedulerTest {
     mockTime.scheduler.startup()
 
     // schedule another task to increment the counter
-    mockTime.scheduler.scheduleOnce("test1", counter1.getAndIncrement _, 1)
+    mockTime.scheduler.scheduleOnce("test1", () => counter1.getAndIncrement(), 1)
     mockTime.sleep(1)
     assertEquals(2, counter1.get())
   }

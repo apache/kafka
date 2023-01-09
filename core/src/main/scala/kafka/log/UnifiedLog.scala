@@ -331,7 +331,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       }
     } else if (keepPartitionMetadataFile) {
       _topicId.foreach(partMetadataFile.record)
-      scheduler.scheduleOnce("flush-metadata-file", maybeFlushMetadataFile _)
+      scheduler.scheduleOnce("flush-metadata-file", () => maybeFlushMetadataFile())
     } else {
       // We want to keep the file and the in-memory topic ID in sync.
       _topicId = None
@@ -618,7 +618,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             case Some(partMetadataFile) =>
               if (!partMetadataFile.exists()) {
                 partMetadataFile.record(topicId)
-                scheduler.scheduleOnce("flush-metadata-file", maybeFlushMetadataFile _)
+                scheduler.scheduleOnce("flush-metadata-file", () => maybeFlushMetadataFile())
               }
             case _ => warn(s"The topic id $topicId will not be persisted to the partition metadata file " +
               "since the partition is deleted")

@@ -55,7 +55,7 @@ class ZkAlterPartitionManager(scheduler: Scheduler, time: Time, zkClient: KafkaZ
   private val lastIsrPropagationMs = new AtomicLong(time.milliseconds())
 
   override def start(): Unit = {
-    scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _, 0L,
+    scheduler.schedule("isr-change-propagation", () => maybePropagateIsrChanges(), 0L,
       isrChangeNotificationConfig.checkIntervalMs)
   }
 

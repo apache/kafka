@@ -534,24 +534,24 @@ class LogManager(logDirs: Seq[File],
     if (scheduler != null) {
       info("Starting log cleanup with a period of %d ms.".format(retentionCheckMs))
       scheduler.schedule("kafka-log-retention",
-                         cleanupLogs _,
+                         () => cleanupLogs(),
                          InitialTaskDelayMs,
                          retentionCheckMs)
       info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
       scheduler.schedule("kafka-log-flusher",
-                         flushDirtyLogs _,
+                         () => flushDirtyLogs(),
                          InitialTaskDelayMs,
                          flushCheckMs)
       scheduler.schedule("kafka-recovery-point-checkpoint",
-                         checkpointLogRecoveryOffsets _,
+                         () => checkpointLogRecoveryOffsets(),
                          InitialTaskDelayMs,
                          flushRecoveryOffsetCheckpointMs)
       scheduler.schedule("kafka-log-start-offset-checkpoint",
-                         checkpointLogStartOffsets _,
+                         () => checkpointLogStartOffsets(),
                          InitialTaskDelayMs,
                          flushStartOffsetCheckpointMs)
       scheduler.scheduleOnce("kafka-delete-logs", // will be rescheduled after each delete logs with a dynamic period
-                         deleteLogs _,
+                         () => deleteLogs(),
                          InitialTaskDelayMs)
     }
     if (cleanerConfig.enableCleaner) {
@@ -1046,7 +1046,7 @@ class LogManager(logDirs: Seq[File],
     } finally {
       try {
         scheduler.scheduleOnce("kafka-delete-logs",
-          deleteLogs _,
+          () => deleteLogs(),
           nextDelayMs)
       } catch {
         case e: Throwable =>
