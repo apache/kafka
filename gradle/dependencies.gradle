@@ -107,7 +107,7 @@ versions += [
   mavenArtifact: "3.8.4",
   metrics: "2.2.0",
   mockito: "4.6.1",
-  netty: "4.1.79.Final",
+  netty: "4.1.86.Final",
   powermock: "2.0.9",
   reflections: "0.9.12",
   reload4j: "1.2.19",

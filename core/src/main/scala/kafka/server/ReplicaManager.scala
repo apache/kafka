@@ -25,7 +25,7 @@ import com.yammer.metrics.core.Meter
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.controller.{KafkaController, StateChangeLogger}
-import kafka.log._
+import kafka.log.{LeaderHwChange, LogAppendInfo, LogManager, LogReadInfo, UnifiedLog}
 import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.HostedPartition.Online
@@ -61,7 +61,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.log.internals.{AppendOrigin, LogDirFailureChannel, LogOffsetMetadata, RecordValidationException}
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogConfig, LogDirFailureChannel, LogOffsetMetadata, RecordValidationException}
 
 import java.nio.file.{Files, Paths}
 import java.util
@@ -1534,14 +1534,14 @@ class ReplicaManager(val config: KafkaConfig,
     leaderTopicSet.diff(newFollowerTopics).foreach(brokerTopicStats.removeOldFollowerMetrics)
   }
 
-  protected def maybeAddLogDirFetchers(partitions: Set[Partition],
+  protected[server] def maybeAddLogDirFetchers(partitions: Set[Partition],
                                        offsetCheckpoints: OffsetCheckpoints,
                                        topicIds: String => Option[Uuid]): Unit = {
     val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
     for (partition <- partitions) {
       val topicPartition = partition.topicPartition
-      if (logManager.getLog(topicPartition, isFuture = true).isDefined) {
-        partition.log.foreach { log =>
+      logManager.getLog(topicPartition, isFuture = true).foreach { futureLog =>
+        partition.log.foreach { _ =>
           val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
 
           // Add future replica log to partition's map
@@ -1556,7 +1556,7 @@ class ReplicaManager(val config: KafkaConfig,
           logManager.abortAndPauseCleaning(topicPartition)
 
           futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(topicIds(topicPartition.topic), leader,
-            partition.getLeaderEpoch, log.highWatermark))
+            partition.getLeaderEpoch, futureLog.highWatermark))
         }
       }
     }

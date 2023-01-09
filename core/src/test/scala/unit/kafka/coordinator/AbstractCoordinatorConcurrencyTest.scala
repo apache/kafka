@@ -22,7 +22,7 @@ import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
-import kafka.log.{LogConfig, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.server._
 import kafka.utils._
 import kafka.utils.timer.MockTimer
@@ -31,9 +31,9 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConversionStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.server.log.internals.AppendOrigin
+import org.apache.kafka.server.log.internals.{AppendOrigin, LogConfig}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.mockito.Mockito.{mock, withSettings, CALLS_REAL_METHODS}
+import org.mockito.Mockito.{CALLS_REAL_METHODS, mock, withSettings}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._

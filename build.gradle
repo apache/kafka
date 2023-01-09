@@ -1102,7 +1102,7 @@ project(':core') {
 
   task genTopicConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'kafka.log.LogConfig'
+    mainClass = 'org.apache.kafka.server.log.internals.LogConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
   }

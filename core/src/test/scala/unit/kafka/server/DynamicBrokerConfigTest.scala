@@ -18,11 +18,11 @@
 package kafka.server
 
 import java.{lang, util}
-import java.util.{Map => JMap, Properties}
+import java.util.{Properties, Map => JMap}
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.atomic.AtomicReference
 import kafka.controller.KafkaController
-import kafka.log.{LogConfig, LogManager}
+import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.{KafkaScheduler, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -33,6 +33,7 @@ import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -106,7 +107,7 @@ class DynamicBrokerConfigTest {
     Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
     Mockito.when(logManagerMock.allLogs).thenReturn(Iterable.empty)
 
-    val currentDefaultLogConfig = new AtomicReference(LogConfig())
+    val currentDefaultLogConfig = new AtomicReference(new LogConfig(new Properties))
     Mockito.when(logManagerMock.currentDefaultConfig).thenAnswer(_ => currentDefaultLogConfig.get())
     Mockito.when(logManagerMock.reconfigureDefaultLogConfig(ArgumentMatchers.any(classOf[LogConfig])))
       .thenAnswer(invocation => currentDefaultLogConfig.set(invocation.getArgument(0)))
@@ -512,7 +513,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.initialize(None)
 
     assertEquals(Defaults.MaxConnections, config.maxConnections)
-    assertEquals(Defaults.MessageMaxBytes, config.messageMaxBytes)
+    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, config.messageMaxBytes)
 
     var newProps = new Properties()
     newProps.put(KafkaConfig.MaxConnectionsProp, "9999")
