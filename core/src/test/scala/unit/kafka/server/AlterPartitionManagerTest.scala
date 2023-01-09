@@ -20,7 +20,7 @@ package kafka.server
 import java.util.Collections
 import java.util.stream.{Stream => JStream}
 import kafka.api.LeaderAndIsr
-import kafka.utils.{MockScheduler, MockTime}
+import kafka.utils.MockTime
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicIdPartition
@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.{AbstractRequest, AlterPartitionRequest,
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV2, IBP_3_2_IV0}
+import org.apache.kafka.server.util.MockScheduler
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach
