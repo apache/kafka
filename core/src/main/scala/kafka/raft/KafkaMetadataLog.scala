@@ -675,7 +675,7 @@ object KafkaMetadataLog extends Logging {
     logDir: Path,
     expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
     logging: Logging
-  ): () => Unit = () => {
+  ): Unit = {
     expiredSnapshots.foreach { case (snapshotId, snapshotReader) =>
       snapshotReader.foreach { reader =>
         CoreUtils.swallow(reader.close(), logging)
