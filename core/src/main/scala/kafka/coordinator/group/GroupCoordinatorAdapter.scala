@@ -246,6 +246,7 @@ class GroupCoordinatorAdapter(
     request: OffsetCommitRequestData,
     bufferSupplier: BufferSupplier
   ): CompletableFuture[OffsetCommitResponseData] = {
+    val currentTimeMs = time.milliseconds
     val future = new CompletableFuture[OffsetCommitResponseData]()
 
     def callback(commitStatus: Map[TopicPartition, Errors]): Unit = {
@@ -253,12 +254,16 @@ class GroupCoordinatorAdapter(
       val byTopics = new mutable.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
 
       commitStatus.forKeyValue { (tp, error) =>
-        var topic = byTopics(tp.topic)
-        if (topic == null) {
-          topic = new OffsetCommitResponseData.OffsetCommitResponseTopic().setName(tp.topic)
-          byTopics += tp.topic -> topic
-          response.topics.add(topic)
+        val topic = byTopics.get(tp.topic) match {
+          case Some(existingTopic) =>
+            existingTopic
+          case None =>
+            val newTopic = new OffsetCommitResponseData.OffsetCommitResponseTopic().setName(tp.topic)
+            byTopics += tp.topic -> newTopic
+            response.topics.add(newTopic)
+            newTopic
         }
+
         topic.partitions.add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
           .setPartitionIndex(tp.partition)
           .setErrorCode(error.code))
@@ -267,15 +272,15 @@ class GroupCoordinatorAdapter(
       future.complete(response)
     }
 
-    // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
-    // expire timestamp is computed differently for v1 and v2.
-    //   - If v1 and no explicit commit timestamp is provided we treat it the same as v5.
-    //   - If v1 and explicit retention time is provided we calculate expiration timestamp based on that.
-    //   - If v2/v3/v4 (no explicit commit timestamp) we treat it the same as v5.
-    //   - For v5 and beyond there is no per partition expiration timestamp, so this field is no longer in effect.
-    val currentTimestamp = time.milliseconds
-    val partitions = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
+    // "default" expiration timestamp is defined as now + retention. The retention may be overridden
+    // in versions from v2 to v4. Otherwise, the retention defined on the broker is used. If an explicit
+    // commit timestamp is provided (v1 only), the expiration timestamp is computed based on that.
+    val expireTimeMs = request.retentionTimeMs match {
+      case OffsetCommitRequest.DEFAULT_RETENTION_TIME => None
+      case retentionTimeMs => Some(currentTimeMs + retentionTimeMs)
+    }
 
+    val partitions = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
     request.topics.forEach { topic =>
       topic.partitions.forEach { partition =>
         val tp = new TopicPartition(topic.name, partition.partitionIndex)
@@ -290,18 +295,14 @@ class GroupCoordinatorAdapter(
             case metadata => metadata
           },
           commitTimestamp = partition.commitTimestamp match {
-            case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimestamp
+            case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimeMs
             case customTimestamp => customTimestamp
           },
-          expireTimestamp = request.retentionTimeMs match {
-            case OffsetCommitRequest.DEFAULT_RETENTION_TIME => None
-            case retentionTime => Some(currentTimestamp + retentionTime)
-          }
+          expireTimestamp = expireTimeMs
         )
       }
     }
 
-    // call coordinator to handle commit offset
     coordinator.handleCommitOffsets(
       request.groupId,
       request.memberId,
