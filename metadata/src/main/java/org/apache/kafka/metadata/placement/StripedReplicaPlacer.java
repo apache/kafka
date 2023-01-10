@@ -353,6 +353,21 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
             }
         }
 
+        /**
+         * This method tries to get an offset within the list of racks to start making assignments from.
+         *
+         * It works by looking at the leader of the highest number partition, which is the last partition that an
+         * assignment was made for, and returning the offset of that rack from within the list of racks. The idea is
+         * we should start making assignments for the next partition starting from this offset plus one.
+         *
+         * Note, if this method is called during topic creation, not partition addition/creation, then no offset will
+         * be returned. There will be no existing partition assignments, so it will always return an empty Optional.
+         *
+         * @param brokerIdToRack A Map from broker ID to rack.
+         * @param existingPartitionAssignments The existing partition assignments.
+         * @param racks The list of racks
+         * @return
+         */
         protected static Optional<Integer> tryGetPreviousRackOffset(
             Map<Integer, Optional<String>> brokerIdToRack,
             List<PartitionAssignment> existingPartitionAssignments,
@@ -373,6 +388,22 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
             return Optional.empty();
         }
 
+        /**
+         * This method tries to get an offset, for a specific rack, within the list of unfenced brokers to start making assignments from.
+         *
+         * It works by iterating through the existing partition assignments, and finding the last assigned broker for
+         * the given rack. If it finds one, it returns that offset that can be used as the starting offset, plus one,
+         * to start making assignments for new partitions.
+         *
+         * Note, if this method is called during topic creation, not partition addition/creation, then no offset will
+         * be returned. There will be no existing partition assignments, so it will always return an empty Optional.
+         *
+         * @param brokerIdToRack Map from broker ID to rack.
+         * @param existingPartitionAssignments Topic's exsiting partition assignments, if any.
+         * @param rack The rack to get the broker offset from.
+         * @param unfencedBrokers The unfenced brokers to get the broker offset from within.
+         * @return The offset in the unfenced broker list to start assignments from.
+         */
         protected static Optional<Integer> tryGetPreviousBrokerOffset(
             Map<Integer, Optional<String>> brokerIdToRack,
             List<PartitionAssignment> existingPartitionAssignments,
