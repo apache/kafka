@@ -546,7 +546,6 @@ public class ReplicationControlManager {
                 topicErrors.put(entry.getKey().name(), entry.getValue());
             }
         }
-        records.addAll(configResult.records());
 
         // Try to create whatever topics are needed.
         Map<String, CreatableTopicResult> successes = new HashMap<>();
@@ -554,7 +553,7 @@ public class ReplicationControlManager {
             if (topicErrors.containsKey(topic.name())) continue;
             ApiError error;
             try {
-                error = createTopic(topic, records, successes, describable.contains(topic.name()));
+                error = createTopic(topic, records, successes, configResult, describable.contains(topic.name()));
             } catch (ApiException e) {
                 error = ApiError.fromThrowable(e);
             }
@@ -597,6 +596,7 @@ public class ReplicationControlManager {
     private ApiError createTopic(CreatableTopic topic,
                                  List<ApiMessageAndVersion> records,
                                  Map<String, CreatableTopicResult> successes,
+                                 ControllerResult<Map<ConfigResource, ApiError>> configResult,
                                  boolean authorizedToReturnConfigs) {
         Map<String, String> creationConfigs = translateCreationConfigs(topic.configs());
         Map<Integer, PartitionRegistration> newParts = new HashMap<>();
@@ -725,6 +725,8 @@ public class ReplicationControlManager {
         records.add(new ApiMessageAndVersion(new TopicRecord().
             setName(topic.name()).
             setTopicId(topicId), (short) 0));
+        // ConfigRecords go after TopicRecord but before PartitionRecord(s).
+        records.addAll(configResult.records());
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();

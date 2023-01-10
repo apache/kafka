@@ -61,6 +61,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -580,6 +581,17 @@ public class ReplicationControlManagerTest {
             replicationControl.createTopics(request1, Collections.singleton("foo"));
         assertEquals((short) 0, result1.response().topics().find("foo").errorCode());
 
+        List<ApiMessageAndVersion> records1 = result1.records();
+        assertTrue(records1.size() >= 3);
+        ApiMessageAndVersion record0 = records1.get(0);
+        assertEquals(TopicRecord.class, record0.message().getClass());
+
+        ApiMessageAndVersion record1 = records1.get(1);
+        assertEquals(ConfigRecord.class, record1.message().getClass());
+
+        ApiMessageAndVersion lastRecord = records1.get(records1.size() - 1);
+        assertEquals(PartitionRecord.class, lastRecord.message().getClass());
+
         ctx.replay(result1.records());
         assertEquals(
             "notNull",
@@ -605,6 +617,16 @@ public class ReplicationControlManagerTest {
             "Null value not supported for topic configs: foo",
             result2.response().topics().find("bar").errorMessage()
         );
+
+        CreateTopicsRequestData request3 = new CreateTopicsRequestData();
+        request3.topics().add(new CreatableTopic().setName("baz")
+            .setNumPartitions(-1).setReplicationFactor((short) -2)
+            .setConfigs(validConfigs));
+
+        ControllerResult<CreateTopicsResponseData> result3 =
+            replicationControl.createTopics(request3, Collections.singleton("baz"));
+        assertEquals(INVALID_REPLICATION_FACTOR.code(), result3.response().topics().find("baz").errorCode());
+        assertEquals(0, result3.records().size());
     }
 
     @Test
