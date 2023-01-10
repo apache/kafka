@@ -227,12 +227,16 @@ public class ProtocolSerializationTest {
         int size = 10;
         ByteBuffer buffer = ByteBuffer.allocate(size);
         int numTaggedFields = 1;
+        // write the number of tagged fields
         ByteUtils.writeUnsignedVarint(numTaggedFields, buffer);
+        // write the tag of the first tagged fields
         ByteUtils.writeUnsignedVarint(tag, buffer);
+        // write the size of tagged fields for this tag, using a large number for testing
         ByteUtils.writeUnsignedVarint(Integer.MAX_VALUE, buffer);
         int expectedRemaining = buffer.remaining();
         buffer.rewind();
 
+        // should throw SchemaException while reading the buffer, instead of OOM
         Throwable e = assertThrows(SchemaException.class, () -> type.read(buffer));
         assertEquals("Error reading array of size " + Integer.MAX_VALUE + ", only " + expectedRemaining + " bytes available",
             e.getMessage());
