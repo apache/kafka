@@ -187,8 +187,7 @@ class BrokerServer(
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
         threadNamePrefix,
-        isZkBroker = false,
-        () => -1)
+        isZkBroker = false)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
