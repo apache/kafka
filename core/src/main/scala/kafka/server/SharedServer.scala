@@ -236,37 +236,35 @@ class SharedServer(
         )
         raftManager.startup()
 
-        if (sharedServerConfig.processRoles.contains(ControllerRole)) {
-          val loaderBuilder = new MetadataLoader.Builder().
-            setNodeId(metaProps.nodeId).
-            setTime(time).
-            setThreadNamePrefix(threadNamePrefix.getOrElse("")).
-            setFaultHandler(metadataLoaderFaultHandler).
-            setHighWaterMarkAccessor(() => raftManager.client.highWatermark())
-          if (brokerMetrics != null) {
-            loaderBuilder.setMetadataLoaderMetrics(brokerMetrics)
-          }
-          loader = loaderBuilder.build()
-          snapshotEmitter = new SnapshotEmitter.Builder().
-            setNodeId(metaProps.nodeId).
-            setRaftClient(raftManager.client).
-            build()
-          snapshotGenerator = new SnapshotGenerator.Builder(snapshotEmitter).
-            setNodeId(metaProps.nodeId).
-            setTime(time).
-            setFaultHandler(metadataPublishingFaultHandler).
-            setMaxBytesSinceLastSnapshot(sharedServerConfig.metadataSnapshotMaxNewRecordBytes).
-            setMaxTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(sharedServerConfig.metadataSnapshotMaxIntervalMs)).
-            setDisabledReason(snapshotsDiabledReason).
-            build()
-          raftManager.register(loader)
-          try {
-            loader.installPublishers(Collections.singletonList(snapshotGenerator))
-          } catch {
-            case t: Throwable => {
-              error("Unable to install metadata publishers", t)
-              throw new RuntimeException("Unable to install metadata publishers.", t)
-            }
+        val loaderBuilder = new MetadataLoader.Builder().
+          setNodeId(metaProps.nodeId).
+          setTime(time).
+          setThreadNamePrefix(threadNamePrefix.getOrElse("")).
+          setFaultHandler(metadataLoaderFaultHandler).
+          setHighWaterMarkAccessor(() => raftManager.client.highWatermark())
+        if (brokerMetrics != null) {
+          loaderBuilder.setMetadataLoaderMetrics(brokerMetrics)
+        }
+        loader = loaderBuilder.build()
+        snapshotEmitter = new SnapshotEmitter.Builder().
+          setNodeId(metaProps.nodeId).
+          setRaftClient(raftManager.client).
+          build()
+        snapshotGenerator = new SnapshotGenerator.Builder(snapshotEmitter).
+          setNodeId(metaProps.nodeId).
+          setTime(time).
+          setFaultHandler(metadataPublishingFaultHandler).
+          setMaxBytesSinceLastSnapshot(sharedServerConfig.metadataSnapshotMaxNewRecordBytes).
+          setMaxTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(sharedServerConfig.metadataSnapshotMaxIntervalMs)).
+          setDisabledReason(snapshotsDiabledReason).
+          build()
+        raftManager.register(loader)
+        try {
+          loader.installPublishers(Collections.singletonList(snapshotGenerator))
+        } catch {
+          case t: Throwable => {
+            error("Unable to install metadata publishers", t)
+            throw new RuntimeException("Unable to install metadata publishers.", t)
           }
         }
         debug("Completed SharedServer startup.")

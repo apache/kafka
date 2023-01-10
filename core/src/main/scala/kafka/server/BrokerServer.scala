@@ -25,8 +25,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
-import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCache, SnapshotWriterBuilder}
+import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCache}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -40,15 +39,13 @@ import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
-import org.apache.kafka.raft
-import org.apache.kafka.raft.{RaftClient, RaftConfig}
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.log.internals.LogDirFailureChannel
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.snapshot.SnapshotWriter
 
 import java.net.InetAddress
 import java.util
@@ -56,19 +53,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.{Map, Seq}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
-
-class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
-    extends SnapshotWriterBuilder {
-  override def build(committedOffset: Long,
-                     committedEpoch: Int,
-                     lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]] = {
-    val snapshotId = new raft.OffsetAndEpoch(committedOffset + 1, committedEpoch)
-    raftClient.createSnapshot(snapshotId, lastContainedLogTime).asScala
-  }
-}
 
 /**
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
@@ -145,10 +131,6 @@ class BrokerServer(
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
   val clusterId: String = sharedServer.metaProps.clusterId
-
-  var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
-
-  var metadataListener: BrokerMetadataListener = _
 
   var metadataPublisher: BrokerMetadataPublisher = _
 
@@ -315,25 +297,6 @@ class BrokerServer(
         ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
 
-      if (!config.processRoles.contains(ControllerRole)) {
-        // If no controller is defined, we rely on the broker to generate snapshots.
-        metadataSnapshotter = Some(new BrokerMetadataSnapshotter(
-          config.nodeId,
-          time,
-          threadNamePrefix,
-          new BrokerSnapshotWriterBuilder(raftManager.client)
-        ))
-      }
-
-      metadataListener = new BrokerMetadataListener(
-        config.nodeId,
-        time,
-        threadNamePrefix,
-        config.metadataSnapshotMaxNewRecordBytes,
-        metadataSnapshotter,
-        sharedServer.brokerMetrics,
-        sharedServer.metadataLoaderFaultHandler)
-
       val networkListeners = new ListenerCollection()
       config.effectiveAdvertisedListeners.foreach { ep =>
         networkListeners.add(new Listener().
@@ -358,15 +321,12 @@ class BrokerServer(
         config.brokerSessionTimeoutMs / 2 // KAFKA-14392
       )
       lifecycleManager.start(
-        () => metadataListener.highestMetadataOffset,
+        () => sharedServer.loader.lastAppliedOffset(),
         brokerLifecycleChannelManager,
         sharedServer.metaProps.clusterId,
         networkListeners,
         featuresRemapped
       )
-
-      // Register a listener with the Raft layer to receive metadata event notifications
-      raftManager.register(metadataListener)
 
       val endpoints = new util.ArrayList[Endpoint](networkListeners.size())
       var interBrokerListener: Endpoint = null
@@ -466,7 +426,7 @@ class BrokerServer(
       // replicaManager, groupCoordinator, and txnCoordinator. The log manager may perform
       // a potentially lengthy recovery-from-unclean-shutdown operation here, if required.
       try {
-        metadataListener.startPublishing(metadataPublisher).get()
+        sharedServer.loader.installPublishers(List(metadataPublisher).asJava).get()
       } catch {
         case t: Throwable => throw new RuntimeException("Received a fatal error while " +
           "waiting for the broker to catch up with the current cluster metadata.", t)
@@ -550,9 +510,6 @@ class BrokerServer(
         }
       }
 
-      if (metadataListener != null)
-        metadataListener.beginShutdown()
-
       lifecycleManager.beginShutdown()
 
       // Stop socket server to stop accepting any more connections and requests.
@@ -567,10 +524,6 @@ class BrokerServer(
       if (controlPlaneRequestProcessor != null)
         CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
       CoreUtils.swallow(authorizer.foreach(_.close()), this)
-      if (metadataListener != null) {
-        CoreUtils.swallow(metadataListener.close(), this)
-      }
-      metadataSnapshotter.foreach(snapshotter => CoreUtils.swallow(snapshotter.close(), this))
 
       /**
        * We must shutdown the scheduler early because otherwise, the scheduler could touch other

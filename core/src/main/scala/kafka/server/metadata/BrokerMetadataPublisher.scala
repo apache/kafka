@@ -18,7 +18,6 @@
 package kafka.server.metadata
 
 import java.util.{OptionalInt, Properties}
-import java.util.concurrent.atomic.AtomicLong
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
@@ -26,6 +25,8 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
+import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.server.authorizer.Authorizer
@@ -121,12 +122,25 @@ class BrokerMetadataPublisher(
    */
   var _firstPublish = true
 
-  /**
-   * This is updated after all components (e.g. LogManager) has finished publishing the new metadata delta
-   */
-  val publishedOffsetAtomic = new AtomicLong(-1)
+  override def name(): String = "BrokerMetadataPublisher"
 
-  override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
+  override def publishSnapshot(
+    delta: MetadataDelta,
+    newImage: MetadataImage,
+    manifest: SnapshotManifest
+  ): Unit = {
+    publish(delta, newImage)
+  }
+
+  override def publishLogDelta(
+    delta: MetadataDelta,
+    newImage: MetadataImage,
+    manifest: LogDeltaManifest
+  ): Unit = {
+    publish(delta, newImage)
+  }
+
+  def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
     val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
 
     val deltaName = if (_firstPublish) {
@@ -263,7 +277,6 @@ class BrokerMetadataPublisher(
       if (_firstPublish) {
         finishInitializingReplicaManager(newImage)
       }
-      publishedOffsetAtomic.set(newImage.highestOffsetAndEpoch().offset)
     } catch {
       case t: Throwable => metadataPublishingFaultHandler.handleFault("Uncaught exception while " +
         s"publishing broker metadata from ${deltaName}", t)
@@ -278,8 +291,6 @@ class BrokerMetadataPublisher(
       case None => OptionalInt.empty
     }
   }
-
-  override def publishedOffset: Long = publishedOffsetAtomic.get()
 
   def reloadUpdatedFilesWithoutConfigChange(props: Properties): Unit = {
     conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
@@ -351,8 +362,8 @@ class BrokerMetadataPublisher(
     }
     try {
       // Start the group coordinator.
-      groupCoordinator.startup(() => metadataCache.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME)
-        .getOrElse(conf.offsetsTopicPartitions))
+      groupCoordinator.startup(() => metadataCache.numPartitions(
+        Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(conf.offsetsTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting GroupCoordinator", t)
     }
@@ -386,5 +397,8 @@ class BrokerMetadataPublisher(
       case t: Throwable => metadataPublishingFaultHandler.handleFault("Error starting high " +
         "watermark checkpoint thread during startup", t)
     }
-}
+  }
+
+  override def close(): Unit = {
+  }
 }
