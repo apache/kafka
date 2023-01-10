@@ -243,6 +243,40 @@ public class SaslServerAuthenticatorTest {
         }
     }
 
+    @Test
+    public void testSessionWontExpiresWithLargeExpirationTime() throws IOException {
+        String mechanism = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+        SaslServer saslServer = mock(SaslServer.class);
+        MockTime time = new MockTime(0, 1, 1000);
+        // set a Long.MAX_VALUE as the expiration time
+        Duration largeExpirationTime = Duration.ofMillis(Long.MAX_VALUE);
+
+        try (
+            MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, largeExpirationTime);
+            MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
+            TransportLayer transportLayer = mockTransportLayer()
+        ) {
+
+            SaslServerAuthenticator authenticator = getSaslServerAuthenticatorForOAuth(mechanism, transportLayer, time, largeExpirationTime.toMillis());
+
+            mockRequest(saslHandshakeRequest(mechanism), transportLayer);
+            authenticator.authenticate();
+
+            when(saslServer.isComplete()).thenReturn(false).thenReturn(true);
+            mockRequest(saslAuthenticateRequest(), transportLayer);
+            authenticator.authenticate();
+
+            // expected to get Long.MAX_VALUE as expiration time
+            assertEquals(Long.MAX_VALUE, authenticator.serverSessionExpirationTimeNanos());
+
+            ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
+            consumeSizeAndHeader(secondResponseSent);
+            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(secondResponseSent, (short) 2);
+            // expected to respond with Long.MAX_VALUE session lifetime
+            assertEquals(Long.MAX_VALUE, response.sessionLifetimeMs());
+        }
+    }
+
     private SaslServerAuthenticator getSaslServerAuthenticatorForOAuth(String mechanism, TransportLayer transportLayer, Time time, Long maxReauth) {
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(mechanism));

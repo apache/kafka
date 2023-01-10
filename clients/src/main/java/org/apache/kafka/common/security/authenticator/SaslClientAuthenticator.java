@@ -516,6 +516,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 long sessionLifetimeMs = response.sessionLifetimeMs();
                 if (sessionLifetimeMs > 0L)
                     reauthInfo.positiveSessionLifetimeMs = sessionLifetimeMs;
+
                 return Utils.copyArray(response.saslAuthBytes());
             } else
                 return null;
@@ -689,7 +690,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 double pctToUse = pctWindowFactorToTakeNetworkLatencyAndClockDriftIntoAccount + RNG.nextDouble()
                         * pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously;
                 sessionLifetimeMsToUse = (long) (positiveSessionLifetimeMs * pctToUse);
-                clientSessionReauthenticationTimeNanos = authenticationEndNanos + 1000 * 1000 * sessionLifetimeMsToUse;
+                clientSessionReauthenticationTimeNanos = Utils.saturatedAdd(authenticationEndNanos, Utils.saturatedMultiply(1000 * 1000, sessionLifetimeMsToUse));
                 log.debug(
                         "Finished {} with session expiration in {} ms and session re-authentication on or after {} ms",
                         authenticationOrReauthenticationText(), positiveSessionLifetimeMs, sessionLifetimeMsToUse);

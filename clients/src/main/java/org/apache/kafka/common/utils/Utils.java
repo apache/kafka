@@ -1496,4 +1496,32 @@ public final class Utils {
             throw new IllegalArgumentException("Expected string to end with " + oldSuffix + " but string is " + str);
         return str.substring(0, str.length() - oldSuffix.length()) + newSuffix;
     }
+
+    public static long zeroIfNegative(long value) {
+        return Math.max(0L, value);
+    }
+
+    // returns the sum of a and b unless it would overflow, which will return Long.MAX_VALUE
+    public static long saturatedAdd(long a, long b) {
+        long result = Long.MAX_VALUE;
+        try {
+            result = Math.addExact(a, b);
+        } catch (ArithmeticException e) {
+            log.info("The sum of {} and {} is overflowed, set to Long.MAX_VALUE", a, b);
+        }
+
+        return result;
+    }
+
+    // returns the product of a and b unless it would overflow, which will return Long.MAX_VALUE
+    public static long saturatedMultiply(long a, long b) {
+        long result = Long.MAX_VALUE;
+        try {
+            result = Math.multiplyExact(a, b);
+        } catch (ArithmeticException e) {
+            log.info("The product of {} and {} is overflowed, set to Long.MAX_VALUE", a, b);
+        }
+
+        return result;
+    }
 }

@@ -153,6 +153,7 @@ public class SaslAuthenticatorTest {
     private static final long CONNECTIONS_MAX_REAUTH_MS_VALUE = 100L;
     private static final int BUFFER_SIZE = 4 * 1024;
     private static Time time = Time.SYSTEM;
+    private static boolean needLargeExpiration = false;
 
     private NioEchoServer server;
     private Selector selector;
@@ -163,6 +164,7 @@ public class SaslAuthenticatorTest {
     private Map<String, Object> saslServerConfigs;
     private CredentialCache credentialCache;
     private int nextCorrelationId;
+    private SaslClientAuthenticator saslClientAuthenticator;
 
     @BeforeEach
     public void setup() throws Exception {
@@ -178,6 +180,8 @@ public class SaslAuthenticatorTest {
 
     @AfterEach
     public void teardown() throws Exception {
+        needLargeExpiration = false;
+        saslClientAuthenticator = null;
         if (server != null)
             this.server.close();
         if (selector != null)
@@ -1608,6 +1612,36 @@ public class SaslAuthenticatorTest {
     }
 
     @Test
+    public void testReauthenticateWithLargeReauthValue() throws Exception {
+        // enable it, we'll get a large expiration timestamp token
+        needLargeExpiration = true;
+        String node = "0";
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+
+        configureMechanisms(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+            Arrays.asList(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM));
+        // set a large re-auth timeout in server side
+        saslServerConfigs.put(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS, Long.MAX_VALUE);
+        server = createEchoServer(securityProtocol);
+
+        // set to default value for sasl login configs for initialization in ExpiringCredentialRefreshConfig
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR, SaslConfigs.DEFAULT_LOGIN_REFRESH_WINDOW_FACTOR);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER, SaslConfigs.DEFAULT_LOGIN_REFRESH_WINDOW_JITTER);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS, SaslConfigs.DEFAULT_LOGIN_REFRESH_MIN_PERIOD_SECONDS);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS, SaslConfigs.DEFAULT_LOGIN_REFRESH_BUFFER_SECONDS);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, AlternateLoginCallbackHandler.class);
+
+        createClientConnectionWithSaslAuthenticateHeader(securityProtocol, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, node);
+        checkClientConnection(node);
+        // ensure metrics are as expected
+        server.verifyAuthenticationMetrics(1, 0);
+        server.verifyReauthenticationMetrics(0, 0);
+
+        // ensure the sasl client session expiration timestamp is not overflowed (a negative value)
+        assertEquals(Long.MAX_VALUE, saslClientAuthenticator.clientSessionReauthenticationTimeNanos());
+    }
+
+    @Test
     public void testCorrelationId() {
         SaslClientAuthenticator authenticator = new SaslClientAuthenticator(
               Collections.emptyMap(),
@@ -2023,6 +2057,40 @@ public class SaslAuthenticatorTest {
                 "localhost", serverChannelBuilder, credentialCache, time);
         server.start();
         return server;
+    }
+
+    private void createClientConnectionWithSaslAuthenticateHeader(final SecurityProtocol securityProtocol,
+                                                                     final String saslMechanism, String node) throws Exception {
+
+        final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        final Map<String, ?> configs = Collections.emptyMap();
+        final JaasContext jaasContext = JaasContext.loadClientContext(configs);
+        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
+
+        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts,
+            securityProtocol, listenerName, false, saslMechanism, true,
+            null, null, null, time, new LogContext(), null) {
+
+            @Override
+            protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
+                                                                       AuthenticateCallbackHandler callbackHandler,
+                                                                       String id,
+                                                                       String serverHost,
+                                                                       String servicePrincipal,
+                                                                       TransportLayer transportLayer,
+                                                                       Subject subject) {
+
+                saslClientAuthenticator = new SaslClientAuthenticator(configs, callbackHandler, id, subject,
+                    servicePrincipal, serverHost, saslMechanism, true,
+                    transportLayer, time, new LogContext());
+                return saslClientAuthenticator;
+            }
+        };
+
+        clientChannelBuilder.configure(saslClientConfigs);
+        this.selector = NetworkTestUtils.createSelector(clientChannelBuilder, time);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
     }
 
     private void createClientConnectionWithoutSaslAuthenticateHeader(final SecurityProtocol securityProtocol,
@@ -2511,10 +2579,11 @@ public class SaslAuthenticatorTest {
                                     + String.valueOf(++numInvocations);
                             String headerJson = "{" + claimOrHeaderJsonText("alg", "none") + "}";
                             /*
-                             * Use a short lifetime so the background refresh thread replaces it before we
+                             * If we're testing large expiration scenario, use a large lifetime.
+                             * Otherwise, use a short lifetime so the background refresh thread replaces it before we
                              * re-authenticate
                              */
-                            String lifetimeSecondsValueToUse = "1";
+                            String lifetimeSecondsValueToUse = needLargeExpiration ? String.valueOf(Long.MAX_VALUE) : "1";
                             String claimsJson;
                             try {
                                 claimsJson = String.format("{%s,%s,%s}",
