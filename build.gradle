@@ -216,7 +216,7 @@ subprojects {
   // don't publish it
   // We also don't publish artifacts for kafka-streams-upgrade-system-tests since they are not necessary,
   // and were resulting in conflicts due to duplicate artifacts
-  def shouldPublish = !project.name.equals('jmh-benchmarks') && !project.name.startsWith("kafka-streams-upgrade-system-tests")
+  def shouldPublish = !project.name.equals('jmh-benchmarks') && !(project.path.startsWith(':streams') && project.name.startsWith("upgrade-system-tests"))
 
   if (shouldPublish) {
     apply plugin: 'maven-publish'
