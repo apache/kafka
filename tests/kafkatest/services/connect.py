@@ -141,7 +141,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         self.start_and_return_immediately(node, worker_type, remote_connector_configs)
         wait_until(lambda: self.listening(node), timeout_sec=self.startup_timeout_sec,
                    err_msg="Kafka Connect failed to start on node: %s in condition mode: %s" %
-                   (str(node.account), self.startup_mode))
+                   (str(node.account), self.startup_mode), retry_on_exc=True)
 
     def start_and_wait_to_join_group(self, node, worker_type, remote_connector_configs):
         if worker_type != 'distributed':
