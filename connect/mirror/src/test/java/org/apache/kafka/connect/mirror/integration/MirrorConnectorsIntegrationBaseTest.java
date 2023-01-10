@@ -305,8 +305,10 @@ public class MirrorConnectorsIntegrationBaseTest {
         Map<TopicPartition, OffsetAndMetadata> backupOffsets = backupClient.remoteConsumerOffsets(consumerGroupName, PRIMARY_CLUSTER_ALIAS,
             Duration.ofMillis(CHECKPOINT_DURATION_MS));
 
-        assertTrue(backupOffsets.containsKey(
-            new TopicPartition("primary.test-topic-1", 0)), "Offsets not translated downstream to backup cluster. Found: " + backupOffsets);
+        for (int i = 0; i < NUM_PARTITIONS; i++) {
+            assertTrue(backupOffsets.containsKey(new TopicPartition("primary.test-topic-1", i)),
+                   "Offsets not translated downstream to backup cluster. Found: " + backupOffsets);
+        }
 
         // Failover consumer group to backup cluster.
         try (Consumer<byte[], byte[]> primaryConsumer = backup.kafka().createConsumer(Collections.singletonMap("group.id", consumerGroupName))) {
