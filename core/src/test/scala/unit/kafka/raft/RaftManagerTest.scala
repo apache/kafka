@@ -66,7 +66,7 @@ class RaftManagerTest {
         props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
         props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
       } else { // broker-only
-        val voterId = (nodeId.toInt + 1)
+        val voterId = nodeId + 1
         props.setProperty(KafkaConfig.QuorumVotersProp, s"${voterId}@localhost:9093")
       }
     } else if (processRoles.contains(ControllerRole)) { // controller-only
@@ -127,18 +127,18 @@ class RaftManagerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("metadata", "log", "metadata,log"))
+  @ValueSource(strings = Array("metadata-only", "log-only", "both"))
   def testLogDirLockWhenControllerOnly(dirType: String): Unit = {
-    val logDir = if (dirType.contains("metadata")) {
-      Some(TestUtils.tempDir().toPath)
-    } else {
+    val logDir = if (dirType.equals("metadata-only")) {
       None
+    } else {
+      Some(TestUtils.tempDir().toPath)
     }
 
-    val metadataDir = if (dirType.contains("log")) {
-      Some(TestUtils.tempDir().toPath)
-    } else {
+    val metadataDir = if (dirType.contains("log-only")) {
       None
+    } else {
+      Some(TestUtils.tempDir().toPath)
     }
 
     val nodeId = 1
@@ -161,7 +161,7 @@ class RaftManagerTest {
   }
 
   @Test
-  def testLogDirLockWhenMetadataDir(): Unit = {
+  def testLogDirLockWhenBrokerOnlyWithSeparateMetadataDir(): Unit = {
     val logDir = Some(TestUtils.tempDir().toPath)
     val metadataDir = Some(TestUtils.tempDir().toPath)
 
