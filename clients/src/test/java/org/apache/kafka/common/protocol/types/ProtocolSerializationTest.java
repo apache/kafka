@@ -221,6 +221,24 @@ public class ProtocolSerializationTest {
     }
 
     @Test
+    public void testReadTaggedFieldsSizeTooLarge() {
+        int tag = 1;
+        Type type = TaggedFields.of(tag, new Field("field", Type.NULLABLE_STRING));
+        int size = 10;
+        ByteBuffer buffer = ByteBuffer.allocate(size);
+        int numTaggedFields = 1;
+        ByteUtils.writeUnsignedVarint(numTaggedFields, buffer);
+        ByteUtils.writeUnsignedVarint(tag, buffer);
+        ByteUtils.writeUnsignedVarint(Integer.MAX_VALUE, buffer);
+        int expectedRemaining = buffer.remaining();
+        buffer.rewind();
+
+        Throwable e = assertThrows(SchemaException.class, () -> type.read(buffer));
+        assertEquals("Error reading array of size " + Integer.MAX_VALUE + ", only " + expectedRemaining + " bytes available",
+            e.getMessage());
+    }
+
+    @Test
     public void testReadNegativeArraySize() {
         Type type = new ArrayOf(Type.INT8);
         int size = 10;
