@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
-public class UnreleasedInstanceId extends ApiException {
-    public UnreleasedInstanceId(String message) {
+public class UnsupportedAssignorException extends ApiException {
+    public UnsupportedAssignorException(String message) {
         super(message);
     }
 }
