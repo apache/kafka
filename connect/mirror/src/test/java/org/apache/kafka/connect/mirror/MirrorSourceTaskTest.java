@@ -32,8 +32,7 @@ import org.apache.kafka.connect.mirror.MirrorSourceTask.PartitionState;
 import org.apache.kafka.connect.source.SourceRecord;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
+import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -244,7 +243,7 @@ public class MirrorSourceTaskTest {
     }
 
     @Test
-    public void testPartitionStateMutation() {
+    public void testSendSyncEvent() {
         byte[] recordKey = "key".getBytes();
         byte[] recordValue = "value".getBytes();
         int maxOffsetLag = 50;
@@ -277,20 +276,14 @@ public class MirrorSourceTaskTest {
         partitionStates.put(sourceTopicPartition, partitionState);
         RecordMetadata recordMetadata = new RecordMetadata(sourceTopicPartition, metadataOffset, 0, 0, 0, recordPartition);
 
-        doAnswer(new Answer<Object>() {
-            @Override
-            public Object answer(final InvocationOnMock invocation) {
-                final Callback callback = invocation.getArgument(1);
-                callback.onCompletion(null, null);
-                return null;
-            }
-        }).when(producer).send(any(), any());
+        ArgumentCaptor<Callback> producerCallback = ArgumentCaptor.forClass(Callback.class);
+        when(producer.send(any(), producerCallback.capture())).thenAnswer(mockInvocation -> {
+            producerCallback.getValue().onCompletion(null, null);
+            return null;
+        });
+
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
-        assertEquals(recordOffset, partitionState.lastSyncUpstreamOffset, "sync offsets");
-        assertEquals(metadataOffset, partitionState.lastSyncDownstreamOffset, "sync offsets");
-        assertEquals(recordOffset, partitionState.previousUpstreamOffset, "sync offsets");
-        assertEquals(metadataOffset, partitionState.previousDownstreamOffset, "sync offsets");
-        assertFalse(partitionState.shouldSyncOffsets, "partition state reset");
+
         verify(producer, times(1)).send(any(), any());
 
         recordOffset = 2;
@@ -301,21 +294,13 @@ public class MirrorSourceTaskTest {
                 recordValue.length, recordKey, recordValue, headers, Optional.empty()));
 
         // Do not release outstanding sync semaphore
-        doAnswer(new Answer<Object>() {
-            @Override
-            public Object answer(final InvocationOnMock invocation) {
-                return null;
-            }
-        }).when(producer).send(any(), any());
+        doReturn(null).when(producer).send(any(), producerCallback.capture());
+
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
 
-        assertEquals(recordOffset, partitionState.lastSyncUpstreamOffset, "sync offsets");
-        assertEquals(metadataOffset, partitionState.lastSyncDownstreamOffset, "sync offsets");
-        assertEquals(recordOffset, partitionState.previousUpstreamOffset, "sync offsets");
-        assertEquals(metadataOffset, partitionState.previousDownstreamOffset, "sync offsets");
-        assertFalse(partitionState.shouldSyncOffsets, "partition state reset");
         verify(producer, times(2)).send(any(), any());
 
+        // Do not send sync event
         recordOffset = 4;
         metadataOffset = 104;
         recordMetadata = new RecordMetadata(sourceTopicPartition, metadataOffset, 0, 0, 0, recordPartition);
@@ -324,14 +309,10 @@ public class MirrorSourceTaskTest {
                 recordValue.length, recordKey, recordValue, headers, Optional.empty()));
 
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
-        assertEquals(recordOffset, partitionState.lastSyncUpstreamOffset, "sync offsets");
-        assertEquals(metadataOffset, partitionState.lastSyncDownstreamOffset, "sync offsets");
-        assertEquals(recordOffset, partitionState.previousUpstreamOffset, "sync offsets");
-        assertEquals(metadataOffset, partitionState.previousDownstreamOffset, "sync offsets");
-        assertTrue(partitionState.shouldSyncOffsets, "no partition state reset");
+
         verify(producer, times(2)).send(any(), any());
 
-        // Should send sync event and should not update last upstream/downstream offset
+        // Should send sync event
         recordOffset = 5;
         metadataOffset = 150;
         recordMetadata = new RecordMetadata(sourceTopicPartition, metadataOffset, 0, 0, 0, recordPartition);
@@ -339,13 +320,10 @@ public class MirrorSourceTaskTest {
                 recordOffset, System.currentTimeMillis(), TimestampType.CREATE_TIME, recordKey.length,
                 recordValue.length, recordKey, recordValue, headers, Optional.empty()));
 
-        outstandingOffsetSyncs.release();
+        producerCallback.getValue().onCompletion(null, null);
+
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
-        assertEquals(4, partitionState.lastSyncUpstreamOffset, "no sync last upstream offset");
-        assertEquals(104, partitionState.lastSyncDownstreamOffset, "no sync last downstream offset");
-        assertEquals(recordOffset, partitionState.previousUpstreamOffset, "sync offsets");
-        assertEquals(metadataOffset, partitionState.previousDownstreamOffset, "sync offsets");
-        assertFalse(partitionState.shouldSyncOffsets, "partition state reset");
+
         verify(producer, times(3)).send(any(), any());
     }
 
