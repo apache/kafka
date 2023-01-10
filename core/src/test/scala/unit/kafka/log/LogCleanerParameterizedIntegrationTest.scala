@@ -19,13 +19,14 @@ package kafka.log
 
 import java.io.File
 import java.util.Properties
-
 import kafka.server.KafkaConfig
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
-import org.apache.kafka.server.common.MetadataVersion.{IBP_0_9_0, IBP_0_10_0_IV1, IBP_0_11_0_IV0}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_11_0_IV0, IBP_0_9_0}
+import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
@@ -92,11 +93,11 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   def testCleansCombinedCompactAndDeleteTopic(codec: CompressionType): Unit = {
     val logProps  = new Properties()
     val retentionMs: Integer = 100000
-    logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
-    logProps.put(LogConfig.CleanupPolicyProp, "compact,delete")
+    logProps.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs: Integer)
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact,delete")
 
     def runCleanerAndCheckCompacted(numKeys: Int): (UnifiedLog, Seq[(Int, String, Long)]) = {
-      cleaner = makeCleaner(partitions = topicPartitions.take(1), propertyOverrides = logProps, backOffMs = 100L)
+      cleaner = makeCleaner(partitions = topicPartitions.take(1), propertyOverrides = logProps, backoffMs = 100L)
       val log = cleaner.logs.get(topicPartitions(0))
 
       val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
@@ -151,7 +152,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     val log = cleaner.logs.get(topicPartitions(0))
     val props = logConfigProperties(maxMessageSize = maxMessageSize)
-    props.put(LogConfig.MessageFormatVersionProp, IBP_0_9_0.version)
+    props.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, IBP_0_9_0.version)
     log.updateConfig(new LogConfig(props))
 
     val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
@@ -173,7 +174,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
       val largeMessageOffset = appendInfo.firstOffset.map(_.messageOffset).get
 
       // also add some messages with version 1 and version 2 to check that we handle mixed format versions correctly
-      props.put(LogConfig.MessageFormatVersionProp, IBP_0_11_0_IV0.version)
+      props.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, IBP_0_11_0_IV0.version)
       log.updateConfig(new LogConfig(props))
       val dupsV1 = writeDups(startKey = 30, numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
       val dupsV2 = writeDups(startKey = 15, numKeys = 5, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V2)
@@ -194,7 +195,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     val log = cleaner.logs.get(topicPartitions(0))
     val props = logConfigProperties(maxMessageSize = maxMessageSize, segmentSize = 256)
-    props.put(LogConfig.MessageFormatVersionProp, IBP_0_9_0.version)
+    props.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, IBP_0_9_0.version)
     log.updateConfig(new LogConfig(props))
 
     // with compression enabled, these messages will be written as a single message containing
@@ -202,7 +203,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     var appendsV0 = writeDupsSingleMessageSet(numKeys = 2, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
     appendsV0 ++= writeDupsSingleMessageSet(numKeys = 2, startKey = 3, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
 
-    props.put(LogConfig.MessageFormatVersionProp, IBP_0_10_0_IV1.version)
+    props.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, IBP_0_10_0_IV1.version)
     log.updateConfig(new LogConfig(props))
 
     var appendsV1 = writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
@@ -231,7 +232,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
     val maxMessageSize = largeMessageSet.sizeInBytes
 
-    cleaner = makeCleaner(partitions = topicPartitions, backOffMs = 1, maxMessageSize = maxMessageSize,
+    cleaner = makeCleaner(partitions = topicPartitions, backoffMs = 1, maxMessageSize = maxMessageSize,
       cleanerIoBufferSize = Some(1))
     val log = cleaner.logs.get(topicPartitions(0))
 
@@ -253,20 +254,21 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
       props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, cleanerConfig.dedupeBufferLoadFactor.toString)
       props.put(KafkaConfig.LogCleanerIoBufferSizeProp, cleanerConfig.ioBufferSize.toString)
       props.put(KafkaConfig.MessageMaxBytesProp, cleanerConfig.maxMessageSize.toString)
-      props.put(KafkaConfig.LogCleanerBackoffMsProp, cleanerConfig.backOffMs.toString)
+      props.put(KafkaConfig.LogCleanerBackoffMsProp, cleanerConfig.backoffMs.toString)
       props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, cleanerConfig.maxIoBytesPerSecond.toString)
       KafkaConfig.fromProps(props)
     }
 
     // Verify cleaning done with larger LogCleanerIoBufferSizeProp
     val oldConfig = kafkaConfigWithCleanerConfig(cleaner.currentConfig)
-    val newConfig = kafkaConfigWithCleanerConfig(CleanerConfig(numThreads = 2,
-      dedupeBufferSize = cleaner.currentConfig.dedupeBufferSize,
-      dedupeBufferLoadFactor = cleaner.currentConfig.dedupeBufferLoadFactor,
-      ioBufferSize = 100000,
-      maxMessageSize = cleaner.currentConfig.maxMessageSize,
-      maxIoBytesPerSecond = cleaner.currentConfig.maxIoBytesPerSecond,
-      backOffMs = cleaner.currentConfig.backOffMs))
+    val newConfig = kafkaConfigWithCleanerConfig(new CleanerConfig(2,
+      cleaner.currentConfig.dedupeBufferSize,
+      cleaner.currentConfig.dedupeBufferLoadFactor,
+      100000,
+      cleaner.currentConfig.maxMessageSize,
+      cleaner.currentConfig.maxIoBytesPerSecond,
+      cleaner.currentConfig.backoffMs,
+      true))
     cleaner.reconfigure(oldConfig, newConfig)
 
     assertEquals(2, cleaner.cleanerCount)
@@ -277,7 +279,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
   private def checkLastCleaned(topic: String, partitionId: Int, firstDirty: Long): Unit = {
     // wait until cleaning up to base_offset, note that cleaning happens only when "log dirty ratio" is higher than
-    // LogConfig.MinCleanableDirtyRatioProp
+    // TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG
     val topicPartition = new TopicPartition(topic, partitionId)
     cleaner.awaitCleaned(topicPartition, firstDirty)
     val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(topicPartition)

@@ -17,12 +17,12 @@
 
 package kafka.log
 
-import kafka.log.LogConfig.MessageFormatVersion
+import kafka.log.remote.RemoteIndexCache
+
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
@@ -37,9 +37,12 @@ import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 import kafka.utils.Implicits._
-import java.util.Properties
+import org.apache.kafka.common.config.TopicConfig
 
+import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.LogConfig.MessageFormatVersion
 
 import scala.annotation.nowarn
 
@@ -390,7 +393,11 @@ class LogManager(logDirs: Seq[File],
         }
 
         val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(logDir =>
-          logDir.isDirectory && UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
+          logDir.isDirectory &&
+            // Ignore remote-log-index-cache directory as that is index cache maintained by tiered storage subsystem
+            // but not any topic-partition dir.
+            !logDir.getName.equals(RemoteIndexCache.DirName) &&
+            UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
         numTotalLogs += logsToLoad.length
         numRemainingLogs.put(dir.getAbsolutePath, logsToLoad.length)
 
@@ -492,12 +499,12 @@ class LogManager(logDirs: Seq[File],
       var overrides = configRepository.topicConfig(topicName)
       // save memory by only including configs for topics with overrides
       if (!overrides.isEmpty) {
-        Option(overrides.getProperty(LogConfig.MessageFormatVersionProp)).foreach { versionString =>
+        Option(overrides.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)).foreach { versionString =>
           val messageFormatVersion = new MessageFormatVersion(versionString, interBrokerProtocolVersion.version)
           if (messageFormatVersion.shouldIgnore) {
             val copy = new Properties()
             copy.putAll(overrides)
-            copy.remove(LogConfig.MessageFormatVersionProp)
+            copy.remove(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
             overrides = copy
 
             if (messageFormatVersion.shouldWarn)
@@ -1074,6 +1081,9 @@ class LogManager(logDirs: Seq[File],
         throw new KafkaStorageException(s"The future replica for $topicPartition is offline")
 
       destLog.renameDir(UnifiedLog.logDirName(topicPartition), true)
+      // the metrics tags still contain "future", so we have to remove it.
+      // we will add metrics back after sourceLog remove the metrics
+      destLog.removeLogMetrics()
       destLog.updateHighWatermark(sourceLog.highWatermark)
 
       // Now that future replica has been successfully renamed to be the current replica
@@ -1095,6 +1105,7 @@ class LogManager(logDirs: Seq[File],
         checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)
         checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
         sourceLog.removeLogMetrics()
+        destLog.newMetrics()
         addLogToBeDeleted(sourceLog)
       } catch {
         case e: KafkaStorageException =>
@@ -1357,10 +1368,10 @@ object LogManager {
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel,
             keepPartitionMetadataFile: Boolean): LogManager = {
-    val defaultProps = LogConfig.extractLogConfigMap(config)
+    val defaultProps = config.extractLogConfigMap
 
     LogConfig.validateValues(defaultProps)
-    val defaultLogConfig = LogConfig(defaultProps)
+    val defaultLogConfig = new LogConfig(defaultProps)
 
     val cleanerConfig = LogCleaner.cleanerConfig(config)
 

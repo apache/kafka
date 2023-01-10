@@ -20,6 +20,7 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
+import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.raft.RaftConfig
@@ -44,7 +45,7 @@ import scala.jdk.CollectionConverters._
 class KafkaServerKRaftRegistrationTest {
 
   @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0)
-  def testRegisterZkBrokerInKraft1(zkCluster: ClusterInstance): Unit = {
+  def testRegisterZkBrokerInKraft(zkCluster: ClusterInstance): Unit = {
     val clusterId = zkCluster.clusterId()
 
     // Bootstrap the ZK cluster ID into KRaft
@@ -55,6 +56,7 @@ class KafkaServerKRaftRegistrationTest {
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
+      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -79,6 +81,7 @@ class KafkaServerKRaftRegistrationTest {
         case t: Throwable => fail("Had some other error waiting for brokers", t)
       }
     } finally {
+      zkCluster.stop()
       kraftCluster.close()
     }
   }

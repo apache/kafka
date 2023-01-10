@@ -17,9 +17,9 @@
 package kafka.cluster
 
 import kafka.log.UnifiedLog
-import kafka.server.LogOffsetMetadata
 import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.log.internals.LogOffsetMetadata
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
@@ -83,7 +83,7 @@ class ReplicaTest {
   ): Long = {
     val currentTimeMs = time.milliseconds()
     replica.updateFetchState(
-      followerFetchOffsetMetadata = LogOffsetMetadata(followerFetchOffset),
+      followerFetchOffsetMetadata = new LogOffsetMetadata(followerFetchOffset),
       followerStartOffset = followerStartOffset,
       followerFetchTimeMs = currentTimeMs,
       leaderEndOffset = leaderEndOffset

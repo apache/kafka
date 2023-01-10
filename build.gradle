@@ -412,7 +412,7 @@ subprojects {
       // connect tests
       "**/ConnectorPluginsResourceTest.*",
       "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
-      "**/ErrorHandlingTaskTest.*", "**/KafkaConfigBackingStoreTest.*",
+      "**/KafkaConfigBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
       "**/SourceTaskOffsetCommitterTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
@@ -875,6 +875,7 @@ project(':core') {
     implementation project(':server-common')
     implementation project(':group-coordinator')
     implementation project(':metadata')
+    implementation project(':storage:api')
     implementation project(':raft')
     implementation project(':storage')
 
@@ -910,6 +911,7 @@ project(':core') {
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':storage:api').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1044,7 +1046,7 @@ project(':core') {
 
   task genTopicConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'kafka.log.LogConfig'
+    mainClass = 'org.apache.kafka.server.log.internals.LogConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
   }
@@ -2038,6 +2040,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-30:test',
             ':streams:upgrade-system-tests-31:test',
             ':streams:upgrade-system-tests-32:test',
+            ':streams:upgrade-system-tests-33:test',
             ':streams:examples:test'
     ]
   )
@@ -2395,6 +2398,19 @@ project(':streams:upgrade-system-tests-32') {
   }
 }
 
+project(':streams:upgrade-system-tests-33') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-33"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_33
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.github.johnrengelman.shadow'
@@ -2411,6 +2427,7 @@ project(':jmh-benchmarks') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':metadata')
+    implementation project(':storage')
     implementation project(':streams')
     implementation project(':core')
     implementation project(':clients').sourceSets.test.output

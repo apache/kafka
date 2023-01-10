@@ -72,12 +72,12 @@ public class StateQueryResult<R> {
                 .filter(r -> r.getResult() != null)
                 .collect(Collectors.toList());
 
-        if (nonempty.size() != 1) {
+        if (nonempty.size() > 1) {
             throw new IllegalArgumentException(
                 "The query did not return exactly one partition result: " + partitionResults
             );
         } else {
-            return nonempty.get(0);
+            return nonempty.isEmpty() ? null : nonempty.get(0);
         }
     }
 

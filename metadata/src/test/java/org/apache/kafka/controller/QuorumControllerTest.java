@@ -31,8 +31,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.Spliterator;
-import java.util.Spliterators;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -42,7 +40,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.StreamSupport;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
@@ -85,27 +82,22 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointColle
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.controller.QuorumController.ConfigResourceExistenceChecker;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
+import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
-import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.metalog.LocalLogManager;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
-import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.snapshot.FileRawSnapshotReader;
-import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotReader;
-import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Disabled;
@@ -128,7 +120,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 
 @Timeout(value = 40)
@@ -173,7 +164,7 @@ public class QuorumControllerTest {
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
-                setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
+                setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV1)).
                 setBrokerId(0).
                 setClusterId(logEnv.clusterId())).get();
             testConfigurationOperations(controlEnv.activeController());
@@ -214,7 +205,7 @@ public class QuorumControllerTest {
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV1)).
                     setBrokerId(0).
                     setClusterId(logEnv.clusterId())).get();
             testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
@@ -277,7 +268,7 @@ public class QuorumControllerTest {
 
             // Brokers are only registered and should still be fenced
             allBrokers.forEach(brokerId -> {
-                assertFalse(active.clusterControl().unfenced(brokerId),
+                assertFalse(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 
@@ -297,7 +288,7 @@ public class QuorumControllerTest {
             TestUtils.waitForCondition(() -> {
                     sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
                     for (Integer brokerId : brokersToFence) {
-                        if (active.clusterControl().unfenced(brokerId)) {
+                        if (active.clusterControl().isUnfenced(brokerId)) {
                             return false;
                         }
                     }
@@ -311,11 +302,11 @@ public class QuorumControllerTest {
 
             // At this point only the brokers we want fenced should be fenced.
             brokersToKeepUnfenced.forEach(brokerId -> {
-                assertTrue(active.clusterControl().unfenced(brokerId),
+                assertTrue(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been unfenced");
             });
             brokersToFence.forEach(brokerId -> {
-                assertFalse(active.clusterControl().unfenced(brokerId),
+                assertFalse(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 
@@ -376,7 +367,7 @@ public class QuorumControllerTest {
 
             // Brokers are only registered and should still be fenced
             allBrokers.forEach(brokerId -> {
-                assertFalse(active.clusterControl().unfenced(brokerId),
+                assertFalse(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 
@@ -396,7 +387,7 @@ public class QuorumControllerTest {
                 () -> {
                     sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
                     for (Integer brokerId : brokersToFence) {
-                        if (active.clusterControl().unfenced(brokerId)) {
+                        if (active.clusterControl().isUnfenced(brokerId)) {
                             return false;
                         }
                     }
@@ -411,11 +402,11 @@ public class QuorumControllerTest {
 
             // At this point only the brokers we want fenced should be fenced.
             brokersToKeepUnfenced.forEach(brokerId -> {
-                assertTrue(active.clusterControl().unfenced(brokerId),
+                assertTrue(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been unfenced");
             });
             brokersToFence.forEach(brokerId -> {
-                assertFalse(active.clusterControl().unfenced(brokerId),
+                assertFalse(active.clusterControl().isUnfenced(brokerId),
                     "Broker " + brokerId + " should have been fenced");
             });
 
@@ -545,7 +536,7 @@ public class QuorumControllerTest {
                     setBrokerId(0).
                     setClusterId(active.clusterId()).
                     setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV1)).
                     setListeners(listeners));
             assertEquals(2L, reply.get().epoch());
             CreateTopicsRequestData createTopicsRequestData =
@@ -669,279 +660,64 @@ public class QuorumControllerTest {
             fooId = fooData.topics().find("foo").topicId();
             active.allocateProducerIds(ANONYMOUS_CONTEXT,
                 new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
-            long snapshotLogOffset = active.beginWritingSnapshot().get();
-            reader = logEnv.waitForSnapshot(snapshotLogOffset);
-            SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(reader);
-            assertEquals(snapshotLogOffset, snapshot.lastContainedLogOffset());
-            checkSnapshotContent(expectedSnapshotContent(fooId, brokerEpochs), snapshot);
-        }
-
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
-                setSnapshotReader(reader).
-                build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder -> {
-                    controllerBuilder.setConfigSchema(SCHEMA);
-                }).
-                build();
-        ) {
-            QuorumController active = controlEnv.activeController();
-            long snapshotLogOffset = active.beginWritingSnapshot().get();
-            SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(
-                logEnv.waitForSnapshot(snapshotLogOffset)
-            );
-            assertEquals(snapshotLogOffset, snapshot.lastContainedLogOffset());
-            checkSnapshotContent(expectedSnapshotContent(fooId, brokerEpochs), snapshot);
+            controlEnv.close();
+            assertEquals(generateTestRecords(fooId, brokerEpochs), logEnv.allRecords());
         }
     }
 
-    @Test
-    public void testSnapshotConfiguration() throws Throwable {
-        final int numBrokers = 4;
-        final int maxNewRecordBytes = 4;
-        Map<Integer, Long> brokerEpochs = new HashMap<>();
-        Uuid fooId;
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
-                build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder -> {
-                    controllerBuilder.setConfigSchema(SCHEMA);
-                    controllerBuilder.setSnapshotMaxNewRecordBytes(maxNewRecordBytes);
-                    controllerBuilder.setBootstrapMetadata(SIMPLE_BOOTSTRAP);
-                }).
-                build();
-        ) {
-            QuorumController active = controlEnv.activeController();
-            for (int i = 0; i < numBrokers; i++) {
-                BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
-                    new BrokerRegistrationRequestData().
-                        setBrokerId(i).
-                        setRack(null).
-                        setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
-                        setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
-                        setListeners(new ListenerCollection(Arrays.asList(new Listener().
-                            setName("PLAINTEXT").setHost("localhost").
-                            setPort(9092 + i)).iterator()))).get();
-                brokerEpochs.put(i, reply.epoch());
-            }
-            for (int i = 0; i < numBrokers - 1; i++) {
-                assertEquals(new BrokerHeartbeatReply(true, false, false, false),
-                    active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
-                        setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
-                        setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
-            }
-            CreateTopicsResponseData fooData = active.createTopics(ANONYMOUS_CONTEXT,
-                new CreateTopicsRequestData().setTopics(
-                    new CreatableTopicCollection(Collections.singleton(
-                        new CreatableTopic().setName("foo").setNumPartitions(-1).
-                            setReplicationFactor((short) -1).
-                            setAssignments(new CreatableReplicaAssignmentCollection(
-                                Arrays.asList(new CreatableReplicaAssignment().
-                                    setPartitionIndex(0).
-                                    setBrokerIds(Arrays.asList(0, 1, 2)),
-                                new CreatableReplicaAssignment().
-                                    setPartitionIndex(1).
-                                    setBrokerIds(Arrays.asList(1, 2, 0))).
-                                        iterator()))).iterator())),
-                Collections.singleton("foo")).get();
-            fooId = fooData.topics().find("foo").topicId();
-            active.allocateProducerIds(ANONYMOUS_CONTEXT,
-                    new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
-
-            SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(logEnv.waitForLatestSnapshot());
-            checkSnapshotSubcontent(
-                expectedSnapshotContent(fooId, brokerEpochs),
-                snapshot
-            );
-        }
-    }
-
-    @Test
-    public void testSnapshotOnlyAfterConfiguredMinBytes() throws Throwable {
-        final int numBrokers = 4;
-        final int maxNewRecordBytes = 1000;
-        Map<Integer, Long> brokerEpochs = new HashMap<>();
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
-                build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder -> {
-                    controllerBuilder.setConfigSchema(SCHEMA);
-                    controllerBuilder.setSnapshotMaxNewRecordBytes(maxNewRecordBytes);
-                }).
-                build();
-        ) {
-            QuorumController active = controlEnv.activeController();
-            for (int i = 0; i < numBrokers; i++) {
-                BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
-                    new BrokerRegistrationRequestData().
-                        setBrokerId(i).
-                        setRack(null).
-                        setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
-                        setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
-                        setListeners(new ListenerCollection(Arrays.asList(new Listener().
-                            setName("PLAINTEXT").setHost("localhost").
-                            setPort(9092 + i)).iterator()))).get();
-                brokerEpochs.put(i, reply.epoch());
-                assertEquals(new BrokerHeartbeatReply(true, false, false, false),
-                    active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
-                        setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
-                        setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
-            }
-
-            assertTrue(logEnv.appendedBytes() < maxNewRecordBytes,
-                String.format("%s appended bytes is not less than %s max new record bytes",
-                    logEnv.appendedBytes(),
-                    maxNewRecordBytes));
-
-            // Keep creating topic until we reached the max bytes limit
-            int counter = 0;
-            while (logEnv.appendedBytes() < maxNewRecordBytes) {
-                counter += 1;
-                String topicName = String.format("foo-%s", counter);
-                active.createTopics(ANONYMOUS_CONTEXT, new CreateTopicsRequestData().setTopics(
-                        new CreatableTopicCollection(Collections.singleton(
-                            new CreatableTopic().setName(topicName).setNumPartitions(-1).
-                                setReplicationFactor((short) -1).
-                                setAssignments(new CreatableReplicaAssignmentCollection(
-                                    Arrays.asList(new CreatableReplicaAssignment().
-                                        setPartitionIndex(0).
-                                        setBrokerIds(Arrays.asList(0, 1, 2)),
-                                    new CreatableReplicaAssignment().
-                                        setPartitionIndex(1).
-                                        setBrokerIds(Arrays.asList(1, 2, 0))).
-                                            iterator()))).iterator())),
-                    Collections.singleton(topicName)).get(60, TimeUnit.SECONDS);
-            }
-            logEnv.waitForLatestSnapshot();
-        }
-    }
-
-    @Test
-    public void testSnapshotAfterConfiguredMaxInterval() throws Throwable {
-        final int numBrokers = 4;
-        Map<Integer, Long> brokerEpochs = new HashMap<>();
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
-                build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder -> {
-                    controllerBuilder.setConfigSchema(SCHEMA);
-                    controllerBuilder.setSnapshotMaxIntervalMs(100);
-                    // Disable snapshot generation due to bytes committed
-                    controllerBuilder.setSnapshotMaxNewRecordBytes(Long.MAX_VALUE);
-                }).
-                build();
-        ) {
-            QuorumController active = controlEnv.activeController();
-            for (int i = 0; i < numBrokers; i++) {
-                BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
-                    new BrokerRegistrationRequestData().
-                        setBrokerId(i).
-                        setRack(null).
-                        setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
-                        setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
-                        setListeners(new ListenerCollection(Arrays.asList(new Listener().
-                            setName("PLAINTEXT").setHost("localhost").
-                            setPort(9092 + i)).iterator()))).get();
-                brokerEpochs.put(i, reply.epoch());
-                assertEquals(new BrokerHeartbeatReply(true, false, false, false),
-                    active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
-                        setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
-                        setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
-            }
-
-            logEnv.waitForLatestSnapshot();
-        }
-    }
-
-    @Test
-    public void testSnapshotAfterRepeatedResign() throws Throwable {
-        final int numBrokers = 4;
-        final int maxNewRecordBytes = 1000;
-        Map<Integer, Long> brokerEpochs = new HashMap<>();
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
-                build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder -> {
-                    controllerBuilder.setConfigSchema(SCHEMA);
-                    controllerBuilder.setSnapshotMaxNewRecordBytes(maxNewRecordBytes);
-                }).
-                build();
-        ) {
-            QuorumController active = controlEnv.activeController();
-            for (int i = 0; i < numBrokers; i++) {
-                BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
-                    new BrokerRegistrationRequestData().
-                        setBrokerId(i).
-                        setRack(null).
-                        setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0)).
-                        setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
-                        setListeners(new ListenerCollection(Arrays.asList(new Listener().
-                            setName("PLAINTEXT").setHost("localhost").
-                            setPort(9092 + i)).iterator()))).get();
-                brokerEpochs.put(i, reply.epoch());
-                assertEquals(new BrokerHeartbeatReply(true, false, false, false),
-                    active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
-                        setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
-                        setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
-            }
-
-            assertTrue(logEnv.appendedBytes() < maxNewRecordBytes,
-                String.format("%s appended bytes is not less than %s max new record bytes",
-                    logEnv.appendedBytes(),
-                    maxNewRecordBytes));
-
-            // Keep creating topic and resign leader until we reached the max bytes limit
-            int counter = 0;
-            while (logEnv.appendedBytes() < maxNewRecordBytes) {
-                active = controlEnv.activeController();
-
-                counter += 1;
-                String topicName = String.format("foo-%s", counter);
-                active.createTopics(ANONYMOUS_CONTEXT, new CreateTopicsRequestData().setTopics(
-                        new CreatableTopicCollection(Collections.singleton(
-                            new CreatableTopic().setName(topicName).setNumPartitions(-1).
-                                setReplicationFactor((short) -1).
-                                setAssignments(new CreatableReplicaAssignmentCollection(
-                                    Arrays.asList(new CreatableReplicaAssignment().
-                                        setPartitionIndex(0).
-                                        setBrokerIds(Arrays.asList(0, 1, 2)),
-                                    new CreatableReplicaAssignment().
-                                        setPartitionIndex(1).
-                                        setBrokerIds(Arrays.asList(1, 2, 0))).
-                                            iterator()))).iterator())),
-                    Collections.singleton(topicName)).get(60, TimeUnit.SECONDS);
-
-                LocalLogManager activeLocalLogManager = logEnv.logManagers().get(active.nodeId());
-                activeLocalLogManager.resign(activeLocalLogManager.leaderAndEpoch().epoch());
-            }
-            logEnv.waitForLatestSnapshot();
-        }
-    }
-
-    private SnapshotReader<ApiMessageAndVersion> createSnapshotReader(RawSnapshotReader reader) {
-        return RecordsSnapshotReader.of(
-            reader,
-            new MetadataRecordSerde(),
-            BufferSupplier.create(),
-            Integer.MAX_VALUE,
-            true
-        );
-    }
-
-    private List<ApiMessageAndVersion> expectedSnapshotContent(Uuid fooId, Map<Integer, Long> brokerEpochs) {
+    private List<ApiMessageAndVersion> generateTestRecords(Uuid fooId, Map<Integer, Long> brokerEpochs) {
         return Arrays.asList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
                 setFeatureLevel(MetadataVersion.IBP_3_3_IV3.featureLevel()), (short) 0),
+            new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
+                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
+                setEndPoints(new BrokerEndpointCollection(
+                    Arrays.asList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                        setPort(9092).setSecurityProtocol((short) 0)).iterator())).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                setRack(null).
+                setFenced(true), (short) 1),
+            new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerId(1).setBrokerEpoch(brokerEpochs.get(1)).
+                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB1")).
+                setEndPoints(new BrokerEndpointCollection(Arrays.asList(
+                    new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                        setPort(9093).setSecurityProtocol((short) 0)).iterator())).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                setRack(null).
+                setFenced(true), (short) 1),
+            new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerId(2).setBrokerEpoch(brokerEpochs.get(2)).
+                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB2")).
+                setEndPoints(new BrokerEndpointCollection(
+                    Arrays.asList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                        setPort(9094).setSecurityProtocol((short) 0)).iterator())).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                setRack(null).
+                setFenced(true), (short) 1),
+            new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerId(3).setBrokerEpoch(brokerEpochs.get(3)).
+                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB3")).
+                setEndPoints(new BrokerEndpointCollection(Arrays.asList(
+                    new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                        setPort(9095).setSecurityProtocol((short) 0)).iterator())).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                setRack(null).
+                setFenced(true), (short) 1),
+            new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+                setBrokerId(0).
+                setBrokerEpoch(brokerEpochs.get(0)).
+                setFenced(BrokerRegistrationFencingChange.UNFENCE.value()), (short) 0),
+            new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+                setBrokerId(1).
+                setBrokerEpoch(brokerEpochs.get(1)).
+                setFenced(BrokerRegistrationFencingChange.UNFENCE.value()), (short) 0),
+            new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+                setBrokerId(2).
+                setBrokerEpoch(brokerEpochs.get(2)).
+                setFenced(BrokerRegistrationFencingChange.UNFENCE.value()), (short) 0),
             new ApiMessageAndVersion(new TopicRecord().
                 setName("foo").setTopicId(fooId), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
@@ -954,99 +730,10 @@ public class QuorumControllerTest {
                 setIsr(Arrays.asList(1, 2, 0)).setRemovingReplicas(Collections.emptyList()).
                 setAddingReplicas(Collections.emptyList()).setLeader(1).setLeaderEpoch(0).
                 setPartitionEpoch(0), (short) 0),
-            new ApiMessageAndVersion(new RegisterBrokerRecord().
-                setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
-                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
-                setEndPoints(
-                    new BrokerEndpointCollection(
-                        Arrays.asList(
-                            new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                            setPort(9092).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
-                setRack(null).
-                setFenced(false), (short) 1),
-            new ApiMessageAndVersion(new RegisterBrokerRecord().
-                setBrokerId(1).setBrokerEpoch(brokerEpochs.get(1)).
-                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB1")).
-                setEndPoints(
-                    new BrokerEndpointCollection(
-                        Arrays.asList(
-                            new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                            setPort(9093).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
-                setRack(null).
-                setFenced(false), (short) 1),
-            new ApiMessageAndVersion(new RegisterBrokerRecord().
-                setBrokerId(2).setBrokerEpoch(brokerEpochs.get(2)).
-                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB2")).
-                setEndPoints(
-                    new BrokerEndpointCollection(
-                        Arrays.asList(
-                            new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                            setPort(9094).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
-                setRack(null).
-                setFenced(false), (short) 1),
-            new ApiMessageAndVersion(new RegisterBrokerRecord().
-                setBrokerId(3).setBrokerEpoch(brokerEpochs.get(3)).
-                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB3")).
-                setEndPoints(new BrokerEndpointCollection(Arrays.asList(
-                    new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                        setPort(9095).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
-                setRack(null), (short) 1),
             new ApiMessageAndVersion(new ProducerIdsRecord().
                 setBrokerId(0).
                 setBrokerEpoch(brokerEpochs.get(0)).
-                setNextProducerId(1000), (short) 0)
-        );
-    }
-
-    private void checkSnapshotContent(
-        List<ApiMessageAndVersion> expected,
-        Iterator<Batch<ApiMessageAndVersion>> iterator
-    ) throws Exception {
-        RecordTestUtils.assertBatchIteratorContains(
-            Arrays.asList(expected),
-            Arrays.asList(
-                StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
-                             .flatMap(batch ->  batch.records().stream())
-                             .collect(Collectors.toList())
-            ).iterator()
-        );
-    }
-
-    /**
-     * This function checks that the iterator is a subset of the expected list.
-     *
-     * This is needed because when generating snapshots through configuration is difficult to control exactly when a
-     * snapshot will be generated and which committed offset will be included in the snapshot.
-     */
-    private void checkSnapshotSubcontent(
-        List<ApiMessageAndVersion> expected,
-        Iterator<Batch<ApiMessageAndVersion>> iterator
-    ) throws Exception {
-        RecordTestUtils.deepSortRecords(expected);
-
-        List<ApiMessageAndVersion> actual = StreamSupport
-            .stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
-            .flatMap(batch ->  batch.records().stream())
-            .collect(Collectors.toList());
-
-        RecordTestUtils.deepSortRecords(actual);
-
-        int expectedIndex = 0;
-        for (ApiMessageAndVersion current : actual) {
-            while (expectedIndex < expected.size() && !expected.get(expectedIndex).equals(current)) {
-                expectedIndex += 1;
-            }
-
-            if (expectedIndex >= expected.size()) {
-                fail("Failed to find record " + current + " in the expected record set: " + expected);
-            }
-
-            expectedIndex += 1;
-        }
+                setNextProducerId(1000), (short) 0));
     }
 
     /**
@@ -1270,7 +957,7 @@ public class QuorumControllerTest {
                     .setBrokerId(brokerId)
                     .setRack(null)
                     .setClusterId(controller.clusterId())
-                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV0))
+                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_4_IV1))
                     .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
                     .setListeners(
                         new ListenerCollection(
@@ -1380,7 +1067,7 @@ public class QuorumControllerTest {
                 }).
                 build()
         ) {
-            logEnv.appendInitialRecords(expectedSnapshotContent(FOO_ID, ALL_ZERO_BROKER_EPOCHS));
+            logEnv.appendInitialRecords(generateTestRecords(FOO_ID, ALL_ZERO_BROKER_EPOCHS));
             logEnv.logManagers().forEach(m -> m.setMaxReadOffset(2));
             try (
                 QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).

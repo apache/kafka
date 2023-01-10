@@ -84,6 +84,10 @@ public class ApiVersionsResponse extends AbstractResponse {
         return version >= 2;
     }
 
+    public boolean zkMigrationReady() {
+        return data.zkMigrationReady();
+    }
+
     public static ApiVersionsResponse parse(ByteBuffer buffer, short version) {
         // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
         // using a version higher than that supported by the broker, a version 0 response is sent

@@ -22,9 +22,11 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.image.MetadataProvenance
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+
 import scala.jdk.CollectionConverters._
 
 final class BrokerServerMetricsTest {
@@ -59,11 +61,14 @@ final class BrokerServerMetricsTest {
     val metrics = new Metrics()
     TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
       val offsetMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordOffsetName)
-      assertEquals(0, offsetMetric.metricValue.asInstanceOf[Long])
+      assertEquals(-1L, offsetMetric.metricValue.asInstanceOf[Long])
 
       // Update metric value and check
       val expectedValue = 1000
-      brokerMetrics.lastAppliedRecordOffset.set(expectedValue)
+      brokerMetrics.updateLastAppliedImageProvenance(new MetadataProvenance(
+        expectedValue,
+        brokerMetrics.lastAppliedImageProvenance.get().epoch(),
+        brokerMetrics.lastAppliedTimestamp()));
       assertEquals(expectedValue, offsetMetric.metricValue.asInstanceOf[Long])
     }
   }
@@ -77,12 +82,16 @@ final class BrokerServerMetricsTest {
       val timestampMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordTimestampName)
       val lagMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordLagMsName)
 
-      assertEquals(0, timestampMetric.metricValue.asInstanceOf[Long])
-      assertEquals(time.milliseconds, lagMetric.metricValue.asInstanceOf[Long])
+      assertEquals(-1L, timestampMetric.metricValue.asInstanceOf[Long])
+      assertEquals(time.milliseconds + 1, lagMetric.metricValue.asInstanceOf[Long])
 
       // Update metric value and check
-      val timestamp = 500
-      brokerMetrics.lastAppliedRecordTimestamp.set(timestamp)
+      val timestamp = 500L
+
+      brokerMetrics.updateLastAppliedImageProvenance(new MetadataProvenance(
+        brokerMetrics.lastAppliedOffset(),
+        brokerMetrics.lastAppliedImageProvenance.get().epoch(),
+        timestamp))
       assertEquals(timestamp, timestampMetric.metricValue.asInstanceOf[Long])
       assertEquals(time.milliseconds - timestamp, lagMetric.metricValue.asInstanceOf[Long])
     }

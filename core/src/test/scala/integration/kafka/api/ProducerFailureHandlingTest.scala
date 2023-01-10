@@ -19,12 +19,11 @@ package kafka.api
 
 import java.util.concurrent.ExecutionException
 import java.util.Properties
-
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
@@ -114,8 +113,8 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private def checkTooLargeRecordForReplicationWithAckAll(maxFetchSize: Int): Unit = {
     val maxMessageSize = maxFetchSize + 100
     val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, numServers.toString)
-    topicConfig.setProperty(LogConfig.MaxMessageBytesProp, maxMessageSize.toString)
+    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, numServers.toString)
+    topicConfig.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageSize.toString)
 
     // create topic
     val topic10 = "topic10"

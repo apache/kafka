@@ -27,14 +27,20 @@ public abstract class AbstractControlRequest extends AbstractRequest {
         protected final int controllerId;
         protected final int controllerEpoch;
         protected final long brokerEpoch;
+        protected final boolean kraftController;
 
         protected Builder(ApiKeys api, short version, int controllerId, int controllerEpoch, long brokerEpoch) {
+            this(api, version, controllerId, controllerEpoch, brokerEpoch, false);
+        }
+
+        protected Builder(ApiKeys api, short version, int controllerId, int controllerEpoch,
+                          long brokerEpoch, boolean kraftController) {
             super(api, version);
             this.controllerId = controllerId;
             this.controllerEpoch = controllerEpoch;
             this.brokerEpoch = brokerEpoch;
+            this.kraftController = kraftController;
         }
-
     }
 
     protected AbstractControlRequest(ApiKeys api, short version) {
@@ -42,6 +48,8 @@ public abstract class AbstractControlRequest extends AbstractRequest {
     }
 
     public abstract int controllerId();
+
+    public abstract boolean isKRaftController();
 
     public abstract int controllerEpoch();
 

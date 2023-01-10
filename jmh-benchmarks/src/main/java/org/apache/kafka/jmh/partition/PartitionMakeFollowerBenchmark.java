@@ -20,13 +20,9 @@ package org.apache.kafka.jmh.partition;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
-import kafka.log.CleanerConfig;
-import kafka.log.Defaults;
-import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
-import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
@@ -41,6 +37,9 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.log.internals.CleanerConfig;
+import org.apache.kafka.server.log.internals.LogConfig;
+import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -76,7 +75,6 @@ import scala.compat.java8.OptionConverters;
 @Measurement(iterations = 15)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-
 public class PartitionMakeFollowerBenchmark {
     private LogManager logManager;
     private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
@@ -94,7 +92,7 @@ public class PartitionMakeFollowerBenchmark {
             throw new IOException("error creating test directory");
 
         scheduler.startup();
-        LogConfig logConfig = createLogConfig();
+        LogConfig logConfig = new LogConfig(new Properties());
 
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
@@ -103,7 +101,7 @@ public class PartitionMakeFollowerBenchmark {
             setInitialOfflineDirs(Collections.emptyList()).
             setConfigRepository(new MockConfigRepository()).
             setInitialDefaultConfig(logConfig).
-            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5")).
+            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
             setRecoveryThreadsPerDataDir(1).
             setFlushCheckMs(1000L).
             setFlushRecoveryOffsetCheckpointMs(10000L).
@@ -161,20 +159,5 @@ public class PartitionMakeFollowerBenchmark {
             .setReplicas(replicas)
             .setIsNew(true);
         return partition.makeFollower(partitionState, offsetCheckpoints, topicId);
-    }
-
-    private static LogConfig createLogConfig() {
-        Properties logProps = new Properties();
-        logProps.put(LogConfig.SegmentMsProp(), Defaults.SegmentMs());
-        logProps.put(LogConfig.SegmentBytesProp(), Defaults.SegmentSize());
-        logProps.put(LogConfig.RetentionMsProp(), Defaults.RetentionMs());
-        logProps.put(LogConfig.RetentionBytesProp(), Defaults.RetentionSize());
-        logProps.put(LogConfig.SegmentJitterMsProp(), Defaults.SegmentJitterMs());
-        logProps.put(LogConfig.CleanupPolicyProp(), Defaults.CleanupPolicy());
-        logProps.put(LogConfig.MaxMessageBytesProp(), Defaults.MaxMessageSize());
-        logProps.put(LogConfig.IndexIntervalBytesProp(), Defaults.IndexInterval());
-        logProps.put(LogConfig.SegmentIndexBytesProp(), Defaults.MaxIndexSize());
-        logProps.put(LogConfig.FileDeleteDelayMsProp(), Defaults.FileDeleteDelayMs());
-        return LogConfig.apply(logProps, new scala.collection.immutable.HashSet<>());
     }
 }

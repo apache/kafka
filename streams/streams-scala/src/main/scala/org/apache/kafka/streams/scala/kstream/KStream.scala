@@ -404,7 +404,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * <p>
    * The created topic is considered as an internal topic and is meant to be used only by the current Kafka Streams instance.
    * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be automatically purged by Kafka Streams.
-   * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+   * The topic will be named as "\${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
    * `StreamsConfig` via parameter `APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG`,
    * "&lt;name&gt;" is either provided via `Repartitioned#as(String)` or an internally
    * generated name, and "-repartition" is a fixed suffix.

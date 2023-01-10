@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.log.internals.{LogDirFailureChannel, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
@@ -146,7 +147,7 @@ class ReplicaManagerQuotasTest {
   def testCompleteInDelayedFetchWithReplicaThrottling(): Unit = {
     // Set up DelayedFetch where there is data to return to a follower replica, either in-sync or out of sync
     def setupDelayedFetch(isReplicaInSync: Boolean): DelayedFetch = {
-      val endOffsetMetadata = LogOffsetMetadata(messageOffset = 100L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
+      val endOffsetMetadata = new LogOffsetMetadata(100L, 0L, 500)
       val partition: Partition = mock(classOf[Partition])
 
       val offsetSnapshot = LogOffsetSnapshot(
@@ -166,8 +167,9 @@ class ReplicaManagerQuotasTest {
       when(partition.getReplica(1)).thenReturn(None)
 
       val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
-      val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
-         relativePositionInSegment = 250), new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
+      val fetchPartitionStatus = FetchPartitionStatus(
+        new LogOffsetMetadata(50L, 0L, 250),
+        new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = FetchParams(
         requestVersion = ApiKeys.FETCH.latestVersion,
         replicaId = 1,
@@ -198,9 +200,9 @@ class ReplicaManagerQuotasTest {
     // Set up DelayedFetch where there is data to return to a consumer, either for the current segment or an older segment
     def setupDelayedFetch(isFetchFromOlderSegment: Boolean): DelayedFetch = {
       val endOffsetMetadata = if (isFetchFromOlderSegment)
-        LogOffsetMetadata(messageOffset = 100L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
+        new LogOffsetMetadata(100L, 0L, 500)
       else
-        LogOffsetMetadata(messageOffset = 150L, segmentBaseOffset = 50L, relativePositionInSegment = 500)
+        new LogOffsetMetadata(150L, 50L, 500)
       val partition: Partition = mock(classOf[Partition])
 
       val offsetSnapshot = LogOffsetSnapshot(
@@ -216,8 +218,9 @@ class ReplicaManagerQuotasTest {
         .thenReturn(partition)
 
       val tidp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
-      val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
-        relativePositionInSegment = 250), new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
+      val fetchPartitionStatus = FetchPartitionStatus(
+        new LogOffsetMetadata(50L, 0L, 250),
+        new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = FetchParams(
         requestVersion = ApiKeys.FETCH.latestVersion,
         replicaId = FetchRequest.CONSUMER_REPLICA_ID,
@@ -253,7 +256,7 @@ class ReplicaManagerQuotasTest {
     when(log.logEndOffset).thenReturn(20L)
     when(log.highWatermark).thenReturn(5)
     when(log.lastStableOffset).thenReturn(5)
-    when(log.logEndOffsetMetadata).thenReturn(LogOffsetMetadata(20L))
+    when(log.logEndOffsetMetadata).thenReturn(new LogOffsetMetadata(20L))
     when(log.topicId).thenReturn(Some(topicId))
 
     //if we ask for len 1 return a message
@@ -262,7 +265,7 @@ class ReplicaManagerQuotasTest {
       isolation = any[FetchIsolation],
       minOneMessage = anyBoolean)).thenReturn(
       FetchDataInfo(
-        LogOffsetMetadata(0L, 0L, 0),
+        new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(CompressionType.NONE, record)
       ))
 
@@ -272,7 +275,7 @@ class ReplicaManagerQuotasTest {
       isolation = any[FetchIsolation],
       minOneMessage = anyBoolean)).thenReturn(
       FetchDataInfo(
-        LogOffsetMetadata(0L, 0L, 0),
+        new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.EMPTY
       ))
 

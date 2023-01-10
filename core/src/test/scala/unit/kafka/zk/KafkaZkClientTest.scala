@@ -17,12 +17,11 @@
 package kafka.zk
 
 import java.nio.charset.StandardCharsets.UTF_8
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, KafkaConfig, QuorumTestHarness}
 import kafka.utils.CoreUtils
@@ -30,6 +29,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
 import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
@@ -44,6 +44,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.zookeeper.KeeperException.{Code, NoAuthException, NoNodeException, NodeExistsException}
 import org.apache.zookeeper.{CreateMode, ZooDefs}
 import org.apache.zookeeper.client.ZKClientConfig
@@ -735,7 +736,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
     assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
 
-    logProps.remove(LogConfig.CleanupPolicyProp)
+    logProps.remove(TopicConfig.CLEANUP_POLICY_CONFIG)
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
     assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
 
@@ -765,9 +766,9 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
   private def createLogProps(bytesProp: Int): Properties = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, bytesProp.toString)
-    logProps.put(LogConfig.SegmentIndexBytesProp, bytesProp.toString)
-    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, bytesProp.toString)
+    logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, bytesProp.toString)
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
     logProps
   }
 
@@ -775,7 +776,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
   @Test
   def testGetLogConfigs(): Unit = {
-    val emptyConfig = LogConfig(Collections.emptyMap())
+    val emptyConfig = new LogConfig(Collections.emptyMap())
     assertEquals((Map(topic1 -> emptyConfig), Map.empty),
       zkClient.getLogConfigs(Set(topic1), Collections.emptyMap()),
       "Non existent config, no defaults")
@@ -783,22 +784,22 @@ class KafkaZkClientTest extends QuorumTestHarness {
     val logProps2 = createLogProps(2048)
 
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
-    assertEquals((Map(topic1 -> LogConfig(logProps), topic2 -> emptyConfig), Map.empty),
+    assertEquals((Map(topic1 -> new LogConfig(logProps), topic2 -> emptyConfig), Map.empty),
       zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()),
       "One existing and one non-existent topic")
 
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic2, logProps2)
-    assertEquals((Map(topic1 -> LogConfig(logProps), topic2 -> LogConfig(logProps2)), Map.empty),
+    assertEquals((Map(topic1 -> new LogConfig(logProps), topic2 -> new LogConfig(logProps2)), Map.empty),
       zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()),
       "Two existing topics")
 
     val logProps1WithMoreValues = createLogProps(1024)
-    logProps1WithMoreValues.put(LogConfig.SegmentJitterMsProp, "100")
-    logProps1WithMoreValues.put(LogConfig.SegmentBytesProp, "1024")
+    logProps1WithMoreValues.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, "100")
+    logProps1WithMoreValues.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1024")
 
-    assertEquals((Map(topic1 -> LogConfig(logProps1WithMoreValues)), Map.empty),
+    assertEquals((Map(topic1 -> new LogConfig(logProps1WithMoreValues)), Map.empty),
       zkClient.getLogConfigs(Set(topic1),
-        Map[String, AnyRef](LogConfig.SegmentJitterMsProp -> "100", LogConfig.SegmentBytesProp -> "128").asJava),
+        Map[String, AnyRef](TopicConfig.SEGMENT_JITTER_MS_CONFIG -> "100", TopicConfig.SEGMENT_BYTES_CONFIG -> "128").asJava),
       "Config with defaults")
   }
 
@@ -1200,6 +1201,72 @@ class KafkaZkClientTest extends QuorumTestHarness {
   }
 
   @Test
+  def testRegisterZkControllerAfterKRaft(): Unit = {
+    // Register KRaft
+    var controllerEpochZkVersion = -1
+    zkClient.tryRegisterKRaftControllerAsActiveController(3000, 42) match {
+      case SuccessfulRegistrationResult(kraftEpoch, zkVersion) =>
+        assertEquals(2, kraftEpoch)
+        controllerEpochZkVersion = zkVersion
+      case FailedRegistrationResult() => fail("Expected to register KRaft as controller in ZK")
+    }
+    assertEquals(1, controllerEpochZkVersion)
+
+    // Can't register ZK anymore
+    assertThrows(classOf[ControllerMovedException], () => zkClient.registerControllerAndIncrementControllerEpoch(1))
+
+    // Delete controller, and try again
+    zkClient.deleteController(controllerEpochZkVersion)
+    val (newEpoch, newZkVersion) = zkClient.registerControllerAndIncrementControllerEpoch(1)
+    assertEquals(3, newEpoch)
+    assertEquals(2, newZkVersion)
+
+    zkClient.tryRegisterKRaftControllerAsActiveController(3000, 42) match {
+      case SuccessfulRegistrationResult(zkEpoch, zkVersion) =>
+        assertEquals(4, zkEpoch)
+        assertEquals(3, zkVersion)
+      case FailedRegistrationResult() => fail("Expected to register KRaft as controller in ZK")
+    }
+  }
+
+  @Test
+  def testConcurrentKRaftControllerClaim(): Unit = {
+    // Setup three threads to race on registering a KRaft controller in ZK
+    val registeredEpochs = new java.util.concurrent.ConcurrentLinkedQueue[Integer]()
+    val registeringNodes = new java.util.concurrent.ConcurrentHashMap[Integer, Integer]()
+
+    def newThread(nodeId: Int): Runnable = {
+      () => {
+        0.to(999).foreach(epoch =>
+          zkClient.tryRegisterKRaftControllerAsActiveController(nodeId, epoch) match {
+            case SuccessfulRegistrationResult(writtenEpoch, _) =>
+              registeredEpochs.add(writtenEpoch)
+              registeringNodes.compute(nodeId, (_, count) => if (count == null) {
+                0
+              } else {
+                count + 1
+              })
+            case FailedRegistrationResult() =>
+          }
+        )
+      }
+    }
+    val thread1 = newThread(1)
+    val thread2 = newThread(2)
+    val thread3 = newThread(3)
+    val executor = Executors.newFixedThreadPool(3)
+    executor.submit(thread1)
+    executor.submit(thread2)
+    executor.submit(thread3)
+    executor.shutdown()
+    executor.awaitTermination(30, TimeUnit.SECONDS)
+
+    assertEquals(1000, registeredEpochs.size())
+    val uniqueEpochs = registeredEpochs.asScala.toSet
+    assertEquals(1000, uniqueEpochs.size)
+  }
+
+  @Test
   def testControllerManagementMethods(): Unit = {
     // No controller
     assertEquals(None, zkClient.getControllerId)
@@ -1375,8 +1442,8 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
   @Test
   def testFailToUpdateMigrationZNode(): Unit = {
-    val (_, stat) = zkClient.getControllerEpoch.get
-    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, stat.getVersion)
+    val (controllerEpoch, stat) = zkClient.getControllerEpoch.get
+    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, controllerEpoch, stat.getVersion)
     migrationState = zkClient.getOrCreateMigrationState(migrationState)
     assertEquals(0, migrationState.migrationZkVersion())
 
@@ -1388,7 +1455,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
       CreateRequest("/foo", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
     )
 
-    migrationState = migrationState.withControllerZkVersion(stat.getVersion)
+    migrationState = migrationState.withZkController(controllerEpoch, stat.getVersion)
     zkClient.retryMigrationRequestsUntilConnected(requests_bad, migrationState) match {
       case (zkVersion: Int, requests: Seq[AsyncRequest#Response]) =>
         assertEquals(0, zkVersion)
@@ -1410,7 +1477,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
       CreateRequest("/foo/bar/eggs", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
     )
 
-    migrationState = migrationState.withControllerZkVersion(stat.getVersion)
+    migrationState = migrationState.withZkController(controllerEpoch, stat.getVersion)
     zkClient.retryMigrationRequestsUntilConnected(requests_good, migrationState) match {
       case (zkVersion: Int, requests: Seq[AsyncRequest#Response]) =>
         assertEquals(1, zkVersion)

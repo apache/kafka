@@ -19,11 +19,12 @@ package kafka.log
 
 import java.util.Properties
 import java.util.concurrent.{Callable, Executors}
-
-import kafka.server.{BrokerTopicStats, FetchHighWatermark, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchHighWatermark}
 import kafka.utils.{KafkaScheduler, TestUtils}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -56,8 +57,8 @@ class LogConcurrencyTest {
   @Test
   def testUncommittedDataNotConsumedFrequentSegmentRolls(): Unit = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 237: Integer)
-    val logConfig = LogConfig(logProps)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 237: Integer)
+    val logConfig = new LogConfig(logProps)
     testUncommittedDataNotConsumed(createLog(logConfig))
   }
 
@@ -140,7 +141,7 @@ class LogConcurrencyTest {
     }
   }
 
-  private def createLog(config: LogConfig = LogConfig(new Properties())): UnifiedLog = {
+  private def createLog(config: LogConfig = new LogConfig(new Properties())): UnifiedLog = {
     UnifiedLog(dir = logDir,
       config = config,
       logStartOffset = 0L,

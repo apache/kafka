@@ -19,11 +19,10 @@ package kafka.coordinator.group
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.common.OffsetAndMetadata
-import kafka.log.LogConfig
-import kafka.message.ProducerCompressionCodec
 import kafka.server._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -32,6 +31,7 @@ import org.apache.kafka.common.metrics.stats.Meter
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.record.BrokerCompressionType
 
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.math.max
@@ -88,9 +88,9 @@ class GroupCoordinator(val brokerId: Int,
 
   def offsetsTopicConfigs: Properties = {
     val props = new Properties
-    props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-    props.put(LogConfig.SegmentBytesProp, offsetConfig.offsetsTopicSegmentBytes.toString)
-    props.put(LogConfig.CompressionTypeProp, ProducerCompressionCodec.name)
+    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, offsetConfig.offsetsTopicSegmentBytes.toString)
+    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name)
 
     props
   }
@@ -1724,7 +1724,7 @@ object GroupCoordinator {
     offsetsTopicNumPartitions = config.offsetsTopicPartitions,
     offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
     offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-    offsetsTopicCompressionCodec = config.offsetsTopicCompressionCodec,
+    offsetsTopicCompressionType = config.offsetsTopicCompressionType,
     offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
     offsetCommitRequiredAcks = config.offsetCommitRequiredAcks
   )

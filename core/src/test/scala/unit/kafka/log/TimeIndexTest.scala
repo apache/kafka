@@ -18,9 +18,9 @@
 package kafka.log
 
 import java.io.File
-
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
+import org.apache.kafka.server.log.internals.{CorruptIndexException, TimeIndex, TimestampOffset}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 
@@ -34,7 +34,7 @@ class TimeIndexTest {
 
   @BeforeEach
   def setup(): Unit = {
-    this.idx = new TimeIndex(nonExistantTempFile(), baseOffset = baseOffset, maxIndexSize = maxEntries * 12)
+    this.idx = new TimeIndex(nonExistantTempFile(), baseOffset, maxEntries * 12)
   }
 
   @AfterEach
@@ -46,26 +46,26 @@ class TimeIndexTest {
   @Test
   def testLookUp(): Unit = {
     // Empty time index
-    assertEquals(TimestampOffset(-1L, baseOffset), idx.lookup(100L))
+    assertEquals(new TimestampOffset(-1L, baseOffset), idx.lookup(100L))
 
     // Add several time index entries.
     appendEntries(maxEntries - 1)
 
     // look for timestamp smaller than the earliest entry
-    assertEquals(TimestampOffset(-1L, baseOffset), idx.lookup(9))
+    assertEquals(new TimestampOffset(-1L, baseOffset), idx.lookup(9))
     // look for timestamp in the middle of two entries.
-    assertEquals(TimestampOffset(20L, 65L), idx.lookup(25))
+    assertEquals(new TimestampOffset(20L, 65L), idx.lookup(25))
     // look for timestamp same as the one in the entry
-    assertEquals(TimestampOffset(30L, 75L), idx.lookup(30))
+    assertEquals(new TimestampOffset(30L, 75L), idx.lookup(30))
   }
 
   @Test
   def testEntry(): Unit = {
     appendEntries(maxEntries - 1)
-    assertEquals(TimestampOffset(10L, 55L), idx.entry(0))
-    assertEquals(TimestampOffset(20L, 65L), idx.entry(1))
-    assertEquals(TimestampOffset(30L, 75L), idx.entry(2))
-    assertEquals(TimestampOffset(40L, 85L), idx.entry(3))
+    assertEquals(new TimestampOffset(10L, 55L), idx.entry(0))
+    assertEquals(new TimestampOffset(20L, 65L), idx.entry(1))
+    assertEquals(new TimestampOffset(30L, 75L), idx.entry(2))
+    assertEquals(new TimestampOffset(40L, 85L), idx.entry(3))
   }
 
   @Test
@@ -114,7 +114,7 @@ class TimeIndexTest {
     var shouldCorruptOffset = false
     var shouldCorruptTimestamp = false
     var shouldCorruptLength = false
-    idx = new TimeIndex(idx.file, baseOffset = baseOffset, maxIndexSize = maxEntries * 12) {
+    idx = new TimeIndex(idx.file, baseOffset, maxEntries * 12) {
       override def lastEntry = {
         val superLastEntry = super.lastEntry
         val offset = if (shouldCorruptOffset) baseOffset - 1 else superLastEntry.offset

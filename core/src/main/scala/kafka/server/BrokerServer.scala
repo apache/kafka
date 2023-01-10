@@ -17,15 +17,11 @@
 
 package kafka.server
 
-import java.net.InetAddress
-import java.util
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorAdapter}
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
+import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
@@ -40,16 +36,23 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.common.{ClusterResource, Endpoint}
+import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.raft
 import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.snapshot.SnapshotWriter
 
+import java.net.InetAddress
+import java.util
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.{Map, Seq}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -106,6 +109,7 @@ class BrokerServer(
 
   var logDirFailureChannel: LogDirFailureChannel = _
   var logManager: LogManager = _
+  var remoteLogManager: Option[RemoteLogManager] = None
 
   var tokenManager: DelegationTokenManager = _
 
@@ -182,7 +186,9 @@ class BrokerServer(
 
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
-        threadNamePrefix)
+        threadNamePrefix,
+        isZkBroker = false,
+        () => -1)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -201,6 +207,8 @@ class BrokerServer(
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
       logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
         brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
+
+      remoteLogManager = createRemoteLogManager(config)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -256,6 +264,7 @@ class BrokerServer(
         time = time,
         scheduler = kafkaScheduler,
         logManager = logManager,
+        remoteLogManager = remoteLogManager,
         quotaManagers = quotaManagers,
         metadataCache = metadataCache,
         logDirFailureChannel = logDirFailureChannel,
@@ -461,6 +470,9 @@ class BrokerServer(
       // Log static broker configurations.
       new KafkaConfig(config.originals(), true)
 
+      // Start RemoteLogManager before broker start serving the requests.
+      remoteLogManager.foreach(_.startup())
+
       // Enable inbound TCP connections. Each endpoint will be started only once its matching
       // authorizer future is completed.
       socketServer.enableRequestProcessing(authorizerFutures)
@@ -489,6 +501,19 @@ class BrokerServer(
         fatal("Fatal error during broker startup. Prepare to shutdown", e)
         shutdown()
         throw if (e.isInstanceOf[ExecutionException]) e.getCause else e
+    }
+  }
+
+  protected def createRemoteLogManager(config: KafkaConfig): Option[RemoteLogManager] = {
+    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+    if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
+      if (config.logDirs.size > 1) {
+        throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
+      }
+
+      Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head))
+    } else {
+      None
     }
   }
 
@@ -566,6 +591,10 @@ class BrokerServer(
 
       if (logManager != null)
         CoreUtils.swallow(logManager.shutdown(), this)
+
+      // Close remote log manager to give a chance to any of its underlying clients
+      // (especially in RemoteStorageManager and RemoteLogMetadataManager) to close gracefully.
+      CoreUtils.swallow(remoteLogManager.foreach(_.close()), this)
 
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
