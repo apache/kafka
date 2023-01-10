@@ -181,9 +181,11 @@ public class SaslAuthenticatorTest {
     @AfterEach
     public void teardown() throws Exception {
         needLargeExpiration = false;
-        saslClientAuthenticator = null;
         if (server != null)
             this.server.close();
+        if (saslClientAuthenticator != null) {
+            saslClientAuthenticator.close();
+        }
         if (selector != null)
             this.selector.close();
     }
@@ -1631,7 +1633,7 @@ public class SaslAuthenticatorTest {
         saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS, SaslConfigs.DEFAULT_LOGIN_REFRESH_BUFFER_SECONDS);
         saslClientConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, AlternateLoginCallbackHandler.class);
 
-        createClientConnectionWithSaslAuthenticateHeader(securityProtocol, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, node);
+        createCustomClientConnection(securityProtocol, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, node, true);
         checkClientConnection(node);
         // ensure metrics are as expected
         server.verifyAuthenticationMetrics(1, 0);
@@ -1971,7 +1973,7 @@ public class SaslAuthenticatorTest {
         if (enableSaslAuthenticateHeader)
             createClientConnection(securityProtocol, node);
         else
-            createClientConnectionWithoutSaslAuthenticateHeader(securityProtocol, saslMechanism, node);
+            createCustomClientConnection(securityProtocol, saslMechanism, node, false);
     }
 
     private NioEchoServer startServerApiVersionsUnsupportedByClient(final SecurityProtocol securityProtocol, String saslMechanism) throws Exception {
@@ -2059,15 +2061,11 @@ public class SaslAuthenticatorTest {
         return server;
     }
 
-    private void createClientConnectionWithSaslAuthenticateHeader(final SecurityProtocol securityProtocol,
-                                                                     final String saslMechanism, String node) throws Exception {
-
-        final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
-        final Map<String, ?> configs = Collections.emptyMap();
-        final JaasContext jaasContext = JaasContext.loadClientContext(configs);
-        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
-
-        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts,
+    private SaslChannelBuilder saslChannelBuilderWithoutHeader(final SecurityProtocol securityProtocol,
+                                                               final String saslMechanism,
+                                                               final Map<String, JaasContext> jaasContexts,
+                                                               final ListenerName listenerName) {
+        return new SaslChannelBuilder(Mode.CLIENT, jaasContexts,
             securityProtocol, listenerName, false, saslMechanism, true,
             null, null, null, time, new LogContext(), null) {
 
@@ -2082,41 +2080,7 @@ public class SaslAuthenticatorTest {
 
                 saslClientAuthenticator = new SaslClientAuthenticator(configs, callbackHandler, id, subject,
                     servicePrincipal, serverHost, saslMechanism, true,
-                    transportLayer, time, new LogContext());
-                return saslClientAuthenticator;
-            }
-        };
-
-        clientChannelBuilder.configure(saslClientConfigs);
-        this.selector = NetworkTestUtils.createSelector(clientChannelBuilder, time);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-    }
-
-    private void createClientConnectionWithoutSaslAuthenticateHeader(final SecurityProtocol securityProtocol,
-            final String saslMechanism, String node) throws Exception {
-
-        final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
-        final Map<String, ?> configs = Collections.emptyMap();
-        final JaasContext jaasContext = JaasContext.loadClientContext(configs);
-        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
-
-        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts,
-                securityProtocol, listenerName, false, saslMechanism, true,
-                null, null, null, time, new LogContext(), null) {
-
-            @Override
-            protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
-                                                                       AuthenticateCallbackHandler callbackHandler,
-                                                                       String id,
-                                                                       String serverHost,
-                                                                       String servicePrincipal,
-                                                                       TransportLayer transportLayer,
-                                                                       Subject subject) {
-
-                return new SaslClientAuthenticator(configs, callbackHandler, id, subject,
-                        servicePrincipal, serverHost, saslMechanism, true,
-                        transportLayer, time, new LogContext()) {
+                    transportLayer, time, new LogContext()) {
                     @Override
                     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
                         return buildSaslHandshakeRequest(saslMechanism, (short) 0);
@@ -2126,8 +2090,46 @@ public class SaslAuthenticatorTest {
                         // Don't set version so that headers are disabled
                     }
                 };
+
+                return saslClientAuthenticator;
             }
         };
+    }
+
+    private void createCustomClientConnection(final SecurityProtocol securityProtocol,
+            final String saslMechanism, String node, boolean withSaslAuthenticateHeader) throws Exception {
+
+        final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        final Map<String, ?> configs = Collections.emptyMap();
+        final JaasContext jaasContext = JaasContext.loadClientContext(configs);
+        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
+
+        SaslChannelBuilder clientChannelBuilder;
+        if (!withSaslAuthenticateHeader) {
+            clientChannelBuilder = saslChannelBuilderWithoutHeader(securityProtocol, saslMechanism, jaasContexts, listenerName);
+        } else {
+            clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts,
+                securityProtocol, listenerName, false, saslMechanism, true,
+                null, null, null, time, new LogContext(), null) {
+
+                @Override
+                protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
+                                                                           AuthenticateCallbackHandler callbackHandler,
+                                                                           String id,
+                                                                           String serverHost,
+                                                                           String servicePrincipal,
+                                                                           TransportLayer transportLayer,
+                                                                           Subject subject) {
+
+                    saslClientAuthenticator = new SaslClientAuthenticator(configs, callbackHandler, id, subject,
+                        servicePrincipal, serverHost, saslMechanism, true,
+                        transportLayer, time, new LogContext());
+
+                    return saslClientAuthenticator;
+                }
+            };
+        }
+
         clientChannelBuilder.configure(saslClientConfigs);
         this.selector = NetworkTestUtils.createSelector(clientChannelBuilder, time);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
