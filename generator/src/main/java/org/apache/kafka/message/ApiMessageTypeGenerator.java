@@ -158,6 +158,8 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("%n");
         generateAccessor("listeners", "EnumSet<ListenerType>");
         buffer.printf("%n");
+        generateAccessor("apiStability", "ApiStabilityType");
+        buffer.printf("%n");
         generateAccessor("apiKey", "short");
         buffer.printf("%n");
         generateAccessor("requestSchemas", "Schema[]");
@@ -171,6 +173,8 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         generateHeaderVersion("response");
         buffer.printf("%n");
         generateListenerTypesEnum();
+        buffer.printf("%n");
+        generateApiStabilityTypesEnum();
         buffer.printf("%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -210,7 +214,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                     .collect(Collectors.toList());
             }
 
-            buffer.printf("%s(\"%s\", (short) %d, %s, %s, (short) %d, (short) %d, %s)%s%n",
+            buffer.printf("%s(\"%s\", (short) %d, %s, %s, (short) %d, (short) %d, %s, %s)%s%n",
                 MessageGenerator.toSnakeCase(name).toUpperCase(Locale.ROOT),
                 MessageGenerator.capitalizeFirst(name),
                 entry.getKey(),
@@ -219,6 +223,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 apiData.requestSpec.struct().versions().lowest(),
                 apiData.requestSpec.struct().versions().highest(),
                 generateListenerTypeEnumSet(listeners),
+                "ApiStabilityType." + apiData.requestSpec.apiStabilityType().get().name(),
                 (numProcessed == apis.size()) ? ";" : ",");
         }
     }
@@ -231,6 +236,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("private final short lowestSupportedVersion;%n");
         buffer.printf("private final short highestSupportedVersion;%n");
         buffer.printf("private final EnumSet<ListenerType> listeners;%n");
+        buffer.printf("private final ApiStabilityType apiStability;%n");
         headerGenerator.addImport(MessageGenerator.SCHEMA_CLASS);
         headerGenerator.addImport(MessageGenerator.ENUM_SET_CLASS);
     }
@@ -239,7 +245,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("ApiMessageType(String name, short apiKey, " +
             "Schema[] requestSchemas, Schema[] responseSchemas, " +
             "short lowestSupportedVersion, short highestSupportedVersion, " +
-            "EnumSet<ListenerType> listeners) {%n");
+            "EnumSet<ListenerType> listeners, ApiStabilityType apiStability) {%n");
         buffer.incrementIndent();
         buffer.printf("this.name = name;%n");
         buffer.printf("this.apiKey = apiKey;%n");
@@ -248,6 +254,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("this.lowestSupportedVersion = lowestSupportedVersion;%n");
         buffer.printf("this.highestSupportedVersion = highestSupportedVersion;%n");
         buffer.printf("this.listeners = listeners;%n");
+        buffer.printf("this.apiStability = apiStability;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -398,6 +405,18 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         while (listenerIter.hasNext()) {
             RequestListenerType scope = listenerIter.next();
             buffer.printf("%s%s%n", scope.name(), listenerIter.hasNext() ? "," : ";");
+        }
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateApiStabilityTypesEnum() {
+        buffer.printf("public enum ApiStabilityType {%n");
+        buffer.incrementIndent();
+        Iterator<RequestApiStabilityType> iter = Arrays.stream(RequestApiStabilityType.values()).iterator();
+        while (iter.hasNext()) {
+            RequestApiStabilityType type = iter.next();
+            buffer.printf("%s%s%n", type.name(), iter.hasNext() ? "," : ";");
         }
         buffer.decrementIndent();
         buffer.printf("}%n");

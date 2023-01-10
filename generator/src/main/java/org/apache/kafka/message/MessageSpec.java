@@ -39,6 +39,8 @@ public final class MessageSpec {
 
     private final List<RequestListenerType> listeners;
 
+    private final Optional<RequestApiStabilityType> apiStabilityType;
+
     @JsonCreator
     public MessageSpec(@JsonProperty("name") String name,
                        @JsonProperty("validVersions") String validVersions,
@@ -47,7 +49,9 @@ public final class MessageSpec {
                        @JsonProperty("type") MessageSpecType type,
                        @JsonProperty("commonStructs") List<StructSpec> commonStructs,
                        @JsonProperty("flexibleVersions") String flexibleVersions,
-                       @JsonProperty("listeners") List<RequestListenerType> listeners) {
+                       @JsonProperty("listeners") List<RequestListenerType> listeners,
+                       @JsonProperty("apiStability") RequestApiStabilityType apiStabilityType
+    ) {
         this.struct = new StructSpec(name, validVersions, fields);
         this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
         this.type = Objects.requireNonNull(type);
@@ -70,6 +74,21 @@ public final class MessageSpec {
                 "messages with type `request`");
         }
         this.listeners = listeners;
+
+        if (apiStabilityType == null) {
+            if (type == MessageSpecType.REQUEST) {
+                this.apiStabilityType = Optional.of(RequestApiStabilityType.STABLE);
+            } else {
+                this.apiStabilityType = Optional.empty();
+            }
+        } else {
+            if (type == MessageSpecType.REQUEST) {
+                this.apiStabilityType = Optional.of(apiStabilityType);
+            } else {
+                throw new RuntimeException("The `apiStability` property is only valid for " +
+                    "messages with type `request`");
+            }
+        }
     }
 
     public StructSpec struct() {
@@ -122,6 +141,11 @@ public final class MessageSpec {
     @JsonProperty("listeners")
     public List<RequestListenerType> listeners() {
         return listeners;
+    }
+
+    @JsonProperty("apiStability")
+    public Optional<RequestApiStabilityType> apiStabilityType() {
+        return apiStabilityType;
     }
 
     public String dataClassName() {

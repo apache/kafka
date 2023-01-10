@@ -16,6 +16,7 @@
 {
   "apiKey": 68,
   "type": "request",
+  "apiStability": "evolving",
   "listeners": ["zkBroker", "broker"],
   "name": "ConsumerGroupHeartbeatRequest",
   "validVersions": "0",
