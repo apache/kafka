@@ -135,7 +135,7 @@ class RaftManagerTest {
       Some(TestUtils.tempDir().toPath)
     }
 
-    val metadataDir = if (dirType.contains("log-only")) {
+    val metadataDir = if (dirType.equals("log-only")) {
       None
     } else {
       Some(TestUtils.tempDir().toPath)
