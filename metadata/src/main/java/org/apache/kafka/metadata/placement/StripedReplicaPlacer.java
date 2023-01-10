@@ -476,7 +476,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
     private static void throwInvalidReplicationFactorIfNonPositive(int replicationFactor) {
         if (replicationFactor <= 0) {
             throw new InvalidReplicationFactorException("Invalid replication factor " +
-                    replicationFactor + ": the replication factor must be positive.");
+                replicationFactor + ": the replication factor must be positive.");
         }
     }
 
@@ -489,8 +489,8 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
     private static void throwInvalidReplicationFactorIfTooFewBrokers(int replicationFactor, int numTotalBrokers) {
         if (replicationFactor > numTotalBrokers) {
             throw new InvalidReplicationFactorException("The target replication factor " +
-                    "of " + replicationFactor + " cannot be reached because only " +
-                    numTotalBrokers + " broker(s) are registered.");
+                "of " + replicationFactor + " cannot be reached because only " +
+                numTotalBrokers + " broker(s) are registered.");
         }
     }
 

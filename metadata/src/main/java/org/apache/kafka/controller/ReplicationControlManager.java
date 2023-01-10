@@ -244,7 +244,7 @@ public class ReplicationControlManager {
             for (Entry<Integer, PartitionRegistration> entry : topicInfo.parts.entrySet()) {
                 PartitionRegistration registration = entry.getValue();
                 partInfo.add(new SimpleImmutableEntry<>(entry.getKey(),
-                        Replicas.toList(registration.replicas)));
+                    Replicas.toList(registration.replicas)));
             }
             partInfo.sort(Comparator.comparingInt(Entry::getKey));
             List<List<Integer>> results = new ArrayList<>();
