@@ -484,7 +484,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
    * group does not know, because the information is not available yet or because the it has
    * failed to parse the Consumer Protocol, it returns true to be safe.
    */
-  def isSubscribedToTopic(topic: String): Boolean = subscribedTopics.forall(topics => topics.contains(topic))
+  def isSubscribedToTopic(topic: String): Boolean = subscribedTopics.forall(_.contains(topic))
 
   /**
    * Collects the set of topics that the members are subscribed to when the Protocol Type is equal
