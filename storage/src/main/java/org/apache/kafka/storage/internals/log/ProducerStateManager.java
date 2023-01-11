@@ -208,8 +208,8 @@ public class ProducerStateManager {
      * marker written at a higher offset than the current high watermark).
      */
     public Optional<LogOffsetMetadata> firstUnstableOffset() {
-        Optional<LogOffsetMetadata> unreplicatedFirstOffset = Optional.of(unreplicatedTxns.firstEntry()).map(e -> e.getValue().firstOffset);
-        Optional<LogOffsetMetadata> undecidedFirstOffset = Optional.of(ongoingTxns.firstEntry()).map(e -> e.getValue().firstOffset);
+        Optional<LogOffsetMetadata> unreplicatedFirstOffset = Optional.ofNullable(unreplicatedTxns.firstEntry()).map(e -> e.getValue().firstOffset);
+        Optional<LogOffsetMetadata> undecidedFirstOffset = Optional.ofNullable(ongoingTxns.firstEntry()).map(e -> e.getValue().firstOffset);
         Optional<LogOffsetMetadata> result;
         if (!unreplicatedFirstOffset.isPresent()) result = undecidedFirstOffset;
         else if (!undecidedFirstOffset.isPresent()) result = unreplicatedFirstOffset;
@@ -234,8 +234,9 @@ public class ProducerStateManager {
      * or aborted. Unlike [[firstUnstableOffset]], this does not reflect the state of replication (i.e.
      * whether a completed transaction marker is beyond the high watermark).
      */
-    public Optional<Long> firstUndecidedOffset() {
-        return Optional.of(ongoingTxns.firstEntry()).map(e -> e.getValue().firstOffset.messageOffset);
+    public OptionalLong firstUndecidedOffset() {
+        Map.Entry<Long, TxnMetadata> firstEntry = ongoingTxns.firstEntry();
+        return firstEntry != null ? OptionalLong.of(firstEntry.getValue().firstOffset.messageOffset) : OptionalLong.empty();
     }
 
     /**
@@ -379,7 +380,7 @@ public class ProducerStateManager {
      * Get the last written entry for the given producer id.
      */
     public Optional<ProducerStateEntry> lastEntry(long producerId) {
-        return Optional.of(producers.get(producerId));
+        return Optional.ofNullable(producers.get(producerId));
     }
 
     /**
@@ -448,7 +449,7 @@ public class ProducerStateManager {
      * Visible for testing
      */
     public Optional<SnapshotFile> snapshotFileForOffset(long offset) {
-        return Optional.of(snapshots.get(offset));
+        return Optional.ofNullable(snapshots.get(offset));
     }
 
     /**
@@ -527,11 +528,11 @@ public class ProducerStateManager {
     }
 
     private Optional<SnapshotFile> oldestSnapshotFile() {
-        return Optional.of(snapshots.firstEntry()).map(x -> x.getValue());
+        return Optional.ofNullable(snapshots.firstEntry()).map(x -> x.getValue());
     }
 
     private Optional<SnapshotFile> latestSnapshotFile() {
-        return Optional.of(snapshots.lastEntry()).map(e -> e.getValue());
+        return Optional.ofNullable(snapshots.lastEntry()).map(e -> e.getValue());
     }
 
     /**

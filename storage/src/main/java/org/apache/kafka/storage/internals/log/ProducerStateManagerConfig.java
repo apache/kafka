@@ -19,9 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import java.util.Collections;
 import java.util.Set;
 
-//todo-refactoring Add respective config changes once https://issues.apache.org/jira/browse/KAFKA-14613 is completed
-public class ProducerStateManagerConfig { // extends BrokerReconfigurable
-    //todo-refactoring replace later with KafkaConfig.ProducerIdExpirationMsProp
+public class ProducerStateManagerConfig {
     public static final Set<String> RECONFIGURABLE_CONFIGS = Collections.singleton("producer.id.expiration.ms");
     private volatile int producerIdExpirationMs;
 
@@ -29,23 +27,9 @@ public class ProducerStateManagerConfig { // extends BrokerReconfigurable
         this.producerIdExpirationMs = producerIdExpirationMs;
     }
 
-    public static Set<String> reconfigurableConfigs() {
-        //Set(KafkaConfig.ProducerIdExpirationMsProp)
-        return null;
+    public void updateProducerIdExpirationMs(int producerIdExpirationMs) {
+        this.producerIdExpirationMs = producerIdExpirationMs;
     }
-
-    // todo-refactoring
-//    public void reconfigure(KafkaConfig oldConfig, KafkaConfig newConfig) {
-//        if (producerIdExpirationMs != newConfig.producerIdExpirationMs) {
-//            info("Reconfigure ${KafkaConfig.ProducerIdExpirationMsProp} from $producerIdExpirationMs to ${newConfig.producerIdExpirationMs}");
-//            producerIdExpirationMs = newConfig.producerIdExpirationMs;
-//        }
-//    }
-
-//    public void validateReconfiguration(KafkaConfig newConfig) {
-//        if (newConfig.producerIdExpirationMs < 0)
-//            throw new ConfigException(s"${KafkaConfig.ProducerIdExpirationMsProp} cannot be less than 0, current value is $producerIdExpirationMs")
-//    }
 
     public int producerIdExpirationMs() {
         return producerIdExpirationMs;

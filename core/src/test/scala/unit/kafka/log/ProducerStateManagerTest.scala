@@ -867,19 +867,19 @@ class ProducerStateManagerTest {
     val epoch = 5.toShort
     val sequence = 0
 
-    assertEquals(None, stateManager.firstUndecidedOffset.asScala)
+    assertEquals(OptionalLong.empty(), stateManager.firstUndecidedOffset)
 
     append(stateManager, producerId, epoch, sequence, offset = 99, isTransactional = true)
-    assertEquals(Some(99L), stateManager.firstUndecidedOffset.asScala)
+    assertEquals(OptionalLong.of(99L), stateManager.firstUndecidedOffset)
     assertEquals(Some(99L), stateManager.firstUnstableOffset.map[Function[LogOffsetMetadata, Long]](_ => _.messageOffset).asScala)
 
     val anotherPid = 2L
     append(stateManager, anotherPid, epoch, sequence, offset = 105, isTransactional = true)
-    assertEquals(Some(99L), stateManager.firstUndecidedOffset.asScala)
+    assertEquals(OptionalLong.of(99L), stateManager.firstUndecidedOffset)
     assertEquals(Some(99L), stateManager.firstUnstableOffset.map[Function[LogOffsetMetadata, Long]](_ => _.messageOffset).asScala)
 
     appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, offset = 109)
-    assertEquals(Some(105L), stateManager.firstUndecidedOffset.asScala)
+    assertEquals(OptionalLong.of(105L), stateManager.firstUndecidedOffset)
     assertEquals(Some(99L), stateManager.firstUnstableOffset.map[Function[LogOffsetMetadata, Long]](_ => _.messageOffset).asScala)
 
     stateManager.onHighWatermarkUpdated(100L)
@@ -889,7 +889,7 @@ class ProducerStateManagerTest {
     assertEquals(Some(105L), stateManager.firstUnstableOffset.map[Function[LogOffsetMetadata, Long]](_ => _.messageOffset).asScala)
 
     appendEndTxnMarker(stateManager, anotherPid, epoch, ControlRecordType.ABORT, offset = 112)
-    assertEquals(None, stateManager.firstUndecidedOffset.asScala)
+    assertEquals(OptionalLong.empty(), stateManager.firstUndecidedOffset)
     assertEquals(Some(105L), stateManager.firstUnstableOffset.map[Function[LogOffsetMetadata, Long]](_ => _.messageOffset).asScala)
 
     stateManager.onHighWatermarkUpdated(113L)
@@ -902,13 +902,13 @@ class ProducerStateManagerTest {
     val sequence = 0
 
     append(stateManager, producerId, epoch, sequence, offset = 99, isTransactional = true)
-    assertEquals(Some(99L), stateManager.firstUndecidedOffset.asScala)
+    assertEquals(Some(99L), stateManager.firstUndecidedOffset)
 
     time.sleep(producerStateManagerConfig.producerIdExpirationMs + 1)
     stateManager.removeExpiredProducers(time.milliseconds)
 
     assertTrue(stateManager.lastEntry(producerId).asScala.isDefined)
-    assertEquals(Some(99L), stateManager.firstUndecidedOffset.asScala)
+    assertEquals(Some(99L), stateManager.firstUndecidedOffset)
 
     stateManager.removeExpiredProducers(time.milliseconds)
     assertTrue(stateManager.lastEntry(producerId).asScala.isDefined)
@@ -932,7 +932,7 @@ class ProducerStateManagerTest {
     val epoch = 5.toShort
     val sequence = 0
 
-    assertEquals(None, stateManager.firstUndecidedOffset.asScala)
+    assertEquals(None, stateManager.firstUndecidedOffset)
 
     append(stateManager, producerId, epoch, sequence, offset = 99, isTransactional = true)
     assertThrows(classOf[InvalidProducerEpochException], () => appendEndTxnMarker(stateManager, producerId, 3.toShort,
