@@ -1088,8 +1088,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         if (origin == AppendOrigin.CLIENT) {
           val maybeLastEntry = producerStateManager.lastEntry(batch.producerId)
 
-          maybeLastEntry.flatMap(_.findDuplicateBatch(batch)).asScala.foreach { duplicate =>
-            return (updatedProducers, completedTxns.toList, Some(duplicate))
+          val duplicateBatch = maybeLastEntry.flatMap(_.findDuplicateBatch(batch))
+          if (duplicateBatch.isPresent) {
+            return (updatedProducers, completedTxns.toList, Some(duplicateBatch.get()))
           }
         }
 
@@ -1678,13 +1679,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   // visible for testing
-  private[log] def latestProducerSnapshotOffset: Option[Long] = lock synchronized {
-    producerStateManager.latestSnapshotOffset.asScala
+  private[log] def latestProducerSnapshotOffset: OptionalLong = lock synchronized {
+    producerStateManager.latestSnapshotOffset
   }
 
   // visible for testing
-  private[log] def oldestProducerSnapshotOffset: Option[Long] = lock synchronized {
-    producerStateManager.oldestSnapshotOffset.asScala
+  private[log] def oldestProducerSnapshotOffset: OptionalLong = lock synchronized {
+    producerStateManager.oldestSnapshotOffset
   }
 
   // visible for testing

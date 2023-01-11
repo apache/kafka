@@ -104,7 +104,7 @@ object DumpLogSegments {
 
   private def dumpProducerIdSnapshot(file: File): Unit = {
     try {
-      ProducerStateManager.readSnapshot(file).asScala.foreach { entry =>
+      ProducerStateManager.readSnapshot(file).forEach { entry =>
         print(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} " +
           s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset} " +
           s"lastTimestamp: ${entry.lastTimestamp} ")

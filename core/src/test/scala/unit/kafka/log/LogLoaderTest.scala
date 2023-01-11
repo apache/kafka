@@ -300,7 +300,7 @@ class LogLoaderTest {
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, messageFormatVersion)
     val logConfig = new LogConfig(logProps)
     var log = createLog(logDir, logConfig)
-    assertEquals(None, log.oldestProducerSnapshotOffset)
+    assertEquals(OptionalLong.empty(), log.oldestProducerSnapshotOffset)
 
     for (i <- 0 to 100) {
       val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
@@ -499,7 +499,7 @@ class LogLoaderTest {
 
     val maxProducerIdExpirationMs = kafka.server.Defaults.ProducerIdExpirationMs
     mockTime.sleep(maxProducerIdExpirationMs)
-    assertEquals(None, log.producerStateManager.lastEntry(producerId))
+    assertEquals(Optional.empty(), log.producerStateManager.lastEntry(producerId))
 
     val secondAppendTimestamp = mockTime.milliseconds()
     LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch, ControlRecordType.ABORT,
@@ -723,15 +723,15 @@ class LogLoaderTest {
     log.close()
     assertEquals(log.logSegments.size, 3)
     // We expect 3 snapshot files, two of which are for the first two segments, the last was written out during log closing.
-    assertEquals(Seq(1, 2, 4), ProducerStateManager.listSnapshotFiles(logDir).asScala.map(_.offset).sorted)
+    assertEquals(Seq(1L, 2L, 4L), ProducerStateManager.listSnapshotFiles(logDir).asScala.map(_.offset).sorted)
     // Inject a stray snapshot file within the bounds of the log at offset 3, it should be cleaned up after loading the log
     val straySnapshotFile = UnifiedLog.producerSnapshotFile(logDir, 3).toPath
     Files.createFile(straySnapshotFile)
-    assertEquals(Seq(1, 2, 3, 4), ProducerStateManager.listSnapshotFiles(logDir).asScala.map(_.offset).sorted)
+    assertEquals(Seq(1L, 2L, 3L, 4L), ProducerStateManager.listSnapshotFiles(logDir).asScala.map(_.offset).sorted)
 
     createLog(logDir, logConfig, lastShutdownClean = false)
     // We should clean up the stray producer state snapshot file, but keep the largest snapshot file (4)
-    assertEquals(Seq(1, 2, 4), ProducerStateManager.listSnapshotFiles(logDir).asScala.map(_.offset).sorted)
+    assertEquals(Seq(1L, 2L, 4L), ProducerStateManager.listSnapshotFiles(logDir).asScala.map(_.offset).sorted)
   }
 
   @Test
@@ -1682,8 +1682,8 @@ class LogLoaderTest {
     assertEquals(9, log.activeSegment.baseOffset)
     assertEquals(9, log.logEndOffset)
     for (offset <- 5 until 10) {
-      val snapshotFileBeforeDeletion = log.producerStateManager.snapshotFileForOffset(offset).asScala
-      assertTrue(snapshotFileBeforeDeletion.isDefined)
+      val snapshotFileBeforeDeletion = log.producerStateManager.snapshotFileForOffset(offset)
+      assertTrue(snapshotFileBeforeDeletion.isPresent)
       assertTrue(snapshotFileBeforeDeletion.get.file.exists)
     }
 

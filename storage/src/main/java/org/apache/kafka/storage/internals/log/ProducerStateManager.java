@@ -100,8 +100,8 @@ public class ProducerStateManager {
     private static final Schema PID_SNAPSHOT_MAP_SCHEMA = new Schema(new Field(VERSION_FIELD, Type.INT16, "Version of the snapshot file"), new Field(CRC_FIELD, Type.UNSIGNED_INT32, "CRC of the snapshot data"), new Field(PRODUCER_ENTRIES_FIELD, new ArrayOf(PRODUCER_SNAPSHOT_ENTRY_SCHEMA), "The entries in the producer table"));
     private final TopicPartition topicPartition;
     private volatile File logDir;
-    public final int maxTransactionTimeoutMs;
-    public final ProducerStateManagerConfig producerStateManagerConfig;
+    private final int maxTransactionTimeoutMs;
+    private final ProducerStateManagerConfig producerStateManagerConfig;
     private final Time time;
 
     private ConcurrentSkipListMap<Long, SnapshotFile> snapshots;
@@ -128,6 +128,14 @@ public class ProducerStateManager {
         this.producerStateManagerConfig = producerStateManagerConfig;
         this.time = time;
         snapshots = loadSnapshots();
+    }
+
+    public int maxTransactionTimeoutMs() {
+        return maxTransactionTimeoutMs;
+    }
+
+    public ProducerStateManagerConfig producerStateManagerConfig() {
+        return producerStateManagerConfig;
     }
 
     public boolean hasLateTransaction(long currentTimeMs) {

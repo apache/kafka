@@ -355,8 +355,8 @@ class LogLoader(
     val producerStateManager = new ProducerStateManager(
       topicPartition,
       dir,
-      this.producerStateManager.maxTransactionTimeoutMs,
-      this.producerStateManager.producerStateManagerConfig,
+      this.producerStateManager.maxTransactionTimeoutMs(),
+      this.producerStateManager.producerStateManagerConfig(),
       time)
     UnifiedLog.rebuildProducerState(
       producerStateManager,
