@@ -536,7 +536,7 @@ public class ReplicationControlManager {
                     "Topic '" + t.name() + "' already exists.")));
 
         // Verify that the configurations for the new topics are OK, and figure out what
-        // ConfigRecords should be created.
+        // configurations should be created.
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges =
             computeConfigChanges(topicErrors, request.topics());
 
@@ -544,6 +544,7 @@ public class ReplicationControlManager {
         Map<String, CreatableTopicResult> successes = new HashMap<>();
         for (CreatableTopic topic : request.topics()) {
             if (topicErrors.containsKey(topic.name())) continue;
+            // Figure out what ConfigRecords should be created, if any.
             ConfigResource configResource = new ConfigResource(TOPIC, topic.name());
             Map<String, Entry<OpType, String>> keyToOps = configChanges.get(configResource);
             List<ApiMessageAndVersion> configRecords;

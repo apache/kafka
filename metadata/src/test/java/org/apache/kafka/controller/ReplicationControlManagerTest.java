@@ -628,7 +628,7 @@ public class ReplicationControlManagerTest {
         assertEquals(INVALID_REPLICATION_FACTOR.code(), result3.response().topics().find("baz").errorCode());
         assertEquals(Collections.emptyList(), result3.records());
 
-        // Test request with all topics together.
+        // Test request with multiple topics together.
         CreateTopicsRequestData request4 = new CreateTopicsRequestData();
         String batchedTopic1 = "batched-topic-1";
         request4.topics().add(new CreatableTopic().setName(batchedTopic1)
