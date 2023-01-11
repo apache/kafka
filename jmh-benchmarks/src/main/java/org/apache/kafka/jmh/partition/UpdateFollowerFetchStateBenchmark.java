@@ -28,7 +28,6 @@ import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
-import kafka.utils.KafkaScheduler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
@@ -38,6 +37,7 @@ import org.apache.kafka.server.log.internals.CleanerConfig;
 import org.apache.kafka.server.log.internals.LogConfig;
 import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 import org.apache.kafka.server.log.internals.LogOffsetMetadata;
+import org.apache.kafka.server.util.KafkaScheduler;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -73,7 +73,7 @@ public class UpdateFollowerFetchStateBenchmark {
     private TopicPartition topicPartition = new TopicPartition(UUID.randomUUID().toString(), 0);
     private Option<Uuid> topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
     private File logDir = new File(System.getProperty("java.io.tmpdir"), topicPartition.toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, "scheduler", true);
+    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
     private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
     private long nextOffset = 0;
@@ -146,7 +146,7 @@ public class UpdateFollowerFetchStateBenchmark {
     }
 
     @TearDown(Level.Trial)
-    public void tearDown() {
+    public void tearDown() throws InterruptedException {
         logManager.shutdown();
         scheduler.shutdown();
     }

@@ -1921,6 +1921,7 @@ project(':streams') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j
     testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
@@ -2057,6 +2058,7 @@ project(':streams:streams-scala') {
 
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':streams').sourceSets.test.output
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
