@@ -371,8 +371,7 @@ class KafkaServer(
           lifecycleManager = new BrokerLifecycleManager(config,
             time,
             threadNamePrefix,
-            isZkBroker = true,
-            () => kafkaController.brokerEpoch)
+            isZkBroker = true)
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
           val kraftMetaProps = MetaProperties(zkMetaProperties.clusterId, zkMetaProperties.brokerId)
@@ -788,7 +787,7 @@ class KafkaServer(
 
       _brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
 
-      if (config.migrationEnabled && lifecycleManager != null) {
+      if (config.migrationEnabled && lifecycleManager != null && metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])) {
         // TODO KAFKA-14447 Only use KRaft controlled shutdown (when in migration mode)
         // For now we'll send the heartbeat with WantShutDown set so the KRaft controller can see a broker
         // shutting down without waiting for the heartbeat to time out.
@@ -802,7 +801,6 @@ class KafkaServer(
           case e: Throwable =>
             error("Got unexpected exception waiting for controlled shutdown future", e)
         }
-        // TODO fix this ^
       }
 
       val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
