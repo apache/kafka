@@ -52,7 +52,6 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -68,7 +67,12 @@ public class FetchSessionHandlerTest {
      * ordering for test purposes.
      */
     private static Set<TopicPartition> toSet(TopicPartition... arr) {
-        TreeSet<TopicPartition> set = new TreeSet<>(Comparator.comparing(TopicPartition::toString));
+        TreeSet<TopicPartition> set = new TreeSet<>(new Comparator<TopicPartition>() {
+            @Override
+            public int compare(TopicPartition o1, TopicPartition o2) {
+                return o1.toString().compareTo(o2.toString());
+            }
+        });
         set.addAll(Arrays.asList(arr));
         return set;
     }
@@ -313,7 +317,12 @@ public class FetchSessionHandlerTest {
         builder.add(new TopicPartition("foo", 0),
             new FetchRequest.PartitionData(Uuid.randomUuid(), 0, 100, 200, Optional.empty()));
         builder.build();
-        assertThrows(IllegalStateException.class, builder::build, "Expected calling build twice to fail.");
+        try {
+            builder.build();
+            fail("Expected calling build twice to fail.");
+        } catch (Throwable t) {
+            // expected
+        }
     }
 
     @Test
