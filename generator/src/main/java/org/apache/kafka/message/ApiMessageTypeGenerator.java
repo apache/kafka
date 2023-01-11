@@ -332,14 +332,14 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             String name = apiData.name();
             buffer.printf("case %d: // %s%n", apiKey, MessageGenerator.capitalizeFirst(name));
             buffer.incrementIndent();
-            if (type.equals("response") && apiKey == 18) {
+            if ("response".equals(type) && apiKey == 18) {
                 buffer.printf("// ApiVersionsResponse always includes a v0 header.%n");
                 buffer.printf("// See KIP-511 for details.%n");
                 buffer.printf("return (short) 0;%n");
                 buffer.decrementIndent();
                 continue;
             }
-            if (type.equals("request") && apiKey == 7) {
+            if ("request".equals(type) && apiKey == 7) {
                 buffer.printf("// Version 0 of ControlledShutdownRequest has a non-standard request header%n");
                 buffer.printf("// which does not include clientId.  Version 1 of ControlledShutdownRequest%n");
                 buffer.printf("// and later use the standard request header.%n");
@@ -351,9 +351,9 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             }
             ApiData data = entry.getValue();
             MessageSpec spec = null;
-            if (type.equals("request")) {
+            if ("request".equals(type)) {
                 spec = data.requestSpec;
-            } else if (type.equals("response")) {
+            } else if ("response".equals(type)) {
                 spec = data.responseSpec;
             } else {
                 throw new RuntimeException("Invalid type " + type + " for generateHeaderVersion");
@@ -364,14 +364,14 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             VersionConditional.forVersions(spec.flexibleVersions(),
                 spec.validVersions()).
                 ifMember(__ -> {
-                    if (type.equals("request")) {
+                    if ("request".equals(type)) {
                         buffer.printf("return (short) 2;%n");
                     } else {
                         buffer.printf("return (short) 1;%n");
                     }
                 }).
                 ifNotMember(__ -> {
-                    if (type.equals("request")) {
+                    if ("request".equals(type)) {
                         buffer.printf("return (short) 1;%n");
                     } else {
                         buffer.printf("return (short) 0;%n");

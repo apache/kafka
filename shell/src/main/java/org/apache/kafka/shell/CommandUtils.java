@@ -83,11 +83,11 @@ public final class CommandUtils {
     public static List<String> stripDotPathComponents(List<String> input) {
         List<String> output = new ArrayList<>();
         for (String string : input) {
-            if (string.equals("..")) {
+            if ("..".equals(string)) {
                 if (output.size() > 0) {
                     output.remove(output.size() - 1);
                 }
-            } else if (!string.equals(".")) {
+            } else if (!".".equals(string)) {
                 output.add(string);
             }
         }

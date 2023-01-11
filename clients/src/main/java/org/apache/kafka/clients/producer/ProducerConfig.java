@@ -562,7 +562,7 @@ public class ProducerConfig extends AbstractConfig {
 
     private static String parseAcks(String acksString) {
         try {
-            return acksString.trim().equalsIgnoreCase("all") ? "-1" : Short.parseShort(acksString.trim()) + "";
+            return "all".equalsIgnoreCase(acksString.trim()) ? "-1" : Short.parseShort(acksString.trim()) + "";
         } catch (NumberFormatException e) {
             throw new ConfigException("Invalid configuration value for 'acks': " + acksString);
         }

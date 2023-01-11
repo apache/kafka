@@ -72,7 +72,7 @@ public class ProducerPerformance {
             boolean transactionsEnabled =  0 < transactionDurationMs;
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
-            String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
+            String payloadDelimiter = "\\n".equals(res.getString("payloadDelimiter")) ? "\n" : res.getString("payloadDelimiter");
 
             if (producerProps == null && producerConfig == null) {
                 throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);

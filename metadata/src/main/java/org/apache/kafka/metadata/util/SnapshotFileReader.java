@@ -169,7 +169,7 @@ public final class SnapshotFileReader implements AutoCloseable {
     }
 
     public void beginShutdown(String reason) {
-        if (reason.equals("done")) {
+        if ("done".equals(reason)) {
             caughtUpFuture.complete(null);
         } else {
             caughtUpFuture.completeExceptionally(new RuntimeException(reason));

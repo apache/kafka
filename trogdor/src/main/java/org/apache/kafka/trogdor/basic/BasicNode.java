@@ -52,9 +52,9 @@ public class BasicNode implements Node {
             Map.Entry<String, JsonNode> entry = iter.next();
             String key = entry.getKey();
             JsonNode node = entry.getValue();
-            if (key.equals("hostname")) {
+            if ("hostname".equals(key)) {
                 hostname = node.asText();
-            } else if (key.equals("tags")) {
+            } else if ("tags".equals(key)) {
                 if (!node.isArray()) {
                     throw new RuntimeException("Expected the 'tags' field to be an " +
                         "array of strings.");

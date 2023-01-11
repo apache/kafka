@@ -289,9 +289,9 @@ public final class FieldSpec {
         if (type instanceof FieldType.BoolFieldType) {
             if (fieldDefault.isEmpty()) {
                 return "false";
-            } else if (fieldDefault.equalsIgnoreCase("true")) {
+            } else if ("true".equalsIgnoreCase(fieldDefault)) {
                 return "true";
-            } else if (fieldDefault.equalsIgnoreCase("false")) {
+            } else if ("false".equalsIgnoreCase(fieldDefault)) {
                 return "false";
             } else {
                 throw new RuntimeException("Invalid default for boolean field " +
@@ -421,14 +421,14 @@ public final class FieldSpec {
                 return "Double.parseDouble(\"" + fieldDefault + "\")";
             }
         } else if (type instanceof FieldType.StringFieldType) {
-            if (fieldDefault.equals("null")) {
+            if ("null".equals(fieldDefault)) {
                 validateNullDefault();
                 return "null";
             } else {
                 return "\"" + fieldDefault + "\"";
             }
         } else if (type.isBytes()) {
-            if (fieldDefault.equals("null")) {
+            if ("null".equals(fieldDefault)) {
                 validateNullDefault();
                 return "null";
             } else if (!fieldDefault.isEmpty()) {
@@ -456,7 +456,7 @@ public final class FieldSpec {
             }
             return "new " + type.toString() + "()";
         } else if (type.isArray()) {
-            if (fieldDefault.equals("null")) {
+            if ("null".equals(fieldDefault)) {
                 validateNullDefault();
                 return "null";
             } else if (!fieldDefault.isEmpty()) {
@@ -584,7 +584,7 @@ public final class FieldSpec {
                                       Versions nullableVersions) {
         String fieldDefault = fieldDefault(headerGenerator, structRegistry);
         if (type().isArray()) {
-            if (fieldDefault.equals("null")) {
+            if ("null".equals(fieldDefault)) {
                 buffer.printf("if (%s%s != null) {%n", fieldPrefix, camelCaseName());
             } else if (nullableVersions.empty()) {
                 buffer.printf("if (!%s%s.isEmpty()) {%n", fieldPrefix, camelCaseName());
@@ -593,7 +593,7 @@ public final class FieldSpec {
                     fieldPrefix, camelCaseName(), fieldPrefix, camelCaseName());
             }
         } else if (type().isBytes()) {
-            if (fieldDefault.equals("null")) {
+            if ("null".equals(fieldDefault)) {
                 buffer.printf("if (%s%s != null) {%n", fieldPrefix, camelCaseName());
             } else if (nullableVersions.empty()) {
                 if (zeroCopy()) {
@@ -613,7 +613,7 @@ public final class FieldSpec {
                 }
             }
         } else if (type().isString() || type().isStruct() || type() instanceof FieldType.UUIDFieldType) {
-            if (fieldDefault.equals("null")) {
+            if ("null".equals(fieldDefault)) {
                 buffer.printf("if (%s%s != null) {%n", fieldPrefix, camelCaseName());
             } else if (nullableVersions.empty()) {
                 buffer.printf("if (!%s%s.equals(%s)) {%n",
@@ -625,7 +625,7 @@ public final class FieldSpec {
             }
         } else if (type() instanceof FieldType.BoolFieldType) {
             buffer.printf("if (%s%s%s) {%n",
-                fieldDefault.equals("true") ? "!" : "",
+                "true".equals(fieldDefault) ? "!" : "",
                 fieldPrefix, camelCaseName());
         } else {
             buffer.printf("if (%s%s != %s) {%n",

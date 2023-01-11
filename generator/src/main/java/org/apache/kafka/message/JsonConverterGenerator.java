@@ -308,7 +308,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                             field.generateNonDefaultValueCheck(headerGenerator,
                                 structRegistry, buffer, "_object.", field.nullableVersions());
                             buffer.incrementIndent();
-                            if (field.defaultString().equals("null")) {
+                            if ("null".equals(field.defaultString())) {
                                 // If the default was null, and we already checked that this field was not
                                 // the default, we can omit further null checks.
                                 generateTargetToJson(target.nonNullableCopy(), presentAndTaggedVersions);

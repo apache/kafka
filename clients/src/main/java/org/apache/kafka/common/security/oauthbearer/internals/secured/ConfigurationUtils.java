@@ -176,7 +176,7 @@ public class ConfigurationUtils {
 
         protocol = protocol.toLowerCase(Locale.ROOT);
 
-        if (!(protocol.equals("http") || protocol.equals("https") || protocol.equals("file")))
+        if (!("http".equals(protocol) || "https".equals(protocol) || "file".equals(protocol)))
             throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", name, value, protocol));
 
         return url;

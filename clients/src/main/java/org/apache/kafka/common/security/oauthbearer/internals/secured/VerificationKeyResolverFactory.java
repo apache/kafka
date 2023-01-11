@@ -57,7 +57,7 @@ public class VerificationKeyResolverFactory {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
-        if (jwksEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
+        if ("file".equals(jwksEndpointUrl.getProtocol().toLowerCase(Locale.ROOT))) {
             Path p = cu.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
             return new JwksFileVerificationKeyResolver(p);
         } else {
