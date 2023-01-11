@@ -80,7 +80,6 @@ class LogManager(logDirs: Seq[File],
 
   import LogManager._
 
-  val LockFile = ".lock"
   val InitialTaskDelayMs = 30 * 1000
 
   private val logCreationOrDeletionLock = new Object
@@ -242,7 +241,7 @@ class LogManager(logDirs: Seq[File],
   private def lockLogDirs(dirs: Seq[File]): Seq[FileLock] = {
     dirs.flatMap { dir =>
       try {
-        val lock = new FileLock(new File(dir, LockFile))
+        val lock = new FileLock(new File(dir, LockFileName))
         if (!lock.tryLock())
           throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParent +
             ". A Kafka instance in another process or thread is using this directory.")
@@ -1334,6 +1333,7 @@ class LogManager(logDirs: Seq[File],
 }
 
 object LogManager {
+  val LockFileName = ".lock"
 
   /**
    * Wait all jobs to complete

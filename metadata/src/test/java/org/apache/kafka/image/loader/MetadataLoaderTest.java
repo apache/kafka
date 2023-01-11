@@ -28,6 +28,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -412,7 +413,7 @@ public class MetadataLoaderTest {
             assertEquals(400L, loader.lastAppliedOffset());
         }
         assertTrue(publishers.get(0).closed);
-        assertEquals(new LogDeltaManifest(new MetadataProvenance(400, 100, 4000), 1,
+        assertEquals(new LogDeltaManifest(new MetadataProvenance(400, 100, 4000), LeaderAndEpoch.UNKNOWN, 1,
                         3000000L, 10),
             publishers.get(0).latestLogDeltaManifest);
         assertEquals(MetadataVersion.IBP_3_3_IV1,

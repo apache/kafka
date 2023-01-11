@@ -103,10 +103,16 @@ class RawMetaProperties(val props: Properties = new Properties()) {
 
 object MetaProperties {
   def parse(properties: RawMetaProperties): MetaProperties = {
-    properties.requireVersion(expectedVersion = 1)
     val clusterId = require(ClusterIdKey, properties.clusterId)
-    val nodeId = require(NodeIdKey, properties.nodeId)
-    new MetaProperties(clusterId, nodeId)
+    if (properties.version == 1) {
+      val nodeId = require(NodeIdKey, properties.nodeId)
+      new MetaProperties(clusterId, nodeId)
+    } else if (properties.version == 0) {
+      val brokerId = require(BrokerIdKey, properties.brokerId)
+      new MetaProperties(clusterId, brokerId)
+    } else {
+      throw new RuntimeException(s"Expected version 0 or 1, but got version ${properties.version}")
+    }
   }
 
   def require[T](key: String, value: Option[T]): T = {
@@ -182,7 +188,8 @@ object BrokerMetadataCheckpoint extends Logging {
     if (brokerMetadataMap.isEmpty) {
       (new RawMetaProperties(), offlineDirs)
     } else {
-      val numDistinctMetaProperties = brokerMetadataMap.values.toSet.size
+      val parsedProperties = brokerMetadataMap.values.map(props => MetaProperties.parse(new RawMetaProperties(props)))
+      val numDistinctMetaProperties = parsedProperties.toSet.size
       if (numDistinctMetaProperties > 1) {
         val builder = new StringBuilder
 

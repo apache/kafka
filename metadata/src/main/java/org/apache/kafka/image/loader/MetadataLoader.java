@@ -359,6 +359,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         long elapsedNs = time.nanoseconds() - startNs;
         metrics.updateBatchProcessingTime(elapsedNs);
         return new LogDeltaManifest(provenance,
+                currentLeaderAndEpoch,
                 numBatches,
                 elapsedNs,
                 numBytes);

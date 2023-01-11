@@ -192,6 +192,10 @@ class KafkaServer(
 
   var lifecycleManager: BrokerLifecycleManager = _
 
+  @volatile var brokerEpochManager: ZkBrokerEpochManager = _
+
+  def brokerEpochSupplier(): Long = Option(brokerEpochManager).map(_.get()).getOrElse(-1)
+
   /**
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
@@ -209,11 +213,6 @@ class KafkaServer(
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
         _brokerState = BrokerState.STARTING
-
-        lifecycleManager = new BrokerLifecycleManager(config,
-          time,
-          threadNamePrefix,
-          isZkBroker = true)
 
         /* setup zookeeper */
         initZkClient(time)
@@ -348,7 +347,7 @@ class KafkaServer(
             time = time,
             metrics = metrics,
             threadNamePrefix = threadNamePrefix,
-            brokerEpochSupplier = () => kafkaController.brokerEpoch
+            brokerEpochSupplier = brokerEpochSupplier
           )
         } else {
           AlterPartitionManager(kafkaScheduler, time, zkClient)
@@ -366,7 +365,22 @@ class KafkaServer(
         val zkMetaProperties = ZkMetaProperties(clusterId, config.brokerId)
         checkpointBrokerMetadata(zkMetaProperties)
 
+        /* start token manager */
+        tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
+        tokenManager.startup()
+
+        /* start kafka controller */
+        _kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, metadataCache, threadNamePrefix)
+        kafkaController.startup()
+
         if (config.migrationEnabled) {
+          logger.info("Starting up additional components for ZooKeeper migration")
+          lifecycleManager = new BrokerLifecycleManager(config,
+            time,
+            threadNamePrefix,
+            isZkBroker = true,
+            () => kafkaController.brokerEpoch)
+
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
           val kraftMetaProps = MetaProperties(zkMetaProperties.clusterId, zkMetaProperties.brokerId)
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
@@ -396,6 +410,7 @@ class KafkaServer(
 
           val listener = new OffsetTrackingListener()
           raftManager.register(listener)
+          raftManager.startup()
 
           val networkListeners = new ListenerCollection()
           config.effectiveAdvertisedListeners.foreach { ep =>
@@ -419,17 +434,12 @@ class KafkaServer(
             networkListeners,
             ibpAsFeature
           )
-
-          raftManager.startup()
+          logger.debug("Start RaftManager")
         }
 
-        /* start token manager */
-        tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
-        tokenManager.startup()
-
-        /* start kafka controller */
-        _kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, metadataCache, threadNamePrefix)
-        kafkaController.startup()
+        // Used by ZK brokers during a KRaft migration. When talking to a KRaft controller, we need to use the epoch
+        // from BrokerLifecycleManager rather than ZK (via KafkaController)
+        brokerEpochManager = new ZkBrokerEpochManager(metadataCache, kafkaController, Option(lifecycleManager))
 
         adminManager = new ZkAdminManager(config, metrics, metadataCache, zkClient)
 
@@ -442,7 +452,7 @@ class KafkaServer(
         val producerIdManager = if (config.interBrokerProtocolVersion.isAllocateProducerIdsSupported) {
           ProducerIdManager.rpc(
             config.brokerId,
-            brokerEpochSupplier = () => kafkaController.brokerEpoch,
+            brokerEpochSupplier = brokerEpochSupplier,
             clientToControllerChannelManager,
             config.requestTimeoutMs
           )
@@ -490,7 +500,7 @@ class KafkaServer(
         remoteLogManager.foreach(_.startup())
 
         /* start processing requests */
-        val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache)
+        val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache, brokerEpochManager)
 
         def createKafkaApis(requestChannel: RequestChannel): KafkaApis = new KafkaApis(
           requestChannel = requestChannel,
@@ -655,7 +665,7 @@ class KafkaServer(
         metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])) {
         info("ZkBroker currently has a KRaft controller. Controlled shutdown will be handled " +
           "through broker life cycle manager")
-        return false
+        return true
       }
       val metadataUpdater = new ManualMetadataUpdater()
       val networkClient = {
@@ -808,6 +818,15 @@ class KafkaServer(
         // shutting down without waiting for the heartbeat to time out.
         info("Notifying KRaft of controlled shutdown")
         lifecycleManager.beginControlledShutdown()
+        try {
+          lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)
+        } catch {
+          case _: TimeoutException =>
+            error("Timed out waiting for the controller to approve controlled shutdown")
+          case e: Throwable =>
+            error("Got unexpected exception waiting for controlled shutdown future", e)
+        }
+        // TODO fix this ^
       }
 
       val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)

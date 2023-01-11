@@ -1442,8 +1442,8 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
   @Test
   def testFailToUpdateMigrationZNode(): Unit = {
-    val (_, stat) = zkClient.getControllerEpoch.get
-    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, stat.getVersion)
+    val (controllerEpoch, stat) = zkClient.getControllerEpoch.get
+    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, controllerEpoch, stat.getVersion)
     migrationState = zkClient.getOrCreateMigrationState(migrationState)
     assertEquals(0, migrationState.migrationZkVersion())
 
@@ -1455,7 +1455,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
       CreateRequest("/foo", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
     )
 
-    migrationState = migrationState.withControllerZkVersion(stat.getVersion)
+    migrationState = migrationState.withZkController(controllerEpoch, stat.getVersion)
     zkClient.retryMigrationRequestsUntilConnected(requests_bad, migrationState) match {
       case (zkVersion: Int, requests: Seq[AsyncRequest#Response]) =>
         assertEquals(0, zkVersion)
@@ -1477,7 +1477,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
       CreateRequest("/foo/bar/eggs", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
     )
 
-    migrationState = migrationState.withControllerZkVersion(stat.getVersion)
+    migrationState = migrationState.withZkController(controllerEpoch, stat.getVersion)
     zkClient.retryMigrationRequestsUntilConnected(requests_good, migrationState) match {
       case (zkVersion: Int, requests: Seq[AsyncRequest#Response]) =>
         assertEquals(1, zkVersion)
