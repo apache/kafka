@@ -57,7 +57,6 @@ public class KerberosLogin extends AbstractLogin {
     private boolean isUsingTicketCache;
 
     private String principal;
-    private AuthenticateCallbackHandler callbackHandler;
 
     // LoginThread will sleep until 80% of time from last refresh to
     // ticket's expiry has been reached, at which time it will wake
@@ -91,7 +90,6 @@ public class KerberosLogin extends AbstractLogin {
         this.minTimeBeforeRelogin = (Long) configs.get(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN);
         this.kinitCmd = (String) configs.get(SaslConfigs.SASL_KERBEROS_KINIT_CMD);
         this.serviceName = getServiceName(configs, contextName, configuration);
-        this.callbackHandler = callbackHandler;
     }
 
     /**
@@ -371,7 +369,7 @@ public class KerberosLogin extends AbstractLogin {
             }
             //login and also update the subject field of this instance to
             //have the new credentials (pass it to the LoginContext constructor)
-            loginContext = new LoginContext(contextName(), subject, callbackHandler, configuration());
+            loginContext = new LoginContext(contextName(), subject, loginCallbackHandler(), configuration());
             log.info("Initiating re-login for {}", principal);
             login(loginContext);
         }
@@ -387,6 +385,16 @@ public class KerberosLogin extends AbstractLogin {
         loginContext.logout();
     }
 
+    // Visibility to override for testing
+    protected AuthenticateCallbackHandler loginCallbackHandler() {
+        return super.loginCallbackHandler();
+    }    
+
+    // Visibility to override for testing
+    protected LoginContext loginContext() {
+        return loginContext;
+    }    
+    
     private long currentElapsedTime() {
         return time.hiResClockMs();
     }
