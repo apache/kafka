@@ -16,7 +16,8 @@
 {
   "type": "data",
   "name": "QuorumStateData",
-  "validVersions": "0",
+  // Version 1 removes clusterId field.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     {"name": "LeaderId", "type": "int32", "versions": "0+", "default": "-1"},

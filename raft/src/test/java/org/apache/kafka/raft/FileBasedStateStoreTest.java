@@ -16,6 +16,14 @@
  */
 package org.apache.kafka.raft;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedWriter;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -88,6 +96,43 @@ public class FileBasedStateStoreTest {
 
         stateStore.clear();
         assertFalse(stateFile.exists());
+    }
+
+    @Test
+    public void testCompatibilityWithClusterId() throws IOException {
+        final File stateFile = TestUtils.tempFile();
+        stateStore = new FileBasedStateStore(stateFile);
+
+        // We initialized a state from the metadata log
+        assertTrue(stateFile.exists());
+
+        String jsonString = "{\"clusterId\":\"abc\",\"leaderId\":0,\"leaderEpoch\":0,\"votedId\":-1,\"appliedOffset\":0,\"currentVoters\":[],\"data_version\":0}";
+        writeToStateFile(stateFile, jsonString);
+
+        // verify that we can read the state file that contains the removed "cluserId" field.
+        assertEquals(stateStore.readElectionState(), new ElectionState(0,
+                OptionalInt.of(0), OptionalInt.empty(), Collections.emptySet()));
+
+        stateStore.clear();
+        assertFalse(stateFile.exists());
+    }
+
+    private void writeToStateFile(final File stateFile, String jsonString) {
+        try (final FileOutputStream fileOutputStream = new FileOutputStream(stateFile);
+             final BufferedWriter writer = new BufferedWriter(
+                     new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode node = mapper.readTree(jsonString);
+
+            writer.write(node.toString());
+            writer.flush();
+            fileOutputStream.getFD().sync();
+
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                    String.format("Error while writing to Quorum state file %s",
+                            stateFile.getAbsolutePath()), e);
+        }
     }
 
     @AfterEach
