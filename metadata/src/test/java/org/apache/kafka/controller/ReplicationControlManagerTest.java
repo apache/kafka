@@ -582,7 +582,7 @@ public class ReplicationControlManagerTest {
         assertEquals((short) 0, result1.response().topics().find("foo").errorCode());
 
         List<ApiMessageAndVersion> records1 = result1.records();
-        assertTrue(records1.size() == 3);
+        assertEquals(3, records1.size());
         ApiMessageAndVersion record0 = records1.get(0);
         assertEquals(TopicRecord.class, record0.message().getClass());
 
