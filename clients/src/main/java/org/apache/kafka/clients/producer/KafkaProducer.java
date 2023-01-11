@@ -1472,7 +1472,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Callbacks that are called by the RecordAccumulator append functions:
      *  - user callback
-     *  - interceptor callbacks
+     *  - interceptor callback
      *  - partition callback
      */
     private class AppendCallbacks<K, V> implements RecordAccumulator.AppendCallbacks {
