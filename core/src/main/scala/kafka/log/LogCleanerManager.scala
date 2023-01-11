@@ -321,7 +321,14 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *  Check if the cleaning for a partition is in a particular state. The caller is expected to hold lock while making the call.
    */
   private def isCleaningInState(topicPartition: TopicPartition, expectedState: LogCleaningState): Boolean = {
-    inProgress.get(topicPartition).contains(expectedState)
+    inProgress.get(topicPartition) match {
+      case None => false
+      case Some(state) =>
+        if (state == expectedState)
+          true
+        else
+          false
+    }
   }
 
   /**

@@ -1514,7 +1514,10 @@ class ReplicaManager(val config: KafkaConfig,
    * @return true if the request topic id is consistent, false otherwise
    */
   private def hasConsistentTopicId(requestTopicIdOpt: Option[Uuid], logTopicIdOpt: Option[Uuid]): Boolean = {
-    requestTopicIdOpt.forall(requestTopicId => logTopicIdOpt.isEmpty || logTopicIdOpt.contains(requestTopicId))
+    requestTopicIdOpt match {
+      case None => true
+      case Some(requestTopicId) => logTopicIdOpt.isEmpty || logTopicIdOpt.contains(requestTopicId)
+    }
   }
 
   /**

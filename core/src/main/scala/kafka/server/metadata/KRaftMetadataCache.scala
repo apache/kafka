@@ -364,7 +364,10 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     _currentImage.topics().topicsByName().containsKey(topicName)
 
   override def contains(tp: TopicPartition): Boolean = {
-    Option(_currentImage.topics().getTopic(tp.topic())).exists(topic => topic.partitions().containsKey(tp.partition()))
+    Option(_currentImage.topics().getTopic(tp.topic())) match {
+      case None => false
+      case Some(topic) => topic.partitions().containsKey(tp.partition())
+    }
   }
 
   def setImage(newImage: MetadataImage): Unit = _currentImage = newImage
