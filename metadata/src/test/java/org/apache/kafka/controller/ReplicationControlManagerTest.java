@@ -582,14 +582,14 @@ public class ReplicationControlManagerTest {
         assertEquals((short) 0, result1.response().topics().find("foo").errorCode());
 
         List<ApiMessageAndVersion> records1 = result1.records();
-        assertTrue(records1.size() >= 3);
+        assertTrue(records1.size() == 3);
         ApiMessageAndVersion record0 = records1.get(0);
         assertEquals(TopicRecord.class, record0.message().getClass());
 
         ApiMessageAndVersion record1 = records1.get(1);
         assertEquals(ConfigRecord.class, record1.message().getClass());
 
-        ApiMessageAndVersion lastRecord = records1.get(records1.size() - 1);
+        ApiMessageAndVersion lastRecord = records1.get(2);
         assertEquals(PartitionRecord.class, lastRecord.message().getClass());
 
         ctx.replay(result1.records());
@@ -626,7 +626,36 @@ public class ReplicationControlManagerTest {
         ControllerResult<CreateTopicsResponseData> result3 =
             replicationControl.createTopics(request3, Collections.singleton("baz"));
         assertEquals(INVALID_REPLICATION_FACTOR.code(), result3.response().topics().find("baz").errorCode());
-        assertEquals(0, result3.records().size());
+        assertEquals(Collections.emptyList(), result3.records());
+
+        // Test request with all topics together.
+        CreateTopicsRequestData request4 = new CreateTopicsRequestData();
+        String batchedTopic1 = "batched-topic-1";
+        request4.topics().add(new CreatableTopic().setName(batchedTopic1)
+            .setNumPartitions(-1).setReplicationFactor((short) -1)
+            .setConfigs(validConfigs));
+        String batchedTopic2 = "batched-topic2";
+        request4.topics().add(new CreatableTopic().setName(batchedTopic2)
+            .setNumPartitions(-1).setReplicationFactor((short) -2)
+            .setConfigs(validConfigs));
+
+        Set<String> request4Topics = new HashSet<>();
+        request4Topics.add(batchedTopic1);
+        request4Topics.add(batchedTopic2);
+        ControllerResult<CreateTopicsResponseData> result4 =
+            replicationControl.createTopics(request4, request4Topics);
+
+        assertEquals(Errors.NONE.code(), result4.response().topics().find(batchedTopic1).errorCode());
+        assertEquals(INVALID_REPLICATION_FACTOR.code(), result4.response().topics().find(batchedTopic2).errorCode());
+
+        assertEquals(3, result4.records().size());
+        assertEquals(TopicRecord.class, result4.records().get(0).message().getClass());
+        TopicRecord batchedTopic1Record = (TopicRecord) result4.records().get(0).message();
+        assertEquals(batchedTopic1, batchedTopic1Record.name());
+        assertEquals(ConfigRecord.class, result4.records().get(1).message().getClass());
+        assertEquals(batchedTopic1, ((ConfigRecord) result4.records().get(1).message()).resourceName());
+        assertEquals(PartitionRecord.class, result4.records().get(2).message().getClass());
+        assertEquals(batchedTopic1Record.topicId(), ((PartitionRecord) result4.records().get(2).message()).topicId());
     }
 
     @Test
