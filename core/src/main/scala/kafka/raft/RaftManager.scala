@@ -29,7 +29,6 @@ import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.CoreUtils
 import kafka.utils.FileLock
-import kafka.utils.KafkaScheduler
 import kafka.utils.Logging
 import kafka.utils.ShutdownableThread
 import kafka.utils.timer.SystemTimer
@@ -47,6 +46,8 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
 import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.server.util.KafkaScheduler
+
 import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
@@ -138,7 +139,7 @@ class KafkaRaftManager[T](
   private val logContext = new LogContext(s"[RaftManager nodeId=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()
 
-  private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix + "-scheduler")
+  private val scheduler = new KafkaScheduler(1, true, threadNamePrefix + "-scheduler")
   scheduler.startup()
 
   private val dataDir = createDataDir()

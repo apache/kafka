@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kafka.controller.KafkaController
 import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
-import kafka.utils.{KafkaScheduler, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
@@ -34,6 +34,7 @@ import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -183,7 +184,7 @@ class DynamicBrokerConfigTest {
     props.put(KafkaConfig.BackgroundThreadsProp, "6")
     config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(6, config.backgroundThreads)
-    Mockito.verify(schedulerMock).resizeThreadPool(newSize = 6)
+    Mockito.verify(schedulerMock).resizeThreadPool(6)
 
     Mockito.verifyNoMoreInteractions(
       handlerPoolMock,
