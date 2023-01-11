@@ -470,7 +470,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestHelper.sendMaybeThrottle(request, responseBuilder.build())
         CompletableFuture.completedFuture(())
       } else if (request.header.apiVersion == 0) {
-        // For version 0, always store offsets to ZK.
+        // For version 0, always store offsets in ZK.
         commitOffsetsToZookeeper(
           request,
           offsetCommitRequest,
@@ -478,7 +478,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           responseBuilder
         )
       } else {
-        // For version > 0, store offsets to Coordinator.
+        // For version > 0, store offsets in Coordinator.
         commitOffsetsToCoordinator(
           request,
           offsetCommitRequest,
