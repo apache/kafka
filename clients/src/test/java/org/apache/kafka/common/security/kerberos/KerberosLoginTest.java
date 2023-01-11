@@ -32,68 +32,70 @@ import org.junit.jupiter.api.Test;
 
 public class KerberosLoginTest {
 	/*
-	 * KerberosLogin class should reuse the same callbackHandler for reLogin() as was used for login().
+	 * KerberosLogin class should reuse the same callbackHandler for reLogin() as
+	 * was used for login().
 	 */
-    @Test
+	@Test
     public void testReuseCallbackDuringRelogin() throws Exception {
-    	KerberosLogin kl = new KerberosLogin();
-    	
-    	HashMap<String, Object> configs = new HashMap<>();
-    	configs.put(SaslConfigs.SASL_KERBEROS_SERVICE_NAME,"test");
-    	configs.put(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR,0.5);
-    	configs.put(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER,0.5);
-    	configs.put(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN,100l);
-    	
-    	Configuration configuration = new TestConfiguration();
-    	AuthenticateCallbackHandler callbackHandler = new TestAuthenticateCallbackHandler();
-    	
-    	kl.configure(configs, "dummy", configuration, callbackHandler);
-    	
-    	AuthenticateCallbackHandler storedCallbackHandler = (AuthenticateCallbackHandler) getFieldViaReflection(kl,"loginCallbackHandler");
-    	assertSame(callbackHandler,storedCallbackHandler);
-    	
-    	setFieldViaReflection(kl,"isKrbTicket",true);
-    	setFieldViaReflection(kl,"loginContext",new TestLoginContext("dummy"));
-    	
-    	LoginContext lctxBeforeRelogin = (LoginContext) getFieldViaReflection(kl,"loginContext");
-    	
-    	try {
-    		kl.reLogin();
-    	} catch( Exception ex ) {
-    		// as expected -- all modules ignored
-    		// but the new login context should have been created with the callbackHandler at this point already
-    	}
-    	
-    	// login context must change
-    	LoginContext lctxAfterRelogin = (LoginContext) getFieldViaReflection(kl,"loginContext");
-    	assertNotSame(lctxAfterRelogin, lctxBeforeRelogin);
-    	
-    	// but the callbackHandler should be the same
-    	CallbackHandler ch = (CallbackHandler) getFieldViaReflection(lctxAfterRelogin,"callbackHandler");
-    	assertSame(callbackHandler,ch);
+        KerberosLogin kl = new KerberosLogin();
+
+        HashMap<String, Object> configs = new HashMap<>();
+        configs.put(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, "test");
+        configs.put(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR, 0.5);
+        configs.put(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER, 0.5);
+        configs.put(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN, 100L);
+
+        Configuration configuration = new TestConfiguration();
+        AuthenticateCallbackHandler callbackHandler = new TestAuthenticateCallbackHandler();
+
+        kl.configure(configs, "dummy", configuration, callbackHandler);
+
+        AuthenticateCallbackHandler storedCallbackHandler = (AuthenticateCallbackHandler) getFieldViaReflection(kl, "loginCallbackHandler");
+        assertSame(callbackHandler, storedCallbackHandler);
+
+        setFieldViaReflection(kl, "isKrbTicket", true);
+        setFieldViaReflection(kl, "loginContext", new TestLoginContext("dummy"));
+
+        LoginContext lctxBeforeRelogin = (LoginContext) getFieldViaReflection(kl, "loginContext");
+
+        try {
+            kl.reLogin();
+		} catch (Exception ex) {
+            // as expected -- all modules ignored
+            // but the new login context should have been created with the callbackHandler
+            // at this point already
+        }
+
+        // login context must change
+        LoginContext lctxAfterRelogin = (LoginContext) getFieldViaReflection(kl, "loginContext");
+        assertNotSame(lctxAfterRelogin, lctxBeforeRelogin);
+
+        // but the callbackHandler should be the same
+        CallbackHandler ch = (CallbackHandler) getFieldViaReflection(lctxAfterRelogin, "callbackHandler");
+        assertSame(callbackHandler, ch);
     }
 
-	private void setFieldViaReflection(Object kl, String name, Object val) throws Exception {
-		Class clz = kl.getClass();
-		
-		Field field = clz.getDeclaredField(name);
-		field.setAccessible(true);
-		field.set(kl, val);
+    private void setFieldViaReflection(Object kl, String name, Object val) throws Exception {
+        Class clz = kl.getClass();
+
+        Field field = clz.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(kl, val);
 	}
-	
-	private Object getFieldViaReflection(Object kl, String name) throws Exception {
-		Class clz = kl.getClass();
-		
-		Field field = null;
-		while(field == null && clz != null) {
-			try {
-				field = clz.getDeclaredField(name);
-			} catch(NoSuchFieldException ex) {
-				clz = clz.getSuperclass();
-			}
-		}
-		
-		field.setAccessible(true);
-		return field.get(kl);
-	}
+
+    private Object getFieldViaReflection(Object kl, String name) throws Exception {
+        Class clz = kl.getClass();
+
+        Field field = null;
+        while (field == null && clz != null) {
+            try {
+                field = clz.getDeclaredField(name);
+            } catch (NoSuchFieldException ex) {
+                clz = clz.getSuperclass();
+            }
+        }
+
+        field.setAccessible(true);
+        return field.get(kl);
+    }
 }
