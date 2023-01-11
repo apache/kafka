@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConversionStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.server.log.internals.{AppendOrigin, LogConfig}
+import org.apache.kafka.server.util.MockScheduler
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.Mockito.{CALLS_REAL_METHODS, mock, withSettings}
 

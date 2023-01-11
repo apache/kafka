@@ -339,6 +339,5 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         private Stream<KafkaServer> servers() {
             return JavaConverters.asJavaCollection(clusterReference.get().servers()).stream();
         }
-
     }
 }

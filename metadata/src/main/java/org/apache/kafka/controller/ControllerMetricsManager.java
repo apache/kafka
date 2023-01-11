@@ -145,6 +145,7 @@ final class ControllerMetricsManager {
             case ACCESS_CONTROL_ENTRY_RECORD:
             case REMOVE_ACCESS_CONTROL_ENTRY_RECORD:
             case NO_OP_RECORD:
+            case ZK_MIGRATION_STATE_RECORD:
                 // These record types do not affect metrics
                 break;
             default:

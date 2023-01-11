@@ -39,15 +39,14 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,20 +72,19 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(600)
 @Category({IntegrationTest.class})
 public class LagFetchIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -102,12 +100,9 @@ public class LagFetchIntegrationTest {
     private String outputTopicName;
     private String stateStoreName;
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
-    public void before() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    @BeforeEach
+    public void before(final TestInfo testInfo) {
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         inputTopicName = "input-topic-" + safeTestName;
         outputTopicName = "output-topic-" + safeTestName;
         stateStoreName = "lagfetch-test-store" + safeTestName;
@@ -128,7 +123,7 @@ public class LagFetchIntegrationTest {
         consumerConfiguration.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class.getName());
     }
 
-    @After
+    @AfterEach
     public void shutdown() throws Exception {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
@@ -318,7 +313,7 @@ public class LagFetchIntegrationTest {
             IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
             Files.walk(stateDir.toPath()).sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
-                .forEach(f -> assertTrue("Some state " + f + " could not be deleted", f.delete()));
+                .forEach(f -> assertTrue(f.delete(), "Some state " + f + " could not be deleted"));
 
             // wait till the lag goes down to 0
             final KafkaStreams restartedStreams = new KafkaStreams(builder.build(), props);

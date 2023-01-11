@@ -62,6 +62,7 @@ import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.log.internals.{AppendOrigin, LogConfig, LogDirFailureChannel, LogOffsetMetadata, RecordValidationException}
+import org.apache.kafka.server.util.Scheduler
 
 import java.nio.file.{Files, Paths}
 import java.util
@@ -281,7 +282,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   def startHighWatermarkCheckPointThread(): Unit = {
     if (highWatermarkCheckPointThreadStarted.compareAndSet(false, true))
-      scheduler.schedule("highwatermark-checkpoint", checkpointHighWatermarks _, period = config.replicaHighWatermarkCheckpointIntervalMs, unit = TimeUnit.MILLISECONDS)
+      scheduler.schedule("highwatermark-checkpoint", () => checkpointHighWatermarks(), 0L, config.replicaHighWatermarkCheckpointIntervalMs)
   }
 
   // When ReplicaAlterDirThread finishes replacing a current replica with a future replica, it will
@@ -308,8 +309,8 @@ class ReplicaManager(val config: KafkaConfig,
   def startup(): Unit = {
     // start ISR expiration thread
     // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x 1.5 before it is removed from ISR
-    scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
-    scheduler.schedule("shutdown-idle-replica-alter-log-dirs-thread", shutdownIdleReplicaAlterLogDirsThread _, period = 10000L, unit = TimeUnit.MILLISECONDS)
+    scheduler.schedule("isr-expiration", () => maybeShrinkIsr(), 0L, config.replicaLagTimeMaxMs / 2)
+    scheduler.schedule("shutdown-idle-replica-alter-log-dirs-thread", () => shutdownIdleReplicaAlterLogDirsThread(), 0L, 10000L)
 
     // If inter-broker protocol (IBP) < 1.0, the controller will send LeaderAndIsrRequest V0 which does not include isNew field.
     // In this case, the broker receiving the request cannot determine whether it is safe to create a partition if a log directory has failed.

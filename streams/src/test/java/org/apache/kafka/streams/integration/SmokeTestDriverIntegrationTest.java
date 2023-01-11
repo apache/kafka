@@ -25,11 +25,10 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
-import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -42,11 +41,11 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
-
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeAll
@@ -175,6 +174,6 @@ public class SmokeTestDriverIntegrationTest {
             driver.exception().printStackTrace();
             throw new AssertionError(driver.exception());
         }
-        Assert.assertTrue(driver.result().result(), driver.result().passed());
+        assertTrue(driver.result().passed(), driver.result().result());
     }
 }

@@ -69,7 +69,9 @@ public class MirrorSourceTask extends SourceTask {
 
     // for testing
     MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceMetrics metrics, String sourceClusterAlias,
-                     ReplicationPolicy replicationPolicy, long maxOffsetLag, KafkaProducer<byte[], byte[]> producer) {
+                     ReplicationPolicy replicationPolicy, long maxOffsetLag, KafkaProducer<byte[], byte[]> producer,
+                     Semaphore outstandingOffsetSyncs, Map<TopicPartition, PartitionState> partitionStates,
+                     String offsetSyncsTopic) {
         this.consumer = consumer;
         this.metrics = metrics;
         this.sourceClusterAlias = sourceClusterAlias;
@@ -77,6 +79,9 @@ public class MirrorSourceTask extends SourceTask {
         this.maxOffsetLag = maxOffsetLag;
         consumerAccess = new Semaphore(1);
         this.offsetProducer = producer;
+        this.outstandingOffsetSyncs = outstandingOffsetSyncs;
+        this.partitionStates = partitionStates;
+        this.offsetSyncsTopic = offsetSyncsTopic;
     }
 
     @Override
@@ -198,16 +203,18 @@ public class MirrorSourceTask extends SourceTask {
         PartitionState partitionState =
             partitionStates.computeIfAbsent(topicPartition, x -> new PartitionState(maxOffsetLag));
         if (partitionState.update(upstreamOffset, downstreamOffset)) {
-            sendOffsetSync(topicPartition, upstreamOffset, downstreamOffset);
+            if (sendOffsetSync(topicPartition, upstreamOffset, downstreamOffset)) {
+                partitionState.reset();
+            }
         }
     }
 
     // sends OffsetSync record upstream to internal offsets topic
-    private void sendOffsetSync(TopicPartition topicPartition, long upstreamOffset,
+    private boolean sendOffsetSync(TopicPartition topicPartition, long upstreamOffset,
             long downstreamOffset) {
         if (!outstandingOffsetSyncs.tryAcquire()) {
             // Too many outstanding offset syncs.
-            return;
+            return false;
         }
         OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(offsetSyncsTopic, 0,
@@ -221,6 +228,7 @@ public class MirrorSourceTask extends SourceTask {
             }
             outstandingOffsetSyncs.release();
         });
+        return true;
     }
  
     private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
@@ -272,6 +280,7 @@ public class MirrorSourceTask extends SourceTask {
         long lastSyncUpstreamOffset = -1L;
         long lastSyncDownstreamOffset = -1L;
         long maxOffsetLag;
+        boolean shouldSyncOffsets;
 
         PartitionState(long maxOffsetLag) {
             this.maxOffsetLag = maxOffsetLag;
@@ -279,7 +288,6 @@ public class MirrorSourceTask extends SourceTask {
 
         // true if we should emit an offset sync
         boolean update(long upstreamOffset, long downstreamOffset) {
-            boolean shouldSyncOffsets = false;
             long upstreamStep = upstreamOffset - lastSyncUpstreamOffset;
             long downstreamTargetOffset = lastSyncDownstreamOffset + upstreamStep;
             if (lastSyncDownstreamOffset == -1L
@@ -293,6 +301,10 @@ public class MirrorSourceTask extends SourceTask {
             previousUpstreamOffset = upstreamOffset;
             previousDownstreamOffset = downstreamOffset;
             return shouldSyncOffsets;
+        }
+
+        void reset() {
+            shouldSyncOffsets = false;
         }
     }
 }
