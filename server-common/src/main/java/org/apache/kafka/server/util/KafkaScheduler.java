@@ -49,6 +49,7 @@ public class KafkaScheduler implements Scheduler {
         public boolean isDone() {
             return true;
         }
+
         @Override
         public Void get() {
             return null;
