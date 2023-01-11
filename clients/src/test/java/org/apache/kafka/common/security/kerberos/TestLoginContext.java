@@ -28,7 +28,7 @@ public class TestLoginContext extends LoginContext {
             return new AppConfigurationEntry[0]; // match any name
         }
     };
-	
+
     public TestLoginContext(String name) throws LoginException {
         super(name, null, null, EMPTY_WILDCARD_CONFIGURATION);
     }

@@ -31,11 +31,11 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.junit.jupiter.api.Test;
 
 public class KerberosLoginTest {
-	/*
-	 * KerberosLogin class should reuse the same callbackHandler for reLogin() as
-	 * was used for login().
-	 */
-	@Test
+    /*
+     * KerberosLogin class should reuse the same callbackHandler for reLogin() as
+     * was used for login().
+     */
+    @Test
     public void testReuseCallbackDuringRelogin() throws Exception {
         KerberosLogin kl = new KerberosLogin();
 
@@ -60,7 +60,7 @@ public class KerberosLoginTest {
 
         try {
             kl.reLogin();
-		} catch (Exception ex) {
+        } catch (Exception ex) {
             // as expected -- all modules ignored
             // but the new login context should have been created with the callbackHandler
             // at this point already
@@ -81,7 +81,7 @@ public class KerberosLoginTest {
         Field field = clz.getDeclaredField(name);
         field.setAccessible(true);
         field.set(kl, val);
-	}
+    }
 
     private Object getFieldViaReflection(Object kl, String name) throws Exception {
         Class clz = kl.getClass();
