@@ -1175,7 +1175,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
 
-    if (topics.isEmpty || (topics.sizeCompare(topicResponses) == 0) || fetchAllTopics) {
+    if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
       topicResponses
     } else {
       val nonExistingTopics = topics.diff(topicResponses.map(_.name).toSet)

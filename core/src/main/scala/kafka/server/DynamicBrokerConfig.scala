@@ -952,7 +952,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     oldAdvertisedListeners: Map[ListenerName, EndPoint],
     newAdvertisedListeners: Map[ListenerName, EndPoint]
   ): Boolean = {
-    if (oldAdvertisedListeners.sizeCompare(newAdvertisedListeners) != 0) return true
+    if (oldAdvertisedListeners.size != newAdvertisedListeners.size) return true
     oldAdvertisedListeners.forKeyValue {
       case (oldListenerName, oldEndpoint) =>
         newAdvertisedListeners.get(oldListenerName) match {

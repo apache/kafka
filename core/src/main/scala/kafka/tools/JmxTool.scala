@@ -212,7 +212,7 @@ object JmxTool extends Logging {
 
     // print csv header
     val keys = List("time") ++ queryAttributes(mbsc, names, attributesInclude).keys.toArray.sorted
-    if(reportFormatOriginal && (keys.sizeCompare(numExpectedAttributes.values.sum + 1) == 0)) {
+    if(reportFormatOriginal && keys.size == numExpectedAttributes.values.sum + 1) {
       println(keys.map("\"" + _ + "\"").mkString(","))
     }
 
@@ -224,7 +224,7 @@ object JmxTool extends Logging {
         case Some(dFormat) => dFormat.format(new Date)
         case None => System.currentTimeMillis().toString
       }
-      if(attributes.keySet.sizeCompare(numExpectedAttributes.values.sum + 1) == 0) {
+      if(attributes.keySet.size == numExpectedAttributes.values.sum + 1) {
         if(reportFormatOriginal) {
           println(keys.map(attributes(_)).mkString(","))
         }

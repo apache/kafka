@@ -1420,7 +1420,7 @@ class KafkaController(val config: KafkaConfig,
     val replicasInError = partitionsInError.map(PartitionAndReplica(_, replicaId))
     // move all the failed replicas to ReplicaDeletionIneligible
     topicDeletionManager.failReplicaDeletion(replicasInError)
-    if (replicasInError.sizeCompare(partitionErrors) != 0) {
+    if (replicasInError.size != partitionErrors.size) {
       // some replicas could have been successfully deleted
       val deletedReplicas = partitionErrors.keySet.diff(partitionsInError)
       topicDeletionManager.completeReplicaDeletion(deletedReplicas.map(PartitionAndReplica(_, replicaId)))

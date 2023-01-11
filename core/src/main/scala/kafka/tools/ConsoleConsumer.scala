@@ -384,7 +384,7 @@ object ConsoleConsumer extends Logging {
       Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --consumer.config
     ).flatten
 
-    if (groupIdsProvided.sizeCompare(1) > 0) {
+    if (groupIdsProvided.size > 1) {
       CommandLineUtils.printUsageAndDie(parser, "The group ids provided in different places (directly using '--group', "
         + "via '--consumer-property', or via '--consumer.config') do not match. "
         + s"Detected group ids: ${groupIdsProvided.mkString("'", "', '", "'")}")
