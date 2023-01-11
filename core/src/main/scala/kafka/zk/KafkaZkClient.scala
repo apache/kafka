@@ -1952,7 +1952,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
     def wrapMigrationRequest(request: Req, lastRequestInBatch: Boolean): MultiRequest = {
       // Wrap a single request with the multi-op transactional request.
-      val checkOp = CheckOp(ControllerEpochZNode.path, migrationState.controllerZkVersion())
+      val checkOp = CheckOp(ControllerEpochZNode.path, migrationState.zkControllerEpochZkVersion())
       val migrationOp = if (lastRequestInBatch) {
         SetDataOp(MigrationZNode.path, MigrationZNode.encode(migrationState), migrationState.migrationZkVersion())
       } else {
@@ -2037,7 +2037,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
       }
     }
 
-    migrationState.controllerZkVersion() match {
+    migrationState.zkControllerEpochZkVersion() match {
       case ZkVersion.MatchAnyVersion => throw new IllegalArgumentException(
         s"Expected a controller epoch zkVersion when making migration writes, not -1.")
       case version if version >= 0 =>

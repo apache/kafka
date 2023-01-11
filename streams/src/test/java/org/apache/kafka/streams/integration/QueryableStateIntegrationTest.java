@@ -61,15 +61,14 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 import org.hamcrest.Matchers;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -116,15 +115,14 @@ import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@Timeout(600)
 @Category({IntegrationTest.class})
 @SuppressWarnings("deprecation")
 public class QueryableStateIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final Logger log = LoggerFactory.getLogger(QueryableStateIntegrationTest.class);
 
     private static final long DEFAULT_TIMEOUT_MS = 120 * 1000;
@@ -133,12 +131,12 @@ public class QueryableStateIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -164,8 +162,8 @@ public class QueryableStateIntegrationTest {
     private Comparator<KeyValue<String, String>> stringComparator;
     private Comparator<KeyValue<String, Long>> stringLongComparator;
 
-    private void createTopics() throws Exception {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    private void createTopics(final TestInfo testInfo) throws Exception {
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         streamOne = streamOne + "-" + safeTestName;
         streamConcurrent = streamConcurrent + "-" + safeTestName;
         streamThree = streamThree + "-" + safeTestName;
@@ -216,14 +214,11 @@ public class QueryableStateIntegrationTest {
         return input;
     }
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
-    public void before() throws Exception {
-        createTopics();
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws Exception {
+        createTopics(testInfo);
         streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -244,7 +239,7 @@ public class QueryableStateIntegrationTest {
         }
     }
 
-    @After
+    @AfterEach
     public void shutdown() throws Exception {
         if (kafkaStreams != null) {
             kafkaStreams.close(ofSeconds(30));
@@ -450,8 +445,8 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldRejectNonExistentStoreName() throws InterruptedException {
-        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+    public void shouldRejectNonExistentStoreName(final TestInfo testInfo) throws InterruptedException {
+        final String uniqueTestName = safeUniqueTestName(getClass(), testInfo);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-input-table";
 
@@ -465,7 +460,7 @@ public class QueryableStateIntegrationTest {
         );
 
         final Properties properties = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, safeUniqueTestName(getClass(), testName)),
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, safeUniqueTestName(getClass(), testInfo)),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
 
@@ -488,8 +483,8 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldRejectWronglyTypedStore() throws InterruptedException {
-        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+    public void shouldRejectWronglyTypedStore(final TestInfo testInfo) throws InterruptedException {
+        final String uniqueTestName = safeUniqueTestName(getClass(), testInfo);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-input-table";
 

@@ -30,11 +30,11 @@ import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
-import kafka.utils.Scheduler;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.internals.LogDirFailureChannel;
+import org.apache.kafka.server.util.Scheduler;
 import scala.compat.java8.OptionConverters;
 
 import java.util.Collections;

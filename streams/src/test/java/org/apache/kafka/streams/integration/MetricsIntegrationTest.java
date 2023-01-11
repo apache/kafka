@@ -43,16 +43,14 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -65,23 +63,24 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+@Timeout(600)
 @Category({IntegrationTest.class})
 @SuppressWarnings("deprecation")
 public class MetricsIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
     private static final int NUM_THREADS = 2;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -242,15 +241,12 @@ public class MetricsIntegrationTest {
 
     private String appId;
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
-    public void before() throws InterruptedException {
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
         CLUSTER.createTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
 
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         appId = "app-" + safeTestName;
 
         streamsConfiguration = new Properties();
@@ -263,7 +259,7 @@ public class MetricsIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
     }
 
-    @After
+    @AfterEach
     public void after() throws InterruptedException {
         CLUSTER.deleteTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
     }
@@ -752,9 +748,9 @@ public class MetricsIntegrationTest {
         final List<Metric> metrics = listMetric.stream()
             .filter(m -> m.metricName().name().equals(metricName))
             .collect(Collectors.toList());
-        Assert.assertEquals("Size of metrics of type:'" + metricName + "' must be equal to " + numMetric + " but it's equal to " + metrics.size(), numMetric, metrics.size());
+        assertEquals(numMetric, metrics.size(), "Size of metrics of type:'" + metricName + "' must be equal to " + numMetric + " but it's equal to " + metrics.size());
         for (final Metric m : metrics) {
-            Assert.assertNotNull("Metric:'" + m.metricName() + "' must be not null", m.metricValue());
+            assertNotNull(m.metricValue(), "Metric:'" + m.metricName() + "' must be not null");
         }
     }
 }
