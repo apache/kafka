@@ -142,7 +142,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       }
     }
 
-    if (partitionReplicaAssignment.values.map(_.size).toSet.size != 1)
+    if (partitionReplicaAssignment.values.map(_.size).toSet.sizeCompare(1) != 0)
       throw new InvalidReplicaAssignmentException("All partitions should have the same number of replicas")
 
     partitionReplicaAssignment.values.foreach(reps =>

@@ -384,7 +384,7 @@ object ConsoleConsumer extends Logging {
       Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --consumer.config
     ).flatten
 
-    if (groupIdsProvided.size > 1) {
+    if (groupIdsProvided.sizeCompare(1) > 0) {
       CommandLineUtils.printUsageAndDie(parser, "The group ids provided in different places (directly using '--group', "
         + "via '--consumer-property', or via '--consumer.config') do not match. "
         + s"Detected group ids: ${groupIdsProvided.mkString("'", "', '", "'")}")
@@ -593,7 +593,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   private def propertiesWithKeyPrefixStripped(prefix: String, configs: Map[String, _]): Map[String, _] = {
     val newConfigs = collection.mutable.Map[String, Any]()
     configs.asScala.foreach { case (key, value) =>
-      if (key.startsWith(prefix) && key.lengthCompare(prefix.length) > 0)
+      if (key.startsWith(prefix) && key.length > prefix.length)
         newConfigs.put(key.substring(prefix.length), value)
     }
     newConfigs.asJava

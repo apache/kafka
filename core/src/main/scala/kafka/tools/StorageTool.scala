@@ -185,7 +185,7 @@ object StorageTool extends Logging {
       0
     } else {
       if (foundDirectories.nonEmpty) {
-        if (foundDirectories.size == 1) {
+        if (foundDirectories.sizeCompare(1) == 0) {
           stream.println("Found log directory:")
         } else {
           stream.println("Found log directories:")

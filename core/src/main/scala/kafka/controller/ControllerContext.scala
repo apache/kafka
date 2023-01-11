@@ -487,7 +487,7 @@ class ControllerContext extends ControllerChannelContext {
     partitionLeadershipInfo.filter { case (topicPartition, leaderIsrAndControllerEpoch) =>
       !isTopicQueuedUpForDeletion(topicPartition.topic) &&
         leaderIsrAndControllerEpoch.leaderAndIsr.leader == brokerId &&
-        partitionReplicaAssignment(topicPartition).size > 1
+        partitionReplicaAssignment(topicPartition).lengthCompare(1) > 0
     }.keySet
   }
 

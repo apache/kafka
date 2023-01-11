@@ -897,7 +897,7 @@ private[log] class Cleaner(val id: Int,
     * @return The estimated last offset for the first segment in segs
     */
   private def lastOffsetForFirstSegment(segs: List[LogSegment], firstUncleanableOffset: Long): Long = {
-    if (segs.size > 1) {
+    if (segs.lengthCompare(1) > 0) {
       /* if there is a next segment, use its base offset as the bounding offset to guarantee we know
        * the worst case offset */
       segs(1).baseOffset - 1

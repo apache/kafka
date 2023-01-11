@@ -107,7 +107,7 @@ private[group] class MemberMetadata(var memberId: String,
    * Check if the provided protocol metadata matches the currently stored metadata.
    */
   def matches(protocols: List[(String, Array[Byte])]): Boolean = {
-    if (protocols.size != this.supportedProtocols.size)
+    if (protocols.lengthCompare(supportedProtocols) != 0)
       return false
 
     for (i <- protocols.indices) {

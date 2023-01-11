@@ -483,7 +483,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case (topicPartition, partitionData) =>
             try {
               if (partitionData.committedMetadata() != null
-                && partitionData.committedMetadata().lengthCompare(config.offsetMetadataMaxSize) > 0)
+                && partitionData.committedMetadata().length > config.offsetMetadataMaxSize)
                 (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE)
               else {
                 zkSupport.zkClient.setOrCreateConsumerOffset(
@@ -1175,7 +1175,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
 
-    if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
+    if (topics.isEmpty || (topics.sizeCompare(topicResponses) == 0) || fetchAllTopics) {
       topicResponses
     } else {
       val nonExistingTopics = topics.diff(topicResponses.map(_.name).toSet)
@@ -1967,7 +1967,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Special handling to add duplicate topics to the response
       val topics = createPartitionsRequest.data.topics.asScala.toSeq
       val dupes = topics.groupBy(_.name)
-        .filter { _._2.size > 1 }
+        .filter { _._2.lengthCompare(1) > 0 }
         .keySet
       val notDuped = topics.filterNot(topic => dupes.contains(topic.name))
       val (authorized, unauthorized) = authHelper.partitionSeqByAuthorized(request.context, ALTER, TOPIC,
