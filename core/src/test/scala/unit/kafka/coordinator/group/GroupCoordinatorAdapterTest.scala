@@ -18,12 +18,13 @@ package kafka.coordinator.group
 
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{OffsetFetchResponse, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
@@ -34,6 +35,7 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.net.InetAddress
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 class GroupCoordinatorAdapterTest {
@@ -435,5 +437,175 @@ class GroupCoordinatorAdapterTest {
       .setErrorCode(Errors.INVALID_GROUP_ID.code))
 
     assertEquals(expectedResults, future.get())
+  }
+
+  @Test
+  def testFetchAllOffsets(): Unit = {
+    val foo0 = new TopicPartition("foo", 0)
+    val foo1 = new TopicPartition("foo", 1)
+    val bar1 = new TopicPartition("bar", 1)
+
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    when(groupCoordinator.handleFetchOffsets(
+      "group",
+      true,
+      None
+    )).thenReturn((
+      Errors.NONE,
+      Map(
+        foo0 -> new OffsetFetchResponse.PartitionData(
+          100,
+          Optional.of(1),
+          "foo",
+          Errors.NONE
+        ),
+        bar1 -> new OffsetFetchResponse.PartitionData(
+          -1,
+          Optional.empty[Integer],
+          "",
+          Errors.UNKNOWN_TOPIC_OR_PARTITION
+        ),
+        foo1 -> new OffsetFetchResponse.PartitionData(
+          200,
+          Optional.empty[Integer],
+          "",
+          Errors.NONE
+        ),
+      )
+    ))
+
+    val ctx = makeContext(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.latestVersion)
+    val future = adapter.fetchAllOffsets(
+      ctx,
+      "group",
+      true
+    )
+
+    assertTrue(future.isDone)
+
+    val expectedResponse = List(
+      new OffsetFetchResponseData.OffsetFetchResponseTopics()
+        .setName(foo0.topic)
+        .setPartitions(List(
+          new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+            .setPartitionIndex(foo0.partition)
+            .setCommittedOffset(100)
+            .setCommittedLeaderEpoch(1)
+            .setMetadata("foo")
+            .setErrorCode(Errors.NONE.code),
+          new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+            .setPartitionIndex(foo1.partition)
+            .setCommittedOffset(200)
+            .setCommittedLeaderEpoch(-1)
+            .setMetadata("")
+            .setErrorCode(Errors.NONE.code),
+        ).asJava),
+      new OffsetFetchResponseData.OffsetFetchResponseTopics()
+        .setName(bar1.topic)
+        .setPartitions(List(
+          new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+            .setPartitionIndex(bar1.partition)
+            .setCommittedOffset(-1)
+            .setCommittedLeaderEpoch(-1)
+            .setMetadata("")
+            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+        ).asJava)
+    )
+
+    assertEquals(
+      expectedResponse.sortWith(_.name > _.name),
+      future.get().asScala.toList.sortWith(_.name > _.name)
+    )
+  }
+
+  @Test
+  def testFetchOffsets(): Unit = {
+    val foo0 = new TopicPartition("foo", 0)
+    val foo1 = new TopicPartition("foo", 1)
+    val bar1 = new TopicPartition("bar", 1)
+
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    when(groupCoordinator.handleFetchOffsets(
+      "group",
+      true,
+      Some(Seq(foo0, foo1, bar1))
+    )).thenReturn((
+      Errors.NONE,
+      Map(
+        foo0 -> new OffsetFetchResponse.PartitionData(
+          100,
+          Optional.of(1),
+          "foo",
+          Errors.NONE
+        ),
+        bar1 -> new OffsetFetchResponse.PartitionData(
+          -1,
+          Optional.empty[Integer],
+          "",
+          Errors.UNKNOWN_TOPIC_OR_PARTITION
+        ),
+        foo1 -> new OffsetFetchResponse.PartitionData(
+          200,
+          Optional.empty[Integer],
+          "",
+          Errors.NONE
+        ),
+      )
+    ))
+
+    val ctx = makeContext(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.latestVersion)
+    val future = adapter.fetchOffsets(
+      ctx,
+      "group",
+      List(
+        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+          .setName(foo0.topic)
+          .setPartitionIndexes(List[Integer](foo0.partition, foo1.partition).asJava),
+        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+          .setName(bar1.topic)
+          .setPartitionIndexes(List[Integer](bar1.partition).asJava),
+      ).asJava,
+      true
+    )
+
+    assertTrue(future.isDone)
+
+    val expectedResponse = List(
+      new OffsetFetchResponseData.OffsetFetchResponseTopics()
+        .setName(foo0.topic)
+        .setPartitions(List(
+          new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+            .setPartitionIndex(foo0.partition)
+            .setCommittedOffset(100)
+            .setCommittedLeaderEpoch(1)
+            .setMetadata("foo")
+            .setErrorCode(Errors.NONE.code),
+          new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+            .setPartitionIndex(foo1.partition)
+            .setCommittedOffset(200)
+            .setCommittedLeaderEpoch(-1)
+            .setMetadata("")
+            .setErrorCode(Errors.NONE.code),
+        ).asJava),
+      new OffsetFetchResponseData.OffsetFetchResponseTopics()
+        .setName(bar1.topic)
+        .setPartitions(List(
+          new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+            .setPartitionIndex(bar1.partition)
+            .setCommittedOffset(-1)
+            .setCommittedLeaderEpoch(-1)
+            .setMetadata("")
+            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+        ).asJava)
+    )
+
+    assertEquals(
+      expectedResponse.sortWith(_.name > _.name),
+      future.get().asScala.toList.sortWith(_.name > _.name)
+    )
   }
 }

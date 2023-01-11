@@ -57,4 +57,11 @@ public class PartitionAssignmentTest {
             }
         }
     }
+
+    @Test
+    public void testToString() {
+        List<Integer> replicas = Arrays.asList(0, 1, 2);
+        PartitionAssignment partitionAssignment = new PartitionAssignment(replicas);
+        assertEquals("PartitionAssignment(replicas=[0, 1, 2])", partitionAssignment.toString());
+    }
 }

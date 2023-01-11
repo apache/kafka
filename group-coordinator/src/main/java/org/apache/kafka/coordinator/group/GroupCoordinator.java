@@ -26,6 +26,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.requests.RequestContext;
@@ -131,6 +133,36 @@ public interface GroupCoordinator {
         RequestContext context,
         List<String> groupIds,
         BufferSupplier bufferSupplier
+    );
+
+    /**
+     * Fetch offsets for a given Group.
+     *
+     * @param context           The request context.
+     * @param groupId           The group id.
+     * @param topics            The topics to fetch the offsets for.
+     *
+     * @return A future yielding the results or an exception.
+     */
+    CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> fetchOffsets(
+        RequestContext context,
+        String groupId,
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
+        boolean requireStable
+    );
+
+    /**
+     * Fetch all offsets for a given Group.
+     *
+     * @param context           The request context.
+     * @param groupId           The group id.
+     *
+     * @return A future yielding the results or an exception.
+     */
+    CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> fetchAllOffsets(
+        RequestContext context,
+        String groupId,
+        boolean requireStable
     );
 }
 
