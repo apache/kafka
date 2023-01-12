@@ -166,8 +166,9 @@ public class ConfigurationControlManager {
      * @return                  The result.
      */
     ControllerResult<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
-            Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
-            boolean newlyCreatedResource) {
+        Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
+        boolean newlyCreatedResource
+    ) {
         List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
         for (Entry<ConfigResource, Map<String, Entry<OpType, String>>> resourceEntry :
@@ -182,8 +183,10 @@ public class ConfigurationControlManager {
     }
 
     ControllerResult<ApiError> incrementalAlterConfig(
-        ConfigResource configResource, Map<String, Entry<OpType, String>> keyToOps,
-        boolean newlyCreatedResource) {
+        ConfigResource configResource,
+        Map<String, Entry<OpType, String>> keyToOps,
+        boolean newlyCreatedResource
+    ) {
         List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
         ApiError apiError = incrementalAlterConfigResource(configResource,
             keyToOps,
@@ -192,10 +195,12 @@ public class ConfigurationControlManager {
         return ControllerResult.atomicOf(outputRecords, apiError);
     }
 
-    private ApiError incrementalAlterConfigResource(ConfigResource configResource,
-                                                Map<String, Entry<OpType, String>> keysToOps,
-                                                boolean newlyCreatedResource,
-                                                List<ApiMessageAndVersion> outputRecords) {
+    private ApiError incrementalAlterConfigResource(
+        ConfigResource configResource,
+        Map<String, Entry<OpType, String>> keysToOps,
+        boolean newlyCreatedResource,
+        List<ApiMessageAndVersion> outputRecords
+    ) {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
         for (Entry<String, Entry<OpType, String>> keysToOpsEntry : keysToOps.entrySet()) {
             String key = keysToOpsEntry.getKey();
