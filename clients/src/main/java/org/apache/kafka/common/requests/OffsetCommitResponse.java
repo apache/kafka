@@ -181,7 +181,9 @@ public class OffsetCommitResponse extends AbstractResponse {
                         data.topics().add(newTopic);
                         byTopicName.put(newTopic.name(), newTopic);
                     } else {
-                        // Otherwise, we add the partitions to the existing one.
+                        // Otherwise, we add the partitions to the existing one. Note we
+                        // expect non-overlapping partitions here as we don't verify
+                        // if the partition is already in the list before adding it.
                         existingTopic.partitions().addAll(newTopic.partitions());
                     }
                 });
