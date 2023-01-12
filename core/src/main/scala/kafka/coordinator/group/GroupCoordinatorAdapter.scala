@@ -360,21 +360,13 @@ class GroupCoordinatorAdapter(
     request.topics.forEach { topic =>
       topic.partitions.forEach { partition =>
         val tp = new TopicPartition(topic.name, partition.partitionIndex)
-        partitions += tp -> new OffsetAndMetadata(
-          offset = partition.committedOffset,
-          leaderEpoch = partition.committedLeaderEpoch match {
-            case RecordBatch.NO_PARTITION_LEADER_EPOCH => Optional.empty[Integer]
-            case committedLeaderEpoch => Optional.of[Integer](committedLeaderEpoch)
-          },
-          metadata = partition.committedMetadata match {
-            case null => OffsetAndMetadata.NoMetadata
-            case metadata => metadata
-          },
-          commitTimestamp = partition.commitTimestamp match {
-            case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimeMs
-            case customTimestamp => customTimestamp
-          },
-          expireTimestamp = expireTimeMs
+        partitions += tp -> createOffsetAndMetadata(
+          currentTimeMs,
+          partition.committedOffset,
+          partition.committedLeaderEpoch,
+          partition.committedMetadata,
+          partition.commitTimestamp,
+          expireTimeMs
         )
       }
     }
@@ -397,19 +389,24 @@ class GroupCoordinatorAdapter(
     request: TxnOffsetCommitRequestData,
     bufferSupplier: BufferSupplier
   ): CompletableFuture[TxnOffsetCommitResponseData] = {
+    val currentTimeMs = time.milliseconds
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
 
     def callback(results: Map[TopicPartition, Errors]): Unit = {
       val response = new TxnOffsetCommitResponseData()
-      val byTopics = new util.HashMap[String, TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic]()
+      val byTopics = new mutable.HashMap[String, TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic]()
 
       results.forKeyValue { (tp, error) =>
-        var topic = byTopics.get(tp.topic)
-        if (topic == null) {
-          topic = new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setName(tp.topic)
-          byTopics.put(tp.topic, topic)
-          response.topics.add(topic)
+        val topic = byTopics.get(tp.topic) match {
+          case Some(existingTopic) =>
+            existingTopic
+          case None =>
+            val newTopic = new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setName(tp.topic)
+            byTopics += tp.topic -> newTopic
+            response.topics.add(newTopic)
+            newTopic
         }
+
         topic.partitions.add(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
           .setPartitionIndex(tp.partition)
           .setErrorCode(error.code))
@@ -418,24 +415,17 @@ class GroupCoordinatorAdapter(
       future.complete(response)
     }
 
-    val currentTimestamp = time.milliseconds
     val partitions = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
-
     request.topics.forEach { topic =>
       topic.partitions.forEach { partition =>
         val tp = new TopicPartition(topic.name, partition.partitionIndex)
-        partitions += tp -> new OffsetAndMetadata(
-          offset = partition.committedOffset,
-          leaderEpoch = partition.committedLeaderEpoch match {
-            case RecordBatch.NO_PARTITION_LEADER_EPOCH => Optional.empty[Integer]
-            case committedLeaderEpoch => Optional.of[Integer](committedLeaderEpoch)
-          },
-          metadata = partition.committedMetadata match {
-            case null => OffsetAndMetadata.NoMetadata
-            case metadata => metadata
-          },
-          commitTimestamp = currentTimestamp,
-          expireTimestamp = None
+        partitions += tp -> createOffsetAndMetadata(
+          currentTimeMs,
+          partition.committedOffset,
+          partition.committedLeaderEpoch,
+          partition.committedMetadata,
+          OffsetCommitRequest.DEFAULT_TIMESTAMP, // means that currentTimeMs is used.
+          None
         )
       }
     }
@@ -453,5 +443,31 @@ class GroupCoordinatorAdapter(
     )
 
     future
+  }
+
+  private def createOffsetAndMetadata(
+    currentTimeMs: Long,
+    offset: Long,
+    leaderEpoch: Int,
+    metadata: String,
+    commitTimestamp: Long,
+    expireTimestamp: Option[Long]
+  ): OffsetAndMetadata = {
+    new OffsetAndMetadata(
+      offset = offset,
+      leaderEpoch = leaderEpoch match {
+        case RecordBatch.NO_PARTITION_LEADER_EPOCH => Optional.empty[Integer]
+        case committedLeaderEpoch => Optional.of[Integer](committedLeaderEpoch)
+      },
+      metadata = metadata match {
+        case null => OffsetAndMetadata.NoMetadata
+        case metadata => metadata
+      },
+      commitTimestamp = commitTimestamp match {
+        case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimeMs
+        case customTimestamp => customTimestamp
+      },
+      expireTimestamp = expireTimestamp
+    )
   }
 }
