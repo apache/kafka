@@ -652,8 +652,12 @@ public class ReplicationControlManagerTest {
         assertEquals(TopicRecord.class, result4.records().get(0).message().getClass());
         TopicRecord batchedTopic1Record = (TopicRecord) result4.records().get(0).message();
         assertEquals(batchedTopic1, batchedTopic1Record.name());
-        assertEquals(ConfigRecord.class, result4.records().get(1).message().getClass());
-        assertEquals(batchedTopic1, ((ConfigRecord) result4.records().get(1).message()).resourceName());
+        assertEquals(new ConfigRecord()
+            .setResourceName(batchedTopic1)
+            .setResourceType(ConfigResource.Type.TOPIC.id())
+            .setName("foo")
+            .setValue("notNull"),
+            result4.records().get(1).message());
         assertEquals(PartitionRecord.class, result4.records().get(2).message().getClass());
         assertEquals(batchedTopic1Record.topicId(), ((PartitionRecord) result4.records().get(2).message()).topicId());
     }
