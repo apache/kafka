@@ -59,7 +59,7 @@ public class BrokerRegistrationTest {
             Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
             Stream.of(new SimpleEntry<>("metadata.version", VersionRange.of((short) 7, (short) 7)))
                 .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue)),
-            Optional.empty(), false, true, Optional.of(10L)));
+            Optional.empty(), false, true, true));
 
     @Test
     public void testValues() {
@@ -90,19 +90,19 @@ public class BrokerRegistrationTest {
             "incarnationId=3MfdxWlNSn2UDYsmDP1pYg, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9091)], supportedFeatures={foo: 1-2}, " +
-            "rack=Optional.empty, fenced=true, inControlledShutdown=false, migratingZkBrokerEpoch=-1)",
+            "rack=Optional.empty, fenced=true, inControlledShutdown=false, isMigratingZkBroker=false)",
             REGISTRATIONS.get(1).toString());
         assertEquals("BrokerRegistration(id=2, epoch=0, " +
             "incarnationId=eY7oaG1RREie5Kk9uy1l6g, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9092)], supportedFeatures={bar: 1-4, foo: 2-3}, " +
-            "rack=Optional[myrack], fenced=false, inControlledShutdown=true, migratingZkBrokerEpoch=-1)",
+            "rack=Optional[myrack], fenced=false, inControlledShutdown=true, isMigratingZkBroker=false)",
             REGISTRATIONS.get(2).toString());
         assertEquals("BrokerRegistration(id=3, epoch=0, " +
             "incarnationId=1t8VyWx2TCSTpUWuqj-FOw, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9093)], supportedFeatures={metadata.version: 7}, " +
-            "rack=Optional.empty, fenced=false, inControlledShutdown=true, migratingZkBrokerEpoch=10)",
+            "rack=Optional.empty, fenced=false, inControlledShutdown=true, isMigratingZkBroker=true)",
             REGISTRATIONS.get(3).toString());
     }
 
