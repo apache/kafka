@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.kafka.tools;
 
 
@@ -47,7 +64,7 @@ public class EndToEndLatency {
     public static void main(String... args) {
         Exit.exit(mainNoExit(args));
     }
-    private final static long timeout = 60000;
+    private final static long TIMEOUT = 60000;
 
     static int mainNoExit(String... args) {
         try {
@@ -70,51 +87,46 @@ public class EndToEndLatency {
                 .description("This tool records the average end to end latency for a single message to travel through Kafka");
 
         parser
-                .addArgument("--broker-list")
-                .required(true)
+                .addArgument("-b", "--brokers")
                 .action(store())
                 .type(String.class)
-                .dest("brokers")
+                .dest("broker_list")
                 .help("The location of the bootstrap broker for both the producer and the consumer");
 
         parser
-                .addArgument("--topic")
-                .required(true)
+                .addArgument("-t", "--topic")
                 .action(store())
                 .type(String.class)
                 .dest("topic")
                 .help("The Kakfa topic to send/receive messages to/from");
 
         parser
-                .addArgument("--num-messages")
-                .required(true)
+                .addArgument("-n", "--num-records")
                 .action(store())
                 .type(Integer.class)
-                .dest("numMessages")
+                .dest("num_messages")
                 .help("The number of messages to send");
 
         parser
-                .addArgument("--producer-acks")
-                .required(true)
+                .addArgument("-a", "--acks")
                 .action(store())
                 .type(String.class)
-                .dest("acks")
+                .dest("producer_acks")
                 .help("The number of messages to send");
 
         parser
-                .addArgument("--message-size-bytes")
+                .addArgument("-s", "--message-bytes")
                 .required(true)
                 .action(store())
                 .type(Integer.class)
-                .dest("messageSize")
+                .dest("message_size_bytes")
                 .help("Size of each message in bytes");
 
         parser
-                .addArgument("--properties-file")
-                .required(false)
+                .addArgument("-f", "--properties-file")
                 .action(store())
                 .type(String.class)
-                .dest("propertiesFile");
+                .dest("properties_file");
 
         Namespace res = null;
         try {
@@ -129,14 +141,14 @@ public class EndToEndLatency {
             }
         }
 
-        String brokers = res.getString("brokers");
+        String brokers = res.getString("broker_list");
         String topic = res.getString("topic");
-        int numMessages = res.getInt("numMessages");
-        String acks = res.getString("acks");
-        int messageSizeBytes = res.getInt("messageSize");
-        String propertiesFile = res.getString("propertiesFile");
+        int numMessages = res.getInt("num_messages");
+        String acks = res.getString("producer_acks");
+        int messageSizeBytes = res.getInt("message_size_bytes");
+        String propertiesFile = res.getString("properties_file");
 
-        if (!("1".equals(acks) || "all".equals(acks))) {
+        if (!Arrays.asList("1", "all").contains(acks)) {
             throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all");
         }
 
@@ -148,6 +160,7 @@ public class EndToEndLatency {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+
         try (KafkaConsumer<byte[], byte[]> consumer = createKafkaConsumer(props);
              KafkaProducer<byte[], byte[]> producer = createKafkaProducer(props, acks)) {
 
@@ -155,14 +168,7 @@ public class EndToEndLatency {
                 createTopic(props, topic);
             }
 
-            List<TopicPartition> topicPartitions = consumer.
-                    partitionsFor(topic).
-                    stream().map(p -> new TopicPartition(p.topic(), p.partition()))
-                    .collect(Collectors.toList());
-            consumer.assign(topicPartitions);
-            consumer.seekToEnd(topicPartitions);
-            // TODO scala Function1 TopicPartition => Long.
-            consumer.assignment().forEach(consumer::position);
+            setupConsumer(topic, consumer);
 
             double totalTime = 0.0;
             long[] latencies = new long[numMessages];
@@ -173,12 +179,12 @@ public class EndToEndLatency {
                 long begin = System.nanoTime();
                 //Send message (of random bytes) synchronously then immediately poll for it
                 producer.send(new ProducerRecord<>(topic, message)).get();
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(timeout));
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(TIMEOUT));
                 long elapsed = System.nanoTime() - begin;
 
                 if (records.isEmpty()) {
                     consumer.commitSync();
-                    throw new RuntimeException("poll() timed out before finding a result (timeout:[" + timeout + "])");
+                    throw new RuntimeException("poll() timed out before finding a result (timeout:[" + TIMEOUT + "])");
                 }
 
                 //Check result matches the original record
@@ -191,8 +197,9 @@ public class EndToEndLatency {
                 }
 
                 //Check we only got the one message
-                if (records.iterator().hasNext()) {
-                    int count = 1 + records.count();
+                if (records.count() != 1) {
+                    int count = records.count();
+                    consumer.commitSync();
                     throw new RuntimeException("Only one result was expected during this test. We found [" + count + "]");
                 }
 
@@ -204,15 +211,29 @@ public class EndToEndLatency {
             }
 
             //Results
-            System.out.printf("Avg latency: %.4f ms\n", totalTime / numMessages / 1000.0 / 1000.0);
-            Arrays.sort(latencies);
-            int p50 = (int) latencies[(int)(latencies.length * 0.5)];
-            int p99 = (int) latencies[(int)(latencies.length * 0.99)];
-            int p999 = (int) latencies[(int)(latencies.length * 0.999)];
-            System.out.printf("Percentiles: 50th = %d, 99th = %d, 99.9th = %d", p50, p99, p999);
+            printResults(numMessages, totalTime, latencies);
             consumer.commitSync();
         }
 
+    }
+
+    private static void setupConsumer(String topic, KafkaConsumer<byte[], byte[]> consumer) {
+        List<TopicPartition> topicPartitions = consumer.
+                partitionsFor(topic).
+                stream().map(p -> new TopicPartition(p.topic(), p.partition()))
+                .collect(Collectors.toList());
+        consumer.assign(topicPartitions);
+        consumer.seekToEnd(topicPartitions);
+        consumer.assignment().forEach(consumer::position);
+    }
+
+    private static void printResults(int numMessages, double totalTime, long[] latencies) {
+        System.out.printf("Avg latency: %.4f ms\n", totalTime / numMessages / 1000.0 / 1000.0);
+        Arrays.sort(latencies);
+        int p50 = (int) latencies[(int) (latencies.length * 0.5)];
+        int p99 = (int) latencies[(int) (latencies.length * 0.99)];
+        int p999 = (int) latencies[(int) (latencies.length * 0.999)];
+        System.out.printf("Percentiles: 50th = %d, 99th = %d, 99.9th = %d", p50, p99, p999);
     }
 
     private static byte[] randomBytesOfLen(Random random, int length) {
@@ -226,8 +247,8 @@ public class EndToEndLatency {
         short defaultReplicationFactor = 1;
         int defaultNumPartitions = 1;
 
-        System.out.printf(("Topic \"%s\" does not exist. " +
-                        "Will create topic with %d partition(s) and replication factor = %d%n"),
+        System.out.printf("Topic \"%s\" does not exist. " +
+                        "Will create topic with %d partition(s) and replication factor = %d%n",
                 topic, defaultNumPartitions, defaultReplicationFactor);
 
         Admin adminClient = Admin.create(props);
