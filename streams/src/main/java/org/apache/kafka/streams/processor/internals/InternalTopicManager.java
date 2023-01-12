@@ -57,6 +57,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -521,7 +522,7 @@ public class InternalTopicManager {
         for (final Map.Entry<String, KafkaFuture<TopicDescription>> topicFuture : futures.entrySet()) {
             final String topicName = topicFuture.getKey();
             try {
-                final TopicDescription topicDescription = topicFuture.getValue().get();
+                final TopicDescription topicDescription = topicFuture.getValue().get(5000, TimeUnit.MILLISECONDS);
                 existedTopicPartition.put(topicName, topicDescription.partitions().size());
             } catch (final InterruptedException fatalException) {
                 // this should not happen; if it ever happens it indicate a bug
@@ -547,6 +548,8 @@ public class InternalTopicManager {
                 tempUnknownTopics.add(topicName);
                 log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
                     "Error message was: {}", topicName, retriableException.toString());
+            } catch (java.util.concurrent.TimeoutException e) {
+                throw new RuntimeException(e);
             }
         }
 
