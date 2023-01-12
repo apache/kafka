@@ -436,17 +436,22 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   def addStopReplicaRequestForBrokers(brokerIds: Seq[Int],
                                       topicPartition: TopicPartition,
                                       deletePartition: Boolean): Unit = {
-    // A sentinel (-2) is used as an epoch if the topic is queued for deletion. It overrides
-    // any existing epoch.
-    val leaderEpoch = metadataInstance.leaderEpoch(topicPartition)
-
     brokerIds.filter(_ >= 0).foreach { brokerId =>
       val result = stopReplicaRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
-      val alreadyDelete = result.get(topicPartition).exists(_.deletePartition)
+      val updatedDeletePartition = deletePartition || result.get(topicPartition).exists(_.deletePartition)
+
+      // A sentinel (-2) is used as an epoch if the replica is to be deleted.
+      // It overrides any existing epoch.
+      val leaderEpoch = if (updatedDeletePartition) {
+        LeaderAndIsr.EpochDuringDelete
+      } else {
+        metadataInstance.leaderEpoch(topicPartition)
+      }
+
       result.put(topicPartition, new StopReplicaPartitionState()
           .setPartitionIndex(topicPartition.partition())
           .setLeaderEpoch(leaderEpoch)
-          .setDeletePartition(alreadyDelete || deletePartition))
+          .setDeletePartition(updatedDeletePartition))
     }
   }
 
