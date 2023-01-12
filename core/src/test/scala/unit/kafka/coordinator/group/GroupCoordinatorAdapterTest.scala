@@ -677,8 +677,7 @@ class GroupCoordinatorAdapterTest {
               .setPartitionIndex(0)
               .setErrorCode(Errors.NONE.code)
           ).asJava)
-      ).asJava
-      )
+      ).asJava)
 
     assertTrue(future.isDone)
     assertEquals(expectedData, future.get())
