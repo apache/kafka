@@ -29,7 +29,6 @@ import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.KafkaRaftServer.ProcessRole
 import kafka.server.MetaProperties
-import kafka.utils.TestUtils
 import kafka.tools.TestRaftServer.ByteArraySerde
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
@@ -41,6 +40,9 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.test.TestUtils
+import org.mockito.{ArgumentMatchers, Mockito}
 import org.mockito.Mockito._
 
 class RaftManagerTest {
@@ -96,7 +98,8 @@ class RaftManagerTest {
       Time.SYSTEM,
       new Metrics(Time.SYSTEM),
       Option.empty,
-      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters))
+      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
+      mock(classOf[FaultHandler])
     )
   }
 
@@ -198,7 +201,8 @@ class RaftManagerTest {
   @Test
   def testShutdownIoThread(): Unit = {
     val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft")
+    val faultHandler = mock(classOf[FaultHandler])
+    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft", faultHandler)
 
     when(raftClient.isRunning).thenReturn(true)
     assertTrue(ioThread.isRunning)
@@ -221,16 +225,23 @@ class RaftManagerTest {
   @Test
   def testUncaughtExceptionInIoThread(): Unit = {
     val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft")
+    val faultHandler = mock(classOf[FaultHandler])
+    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft", faultHandler)
 
     when(raftClient.isRunning).thenReturn(true)
     assertTrue(ioThread.isRunning)
 
-    when(raftClient.poll()).thenThrow(new RuntimeException)
+    val exception = new RuntimeException()
+    when(raftClient.poll()).thenThrow(exception)
     ioThread.run()
 
     assertTrue(ioThread.isShutdownComplete)
     assertTrue(ioThread.isThreadFailed)
     assertFalse(ioThread.isRunning)
+
+    Mockito.verify(faultHandler).handleFault(
+      ArgumentMatchers.anyString(),
+      ArgumentMatchers.eq(exception)
+    )
   }
 }
