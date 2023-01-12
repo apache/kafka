@@ -1635,4 +1635,48 @@ class KafkaConfigTest {
       errorMessage
     )
   }
+
+  @Test
+  def testMigrationEnabledZkMode(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+    assertEquals(
+      "If using zookeeper.metadata.migration.enable, controller.quorum.voters must contain a parseable set of voters.",
+      assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage)
+
+    props.setProperty(KafkaConfig.QuorumVotersProp, "3000@localhost:9093")
+    assertEquals(
+      "requirement failed: controller.listener.names must not be empty when running in ZooKeeper migration mode: []",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    KafkaConfig.fromProps(props)
+
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.IBP_3_3_IV0.version())
+    assertEquals(
+      "requirement failed: Cannot enable ZooKeeper migration without setting 'inter.broker.protocol.version' to 3.4 or higher",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+
+    props.remove(KafkaConfig.MigrationEnabledProp)
+    assertEquals(
+      "requirement failed: controller.listener.names must be empty when not running in KRaft mode: [CONTROLLER]",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+
+    props.remove(KafkaConfig.ControllerListenerNamesProp)
+    KafkaConfig.fromProps(props)
+  }
+
+  @Test
+  def testMigrationEnabledKRaftMode(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+
+    assertEquals(
+      "If using `zookeeper.metadata.migration.enable` in KRaft mode, `zookeeper.connect` must also be set.",
+      assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage)
+
+    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    KafkaConfig.fromProps(props)
+  }
 }

@@ -25,7 +25,7 @@ import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.MetadataVersion
-import org.junit.jupiter.api.Assertions.fail
+import org.junit.jupiter.api.Assertions.{assertThrows, fail}
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{Tag, Timeout}
 
@@ -80,6 +80,37 @@ class KafkaServerKRaftRegistrationTest {
         case _: TimeoutException => fail("Did not see 3 brokers within 30 seconds")
         case t: Throwable => fail("Had some other error waiting for brokers", t)
       }
+    } finally {
+      zkCluster.stop()
+      kraftCluster.close()
+    }
+  }
+
+  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_3_IV0)
+  def testRestartOldIbpZkBrokerInMigrationMode(zkCluster: ClusterInstance): Unit = {
+    // Bootstrap the ZK cluster ID into KRaft
+    val clusterId = zkCluster.clusterId()
+    val kraftCluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
+        setClusterId(Uuid.fromString(clusterId)).
+        setNumBrokerNodes(0).
+        setNumControllerNodes(1).build())
+      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
+      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .build()
+    try {
+      kraftCluster.format()
+      kraftCluster.startup()
+
+      // Enable migration configs and restart brokers
+      val props = kraftCluster.controllerClientProperties()
+      val voters = props.get(RaftConfig.QUORUM_VOTERS_CONFIG)
+      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, voters)
+      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      assertThrows(classOf[IllegalArgumentException], () => zkCluster.rollingBrokerRestart())
     } finally {
       zkCluster.stop()
       kraftCluster.close()
