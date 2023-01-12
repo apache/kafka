@@ -23,10 +23,10 @@ import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
+
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
@@ -115,34 +115,40 @@ public final class KafkaEventQueue implements EventQueue {
 
         /**
          * Run the event associated with this EventContext.
+         *
+         * @param log                  The logger to use.
+         * @param exceptionToDeliver   If non-null, the exception to deliver to the event.
+         *
+         * @return                     True if the thread was interrupted; false otherwise.
          */
-        void run(Logger log) throws InterruptedException {
-            try {
-                event.run();
-            } catch (InterruptedException e) {
-                throw e;
-            } catch (Exception e) {
+        boolean run(Logger log, Throwable exceptionToDeliver) {
+            if (exceptionToDeliver == null) {
                 try {
-                    event.handleException(e);
-                } catch (Throwable t) {
-                    log.error("Unexpected exception in handleException", t);
+                    event.run();
+                } catch (InterruptedException e) {
+                    log.warn("Interrupted while running event. Shutting down event queue");
+                    return true;
+                } catch (Throwable e) {
+                    log.debug("Got exception while running {}. Invoking handleException.", event, e);
+                    exceptionToDeliver = e;
                 }
             }
-        }
-
-        /**
-         * Complete the event associated with this EventContext with a timeout exception.
-         */
-        void completeWithTimeout() {
-            completeWithException(new TimeoutException());
+            if (exceptionToDeliver != null) {
+                completeWithException(log, exceptionToDeliver);
+            }
+            return Thread.currentThread().isInterrupted();
         }
 
         /**
          * Complete the event associated with this EventContext with the specified
          * exception.
          */
-        void completeWithException(Throwable t) {
-            event.handleException(t);
+        void completeWithException(Logger log, Throwable t) {
+            try {
+                event.handleException(t);
+            } catch (Exception e) {
+                log.error("Unexpected exception in handleException", e);
+            }
         }
     }
 
@@ -173,9 +179,13 @@ public final class KafkaEventQueue implements EventQueue {
         public void run() {
             try {
                 handleEvents();
-                cleanupEvent.run();
             } catch (Throwable e) {
                 log.warn("event handler thread exiting with exception", e);
+            }
+            try {
+                cleanupEvent.run();
+            } catch (Throwable e) {
+                log.warn("cleanup event threw exception", e);
             }
         }
 
@@ -192,23 +202,23 @@ public final class KafkaEventQueue implements EventQueue {
         }
 
         private void handleEvents() throws InterruptedException {
-            EventContext toTimeout = null;
+            Throwable toDeliver = null;
             EventContext toRun = null;
+            boolean wasInterrupted = false;
             while (true) {
-                if (toTimeout != null) {
-                    toTimeout.completeWithTimeout();
-                } else if (toRun != null) {
-                    toRun.run(log);
+                if (toRun != null) {
+                    wasInterrupted = toRun.run(log, toDeliver);
                 }
                 lock.lock();
                 try {
-                    if (toTimeout != null) {
-                        size--;
-                        toTimeout = null;
-                    }
                     if (toRun != null) {
                         size--;
+                        if (wasInterrupted) {
+                            interrupted = wasInterrupted;
+                        }
+                        toDeliver = null;
                         toRun = null;
+                        wasInterrupted = false;
                     }
                     long awaitNs = Long.MAX_VALUE;
                     Map.Entry<Long, EventContext> entry = deadlineMap.firstEntry();
@@ -224,41 +234,60 @@ public final class KafkaEventQueue implements EventQueue {
                                 // queue.  (The value for deferred events is a schedule time
                                 // rather than a timeout.)
                                 remove(eventContext);
+                                toDeliver = null;
                                 toRun = eventContext;
                             } else {
                                 // not a deferred event, so it is a deadline, and it is timed out.
                                 remove(eventContext);
-                                toTimeout = eventContext;
+                                toDeliver = new TimeoutException();
+                                toRun = eventContext;
                             }
                             continue;
-                        } else if (closingTimeNs <= now) {
+                        } else if (interrupted) {
                             remove(eventContext);
-                            toTimeout = eventContext;
+                            toDeliver = new InterruptedException();
+                            toRun = eventContext;
+                            continue;
+                        } else if (shuttingDown) {
+                            remove(eventContext);
+                            toDeliver = new TimeoutException();
+                            toRun = eventContext;
                             continue;
                         }
                         awaitNs = timeoutNs - now;
                     }
                     if (head.next == head) {
-                        if ((closingTimeNs != Long.MAX_VALUE) && deadlineMap.isEmpty()) {
+                        if (deadlineMap.isEmpty() && (shuttingDown || interrupted)) {
                             // If there are no more entries to process, and the queue is
                             // closing, exit the thread.
                             return;
                         }
                     } else {
+                        if (interrupted) {
+                            toDeliver = new InterruptedException();
+                        } else {
+                            toDeliver = null;
+                        }
                         toRun = head.next;
                         remove(toRun);
                         continue;
                     }
-                    if (closingTimeNs != Long.MAX_VALUE) {
-                        long now = time.nanoseconds();
-                        if (awaitNs > closingTimeNs - now) {
-                            awaitNs = closingTimeNs - now;
-                        }
-                    }
                     if (awaitNs == Long.MAX_VALUE) {
-                        cond.await();
+                        try {
+                            cond.await();
+                        } catch (InterruptedException e) {
+                            log.warn("Interrupted while waiting for a new event. " +
+                                "Shutting down event queue");
+                            interrupted = true;
+                        }
                     } else {
-                        cond.awaitNanos(awaitNs);
+                        try {
+                            cond.awaitNanos(awaitNs);
+                        } catch (InterruptedException e) {
+                            log.warn("Interrupted while waiting for a deferred event. " +
+                                "Shutting down event queue");
+                            interrupted = true;
+                        }
                     }
                 } finally {
                     lock.unlock();
@@ -270,8 +299,11 @@ public final class KafkaEventQueue implements EventQueue {
                           Function<OptionalLong, OptionalLong> deadlineNsCalculator) {
             lock.lock();
             try {
-                if (closingTimeNs != Long.MAX_VALUE) {
+                if (shuttingDown) {
                     return new RejectedExecutionException();
+                }
+                if (interrupted) {
+                    return new InterruptedException();
                 }
                 OptionalLong existingDeadlineNs = OptionalLong.empty();
                 if (eventContext.tag != null) {
@@ -362,31 +394,69 @@ public final class KafkaEventQueue implements EventQueue {
         }
     }
 
+    /**
+     * The clock to use.
+     */
     private final Time time;
+
+    /**
+     * The event to run when the queue is closing.
+     */
+    private final Event cleanupEvent;
+
+    /**
+     * The lock which protects private data.
+     */
     private final ReentrantLock lock;
+
+    /**
+     * The log4j logger to use.
+     */
     private final Logger log;
+
+    /**
+     * The runnable that our thread executes.
+     */
     private final EventHandler eventHandler;
+
+    /**
+     * The queue thread.
+     */
     private final Thread eventHandlerThread;
 
     /**
-     * The time in monotonic nanoseconds when the queue is closing, or Long.MAX_VALUE if
-     * the queue is not currently closing.
+     * True if the event queue is shutting down. Protected by the lock.
      */
-    private long closingTimeNs;
+    private boolean shuttingDown;
 
-    private Event cleanupEvent;
+    /**
+     * True if the event handler thread was interrupted. Protected by the lock.
+     */
+    private boolean interrupted;
 
-    public KafkaEventQueue(Time time,
-                           LogContext logContext,
-                           String threadNamePrefix) {
+    public KafkaEventQueue(
+        Time time,
+        LogContext logContext,
+        String threadNamePrefix
+    ) {
+        this(time, logContext, threadNamePrefix, VoidEvent::new);
+    }
+
+    public KafkaEventQueue(
+        Time time,
+        LogContext logContext,
+        String threadNamePrefix,
+        Event cleanupEvent
+    ) {
         this.time = time;
+        this.cleanupEvent = Objects.requireNonNull(cleanupEvent);
         this.lock = new ReentrantLock();
         this.log = logContext.logger(KafkaEventQueue.class);
         this.eventHandler = new EventHandler();
         this.eventHandlerThread = new KafkaThread(threadNamePrefix + "EventHandler",
             this.eventHandler, false);
-        this.closingTimeNs = Long.MAX_VALUE;
-        this.cleanupEvent = null;
+        this.shuttingDown = false;
+        this.interrupted = false;
         this.eventHandlerThread.start();
     }
 
@@ -398,7 +468,7 @@ public final class KafkaEventQueue implements EventQueue {
         EventContext eventContext = new EventContext(event, insertionType, tag);
         Exception e = eventHandler.enqueue(eventContext, deadlineNsCalculator);
         if (e != null) {
-            eventContext.completeWithException(e);
+            eventContext.completeWithException(log, e);
         }
     }
 
@@ -408,24 +478,15 @@ public final class KafkaEventQueue implements EventQueue {
     }
 
     @Override
-    public void beginShutdown(String source, Event newCleanupEvent,
-                              long timeSpan, TimeUnit timeUnit) {
-        if (timeSpan < 0) {
-            throw new IllegalArgumentException("beginShutdown must be called with a " +
-                "non-negative timeout.");
-        }
-        Objects.requireNonNull(newCleanupEvent);
+    public void beginShutdown(String source) {
         lock.lock();
         try {
-            if (cleanupEvent != null) {
+            if (shuttingDown) {
                 log.debug("{}: Event queue is already shutting down.", source);
                 return;
             }
             log.info("{}: shutting down event queue.", source);
-            cleanupEvent = newCleanupEvent;
-            long newClosingTimeNs = time.nanoseconds() + timeUnit.toNanos(timeSpan);
-            if (closingTimeNs >= newClosingTimeNs)
-                closingTimeNs = newClosingTimeNs;
+            shuttingDown = true;
             eventHandler.cond.signal();
         } finally {
             lock.unlock();
