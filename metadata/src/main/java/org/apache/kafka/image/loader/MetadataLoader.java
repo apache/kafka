@@ -25,6 +25,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.image.writer.ImageReWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
@@ -209,7 +210,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         this.uninitializedPublishers = new LinkedHashMap<>();
         this.publishers = new LinkedHashMap<>();
         this.image = MetadataImage.EMPTY;
-        this.eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix);
+        this.eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix, new ShutdownEvent());
     }
 
     private boolean stillNeedToCatchUp(long offset) {
@@ -538,9 +539,14 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
 
     @Override
     public void beginShutdown() {
-        eventQueue.beginShutdown("beginShutdown", () -> {
+        eventQueue.beginShutdown("beginShutdown");
+    }
+
+    class ShutdownEvent implements EventQueue.Event {
+        @Override
+        public void run() throws Exception {
             for (Iterator<MetadataPublisher> iter = uninitializedPublishers.values().iterator();
-                    iter.hasNext(); ) {
+                 iter.hasNext(); ) {
                 closePublisher(iter.next());
                 iter.remove();
             }
@@ -549,7 +555,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 closePublisher(iter.next());
                 iter.remove();
             }
-        });
+        }
     }
 
     Time time() {
