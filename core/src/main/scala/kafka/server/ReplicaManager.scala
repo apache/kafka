@@ -17,7 +17,7 @@
 package kafka.server
 
 import java.io.File
-import java.util.Optional
+import java.util.{Optional, OptionalInt, OptionalLong}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.Lock
@@ -122,9 +122,9 @@ case class LogReadResult(info: FetchDataInfo,
     this.leaderLogStartOffset,
     this.info.records,
     this.divergingEpoch.asJava,
-    if (this.lastStableOffset.isDefined) Optional.of(this.lastStableOffset.get) else Optional.empty(),
-    if (this.info.abortedTransactions.isPresent) this.info.abortedTransactions else Optional.empty(),
-    if (this.preferredReadReplica.isDefined) Optional.of(this.preferredReadReplica.get) else Optional.empty(),
+    if (this.lastStableOffset.isDefined) OptionalLong.of(this.lastStableOffset.get) else OptionalLong.empty(),
+    this.info.abortedTransactions,
+    if (this.preferredReadReplica.isDefined) OptionalInt.of(this.preferredReadReplica.get) else OptionalInt.empty(),
     isReassignmentFetch)
 
   def withEmptyFetchInfo: LogReadResult =

@@ -38,6 +38,8 @@ public class FetchParams {
                        int maxBytes,
                        FetchIsolation isolation,
                        Optional<ClientMetadata> clientMetadata) {
+        Objects.requireNonNull(isolation);
+        Objects.requireNonNull(clientMetadata);
         this.requestVersion = requestVersion;
         this.replicaId = replicaId;
         this.maxWaitMs = maxWaitMs;
@@ -73,18 +75,25 @@ public class FetchParams {
                 && maxWaitMs == that.maxWaitMs
                 && minBytes == that.minBytes
                 && maxBytes == that.maxBytes
-                && Objects.equals(isolation, that.isolation)
-                && Objects.equals(clientMetadata, that.clientMetadata);
+                && isolation.equals(that.isolation)
+                && clientMetadata.equals(that.clientMetadata);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(requestVersion, replicaId, maxWaitMs, minBytes, maxBytes, isolation, clientMetadata);
+        int result = requestVersion;
+        result = 31 * result + replicaId;
+        result = 31 * result + Long.hashCode(32);
+        result = 31 * result + minBytes;
+        result = 31 * result + maxBytes;
+        result = 31 * result + isolation.hashCode();
+        result = 31 * result + clientMetadata.hashCode();
+        return result;
     }
 
     @Override
     public String toString() {
-        return "FetchParams{" +
+        return "FetchParams(" +
                 "requestVersion=" + requestVersion +
                 ", replicaId=" + replicaId +
                 ", maxWaitMs=" + maxWaitMs +
@@ -92,6 +101,6 @@ public class FetchParams {
                 ", maxBytes=" + maxBytes +
                 ", isolation=" + isolation +
                 ", clientMetadata=" + clientMetadata +
-                '}';
+                ')';
     }
 }

@@ -24,26 +24,14 @@ import java.util.List;
 import java.util.Optional;
 
 public class FetchDataInfo {
-    private final LogOffsetMetadata fetchOffsetMetadata;
-    private final Records records;
-    private final boolean firstEntryIncomplete;
-    private final Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions;
+    public final LogOffsetMetadata fetchOffsetMetadata;
+    public final Records records;
+    public final boolean firstEntryIncomplete;
+    public final Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions;
 
     public FetchDataInfo(LogOffsetMetadata fetchOffsetMetadata,
                          Records records) {
         this(fetchOffsetMetadata, records, false, Optional.empty());
-    }
-
-    public FetchDataInfo(LogOffsetMetadata fetchOffsetMetadata,
-                         Records records,
-                         boolean firstEntryIncomplete) {
-        this(fetchOffsetMetadata, records, firstEntryIncomplete, Optional.empty());
-    }
-
-    public FetchDataInfo(LogOffsetMetadata fetchOffsetMetadata,
-                         Records records,
-                         Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions) {
-        this(fetchOffsetMetadata, records, false, abortedTransactions);
     }
 
     public FetchDataInfo(LogOffsetMetadata fetchOffsetMetadata,
@@ -54,22 +42,6 @@ public class FetchDataInfo {
         this.records = records;
         this.firstEntryIncomplete = firstEntryIncomplete;
         this.abortedTransactions = abortedTransactions;
-    }
-
-    public LogOffsetMetadata fetchOffsetMetadata() {
-        return fetchOffsetMetadata;
-    }
-
-    public Records records() {
-        return records;
-    }
-
-    public boolean firstEntryIncomplete() {
-        return firstEntryIncomplete;
-    }
-
-    public Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions() {
-        return abortedTransactions;
     }
 
     public static FetchDataInfo empty(long fetchOffset) {

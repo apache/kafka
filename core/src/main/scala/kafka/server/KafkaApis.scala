@@ -82,7 +82,6 @@ import java.util.{Collections, Optional}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
-import scala.compat.java8.OptionConverters.{RichOptionForJava8}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -835,8 +834,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       val partitions = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
       val reassigningPartitions = mutable.Set[TopicIdPartition]()
       responsePartitionData.foreach { case (tp, data) =>
-        val abortedTransactions = if (data.abortedTransactions.isPresent) data.abortedTransactions.get else null
-        val lastStableOffset: Long = if (data.lastStableOffset.isPresent) data.lastStableOffset.get else FetchResponse.INVALID_LAST_STABLE_OFFSET
+        val abortedTransactions = data.abortedTransactions.orElse(null)
+        val lastStableOffset: Long = data.lastStableOffset.orElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         if (data.isReassignmentFetch) reassigningPartitions.add(tp)
         val partitionData = new FetchResponseData.PartitionData()
           .setPartitionIndex(tp.partition)
@@ -846,7 +845,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setLogStartOffset(data.logStartOffset)
           .setAbortedTransactions(abortedTransactions)
           .setRecords(data.records)
-          .setPreferredReadReplica(if (data.preferredReadReplica.isPresent) data.preferredReadReplica.get else FetchResponse.INVALID_PREFERRED_REPLICA_ID)
+          .setPreferredReadReplica(data.preferredReadReplica.orElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
         if (data.divergingEpoch.isPresent) partitionData.setDivergingEpoch(data.divergingEpoch.get)
         partitions.put(tp, partitionData)
       }
@@ -956,16 +955,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       val fetchMaxBytes = Math.min(Math.min(fetchRequest.maxBytes, config.fetchMaxBytes), maxQuotaWindowBytes)
       val fetchMinBytes = Math.min(fetchRequest.minBytes, fetchMaxBytes)
 
-      val clientMetadata: Option[ClientMetadata] = if (versionId >= 11) {
+      val clientMetadata: Optional[ClientMetadata] = if (versionId >= 11) {
         // Fetch API version 11 added preferred replica logic
-        Some(new DefaultClientMetadata(
+        Optional.of(new DefaultClientMetadata(
           fetchRequest.rackId,
           clientId,
           request.context.clientAddress,
           request.context.principal,
           request.context.listenerName.value))
       } else {
-        None
+        Optional.empty()
       }
 
       val params = new FetchParams(
@@ -975,7 +974,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchMinBytes,
         fetchMaxBytes,
         FetchIsolation.of(fetchRequest),
-        clientMetadata.asJava
+        clientMetadata
       )
 
       // call the replica manager to fetch messages from the local replica

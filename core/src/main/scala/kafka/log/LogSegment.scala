@@ -319,7 +319,7 @@ class LogSegment private[log] (val log: FileRecords,
     val fetchSize: Int = min((maxPosition - startPosition).toInt, adjustedMaxSize)
 
     new FetchDataInfo(offsetMetadata, log.slice(startPosition, fetchSize),
-      adjustedMaxSize < startOffsetAndSize.size)
+      adjustedMaxSize < startOffsetAndSize.size, Optional.empty())
   }
 
    def fetchUpperBoundOffset(startOffsetPosition: OffsetPosition, fetchSize: Int): Optional[Long] =

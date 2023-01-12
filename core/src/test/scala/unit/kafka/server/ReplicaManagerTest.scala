@@ -24,7 +24,7 @@ import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.stream.IntStream
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Optional, OptionalLong, Properties}
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
@@ -583,7 +583,7 @@ class ReplicaManagerTest {
       var fetchData = consumerFetchResult.assertFired
       assertEquals(Errors.NONE, fetchData.error)
       assertTrue(fetchData.records.batches.asScala.isEmpty)
-      assertEquals(0, fetchData.lastStableOffset.get())
+      assertEquals(OptionalLong.of(0), fetchData.lastStableOffset)
       assertEquals(Optional.of(Collections.emptyList()), fetchData.abortedTransactions)
 
       // delayed fetch should timeout and return nothing
@@ -601,7 +601,7 @@ class ReplicaManagerTest {
       fetchData = consumerFetchResult.assertFired
       assertEquals(Errors.NONE, fetchData.error)
       assertTrue(fetchData.records.batches.asScala.isEmpty)
-      assertEquals(0, fetchData.lastStableOffset.get())
+      assertEquals(OptionalLong.of(0), fetchData.lastStableOffset)
       assertEquals(Optional.of(Collections.emptyList()), fetchData.abortedTransactions)
 
       // now commit the transaction
@@ -639,7 +639,7 @@ class ReplicaManagerTest {
 
       fetchData = consumerFetchResult.assertFired
       assertEquals(Errors.NONE, fetchData.error)
-      assertEquals(numRecords + 1, fetchData.lastStableOffset.get())
+      assertEquals(OptionalLong.of(numRecords + 1), fetchData.lastStableOffset)
       assertEquals(Optional.of(Collections.emptyList()), fetchData.abortedTransactions)
       assertEquals(numRecords + 1, fetchData.records.batches.asScala.size)
     } finally {
@@ -720,7 +720,7 @@ class ReplicaManagerTest {
       val fetchData = fetchResult.assertFired
 
       assertEquals(Errors.NONE, fetchData.error)
-      assertEquals(numRecords + 1, fetchData.lastStableOffset.get())
+      assertEquals(OptionalLong.of(numRecords + 1), fetchData.lastStableOffset)
       assertEquals(numRecords + 1, fetchData.records.records.asScala.size)
       assertTrue(fetchData.abortedTransactions.isPresent)
       assertEquals(1, fetchData.abortedTransactions.get.size)
@@ -1082,7 +1082,7 @@ class ReplicaManagerTest {
         // the response contains high watermark on the leader before it is updated based
         // on this fetch request
         assertEquals(0, tp0Status.get.highWatermark)
-        assertEquals(0, tp0Status.get.lastStableOffset.get())
+        assertEquals(OptionalLong.of(0), tp0Status.get.lastStableOffset)
         assertEquals(Errors.NONE, tp0Status.get.error)
         assertTrue(tp0Status.get.records.batches.iterator.hasNext)
 

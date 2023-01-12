@@ -38,7 +38,7 @@ import org.mockito.ArgumentMatchers.{any, anyBoolean}
 import org.mockito.Mockito.{doNothing, mock, never, times, verify, when}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
@@ -142,9 +142,9 @@ class ReplicaAlterLogDirsThreadTest {
       -1,
       MemoryRecords.EMPTY,
       Optional.empty(),
+      OptionalLong.empty(),
       Optional.empty(),
-      Optional.empty(),
-      Optional.empty(),
+      OptionalInt.empty(),
       false)
     mockFetchFromCurrentLog(tid1p0, fencedRequestData, config, replicaManager, fencedResponseData)
 
@@ -183,9 +183,9 @@ class ReplicaAlterLogDirsThreadTest {
       0L,
       MemoryRecords.EMPTY,
       Optional.empty(),
+      OptionalLong.empty(),
       Optional.empty(),
-      Optional.empty(),
-      Optional.empty(),
+      OptionalInt.empty(),
       false)
     mockFetchFromCurrentLog(tid1p0, requestData, config, replicaManager, responseData)
 
@@ -241,9 +241,9 @@ class ReplicaAlterLogDirsThreadTest {
       0L,
       MemoryRecords.EMPTY,
       Optional.empty(),
+      OptionalLong.empty(),
       Optional.empty(),
-      Optional.empty(),
-      Optional.empty(),
+      OptionalInt.empty(),
       false)
     mockFetchFromCurrentLog(tid1p0, requestData, config, replicaManager, responseData)
 
@@ -286,15 +286,12 @@ class ReplicaAlterLogDirsThreadTest {
       Optional.empty()
     )
 
-    println(expectedFetchParams)
-
     when(replicaManager.fetchMessages(
       params = ArgumentMatchers.eq(expectedFetchParams),
       fetchInfos = ArgumentMatchers.eq(Seq(topicIdPartition -> requestData)),
       quota = ArgumentMatchers.eq(UnboundedQuota),
       responseCallback = callbackCaptor.capture(),
     )).thenAnswer(_ => {
-      println("Did we get the callback?")
       callbackCaptor.getValue.apply(Seq((topicIdPartition, responseData)))
     })
   }

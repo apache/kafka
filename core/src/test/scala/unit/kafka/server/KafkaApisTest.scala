@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Optional, OptionalInt, OptionalLong, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
@@ -2650,7 +2650,7 @@ class KafkaApisTest {
       val records = MemoryRecords.withRecords(CompressionType.NONE,
         new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
       callback(Seq(tidp -> new FetchPartitionData(Errors.NONE, hw, 0, records,
-        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false)))
+        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)))
     })
 
     val fetchData = Map(tidp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
@@ -3439,7 +3439,7 @@ class KafkaApisTest {
     )).thenAnswer(invocation => {
       val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
       callback(Seq(tidp0 -> new FetchPartitionData(Errors.NONE, hw, 0, records,
-        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), isReassigning)))
+        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), isReassigning)))
     })
 
     val fetchMetadata = new JFetchMetadata(0, 0)

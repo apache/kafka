@@ -1010,6 +1010,7 @@ object LocalLog extends Logging {
       else Optional.empty()
     new FetchDataInfo(fetchOffsetMetadata,
       MemoryRecords.EMPTY,
+      false,
       abortedTransactions)
   }
 

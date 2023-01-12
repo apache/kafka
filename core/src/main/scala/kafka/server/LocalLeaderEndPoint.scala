@@ -75,8 +75,8 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
     def processResponseCallback(responsePartitionData: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
       partitionData = responsePartitionData.map { case (tp, data) =>
-        val abortedTransactions =  if (data.abortedTransactions.isPresent) data.abortedTransactions.get else null
-        val lastStableOffset: Long = if (data.lastStableOffset.isPresent) data.lastStableOffset.get else FetchResponse.INVALID_LAST_STABLE_OFFSET
+        val abortedTransactions =  data.abortedTransactions.orElse(null)
+        val lastStableOffset: Long = data.lastStableOffset.orElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         tp.topicPartition -> new FetchResponseData.PartitionData()
           .setPartitionIndex(tp.topicPartition.partition)
           .setErrorCode(data.error.code)

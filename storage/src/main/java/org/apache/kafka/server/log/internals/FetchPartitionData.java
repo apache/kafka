@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.server.log.internals;
 
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.Records;
@@ -29,9 +31,9 @@ public class FetchPartitionData {
     public final long logStartOffset;
     public final Records records;
     public final Optional<FetchResponseData.EpochEndOffset> divergingEpoch;
-    public final Optional<Long> lastStableOffset;
+    public final OptionalLong lastStableOffset;
     public final Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions;
-    public final Optional<Integer> preferredReadReplica;
+    public final OptionalInt preferredReadReplica;
     public final boolean isReassignmentFetch;
 
     public FetchPartitionData(Errors error,
@@ -39,9 +41,9 @@ public class FetchPartitionData {
                               long logStartOffset,
                               Records records,
                               Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
-                              Optional<Long> lastStableOffset,
+                              OptionalLong lastStableOffset,
                               Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions,
-                              Optional<Integer> preferredReadReplica,
+                              OptionalInt preferredReadReplica,
                               boolean isReassignmentFetch) {
         this.error = error;
         this.highWatermark = highWatermark;

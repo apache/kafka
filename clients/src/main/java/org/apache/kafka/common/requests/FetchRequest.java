@@ -447,11 +447,10 @@ public class FetchRequest extends AbstractRequest {
             case DEBUGGING_CONSUMER_ID: return "debug consumer";
             case FUTURE_LOCAL_REPLICA_ID: return "future local replica";
             default: {
-                if (isValidBrokerId(replicaId)) {
-                    return String.format("replica [%s]", replicaId);
-                } else {
-                    return String.format("invalid replica [%s]", replicaId);
-                }
+                if (isValidBrokerId(replicaId))
+                    return "replica [" + replicaId + "]";
+                else
+                    return "invalid replica [" + replicaId + "]";
             }
         }
     }
