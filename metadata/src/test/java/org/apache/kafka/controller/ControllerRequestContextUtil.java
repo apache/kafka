@@ -17,7 +17,11 @@
 
 package org.apache.kafka.controller;
 
+import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.function.Consumer;
+
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -30,19 +34,34 @@ public class ControllerRequestContextUtil {
             OptionalLong.empty());
 
     public static ControllerRequestContext anonymousContextFor(ApiKeys apiKeys) {
-        return anonymousContextFor(apiKeys, apiKeys.latestVersion());
+        return anonymousContextFor(apiKeys, apiKeys.latestVersion(), Optional.empty());
+    }
+
+    public static ControllerRequestContext anonymousContextWithMutationQuotaExceededFor(ApiKeys apiKeys) {
+        return anonymousContextFor(apiKeys, apiKeys.latestVersion(), Optional.of(x -> {
+            throw new ThrottlingQuotaExceededException("Quota exceeded in test");
+        }));
+    }
+
+    public static ControllerRequestContext anonymousContextFor(
+            ApiKeys apiKeys,
+            short version
+    ) {
+        return anonymousContextFor(apiKeys, version, Optional.empty());
     }
 
     public static ControllerRequestContext anonymousContextFor(
         ApiKeys apiKeys,
-        short version
+        short version,
+        Optional<Consumer<Double>> requestedPartitionCountRecorder
     ) {
         return new ControllerRequestContext(
             new RequestHeaderData()
                 .setRequestApiKey(apiKeys.id)
                 .setRequestApiVersion(version),
             KafkaPrincipal.ANONYMOUS,
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            requestedPartitionCountRecorder
         );
     }
 }

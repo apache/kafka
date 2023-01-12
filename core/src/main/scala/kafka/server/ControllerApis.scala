@@ -17,10 +17,11 @@
 
 package kafka.server
 
-import java.util
-import java.util.{Collections, OptionalLong}
+import java.{lang, util}
+import java.util.{Collections, Optional, OptionalLong}
 import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
+import java.util.function.Consumer
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -175,7 +176,8 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleDeleteTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val deleteTopicsRequest = request.body[DeleteTopicsRequest]
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
-      requestTimeoutMsToDeadlineNs(time, deleteTopicsRequest.data.timeoutMs))
+      requestTimeoutMsToDeadlineNs(time, deleteTopicsRequest.data.timeoutMs),
+      controllerMutationQuotaRecorder(request, strictSinceVersion = 5))
     val future = deleteTopics(context,
       deleteTopicsRequest.data,
       request.context.apiVersion,
@@ -339,7 +341,8 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleCreateTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
-      requestTimeoutMsToDeadlineNs(time, createTopicsRequest.data.timeoutMs))
+      requestTimeoutMsToDeadlineNs(time, createTopicsRequest.data.timeoutMs),
+      controllerMutationQuotaRecorder(request, strictSinceVersion = 6))
     val future = createTopics(context,
         createTopicsRequest.data,
         authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
@@ -356,6 +359,14 @@ class ControllerApis(val requestChannel: RequestChannel,
         }
       })
     }
+  }
+
+  private def controllerMutationQuotaRecorder(request: RequestChannel.Request, strictSinceVersion: Short) = {
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion)
+    val controllerMutationQuotaRecorder = new Consumer[lang.Double]() {
+      override def accept(permits: lang.Double): Unit = controllerMutationQuota.record(permits)
+    }
+    Optional.of(controllerMutationQuotaRecorder)
   }
 
   def createTopics(
@@ -748,7 +759,8 @@ class ControllerApis(val requestChannel: RequestChannel,
     }
     val createPartitionsRequest = request.body[CreatePartitionsRequest]
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
-      requestTimeoutMsToDeadlineNs(time, createPartitionsRequest.data.timeoutMs))
+      requestTimeoutMsToDeadlineNs(time, createPartitionsRequest.data.timeoutMs),
+      controllerMutationQuotaRecorder(request, strictSinceVersion = 3))
     val future = createPartitions(context,
       createPartitionsRequest.data(),
       filterAlterAuthorizedTopics)

@@ -1771,7 +1771,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new CreateTopicsResponseData());
         }
         return appendWriteEvent("createTopics", context.deadlineNs(),
-            () -> replicationControl.createTopics(request, describable));
+            () -> replicationControl.createTopics(context, request, describable));
     }
 
     @Override
@@ -2042,7 +2042,7 @@ public final class QuorumController implements Controller {
         }
 
         return appendWriteEvent("createPartitions", context.deadlineNs(), () -> {
-            final ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(topics);
+            final ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(context, topics);
             if (validateOnly) {
                 log.debug("Validate-only CreatePartitions result(s): {}", result.response());
                 return result.withoutRecords();

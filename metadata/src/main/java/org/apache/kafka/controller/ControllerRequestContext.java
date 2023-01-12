@@ -18,12 +18,15 @@
 package org.apache.kafka.controller;
 
 
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
+import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.function.Consumer;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -42,19 +45,39 @@ public class ControllerRequestContext {
     private final OptionalLong deadlineNs;
     private final RequestHeaderData requestHeader;
 
+    private final Optional<Consumer<Double>> requestedPartitionCountRecorder;
+
     public ControllerRequestContext(
         RequestHeaderData requestHeader,
         KafkaPrincipal principal,
         OptionalLong deadlineNs
     ) {
+        this(requestHeader, principal, deadlineNs, Optional.empty());
+    }
+
+    public ControllerRequestContext(
+        RequestHeaderData requestHeader,
+        KafkaPrincipal principal,
+        OptionalLong deadlineNs,
+        Optional<Consumer<Double>> requestedPartitionCountRecorder
+    ) {
         this.requestHeader = requestHeader;
         this.principal = principal;
         this.deadlineNs = deadlineNs;
+        this.requestedPartitionCountRecorder = requestedPartitionCountRecorder;
     }
 
     public ControllerRequestContext(
         AuthorizableRequestContext requestContext,
         OptionalLong deadlineNs
+    ) {
+        this(requestContext, deadlineNs, Optional.empty());
+    }
+
+    public ControllerRequestContext(
+        AuthorizableRequestContext requestContext,
+        OptionalLong deadlineNs,
+        Optional<Consumer<Double>> requestedPartitionCountRecorder
     ) {
         this(
             new RequestHeaderData()
@@ -63,7 +86,8 @@ public class ControllerRequestContext {
                 .setCorrelationId(requestContext.correlationId())
                 .setClientId(requestContext.clientId()),
             requestContext.principal(),
-            deadlineNs
+            deadlineNs,
+            requestedPartitionCountRecorder
         );
     }
 
@@ -77,5 +101,15 @@ public class ControllerRequestContext {
 
     public OptionalLong deadlineNs() {
         return deadlineNs;
+    }
+
+    /**
+     *
+     * @param requestedPartitionCount the value to record
+     * @throws ThrottlingQuotaExceededException if recording this value moves a metric beyond its configured maximum or minimum
+     *         bound
+     */
+    public void record(double requestedPartitionCount) {
+        this.requestedPartitionCountRecorder.ifPresent(recorder -> recorder.accept(requestedPartitionCount));
     }
 }

@@ -32,6 +32,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.NoReassignmentInProgressException;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -522,8 +523,11 @@ public class ReplicationControlManager {
         log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
     }
 
-    ControllerResult<CreateTopicsResponseData>
-            createTopics(CreateTopicsRequestData request, Set<String> describable) {
+    ControllerResult<CreateTopicsResponseData> createTopics(
+        ControllerRequestContext context,
+        CreateTopicsRequestData request,
+        Set<String> describable
+    ) {
         Map<String, ApiError> topicErrors = new HashMap<>();
         List<ApiMessageAndVersion> records = new ArrayList<>();
 
@@ -562,7 +566,7 @@ public class ReplicationControlManager {
             }
             ApiError error;
             try {
-                error = createTopic(topic, records, successes, configRecords, describable.contains(topic.name()));
+                error = createTopic(context, topic, records, successes, configRecords, describable.contains(topic.name()));
             } catch (ApiException e) {
                 error = ApiError.fromThrowable(e);
             }
@@ -602,7 +606,8 @@ public class ReplicationControlManager {
         }
     }
 
-    private ApiError createTopic(CreatableTopic topic,
+    private ApiError createTopic(ControllerRequestContext context,
+                                 CreatableTopic topic,
                                  List<ApiMessageAndVersion> records,
                                  Map<String, CreatableTopicResult> successes,
                                  List<ApiMessageAndVersion> configRecords,
@@ -710,6 +715,15 @@ public class ReplicationControlManager {
             setTopicId(topicId).
             setErrorCode(NONE.code()).
             setErrorMessage(null);
+        int numPartitions = newParts.size();
+        if (!validateOnly) {
+            try {
+                context.record(numPartitions); // check controller mutation quota
+            } catch (ThrottlingQuotaExceededException e) {
+                log.debug("Topic creation not allowed because quota is violated. Delay time: {}", e.throttleTimeMs());
+                return ApiError.fromThrowable(e);
+            }
+        }
         if (authorizedToReturnConfigs) {
             Map<String, ConfigEntry> effectiveConfig = configurationControl.
                 computeEffectiveTopicConfigs(creationConfigs);
@@ -724,7 +738,7 @@ public class ReplicationControlManager {
                     setConfigSource(KafkaConfigSchema.translateConfigSource(entry.source()).id()).
                     setIsSensitive(entry.isSensitive()));
             }
-            result.setNumPartitions(newParts.size());
+            result.setNumPartitions(numPartitions);
             result.setReplicationFactor((short) newParts.values().iterator().next().replicas.length);
             result.setTopicConfigErrorCode(NONE.code());
         } else {
@@ -1457,8 +1471,10 @@ public class ReplicationControlManager {
         return ControllerResult.of(records, rescheduleImmidiately);
     }
 
-    ControllerResult<List<CreatePartitionsTopicResult>>
-            createPartitions(List<CreatePartitionsTopic> topics) {
+    ControllerResult<List<CreatePartitionsTopicResult>> createPartitions(
+        ControllerRequestContext context,
+        List<CreatePartitionsTopic> topics
+    ) {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         List<CreatePartitionsTopicResult> results = new ArrayList<>();
         for (CreatePartitionsTopic topic : topics) {

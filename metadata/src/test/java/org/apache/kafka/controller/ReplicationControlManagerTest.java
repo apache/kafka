@@ -128,9 +128,11 @@ import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRES
 import static org.apache.kafka.common.protocol.Errors.OPERATION_NOT_ATTEMPTED;
 import static org.apache.kafka.common.protocol.Errors.POLICY_VIOLATION;
 import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAILABLE;
+import static org.apache.kafka.common.protocol.Errors.THROTTLING_QUOTA_EXCEEDED;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
+import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextWithMutationQuotaExceededFor;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -219,8 +221,10 @@ public class ReplicationControlManagerTest {
             CreatableTopic topic = new CreatableTopic().setName(name);
             topic.setNumPartitions(numPartitions).setReplicationFactor(replicationFactor);
             request.topics().add(topic);
+            ControllerRequestContext requestContext =
+                    anonymousContextFor(ApiKeys.CREATE_TOPICS);
             ControllerResult<CreateTopicsResponseData> result =
-                replicationControl.createTopics(request, Collections.singleton(name));
+                replicationControl.createTopics(requestContext, request, Collections.singleton(name));
             CreatableTopicResult topicResult = result.response().topics().find(name);
             assertNotNull(topicResult);
             assertEquals(expectedErrorCode, topicResult.errorCode());
@@ -254,8 +258,10 @@ public class ReplicationControlManagerTest {
                 new CreateTopicsRequestData.CreateableTopicConfig().setName(e.getKey()).
                     setValue(e.getValue())));
             request.topics().add(topic);
+            ControllerRequestContext requestContext =
+                    anonymousContextFor(ApiKeys.CREATE_TOPICS);
             ControllerResult<CreateTopicsResponseData> result =
-                replicationControl.createTopics(request, Collections.singleton(name));
+                replicationControl.createTopics(requestContext, request, Collections.singleton(name));
             CreatableTopicResult topicResult = result.response().topics().find(name);
             assertNotNull(topicResult);
             assertEquals(expectedErrorCode, topicResult.errorCode());
@@ -292,8 +298,10 @@ public class ReplicationControlManagerTest {
                 topic.assignments().add(new CreatePartitionsAssignment().
                     setBrokerIds(Replicas.toList(replicas[i])));
             }
+            ControllerRequestContext requestContext =
+                    anonymousContextFor(ApiKeys.CREATE_PARTITIONS);
             ControllerResult<List<CreatePartitionsTopicResult>> result =
-                replicationControl.createPartitions(Collections.singletonList(topic));
+                replicationControl.createPartitions(requestContext, Collections.singletonList(topic));
             assertEquals(1, result.response().size());
             CreatePartitionsTopicResult topicResult = result.response().get(0);
             assertEquals(name, topicResult.name());
@@ -471,8 +479,10 @@ public class ReplicationControlManagerTest {
         request.topics().add(new CreatableTopic().setName("foo").
             setNumPartitions(-1).setReplicationFactor((short) -1));
 
+        ControllerRequestContext requestContext =
+                anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
-            replicationControl.createTopics(request, Collections.singleton("foo"));
+            replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
             setErrorCode(INVALID_REPLICATION_FACTOR.code()).
@@ -485,7 +495,7 @@ public class ReplicationControlManagerTest {
         ctx.inControlledShutdownBrokers(0);
 
         ControllerResult<CreateTopicsResponseData> result2 =
-            replicationControl.createTopics(request, Collections.singleton("foo"));
+            replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse2 = new CreateTopicsResponseData();
         expectedResponse2.topics().add(new CreatableTopicResult().setName("foo").
             setErrorCode(INVALID_REPLICATION_FACTOR.code()).
@@ -497,7 +507,7 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1, 2);
 
         ControllerResult<CreateTopicsResponseData> result3 =
-            replicationControl.createTopics(request, Collections.singleton("foo"));
+            replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse3 = new CreateTopicsResponseData();
         expectedResponse3.topics().add(new CreatableTopicResult().setName("foo").
             setNumPartitions(1).setReplicationFactor((short) 3).
@@ -510,12 +520,32 @@ public class ReplicationControlManagerTest {
             replicationControl.getPartition(
                 ((TopicRecord) result3.records().get(0).message()).topicId(), 0));
         ControllerResult<CreateTopicsResponseData> result4 =
-                replicationControl.createTopics(request, Collections.singleton("foo"));
+                replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse4 = new CreateTopicsResponseData();
         expectedResponse4.topics().add(new CreatableTopicResult().setName("foo").
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
                 setErrorMessage("Topic 'foo' already exists."));
         assertEquals(expectedResponse4, result4.response());
+    }
+
+    @Test
+    public void testCreateTopicsWithMutationQuotaExceeded() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+                setNumPartitions(-1).setReplicationFactor((short) -1));
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        ControllerRequestContext requestContext =
+                anonymousContextWithMutationQuotaExceededFor(ApiKeys.CREATE_TOPICS);
+        ControllerResult<CreateTopicsResponseData> result =
+                replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
+        CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
+        expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
+                setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
+                setErrorMessage("Quota exceeded in test"));
+        assertEquals(expectedResponse, result.response());
     }
 
     @Test
@@ -531,8 +561,10 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1);
         ctx.inControlledShutdownBrokers(1);
 
+        ControllerRequestContext requestContext =
+                anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
-            replicationControl.createTopics(request, Collections.singleton("foo"));
+            replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
 
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
@@ -577,8 +609,10 @@ public class ReplicationControlManagerTest {
             .setNumPartitions(-1).setReplicationFactor((short) -1)
             .setConfigs(validConfigs));
 
+        ControllerRequestContext requestContext =
+                anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result1 =
-            replicationControl.createTopics(request1, Collections.singleton("foo"));
+            replicationControl.createTopics(requestContext, request1, Collections.singleton("foo"));
         assertEquals((short) 0, result1.response().topics().find("foo").errorCode());
 
         List<ApiMessageAndVersion> records1 = result1.records();
@@ -611,7 +645,7 @@ public class ReplicationControlManagerTest {
             .setConfigs(invalidConfigs));
 
         ControllerResult<CreateTopicsResponseData> result2 =
-            replicationControl.createTopics(request2, Collections.singleton("bar"));
+            replicationControl.createTopics(requestContext, request2, Collections.singleton("bar"));
         assertEquals(Errors.INVALID_CONFIG.code(), result2.response().topics().find("bar").errorCode());
         assertEquals(
             "Null value not supported for topic configs: foo",
@@ -624,7 +658,7 @@ public class ReplicationControlManagerTest {
             .setConfigs(validConfigs));
 
         ControllerResult<CreateTopicsResponseData> result3 =
-            replicationControl.createTopics(request3, Collections.singleton("baz"));
+            replicationControl.createTopics(requestContext, request3, Collections.singleton("baz"));
         assertEquals(INVALID_REPLICATION_FACTOR.code(), result3.response().topics().find("baz").errorCode());
         assertEquals(Collections.emptyList(), result3.records());
 
@@ -643,7 +677,7 @@ public class ReplicationControlManagerTest {
         request4Topics.add(batchedTopic1);
         request4Topics.add(batchedTopic2);
         ControllerResult<CreateTopicsResponseData> result4 =
-            replicationControl.createTopics(request4, request4Topics);
+            replicationControl.createTopics(requestContext, request4, request4Topics);
 
         assertEquals(Errors.NONE.code(), result4.response().topics().find(batchedTopic1).errorCode());
         assertEquals(INVALID_REPLICATION_FACTOR.code(), result4.response().topics().find(batchedTopic2).errorCode());
@@ -662,16 +696,20 @@ public class ReplicationControlManagerTest {
         assertEquals(batchedTopic1Record.topicId(), ((PartitionRecord) result4.records().get(2).message()).topicId());
     }
 
-    @Test
-    public void testCreateTopicsWithValidateOnlyFlag() throws Exception {
+    @ParameterizedTest(name = "testCreateTopicsWithValidateOnlyFlag with mutationQuotaExceeded: {0}")
+    @ValueSource(booleans = {true, false})
+    public void testCreateTopicsWithValidateOnlyFlag(boolean mutationQuotaExceeded) throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ctx.registerBrokers(0, 1, 2);
         ctx.unfenceBrokers(0, 1, 2);
         CreateTopicsRequestData request = new CreateTopicsRequestData().setValidateOnly(true);
         request.topics().add(new CreatableTopic().setName("foo").
             setNumPartitions(1).setReplicationFactor((short) 3));
+        ControllerRequestContext requestContext = mutationQuotaExceeded ?
+                    anonymousContextWithMutationQuotaExceededFor(ApiKeys.CREATE_TOPICS) :
+                    anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
-            ctx.replicationControl.createTopics(request, Collections.singleton("foo"));
+            ctx.replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
         assertEquals(0, result.records().size());
         CreatableTopicResult topicResult = result.response().topics().find("foo");
         assertEquals((short) 0, topicResult.errorCode());
@@ -685,8 +723,10 @@ public class ReplicationControlManagerTest {
         CreateTopicsRequestData request = new CreateTopicsRequestData().setValidateOnly(true);
         request.topics().add(new CreatableTopic().setName("foo").
             setNumPartitions(1).setReplicationFactor((short) 4));
+        ControllerRequestContext requestContext =
+                anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
-            ctx.replicationControl.createTopics(request, Collections.singleton("foo"));
+            ctx.replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
         assertEquals(0, result.records().size());
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
@@ -1050,8 +1090,10 @@ public class ReplicationControlManagerTest {
             setConfigs(requestConfigs));
         ctx.registerBrokers(0, 1);
         ctx.unfenceBrokers(0, 1);
+        ControllerRequestContext requestContext =
+                anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createResult =
-            replicationControl.createTopics(request, Collections.singleton("foo"));
+            replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         Uuid topicId = createResult.response().topics().find("foo").topicId();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
@@ -1122,8 +1164,10 @@ public class ReplicationControlManagerTest {
             setNumPartitions(2).setReplicationFactor((short) 2));
         ctx.registerBrokers(0, 1);
         ctx.unfenceBrokers(0, 1);
+        ControllerRequestContext requestContext =
+                anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
-            createTopics(request, new HashSet<>(Arrays.asList("foo", "bar", "quux", "foo2")));
+            createTopics(requestContext, request, new HashSet<>(Arrays.asList("foo", "bar", "quux", "foo2")));
         ctx.replay(createTopicResult.records());
         List<CreatePartitionsTopic> topics = new ArrayList<>();
         topics.add(new CreatePartitionsTopic().
@@ -1135,7 +1179,7 @@ public class ReplicationControlManagerTest {
         topics.add(new CreatePartitionsTopic().
             setName("quux").setCount(2).setAssignments(null));
         ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult =
-            replicationControl.createPartitions(topics);
+            replicationControl.createPartitions(requestContext, topics);
         assertEquals(asList(new CreatePartitionsTopicResult().
                 setName("foo").
                 setErrorCode(NONE.code()).
@@ -1168,7 +1212,7 @@ public class ReplicationControlManagerTest {
             setName("foo2").setCount(3).setAssignments(asList(
             new CreatePartitionsAssignment().setBrokerIds(asList(2, 0)))));
         ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult2 =
-            replicationControl.createPartitions(topics2);
+            replicationControl.createPartitions(requestContext, topics2);
         assertEquals(asList(new CreatePartitionsTopicResult().
                 setName("foo").
                 setErrorCode(NONE.code()).
@@ -1203,8 +1247,10 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokers(0, 1);
         ctx.unfenceBrokers(0, 1);
 
+        ControllerRequestContext requestContext =
+                anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
-            createTopics(request, new HashSet<>(Arrays.asList("foo")));
+            createTopics(requestContext, request, new HashSet<>(Arrays.asList("foo")));
         ctx.replay(createTopicResult.records());
 
         ctx.registerBrokers(0, 1);
@@ -1215,7 +1261,7 @@ public class ReplicationControlManagerTest {
         topics.add(new CreatePartitionsTopic().
             setName("foo").setCount(2).setAssignments(null));
         ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult =
-            replicationControl.createPartitions(topics);
+            replicationControl.createPartitions(requestContext, topics);
 
         assertEquals(
             asList(new CreatePartitionsTopicResult().
@@ -1239,15 +1285,17 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1);
         ctx.inControlledShutdownBrokers(1);
 
+        ControllerRequestContext requestContext =
+                anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
-            replicationControl.createTopics(request, Collections.singleton("foo"));
+            replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
         ctx.replay(result.records());
 
         List<CreatePartitionsTopic> topics = asList(new CreatePartitionsTopic().
             setName("foo").setCount(2).setAssignments(null));
 
         ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult =
-            replicationControl.createPartitions(topics);
+            replicationControl.createPartitions(requestContext, topics);
         ctx.replay(createPartitionsResult.records());
 
         // Broker 2 cannot be in the ISR because it is fenced and broker 1
