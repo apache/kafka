@@ -18,26 +18,26 @@
 package kafka.server
 
 import kafka.cluster.EndPoint
-import kafka.log.LogConfig
-import kafka.message._
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.Records
+import org.apache.kafka.common.record.{CompressionType, Records}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UNKNOWN_ADDRESS_SPEC_INSTANCE}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
 import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
-
 import org.apache.kafka.common.Node
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
+import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.junit.jupiter.api.function.Executable
 
@@ -1006,59 +1006,59 @@ class KafkaConfigTest {
     // Every log config prop must be explicitly accounted for here.
     // A value other than the default value for this config should be set to ensure that we can check whether
     // the value is dynamically updatable.
-    LogConfig.TopicConfigSynonyms.foreach { case (logConfig, kafkaConfigProp) =>
+    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.forEach { case (logConfig, kafkaConfigProp) =>
       logConfig match {
-        case LogConfig.CleanupPolicyProp =>
-          assertDynamic(kafkaConfigProp, Defaults.Compact, () => config.logCleanupPolicy)
-        case LogConfig.CompressionTypeProp =>
+        case TopicConfig.CLEANUP_POLICY_CONFIG =>
+          assertDynamic(kafkaConfigProp, TopicConfig.CLEANUP_POLICY_COMPACT, () => config.logCleanupPolicy)
+        case TopicConfig.COMPRESSION_TYPE_CONFIG =>
           assertDynamic(kafkaConfigProp, "lz4", () => config.compressionType)
-        case LogConfig.SegmentBytesProp =>
+        case TopicConfig.SEGMENT_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 10000, () => config.logSegmentBytes)
-        case LogConfig.SegmentMsProp =>
+        case TopicConfig.SEGMENT_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10001L, () => config.logRollTimeMillis)
-        case LogConfig.DeleteRetentionMsProp =>
+        case TopicConfig.DELETE_RETENTION_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10002L, () => config.logCleanerDeleteRetentionMs)
-        case LogConfig.FileDeleteDelayMsProp =>
+        case TopicConfig.FILE_DELETE_DELAY_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10003L, () => config.logDeleteDelayMs)
-        case LogConfig.FlushMessagesProp =>
+        case TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG =>
           assertDynamic(kafkaConfigProp, 10004L, () => config.logFlushIntervalMessages)
-        case LogConfig.FlushMsProp =>
+        case TopicConfig.FLUSH_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10005L, () => config.logFlushIntervalMs)
-        case LogConfig.MaxCompactionLagMsProp =>
+        case TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10006L, () => config.logCleanerMaxCompactionLagMs)
-        case LogConfig.IndexIntervalBytesProp =>
+        case TopicConfig.INDEX_INTERVAL_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 10007, () => config.logIndexIntervalBytes)
-        case LogConfig.MaxMessageBytesProp =>
+        case TopicConfig.MAX_MESSAGE_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 10008, () => config.messageMaxBytes)
-        case LogConfig.MessageDownConversionEnableProp =>
+        case TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG =>
           assertDynamic(kafkaConfigProp, false, () => config.logMessageDownConversionEnable)
-        case LogConfig.MessageTimestampDifferenceMaxMsProp =>
+        case TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10009, () => config.logMessageTimestampDifferenceMaxMs)
-        case LogConfig.MessageTimestampTypeProp =>
+        case TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG =>
           assertDynamic(kafkaConfigProp, "LogAppendTime", () => config.logMessageTimestampType.name)
-        case LogConfig.MinCleanableDirtyRatioProp =>
+        case TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG =>
           assertDynamic(kafkaConfigProp, 0.01, () => config.logCleanerMinCleanRatio)
-        case LogConfig.MinCompactionLagMsProp =>
+        case TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10010L, () => config.logCleanerMinCompactionLagMs)
-        case LogConfig.MinInSyncReplicasProp =>
+        case TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG =>
           assertDynamic(kafkaConfigProp, 4, () => config.minInSyncReplicas)
-        case LogConfig.PreAllocateEnableProp =>
+        case TopicConfig.PREALLOCATE_CONFIG =>
           assertDynamic(kafkaConfigProp, true, () => config.logPreAllocateEnable)
-        case LogConfig.RetentionBytesProp =>
+        case TopicConfig.RETENTION_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 10011L, () => config.logRetentionBytes)
-        case LogConfig.RetentionMsProp =>
+        case TopicConfig.RETENTION_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10012L, () => config.logRetentionTimeMillis)
-        case LogConfig.SegmentIndexBytesProp =>
+        case TopicConfig.SEGMENT_INDEX_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 10013, () => config.logIndexSizeMaxBytes)
-        case LogConfig.SegmentJitterMsProp =>
+        case TopicConfig.SEGMENT_JITTER_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10014L, () => config.logRollTimeJitterMillis)
-        case LogConfig.UncleanLeaderElectionEnableProp =>
+        case TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG =>
           assertDynamic(kafkaConfigProp, true, () => config.uncleanLeaderElectionEnable)
-        case LogConfig.MessageFormatVersionProp =>
+        case TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG =>
         // not dynamically updatable
-        case LogConfig.FollowerReplicationThrottledReplicasProp =>
+        case LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
-        case LogConfig.LeaderReplicationThrottledReplicasProp =>
+        case LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
         case prop =>
           fail(prop + " must be explicitly checked for dynamic updatability. Note that LogConfig(s) require that KafkaConfig value lookups are dynamic and not static values.")
@@ -1083,7 +1083,7 @@ class KafkaConfigTest {
     defaults.setProperty(KafkaConfig.LogRetentionTimeHoursProp, "10")
     //For LogFlushIntervalMsProp
     defaults.setProperty(KafkaConfig.LogFlushSchedulerIntervalMsProp, "123")
-    defaults.setProperty(KafkaConfig.OffsetsTopicCompressionCodecProp, SnappyCompressionCodec.codec.toString)
+    defaults.setProperty(KafkaConfig.OffsetsTopicCompressionCodecProp, CompressionType.SNAPPY.id.toString)
     // For MetricRecordingLevelProp
     defaults.setProperty(KafkaConfig.MetricRecordingLevelProp, Sensor.RecordingLevel.DEBUG.toString)
 
@@ -1100,7 +1100,7 @@ class KafkaConfigTest {
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
     assertEquals(123L, config.logFlushIntervalMs)
-    assertEquals(SnappyCompressionCodec, config.offsetsTopicCompressionCodec)
+    assertEquals(CompressionType.SNAPPY, config.offsetsTopicCompressionType)
     assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)
     assertEquals(false, config.tokenAuthEnabled)
     assertEquals(7 * 24 * 60L * 60L * 1000L, config.delegationTokenMaxLifeMs)
@@ -1634,5 +1634,49 @@ class KafkaConfigTest {
       "Invalid value -1 for configuration metadata.log.max.snapshot.interval.ms: Value must be at least 0",
       errorMessage
     )
+  }
+
+  @Test
+  def testMigrationEnabledZkMode(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+    assertEquals(
+      "If using zookeeper.metadata.migration.enable, controller.quorum.voters must contain a parseable set of voters.",
+      assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage)
+
+    props.setProperty(KafkaConfig.QuorumVotersProp, "3000@localhost:9093")
+    assertEquals(
+      "requirement failed: controller.listener.names must not be empty when running in ZooKeeper migration mode: []",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    KafkaConfig.fromProps(props)
+
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.IBP_3_3_IV0.version())
+    assertEquals(
+      "requirement failed: Cannot enable ZooKeeper migration without setting 'inter.broker.protocol.version' to 3.4 or higher",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+
+    props.remove(KafkaConfig.MigrationEnabledProp)
+    assertEquals(
+      "requirement failed: controller.listener.names must be empty when not running in KRaft mode: [CONTROLLER]",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+
+    props.remove(KafkaConfig.ControllerListenerNamesProp)
+    KafkaConfig.fromProps(props)
+  }
+
+  @Test
+  def testMigrationEnabledKRaftMode(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+
+    assertEquals(
+      "If using `zookeeper.metadata.migration.enable` in KRaft mode, `zookeeper.connect` must also be set.",
+      assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage)
+
+    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    KafkaConfig.fromProps(props)
   }
 }

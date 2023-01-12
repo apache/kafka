@@ -54,13 +54,19 @@ public class BrokerRegistrationTest {
             Stream.of(new SimpleEntry<>("foo", VersionRange.of((short) 2, (short) 3)),
                 new SimpleEntry<>("bar", VersionRange.of((short) 1, (short) 4))).collect(
                         Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue)),
-            Optional.of("myrack"), false, true));
+            Optional.of("myrack"), false, true),
+        new BrokerRegistration(3, 0, Uuid.fromString("1t8VyWx2TCSTpUWuqj-FOw"),
+            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
+            Stream.of(new SimpleEntry<>("metadata.version", VersionRange.of((short) 7, (short) 7)))
+                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue)),
+            Optional.empty(), false, true, true));
 
     @Test
     public void testValues() {
         assertEquals(0, REGISTRATIONS.get(0).id());
         assertEquals(1, REGISTRATIONS.get(1).id());
         assertEquals(2, REGISTRATIONS.get(2).id());
+        assertEquals(3, REGISTRATIONS.get(3).id());
     }
 
     @Test
@@ -69,9 +75,13 @@ public class BrokerRegistrationTest {
         assertNotEquals(REGISTRATIONS.get(1), REGISTRATIONS.get(0));
         assertNotEquals(REGISTRATIONS.get(0), REGISTRATIONS.get(2));
         assertNotEquals(REGISTRATIONS.get(2), REGISTRATIONS.get(0));
+        assertNotEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(0));
+        assertNotEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(1));
+        assertNotEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(2));
         assertEquals(REGISTRATIONS.get(0), REGISTRATIONS.get(0));
         assertEquals(REGISTRATIONS.get(1), REGISTRATIONS.get(1));
         assertEquals(REGISTRATIONS.get(2), REGISTRATIONS.get(2));
+        assertEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(3));
     }
 
     @Test
@@ -88,6 +98,12 @@ public class BrokerRegistrationTest {
             "host='localhost', port=9092)], supportedFeatures={bar: 1-4, foo: 2-3}, " +
             "rack=Optional[myrack], fenced=false, inControlledShutdown=true, isMigratingZkBroker=false)",
             REGISTRATIONS.get(2).toString());
+        assertEquals("BrokerRegistration(id=3, epoch=0, " +
+            "incarnationId=1t8VyWx2TCSTpUWuqj-FOw, listeners=[Endpoint(" +
+            "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
+            "host='localhost', port=9093)], supportedFeatures={metadata.version: 7}, " +
+            "rack=Optional.empty, fenced=false, inControlledShutdown=true, isMigratingZkBroker=true)",
+            REGISTRATIONS.get(3).toString());
     }
 
     @Test
@@ -95,6 +111,7 @@ public class BrokerRegistrationTest {
         testRoundTrip(REGISTRATIONS.get(0));
         testRoundTrip(REGISTRATIONS.get(1));
         testRoundTrip(REGISTRATIONS.get(2));
+        testRoundTrip(REGISTRATIONS.get(3));
     }
 
     private void testRoundTrip(BrokerRegistration registration) {
@@ -117,5 +134,7 @@ public class BrokerRegistrationTest {
             REGISTRATIONS.get(1).node("INTERNAL"));
         assertEquals(Optional.of(new Node(2, "localhost", 9092, "myrack")),
             REGISTRATIONS.get(2).node("INTERNAL"));
+        assertEquals(Optional.of(new Node(3, "localhost", 9093, null)),
+            REGISTRATIONS.get(3).node("INTERNAL"));
     }
 }

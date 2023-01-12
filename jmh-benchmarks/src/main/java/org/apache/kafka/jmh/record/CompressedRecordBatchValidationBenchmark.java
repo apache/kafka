@@ -16,16 +16,15 @@
  */
 package org.apache.kafka.jmh.record;
 
-import kafka.common.LongRef;
-import kafka.log.AppendOrigin;
-import kafka.log.LogValidator;
-import kafka.message.CompressionCodec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.log.internals.AppendOrigin;
+import org.apache.kafka.server.log.internals.LogValidator;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
@@ -52,14 +51,11 @@ public class CompressedRecordBatchValidationBenchmark extends BaseRecordBatchBen
     @Benchmark
     public void measureValidateMessagesAndAssignOffsetsCompressed(Blackhole bh) {
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
-        LogValidator.validateMessagesAndAssignOffsetsCompressed(records, new TopicPartition("a", 0),
-                new LongRef(startingOffset), Time.SYSTEM, System.currentTimeMillis(),
-                CompressionCodec.getCompressionCodec(compressionType.id),
-                CompressionCodec.getCompressionCodec(compressionType.id),
-                false,  messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, 0,
-                new AppendOrigin.Client$(),
-                MetadataVersion.latest(),
-                brokerTopicStats,
-                requestLocal);
+        new LogValidator(records, new TopicPartition("a", 0),
+            Time.SYSTEM, compressionType, compressionType, false,  messageVersion,
+            TimestampType.CREATE_TIME, Long.MAX_VALUE, 0, AppendOrigin.CLIENT,
+            MetadataVersion.latest()
+        ).validateMessagesAndAssignOffsetsCompressed(PrimitiveRef.ofLong(startingOffset),
+            validatorMetricsRecorder, requestLocal.bufferSupplier());
     }
 }

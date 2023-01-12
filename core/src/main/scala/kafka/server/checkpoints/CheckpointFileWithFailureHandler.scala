@@ -16,9 +16,9 @@
   */
 package kafka.server.checkpoints
 
-import kafka.server.LogDirFailureChannel
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.server.common.CheckpointFile
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
 import CheckpointFile.EntryFormatter
 
 import java.io._

@@ -21,13 +21,11 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
-import kafka.log.{AppendOrigin, LogConfig}
-import kafka.message.UncompressedCodec
 import kafka.server.{Defaults, FetchLogEnd, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
-import kafka.utils.{Logging, Pool, Scheduler}
+import kafka.utils.{Logging, Pool}
 import kafka.utils.Implicits._
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ListTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
@@ -38,6 +36,9 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.server.log.internals.AppendOrigin
+import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.util.Scheduler
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -283,7 +284,7 @@ class TransactionStateManager(brokerId: Int,
         config.requestTimeoutMs,
         TransactionLog.EnforcedRequiredAcks,
         internalTopicsAllowed = true,
-        origin = AppendOrigin.Coordinator,
+        origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
         removeFromCacheCallback,
         requestLocal = RequestLocal.NoCaching)
@@ -292,10 +293,10 @@ class TransactionStateManager(brokerId: Int,
 
   def enableTransactionalIdExpiration(): Unit = {
     scheduler.schedule(
-      name = "transactionalId-expiration",
-      fun = removeExpiredTransactionalIds,
-      delay = config.removeExpiredTransactionalIdsIntervalMs,
-      period = config.removeExpiredTransactionalIdsIntervalMs
+      "transactionalId-expiration",
+      () => removeExpiredTransactionalIds(),
+      config.removeExpiredTransactionalIdsIntervalMs,
+      config.removeExpiredTransactionalIdsIntervalMs
     )
   }
 
@@ -401,11 +402,11 @@ class TransactionStateManager(brokerId: Int,
     val props = new Properties
 
     // enforce disabled unclean leader election, no compression types, and compact cleanup policy
-    props.put(LogConfig.UncleanLeaderElectionEnableProp, "false")
-    props.put(LogConfig.CompressionTypeProp, UncompressedCodec.name)
-    props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-    props.put(LogConfig.MinInSyncReplicasProp, config.transactionLogMinInsyncReplicas.toString)
-    props.put(LogConfig.SegmentBytesProp, config.transactionLogSegmentBytes.toString)
+    props.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
+    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name)
+    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    props.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.transactionLogMinInsyncReplicas.toString)
+    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.transactionLogSegmentBytes.toString)
 
     props
   }
@@ -565,7 +566,7 @@ class TransactionStateManager(brokerId: Int,
     }
 
     val scheduleStartMs = time.milliseconds()
-    scheduler.schedule(s"load-txns-for-partition-$topicPartition", () => loadTransactions(scheduleStartMs))
+    scheduler.scheduleOnce(s"load-txns-for-partition-$topicPartition", () => loadTransactions(scheduleStartMs))
   }
 
   def removeTransactionsForTxnTopicPartition(partitionId: Int): Unit = {
@@ -762,7 +763,7 @@ class TransactionStateManager(brokerId: Int,
                 newMetadata.txnTimeoutMs.toLong,
                 TransactionLog.EnforcedRequiredAcks,
                 internalTopicsAllowed = true,
-                origin = AppendOrigin.Coordinator,
+                origin = AppendOrigin.COORDINATOR,
                 recordsPerPartition,
                 updateCacheCallback,
                 requestLocal = requestLocal)

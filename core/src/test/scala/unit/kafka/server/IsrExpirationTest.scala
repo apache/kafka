@@ -28,6 +28,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.log.internals.{LogDirFailureChannel, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{atLeastOnce, mock, verify, when}
@@ -97,7 +98,7 @@ class IsrExpirationTest {
     // let the follower catch up to the Leader logEndOffset - 1
     for (replica <- partition0.remoteReplicas)
       replica.updateFetchState(
-        followerFetchOffsetMetadata = LogOffsetMetadata(leaderLogEndOffset - 1),
+        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 1),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = leaderLogEndOffset)
@@ -146,7 +147,7 @@ class IsrExpirationTest {
     // Make the remote replica not read to the end of log. It should be not be out of sync for at least 100 ms
     for (replica <- partition0.remoteReplicas)
       replica.updateFetchState(
-        followerFetchOffsetMetadata = LogOffsetMetadata(leaderLogEndOffset - 2),
+        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 2),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = leaderLogEndOffset)
@@ -160,7 +161,7 @@ class IsrExpirationTest {
 
     partition0.remoteReplicas.foreach { r =>
       r.updateFetchState(
-        followerFetchOffsetMetadata = LogOffsetMetadata(leaderLogEndOffset - 1),
+        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 1),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = leaderLogEndOffset)
@@ -177,7 +178,7 @@ class IsrExpirationTest {
     // Now actually make a fetch to the end of the log. The replicas should be back in ISR
     partition0.remoteReplicas.foreach { r =>
       r.updateFetchState(
-        followerFetchOffsetMetadata = LogOffsetMetadata(leaderLogEndOffset),
+        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = leaderLogEndOffset)
@@ -201,7 +202,7 @@ class IsrExpirationTest {
     // let the follower catch up to the Leader logEndOffset
     for (replica <- partition0.remoteReplicas)
       replica.updateFetchState(
-        followerFetchOffsetMetadata = LogOffsetMetadata(leaderLogEndOffset),
+        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = leaderLogEndOffset)
@@ -237,7 +238,7 @@ class IsrExpirationTest {
     // set lastCaughtUpTime to current time
     for (replica <- partition.remoteReplicas)
       replica.updateFetchState(
-        followerFetchOffsetMetadata = LogOffsetMetadata(0L),
+        followerFetchOffsetMetadata = new LogOffsetMetadata(0L),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = 0L)

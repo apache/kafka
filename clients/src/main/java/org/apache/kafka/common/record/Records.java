@@ -48,9 +48,9 @@ public interface Records extends TransferableRecords {
     int SIZE_LENGTH = 4;
     int LOG_OVERHEAD = SIZE_OFFSET + SIZE_LENGTH;
 
-    // the magic offset is at the same offset for all current message formats, but the 4 bytes
+    // The magic offset is at the same offset for all current message formats, but the 4 bytes
     // between the size and the magic is dependent on the version.
-    int MAGIC_OFFSET = 16;
+    int MAGIC_OFFSET = LOG_OVERHEAD + 4;
     int MAGIC_LENGTH = 1;
     int HEADER_SIZE_UP_TO_MAGIC = MAGIC_OFFSET + MAGIC_LENGTH;
 

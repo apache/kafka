@@ -55,7 +55,7 @@ class BrokerLifecycleManager(
   val config: KafkaConfig,
   val time: Time,
   val threadNamePrefix: Option[String],
-  val isZkBroker: Boolean = false
+  val isZkBroker: Boolean
 ) extends Logging {
 
   val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.nodeId}] ")
@@ -271,7 +271,7 @@ class BrokerLifecycleManager(
       _advertisedListeners = advertisedListeners.duplicate()
       _supportedFeatures = new util.HashMap[String, VersionRange](supportedFeatures)
       if (!isZkBroker) {
-        // ZK brokers don't block on registration during startup
+        // Only KRaft brokers block on registration during startup
         eventQueue.scheduleDeferred("initialRegistrationTimeout",
           new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
           new RegistrationTimeoutEvent())

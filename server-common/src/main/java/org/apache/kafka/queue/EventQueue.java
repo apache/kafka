@@ -40,7 +40,7 @@ public interface EventQueue extends AutoCloseable {
          *              its deadline before it could be scheduled.
          *              It will be a RejectedExecutionException if the event could not be
          *              scheduled because the event queue has already been closed.
-         *              Otherweise, it will be whatever exception was thrown by run().
+         *              Otherwise, it will be whatever exception was thrown by run().
          */
         default void handleException(Throwable e) {}
     }

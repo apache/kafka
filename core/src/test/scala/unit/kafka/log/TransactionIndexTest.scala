@@ -18,10 +18,13 @@ package kafka.log
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.server.log.internals.{AbortedTxn, CorruptIndexException, TransactionIndex}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
+import scala.jdk.CollectionConverters._
 import java.io.File
+import java.util.Collections
 
 class TransactionIndexTest {
   var file: File = _
@@ -42,26 +45,26 @@ class TransactionIndexTest {
   @Test
   def testPositionSetCorrectlyWhenOpened(): Unit = {
     val abortedTxns = List(
-      new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 11),
-      new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 13),
-      new AbortedTxn(producerId = 2L, firstOffset = 18, lastOffset = 35, lastStableOffset = 25),
-      new AbortedTxn(producerId = 3L, firstOffset = 32, lastOffset = 50, lastStableOffset = 40))
+      new AbortedTxn(0L, 0, 10, 11),
+      new AbortedTxn(1L, 5, 15, 13),
+      new AbortedTxn(2L, 18, 35, 25),
+      new AbortedTxn(3L, 32, 50, 40))
     abortedTxns.foreach(index.append)
     index.close()
 
     val reopenedIndex = new TransactionIndex(0L, file)
-    val anotherAbortedTxn = new AbortedTxn(producerId = 3L, firstOffset = 50, lastOffset = 60, lastStableOffset = 55)
+    val anotherAbortedTxn = new AbortedTxn(3L, 50, 60, 55)
     reopenedIndex.append(anotherAbortedTxn)
-    assertEquals(abortedTxns ++ List(anotherAbortedTxn), reopenedIndex.allAbortedTxns)
+    assertEquals((abortedTxns ++ List(anotherAbortedTxn)).asJava, reopenedIndex.allAbortedTxns)
   }
 
   @Test
   def testSanityCheck(): Unit = {
     val abortedTxns = List(
-      new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 11),
-      new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 13),
-      new AbortedTxn(producerId = 2L, firstOffset = 18, lastOffset = 35, lastStableOffset = 25),
-      new AbortedTxn(producerId = 3L, firstOffset = 32, lastOffset = 50, lastStableOffset = 40))
+      new AbortedTxn(0L, 0, 10, 11),
+      new AbortedTxn(1L, 5, 15, 13),
+      new AbortedTxn(2L, 18, 35, 25),
+      new AbortedTxn(3L, 32, 50, 40))
     abortedTxns.foreach(index.append)
     index.close()
 
@@ -72,71 +75,71 @@ class TransactionIndexTest {
 
   @Test
   def testLastOffsetMustIncrease(): Unit = {
-    index.append(new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 13))
-    assertThrows(classOf[IllegalArgumentException], () => index.append(new AbortedTxn(producerId = 0L, firstOffset = 0,
-      lastOffset = 15, lastStableOffset = 11)))
+    index.append(new AbortedTxn(1L, 5, 15, 13))
+    assertThrows(classOf[IllegalArgumentException], () => index.append(new AbortedTxn(0L, 0,
+      15, 11)))
   }
 
   @Test
   def testLastOffsetCannotDecrease(): Unit = {
-    index.append(new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 13))
-    assertThrows(classOf[IllegalArgumentException], () => index.append(new AbortedTxn(producerId = 0L, firstOffset = 0,
-      lastOffset = 10, lastStableOffset = 11)))
+    index.append(new AbortedTxn(1L, 5, 15, 13))
+    assertThrows(classOf[IllegalArgumentException], () => index.append(new AbortedTxn(0L, 0,
+      10, 11)))
   }
 
   @Test
   def testCollectAbortedTransactions(): Unit = {
     val abortedTransactions = List(
-      new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 11),
-      new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 13),
-      new AbortedTxn(producerId = 2L, firstOffset = 18, lastOffset = 35, lastStableOffset = 25),
-      new AbortedTxn(producerId = 3L, firstOffset = 32, lastOffset = 50, lastStableOffset = 40))
+      new AbortedTxn(0L, 0, 10, 11),
+      new AbortedTxn(1L, 5, 15, 13),
+      new AbortedTxn(2L, 18, 35, 25),
+      new AbortedTxn(3L, 32, 50, 40))
 
     abortedTransactions.foreach(index.append)
 
     var result = index.collectAbortedTxns(0L, 100L)
-    assertEquals(abortedTransactions, result.abortedTransactions)
+    assertEquals(abortedTransactions.asJava, result.abortedTransactions)
     assertFalse(result.isComplete)
 
     result = index.collectAbortedTxns(0L, 32)
-    assertEquals(abortedTransactions.take(3), result.abortedTransactions)
+    assertEquals(abortedTransactions.take(3).asJava, result.abortedTransactions)
     assertTrue(result.isComplete)
 
     result = index.collectAbortedTxns(0L, 35)
-    assertEquals(abortedTransactions, result.abortedTransactions)
+    assertEquals(abortedTransactions.asJava, result.abortedTransactions)
     assertTrue(result.isComplete)
 
     result = index.collectAbortedTxns(10, 35)
-    assertEquals(abortedTransactions, result.abortedTransactions)
+    assertEquals(abortedTransactions.asJava, result.abortedTransactions)
     assertTrue(result.isComplete)
 
     result = index.collectAbortedTxns(11, 35)
-    assertEquals(abortedTransactions.slice(1, 4), result.abortedTransactions)
+    assertEquals(abortedTransactions.slice(1, 4).asJava, result.abortedTransactions)
     assertTrue(result.isComplete)
 
     result = index.collectAbortedTxns(20, 41)
-    assertEquals(abortedTransactions.slice(2, 4), result.abortedTransactions)
+    assertEquals(abortedTransactions.slice(2, 4).asJava, result.abortedTransactions)
     assertFalse(result.isComplete)
   }
 
   @Test
   def testTruncate(): Unit = {
     val abortedTransactions = List(
-      new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 2),
-      new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 16),
-      new AbortedTxn(producerId = 2L, firstOffset = 18, lastOffset = 35, lastStableOffset = 25),
-      new AbortedTxn(producerId = 3L, firstOffset = 32, lastOffset = 50, lastStableOffset = 40))
+      new AbortedTxn(0L, 0, 10, 2),
+      new AbortedTxn(1L, 5, 15, 16),
+      new AbortedTxn(2L, 18, 35, 25),
+      new AbortedTxn(3L, 32, 50, 40))
 
     abortedTransactions.foreach(index.append)
 
     index.truncateTo(51)
-    assertEquals(abortedTransactions, index.collectAbortedTxns(0L, 100L).abortedTransactions)
+    assertEquals(abortedTransactions.asJava, index.collectAbortedTxns(0L, 100L).abortedTransactions)
 
     index.truncateTo(50)
-    assertEquals(abortedTransactions.take(3), index.collectAbortedTxns(0L, 100L).abortedTransactions)
+    assertEquals(abortedTransactions.take(3).asJava, index.collectAbortedTxns(0L, 100L).abortedTransactions)
 
     index.reset()
-    assertEquals(List.empty[FetchResponseData.AbortedTransaction], index.collectAbortedTxns(0L, 100L).abortedTransactions)
+    assertEquals(Collections.emptyList[FetchResponseData.AbortedTransaction], index.collectAbortedTxns(0L, 100L).abortedTransactions)
   }
 
   @Test
@@ -147,7 +150,7 @@ class TransactionIndexTest {
     val lastStableOffset = 200L
 
     val abortedTxn = new AbortedTxn(pid, firstOffset, lastOffset, lastStableOffset)
-    assertEquals(AbortedTxn.CurrentVersion, abortedTxn.version)
+    assertEquals(AbortedTxn.CURRENT_VERSION, abortedTxn.version)
     assertEquals(pid, abortedTxn.producerId)
     assertEquals(firstOffset, abortedTxn.firstOffset)
     assertEquals(lastOffset, abortedTxn.lastOffset)
@@ -157,15 +160,23 @@ class TransactionIndexTest {
   @Test
   def testRenameIndex(): Unit = {
     val renamed = TestUtils.tempFile()
-    index.append(new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 2))
+    index.append(new AbortedTxn(0L, 0, 10, 2))
 
     index.renameTo(renamed)
-    index.append(new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 16))
+    index.append(new AbortedTxn(1L, 5, 15, 16))
 
     val abortedTxns = index.collectAbortedTxns(0L, 100L).abortedTransactions
     assertEquals(2, abortedTxns.size)
-    assertEquals(0, abortedTxns(0).firstOffset)
-    assertEquals(5, abortedTxns(1).firstOffset)
+    assertEquals(0, abortedTxns.get(0).firstOffset)
+    assertEquals(5, abortedTxns.get(1).firstOffset)
   }
 
+  @Test
+  def testUpdateParentDir(): Unit = {
+    val tmpParentDir = new File(TestUtils.tempDir(), "parent")
+    tmpParentDir.mkdir()
+    assertNotEquals(tmpParentDir, index.file.getParentFile)
+    index.updateParentDir(tmpParentDir)
+    assertEquals(tmpParentDir, index.file.getParentFile)
+  }
 }

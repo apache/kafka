@@ -17,13 +17,16 @@
 package kafka.coordinator.group
 
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import kafka.utils.Implicits.MapExtensionMethods
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
 import java.util
 import java.util.concurrent.CompletableFuture
-import scala.collection.immutable
+import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
 
 /**
@@ -215,5 +218,98 @@ class GroupCoordinatorAdapter(
     }
 
     CompletableFuture.completedFuture(groupIds.asScala.map(describeGroup).asJava)
+  }
+
+  override def deleteGroups(
+    context: RequestContext,
+    groupIds: util.List[String],
+    bufferSupplier: BufferSupplier
+  ): CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection] = {
+    val results = new DeleteGroupsResponseData.DeletableGroupResultCollection()
+    coordinator.handleDeleteGroups(
+      groupIds.asScala.toSet,
+      RequestLocal(bufferSupplier)
+    ).forKeyValue { (groupId, error) =>
+      results.add(new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId(groupId)
+        .setErrorCode(error.code))
+    }
+    CompletableFuture.completedFuture(results)
+  }
+
+  override def fetchAllOffsets(
+    context: RequestContext,
+    groupId: String,
+    requireStable: Boolean
+  ): CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]] = {
+    handleFetchOffset(
+      groupId,
+      requireStable,
+      None
+    )
+  }
+
+  override def fetchOffsets(
+    context: RequestContext,
+    groupId: String,
+    topics: util.List[OffsetFetchRequestData.OffsetFetchRequestTopics],
+    requireStable: Boolean
+  ): CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]] = {
+    val topicPartitions = new mutable.ArrayBuffer[TopicPartition]()
+    topics.forEach { topic =>
+      topic.partitionIndexes.forEach { partition =>
+        topicPartitions += new TopicPartition(topic.name, partition)
+      }
+    }
+
+    handleFetchOffset(
+      groupId,
+      requireStable,
+      Some(topicPartitions.toSeq)
+    )
+  }
+
+  private def handleFetchOffset(
+    groupId: String,
+    requireStable: Boolean,
+    partitions: Option[Seq[TopicPartition]]
+  ): CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]] = {
+    val (error, results) = coordinator.handleFetchOffsets(
+      groupId,
+      requireStable,
+      partitions
+    )
+
+    val future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    if (error != Errors.NONE) {
+      future.completeExceptionally(error.exception)
+    } else {
+      val topicsList = new util.ArrayList[OffsetFetchResponseData.OffsetFetchResponseTopics]()
+      val topicsMap = new mutable.HashMap[String, OffsetFetchResponseData.OffsetFetchResponseTopics]()
+
+      results.forKeyValue { (tp, offset) =>
+        val topic = topicsMap.get(tp.topic) match {
+          case Some(topic) =>
+            topic
+
+          case None =>
+            val topicOffsets = new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(tp.topic)
+            topicsMap += tp.topic -> topicOffsets
+            topicsList.add(topicOffsets)
+            topicOffsets
+        }
+
+        topic.partitions.add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+          .setPartitionIndex(tp.partition)
+          .setMetadata(offset.metadata)
+          .setCommittedOffset(offset.offset)
+          .setCommittedLeaderEpoch(offset.leaderEpoch.orElse(-1))
+          .setErrorCode(offset.error.code))
+      }
+
+      future.complete(topicsList)
+    }
+
+    future
   }
 }

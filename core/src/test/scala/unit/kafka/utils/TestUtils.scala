@@ -70,6 +70,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -179,7 +180,12 @@ object TestUtils extends Logging {
   }
 
   def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], startup: Boolean): KafkaServer = {
-    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding = false)
+    createServer(config, time, threadNamePrefix, startup, enableZkApiForwarding = false)
+  }
+
+  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String],
+                   startup: Boolean, enableZkApiForwarding: Boolean) = {
+    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding = enableZkApiForwarding)
     if (startup) server.startup()
     server
   }
@@ -379,7 +385,7 @@ object TestUtils extends Logging {
       config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)
   }
 
- def createAdminClient[B <: KafkaBroker](
+  def createAdminClient[B <: KafkaBroker](
     brokers: Seq[B],
     listenerName: ListenerName,
     adminConfig: Properties = new Properties
@@ -418,7 +424,7 @@ object TestUtils extends Logging {
     }
 
     result.topicId(topic).get()
-}
+  }
 
   def createTopicWithAdmin[B <: KafkaBroker](
     admin: Admin,
@@ -435,6 +441,14 @@ object TestUtils extends Logging {
       replicaAssignment.size
     }
 
+    def isTopicExistsAndHasSameNumPartitionsAndReplicationFactor(cause: Throwable): Boolean = {
+      cause != null &&
+        cause.isInstanceOf[TopicExistsException] &&
+        // wait until all partitions metadata are propagated before verifying partitions number and replication factor
+        !waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions).isEmpty &&
+        topicHasSameNumPartitionsAndReplicationFactor(admin, topic, effectiveNumPartitions, replicationFactor)
+    }
+
     try {
       createTopicWithAdminRaw(
         admin,
@@ -445,12 +459,10 @@ object TestUtils extends Logging {
         topicConfig
       )
     } catch {
-      case e: ExecutionException => if (!(e.getCause != null &&
-          e.getCause.isInstanceOf[TopicExistsException] &&
-          topicHasSameNumPartitionsAndReplicationFactor(admin, topic,
-            effectiveNumPartitions, replicationFactor))) {
-        throw e
-      }
+      case e: ExecutionException =>
+        if (!isTopicExistsAndHasSameNumPartitionsAndReplicationFactor(e.getCause)) {
+          throw e
+        }
     }
 
     // wait until we've propagated all partitions metadata to all brokers
@@ -1339,9 +1351,9 @@ object TestUtils extends Logging {
    * Create new LogManager instance with default configuration for testing
    */
   def createLogManager(logDirs: Seq[File] = Seq.empty[File],
-                       defaultConfig: LogConfig = LogConfig(),
+                       defaultConfig: LogConfig = new LogConfig(new Properties),
                        configRepository: ConfigRepository = new MockConfigRepository,
-                       cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
+                       cleanerConfig: CleanerConfig = new CleanerConfig(false),
                        time: MockTime = new MockTime(),
                        interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
                        recoveryThreadsPerDataDir: Int = 4): LogManager = {
@@ -2144,8 +2156,8 @@ object TestUtils extends Logging {
     val throttles = allReplicasByPartition.groupBy(_._1.topic()).map {
       case (topic, replicasByPartition) =>
         new ConfigResource(TOPIC, topic) -> Seq(
-          new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
-          new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
+          new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
+          new AlterConfigOp(new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
         ).asJavaCollection
     }
     adminClient.incrementalAlterConfigs(throttles.asJava).all().get()
@@ -2155,8 +2167,8 @@ object TestUtils extends Logging {
     val throttles = partitions.map {
       tp =>
         new ConfigResource(TOPIC, tp.topic()) -> Seq(
-          new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE),
-          new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE)
+          new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), AlterConfigOp.OpType.DELETE),
+          new AlterConfigOp(new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
         ).asJavaCollection
     }.toMap
     adminClient.incrementalAlterConfigs(throttles.asJava).all().get()

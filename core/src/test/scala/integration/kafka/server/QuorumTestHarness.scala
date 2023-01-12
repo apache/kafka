@@ -160,6 +160,10 @@ abstract class QuorumTestHarness extends Logging {
     TestInfoUtils.isKRaft(testInfo)
   }
 
+  def isZkMigrationTest(): Boolean = {
+    TestInfoUtils.isZkMigrationTest(testInfo)
+  }
+
   def checkIsZKTest(): Unit = {
     if (isKRaftTest()) {
       throw new RuntimeException("This function can't be accessed when running the test " +

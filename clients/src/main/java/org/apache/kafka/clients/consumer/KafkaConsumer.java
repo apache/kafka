@@ -1581,7 +1581,28 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Overrides the fetch offsets that the consumer will use on the next {@link #poll(Duration) poll(timeout)}. If this API
      * is invoked for the same partition more than once, the latest offset will be used on the next poll(). Note that
      * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
+     * <p>
+     * The next Consumer Record which will be retrieved when poll() is invoked will have the offset specified, given that
+     * a record with that offset exists (i.e. it is a valid offset).
+     * <p>
+     * {@link #seekToBeginning(Collection)} will go to the first offset in the topic.
+     * seek(0) is equivalent to seekToBeginning for a TopicPartition with beginning offset 0,
+     * assuming that there is a record at offset 0 still available.
+     * {@link #seekToEnd(Collection)} is equivalent to seeking to the last offset of the partition, but behavior depends on
+     * {@code isolation.level}, so see {@link #seekToEnd(Collection)} documentation for more details.
+     * <p>
+     * Seeking to the offset smaller than the log start offset or larger than the log end offset
+     * means an invalid offset is reached.
+     * Invalid offset behaviour is controlled by the {@code auto.offset.reset} property.
+     * If this is set to "earliest", the next poll will return records from the starting offset.
+     * If it is set to "latest", it will seek to the last offset (similar to seekToEnd()).
+     * If it is set to "none", an {@code OffsetOutOfRangeException} will be thrown.
+     * <p>
+     * Note that, the seek offset won't change to the in-flight fetch request, it will take effect in next fetch request.
+     * So, the consumer might wait for {@code fetch.max.wait.ms} before starting to fetch the records from desired offset.
      *
+     * @param partition the TopicPartition on which the seek will be performed.
+     * @param offset the next offset returned by poll().
      * @throws IllegalArgumentException if the provided offset is negative
      * @throws IllegalStateException if the provided TopicPartition is not assigned to this consumer
      */

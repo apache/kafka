@@ -205,9 +205,10 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             if (internalProcessorContext.currentSystemTimeMs() < sharedTimeTracker.nextTimeToEmit) {
                 return;
             }
-            if (sharedTimeTracker.nextTimeToEmit == 0) {
-                sharedTimeTracker.nextTimeToEmit = internalProcessorContext.currentSystemTimeMs();
-            }
+
+            // Ensure `nextTimeToEmit` is synced with `currentSystemTimeMs`, if we dont set it everytime,
+            // they can get out of sync during a clock drift
+            sharedTimeTracker.nextTimeToEmit = internalProcessorContext.currentSystemTimeMs();
             sharedTimeTracker.advanceNextTimeToEmit();
 
             // reset to MAX_VALUE in case the store is empty

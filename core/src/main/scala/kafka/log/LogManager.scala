@@ -17,12 +17,12 @@
 
 package kafka.log
 
-import kafka.log.LogConfig.MessageFormatVersion
+import kafka.log.remote.RemoteIndexCache
+
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
@@ -37,9 +37,13 @@ import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 import kafka.utils.Implicits._
-import java.util.Properties
+import org.apache.kafka.common.config.TopicConfig
 
+import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.LogConfig.MessageFormatVersion
+import org.apache.kafka.server.util.Scheduler
 
 import scala.annotation.nowarn
 
@@ -76,7 +80,6 @@ class LogManager(logDirs: Seq[File],
 
   import LogManager._
 
-  val LockFile = ".lock"
   val InitialTaskDelayMs = 30 * 1000
 
   private val logCreationOrDeletionLock = new Object
@@ -238,7 +241,7 @@ class LogManager(logDirs: Seq[File],
   private def lockLogDirs(dirs: Seq[File]): Seq[FileLock] = {
     dirs.flatMap { dir =>
       try {
-        val lock = new FileLock(new File(dir, LockFile))
+        val lock = new FileLock(new File(dir, LockFileName))
         if (!lock.tryLock())
           throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParent +
             ". A Kafka instance in another process or thread is using this directory.")
@@ -390,7 +393,11 @@ class LogManager(logDirs: Seq[File],
         }
 
         val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(logDir =>
-          logDir.isDirectory && UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
+          logDir.isDirectory &&
+            // Ignore remote-log-index-cache directory as that is index cache maintained by tiered storage subsystem
+            // but not any topic-partition dir.
+            !logDir.getName.equals(RemoteIndexCache.DirName) &&
+            UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
         numTotalLogs += logsToLoad.length
         numRemainingLogs.put(dir.getAbsolutePath, logsToLoad.length)
 
@@ -492,12 +499,12 @@ class LogManager(logDirs: Seq[File],
       var overrides = configRepository.topicConfig(topicName)
       // save memory by only including configs for topics with overrides
       if (!overrides.isEmpty) {
-        Option(overrides.getProperty(LogConfig.MessageFormatVersionProp)).foreach { versionString =>
+        Option(overrides.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)).foreach { versionString =>
           val messageFormatVersion = new MessageFormatVersion(versionString, interBrokerProtocolVersion.version)
           if (messageFormatVersion.shouldIgnore) {
             val copy = new Properties()
             copy.putAll(overrides)
-            copy.remove(LogConfig.MessageFormatVersionProp)
+            copy.remove(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
             overrides = copy
 
             if (messageFormatVersion.shouldWarn)
@@ -526,30 +533,25 @@ class LogManager(logDirs: Seq[File],
     if (scheduler != null) {
       info("Starting log cleanup with a period of %d ms.".format(retentionCheckMs))
       scheduler.schedule("kafka-log-retention",
-                         cleanupLogs _,
-                         delay = InitialTaskDelayMs,
-                         period = retentionCheckMs,
-                         TimeUnit.MILLISECONDS)
+                         () => cleanupLogs(),
+                         InitialTaskDelayMs,
+                         retentionCheckMs)
       info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
       scheduler.schedule("kafka-log-flusher",
-                         flushDirtyLogs _,
-                         delay = InitialTaskDelayMs,
-                         period = flushCheckMs,
-                         TimeUnit.MILLISECONDS)
+                         () => flushDirtyLogs(),
+                         InitialTaskDelayMs,
+                         flushCheckMs)
       scheduler.schedule("kafka-recovery-point-checkpoint",
-                         checkpointLogRecoveryOffsets _,
-                         delay = InitialTaskDelayMs,
-                         period = flushRecoveryOffsetCheckpointMs,
-                         TimeUnit.MILLISECONDS)
+                         () => checkpointLogRecoveryOffsets(),
+                         InitialTaskDelayMs,
+                         flushRecoveryOffsetCheckpointMs)
       scheduler.schedule("kafka-log-start-offset-checkpoint",
-                         checkpointLogStartOffsets _,
-                         delay = InitialTaskDelayMs,
-                         period = flushStartOffsetCheckpointMs,
-                         TimeUnit.MILLISECONDS)
-      scheduler.schedule("kafka-delete-logs", // will be rescheduled after each delete logs with a dynamic period
-                         deleteLogs _,
-                         delay = InitialTaskDelayMs,
-                         unit = TimeUnit.MILLISECONDS)
+                         () => checkpointLogStartOffsets(),
+                         InitialTaskDelayMs,
+                         flushStartOffsetCheckpointMs)
+      scheduler.scheduleOnce("kafka-delete-logs", // will be rescheduled after each delete logs with a dynamic period
+                         () => deleteLogs(),
+                         InitialTaskDelayMs)
     }
     if (cleanerConfig.enableCleaner) {
       _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
@@ -1042,16 +1044,13 @@ class LogManager(logDirs: Seq[File],
         error(s"Exception in kafka-delete-logs thread.", e)
     } finally {
       try {
-        scheduler.schedule("kafka-delete-logs",
-          deleteLogs _,
-          delay = nextDelayMs,
-          unit = TimeUnit.MILLISECONDS)
+        scheduler.scheduleOnce("kafka-delete-logs",
+          () => deleteLogs(),
+          nextDelayMs)
       } catch {
         case e: Throwable =>
-          if (scheduler.isStarted) {
-            // No errors should occur unless scheduler has been shutdown
-            error(s"Failed to schedule next delete in kafka-delete-logs thread", e)
-          }
+          // No errors should occur unless scheduler has been shutdown
+          error(s"Failed to schedule next delete in kafka-delete-logs thread", e)
       }
     }
   }
@@ -1074,6 +1073,9 @@ class LogManager(logDirs: Seq[File],
         throw new KafkaStorageException(s"The future replica for $topicPartition is offline")
 
       destLog.renameDir(UnifiedLog.logDirName(topicPartition), true)
+      // the metrics tags still contain "future", so we have to remove it.
+      // we will add metrics back after sourceLog remove the metrics
+      destLog.removeLogMetrics()
       destLog.updateHighWatermark(sourceLog.highWatermark)
 
       // Now that future replica has been successfully renamed to be the current replica
@@ -1095,6 +1097,7 @@ class LogManager(logDirs: Seq[File],
         checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)
         checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
         sourceLog.removeLogMetrics()
+        destLog.newMetrics()
         addLogToBeDeleted(sourceLog)
       } catch {
         case e: KafkaStorageException =>
@@ -1330,6 +1333,7 @@ class LogManager(logDirs: Seq[File],
 }
 
 object LogManager {
+  val LockFileName = ".lock"
 
   /**
    * Wait all jobs to complete
@@ -1352,15 +1356,15 @@ object LogManager {
   def apply(config: KafkaConfig,
             initialOfflineDirs: Seq[String],
             configRepository: ConfigRepository,
-            kafkaScheduler: KafkaScheduler,
+            kafkaScheduler: Scheduler,
             time: Time,
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel,
             keepPartitionMetadataFile: Boolean): LogManager = {
-    val defaultProps = LogConfig.extractLogConfigMap(config)
+    val defaultProps = config.extractLogConfigMap
 
     LogConfig.validateValues(defaultProps)
-    val defaultLogConfig = LogConfig(defaultProps)
+    val defaultLogConfig = new LogConfig(defaultProps)
 
     val cleanerConfig = LogCleaner.cleanerConfig(config)
 
