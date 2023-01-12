@@ -106,12 +106,12 @@ public class FileBasedStateStoreTest {
         // We initialized a state from the metadata log
         assertTrue(stateFile.exists());
 
+
         String jsonString = "{\"clusterId\":\"abc\",\"leaderId\":0,\"leaderEpoch\":0,\"votedId\":-1,\"appliedOffset\":0,\"currentVoters\":[],\"data_version\":0}";
         writeToStateFile(stateFile, jsonString);
 
         // verify that we can read the state file that contains the removed "cluserId" field.
-        assertEquals(stateStore.readElectionState(), new ElectionState(0,
-                OptionalInt.of(0), OptionalInt.empty(), Collections.emptySet()));
+        assertEquals(ElectionState.withElectedLeader(0, 0, Collections.emptySet()), stateStore.readElectionState());
 
         stateStore.clear();
         assertFalse(stateFile.exists());
