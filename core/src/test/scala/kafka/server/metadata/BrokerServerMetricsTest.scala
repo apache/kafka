@@ -67,7 +67,7 @@ final class BrokerServerMetricsTest {
       val expectedValue = 1000
       brokerMetrics.updateLastAppliedImageProvenance(new MetadataProvenance(
         expectedValue,
-        brokerMetrics.lastAppliedImageProvenance.get().epoch(),
+        brokerMetrics.lastAppliedImageProvenance.get().lastContainedEpoch(),
         brokerMetrics.lastAppliedTimestamp()));
       assertEquals(expectedValue, offsetMetric.metricValue.asInstanceOf[Long])
     }
@@ -90,7 +90,7 @@ final class BrokerServerMetricsTest {
 
       brokerMetrics.updateLastAppliedImageProvenance(new MetadataProvenance(
         brokerMetrics.lastAppliedOffset(),
-        brokerMetrics.lastAppliedImageProvenance.get().epoch(),
+        brokerMetrics.lastAppliedImageProvenance.get().lastContainedEpoch(),
         timestamp))
       assertEquals(timestamp, timestampMetric.metricValue.asInstanceOf[Long])
       assertEquals(time.milliseconds - timestamp, lagMetric.metricValue.asInstanceOf[Long])
