@@ -116,6 +116,8 @@ public class ConsumerNetworkClientTest {
 
         consumerClient.awaitPendingRequests(node, time.timer(Long.MAX_VALUE));
         assertTrue(future1.succeeded());
+        assertFalse(future2.succeeded());
+        consumerClient.poll(future2);
         assertTrue(future2.succeeded());
     }
 
@@ -283,7 +285,7 @@ public class ConsumerNetworkClientTest {
         final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         consumerClient.pollNoWakeup(); // dequeue and send the request
 
-        client.enableBlockingUntilWakeup(2);
+        client.enableBlockingUntilWakeup(1);
         Thread t1 = new Thread() {
             @Override
             public void run() {
@@ -410,9 +412,9 @@ public class ConsumerNetworkClientTest {
         isReady.set(true);
         consumerClient.trySend(time.milliseconds());
         // check node ready or not for every request
-        assertEquals(2, checkCount.getAndSet(0));
+        assertEquals(1, checkCount.getAndSet(0));
         assertEquals(2, consumerClient.pendingRequestCount(node));
-        assertEquals(2, client.inFlightRequestCount(node.idString()));
+        assertEquals(1, client.inFlightRequestCount(node.idString()));
     }
 
     private HeartbeatRequest.Builder heartbeat() {

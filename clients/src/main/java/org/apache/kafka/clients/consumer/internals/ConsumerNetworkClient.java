@@ -505,17 +505,13 @@ public class ConsumerNetworkClient implements Closeable {
         // send any requests that can be sent now
         for (Node node : unsent.nodes()) {
             Iterator<ClientRequest> iterator = unsent.requestIterator(node);
-            if (iterator.hasNext())
+            // Only try to send the first request here.
+            // The previous send is completed before the next request can be sent
+            if (iterator.hasNext()) {
                 pollDelayMs = Math.min(pollDelayMs, client.pollDelayMs(node, now));
-
-            while (iterator.hasNext()) {
-                ClientRequest request = iterator.next();
                 if (client.ready(node, now)) {
-                    client.send(request, now);
+                    client.send(iterator.next(), now);
                     iterator.remove();
-                } else {
-                    // try next node when current node is not ready
-                    break;
                 }
             }
         }
@@ -709,12 +705,7 @@ public class ConsumerNetworkClient implements Closeable {
             // the lock protects removal from a concurrent put which could otherwise mutate the
             // queue after it has been removed from the map
             synchronized (unsent) {
-                Iterator<ConcurrentLinkedQueue<ClientRequest>> iterator = unsent.values().iterator();
-                while (iterator.hasNext()) {
-                    ConcurrentLinkedQueue<ClientRequest> requests = iterator.next();
-                    if (requests.isEmpty())
-                        iterator.remove();
-                }
+                unsent.values().removeIf(ConcurrentLinkedQueue::isEmpty);
             }
         }
 
