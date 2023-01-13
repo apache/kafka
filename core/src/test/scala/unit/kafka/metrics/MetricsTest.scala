@@ -80,6 +80,22 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
+  def testBrokerTopicMetricsUnregisteredAfterDeletingTopicWithDelayedFetches(quorum: String): Unit = {
+    val topic = "test-broker-topic-metric"
+    createTopic(topic, 2, 1)
+    // Produce a few messages and consume them to create the metrics
+    // Do consume messages
+    TestUtils.generateAndProduceMessages(brokers, topic, nMessages)
+    TestUtils.consumeTopicRecords(brokers, topic, nMessages)
+    assertTrue(topicMetricGroups(topic).nonEmpty, "Topic metrics don't exist")
+    brokers.foreach(b => assertNotNull(b.brokerTopicStats.topicStats(topic)))
+    deleteTopic(topic)
+    TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 1, brokers)
+    TestUtils.waitUntilTrue(() => topicMetricGroups(topic).isEmpty, "Topic metrics still exists after deleteTopic");
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
   def testClusterIdMetric(quorum: String): Unit = {
     // Check if clusterId metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
