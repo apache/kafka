@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Optional, OptionalInt, OptionalLong, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
@@ -92,7 +92,7 @@ import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartiti
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
-import org.apache.kafka.server.log.internals.AppendOrigin
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchParams, FetchPartitionData}
 
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -2883,8 +2883,8 @@ class KafkaApisTest {
       val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
       val records = MemoryRecords.withRecords(CompressionType.NONE,
         new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
-      callback(Seq(tidp -> FetchPartitionData(Errors.NONE, hw, 0, records,
-        None, None, None, Option.empty, isReassignmentFetch = false)))
+      callback(Seq(tidp -> new FetchPartitionData(Errors.NONE, hw, 0, records,
+        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)))
     })
 
     val fetchData = Map(tidp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
@@ -4007,8 +4007,8 @@ class KafkaApisTest {
       any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
     )).thenAnswer(invocation => {
       val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
-      callback(Seq(tidp0 -> FetchPartitionData(Errors.NONE, hw, 0, records,
-        None, None, None, Option.empty, isReassignmentFetch = isReassigning)))
+      callback(Seq(tidp0 -> new FetchPartitionData(Errors.NONE, hw, 0, records,
+        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), isReassigning)))
     })
 
     val fetchMetadata = new JFetchMetadata(0, 0)

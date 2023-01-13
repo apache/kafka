@@ -20,13 +20,13 @@ package kafka
 import java.util.Properties
 import java.util.concurrent.atomic._
 import kafka.log._
-import kafka.server.{BrokerTopicStats, FetchLogEnd}
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{FetchIsolation, LogConfig, LogDirFailureChannel}
 
 /**
  * A stress test that instantiates a log and then runs continual appends against it from one thread and continual reads against it
@@ -135,7 +135,7 @@ object StressTestLog {
       try {
         log.read(currentOffset,
           maxLength = 1,
-          isolation = FetchLogEnd,
+          isolation = FetchIsolation.LOG_END,
           minOneMessage = true).records match {
           case read: FileRecords if read.sizeInBytes > 0 => {
             val first = read.batches.iterator.next()

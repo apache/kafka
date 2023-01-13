@@ -18,8 +18,7 @@
 package kafka.tools
 
 import joptsimple.OptionParser
-import kafka.api._
-import kafka.utils.{IncludeList, _}
+import kafka.utils._
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, TopicDescription}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
@@ -28,10 +27,11 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
-import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetsRequest, FetchRequest => JFetchRequest}
+import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, FetchResponse, ListOffsetsRequest}
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
+
 import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
 import java.util
@@ -39,7 +39,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.regex.{Pattern, PatternSyntaxException}
 import java.util.{Date, Optional, Properties}
-
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -396,7 +395,7 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
   extends ShutdownableThread(name) {
 
   private val fetchEndpoint = new ReplicaFetcherBlockingSend(sourceBroker, new ConsumerConfig(consumerConfig), new Metrics(), Time.SYSTEM, fetcherId,
-    s"broker-${Request.DebuggingConsumerId}-fetcher-$fetcherId")
+    s"broker-${FetchRequest.DEBUGGING_CONSUMER_ID}-fetcher-$fetcherId")
 
   private val topicNames = topicIds.map(_.swap)
 
@@ -405,13 +404,13 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
     val fetcherBarrier = replicaBuffer.getFetcherBarrier()
     val verificationBarrier = replicaBuffer.getVerificationBarrier()
 
-    val requestMap = new util.LinkedHashMap[TopicPartition, JFetchRequest.PartitionData]
+    val requestMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     for (topicPartition <- topicPartitions)
-      requestMap.put(topicPartition, new JFetchRequest.PartitionData(topicIds.getOrElse(topicPartition.topic, Uuid.ZERO_UUID), replicaBuffer.getOffset(topicPartition),
+      requestMap.put(topicPartition, new FetchRequest.PartitionData(topicIds.getOrElse(topicPartition.topic, Uuid.ZERO_UUID), replicaBuffer.getOffset(topicPartition),
         0L, fetchSize, Optional.empty()))
 
-    val fetchRequestBuilder = JFetchRequest.Builder.
-      forReplica(ApiKeys.FETCH.latestVersion, Request.DebuggingConsumerId, maxWait, minBytes, requestMap)
+    val fetchRequestBuilder = FetchRequest.Builder.
+      forReplica(ApiKeys.FETCH.latestVersion, FetchRequest.DEBUGGING_CONSUMER_ID, maxWait, minBytes, requestMap)
 
     debug("Issuing fetch request ")
 

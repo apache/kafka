@@ -69,7 +69,7 @@ import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
-import org.apache.kafka.server.log.internals.AppendOrigin
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.record.BrokerCompressionType
 
 import java.lang.{Long => JLong}
@@ -840,8 +840,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       val partitions = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
       val reassigningPartitions = mutable.Set[TopicIdPartition]()
       responsePartitionData.foreach { case (tp, data) =>
-        val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
-        val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+        val abortedTransactions = data.abortedTransactions.orElse(null)
+        val lastStableOffset: Long = data.lastStableOffset.orElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         if (data.isReassignmentFetch) reassigningPartitions.add(tp)
         val partitionData = new FetchResponseData.PartitionData()
           .setPartitionIndex(tp.partition)
@@ -851,8 +851,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setLogStartOffset(data.logStartOffset)
           .setAbortedTransactions(abortedTransactions)
           .setRecords(data.records)
-          .setPreferredReadReplica(data.preferredReadReplica.getOrElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
-        data.divergingEpoch.foreach(partitionData.setDivergingEpoch)
+          .setPreferredReadReplica(data.preferredReadReplica.orElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
+        data.divergingEpoch.ifPresent(partitionData.setDivergingEpoch(_))
         partitions.put(tp, partitionData)
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
@@ -961,26 +961,26 @@ class KafkaApis(val requestChannel: RequestChannel,
       val fetchMaxBytes = Math.min(Math.min(fetchRequest.maxBytes, config.fetchMaxBytes), maxQuotaWindowBytes)
       val fetchMinBytes = Math.min(fetchRequest.minBytes, fetchMaxBytes)
 
-      val clientMetadata: Option[ClientMetadata] = if (versionId >= 11) {
+      val clientMetadata: Optional[ClientMetadata] = if (versionId >= 11) {
         // Fetch API version 11 added preferred replica logic
-        Some(new DefaultClientMetadata(
+        Optional.of(new DefaultClientMetadata(
           fetchRequest.rackId,
           clientId,
           request.context.clientAddress,
           request.context.principal,
           request.context.listenerName.value))
       } else {
-        None
+        Optional.empty()
       }
 
-      val params = FetchParams(
-        requestVersion = versionId,
-        replicaId = fetchRequest.replicaId,
-        maxWaitMs = fetchRequest.maxWait,
-        minBytes = fetchMinBytes,
-        maxBytes = fetchMaxBytes,
-        isolation = FetchIsolation(fetchRequest),
-        clientMetadata = clientMetadata
+      val params = new FetchParams(
+        versionId,
+        fetchRequest.replicaId,
+        fetchRequest.maxWait,
+        fetchMinBytes,
+        fetchMaxBytes,
+        FetchIsolation.of(fetchRequest),
+        clientMetadata
       )
 
       // call the replica manager to fetch messages from the local replica
