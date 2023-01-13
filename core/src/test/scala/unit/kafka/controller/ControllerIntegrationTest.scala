@@ -300,7 +300,11 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       tp0 -> ReplicaAssignment(Seq(0), Seq(), Seq()),
       tp1 -> ReplicaAssignment(Seq(0), Seq(), Seq()))
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
-    zkClient.setTopicAssignment(tp0.topic, Some(Uuid.randomUuid()), expandedAssignment, firstControllerEpochZkVersion)
+
+    // Newer clients (>=2.8) will fetch the topic IDs from Zk and use them with expanded assignment,
+    // see AdminZkClient#writeTopicPartitionAssignment()
+    val topicIds = zkClient.getTopicIdsForTopics(Set(tp0.topic))
+    zkClient.setTopicAssignment(tp0.topic, topicIds.get(tp0.topic), expandedAssignment, firstControllerEpochZkVersion)
     waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitForPartitionMetadata(servers, tp1.topic, tp1.partition)
@@ -367,7 +371,10 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
-    zkClient.setTopicAssignment(tp0.topic, Some(Uuid.randomUuid()), expandedAssignment, firstControllerEpochZkVersion)
+    // Newer clients (>=2.8) will fetch the topic IDs from Zk and use them with expanded assignment,
+    // see AdminZkClient#writeTopicPartitionAssignment()
+    val topicIds = zkClient.getTopicIdsForTopics(Set(tp0.topic))
+    zkClient.setTopicAssignment(tp0.topic, topicIds.get(tp0.topic), expandedAssignment, firstControllerEpochZkVersion)
     waitForPartitionState(tp1, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitForPartitionMetadata(Seq(servers(controllerId)), tp1.topic, tp1.partition)
