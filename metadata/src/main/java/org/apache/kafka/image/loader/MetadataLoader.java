@@ -78,7 +78,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
 
             @Override
             public void updateLastAppliedImageProvenance(MetadataProvenance provenance) {
-                this.lastAppliedOffset = provenance.offset();
+                this.lastAppliedOffset = provenance.lastContainedOffset();
             }
 
             @Override
@@ -277,7 +277,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 LogDeltaManifest manifest = loadLogDelta(delta, reader);
                 if (log.isDebugEnabled()) {
                     log.debug("Generated a metadata delta between {} and {} from {} batch(es) " +
-                            "in {} us.", image.offset(), manifest.provenance().offset(),
+                            "in {} us.", image.offset(), manifest.provenance().lastContainedOffset(),
                             manifest.numBatches(), NANOSECONDS.toMicros(manifest.elapsedNs()));
                 }
                 try {
@@ -285,10 +285,10 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 } catch (Throwable e) {
                     faultHandler.handleFault("Error generating new metadata image from " +
                         "metadata delta between offset " + image.offset() +
-                            " and " + manifest.provenance().offset(), e);
+                            " and " + manifest.provenance().lastContainedOffset(), e);
                     return;
                 }
-                if (stillNeedToCatchUp(manifest.provenance().offset())) {
+                if (stillNeedToCatchUp(manifest.provenance().lastContainedOffset())) {
                     return;
                 }
                 log.debug("Publishing new image with provenance {}.", image.provenance());
@@ -297,7 +297,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                         publisher.publishLogDelta(delta, image, manifest);
                     } catch (Throwable e) {
                         faultHandler.handleFault("Unhandled error publishing the new metadata " +
-                            "image ending at " + manifest.provenance().offset() +
+                            "image ending at " + manifest.provenance().lastContainedOffset() +
                                 " with publisher " + publisher.name(), e);
                     }
                 }
@@ -331,8 +331,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         long startNs = time.nanoseconds();
         int numBatches = 0;
         long numBytes = 0L;
-        long lastOffset = image.provenance().offset();
-        int lastEpoch = image.provenance().epoch();
+        long lastOffset = image.provenance().lastContainedOffset();
+        int lastEpoch = image.provenance().lastContainedEpoch();
         long lastContainedLogTimeMs = image.provenance().lastContainedLogTimeMs();
 
         while (reader.hasNext()) {
@@ -375,7 +375,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 SnapshotManifest manifest = loadSnapshot(delta, reader);
                 if (log.isDebugEnabled()) {
                     log.debug("Generated a metadata delta from a snapshot at offset {} " +
-                            "in {} us.", manifest.provenance().offset(),
+                            "in {} us.", manifest.provenance().lastContainedOffset(),
                             NANOSECONDS.toMicros(manifest.elapsedNs()));
                 }
                 try {
@@ -385,7 +385,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                             "snapshot at offset " + reader.lastContainedLogOffset(), e);
                     return;
                 }
-                if (stillNeedToCatchUp(manifest.provenance().offset())) {
+                if (stillNeedToCatchUp(manifest.provenance().lastContainedOffset())) {
                     return;
                 }
                 log.debug("Publishing new snapshot image with provenance {}.", image.provenance());
