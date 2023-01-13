@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Configuration needed for all sink connectors
+ * Configuration needed for all {@link org.apache.kafka.connect.sink.SinkConnector sink connectors}
  */
 
 public class SinkConnectorConfig extends ConnectorConfig {

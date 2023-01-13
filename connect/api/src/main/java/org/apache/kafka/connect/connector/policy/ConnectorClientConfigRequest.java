@@ -24,11 +24,11 @@ import java.util.Map;
 
 public class ConnectorClientConfigRequest {
 
-    private Map<String, Object> clientProps;
-    private ClientType  clientType;
-    private String connectorName;
-    private ConnectorType connectorType;
-    private Class<? extends Connector> connectorClass;
+    private final Map<String, Object> clientProps;
+    private final ClientType clientType;
+    private final String connectorName;
+    private final ConnectorType connectorType;
+    private final Class<? extends Connector> connectorClass;
 
     public ConnectorClientConfigRequest(
         String connectorName,
@@ -44,25 +44,25 @@ public class ConnectorClientConfigRequest {
     }
 
     /**
-     * Provides Config with prefix {@code producer.override.} for {@link ConnectorType#SOURCE}.
-     * Provides Config with prefix {@code consumer.override.} for {@link ConnectorType#SINK}.
-     * Provides Config with prefix {@code producer.override.} for {@link ConnectorType#SINK} for DLQ.
-     * Provides Config with prefix {@code admin.override.} for {@link ConnectorType#SINK} for DLQ.
+     * <p>Provides Config with prefix "{@code producer.override.}" for {@link ConnectorType#SOURCE}.
+     * <p>Provides Config with prefix "{@code consumer.override.}" for {@link ConnectorType#SINK}.
+     * <p>Provides Config with prefix "{@code producer.override.}" for {@link ConnectorType#SINK} for DLQ.
+     * <p>Provides Config with prefix "{@code admin.override.}" for {@link ConnectorType#SINK} for DLQ.
      *
-     * @return The client properties specified in the Connector Config with prefix {@code producer.override.} ,
-     * {@code consumer.override.} and {@code admin.override.}. The configs don't include the prefixes.
+     * @return The client properties specified in the Connector Config with prefix "{@code producer.override.}" ,
+     * "{@code consumer.override.}" and "{@code admin.override.}". The configs don't include the prefixes.
      */
     public Map<String, Object> clientProps() {
         return clientProps;
     }
 
     /**
-     * {@link ClientType#PRODUCER} for {@link ConnectorType#SOURCE}
-     * {@link ClientType#CONSUMER} for {@link ConnectorType#SINK}
-     * {@link ClientType#PRODUCER} for DLQ in {@link ConnectorType#SINK}
-     * {@link ClientType#ADMIN} for DLQ  Topic Creation in {@link ConnectorType#SINK}
+     * <p>{@link ClientType#PRODUCER} for {@link ConnectorType#SOURCE}
+     * <p>{@link ClientType#CONSUMER} for {@link ConnectorType#SINK}
+     * <p>{@link ClientType#PRODUCER} for DLQ in {@link ConnectorType#SINK}
+     * <p>{@link ClientType#ADMIN} for DLQ Topic Creation in {@link ConnectorType#SINK}
      *
-     * @return enumeration specifying the client type that is being overriden by the worker; never null.
+     * @return enumeration specifying the client type that is being overridden by the worker; never null.
      */
     public ClientType clientType() {
         return clientType;
@@ -80,7 +80,7 @@ public class ConnectorClientConfigRequest {
     /**
      * Type of the Connector.
      *
-     * @return enumeration specifying the type of the connector {@link ConnectorType#SINK} or {@link ConnectorType#SOURCE}.
+     * @return enumeration specifying the type of the connector - {@link ConnectorType#SINK} or {@link ConnectorType#SOURCE}.
      */
     public ConnectorType connectorType() {
         return connectorType;

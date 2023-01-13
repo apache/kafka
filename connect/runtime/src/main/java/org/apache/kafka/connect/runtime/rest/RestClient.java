@@ -192,9 +192,9 @@ public class RestClient {
     }
 
     /**
-     * Convert response parameters from Jetty format (HttpFields)
-     * @param httpFields
-     * @return
+     * Convert response headers from Jetty format ({@link HttpFields}) to a simple {@link Map}
+     * @param httpFields the response headers
+     * @return a {@link Map} containing the response headers
      */
     private static Map<String, String> convertHttpFieldsToMap(HttpFields httpFields) {
         Map<String, String> headers = new HashMap<>();
