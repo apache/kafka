@@ -602,14 +602,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     val updatedAssignments = topicIdReplicaAssignments.map {
       case TopicIdReplicaAssignment(topic, None, assignments) =>
         TopicIdReplicaAssignment(topic, Some(Uuid.randomUuid()), assignments)
-      case TopicIdReplicaAssignment(topic, Some(_), _) =>
-        throw new IllegalArgumentException("TopicIdReplicaAssignment for " + topic + " already contains a topic ID.")
+      case t => t
     }.toSet
 
     val setDataRequests = updatedAssignments.map { case TopicIdReplicaAssignment(topic, topicIdOpt, assignments) =>
       SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(topicIdOpt, assignments), ZkVersion.MatchAnyVersion)
     }.toSeq
-
+    
     retryRequestsUntilConnected(setDataRequests, expectedControllerEpochZkVersion)
     updatedAssignments
   }

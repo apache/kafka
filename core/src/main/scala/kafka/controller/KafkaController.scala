@@ -1664,11 +1664,21 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def processTopicIds(topicIdAssignments: Set[TopicIdReplicaAssignment]): Unit = {
-    // Create topic IDs for topics missing them if we are using topic IDs
+    // Create topic IDs or update with locally stored topicIDs for topics missing them if we are using topic IDs
     // Otherwise, maintain what we have in the topicZNode
     val updatedTopicIdAssignments = if (config.usesTopicId) {
-      val (withTopicIds, withoutTopicIds) = topicIdAssignments.partition(_.topicId.isDefined)
-      withTopicIds ++ zkClient.setTopicIds(withoutTopicIds, controllerContext.epochZkVersion)
+      val (withTopicIds, withoutTopicIds, withLocalTopicIds) = topicIdAssignments.foldLeft((Set.empty[TopicIdReplicaAssignment], Set.empty[TopicIdReplicaAssignment], Set.empty[TopicIdReplicaAssignment])) {
+        case ((wt, wo, wl), t) =>
+          if (t.topicId.isDefined) (wt union Set(t), wo, wl)
+          else if (controllerContext.topicIds.contains(t.topic)) (wt, wo, wl union Set(t))
+          else (wt, wo union Set(t), wl)
+      }
+
+      val topicIdsForZkUpdate = withoutTopicIds ++ withLocalTopicIds.map { t =>
+        TopicIdReplicaAssignment(t.topic, controllerContext.topicIds.get(t.topic), t.assignment)
+      }
+
+      withTopicIds ++ zkClient.setTopicIds(topicIdsForZkUpdate, controllerContext.epochZkVersion)
     } else {
       topicIdAssignments
     }
@@ -1698,7 +1708,7 @@ class KafkaController(val config: KafkaConfig,
   private def processPartitionModifications(topic: String): Unit = {
     def restorePartitionReplicaAssignment(
       topic: String,
-      newPartitionReplicaAssignment: Map[TopicPartition, ReplicaAssignment]
+      newPartitionReplicaAssignment: Set[(TopicPartition, ReplicaAssignment)]
     ): Unit = {
       info("Restoring the partition replica assignment for topic %s".format(topic))
 
@@ -1716,27 +1726,25 @@ class KafkaController(val config: KafkaConfig,
     }
 
     if (!isActive) return
-    val partitionReplicaAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic))
-    val partitionsToBeAdded = partitionReplicaAssignment.filter { case (topicPartition, _) =>
-      controllerContext.partitionReplicaAssignment(topicPartition).isEmpty
-    }
+    val partitions = zkClient.getReplicaAssignmentAndTopicIdForTopics(immutable.Set(topic))
+    val partitionsToBeAdded = partitions.flatMap(_.assignment).filter(t => controllerContext.partitionReplicaAssignment(t._1).isEmpty)
 
     if (topicDeletionManager.isTopicQueuedUpForDeletion(topic)) {
       if (partitionsToBeAdded.nonEmpty) {
         warn("Skipping adding partitions %s for topic %s since it is currently being deleted"
           .format(partitionsToBeAdded.map(_._1.partition).mkString(","), topic))
 
-        restorePartitionReplicaAssignment(topic, partitionReplicaAssignment)
+        restorePartitionReplicaAssignment(topic, partitions.flatMap(_.assignment))
       } else {
         // This can happen if existing partition replica assignment are restored to prevent increasing partition count during topic deletion
         info("Ignoring partition change during topic deletion as no new partitions are added")
       }
     } else if (partitionsToBeAdded.nonEmpty) {
       info(s"New partitions to be added $partitionsToBeAdded")
-      partitionsToBeAdded.forKeyValue { (topicPartition, assignedReplicas) =>
-        controllerContext.updatePartitionFullReplicaAssignment(topicPartition, assignedReplicas)
-      }
-      onNewPartitionCreation(partitionsToBeAdded.keySet)
+      processTopicIds(partitions)
+      partitionsToBeAdded.foreach(tuple => controllerContext.updatePartitionFullReplicaAssignment(tuple._1, tuple._2))
+
+      onNewPartitionCreation(partitionsToBeAdded.map(_._1))
     }
   }
 

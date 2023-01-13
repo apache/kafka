@@ -37,7 +37,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_6_IV0, IBP_2_7_IV0, IBP_3_2_IV0}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.log4j.Level
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
@@ -304,6 +304,53 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitForPartitionMetadata(servers, tp1.topic, tp1.partition)
+  }
+
+  /**
+   * This tests a scenario where client < 2.8 are used to increase the partitions for a topic by directly modifying
+   * assignment at Zk. This direct modification overwrites existing topicIds and replaces them with empty.
+   *
+   * This test verifies that the topicId in Zk is rebuilt by the controller as long as controller failover doesn't
+   * happen. We currently don't handle the scenario when controller failover occurs between Zk overwriting the topicId
+   * and controller updating it with it's locally stored value.
+   */
+  @Test
+  def testTopicPartitionExpansionWithOlderClients(): Unit = {
+    val tp0 = new TopicPartition("t", 0)
+    val tp1 = new TopicPartition("t", 1)
+    val initialAssignment = Map(tp0.partition -> Seq(0))
+    val expandedAssignment = Map(
+      tp0 -> ReplicaAssignment(Seq(0), Seq(), Seq()),
+      tp1 -> ReplicaAssignment(Seq(0), Seq(), Seq()))
+
+    servers = makeServers(1)
+
+    TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = initialAssignment, servers = servers)
+    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp0.topic())).get(tp0.topic())
+    val controllerDuringTopicCreation = getController()
+    val topicIdStoredByController = getController().kafkaController.controllerContext.topicIds.get(tp0.topic)
+
+    // Note that topic ID for the topic should be non-empty
+    assertTrue(topicIdAfterCreate.nonEmpty)
+    assertEquals(topicIdAfterCreate, topicIdStoredByController, "topic ID stored in Zk does not match with topicID in controller")
+
+    // This mimics a TopicCommand.ZookeeperTopicService# call from a client <2.8 which passes an empty value for topicId.
+    zkClient.setTopicAssignment(tp0.topic, /*empty topic Id*/ Option.empty, expandedAssignment, firstControllerEpochZkVersion)
+
+    waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
+      "failed to get expected partition state upon topic partition expansion")
+
+    // The assertions of this test is only valid if controller hasn't failed over
+    if (controllerDuringTopicCreation.config.brokerId == getController().config.brokerId) {
+      // verify that the topic Id stored in Zk after the expansion is same as the one which was assigned on topic creation
+      val topicIdAfterPartitionExpansion = zkClient.getTopicIdsForTopics(Set(tp0.topic())).get(tp0.topic())
+      assertTrue(topicIdAfterPartitionExpansion.nonEmpty, "TopicId should not be empty, controller should have re-created it.")
+      assertEquals(topicIdAfterCreate, topicIdAfterPartitionExpansion, "TopicId has changed for the topic after partition expansion")
+
+      TestUtils.waitForPartitionMetadata(servers, tp1.topic, tp1.partition)
+    } else {
+      fail("Controller failover occurred during this test which is not expected. Please re-try the test.")
+    }
   }
 
   @Test
