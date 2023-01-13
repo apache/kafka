@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
@@ -27,6 +26,9 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.coordinator.group.GroupCoordinator
+
+import java.util.OptionalInt
 
 object RequestHandlerHelper {
 
@@ -46,7 +48,7 @@ object RequestHandlerHelper {
 
     updatedFollowers.foreach { partition =>
       if (partition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
-        groupCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
+        groupCoordinator.onResignation(partition.partitionId, OptionalInt.of(partition.getLeaderEpoch))
       else if (partition.topic == Topic.TRANSACTION_STATE_TOPIC_NAME)
         txnCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
     }
