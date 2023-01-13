@@ -275,9 +275,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
              * (it seems likely to be a bug, but it doesn't hurt to keep trying to refresh).
              */
             long retvalNextRefreshMs = relativeToMs + DELAY_SECONDS_BEFORE_NEXT_RETRY_WHEN_RELOGIN_FAILS * 1000L;
-            // The principal here is always null?
-            log.warn("[Principal={}]: No Expiring credential found: will try again at {}", principalLogText(),
-                    new Date(retvalNextRefreshMs));
+            log.warn("No Expiring credential found: will try again at {}", new Date(retvalNextRefreshMs));
             return retvalNextRefreshMs;
         }
         long expireTimeMs = expiringCredential.expireTimeMs();
@@ -378,14 +376,13 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
              * Perform a login, making note of any credential that might need a logout()
              * afterwards
              */
-            String principalName = expiringCredential.principalName();
             ExpiringCredential optionalCredentialToLogout = expiringCredential;
             LoginContext optionalLoginContextToLogout = loginContext;
             boolean cleanLogin = false; // remember to restore the original if necessary
             try {
                 loginContext = loginContextFactory.createLoginContext(ExpiringCredentialRefreshingLogin.this);
                 log.info("Initiating re-login for {}, logout() still needs to be called on a previous login = {}",
-                        principalName, optionalCredentialToLogout != null);
+                    expiringCredential.principalName(), optionalCredentialToLogout != null);
                 loginContext.login();
                 cleanLogin = true; // no need to restore the original
                 // Perform a logout() on any original credential if necessary
@@ -409,7 +406,6 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                  * seems likely to be a bug, but it doesn't hurt to keep trying to refresh).
                  */
                 log.error("No Expiring Credential after a supposedly-successful re-login");
-                principalName = null;
             } else {
                 if (expiringCredential == optionalCredentialToLogout)
                     /*
@@ -428,8 +424,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
 
     // Visible for testing
     String principalLogText() {
-        return expiringCredential == null ? ""
-                : expiringCredential.getClass().getSimpleName() + ":" + principalName();
+        return expiringCredential.getClass().getSimpleName() + ":" + principalName();
     }
 
     private long currentMs() {
