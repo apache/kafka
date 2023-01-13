@@ -20,11 +20,12 @@ package kafka.log
 import java.util.Properties
 import java.util.concurrent.{Callable, Executors}
 import kafka.server.BrokerTopicStats
-import kafka.utils.{KafkaScheduler, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.log.internals.{FetchIsolation, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.util.KafkaScheduler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 

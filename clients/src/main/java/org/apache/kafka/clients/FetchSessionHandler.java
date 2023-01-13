@@ -433,13 +433,13 @@ public class FetchSessionHandler {
             extraIds = findMissing(ids, sessionTopicNames.keySet());
         }
         if (!omitted.isEmpty()) {
-            bld.append("omittedPartitions=(").append(Utils.join(omitted, ", ")).append(", ");
+            bld.append("omittedPartitions=(").append(Utils.join(omitted, ", ")).append("), ");
         }
         if (!extra.isEmpty()) {
-            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append(", ");
+            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");
         }
         if (!extraIds.isEmpty()) {
-            bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append(", ");
+            bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append("), ");
         }
         if ((!omitted.isEmpty()) || (!extra.isEmpty()) || (!extraIds.isEmpty())) {
             bld.append("response=(").append(Utils.join(topicPartitions, ", ")).append(")");

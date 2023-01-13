@@ -56,6 +56,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.log.internals.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.KafkaScheduler
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -2157,7 +2158,7 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testZkIsrManagerAsyncCallback(): Unit = {
     // We need a real scheduler here so that the ISR write lock works properly
-    val scheduler = new KafkaScheduler(1, "zk-isr-test")
+    val scheduler = new KafkaScheduler(1, true, "zk-isr-test")
     scheduler.startup()
     val kafkaZkClient = mock(classOf[KafkaZkClient])
 

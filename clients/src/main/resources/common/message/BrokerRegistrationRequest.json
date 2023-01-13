@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Version 1 adds Zk broker epoch to the request if the broker is migrating from Zk mode to KRaft mode.
 {
   "apiKey":62,
   "type": "request",
@@ -52,6 +53,6 @@
     { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The rack which this broker is in." },
     { "name": "IsMigratingZkBroker", "type": "bool", "versions": "1+", "default": "false",
-      "about": "Set by a ZK broker if the required configurations for ZK migration are present." }
+      "about": "If the required configurations for ZK migration are present, this value is set to true" }
   ]
 }

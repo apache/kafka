@@ -34,21 +34,16 @@ import java.util.stream.Stream;
  */
 public class ProducerStateEntry {
     public static final int NUM_BATCHES_TO_RETAIN = 5;
-
-    public int coordinatorEpoch;
-    public long lastTimestamp;
-    public OptionalLong currentTxnFirstOffset;
-
     private final long producerId;
     private final Deque<BatchMetadata> batchMetadata = new ArrayDeque<>();
+
     private short producerEpoch;
+    private int coordinatorEpoch;
+    private long lastTimestamp;
+    private OptionalLong currentTxnFirstOffset;
 
     public static ProducerStateEntry empty(long producerId) {
         return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty());
-    }
-
-    public ProducerStateEntry(long producerId) {
-        this(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty());
     }
 
     public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp, OptionalLong currentTxnFirstOffset, Optional<BatchMetadata> firstBatchMetadata) {
@@ -84,6 +79,15 @@ public class ProducerStateEntry {
         return batchMetadata.isEmpty();
     }
 
+    /**
+     * Returns a new instance with the provided parameters (when present) and the values from the current instance
+     * otherwise.
+     */
+    public ProducerStateEntry withProducerIdAndBatchMetadata(long producerId, Optional<BatchMetadata> batchMetadata) {
+        return new ProducerStateEntry(producerId, this.producerEpoch(), this.coordinatorEpoch, this.lastTimestamp,
+            this.currentTxnFirstOffset, batchMetadata);
+    }
+
     public void addBatch(short producerEpoch, int lastSeq, long lastOffset, int offsetDelta, long timestamp) {
         maybeUpdateProducerEpoch(producerEpoch);
         addBatchMetadata(new BatchMetadata(lastSeq, lastOffset, offsetDelta, timestamp));
@@ -106,11 +110,25 @@ public class ProducerStateEntry {
     }
 
     public void update(ProducerStateEntry nextEntry) {
-        maybeUpdateProducerEpoch(nextEntry.producerEpoch);
-        while (!nextEntry.batchMetadata.isEmpty()) addBatchMetadata(nextEntry.batchMetadata.removeFirst());
-        this.coordinatorEpoch = nextEntry.coordinatorEpoch;
-        this.currentTxnFirstOffset = nextEntry.currentTxnFirstOffset;
-        this.lastTimestamp = nextEntry.lastTimestamp;
+        update(nextEntry.producerEpoch, nextEntry.coordinatorEpoch, nextEntry.lastTimestamp, nextEntry.batchMetadata, nextEntry.currentTxnFirstOffset);
+    }
+
+    public void update(short producerEpoch, int coordinatorEpoch, long lastTimestamp) {
+        update(producerEpoch, coordinatorEpoch, lastTimestamp, new ArrayDeque<>(0), OptionalLong.empty());
+    }
+
+    private void update(short producerEpoch, int coordinatorEpoch, long lastTimestamp, Deque<BatchMetadata> batchMetadata,
+                        OptionalLong currentTxnFirstOffset) {
+        maybeUpdateProducerEpoch(producerEpoch);
+        while (!batchMetadata.isEmpty())
+            addBatchMetadata(batchMetadata.removeFirst());
+        this.coordinatorEpoch = coordinatorEpoch;
+        this.currentTxnFirstOffset = currentTxnFirstOffset;
+        this.lastTimestamp = lastTimestamp;
+    }
+
+    public void setCurrentTxnFirstOffset(long firstOffset) {
+        this.currentTxnFirstOffset = OptionalLong.of(firstOffset);
     }
 
     public Optional<BatchMetadata> findDuplicateBatch(RecordBatch batch) {
@@ -134,6 +152,18 @@ public class ProducerStateEntry {
 
     public long producerId() {
         return producerId;
+    }
+
+    public int coordinatorEpoch() {
+        return coordinatorEpoch;
+    }
+
+    public long lastTimestamp() {
+        return lastTimestamp;
+    }
+
+    public OptionalLong currentTxnFirstOffset() {
+        return currentTxnFirstOffset;
     }
 
     @Override

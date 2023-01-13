@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.server.{Defaults, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
-import kafka.utils.{Logging, Pool, Scheduler}
+import kafka.utils.{Logging, Pool}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation}
 import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.util.Scheduler
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -292,10 +293,10 @@ class TransactionStateManager(brokerId: Int,
 
   def enableTransactionalIdExpiration(): Unit = {
     scheduler.schedule(
-      name = "transactionalId-expiration",
-      fun = removeExpiredTransactionalIds,
-      delay = config.removeExpiredTransactionalIdsIntervalMs,
-      period = config.removeExpiredTransactionalIdsIntervalMs
+      "transactionalId-expiration",
+      () => removeExpiredTransactionalIds(),
+      config.removeExpiredTransactionalIdsIntervalMs,
+      config.removeExpiredTransactionalIdsIntervalMs
     )
   }
 
@@ -565,7 +566,7 @@ class TransactionStateManager(brokerId: Int,
     }
 
     val scheduleStartMs = time.milliseconds()
-    scheduler.schedule(s"load-txns-for-partition-$topicPartition", () => loadTransactions(scheduleStartMs))
+    scheduler.scheduleOnce(s"load-txns-for-partition-$topicPartition", () => loadTransactions(scheduleStartMs))
   }
 
   def removeTransactionsForTxnTopicPartition(partitionId: Int): Unit = {

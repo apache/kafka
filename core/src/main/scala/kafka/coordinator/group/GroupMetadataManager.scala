@@ -23,7 +23,7 @@ import java.nio.charset.StandardCharsets
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.ConcurrentHashMap
 import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
 import kafka.internals.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
@@ -47,6 +47,7 @@ import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicPartition
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
 import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation}
+import org.apache.kafka.server.util.KafkaScheduler
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -79,7 +80,7 @@ class GroupMetadataManager(brokerId: Int,
   @volatile private var groupMetadataTopicPartitionCount: Int = _
 
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
-  private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
+  private val scheduler = new KafkaScheduler(1, true, "group-metadata-manager-")
 
   /* The groups with open transactional offsets commits per producer. We need this because when the commit or abort
    * marker comes in for a transaction, it is for a particular partition on the offsets topic and a particular producerId.
@@ -175,10 +176,10 @@ class GroupMetadataManager(brokerId: Int,
     groupMetadataTopicPartitionCount = retrieveGroupMetadataTopicPartitionCount()
     scheduler.startup()
     if (enableMetadataExpiration) {
-      scheduler.schedule(name = "delete-expired-group-metadata",
-        fun = () => cleanupGroupMetadata(),
-        period = config.offsetsRetentionCheckIntervalMs,
-        unit = TimeUnit.MILLISECONDS)
+      scheduler.schedule("delete-expired-group-metadata",
+        () => cleanupGroupMetadata(),
+        0L,
+        config.offsetsRetentionCheckIntervalMs)
     }
   }
 
@@ -537,7 +538,7 @@ class GroupMetadataManager(brokerId: Int,
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     info(s"Scheduling loading of offsets and group metadata from $topicPartition for epoch $coordinatorEpoch")
     val startTimeMs = time.milliseconds()
-    scheduler.schedule(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, coordinatorEpoch, onGroupLoaded, startTimeMs))
+    scheduler.scheduleOnce(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, coordinatorEpoch, onGroupLoaded, startTimeMs))
   }
 
   private[group] def loadGroupsAndOffsets(
@@ -766,7 +767,7 @@ class GroupMetadataManager(brokerId: Int,
                                onGroupUnloaded: GroupMetadata => Unit): Unit = {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     info(s"Scheduling unloading of offsets and group metadata from $topicPartition")
-    scheduler.schedule(topicPartition.toString, () => removeGroupsAndOffsets(topicPartition, coordinatorEpoch, onGroupUnloaded))
+    scheduler.scheduleOnce(topicPartition.toString, () => removeGroupsAndOffsets(topicPartition, coordinatorEpoch, onGroupUnloaded))
   }
 
   private [group] def removeGroupsAndOffsets(topicPartition: TopicPartition,
@@ -921,7 +922,7 @@ class GroupMetadataManager(brokerId: Int,
    * the scheduler thread to avoid deadlocks.
    */
   def scheduleHandleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean): Unit = {
-    scheduler.schedule(s"handleTxnCompletion-$producerId", () =>
+    scheduler.scheduleOnce(s"handleTxnCompletion-$producerId", () =>
       handleTxnCompletion(producerId, completedPartitions, isCommit))
   }
 
@@ -974,8 +975,7 @@ class GroupMetadataManager(brokerId: Int,
 
   def shutdown(): Unit = {
     shuttingDown.set(true)
-    if (scheduler.isStarted)
-      scheduler.shutdown()
+    scheduler.shutdown()
     metrics.removeSensor(GroupMetadataManager.LoadTimeSensor)
     metrics.removeSensor(GroupMetadataManager.OffsetCommitsSensor)
     metrics.removeSensor(GroupMetadataManager.OffsetExpiredSensor)

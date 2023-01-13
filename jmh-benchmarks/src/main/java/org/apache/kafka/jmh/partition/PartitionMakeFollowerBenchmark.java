@@ -27,7 +27,6 @@ import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
-import kafka.utils.KafkaScheduler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
@@ -40,6 +39,7 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.log.internals.CleanerConfig;
 import org.apache.kafka.server.log.internals.LogConfig;
 import org.apache.kafka.server.log.internals.LogDirFailureChannel;
+import org.apache.kafka.server.util.KafkaScheduler;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -78,7 +78,7 @@ import scala.compat.java8.OptionConverters;
 public class PartitionMakeFollowerBenchmark {
     private LogManager logManager;
     private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, "scheduler", true);
+    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
     private Partition partition;
     private List<Integer> replicas = Arrays.asList(0, 1, 2);
     private OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
@@ -141,7 +141,7 @@ public class PartitionMakeFollowerBenchmark {
     }
 
     @TearDown(Level.Trial)
-    public void tearDown() throws IOException {
+    public void tearDown() throws IOException, InterruptedException {
         executorService.shutdownNow();
         logManager.shutdown();
         scheduler.shutdown();

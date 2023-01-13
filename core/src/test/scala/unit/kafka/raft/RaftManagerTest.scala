@@ -16,10 +16,20 @@
  */
 package kafka.raft
 
-import java.util.concurrent.CompletableFuture
+import java.nio.channels.FileChannel
+import java.nio.channels.OverlappingFileLockException
+import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.util.Properties
+import java.util.concurrent.CompletableFuture
+import kafka.log.LogManager
 import kafka.raft.KafkaRaftManager.RaftIoThread
-import kafka.server.{KafkaConfig, MetaProperties}
+import kafka.server.KafkaConfig
+import kafka.server.KafkaRaftServer.BrokerRole
+import kafka.server.KafkaRaftServer.ControllerRole
+import kafka.server.KafkaRaftServer.ProcessRole
+import kafka.server.MetaProperties
+import kafka.utils.TestUtils
 import kafka.tools.TestRaftServer.ByteArraySerde
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
@@ -27,41 +37,50 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.KafkaRaftClient
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito._
 
-import java.io.File
-
 class RaftManagerTest {
-
-  private def instantiateRaftManagerWithConfigs(topicPartition: TopicPartition, processRoles: String, nodeId: String) = {
-    def configWithProcessRolesAndNodeId(processRoles: String, nodeId: String, logDir: File): KafkaConfig = {
-      val props = new Properties
-      props.setProperty(KafkaConfig.MetadataLogDirProp, logDir.getPath)
-      props.setProperty(KafkaConfig.ProcessRolesProp, processRoles)
-      props.setProperty(KafkaConfig.NodeIdProp, nodeId)
-      props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
-      if (processRoles.contains("broker")) {
-        props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
-        if (processRoles.contains("controller")) { // co-located
-          props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
-          props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
-        } else { // broker-only
-          val voterId = (nodeId.toInt + 1)
-          props.setProperty(KafkaConfig.QuorumVotersProp, s"${voterId}@localhost:9093")
-        }
-      } else if (processRoles.contains("controller")) { // controller-only
-        props.setProperty(KafkaConfig.ListenersProp, "SSL://localhost:9093")
+  private def createConfig(
+    processRoles: Set[ProcessRole],
+    nodeId: Int,
+    logDir: Option[Path],
+    metadataDir: Option[Path]
+  ): KafkaConfig = {
+    val props = new Properties
+    logDir.foreach { value =>
+      props.setProperty(KafkaConfig.LogDirProp, value.toString)
+    }
+    metadataDir.foreach { value =>
+      props.setProperty(KafkaConfig.MetadataLogDirProp, value.toString)
+    }
+    props.setProperty(KafkaConfig.ProcessRolesProp, processRoles.mkString(","))
+    props.setProperty(KafkaConfig.NodeIdProp, nodeId.toString)
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    if (processRoles.contains(BrokerRole)) {
+      props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
+      if (processRoles.contains(ControllerRole)) { // co-located
+        props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
         props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+      } else { // broker-only
+        val voterId = nodeId + 1
+        props.setProperty(KafkaConfig.QuorumVotersProp, s"${voterId}@localhost:9093")
       }
-
-      new KafkaConfig(props)
+    } else if (processRoles.contains(ControllerRole)) { // controller-only
+      props.setProperty(KafkaConfig.ListenersProp, "SSL://localhost:9093")
+      props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
     }
 
-    val logDir = TestUtils.tempDirectory()
-    val config = configWithProcessRolesAndNodeId(processRoles, nodeId, logDir)
+    new KafkaConfig(props)
+  }
+
+  private def createRaftManager(
+    topicPartition: TopicPartition,
+    config: KafkaConfig
+  ): KafkaRaftManager[Array[Byte]] = {
     val topicId = new Uuid(0L, 2L)
     val metaProperties = MetaProperties(
       clusterId = Uuid.randomUuid.toString,
@@ -81,25 +100,99 @@ class RaftManagerTest {
     )
   }
 
-  @Test
-  def testNodeIdPresentIfBrokerRoleOnly(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "broker", "1")
-    assertEquals(1, raftManager.client.nodeId.getAsInt)
+  @ParameterizedTest
+  @ValueSource(strings = Array("broker", "controller", "broker,controller"))
+  def testNodeIdPresent(processRoles: String): Unit = {
+    var processRolesSet = Set.empty[ProcessRole]
+    if (processRoles.contains("broker")) {
+      processRolesSet = processRolesSet ++ Set(BrokerRole)
+    }
+    if (processRoles.contains("controller")) {
+      processRolesSet = processRolesSet ++ Set(ControllerRole)
+    }
+
+    val logDir = TestUtils.tempDir()
+    val nodeId = 1
+    val raftManager = createRaftManager(
+      new TopicPartition("__raft_id_test", 0),
+      createConfig(
+        processRolesSet,
+        nodeId,
+        Some(logDir.toPath),
+        None
+      )
+    )
+    assertEquals(nodeId, raftManager.client.nodeId.getAsInt)
     raftManager.shutdown()
   }
 
-  @Test
-  def testNodeIdPresentIfControllerRoleOnly(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller", "1")
-    assertEquals(1, raftManager.client.nodeId.getAsInt)
+  @ParameterizedTest
+  @ValueSource(strings = Array("metadata-only", "log-only", "both"))
+  def testLogDirLockWhenControllerOnly(dirType: String): Unit = {
+    val logDir = if (dirType.equals("metadata-only")) {
+      None
+    } else {
+      Some(TestUtils.tempDir().toPath)
+    }
+
+    val metadataDir = if (dirType.equals("log-only")) {
+      None
+    } else {
+      Some(TestUtils.tempDir().toPath)
+    }
+
+    val nodeId = 1
+    val raftManager = createRaftManager(
+      new TopicPartition("__raft_id_test", 0),
+      createConfig(
+        Set(ControllerRole),
+        nodeId,
+        logDir,
+        metadataDir
+      )
+    )
+
+    val lockPath = metadataDir.getOrElse(logDir.get).resolve(LogManager.LockFileName)
+    assertTrue(fileLocked(lockPath))
+
     raftManager.shutdown()
+
+    assertFalse(fileLocked(lockPath))
   }
 
   @Test
-  def testNodeIdPresentIfColocated(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller,broker", "1")
-    assertEquals(1, raftManager.client.nodeId.getAsInt)
+  def testLogDirLockWhenBrokerOnlyWithSeparateMetadataDir(): Unit = {
+    val logDir = Some(TestUtils.tempDir().toPath)
+    val metadataDir = Some(TestUtils.tempDir().toPath)
+
+    val nodeId = 1
+    val raftManager = createRaftManager(
+      new TopicPartition("__raft_id_test", 0),
+      createConfig(
+        Set(BrokerRole),
+        nodeId,
+        logDir,
+        metadataDir
+      )
+    )
+
+    val lockPath = metadataDir.getOrElse(logDir.get).resolve(LogManager.LockFileName)
+    assertTrue(fileLocked(lockPath))
+
     raftManager.shutdown()
+
+    assertFalse(fileLocked(lockPath))
+  }
+
+  private def fileLocked(path: Path): Boolean = {
+    TestUtils.resource(FileChannel.open(path, StandardOpenOption.WRITE)) { channel =>
+      try {
+        Option(channel.tryLock()).foreach(_.close())
+        false
+      } catch {
+        case _: OverlappingFileLockException => true
+      }
+    }
   }
 
   @Test
@@ -140,5 +233,4 @@ class RaftManagerTest {
     assertTrue(ioThread.isThreadFailed)
     assertFalse(ioThread.isRunning)
   }
-
 }
