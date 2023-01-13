@@ -826,13 +826,6 @@ class ControllerApis(val requestChannel: RequestChannel,
          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
            new AlterUserScramCredentialsResponse(response.setThrottleTimeMs(requestThrottleMs)))
       }
-    // controller.alterUserScramCredentials(context, alterRequest.data()).whenComplete((response, e) =>
-    //   if (e != null) {
-    //     requestHelper.handleError(request, e)
-    //   } else {
-    //     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-    //       new AlterUserScramCredentialsResponse(response.setThrottleTimeMs(requestThrottleMs)))
-    //   })
   }
 
   def handleListPartitionReassignments(request: RequestChannel.Request): CompletableFuture[Unit] = {
