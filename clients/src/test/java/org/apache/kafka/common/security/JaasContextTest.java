@@ -30,6 +30,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag;
 import javax.security.auth.login.Configuration;
 
+import static org.apache.kafka.common.security.JaasUtils.DISALLOWED_LOGIN_MODULES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -61,6 +62,7 @@ public class JaasContextTest {
     @AfterEach
     public void tearDown() throws Exception {
         Files.delete(jaasConfigFile.toPath());
+        System.clearProperty(DISALLOWED_LOGIN_MODULES_CONFIG);
     }
 
     @Test
@@ -178,6 +180,52 @@ public class JaasContextTest {
     @Test
     public void testInvalidControlFlag() throws Exception {
         checkInvalidConfiguration("test.testInvalidControlFlag { option1=3;");
+    }
+
+    @Test
+    public void testDisallowedLoginModulesSystemProperty() throws Exception {
+        //test JndiLoginModule is not allowed by default
+        String jaasConfigProp1 = "com.sun.security.auth.module.JndiLoginModule required;";
+        assertThrows(IllegalArgumentException.class, () -> configurationEntry(JaasContext.Type.CLIENT, jaasConfigProp1));
+
+        //test ListenerName Override
+        writeConfiguration(Arrays.asList(
+                "KafkaServer { test.LoginModuleDefault required; };",
+                "plaintext.KafkaServer { com.sun.security.auth.module.JndiLoginModule requisite; };"
+        ));
+        assertThrows(IllegalArgumentException.class, () -> JaasContext.loadServerContext(new ListenerName("plaintext"),
+                "SOME-MECHANISM", Collections.emptyMap()));
+
+        //test org.apache.kafka.disallowed.login.modules system property with multiple modules
+        System.setProperty(DISALLOWED_LOGIN_MODULES_CONFIG, " com.ibm.security.auth.module.LdapLoginModule , com.ibm.security.auth.module.Krb5LoginModule ");
+
+        String jaasConfigProp2 = "com.ibm.security.auth.module.LdapLoginModule required;";
+        assertThrows(IllegalArgumentException.class, () ->  configurationEntry(JaasContext.Type.CLIENT, jaasConfigProp2));
+
+        //test ListenerName Override
+        writeConfiguration(Arrays.asList(
+                "KafkaServer { test.LoginModuleDefault required; };",
+                "plaintext.KafkaServer { com.ibm.security.auth.module.Krb5LoginModule requisite; };"
+        ));
+        assertThrows(IllegalArgumentException.class, () -> JaasContext.loadServerContext(new ListenerName("plaintext"),
+                "SOME-MECHANISM", Collections.emptyMap()));
+
+
+        //Remove default value for org.apache.kafka.disallowed.login.modules
+        System.setProperty(DISALLOWED_LOGIN_MODULES_CONFIG, "");
+
+        checkConfiguration("com.sun.security.auth.module.JndiLoginModule", LoginModuleControlFlag.REQUIRED, new HashMap<>());
+
+        //test ListenerName Override
+        writeConfiguration(Arrays.asList(
+                "KafkaServer { com.ibm.security.auth.module.LdapLoginModule required; };",
+                "plaintext.KafkaServer { com.sun.security.auth.module.JndiLoginModule requisite; };"
+        ));
+        JaasContext context = JaasContext.loadServerContext(new ListenerName("plaintext"),
+                "SOME-MECHANISM", Collections.emptyMap());
+        assertEquals(1, context.configurationEntries().size());
+        checkEntry(context.configurationEntries().get(0), "com.sun.security.auth.module.JndiLoginModule",
+                LoginModuleControlFlag.REQUISITE, Collections.emptyMap());
     }
 
     @Test
