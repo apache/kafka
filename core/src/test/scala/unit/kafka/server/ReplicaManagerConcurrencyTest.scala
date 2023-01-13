@@ -230,7 +230,7 @@ class ReplicaManagerConcurrencyTest {
       val fetchParams = new FetchParams(
         ApiKeys.FETCH.latestVersion,
         replicaId,
-        random.nextLong(100),
+        random.nextInt(100),
         1,
         1024 * 1024,
         FetchIsolation.of(replicaId, IsolationLevel.READ_UNCOMMITTED),
