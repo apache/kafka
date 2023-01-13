@@ -22,7 +22,6 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -80,11 +79,88 @@ public class EndToEndLatency {
         }
     }
 
+    // Visible for testing
     static void execute(String... args) throws Exception {
+
+        ArgumentParser parser = addArguments();
+
+        Namespace res = null;
+        try {
+            res = parser.parseArgs(args);
+        } catch (ArgumentParserException e) {
+            if (args.length == 0) {
+                parser.printHelp();
+                Exit.exit(0);
+            } else {
+                parser.handleError(e);
+                Exit.exit(1);
+            }
+        }
+
+        String brokers = res.getString("broker_list");
+        String topic = res.getString("topic");
+        int numMessages = res.getInt("num_messages");
+        String acks = res.getString("producer_acks");
+        int messageSizeBytes = res.getInt("message_size_bytes");
+        String propertiesFile = res.getString("properties_file");
+
+        if (!Arrays.asList("1", "all").contains(acks)) {
+            throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all");
+        }
+
+        Properties props;
+        try {
+            props = loadPropsWithBootstrapServers(propertiesFile);
+        } catch (FileNotFoundException e) {
+            throw new IllegalArgumentException("Properties file not found");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        try (KafkaConsumer<byte[], byte[]> consumer = createKafkaConsumer(props, brokers);
+             KafkaProducer<byte[], byte[]> producer = createKafkaProducer(props, acks, brokers)) {
+
+            if (!consumer.listTopics().containsKey(topic)) {
+                createTopic(props, topic);
+            }
+
+            setupConsumer(topic, consumer);
+
+            double totalTime = 0.0;
+            long[] latencies = new long[numMessages];
+            Random random = new Random(0);
+
+            for (int i = 0; i < numMessages; i++) {
+                byte[] message = randomBytesOfLen(random, messageSizeBytes);
+                long begin = System.nanoTime();
+                //Send message (of random bytes) synchronously then immediately poll for it
+                producer.send(new ProducerRecord<>(topic, message)).get();
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(TIMEOUT));
+                long elapsed = System.nanoTime() - begin;
+
+                validate(consumer, message, records);
+
+                //Report progress
+                if (i % 1000 == 0)
+                    System.out.println(i + "\t" + elapsed / 1000.0 / 1000.0);
+                totalTime += elapsed;
+                latencies[i] = elapsed / 1000 / 1000;
+            }
+
+            //Results
+            printResults(numMessages, totalTime, latencies);
+            consumer.commitSync();
+        }
+
+    }
+
+    static ArgumentParser addArguments() {
+
         ArgumentParser parser = ArgumentParsers
                 .newArgumentParser("end-to-end-latency")
                 .defaultHelp(true)
                 .description("This tool records the average end to end latency for a single message to travel through Kafka");
+
 
         parser
                 .addArgument("-b", "--brokers")
@@ -128,93 +204,31 @@ public class EndToEndLatency {
                 .type(String.class)
                 .dest("properties_file");
 
-        Namespace res = null;
-        try {
-            res = parser.parseArgs(args);
-        } catch (ArgumentParserException e) {
-            if (args.length == 0) {
-                parser.printHelp();
-                Exit.exit(0);
-            } else {
-                parser.handleError(e);
-                Exit.exit(1);
-            }
-        }
+        return parser;
+    }
 
-        String brokers = res.getString("broker_list");
-        String topic = res.getString("topic");
-        int numMessages = res.getInt("num_messages");
-        String acks = res.getString("producer_acks");
-        int messageSizeBytes = res.getInt("message_size_bytes");
-        String propertiesFile = res.getString("properties_file");
-
-        if (!Arrays.asList("1", "all").contains(acks)) {
-            throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all");
-        }
-
-        Properties props;
-        try {
-            props = loadPropsWithBootstrapServers(propertiesFile, brokers);
-        } catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("Properties file not found");
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        try (KafkaConsumer<byte[], byte[]> consumer = createKafkaConsumer(props);
-             KafkaProducer<byte[], byte[]> producer = createKafkaProducer(props, acks)) {
-
-            if (!consumer.listTopics().containsKey(topic)) {
-                createTopic(props, topic);
-            }
-
-            setupConsumer(topic, consumer);
-
-            double totalTime = 0.0;
-            long[] latencies = new long[numMessages];
-            Random random = new Random(0);
-
-            for (int i = 0; i < numMessages; i++) {
-                byte[] message = randomBytesOfLen(random, messageSizeBytes);
-                long begin = System.nanoTime();
-                //Send message (of random bytes) synchronously then immediately poll for it
-                producer.send(new ProducerRecord<>(topic, message)).get();
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(TIMEOUT));
-                long elapsed = System.nanoTime() - begin;
-
-                if (records.isEmpty()) {
-                    consumer.commitSync();
-                    throw new RuntimeException("poll() timed out before finding a result (timeout:[" + TIMEOUT + "])");
-                }
-
-                //Check result matches the original record
-                String sent = new String(message, StandardCharsets.UTF_8);
-                String read = new String(records.iterator().next().value(), StandardCharsets.UTF_8);
-
-                if (!read.equals(sent)) {
-                    consumer.commitSync();
-                    throw new RuntimeException("The message read [" + read + "] did not match the message sent [" + sent + "]");
-                }
-
-                //Check we only got the one message
-                if (records.count() != 1) {
-                    int count = records.count();
-                    consumer.commitSync();
-                    throw new RuntimeException("Only one result was expected during this test. We found [" + count + "]");
-                }
-
-                //Report progress
-                if (i % 1000 == 0)
-                    System.out.println(i + "\t" + elapsed / 1000.0 / 1000.0);
-                totalTime += elapsed;
-                latencies[i] = elapsed / 1000 / 1000;
-            }
-
-            //Results
-            printResults(numMessages, totalTime, latencies);
+    // Visible for testing
+    static void validate(KafkaConsumer<byte[], byte[]> consumer, byte[] message, ConsumerRecords<byte[], byte[]> records) {
+        if (records.isEmpty()) {
             consumer.commitSync();
+            throw new RuntimeException("poll() timed out before finding a result (timeout:[" + TIMEOUT + "])");
         }
 
+        //Check result matches the original record
+        String sent = new String(message, StandardCharsets.UTF_8);
+        String read = new String(records.iterator().next().value(), StandardCharsets.UTF_8);
+
+        if (!read.equals(sent)) {
+            consumer.commitSync();
+            throw new RuntimeException("The message read [" + read + "] did not match the message sent [" + sent + "]");
+        }
+
+        //Check we only got the one message
+        if (records.count() != 1) {
+            int count = records.count();
+            consumer.commitSync();
+            throw new RuntimeException("Only one result was expected during this test. We found [" + count + "]");
+        }
     }
 
     private static void setupConsumer(String topic, KafkaConsumer<byte[], byte[]> consumer) {
@@ -264,14 +278,14 @@ public class EndToEndLatency {
         }
     }
 
-    private static Properties loadPropsWithBootstrapServers(String propertiesFile, String brokers) throws IOException {
+    private static Properties loadPropsWithBootstrapServers(String propertiesFile) throws IOException {
         Properties properties = propertiesFile != null ? Utils.loadProps(propertiesFile) : new Properties();
-        properties.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokers);
         return properties;
     }
 
-    private static KafkaConsumer<byte[], byte[]> createKafkaConsumer(Properties properties) {
+    private static KafkaConsumer<byte[], byte[]> createKafkaConsumer(Properties properties, String brokers) {
         Properties consumerProps = properties;
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + System.currentTimeMillis());
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
@@ -281,8 +295,9 @@ public class EndToEndLatency {
         return new KafkaConsumer<>(consumerProps);
     }
 
-    private static KafkaProducer<byte[], byte[]> createKafkaProducer(Properties properties, String acks) {
+    private static KafkaProducer<byte[], byte[]> createKafkaProducer(Properties properties, String acks, String brokers) {
         Properties producerProps = properties;
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
         producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0"); //ensure writes are synchronous
         producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MAX_VALUE);
         producerProps.put(ProducerConfig.ACKS_CONFIG, acks);
