@@ -878,7 +878,7 @@ public class DistributedHerderTest extends ThreadedTest {
 
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
         assertEquals(
-                Collections.singletonList("The connector does not support exactly-once delivery guarantees with the provided configuration."),
+                Collections.singletonList("The connector does not support exactly-once semantics with the provided configuration."),
                 errors);
 
         PowerMock.verifyAll();

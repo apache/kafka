@@ -75,8 +75,8 @@ public class SourceConnectorConfig extends ConnectorConfig {
 
     public static final String EXACTLY_ONCE_SUPPORT_CONFIG = "exactly.once.support";
     private static final String EXACTLY_ONCE_SUPPORT_DOC = "Permitted values are " + String.join(", ", enumOptions(ExactlyOnceSupportLevel.class)) + ". "
-            + "If set to \"" + REQUIRED + "\", forces a preflight check for the connector to ensure that it can provide exactly-once delivery "
-            + "with the given configuration. Some connectors may be capable of providing exactly-once delivery but not signal to "
+            + "If set to \"" + REQUIRED + "\", forces a preflight check for the connector to ensure that it can provide exactly-once semantics "
+            + "with the given configuration. Some connectors may be capable of providing exactly-once semantics but not signal to "
             + "Connect that they support this; in that case, documentation for the connector should be consulted carefully before "
             + "creating it, and the value for this property should be set to \"" + REQUESTED + "\". "
             + "Additionally, if the value is set to \"" + REQUIRED + "\" but the worker that performs preflight validation does not have "

@@ -160,7 +160,7 @@ public class ExactlyOnceSourceIntegrationTest {
     }
 
     /**
-     * A simple test for the pre-flight validation API for connectors to provide their own delivery guarantees.
+     * A simple test for the pre-flight validation API for connectors to provide their own guarantees for exactly-once semantics.
      */
     @Test
     public void testPreflightValidation() {
@@ -726,8 +726,8 @@ public class ExactlyOnceSourceIntegrationTest {
      * Then, a "soft downgrade" is simulated: the Connect cluster is shut down and reconfigured to disable
      * exactly-once support. The cluster is brought up again, the connector is allowed to produce some data,
      * the connector is shut down, and this time, the records the connector has produced are inspected for
-     * accuracy. Because of the downgrade, exactly-once guarantees are lost, but we check to make sure that
-     * the task has maintained exactly-once delivery <i>up to the last-committed record</i>.
+     * accuracy. Because of the downgrade, exactly-once semantics are lost, but we check to make sure that
+     * the task has maintained exactly-once semantics <i>up to the last-committed record</i>.
      */
     @Test
     public void testSeparateOffsetsTopic() throws Exception {
@@ -857,7 +857,7 @@ public class ExactlyOnceSourceIntegrationTest {
             );
             assertTrue("Not enough records produced by source connector. Expected at least: " + recordsProduced + " + but got " + sourceRecords.count(),
                     sourceRecords.count() >= recordsProduced);
-            // also have to check which offsets have actually been committed, since we no longer have exactly-once guarantees
+            // also have to check which offsets have actually been committed, since we no longer have exactly-once semantics
             offsetRecords = connectorTargetedCluster.consumeAll(
                     CONSUME_RECORDS_TIMEOUT_MS,
                     Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),

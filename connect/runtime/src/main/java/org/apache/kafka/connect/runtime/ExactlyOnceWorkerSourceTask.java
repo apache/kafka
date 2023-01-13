@@ -54,7 +54,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 
 /**
- * WorkerTask that uses a SourceTask to ingest data into Kafka, with support for exactly-once delivery guarantees.
+ * WorkerTask that uses a SourceTask to ingest data into Kafka, with support for exactly-once semantics.
  */
 class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     private static final Logger log = LoggerFactory.getLogger(ExactlyOnceWorkerSourceTask.class);

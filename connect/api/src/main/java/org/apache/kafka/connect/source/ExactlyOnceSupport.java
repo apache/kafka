@@ -17,15 +17,15 @@
 package org.apache.kafka.connect.source;
 
 /**
- * An enum to represent the level of support for exactly-once delivery from a source connector.
+ * An enum to represent the level of support for exactly-once semantics from a source connector.
  */
 public enum ExactlyOnceSupport {
     /**
-     * Signals that a connector supports exactly-once delivery.
+     * Signals that a connector supports exactly-once semantics.
      */
     SUPPORTED,
     /**
-     * Signals that a connector does not support exactly-once delivery.
+     * Signals that a connector does not support exactly-once semantics.
      */
     UNSUPPORTED;
 }

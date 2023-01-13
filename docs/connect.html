@@ -371,15 +371,15 @@ errors.tolerance=all</pre>
 
     <h4><a id="connect_exactlyonce" href="#connect_exactlyonce">Exactly-once support</a></h4>
 
-    <p>Kafka Connect is capable of providing exactly-once delivery guarantees for sink connectors (as of version 0.11.0) and source connectors (as of version 3.3.0). Please note that <b>support for exactly-once delivery is highly dependent on the type of connector you run.</b> Even if you set all the correct worker properties in the configuration for each node in a cluster, if a connector is not designed to, or cannot take advantage of the capabilities of the Kafka Connect framework, exactly-once may not be possible.</p>
+    <p>Kafka Connect is capable of providing exactly-once semantics for sink connectors (as of version 0.11.0) and source connectors (as of version 3.3.0). Please note that <b>support for exactly-once semantics is highly dependent on the type of connector you run.</b> Even if you set all the correct worker properties in the configuration for each node in a cluster, if a connector is not designed to, or cannot take advantage of the capabilities of the Kafka Connect framework, exactly-once may not be possible.</p>
 
     <h5><a id="connect_exactlyoncesink" href="#connect_exactlyoncesink">Sink connectors</a></h5>
 
-    <p>If a sink connector supports exactly-once delivery, to enable exactly-once delivery at the Connect worker level, you must ensure its consumer group is configured to ignore records in aborted transactions. You can do this by setting the worker property <code>consumer.isolation.level</code> to <code>read_committed</code> or, if running a version of Kafka Connect that supports it, using a <a href="#connectconfigs_connector.client.config.override.policy">connector client config override policy</a> that allows the <code>consumer.override.isolation.level</code> property to be set to <code>read_committed</code> in individual connector configs. There are no additional ACL requirements.</p>
+    <p>If a sink connector supports exactly-once semantics, to enable exactly-once at the Connect worker level, you must ensure its consumer group is configured to ignore records in aborted transactions. You can do this by setting the worker property <code>consumer.isolation.level</code> to <code>read_committed</code> or, if running a version of Kafka Connect that supports it, using a <a href="#connectconfigs_connector.client.config.override.policy">connector client config override policy</a> that allows the <code>consumer.override.isolation.level</code> property to be set to <code>read_committed</code> in individual connector configs. There are no additional ACL requirements.</p>
 
     <h5><a id="connect_exactlyoncesource" href="connect_exactlyoncesource">Source connectors</a></h5>
 
-    <p>If a source connector supports exactly-once delivery, you must configure your Connect cluster to enable framework-level support for exactly-once delivery for source connectors. Additional ACLs may be necessary if running against a secured Kafka cluster. Note that exactly-once support for source connectors is currently only available in distributed mode; standalone Connect workers cannot provide exactly-once guarantees.</p>
+    <p>If a source connector supports exactly-once semantics, you must configure your Connect cluster to enable framework-level support for exactly-once source connectors. Additional ACLs may be necessary if running against a secured Kafka cluster. Note that exactly-once support for source connectors is currently only available in distributed mode; standalone Connect workers cannot provide exactly-once semantics.</p>
 
     <h6>Worker configuration</h6>
 
@@ -763,24 +763,24 @@ public List&lt;SourceRecord&gt; poll() {
 
     <p>A few additional preflight validation APIs can be implemented by source connector developers.</p>
 
-    <p>Some users may require exactly-once delivery guarantees from a connector. In this case, they may set the <code>exactly.once.support</code> property to <code>required</code> in the configuration for the connector. When this happens, the Kafka Connect framework will ask the connector whether it can provide exactly-once delivery guarantees with the specified configuration. This is done by invoking the <code>exactlyOnceSupport</code> method on the connector.</p>
+    <p>Some users may require exactly-once semantics from a connector. In this case, they may set the <code>exactly.once.support</code> property to <code>required</code> in the configuration for the connector. When this happens, the Kafka Connect framework will ask the connector whether it can provide exactly-once semantics with the specified configuration. This is done by invoking the <code>exactlyOnceSupport</code> method on the connector.</p>
 
-    <p>If a connector doesn't support exactly-once delivery, it should still implement this method to let users know for certain that it cannot provide exactly-once delivery guarantees:</p>
+    <p>If a connector doesn't support exactly-once semantics, it should still implement this method to let users know for certain that it cannot provide exactly-once semantics:</p>
 
 <pre class="brush: java;">
 @Override
 public ExactlyOnceSupport exactlyOnceSupport(Map&lt;String, String&gt; props) {
-    // This connector cannot provide exactly-once delivery guarantees under any conditions
+    // This connector cannot provide exactly-once semantics under any conditions
     return ExactlyOnceSupport.UNSUPPORTED;
 }
 </pre>
 
-    <p>Otherwise, a connector should examine the configuration, and return <code>ExactlyOnceSupport.SUPPORTED</code> if it can provide exactly-once delivery guarantees:</p>
+    <p>Otherwise, a connector should examine the configuration, and return <code>ExactlyOnceSupport.SUPPORTED</code> if it can provide exactly-once semantics:</p>
 
 <pre class="brush: java;">
 @Override
 public ExactlyOnceSupport exactlyOnceSupport(Map&lt;String, String&gt; props) {
-    // This connector can always provide exactly-once delivery guarantees
+    // This connector can always provide exactly-once semantics
     return ExactlyOnceSupport.SUPPORTED;
 }
 </pre>

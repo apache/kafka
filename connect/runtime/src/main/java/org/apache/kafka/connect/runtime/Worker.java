@@ -850,7 +850,7 @@ public class Worker {
         Map<String, Object> result = baseConsumerConfigs(
                 connName, defaultClientId, config, connConfig, connectorClass,
                 connectorClientConfigOverridePolicy, clusterId, ConnectorType.SOURCE);
-        // Users can disable this if they want to; it won't affect delivery guarantees since the task isn't exactly-once anyways
+        // Users can disable this if they want to since the task isn't exactly-once anyways
         result.putIfAbsent(
                 ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                 IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT));
