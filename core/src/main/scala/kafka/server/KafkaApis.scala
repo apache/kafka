@@ -1578,7 +1578,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       val (partition, internalTopicName) = CoordinatorType.forId(keyType) match {
         case CoordinatorType.GROUP =>
-          (groupCoordinator.partitionFor(key), GROUP_METADATA_TOPIC_NAME)
+          (newGroupCoordinator.partitionFor(key), GROUP_METADATA_TOPIC_NAME)
 
         case CoordinatorType.TRANSACTION =>
           (txnCoordinator.partitionFor(key), TRANSACTION_STATE_TOPIC_NAME)

@@ -470,4 +470,9 @@ class GroupCoordinatorAdapter(
       expireTimestamp = expireTimestamp
     )
   }
+
+  override def partitionFor(groupId: String): Int = {
+    coordinator.partitionFor(groupId)
+  }
+
 }

@@ -198,5 +198,14 @@ public interface GroupCoordinator {
         TxnOffsetCommitRequestData request,
         BufferSupplier bufferSupplier
     );
+
+    /**
+     * Return the partition index for the given Group.
+     *
+     * @param groupId           The group id.
+     *
+     * @return The partition index.
+     */
+    int partitionFor(String groupId);
 }
 
