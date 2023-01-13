@@ -21,7 +21,7 @@ import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallbac
 import kafka.server.RequestLocal
 import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -679,5 +679,77 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertEquals(expectedResponseData, future.get())
+  }
+
+  @Test
+  def testCommitTransactionalOffsets(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val time = new MockTime()
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, time)
+    val now = time.milliseconds()
+
+    val ctx = makeContext(ApiKeys.TXN_OFFSET_COMMIT, ApiKeys.TXN_OFFSET_COMMIT.latestVersion)
+    val data = new TxnOffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(10)
+      .setProducerEpoch(1)
+      .setProducerId(2)
+      .setTransactionalId("transaction-id")
+      .setTopics(List(
+        new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+    val bufferSupplier = BufferSupplier.create()
+
+    val future = adapter.commitTransactionalOffsets(ctx, data, bufferSupplier)
+    assertFalse(future.isDone)
+
+    val capturedCallback: ArgumentCaptor[Map[TopicPartition, Errors] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, Errors] => Unit])
+
+    verify(groupCoordinator).handleTxnCommitOffsets(
+      ArgumentMatchers.eq(data.groupId),
+      ArgumentMatchers.eq(data.producerId),
+      ArgumentMatchers.eq(data.producerEpoch),
+      ArgumentMatchers.eq(data.memberId),
+      ArgumentMatchers.eq(None),
+      ArgumentMatchers.eq(data.generationId),
+      ArgumentMatchers.eq(Map(
+        new TopicPartition("foo", 0) -> new OffsetAndMetadata(
+          offset = 100,
+          leaderEpoch = Optional.of[Integer](1),
+          metadata = "",
+          commitTimestamp = now,
+          expireTimestamp = None
+        )
+      )),
+      capturedCallback.capture(),
+      ArgumentMatchers.eq(RequestLocal(bufferSupplier))
+    )
+
+    capturedCallback.getValue.apply(Map(
+      new TopicPartition("foo", 0) -> Errors.NONE
+    ))
+
+    val expectedData = new TxnOffsetCommitResponseData()
+      .setTopics(List(
+        new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code)
+          ).asJava)
+      ).asJava)
+
+    assertTrue(future.isDone)
+    assertEquals(expectedData, future.get())
   }
 }
