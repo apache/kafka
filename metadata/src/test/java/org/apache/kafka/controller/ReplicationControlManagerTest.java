@@ -61,6 +61,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -580,6 +581,17 @@ public class ReplicationControlManagerTest {
             replicationControl.createTopics(request1, Collections.singleton("foo"));
         assertEquals((short) 0, result1.response().topics().find("foo").errorCode());
 
+        List<ApiMessageAndVersion> records1 = result1.records();
+        assertEquals(3, records1.size());
+        ApiMessageAndVersion record0 = records1.get(0);
+        assertEquals(TopicRecord.class, record0.message().getClass());
+
+        ApiMessageAndVersion record1 = records1.get(1);
+        assertEquals(ConfigRecord.class, record1.message().getClass());
+
+        ApiMessageAndVersion lastRecord = records1.get(2);
+        assertEquals(PartitionRecord.class, lastRecord.message().getClass());
+
         ctx.replay(result1.records());
         assertEquals(
             "notNull",
@@ -605,6 +617,49 @@ public class ReplicationControlManagerTest {
             "Null value not supported for topic configs: foo",
             result2.response().topics().find("bar").errorMessage()
         );
+
+        CreateTopicsRequestData request3 = new CreateTopicsRequestData();
+        request3.topics().add(new CreatableTopic().setName("baz")
+            .setNumPartitions(-1).setReplicationFactor((short) -2)
+            .setConfigs(validConfigs));
+
+        ControllerResult<CreateTopicsResponseData> result3 =
+            replicationControl.createTopics(request3, Collections.singleton("baz"));
+        assertEquals(INVALID_REPLICATION_FACTOR.code(), result3.response().topics().find("baz").errorCode());
+        assertEquals(Collections.emptyList(), result3.records());
+
+        // Test request with multiple topics together.
+        CreateTopicsRequestData request4 = new CreateTopicsRequestData();
+        String batchedTopic1 = "batched-topic-1";
+        request4.topics().add(new CreatableTopic().setName(batchedTopic1)
+            .setNumPartitions(-1).setReplicationFactor((short) -1)
+            .setConfigs(validConfigs));
+        String batchedTopic2 = "batched-topic2";
+        request4.topics().add(new CreatableTopic().setName(batchedTopic2)
+            .setNumPartitions(-1).setReplicationFactor((short) -2)
+            .setConfigs(validConfigs));
+
+        Set<String> request4Topics = new HashSet<>();
+        request4Topics.add(batchedTopic1);
+        request4Topics.add(batchedTopic2);
+        ControllerResult<CreateTopicsResponseData> result4 =
+            replicationControl.createTopics(request4, request4Topics);
+
+        assertEquals(Errors.NONE.code(), result4.response().topics().find(batchedTopic1).errorCode());
+        assertEquals(INVALID_REPLICATION_FACTOR.code(), result4.response().topics().find(batchedTopic2).errorCode());
+
+        assertEquals(3, result4.records().size());
+        assertEquals(TopicRecord.class, result4.records().get(0).message().getClass());
+        TopicRecord batchedTopic1Record = (TopicRecord) result4.records().get(0).message();
+        assertEquals(batchedTopic1, batchedTopic1Record.name());
+        assertEquals(new ConfigRecord()
+            .setResourceName(batchedTopic1)
+            .setResourceType(ConfigResource.Type.TOPIC.id())
+            .setName("foo")
+            .setValue("notNull"),
+            result4.records().get(1).message());
+        assertEquals(PartitionRecord.class, result4.records().get(2).message().getClass());
+        assertEquals(batchedTopic1Record.topicId(), ((PartitionRecord) result4.records().get(2).message()).topicId());
     }
 
     @Test
