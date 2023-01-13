@@ -39,6 +39,7 @@ import org.apache.kafka.common.utils.Utils;
 public class LiCombinedControlRequest extends AbstractControlRequest {
     public static class Builder extends AbstractControlRequest.Builder<LiCombinedControlRequest> {
         // fields from the LeaderAndISRRequest
+        private final boolean isFullLeaderAndIsr;
         private final List<LiCombinedControlRequestData.LeaderAndIsrPartitionState> leaderAndIsrPartitionStates;
         private final Collection<Node> leaderAndIsrLiveLeaders;
 
@@ -52,12 +53,14 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
         private final Map<String, Uuid> topicIds;
 
         public Builder(short version, int controllerId, int controllerEpoch,
+            boolean isFullLeaderAndIsr,
             List<LiCombinedControlRequestData.LeaderAndIsrPartitionState> leaderAndIsrPartitionStates, Collection<Node> leaderAndIsrLiveLeaders,
             List<LiCombinedControlRequestData.UpdateMetadataPartitionState> updateMetadataPartitionStates, List<LiCombinedControlRequestData.UpdateMetadataBroker> updateMetadataLiveBrokers,
             List<LiCombinedControlRequestData.StopReplicaPartitionState> stopReplicaPartitions, Map<String, Uuid> topicIds) {
             // Since we've moved the maxBrokerEpoch down to the partition level
             // the request level maxBrokerEpoch will always be -1
             super(ApiKeys.LI_COMBINED_CONTROL, version, controllerId, controllerEpoch, -1, -1);
+            this.isFullLeaderAndIsr = isFullLeaderAndIsr;
             this.leaderAndIsrPartitionStates = leaderAndIsrPartitionStates;
             this.leaderAndIsrLiveLeaders = leaderAndIsrLiveLeaders;
             this.updateMetadataPartitionStates = updateMetadataPartitionStates;
@@ -73,6 +76,9 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
                 .setControllerEpoch(controllerEpoch);
 
             // setting the LeaderAndIsr fields
+            LeaderAndIsrRequestType leaderAndIsrRequestType = isFullLeaderAndIsr ? LeaderAndIsrRequestType.FULL : LeaderAndIsrRequestType.INCREMENTAL;
+            data.setLeaderAndIsrType(leaderAndIsrRequestType.code());
+
             List<LiCombinedControlRequestData.LeaderAndIsrLiveLeader> leaders = leaderAndIsrLiveLeaders.stream()
                 .map(n -> new LiCombinedControlRequestData.LeaderAndIsrLiveLeader().setBrokerId(n.id())
                     .setHostName(n.host())

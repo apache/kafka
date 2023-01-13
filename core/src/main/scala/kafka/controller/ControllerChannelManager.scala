@@ -253,8 +253,6 @@ class RequestSendThread(val controllerId: Int,
 
   private var firstUpdateMetadataWithPartitionsSent = false
 
-  private var firstFullLeaderAndIsrSent = false
-
   @volatile private var latestRequestStatus = LatestRequestStatus(isInFlight = false, isInQueue = false, 0)
 
   // This metric reports the queued time of the latest request from the queue
@@ -285,14 +283,7 @@ class RequestSendThread(val controllerId: Int,
     if (controllerRequestMerger.hasPendingRequests() ||
       (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1 &&
         config.liCombinedControlRequestEnable &&
-        firstUpdateMetadataWithPartitionsSent &&
-        // The LeaderAndIsrRequest starts having the full/incremental flag since IBP KAFKA_2_8_IV1.
-        // Thus, we require the firstFullLeaderAndIsrSent to be set only when IBP >= KAFKA_2_8_IV1
-        (config.interBrokerProtocolVersion < KAFKA_2_8_IV1 || firstFullLeaderAndIsrSent ||
-          // Brokers that don't host any replicas will never receive a LeaderAndIsr request, including
-          // the preferred controllers and maintenance brokers. We treat them specially here
-          // so that they can have the LiCombinedControl requests enabled.
-          controllerContext.partitionsOnBroker(brokerNode.id()).isEmpty))) {
+        firstUpdateMetadataWithPartitionsSent)) {
       // Only start the merging logic after the first UpdateMetadata request with partitions,
       // since the first UpdateMetadata request with partitions may contain hundreds of thousands of partitions,
       // and thus needs to be cached and shared by all brokers in order to prevent OOM
@@ -304,10 +295,11 @@ class RequestSendThread(val controllerId: Int,
       // case 4: queue empty, merger empty {action: block and wait until queue becomes non-empty, then transition to case 1 or 3}
 
       // handle case 4 first
+      var shouldContinueMerging = true
       if (!controllerRequestMerger.hasPendingRequests()) {
         val QueueItem(apiKey, requestBuilder, callback, enqueueTimeMs) = queue.take()
         latestRequestStatus = LatestRequestStatus(isInFlight = true, isInQueue = false, enqueueTimeMs)
-        mergeControlRequest(enqueueTimeMs, apiKey, requestBuilder, callback)
+        shouldContinueMerging = mergeControlRequest(enqueueTimeMs, apiKey, requestBuilder, callback)
       }
 
       // now we are guaranteed that the controllerRequestMerger is not empty (case 1 or 3)
@@ -315,9 +307,9 @@ class RequestSendThread(val controllerId: Int,
       // one concurrent access case considering the producer of the queue:
       // an item is put to the queue right after the condition check below.
       // That behavior does not change correctness since the inserted item will be picked up in the next round
-      while (!queue.isEmpty) {
+      while (!queue.isEmpty && shouldContinueMerging) {
         val QueueItem(apiKey, requestBuilder, callback, enqueueTimeMs) = queue.take()
-        mergeControlRequest(enqueueTimeMs, apiKey, requestBuilder, callback)
+        shouldContinueMerging = mergeControlRequest(enqueueTimeMs, apiKey, requestBuilder, callback)
       }
 
       val requestBuilder = controllerRequestMerger.pollLatestRequest()
@@ -383,10 +375,6 @@ class RequestSendThread(val controllerId: Int,
         if (api == ApiKeys.UPDATE_METADATA && !requestBuilder.asInstanceOf[UpdateMetadataRequest.Builder].partitionStates().isEmpty) {
           firstUpdateMetadataWithPartitionsSent = true
         }
-        if (api == ApiKeys.LEADER_AND_ISR &&
-          requestBuilder.asInstanceOf[LeaderAndIsrRequest.Builder].`type`() == LeaderAndIsrRequestType.FULL) {
-          firstFullLeaderAndIsrSent = true
-        }
 
         val response = clientResponse.responseBody
 
@@ -413,9 +401,10 @@ class RequestSendThread(val controllerId: Int,
    * @param apiKey
    * @param requestBuilder
    * @param callback
+   * @return This method should return true if the merging should continue, and false otherwise.
    */
   def mergeControlRequest(enqueueTimeMs: Long, apiKey: ApiKeys, requestBuilder: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
-    callback: AbstractResponse => Unit): Unit = {
+    callback: AbstractResponse => Unit): Boolean = {
     updateMetrics(apiKey, enqueueTimeMs)
     controllerRequestMerger.addRequest(requestBuilder, callback)
   }

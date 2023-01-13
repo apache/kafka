@@ -39,6 +39,7 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
     if (config.interBrokerProtocolVersion >= KAFKA_3_0_IV0) 1
     else 0
 
+  var isFullLeaderAndIsr: Boolean = false
   val leaderAndIsrPartitionStates: mutable.Map[TopicIdPartition, util.LinkedList[LeaderAndIsrPartitionState]] = mutable.HashMap.empty
   var leaderAndIsrLiveLeaders: util.Collection[Node] = new util.ArrayList[Node]()
 
@@ -58,8 +59,11 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
   var stopReplicaCallback: AbstractResponse => Unit = null
   val aggregateTopicIds: util.Map[String, Uuid] = new util.HashMap[String, Uuid]()
 
+  /**
+   *@return This method should return true if the merging should continue, and false otherwise.
+   */
   def addRequest(request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
-    callback: AbstractResponse => Unit = null): Unit = {
+    callback: AbstractResponse => Unit = null): Boolean = {
     val newControllerState = new RequestControllerState(request.controllerId(), request.controllerEpoch())
     if (controllerState != null) {
       if (!controllerState.equals(newControllerState)) {
@@ -115,9 +119,21 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
     aggregateTopicIds.putAll(topicIds)
   }
 
+  /**
+   *@return This method should return true if the merging should continue, and false otherwise.
+   */
   private def addLeaderAndIsrRequest(request: LeaderAndIsrRequest.Builder,
-                                     callback: AbstractResponse => Unit): Unit = {
+                                     callback: AbstractResponse => Unit): Boolean = {
     mergeTopicIds(request.topicIds())
+
+    if (request.`type`().equals(LeaderAndIsrRequestType.FULL)) {
+      // There should be no other LeaderAndISR partitions in the merger when a full LeaderAndISR request is sent
+      if (!leaderAndIsrPartitionStates.isEmpty) {
+        throw new IllegalStateException("A Full LeaderAndISR request is received " +
+          "while some LeaderAndISR partitions are already in the ControllerRequest merger")
+      }
+      isFullLeaderAndIsr = true
+    }
 
     request.partitionStates().forEach{partitionState => {
       val transformedPartitionState = LiCombinedControlTransformer.transformLeaderAndIsrPartition(partitionState, request.maxBrokerEpoch())
@@ -135,13 +151,18 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
     }}
     leaderAndIsrLiveLeaders = request.liveLeaders()
     leaderAndIsrCallback = callback
+    // we should stop the merging when a full LeaderAndISR request is encountered
+    !isFullLeaderAndIsr
   }
 
   private def clearLeaderAndIsrPartitionState(topicIdPartition: TopicIdPartition): Unit = {
     leaderAndIsrPartitionStates.remove(topicIdPartition)
   }
 
-  private def addUpdateMetadataRequest(request: UpdateMetadataRequest.Builder): Unit = {
+  /**
+   *@return This method should return true if the merging should continue, and false otherwise.
+   */
+  private def addUpdateMetadataRequest(request: UpdateMetadataRequest.Builder): Boolean = {
     mergeTopicIds(request.topicIds())
 
     request.partitionStates().forEach{partitionState => {
@@ -157,6 +178,7 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
     request.liveBrokers().forEach{liveBroker =>
       updateMetadataLiveBrokers.add(LiCombinedControlTransformer.transformUpdateMetadataBroker(liveBroker))
     }
+    true
   }
 
   def isStopReplicaReplaceable(newState: StopReplicaPartitionState, currentState: StopReplicaPartitionState): Boolean = {
@@ -175,8 +197,11 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
     }
   }
 
+  /**
+   *@return This method should return true if the merging should continue, and false otherwise.
+   */
   private def addStopReplicaRequest(request: StopReplicaRequest.Builder,
-                                    callback: AbstractResponse => Unit): Unit = {
+                                    callback: AbstractResponse => Unit): Boolean = {
     request.topicStates().forEach{topicState => {
       topicState.partitionStates().forEach{ partitionState =>
         val topicName = topicState.topicName()
@@ -206,6 +231,7 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
     // To preserve correctness, we require that the later callback and the earlier callback
     // must have the same sideeffects when they are provided with the same StopReplica response.
     stopReplicaCallback = callback
+    true
   }
   private def clearStopReplicaPartitionState(topicIdPartition: TopicIdPartition): Unit = {
     stopReplicaPartitionStates.remove(topicIdPartition)
@@ -227,6 +253,8 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
       }
     }
 
+    // clear the isFullLeaderAndISR flag
+    isFullLeaderAndIsr = false
     latestPartitionStates
   }
 
@@ -275,9 +303,14 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
     } else {
       val (latestUpdateMetadataPartitions, liveBrokers) = pollLatestUpdateMetadataInfo()
 
+      /**
+       * note that calling the pollLatestLeaderAndIsrPartitions() method below will clear the isFullLeaderAndIsr field
+       * thus we explicitly save the isFullLeaderAndIsr state before constructing the LiCombinedControlRequest
+       */
+      val fullLeaderAndIsr = isFullLeaderAndIsr
       val latestRequest = new LiCombinedControlRequest.Builder(
         liCombinedControlRequestVersion, controllerState.controllerId, controllerState.controllerEpoch,
-        pollLatestLeaderAndIsrPartitions(), leaderAndIsrLiveLeaders,
+        fullLeaderAndIsr, pollLatestLeaderAndIsrPartitions(), leaderAndIsrLiveLeaders,
         latestUpdateMetadataPartitions, liveBrokers,
         pollLatestStopReplicaPartitions(), ImmutableMap.copyOf(aggregateTopicIds)
       )

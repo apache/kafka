@@ -111,7 +111,7 @@ class LiCombinedControlRequestTest extends KafkaServerTestHarness  with Logging 
     topicIds.put("topic2", topic2Uuid)
     topicIds.put("topic3", topic3Uuid)
 
-    val liCombinedControlRequest = new LiCombinedControlRequest.Builder(1, 0, 0, leaderAndIsrPartitionStates,
+    val liCombinedControlRequest = new LiCombinedControlRequest.Builder(1, 0, 0, false, leaderAndIsrPartitionStates,
       new util.ArrayList[Node](), updateMetadataPartitionStates, new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataBroker](),
       stopReplicaPartitionStates, topicIds).build()
 

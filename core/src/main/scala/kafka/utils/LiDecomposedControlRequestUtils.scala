@@ -25,7 +25,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.LiCombinedControlRequestData
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataPartitionState}
-import org.apache.kafka.common.requests.{LeaderAndIsrRequest, LiCombinedControlRequest, StopReplicaRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.{LeaderAndIsrRequest, LeaderAndIsrRequestType, LiCombinedControlRequest, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.LiCombinedControlTransformer
 
 import scala.collection.JavaConverters._
@@ -81,7 +81,8 @@ object LiDecomposedControlRequestUtils {
       }
 
       Some(new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, request.controllerId(), request.controllerEpoch(),
-        request.brokerEpoch(), request.maxBrokerEpoch(), effectivePartitionStates, topicIds, leaderNodes
+        request.brokerEpoch(), request.maxBrokerEpoch(), effectivePartitionStates, topicIds, leaderNodes,
+        request.leaderAndIsrType() == LeaderAndIsrRequestType.FULL.code()
       ).build())
     }
   }

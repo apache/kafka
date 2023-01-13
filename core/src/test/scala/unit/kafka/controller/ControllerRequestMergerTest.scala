@@ -30,7 +30,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractResponse, LeaderAndIsrRequest, LiCombinedControlResponse, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.LiCombinedControlTransformer
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
@@ -177,6 +177,27 @@ class ControllerRequestMergerTest {
       .setZkVersion(0)
       .setReplicas(replicas)
       .setIsNew(false))
+  }
+
+  @Test
+  def testMergingFullLeaderAndISRWithExistingPartitionStates(): Unit = {
+    val partitionStates1 = getLeaderAndIsrPartitionStates(topic, 0)
+    val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
+      brokerEpoch, brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava)
+
+    val partitionStates2 = getLeaderAndIsrPartitionStates(topic, 0, 1)
+    val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
+      brokerEpoch, brokerEpoch, partitionStates2.asJava, Map(topic -> topicId).asJava, leaders.asJava, true)
+    controllerRequestMerger.addRequest(leaderAndIsrRequest1)
+    assertThrows(classOf[IllegalStateException], () => controllerRequestMerger.addRequest(leaderAndIsrRequest2))
+  }
+
+  @Test
+  def testMergingFullLeaderAndISR(): Unit = {
+    val partitionStates1 = getLeaderAndIsrPartitionStates(topic, 0)
+    val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
+      brokerEpoch, brokerEpoch, partitionStates1.asJava, Map(topic -> topicId).asJava, leaders.asJava, true)
+    assertEquals(false, controllerRequestMerger.addRequest(leaderAndIsrRequest1))
   }
 
   @Test

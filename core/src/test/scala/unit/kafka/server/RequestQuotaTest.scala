@@ -653,7 +653,8 @@ class RequestQuotaTest extends BaseRequestTest {
             ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK.latestVersion)
 
         case ApiKeys.LI_COMBINED_CONTROL =>
-          new LiCombinedControlRequest.Builder(ApiKeys.LI_COMBINED_CONTROL.latestVersion, brokerId, 0, new util.ArrayList[LiCombinedControlRequestData.LeaderAndIsrPartitionState](),
+          new LiCombinedControlRequest.Builder(ApiKeys.LI_COMBINED_CONTROL.latestVersion, brokerId, 0,
+            false, new util.ArrayList[LiCombinedControlRequestData.LeaderAndIsrPartitionState](),
             new util.ArrayList[Node](), new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataPartitionState](), new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataBroker](),
             new util.ArrayList[LiCombinedControlRequestData.StopReplicaPartitionState](), Collections.emptyMap())
 
