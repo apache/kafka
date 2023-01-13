@@ -16,7 +16,6 @@
   */
 package kafka.server
 
-import kafka.api.Request
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
@@ -32,13 +31,14 @@ import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.{any, anyBoolean}
 import org.mockito.Mockito.{doNothing, mock, never, times, verify, when}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
@@ -136,16 +136,16 @@ class ReplicaAlterLogDirsThreadTest {
 
     val fencedRequestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch - 1))
-    val fencedResponseData = FetchPartitionData(
-      error = Errors.FENCED_LEADER_EPOCH,
-      highWatermark = -1,
-      logStartOffset = -1,
-      records = MemoryRecords.EMPTY,
-      divergingEpoch = None,
-      lastStableOffset = None,
-      abortedTransactions = None,
-      preferredReadReplica = None,
-      isReassignmentFetch = false)
+    val fencedResponseData = new FetchPartitionData(
+      Errors.FENCED_LEADER_EPOCH,
+      -1,
+      -1,
+      MemoryRecords.EMPTY,
+      Optional.empty(),
+      OptionalLong.empty(),
+      Optional.empty(),
+      OptionalInt.empty(),
+      false)
     mockFetchFromCurrentLog(tid1p0, fencedRequestData, config, replicaManager, fencedResponseData)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
@@ -177,16 +177,16 @@ class ReplicaAlterLogDirsThreadTest {
 
     val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
-    val responseData = FetchPartitionData(
-      error = Errors.NONE,
-      highWatermark = 0L,
-      logStartOffset = 0L,
-      records = MemoryRecords.EMPTY,
-      divergingEpoch = None,
-      lastStableOffset = None,
-      abortedTransactions = None,
-      preferredReadReplica = None,
-      isReassignmentFetch = false)
+    val responseData = new FetchPartitionData(
+      Errors.NONE,
+      0L,
+      0L,
+      MemoryRecords.EMPTY,
+      Optional.empty(),
+      OptionalLong.empty(),
+      Optional.empty(),
+      OptionalInt.empty(),
+      false)
     mockFetchFromCurrentLog(tid1p0, requestData, config, replicaManager, responseData)
 
     thread.doWork()
@@ -235,16 +235,16 @@ class ReplicaAlterLogDirsThreadTest {
 
     val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
-    val responseData = FetchPartitionData(
-      error = Errors.NONE,
-      highWatermark = 0L,
-      logStartOffset = 0L,
-      records = MemoryRecords.EMPTY,
-      divergingEpoch = None,
-      lastStableOffset = None,
-      abortedTransactions = None,
-      preferredReadReplica = None,
-      isReassignmentFetch = false)
+    val responseData = new FetchPartitionData(
+      Errors.NONE,
+      0L,
+      0L,
+      MemoryRecords.EMPTY,
+      Optional.empty(),
+      OptionalLong.empty(),
+      Optional.empty(),
+      OptionalInt.empty(),
+      false)
     mockFetchFromCurrentLog(tid1p0, requestData, config, replicaManager, responseData)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
@@ -276,17 +276,15 @@ class ReplicaAlterLogDirsThreadTest {
     val callbackCaptor: ArgumentCaptor[Seq[(TopicIdPartition, FetchPartitionData)] => Unit] =
       ArgumentCaptor.forClass(classOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit])
 
-    val expectedFetchParams = FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = Request.FutureLocalReplicaId,
-      maxWaitMs = 0L,
-      minBytes = 0,
-      maxBytes = config.replicaFetchResponseMaxBytes,
-      isolation = FetchLogEnd,
-      clientMetadata = None
+    val expectedFetchParams = new FetchParams(
+      ApiKeys.FETCH.latestVersion,
+      FetchRequest.FUTURE_LOCAL_REPLICA_ID,
+      0L,
+      0,
+      config.replicaFetchResponseMaxBytes,
+      FetchIsolation.LOG_END,
+      Optional.empty()
     )
-
-    println(expectedFetchParams)
 
     when(replicaManager.fetchMessages(
       params = ArgumentMatchers.eq(expectedFetchParams),
@@ -294,7 +292,6 @@ class ReplicaAlterLogDirsThreadTest {
       quota = ArgumentMatchers.eq(UnboundedQuota),
       responseCallback = callbackCaptor.capture(),
     )).thenAnswer(_ => {
-      println("Did we get the callback?")
       callbackCaptor.getValue.apply(Seq((topicIdPartition, responseData)))
     })
   }
