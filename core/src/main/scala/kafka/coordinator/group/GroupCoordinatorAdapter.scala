@@ -23,7 +23,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext}
+import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 
 import java.util
@@ -475,4 +475,15 @@ class GroupCoordinatorAdapter(
     coordinator.partitionFor(groupId)
   }
 
+  override def onTransactionCompleted(
+    producerId: Long,
+    partitions: java.lang.Iterable[TopicPartition],
+    transactionResult: TransactionResult
+  ): Unit = {
+    coordinator.scheduleHandleTxnCompletion(
+      producerId,
+      partitions.asScala,
+      transactionResult
+    )
+  }
 }

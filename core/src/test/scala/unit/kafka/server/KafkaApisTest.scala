@@ -1954,7 +1954,7 @@ class KafkaApisTest {
       val request = buildRequest(addOffsetsToTxnRequest)
 
       val partition = 1
-      when(groupCoordinator.partitionFor(
+      when(newGroupCoordinator.partitionFor(
         ArgumentMatchers.eq(groupId)
       )).thenReturn(partition)
 

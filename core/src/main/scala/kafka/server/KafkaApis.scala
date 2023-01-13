@@ -2312,7 +2312,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // as soon as the end transaction marker has been written for a transactional offset commit,
         // call to the group coordinator to materialize the offsets into the cache
         try {
-          groupCoordinator.scheduleHandleTxnCompletion(producerId, successfulOffsetsPartitions, result)
+          newGroupCoordinator.onTransactionCompleted(producerId, successfulOffsetsPartitions.asJava, result)
         } catch {
           case e: Exception =>
             error(s"Received an exception while trying to update the offsets cache on transaction marker append", e)
@@ -2454,7 +2454,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val addOffsetsToTxnRequest = request.body[AddOffsetsToTxnRequest]
     val transactionalId = addOffsetsToTxnRequest.data.transactionalId
     val groupId = addOffsetsToTxnRequest.data.groupId
-    val offsetTopicPartition = new TopicPartition(GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId))
+    val offsetTopicPartition = new TopicPartition(GROUP_METADATA_TOPIC_NAME, newGroupCoordinator.partitionFor(groupId))
 
     if (!authHelper.authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId))
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>

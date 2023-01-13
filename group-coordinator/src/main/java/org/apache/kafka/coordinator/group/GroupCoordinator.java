@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
 
 import java.util.List;
@@ -207,5 +209,18 @@ public interface GroupCoordinator {
      * @return The partition index.
      */
     int partitionFor(String groupId);
+
+    /**
+     * Commit or abort the pending transactional offsets for the given partitions.
+     *
+     * @param producerId        The producer id.
+     * @param partitions        The partitions.
+     * @param transactionResult The result of the transaction.
+     */
+    void onTransactionCompleted(
+        long producerId,
+        Iterable<TopicPartition> partitions,
+        TransactionResult transactionResult
+    );
 }
 
