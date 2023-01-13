@@ -37,7 +37,7 @@ public class EpochEntry {
     @Override
     public int hashCode() {
         int result = epoch;
-        result = 31 * result + (int) (startOffset ^ (startOffset >>> 32));
+        result = 31 * result + Long.hashCode(startOffset);
         return result;
     }
 

@@ -21,7 +21,6 @@ import java.io.{BufferedWriter, File, FileWriter, IOException}
 import java.nio.ByteBuffer
 import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util.Properties
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.{MockTime, TestUtils}

@@ -26,7 +26,6 @@ import java.util.List;
 public class CheckpointFileWithFailureHandler<T> {
 
     public final File file;
-    public final int version;
     private final LogDirFailureChannel logDirFailureChannel;
     private final String logDir;
 
@@ -35,7 +34,6 @@ public class CheckpointFileWithFailureHandler<T> {
     public CheckpointFileWithFailureHandler(File file, int version, CheckpointFile.EntryFormatter<T> formatter,
                                             LogDirFailureChannel logDirFailureChannel, String logDir) throws IOException {
         this.file = file;
-        this.version = version;
         this.logDirFailureChannel = logDirFailureChannel;
         this.logDir = logDir;
         checkpointFile = new CheckpointFile<>(file, version, formatter);
