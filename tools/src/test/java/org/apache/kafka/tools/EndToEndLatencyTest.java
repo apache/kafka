@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -45,27 +43,14 @@ public class EndToEndLatencyTest {
 
     @Test
     public void testUnexpectedArgs() {
-        String[] args = new String[] {
-            "-b", "localhost:9092",
-            "-t", "test",
-            "-n", "10000",
-            "-a", "1",
-            "-s", "200",
-            "-e", "123"};
-        ArgumentParser parser = EndToEndLatency.addArguments();
-        ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () -> parser.parseArgs(args));
-        assertEquals("unrecognized arguments: '-e'", thrown.getMessage());
+        String[] args = new String[] {"localhost:9092", "test", "10000", "1", "200", "propsfile.properties", "random"};
+        int output = EndToEndLatency.mainNoExit(args);
+        assertEquals(1, output);
     }
 
     @Test
     public void shouldFailWhenProducerAcksAreNotSynchronised() throws Exception {
-        String[] args = new String[] {
-            "-b", "localhost:9092",
-            "-t", "test",
-            "-n", "10000",
-            "-a", "0",
-            "-s", "200"};
-
+        String[] args = new String[] {"localhost:9092", "test", "10000", "0", "200"};
         assertThrows(IllegalArgumentException.class, () -> EndToEndLatency.execute(args));
     }
 

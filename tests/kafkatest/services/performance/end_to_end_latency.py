@@ -87,7 +87,7 @@ class EndToEndLatencyService(PerformanceService):
         cmd = "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % EndToEndLatencyService.LOG4J_CONFIG
         if node.version.consumer_supports_bootstrap_server():
             cmd += "KAFKA_OPTS=%(kafka_opts)s %(kafka_run_class)s %(java_class_name)s " % args
-            cmd += "-b %(bootstrap_servers)s -t %(topic)s -n %(num_records)d -a %(acks)d -s %(message_bytes)d -f %(config_file)s" % args
+            cmd += "%(bootstrap_servers)s %(topic)s %(num_records)d %(acks)d %(message_bytes)d %(config_file)s" % args
         else:
             # Set fetch max wait to 0 to match behavior in later versions
             cmd += "KAFKA_OPTS=%(kafka_opts)s %(kafka_run_class)s kafka.tools.TestEndToEndLatency " % args

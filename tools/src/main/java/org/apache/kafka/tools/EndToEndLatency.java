@@ -17,11 +17,6 @@
 
 package org.apache.kafka.tools;
 
-
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -46,8 +41,6 @@ import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import static net.sourceforge.argparse4j.impl.Arguments.store;
-
 /**
  * This class records the average end to end latency for a single message to travel through Kafka
  *
@@ -68,6 +61,11 @@ public class EndToEndLatency {
 
     static int mainNoExit(String... args) {
         try {
+            if (args.length != 5 && args.length != 6) {
+                System.err.println("USAGE: java " + EndToEndLatency.class.getName()
+                        + " broker_list topic num_messages producer_acks message_size_bytes [optional] properties_file");
+                return 1;
+            }
             execute(args);
             return 0;
         } catch (TerseException e) {
@@ -82,25 +80,12 @@ public class EndToEndLatency {
 
     // Visible for testing
     static void execute(String... args) throws Exception {
-        ArgumentParser parser = addArguments();
-        Namespace res = null;
-        try {
-            res = parser.parseArgs(args);
-        } catch (ArgumentParserException e) {
-            if (args.length == 0) {
-                parser.printHelp();
-                Exit.exit(0);
-            } else {
-                parser.handleError(e);
-                Exit.exit(1);
-            }
-        }
-        String brokers = res.getString("broker_list");
-        String topic = res.getString("topic");
-        int numMessages = res.getInt("num_messages");
-        String acks = res.getString("producer_acks");
-        int messageSizeBytes = res.getInt("message_size_bytes");
-        String propertiesFile = res.getString("properties_file");
+        String brokers = args[0];
+        String topic = args[1];
+        int numMessages = Integer.parseInt(args[2]);
+        String acks = args[3];
+        int messageSizeBytes = Integer.parseInt(args[4]);
+        String propertiesFile = args.length > 5 ? args[5] : null;
 
         if (!Arrays.asList("1", "all").contains(acks)) {
             throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all");
@@ -149,50 +134,6 @@ public class EndToEndLatency {
             printResults(numMessages, totalTime, latencies);
             consumer.commitSync();
         }
-    }
-
-    static ArgumentParser addArguments() {
-        ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("end-to-end-latency")
-                .defaultHelp(true)
-                .description("This tool records the average end to end latency for a single message to travel through Kafka");
-        parser
-                .addArgument("-b", "--brokers")
-                .action(store())
-                .type(String.class)
-                .dest("broker_list")
-                .help("The location of the bootstrap broker for both the producer and the consumer");
-        parser
-                .addArgument("-t", "--topic")
-                .action(store())
-                .type(String.class)
-                .dest("topic")
-                .help("The Kakfa topic to send/receive messages to/from");
-        parser
-                .addArgument("-n", "--num-records")
-                .action(store())
-                .type(Integer.class)
-                .dest("num_messages")
-                .help("The number of messages to send");
-        parser
-                .addArgument("-a", "--acks")
-                .action(store())
-                .type(String.class)
-                .dest("producer_acks")
-                .help("The number of messages to send");
-        parser
-                .addArgument("-s", "--message-bytes")
-                .required(true)
-                .action(store())
-                .type(Integer.class)
-                .dest("message_size_bytes")
-                .help("Size of each message in bytes");
-        parser
-                .addArgument("-f", "--properties-file")
-                .action(store())
-                .type(String.class)
-                .dest("properties_file");
-        return parser;
     }
 
     // Visible for testing
@@ -279,7 +220,6 @@ public class EndToEndLatency {
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0"); //ensure we have no temporal batching
-        System.out.println(consumerProps);
         return new KafkaConsumer<>(consumerProps);
     }
 
@@ -291,7 +231,6 @@ public class EndToEndLatency {
         producerProps.put(ProducerConfig.ACKS_CONFIG, acks);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        System.out.println(producerProps);
         return new KafkaProducer<>(producerProps);
     }
 
