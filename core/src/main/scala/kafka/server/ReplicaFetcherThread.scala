@@ -35,7 +35,6 @@ import java.io.{BufferedReader, File, InputStreamReader}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, StandardCopyOption}
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
 
 class ReplicaFetcherThread(name: String,
                            leader: LeaderEndPoint,
@@ -293,7 +292,7 @@ class ReplicaFetcherThread(name: String,
           log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
           val epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata)
           log.leaderEpochCache.foreach { cache =>
-            cache.assign(epochs.asJava)
+            cache.assign(epochs)
           }
 
           debug(s"Updated the epoch cache from remote tier till offset: $leaderLocalLogStartOffset " +
@@ -329,12 +328,12 @@ class ReplicaFetcherThread(name: String,
     nextOffset
   }
 
-  private def readLeaderEpochCheckpoint(rlm: RemoteLogManager, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): collection.Seq[EpochEntry] = {
+  private def readLeaderEpochCheckpoint(rlm: RemoteLogManager, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): java.util.List[EpochEntry] = {
     val inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.LEADER_EPOCH)
     val bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     try {
       val readBuffer = new CheckpointReadBuffer[EpochEntry]("", bufferedReader,  0, LeaderEpochCheckpointFile.FORMATTER)
-      readBuffer.read().asScala.toSeq
+      readBuffer.read()
     } finally {
       bufferedReader.close()
     }

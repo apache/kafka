@@ -68,9 +68,9 @@ class OffsetCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureCh
   def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets.toSeq.asJava)
 
   def read(): Map[TopicPartition, Long] = {
-    val list = checkpoint.read().asScala
+    val list = checkpoint.read()
     val result = mutable.Map.empty[TopicPartition, Long]
-    list.foreach { case (tp, offset) => result += tp -> offset }
+    list.forEach { case (tp, offset) => result += tp -> offset }
     result.toMap
   }
 
