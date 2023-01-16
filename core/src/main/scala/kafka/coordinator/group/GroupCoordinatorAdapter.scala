@@ -33,7 +33,6 @@ import java.util.concurrent.CompletableFuture
 import java.util.function.IntSupplier
 import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOptionalInt
 
 object GroupCoordinatorAdapter {
   def apply(
@@ -568,7 +567,11 @@ private[group] class GroupCoordinatorAdapter(
     partitionIndex: Int,
     partitionLeaderEpoch: OptionalInt
   ): Unit = {
-    coordinator.onResignation(partitionIndex, partitionLeaderEpoch.toScala)
+    coordinator.onResignation(partitionIndex, toOption(partitionLeaderEpoch))
+  }
+
+  private def toOption(optional: OptionalInt): Option[Int] = {
+    if (optional.isPresent) Some(optional.getAsInt) else None
   }
 
   override def offsetsTopicConfigs(): Properties = {
