@@ -168,7 +168,10 @@ class ControllerServer(
           }.toMap
       }
 
-      val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER)
+      val apiVersionManager = new SimpleApiVersionManager(
+        ListenerType.CONTROLLER,
+        config.advertiseUnreleasedApis
+      )
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)

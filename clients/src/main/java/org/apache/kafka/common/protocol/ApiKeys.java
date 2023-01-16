@@ -23,10 +23,13 @@ import org.apache.kafka.common.record.RecordBatch;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -111,12 +114,22 @@ public enum ApiKeys {
     ALLOCATE_PRODUCER_IDS(ApiMessageType.ALLOCATE_PRODUCER_IDS, true, true),
     CONSUMER_GROUP_HEARTBEAT(ApiMessageType.CONSUMER_GROUP_HEARTBEAT);
 
+    private static final Set<ApiMessageType.ApiStabilityType> ALL_API_STABILITY_TYPES =
+        new HashSet<>(Arrays.asList(
+            ApiMessageType.ApiStabilityType.STABLE,
+            ApiMessageType.ApiStabilityType.EVOLVING
+        ));
+
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
 
     static {
+        // Only stable APIs are included by default.
         for (ApiMessageType.ListenerType listenerType : ApiMessageType.ListenerType.values()) {
-            APIS_BY_LISTENER.put(listenerType, filterApisForListener(listenerType));
+            APIS_BY_LISTENER.put(listenerType, filterApisForListener(
+                listenerType,
+                Collections.singleton(ApiMessageType.ApiStabilityType.STABLE)
+            ));
         }
     }
 
@@ -225,6 +238,10 @@ public enum ApiKeys {
         return messageType.listeners().contains(listener);
     }
 
+    public boolean isExposed(Set<ApiMessageType.ApiStabilityType> types) {
+        return types.contains(messageType.apiStability());
+    }
+
     private static String toHtml() {
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
@@ -291,17 +308,18 @@ public enum ApiKeys {
     ) {
         if (includeUnreleasedApis) {
             // This is only used during development, so we consider it as an exceptional path.
-            return EnumSet.copyOf(Arrays.stream(ApiKeys.values())
-                .filter(apiKey -> apiKey.inScope(listener))
-                .collect(Collectors.toList()));
+            return filterApisForListener(listener, ALL_API_STABILITY_TYPES);
         }
 
         return APIS_BY_LISTENER.get(listener);
     }
 
-    private static EnumSet<ApiKeys> filterApisForListener(ApiMessageType.ListenerType listener) {
+    private static EnumSet<ApiKeys> filterApisForListener(
+        ApiMessageType.ListenerType listener,
+        Set<ApiMessageType.ApiStabilityType> apiStabilityTypes
+    ) {
         List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.inScope(listener) && apiKey.messageType.apiStability() == ApiMessageType.ApiStabilityType.STABLE)
+            .filter(apiKey -> apiKey.inScope(listener) && apiKey.isExposed(apiStabilityTypes))
             .collect(Collectors.toList());
         return EnumSet.copyOf(apis);
     }

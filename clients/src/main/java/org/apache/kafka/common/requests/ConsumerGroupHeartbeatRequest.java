@@ -34,7 +34,6 @@ public class ConsumerGroupHeartbeatRequest extends AbstractRequest {
             this.data = data;
         }
 
-
         @Override
         public ConsumerGroupHeartbeatRequest build(short version) {
             return new ConsumerGroupHeartbeatRequest(data, version);

@@ -215,11 +215,11 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public static ApiVersionCollection filterApis(
-        Set<ApiKeys> enabledApi,
+        Set<ApiKeys> enabledApis,
         RecordVersion minRecordVersion
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-        for (ApiKeys apiKey : enabledApi) {
+        for (ApiKeys apiKey : enabledApis) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 apiKeys.add(ApiVersionsResponse.toApiVersion(apiKey));
             }

@@ -58,8 +58,19 @@ class SimpleApiVersionManager(
   brokerFeatures: Features[SupportedVersionRange]
 ) extends ApiVersionManager {
 
+  def this(
+    listenerType: ListenerType,
+    includeUnreleasedApis: Boolean
+  ) = {
+    this(
+      listenerType,
+      ApiKeys.apisForListener(listenerType, includeUnreleasedApis).asScala,
+      BrokerFeatures.defaultSupportedFeatures()
+    )
+  }
+
   def this(listenerType: ListenerType) = {
-    this(listenerType, ApiKeys.apisForListener(listenerType).asScala, BrokerFeatures.defaultSupportedFeatures())
+    this(listenerType, false)
   }
 
   private val apiVersions = ApiVersionsResponse.collectApis(enabledApis.asJava)
