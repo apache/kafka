@@ -27,7 +27,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -42,14 +41,13 @@ public class EndToEndLatencyTest {
     ConsumerRecords<byte[], byte[]> records;
 
     @Test
-    public void testUnexpectedArgs() {
+    public void shouldFailWhenSuppliedUnexpectedArgs() {
         String[] args = new String[] {"localhost:9092", "test", "10000", "1", "200", "propsfile.properties", "random"};
-        int output = EndToEndLatency.mainNoExit(args);
-        assertEquals(1, output);
+        assertThrows(TerseException.class, () -> EndToEndLatency.execute(args));
     }
 
     @Test
-    public void shouldFailWhenProducerAcksAreNotSynchronised() throws Exception {
+    public void shouldFailWhenProducerAcksAreNotSynchronised() {
         String[] args = new String[] {"localhost:9092", "test", "10000", "0", "200"};
         assertThrows(IllegalArgumentException.class, () -> EndToEndLatency.execute(args));
     }
