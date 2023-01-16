@@ -90,6 +90,7 @@ import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
+import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.log.internals.{AppendOrigin, FetchParams, FetchPartitionData}
@@ -2742,8 +2743,6 @@ class KafkaApisTest {
     addTopicToMetadataCache("topic-1", numPartitions = 2)
     addTopicToMetadataCache("topic-2", numPartitions = 2)
 
-    reset(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
-
     val topics = new OffsetDeleteRequestTopicCollection()
     topics.add(new OffsetDeleteRequestTopic()
       .setName("topic-1")
@@ -2764,37 +2763,180 @@ class KafkaApisTest {
     val request = buildRequest(offsetDeleteRequest)
 
     val requestLocal = RequestLocal.withThreadConfinedCaching
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    when(groupCoordinator.handleDeleteOffsets(
-      ArgumentMatchers.eq(group),
-      ArgumentMatchers.eq(Seq(
-        new TopicPartition("topic-1", 0),
-        new TopicPartition("topic-1", 1),
-        new TopicPartition("topic-2", 0),
-        new TopicPartition("topic-2", 1)
-      )),
-      ArgumentMatchers.eq(requestLocal)
-    )).thenReturn((Errors.NONE, Map(
-      new TopicPartition("topic-1", 0) -> Errors.NONE,
-      new TopicPartition("topic-1", 1) -> Errors.NONE,
-      new TopicPartition("topic-2", 0) -> Errors.NONE,
-      new TopicPartition("topic-2", 1) -> Errors.NONE,
-    )))
+    val future = new CompletableFuture[OffsetDeleteResponseData]()
+    when(newGroupCoordinator.deleteOffsets(
+      request.context,
+      offsetDeleteRequest.data,
+      requestLocal.bufferSupplier
+    )).thenReturn(future)
 
     createKafkaApis().handleOffsetDeleteRequest(request, requestLocal)
 
+    val offsetDeleteResponseData = new OffsetDeleteResponseData()
+      .setTopics(new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection(List(
+        new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
+          .setName("topic-1")
+          .setPartitions(new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection(List(
+            new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)
+          ).asJava.iterator)),
+        new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
+          .setName("topic-2")
+          .setPartitions(new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection(List(
+            new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)
+          ).asJava.iterator))
+      ).asJava.iterator()))
+
+    future.complete(offsetDeleteResponseData)
+
     val response = verifyNoThrottling[OffsetDeleteResponse](request)
+    assertEquals(offsetDeleteResponseData, response.data)
+  }
 
-    def errorForPartition(topic: String, partition: Int): Errors = {
-      Errors.forCode(response.data.topics.find(topic).partitions.find(partition).errorCode)
-    }
+  @Test
+  def testOffsetDeleteTopicsAndPartitionsValidation(): Unit = {
+    val group = "groupId"
+    addTopicToMetadataCache("foo", numPartitions = 2)
+    addTopicToMetadataCache("bar", numPartitions = 2)
 
-    assertEquals(2, response.data.topics.size)
-    assertEquals(Errors.NONE, errorForPartition("topic-1", 0))
-    assertEquals(Errors.NONE, errorForPartition("topic-1", 1))
-    assertEquals(Errors.NONE, errorForPartition("topic-2", 0))
-    assertEquals(Errors.NONE, errorForPartition("topic-2", 1))
+    val offsetDeleteRequest = new OffsetDeleteRequestData()
+      .setGroupId(group)
+      .setTopics(new OffsetDeleteRequestTopicCollection(List(
+        // foo exists but has only 2 partitions.
+        new OffsetDeleteRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetDeleteRequestPartition().setPartitionIndex(0),
+            new OffsetDeleteRequestPartition().setPartitionIndex(1),
+            new OffsetDeleteRequestPartition().setPartitionIndex(2)
+          ).asJava),
+        // bar exists.
+        new OffsetDeleteRequestTopic()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetDeleteRequestPartition().setPartitionIndex(0),
+            new OffsetDeleteRequestPartition().setPartitionIndex(1)
+          ).asJava),
+        // zar does not exist.
+        new OffsetDeleteRequestTopic()
+          .setName("zar")
+          .setPartitions(List(
+            new OffsetDeleteRequestPartition().setPartitionIndex(0),
+            new OffsetDeleteRequestPartition().setPartitionIndex(1)
+          ).asJava),
+      ).asJava.iterator))
+
+    val requestChannelRequest = buildRequest(new OffsetDeleteRequest.Builder(offsetDeleteRequest).build())
+
+    // This is the request expected by the group coordinator. It contains
+    // only existing topic-partitions.
+    val expectedOffsetDeleteRequest = new OffsetDeleteRequestData()
+      .setGroupId(group)
+      .setTopics(new OffsetDeleteRequestTopicCollection(List(
+        new OffsetDeleteRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetDeleteRequestPartition().setPartitionIndex(0),
+            new OffsetDeleteRequestPartition().setPartitionIndex(1)
+          ).asJava),
+        new OffsetDeleteRequestTopic()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetDeleteRequestPartition().setPartitionIndex(0),
+            new OffsetDeleteRequestPartition().setPartitionIndex(1)
+          ).asJava)
+      ).asJava.iterator))
+
+    val future = new CompletableFuture[OffsetDeleteResponseData]()
+    when(newGroupCoordinator.deleteOffsets(
+      requestChannelRequest.context,
+      expectedOffsetDeleteRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    // This is the response returned by the group coordinator.
+    val offsetDeleteResponse = new OffsetDeleteResponseData()
+      .setTopics(new OffsetDeleteResponseTopicCollection(List(
+        new OffsetDeleteResponseTopic()
+          .setName("foo")
+          .setPartitions(new OffsetDeleteResponsePartitionCollection(List(
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)
+          ).asJava.iterator)),
+        new OffsetDeleteResponseTopic()
+          .setName("bar")
+          .setPartitions(new OffsetDeleteResponsePartitionCollection(List(
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)
+          ).asJava.iterator)),
+      ).asJava.iterator))
+
+    val expectedOffsetDeleteResponse = new OffsetDeleteResponseData()
+      .setTopics(new OffsetDeleteResponseTopicCollection(List(
+        new OffsetDeleteResponseTopic()
+          .setName("foo")
+          .setPartitions(new OffsetDeleteResponsePartitionCollection(List(
+            // foo-2 is first because partitions failing the validation
+            // are put in the response first.
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(2)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)
+          ).asJava.iterator)),
+        // zar is before bar because topics failing the validation are
+        // put in the response first.
+        new OffsetDeleteResponseTopic()
+          .setName("zar")
+          .setPartitions(new OffsetDeleteResponsePartitionCollection(List(
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+          ).asJava.iterator)),
+        new OffsetDeleteResponseTopic()
+          .setName("bar")
+          .setPartitions(new OffsetDeleteResponsePartitionCollection(List(
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)
+          ).asJava.iterator)),
+      ).asJava.iterator))
+
+    future.complete(offsetDeleteResponse)
+    val response = verifyNoThrottling[OffsetDeleteResponse](requestChannelRequest)
+    assertEquals(expectedOffsetDeleteResponse, response.data)
   }
 
   @Test
@@ -2817,14 +2959,18 @@ class KafkaApisTest {
           .setTopics(topics)
       ).build()
       val request = buildRequest(offsetDeleteRequest)
-      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-        any[Long])).thenReturn(0)
 
-      val requestLocal = RequestLocal.withThreadConfinedCaching
-      when(groupCoordinator.handleDeleteOffsets(ArgumentMatchers.eq(group), ArgumentMatchers.eq(Seq.empty),
-        ArgumentMatchers.eq(requestLocal))).thenReturn((Errors.NONE, Map.empty[TopicPartition, Errors]))
+      // The group coordinator is called even if there are no
+      // topic-partitions left after the validation.
+      when(newGroupCoordinator.deleteOffsets(
+        request.context,
+        new OffsetDeleteRequestData().setGroupId(group),
+        RequestLocal.NoCaching.bufferSupplier
+      )).thenReturn(CompletableFuture.completedFuture(
+        new OffsetDeleteResponseData()
+      ))
 
-      createKafkaApis().handleOffsetDeleteRequest(request, requestLocal)
+      createKafkaApis().handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
 
       val response = verifyNoThrottling[OffsetDeleteResponse](request)
 
@@ -2839,22 +2985,24 @@ class KafkaApisTest {
   @Test
   def testOffsetDeleteWithInvalidGroup(): Unit = {
     val group = "groupId"
-
-    reset(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+    val topic = "topic"
+    addTopicToMetadataCache(topic, numPartitions = 1)
 
     val offsetDeleteRequest = new OffsetDeleteRequest.Builder(
-      new OffsetDeleteRequestData()
-        .setGroupId(group)
+      new OffsetDeleteRequestData().setGroupId(group)
     ).build()
     val request = buildRequest(offsetDeleteRequest)
 
-    val requestLocal = RequestLocal.withThreadConfinedCaching
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    when(groupCoordinator.handleDeleteOffsets(ArgumentMatchers.eq(group), ArgumentMatchers.eq(Seq.empty),
-      ArgumentMatchers.eq(requestLocal))).thenReturn((Errors.GROUP_ID_NOT_FOUND, Map.empty[TopicPartition, Errors]))
+    val future = new CompletableFuture[OffsetDeleteResponseData]()
+    when(newGroupCoordinator.deleteOffsets(
+      request.context,
+      offsetDeleteRequest.data,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
 
-    createKafkaApis().handleOffsetDeleteRequest(request, requestLocal)
+    createKafkaApis().handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
+
+    future.completeExceptionally(Errors.GROUP_ID_NOT_FOUND.exception)
 
     val response = verifyNoThrottling[OffsetDeleteResponse](request)
 
