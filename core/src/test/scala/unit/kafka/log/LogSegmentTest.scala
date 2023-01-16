@@ -18,7 +18,6 @@ package kafka.log
 
 import java.io.File
 import java.util.OptionalLong
-
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
@@ -30,6 +29,7 @@ import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
+import java.util
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
@@ -379,7 +379,7 @@ class LogSegmentTest {
     val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
       private var epochs = Seq.empty[EpochEntry]
 
-      override def write(epochs: java.util.List[EpochEntry]): Unit = {
+      override def write(epochs: util.Collection[EpochEntry]): Unit = {
         this.epochs = epochs.asScala.toSeq
       }
 

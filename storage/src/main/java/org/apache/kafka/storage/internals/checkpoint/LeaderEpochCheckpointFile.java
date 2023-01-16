@@ -23,6 +23,7 @@ import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -56,7 +57,7 @@ public class LeaderEpochCheckpointFile implements LeaderEpochCheckpoint {
         this(file, null);
     }
 
-    public void write(List<EpochEntry> epochs) {
+    public void write(Collection<EpochEntry> epochs) {
         checkpoint.write(epochs);
     }
 

@@ -21,6 +21,7 @@ import org.apache.kafka.server.common.CheckpointFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 
 public class CheckpointFileWithFailureHandler<T> {
@@ -39,7 +40,7 @@ public class CheckpointFileWithFailureHandler<T> {
         checkpointFile = new CheckpointFile<>(file, version, formatter);
     }
 
-    public void write(List<T> entries) {
+    public void write(Collection<T> entries) {
         try {
             checkpointFile.write(entries);
         } catch (IOException e) {

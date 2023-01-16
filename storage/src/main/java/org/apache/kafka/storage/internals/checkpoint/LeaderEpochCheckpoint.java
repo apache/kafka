@@ -18,11 +18,12 @@ package org.apache.kafka.storage.internals.checkpoint;
 
 import org.apache.kafka.server.log.internals.EpochEntry;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface LeaderEpochCheckpoint {
 
-    void write(List<EpochEntry> epochs);
+    void write(Collection<EpochEntry> epochs);
 
     List<EpochEntry> read();
 }

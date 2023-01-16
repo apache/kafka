@@ -38,7 +38,7 @@ class LeaderEpochFileCacheTest {
   val tp = new TopicPartition("TestTopic", 5)
   private val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
     private var epochs: Seq[EpochEntry] = Seq()
-    override def write(epochs: java.util.List[EpochEntry]): Unit = this.epochs = epochs.asScala.toSeq
+    override def write(epochs: java.util.Collection[EpochEntry]): Unit = this.epochs = epochs.asScala.toSeq
     override def read(): java.util.List[EpochEntry] = this.epochs.asJava
   }
 

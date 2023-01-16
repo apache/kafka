@@ -22,7 +22,6 @@ import org.apache.kafka.server.common.CheckpointFile;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,7 +68,7 @@ public class CommittedOffsetsFile {
     }
 
     public synchronized void writeEntries(Map<Integer, Long> committedOffsets) throws IOException {
-        checkpointFile.write(new ArrayList<>(committedOffsets.entrySet()));
+        checkpointFile.write(committedOffsets.entrySet());
     }
 
     public synchronized Map<Integer, Long> readEntries() throws IOException {

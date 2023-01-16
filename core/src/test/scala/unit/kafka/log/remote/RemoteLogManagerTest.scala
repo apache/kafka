@@ -62,7 +62,7 @@ class RemoteLogManagerTest {
 
   val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
     var epochs: Seq[EpochEntry] = Seq()
-    override def write(epochs: util.List[EpochEntry]): Unit = this.epochs = epochs.asScala.toSeq
+    override def write(epochs: util.Collection[EpochEntry]): Unit = this.epochs = epochs.asScala.toSeq
     override def read(): util.List[EpochEntry] = this.epochs.asJava
   }
 

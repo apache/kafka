@@ -379,7 +379,7 @@ public class LeaderEpochFileCache {
     }
 
     public void flush() {
-        checkpoint.write(new ArrayList<>(epochs.values()));
+        checkpoint.write(epochs.values());
     }
 
 }
