@@ -40,6 +40,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -170,8 +171,8 @@ public class ProducerStateManager {
      * The goal here is to remove any snapshot files which do not have an associated segment file, but not to remove the
      * largest stray snapshot file which was emitted during clean shutdown.
      */
-    public void removeStraySnapshots(List<Long> segmentBaseOffsets) throws IOException {
-        OptionalLong maxSegmentBaseOffset = (segmentBaseOffsets.isEmpty()) ? OptionalLong.empty() : OptionalLong.of(segmentBaseOffsets.stream().max(Long::compare).get());
+    public void removeStraySnapshots(Collection<Long> segmentBaseOffsets) throws IOException {
+        OptionalLong maxSegmentBaseOffset = segmentBaseOffsets.isEmpty() ? OptionalLong.empty() : OptionalLong.of(segmentBaseOffsets.stream().max(Long::compare).get());
 
         HashSet<Long> baseOffsets = new HashSet<>(segmentBaseOffsets);
         Optional<SnapshotFile> latestStraySnapshot = Optional.empty();

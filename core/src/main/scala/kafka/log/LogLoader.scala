@@ -192,7 +192,7 @@ class LogLoader(
     // Reload all snapshots into the ProducerStateManager cache, the intermediate ProducerStateManager used
     // during log recovery may have deleted some files without the LogLoader.producerStateManager instance witnessing the
     // deletion.
-    producerStateManager.removeStraySnapshots(segments.baseOffsets.toSeq.map(x => Long.box(x)).asJava)
+    producerStateManager.removeStraySnapshots(segments.baseOffsets.map(x => Long.box(x)).asJavaCollection)
     UnifiedLog.rebuildProducerState(
       producerStateManager,
       segments,
