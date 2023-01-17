@@ -185,7 +185,6 @@ public class EndToEndLatency {
         Properties adminProps = loadPropsWithBootstrapServers(propertiesFile, brokers);
         Admin adminClient = Admin.create(adminProps);
         NewTopic newTopic = new NewTopic(topic, defaultNumPartitions, defaultReplicationFactor);
-        adminClient.createTopics(Collections.singletonList(newTopic));
         try {
             adminClient.createTopics(Collections.singleton(newTopic)).all().get();
         } catch (ExecutionException | InterruptedException e) {
