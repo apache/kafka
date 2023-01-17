@@ -38,6 +38,7 @@ import java.util.Collections;
 import java.util.Properties;
 import java.util.List;
 import java.util.Random;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -85,7 +86,7 @@ public class EndToEndLatency {
         int numMessages = Integer.parseInt(args[2]);
         String acks = args[3];
         int messageSizeBytes = Integer.parseInt(args[4]);
-        String propertiesFile = args.length > 5 ? Utils.isBlank(args[5]) ? null : args[5] : null;
+        Optional<String> propertiesFile = args.length > 5 ? (Utils.isBlank(args[5]) ? Optional.empty() : Optional.of(args[5])) : Optional.empty();
 
         if (!Arrays.asList("1", "all").contains(acks)) {
             throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all");
@@ -173,7 +174,7 @@ public class EndToEndLatency {
         return randomBytes;
     }
 
-    private static void createTopic(String propertiesFile, String brokers, String topic) throws IOException {
+    private static void createTopic(Optional<String> propertiesFile, String brokers, String topic) throws IOException {
         short defaultReplicationFactor = 1;
         int defaultNumPartitions = 1;
 
@@ -195,13 +196,13 @@ public class EndToEndLatency {
         }
     }
 
-    private static Properties loadPropsWithBootstrapServers(String propertiesFile, String brokers) throws IOException {
-        Properties properties = propertiesFile != null ? Utils.loadProps(propertiesFile) : new Properties();
+    private static Properties loadPropsWithBootstrapServers(Optional<String> propertiesFile, String brokers) throws IOException {
+        Properties properties = propertiesFile.isPresent() ? Utils.loadProps(propertiesFile.get()) : new Properties();
         properties.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokers);
         return properties;
     }
 
-    private static KafkaConsumer<byte[], byte[]> createKafkaConsumer(String propsFile, String brokers) throws IOException {
+    private static KafkaConsumer<byte[], byte[]> createKafkaConsumer(Optional<String> propsFile, String brokers) throws IOException {
         Properties consumerProps = loadPropsWithBootstrapServers(propsFile, brokers);
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + System.currentTimeMillis());
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
@@ -212,7 +213,7 @@ public class EndToEndLatency {
         return new KafkaConsumer<>(consumerProps);
     }
 
-    private static KafkaProducer<byte[], byte[]> createKafkaProducer(String propsFile, String brokers, String acks) throws IOException {
+    private static KafkaProducer<byte[], byte[]> createKafkaProducer(Optional<String> propsFile, String brokers, String acks) throws IOException {
         Properties producerProps = loadPropsWithBootstrapServers(propsFile, brokers);
         producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0"); //ensure writes are synchronous
         producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MAX_VALUE);
