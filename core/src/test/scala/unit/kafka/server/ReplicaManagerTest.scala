@@ -2766,7 +2766,7 @@ class ReplicaManagerTest {
 
   @Test
   def testStopReplicaWithExistingPartitionAndEqualLeaderEpoch(): Unit = {
-    testStopReplicaWithExistingPartition(1, false, false, Errors.FENCED_LEADER_EPOCH)
+    testStopReplicaWithExistingPartition(1, false, false, Errors.NONE)
   }
 
   @Test
@@ -2796,7 +2796,7 @@ class ReplicaManagerTest {
 
   @Test
   def testStopReplicaWithDeletePartitionAndExistingPartitionAndEqualLeaderEpoch(): Unit = {
-    testStopReplicaWithExistingPartition(1, true, false, Errors.FENCED_LEADER_EPOCH)
+    testStopReplicaWithExistingPartition(1, true, false, Errors.NONE)
   }
 
   @Test

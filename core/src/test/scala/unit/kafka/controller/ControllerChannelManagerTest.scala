@@ -824,11 +824,9 @@ class ControllerChannelManagerTest {
       new LeaderAndDelete(LeaderAndIsr(leader, List()), deletePartition)
   }
 
-  private def partitionStates(
-    partitions: Map[TopicPartition, LeaderAndDelete],
-    topicsQueuedForDeletion: collection.Set[String] = Set.empty[String],
-    version: Short = ApiKeys.STOP_REPLICA.latestVersion
-  ): Map[TopicPartition, StopReplicaPartitionState] = {
+  private def partitionStates(partitions: Map[TopicPartition, LeaderAndDelete],
+                              topicsQueuedForDeletion: collection.Set[String] = Set.empty[String],
+                              version: Short = ApiKeys.STOP_REPLICA.latestVersion): Map[TopicPartition, StopReplicaPartitionState] = {
     partitions.map { case (topicPartition, LeaderAndDelete(leaderAndIsr, deletePartition)) =>
       topicPartition -> {
         val partitionState = new StopReplicaPartitionState()
@@ -836,12 +834,10 @@ class ControllerChannelManagerTest {
           .setDeletePartition(deletePartition)
 
         if (version >= 3) {
-          val leaderEpoch = if (topicsQueuedForDeletion.contains(topicPartition.topic) || deletePartition) {
+          partitionState.setLeaderEpoch(if (topicsQueuedForDeletion.contains(topicPartition.topic))
             LeaderAndIsr.EpochDuringDelete
-          } else {
-            leaderAndIsr.leaderEpoch
-          }
-          partitionState.setLeaderEpoch(leaderEpoch)
+          else
+            leaderAndIsr.leaderEpoch)
         }
 
         partitionState
