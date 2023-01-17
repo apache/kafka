@@ -28,6 +28,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -198,5 +200,19 @@ public interface GroupCoordinator {
         TxnOffsetCommitRequestData request,
         BufferSupplier bufferSupplier
     );
-}
 
+    /**
+     * Delete offsets for a given Group.
+     *
+     * @param context           The request context.
+     * @param request           The OffsetDeleteRequest data.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<OffsetDeleteResponseData> deleteOffsets(
+        RequestContext context,
+        OffsetDeleteRequestData request,
+        BufferSupplier bufferSupplier
+    );
+}
