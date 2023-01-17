@@ -1051,6 +1051,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         } finally {
             super.close(timer);
+            sensors.close();
         }
     }
 
@@ -1567,8 +1568,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         private final Sensor revokeCallbackSensor;
         private final Sensor assignCallbackSensor;
         private final Sensor loseCallbackSensor;
+        private final Metrics metrics;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
+            this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             this.commitSensor = metrics.sensor("commit-latency");
@@ -1608,6 +1611,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             metrics.addMetric(metrics.metricName("assigned-partitions",
                 this.metricGrpName,
                 "The number of partitions currently assigned to this consumer"), numParts);
+        }
+
+        public void close() {
+            metrics.removeSensor(commitSensor.name());
+            metrics.removeSensor(revokeCallbackSensor.name());
+            metrics.removeSensor(assignCallbackSensor.name());
+            metrics.removeSensor(loseCallbackSensor.name());
+            metrics.removeMetric(metrics.metricName("assigned-partitions", this.metricGrpName));
         }
     }
 
