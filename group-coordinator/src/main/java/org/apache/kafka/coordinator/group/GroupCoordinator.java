@@ -22,12 +22,18 @@ import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.BufferSupplier;
 
@@ -130,6 +136,66 @@ public interface GroupCoordinator {
     CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> deleteGroups(
         RequestContext context,
         List<String> groupIds,
+        BufferSupplier bufferSupplier
+    );
+
+    /**
+     * Fetch offsets for a given Group.
+     *
+     * @param context           The request context.
+     * @param groupId           The group id.
+     * @param topics            The topics to fetch the offsets for.
+     *
+     * @return A future yielding the results or an exception.
+     */
+    CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> fetchOffsets(
+        RequestContext context,
+        String groupId,
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
+        boolean requireStable
+    );
+
+    /**
+     * Fetch all offsets for a given Group.
+     *
+     * @param context           The request context.
+     * @param groupId           The group id.
+     *
+     * @return A future yielding the results or an exception.
+     */
+    CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> fetchAllOffsets(
+        RequestContext context,
+        String groupId,
+        boolean requireStable
+    );
+
+    /**
+     * Commit offsets for a given Group.
+     *
+     * @param context           The request context.
+     * @param request           The OffsetCommitRequest data.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<OffsetCommitResponseData> commitOffsets(
+        RequestContext context,
+        OffsetCommitRequestData request,
+        BufferSupplier bufferSupplier
+    );
+
+    /**
+     * Commit transactional offsets for a given Group.
+     *
+     * @param context           The request context.
+     * @param request           The TnxOffsetCommitRequest data.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<TxnOffsetCommitResponseData> commitTransactionalOffsets(
+        RequestContext context,
+        TxnOffsetCommitRequestData request,
         BufferSupplier bufferSupplier
     );
 }

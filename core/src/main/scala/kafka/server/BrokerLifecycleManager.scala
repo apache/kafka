@@ -55,8 +55,7 @@ class BrokerLifecycleManager(
   val config: KafkaConfig,
   val time: Time,
   val threadNamePrefix: Option[String],
-  val isZkBroker: Boolean,
-  val zkBrokerEpochSupplier: () => Long
+  val isZkBroker: Boolean
 ) extends Logging {
 
   val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.nodeId}] ")
@@ -181,7 +180,10 @@ class BrokerLifecycleManager(
   /**
    * The event queue.
    */
-  private[server] val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
+  private[server] val eventQueue = new KafkaEventQueue(time,
+    logContext,
+    threadNamePrefix.getOrElse(""),
+    new ShutdownEvent())
 
   /**
    * Start the BrokerLifecycleManager.
@@ -240,7 +242,7 @@ class BrokerLifecycleManager(
    * Start shutting down the BrokerLifecycleManager, but do not block.
    */
   def beginShutdown(): Unit = {
-    eventQueue.beginShutdown("beginShutdown", new ShutdownEvent())
+    eventQueue.beginShutdown("beginShutdown");
   }
 
   /**
@@ -291,20 +293,9 @@ class BrokerLifecycleManager(
         setMinSupportedVersion(range.min()).
         setMaxSupportedVersion(range.max()))
     }
-    val migrationZkBrokerEpoch: Long = {
-      if (isZkBroker) {
-        val zkBrokerEpoch: Long = Option(zkBrokerEpochSupplier).map(_.apply()).getOrElse(-1)
-        if (zkBrokerEpoch < 0) {
-          throw new IllegalStateException("Trying to sending BrokerRegistration in migration Zk " +
-            "broker without valid zk broker epoch")
-        }
-        zkBrokerEpoch
-      } else
-        -1
-    }
     val data = new BrokerRegistrationRequestData().
         setBrokerId(nodeId).
-        setMigratingZkBrokerEpoch(migrationZkBrokerEpoch).
+        setIsMigratingZkBroker(isZkBroker).
         setClusterId(_clusterId).
         setFeatures(features).
         setIncarnationId(incarnationId).
@@ -482,7 +473,7 @@ class BrokerLifecycleManager(
     override def run(): Unit = {
       if (!initialRegistrationSucceeded) {
         error("Shutting down because we were unable to register with the controller quorum.")
-        eventQueue.beginShutdown("registrationTimeout", new ShutdownEvent())
+        eventQueue.beginShutdown("registrationTimeout");
       }
     }
   }

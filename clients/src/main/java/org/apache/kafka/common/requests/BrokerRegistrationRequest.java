@@ -36,7 +36,7 @@ public class BrokerRegistrationRequest extends AbstractRequest {
 
         @Override
         public short oldestAllowedVersion() {
-            if (data.migratingZkBrokerEpoch() != -1) {
+            if (data.isMigratingZkBroker()) {
                 return (short) 1;
             } else {
                 return (short) 0;

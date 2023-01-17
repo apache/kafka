@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Optional, OptionalInt, OptionalLong, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
@@ -92,7 +92,7 @@ import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartiti
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
-import org.apache.kafka.server.log.internals.AppendOrigin
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchParams, FetchPartitionData}
 
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -1265,6 +1265,239 @@ class KafkaApisTest {
   }
 
   @Test
+  def testHandleOffsetCommitRequest(): Unit = {
+    addTopicToMetadataCache("foo", numPartitions = 1)
+
+    val offsetCommitRequest = new OffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setTopics(List(
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(10)).asJava)).asJava)
+
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
+
+    val future = new CompletableFuture[OffsetCommitResponseData]()
+    when(newGroupCoordinator.commitOffsets(
+      requestChannelRequest.context,
+      offsetCommitRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    // This is the response returned by the group coordinator.
+    val offsetCommitResponse = new OffsetCommitResponseData()
+      .setTopics(List(
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+
+    future.complete(offsetCommitResponse)
+    val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
+    assertEquals(offsetCommitResponse, response.data)
+  }
+
+  @Test
+  def testHandleOffsetCommitRequestFutureFailed(): Unit = {
+    addTopicToMetadataCache("foo", numPartitions = 1)
+
+    val offsetCommitRequest = new OffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setTopics(List(
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(10)).asJava)).asJava)
+
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
+
+    val future = new CompletableFuture[OffsetCommitResponseData]()
+    when(newGroupCoordinator.commitOffsets(
+      requestChannelRequest.context,
+      offsetCommitRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    val expectedOffsetCommitResponse = new OffsetCommitResponseData()
+      .setTopics(List(
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NOT_COORDINATOR.code)).asJava)).asJava)
+
+    future.completeExceptionally(Errors.NOT_COORDINATOR.exception)
+    val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
+    assertEquals(expectedOffsetCommitResponse, response.data)
+  }
+
+  @Test
+  def testHandleOffsetCommitRequestTopicsAndPartitionsValidation(): Unit = {
+    addTopicToMetadataCache("foo", numPartitions = 2)
+    addTopicToMetadataCache("bar", numPartitions = 2)
+
+    val offsetCommitRequest = new OffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setTopics(List(
+        // foo exists but only has 2 partitions.
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(10),
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(20),
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(2)
+              .setCommittedOffset(30)).asJava),
+        // bar exists.
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(40),
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(50)).asJava),
+        // zar does not exist.
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setName("zar")
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(60),
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(70)).asJava)).asJava)
+
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
+
+    // This is the request expected by the group coordinator.
+    val expectedOffsetCommitRequest = new OffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setTopics(List(
+        // foo exists but only has 2 partitions.
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(10),
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(20)).asJava),
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(40),
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(50)).asJava)).asJava)
+
+    val future = new CompletableFuture[OffsetCommitResponseData]()
+    when(newGroupCoordinator.commitOffsets(
+      requestChannelRequest.context,
+      expectedOffsetCommitRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    // This is the response returned by the group coordinator.
+    val offsetCommitResponse = new OffsetCommitResponseData()
+      .setTopics(List(
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)).asJava),
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+
+    val expectedOffsetCommitResponse = new OffsetCommitResponseData()
+      .setTopics(List(
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            // foo-2 is first because partitions failing the validation
+            // are put in the response first.
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(2)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)).asJava),
+        // zar is before bar because topics failing the validation are
+        // put in the response first.
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName("zar")
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)).asJava),
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+
+    future.complete(offsetCommitResponse)
+    val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
+    assertEquals(expectedOffsetCommitResponse, response.data)
+  }
+
+  @Test
   def testOffsetCommitWithInvalidPartition(): Unit = {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 1)
@@ -1332,59 +1565,299 @@ class KafkaApisTest {
   }
 
   @Test
-  def shouldReplaceCoordinatorNotAvailableWithLoadInProcessInTxnOffsetCommitWithOlderClient(): Unit = {
+  def testHandleTxnOffsetCommitRequest(): Unit = {
+    addTopicToMetadataCache("foo", numPartitions = 1)
+
+    val txnOffsetCommitRequest = new TxnOffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(10)
+      .setProducerId(20)
+      .setProducerEpoch(30)
+      .setGroupInstanceId("instance-id")
+      .setTransactionalId("transactional-id")
+      .setTopics(List(
+        new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(10)).asJava)).asJava)
+
+    val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
+
+    val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(newGroupCoordinator.commitTransactionalOffsets(
+      requestChannelRequest.context,
+      txnOffsetCommitRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    // This is the response returned by the group coordinator.
+    val txnOffsetCommitResponse = new TxnOffsetCommitResponseData()
+      .setTopics(List(
+        new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+
+    future.complete(txnOffsetCommitResponse)
+    val response = verifyNoThrottling[TxnOffsetCommitResponse](requestChannelRequest)
+    assertEquals(txnOffsetCommitResponse, response.data)
+  }
+
+  @Test
+  def testHandleTxnOffsetCommitRequestFutureFailed(): Unit = {
+    addTopicToMetadataCache("foo", numPartitions = 1)
+
+    val txnOffsetCommitRequest = new TxnOffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setTopics(List(
+        new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(10)).asJava)).asJava)
+
+    val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
+
+    val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(newGroupCoordinator.commitTransactionalOffsets(
+      requestChannelRequest.context,
+      txnOffsetCommitRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    val expectedTxnOffsetCommitResponse = new TxnOffsetCommitResponseData()
+      .setTopics(List(
+        new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NOT_COORDINATOR.code)).asJava)).asJava)
+
+    future.completeExceptionally(Errors.NOT_COORDINATOR.exception)
+    val response = verifyNoThrottling[TxnOffsetCommitResponse](requestChannelRequest)
+    assertEquals(expectedTxnOffsetCommitResponse, response.data)
+  }
+
+  @Test
+  def testHandleTxnOffsetCommitRequestTopicsAndPartitionsValidation(): Unit = {
+    addTopicToMetadataCache("foo", numPartitions = 2)
+    addTopicToMetadataCache("bar", numPartitions = 2)
+
+    val txnOffsetCommitRequest = new TxnOffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setTopics(List(
+        // foo exists but only has 2 partitions.
+        new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(10),
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(20),
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(2)
+              .setCommittedOffset(30)).asJava),
+        // bar exists.
+        new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+          .setName("bar")
+          .setPartitions(List(
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(40),
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(50)).asJava),
+        // zar does not exist.
+        new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+          .setName("zar")
+          .setPartitions(List(
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(60),
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(70)).asJava)).asJava)
+
+    val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
+
+    // This is the request expected by the group coordinator.
+    val expectedTnxOffsetCommitRequest = new TxnOffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setTopics(List(
+        // foo exists but only has 2 partitions.
+        new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(10),
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(20)).asJava),
+        new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+          .setName("bar")
+          .setPartitions(List(
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(40),
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(50)).asJava)).asJava)
+
+    val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(newGroupCoordinator.commitTransactionalOffsets(
+      requestChannelRequest.context,
+      expectedTnxOffsetCommitRequest,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    // This is the response returned by the group coordinator.
+    val txnOffsetCommitResponse = new TxnOffsetCommitResponseData()
+      .setTopics(List(
+        new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)).asJava),
+        new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+          .setName("bar")
+          .setPartitions(List(
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+
+    val expectedTxnOffsetCommitResponse = new TxnOffsetCommitResponseData()
+      .setTopics(List(
+        new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            // foo-2 is first because partitions failing the validation
+            // are put in the response first.
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(2)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)).asJava),
+        // zar is before bar because topics failing the validation are
+        // put in the response first.
+        new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+          .setName("zar")
+          .setPartitions(List(
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)).asJava),
+        new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+          .setName("bar")
+          .setPartitions(List(
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+
+    future.complete(txnOffsetCommitResponse)
+    val response = verifyNoThrottling[TxnOffsetCommitResponse](requestChannelRequest)
+    assertEquals(expectedTxnOffsetCommitResponse, response.data)
+  }
+
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+  def shouldReplaceCoordinatorNotAvailableWithLoadInProcessInTxnOffsetCommitWithOlderClient(version: Short): Unit = {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 2)
 
-    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion) {
-      reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
+    val topicPartition = new TopicPartition(topic, 1)
+    val capturedResponse: ArgumentCaptor[TxnOffsetCommitResponse] = ArgumentCaptor.forClass(classOf[TxnOffsetCommitResponse])
 
-      val topicPartition = new TopicPartition(topic, 1)
-      val capturedResponse: ArgumentCaptor[TxnOffsetCommitResponse] = ArgumentCaptor.forClass(classOf[TxnOffsetCommitResponse])
-      val responseCallback: ArgumentCaptor[Map[TopicPartition, Errors] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, Errors] => Unit])
+    val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
+    val groupId = "groupId"
 
-      val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
-      val groupId = "groupId"
+    val producerId = 15L
+    val epoch = 0.toShort
 
-      val producerId = 15L
-      val epoch = 0.toShort
+    val offsetCommitRequest = new TxnOffsetCommitRequest.Builder(
+      "txnId",
+      groupId,
+      producerId,
+      epoch,
+      Map(topicPartition -> partitionOffsetCommitData).asJava,
+    ).build(version)
+    val request = buildRequest(offsetCommitRequest)
 
-      val offsetCommitRequest = new TxnOffsetCommitRequest.Builder(
-        "txnId",
-        groupId,
-        producerId,
-        epoch,
-        Map(topicPartition -> partitionOffsetCommitData).asJava,
-      ).build(version.toShort)
-      val request = buildRequest(offsetCommitRequest)
+    val requestLocal = RequestLocal.withThreadConfinedCaching
+    val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(newGroupCoordinator.commitTransactionalOffsets(
+      request.context,
+      offsetCommitRequest.data,
+      requestLocal.bufferSupplier
+    )).thenReturn(future)
 
-      val requestLocal = RequestLocal.withThreadConfinedCaching
-      when(groupCoordinator.handleTxnCommitOffsets(
-        ArgumentMatchers.eq(groupId),
-        ArgumentMatchers.eq(producerId),
-        ArgumentMatchers.eq(epoch),
-        anyString,
-        ArgumentMatchers.eq(Option.empty),
-        anyInt,
-        any(),
-        responseCallback.capture(),
-        ArgumentMatchers.eq(requestLocal)
-      )).thenAnswer(_ => responseCallback.getValue.apply(Map(topicPartition -> Errors.COORDINATOR_LOAD_IN_PROGRESS)))
+    future.complete(new TxnOffsetCommitResponseData()
+      .setTopics(List(
+        new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+          .setName(topicPartition.topic)
+          .setPartitions(List(
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(topicPartition.partition)
+              .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code)
+          ).asJava)
+      ).asJava))
 
-      createKafkaApis().handleTxnOffsetCommitRequest(request, requestLocal)
+    createKafkaApis().handleTxnOffsetCommitRequest(request, requestLocal)
 
-      verify(requestChannel).sendResponse(
-        ArgumentMatchers.eq(request),
-        capturedResponse.capture(),
-        ArgumentMatchers.eq(None)
-      )
-      val response = capturedResponse.getValue
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(request),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None)
+    )
+    val response = capturedResponse.getValue
 
-      if (version < 2) {
-        assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.errors().get(topicPartition))
-      } else {
-        assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, response.errors().get(topicPartition))
-      }
+    if (version < 2) {
+      assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.errors().get(topicPartition))
+    } else {
+      assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, response.errors().get(topicPartition))
     }
   }
 
@@ -2650,8 +3123,8 @@ class KafkaApisTest {
       val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
       val records = MemoryRecords.withRecords(CompressionType.NONE,
         new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
-      callback(Seq(tidp -> FetchPartitionData(Errors.NONE, hw, 0, records,
-        None, None, None, Option.empty, isReassignmentFetch = false)))
+      callback(Seq(tidp -> new FetchPartitionData(Errors.NONE, hw, 0, records,
+        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)))
     })
 
     val fetchData = Map(tidp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
@@ -3406,6 +3879,341 @@ class KafkaApisTest {
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
   }
 
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+  def testHandleOffsetFetchWithMultipleGroups(version: Short): Unit = {
+    // Version 0 gets offsets from Zookeeper. We are not interested
+    // in testing this here.
+    if (version == 0) return
+
+    def makeRequest(version: Short): RequestChannel.Request = {
+      val groups = Map(
+        "group-1" -> List(
+          new TopicPartition("foo", 0),
+          new TopicPartition("foo", 1)
+        ).asJava,
+        "group-2" -> null,
+        "group-3" -> null,
+      ).asJava
+      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+    }
+
+    if (version < 8) {
+      // Request version earlier than version 8 do not support batching groups.
+      assertThrows(classOf[UnsupportedVersionException], () => makeRequest(version))
+    } else {
+      val requestChannelRequest = makeRequest(version)
+
+      val group1Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+      when(newGroupCoordinator.fetchOffsets(
+        requestChannelRequest.context,
+        "group-1",
+        List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+          .setName("foo")
+          .setPartitionIndexes(List[Integer](0, 1).asJava)
+        ).asJava,
+        false
+      )).thenReturn(group1Future)
+
+      val group2Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+      when(newGroupCoordinator.fetchAllOffsets(
+        requestChannelRequest.context,
+        "group-2",
+        false
+      )).thenReturn(group2Future)
+
+      val group3Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+      when(newGroupCoordinator.fetchAllOffsets(
+        requestChannelRequest.context,
+        "group-3",
+        false
+      )).thenReturn(group3Future)
+
+      createKafkaApis().handleOffsetFetchRequest(requestChannelRequest)
+
+      val group1Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+        .setGroupId("group-1")
+        .setTopics(List(
+          new OffsetFetchResponseData.OffsetFetchResponseTopics()
+            .setName("foo")
+            .setPartitions(List(
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(0)
+                .setCommittedOffset(100)
+                .setCommittedLeaderEpoch(1),
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(1)
+                .setCommittedOffset(200)
+                .setCommittedLeaderEpoch(2)
+            ).asJava)
+        ).asJava)
+
+      val group2Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+        .setGroupId("group-2")
+        .setTopics(List(
+          new OffsetFetchResponseData.OffsetFetchResponseTopics()
+            .setName("bar")
+            .setPartitions(List(
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(0)
+                .setCommittedOffset(100)
+                .setCommittedLeaderEpoch(1),
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(1)
+                .setCommittedOffset(200)
+                .setCommittedLeaderEpoch(2),
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(2)
+                .setCommittedOffset(300)
+                .setCommittedLeaderEpoch(3)
+            ).asJava)
+        ).asJava)
+
+      val group3Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+        .setGroupId("group-3")
+        .setErrorCode(Errors.INVALID_GROUP_ID.code)
+
+      val expectedOffsetFetchResponse = new OffsetFetchResponseData()
+        .setGroups(List(group1Response, group2Response, group3Response).asJava)
+
+      group1Future.complete(group1Response.topics)
+      group2Future.complete(group2Response.topics)
+      group3Future.completeExceptionally(Errors.INVALID_GROUP_ID.exception)
+
+      val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
+      assertEquals(expectedOffsetFetchResponse, response.data)
+    }
+  }
+
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+  def testHandleOffsetFetchWithSingleGroup(version: Short): Unit = {
+    // Version 0 gets offsets from Zookeeper. We are not interested
+    // in testing this here.
+    if (version == 0) return
+
+    def makeRequest(version: Short): RequestChannel.Request = {
+      buildRequest(new OffsetFetchRequest.Builder(
+        "group-1",
+        false,
+        List(
+          new TopicPartition("foo", 0),
+          new TopicPartition("foo", 1)
+        ).asJava,
+        false
+      ).build(version))
+    }
+
+    val requestChannelRequest = makeRequest(version)
+
+    val future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    when(newGroupCoordinator.fetchOffsets(
+      requestChannelRequest.context,
+      "group-1",
+      List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+        .setName("foo")
+        .setPartitionIndexes(List[Integer](0, 1).asJava)
+      ).asJava,
+      false
+    )).thenReturn(future)
+
+    createKafkaApis().handleOffsetFetchRequest(requestChannelRequest)
+
+    val group1Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId("group-1")
+      .setTopics(List(
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1),
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(1)
+              .setCommittedOffset(200)
+              .setCommittedLeaderEpoch(2)
+          ).asJava)
+      ).asJava)
+
+    val expectedOffsetFetchResponse = if (version >= 8) {
+      new OffsetFetchResponseData()
+        .setGroups(List(group1Response).asJava)
+    } else {
+      new OffsetFetchResponseData()
+        .setTopics(List(
+          new OffsetFetchResponseData.OffsetFetchResponseTopic()
+            .setName("foo")
+            .setPartitions(List(
+              new OffsetFetchResponseData.OffsetFetchResponsePartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(100)
+                .setCommittedLeaderEpoch(if (version >= 5) 1 else -1),
+              new OffsetFetchResponseData.OffsetFetchResponsePartition()
+                .setPartitionIndex(1)
+                .setCommittedOffset(200)
+                .setCommittedLeaderEpoch(if (version >= 5) 2 else -1)
+            ).asJava)
+        ).asJava)
+    }
+
+    future.complete(group1Response.topics)
+
+    val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
+    assertEquals(expectedOffsetFetchResponse, response.data)
+  }
+
+  @Test
+  def testHandleOffsetFetchAuthorization(): Unit = {
+    def makeRequest(version: Short): RequestChannel.Request = {
+      val groups = Map(
+        "group-1" -> List(
+          new TopicPartition("foo", 0),
+          new TopicPartition("bar", 0)
+        ).asJava,
+        "group-2" -> List(
+          new TopicPartition("foo", 0),
+          new TopicPartition("bar", 0)
+        ).asJava,
+        "group-3" -> null,
+        "group-4" -> null,
+      ).asJava
+      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+    }
+
+    val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion)
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+
+    val acls = Map(
+      "group-1" -> AuthorizationResult.ALLOWED,
+      "group-2" -> AuthorizationResult.DENIED,
+      "group-3" -> AuthorizationResult.ALLOWED,
+      "group-4" -> AuthorizationResult.DENIED,
+      "foo" -> AuthorizationResult.DENIED,
+      "bar" -> AuthorizationResult.ALLOWED
+    )
+
+    when(authorizer.authorize(
+      any[RequestContext],
+      any[util.List[Action]]
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument(1, classOf[util.List[Action]])
+      actions.asScala.map { action =>
+        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
+      }.asJava
+    }
+
+    // group-1 is allowed and bar is allowed.
+    val group1Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    when(newGroupCoordinator.fetchOffsets(
+      requestChannelRequest.context,
+      "group-1",
+      List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+        .setName("bar")
+        .setPartitionIndexes(List[Integer](0).asJava)
+      ).asJava,
+      false
+    )).thenReturn(group1Future)
+
+    // group-3 is allowed and bar is allowed.
+    val group3Future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    when(newGroupCoordinator.fetchAllOffsets(
+      requestChannelRequest.context,
+      "group-3",
+      false
+    )).thenReturn(group3Future)
+
+    createKafkaApis(authorizer = Some(authorizer)).handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val group1ResponseFromCoordinator = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId("group-1")
+      .setTopics(List(
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+
+    val group3ResponseFromCoordinator = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId("group-3")
+      .setTopics(List(
+        // foo should be filtered out.
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1)
+          ).asJava),
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+
+    val expectedOffsetFetchResponse = new OffsetFetchResponseData()
+      .setGroups(List(
+        // group-1 is authorized but foo is not.
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("group-1")
+          .setTopics(List(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setName("bar")
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(100)
+                  .setCommittedLeaderEpoch(1)
+              ).asJava),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setName("foo")
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                  .setCommittedOffset(-1)
+              ).asJava)
+          ).asJava),
+        // group-2 is not authorized.
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("group-2")
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code),
+        // group-3 is authorized but foo is not.
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("group-3")
+          .setTopics(List(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setName("bar")
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(100)
+                  .setCommittedLeaderEpoch(1)
+              ).asJava)
+          ).asJava),
+        // group-4 is not authorized.
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("group-4")
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code),
+      ).asJava)
+
+    group1Future.complete(group1ResponseFromCoordinator.topics)
+    group3Future.complete(group3ResponseFromCoordinator.topics)
+
+    val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
+    assertEquals(expectedOffsetFetchResponse, response.data)
+  }
+
   @Test
   def testReassignmentAndReplicationBytesOutRateWhenReassigning(): Unit = {
     assertReassignmentAndReplicationBytesOutPerSec(true)
@@ -3439,8 +4247,8 @@ class KafkaApisTest {
       any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
     )).thenAnswer(invocation => {
       val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
-      callback(Seq(tidp0 -> FetchPartitionData(Errors.NONE, hw, 0, records,
-        None, None, None, Option.empty, isReassignmentFetch = isReassigning)))
+      callback(Seq(tidp0 -> new FetchPartitionData(Errors.NONE, hw, 0, records,
+        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), isReassigning)))
     })
 
     val fetchMetadata = new JFetchMetadata(0, 0)

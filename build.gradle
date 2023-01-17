@@ -1977,6 +1977,7 @@ project(':streams') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j
     testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
@@ -2096,6 +2097,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-30:test',
             ':streams:upgrade-system-tests-31:test',
             ':streams:upgrade-system-tests-32:test',
+            ':streams:upgrade-system-tests-33:test',
             ':streams:examples:test'
     ]
   )
@@ -2112,6 +2114,7 @@ project(':streams:streams-scala') {
 
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':streams').sourceSets.test.output
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
@@ -2445,6 +2448,19 @@ project(':streams:upgrade-system-tests-32') {
 
   dependencies {
     testImplementation libs.kafkaStreams_32
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-33') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-33"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_33
     testRuntimeOnly libs.junitJupiter
   }
 

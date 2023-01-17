@@ -18,14 +18,13 @@
 package kafka.server
 
 import java.util.concurrent.TimeUnit
-
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.server.log.internals.LogOffsetMetadata
+import org.apache.kafka.server.log.internals.{FetchIsolation, FetchParams, FetchPartitionData, LogOffsetMetadata}
 
 import scala.collection._
 
@@ -81,9 +80,9 @@ class DelayedFetch(
             val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, params.fetchOnlyLeader)
 
             val endOffset = params.isolation match {
-              case FetchLogEnd => offsetSnapshot.logEndOffset
-              case FetchHighWatermark => offsetSnapshot.highWatermark
-              case FetchTxnCommitted => offsetSnapshot.lastStableOffset
+              case FetchIsolation.LOG_END => offsetSnapshot.logEndOffset
+              case FetchIsolation.HIGH_WATERMARK => offsetSnapshot.highWatermark
+              case FetchIsolation.TXN_COMMITTED => offsetSnapshot.lastStableOffset
             }
 
             // Go directly to the check for Case G if the message offsets are the same. If the log segment

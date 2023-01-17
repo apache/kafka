@@ -258,7 +258,7 @@ public class ProducerConfig extends AbstractConfig {
             + "Enabling idempotence requires this config value to be greater than 0."
             + " If conflicting configurations are set and idempotence is not explicitly enabled, idempotence is disabled."
             + "<p>"
-            + "Allowing retries while setting <code>enable.idempotence</code> to <code>false</code> and <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
+            + "Allowing retries while setting <code>enable.idempotence</code> to <code>false</code> and <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to greater than 1 will potentially change the"
             + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
             + " succeeds, then the records in the second batch may appear first.";
 

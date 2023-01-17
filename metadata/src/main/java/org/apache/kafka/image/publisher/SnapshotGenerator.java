@@ -205,8 +205,7 @@ public class SnapshotGenerator implements MetadataPublisher {
         MetadataImage newImage,
         SnapshotManifest manifest
     ) {
-        log.debug("Resetting the snapshot counters because we just read a snapshot at offset {}.",
-                newImage.provenance().offset());
+        log.debug("Resetting the snapshot counters because we just read {}.", newImage.provenance().snapshotName());
         resetSnapshotCounters();
     }
 
