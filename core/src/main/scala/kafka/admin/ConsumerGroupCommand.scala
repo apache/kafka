@@ -1033,7 +1033,7 @@ object ConsumerGroupCommand extends Logging {
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val allGroupsOpt = parser.accepts("all-groups", AllGroupsDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
-    val timeoutMsOpt = parser.accepts("timeout", TimeoutMsDoc)
+    val timeoutMsOpt: OptionSpec[Long] = parser.accepts("timeout", TimeoutMsDoc)
                              .withRequiredArg
                              .describedAs("timeout (ms)")
                              .ofType(classOf[Long])
@@ -1047,7 +1047,7 @@ object ConsumerGroupCommand extends Logging {
     val dryRunOpt = parser.accepts("dry-run", DryRunDoc)
     val executeOpt = parser.accepts("execute", ExecuteDoc)
     val exportOpt = parser.accepts("export", ExportDoc)
-    val resetToOffsetOpt = parser.accepts("to-offset", ResetToOffsetDoc)
+    val resetToOffsetOpt: OptionSpec[Long] = parser.accepts("to-offset", ResetToOffsetDoc)
                            .withRequiredArg()
                            .describedAs("offset")
                            .ofType(classOf[Long])
