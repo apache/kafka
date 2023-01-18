@@ -16,15 +16,18 @@
  */
 package kafka.coordinator.group
 
+import kafka.common.OffsetAndMetadata
 import kafka.server.RequestLocal
 import kafka.utils.Implicits.MapExtensionMethods
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.RequestContext
-import org.apache.kafka.common.utils.BufferSupplier
+import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext}
+import org.apache.kafka.common.utils.{BufferSupplier, Time}
 
 import java.util
+import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
@@ -34,7 +37,8 @@ import scala.jdk.CollectionConverters._
  * that exposes the new org.apache.kafka.coordinator.group.GroupCoordinator interface.
  */
 class GroupCoordinatorAdapter(
-  val coordinator: GroupCoordinator
+  private val coordinator: GroupCoordinator,
+  private val time: Time
 ) extends org.apache.kafka.coordinator.group.GroupCoordinator {
 
   override def joinGroup(
@@ -308,6 +312,201 @@ class GroupCoordinatorAdapter(
       }
 
       future.complete(topicsList)
+    }
+
+    future
+  }
+
+  override def commitOffsets(
+    context: RequestContext,
+    request: OffsetCommitRequestData,
+    bufferSupplier: BufferSupplier
+  ): CompletableFuture[OffsetCommitResponseData] = {
+    val currentTimeMs = time.milliseconds
+    val future = new CompletableFuture[OffsetCommitResponseData]()
+
+    def callback(commitStatus: Map[TopicPartition, Errors]): Unit = {
+      val response = new OffsetCommitResponseData()
+      val byTopics = new mutable.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
+
+      commitStatus.forKeyValue { (tp, error) =>
+        val topic = byTopics.get(tp.topic) match {
+          case Some(existingTopic) =>
+            existingTopic
+          case None =>
+            val newTopic = new OffsetCommitResponseData.OffsetCommitResponseTopic().setName(tp.topic)
+            byTopics += tp.topic -> newTopic
+            response.topics.add(newTopic)
+            newTopic
+        }
+
+        topic.partitions.add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
+          .setPartitionIndex(tp.partition)
+          .setErrorCode(error.code))
+      }
+
+      future.complete(response)
+    }
+
+    // "default" expiration timestamp is defined as now + retention. The retention may be overridden
+    // in versions from v2 to v4. Otherwise, the retention defined on the broker is used. If an explicit
+    // commit timestamp is provided (v1 only), the expiration timestamp is computed based on that.
+    val expireTimeMs = request.retentionTimeMs match {
+      case OffsetCommitRequest.DEFAULT_RETENTION_TIME => None
+      case retentionTimeMs => Some(currentTimeMs + retentionTimeMs)
+    }
+
+    val partitions = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
+    request.topics.forEach { topic =>
+      topic.partitions.forEach { partition =>
+        val tp = new TopicPartition(topic.name, partition.partitionIndex)
+        partitions += tp -> createOffsetAndMetadata(
+          currentTimeMs,
+          partition.committedOffset,
+          partition.committedLeaderEpoch,
+          partition.committedMetadata,
+          partition.commitTimestamp,
+          expireTimeMs
+        )
+      }
+    }
+
+    coordinator.handleCommitOffsets(
+      request.groupId,
+      request.memberId,
+      Option(request.groupInstanceId),
+      request.generationId,
+      partitions.toMap,
+      callback,
+      RequestLocal(bufferSupplier)
+    )
+
+    future
+  }
+
+  override def commitTransactionalOffsets(
+    context: RequestContext,
+    request: TxnOffsetCommitRequestData,
+    bufferSupplier: BufferSupplier
+  ): CompletableFuture[TxnOffsetCommitResponseData] = {
+    val currentTimeMs = time.milliseconds
+    val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+
+    def callback(results: Map[TopicPartition, Errors]): Unit = {
+      val response = new TxnOffsetCommitResponseData()
+      val byTopics = new mutable.HashMap[String, TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic]()
+
+      results.forKeyValue { (tp, error) =>
+        val topic = byTopics.get(tp.topic) match {
+          case Some(existingTopic) =>
+            existingTopic
+          case None =>
+            val newTopic = new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setName(tp.topic)
+            byTopics += tp.topic -> newTopic
+            response.topics.add(newTopic)
+            newTopic
+        }
+
+        topic.partitions.add(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+          .setPartitionIndex(tp.partition)
+          .setErrorCode(error.code))
+      }
+
+      future.complete(response)
+    }
+
+    val partitions = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
+    request.topics.forEach { topic =>
+      topic.partitions.forEach { partition =>
+        val tp = new TopicPartition(topic.name, partition.partitionIndex)
+        partitions += tp -> createOffsetAndMetadata(
+          currentTimeMs,
+          partition.committedOffset,
+          partition.committedLeaderEpoch,
+          partition.committedMetadata,
+          OffsetCommitRequest.DEFAULT_TIMESTAMP, // means that currentTimeMs is used.
+          None
+        )
+      }
+    }
+
+    coordinator.handleTxnCommitOffsets(
+      request.groupId,
+      request.producerId,
+      request.producerEpoch,
+      request.memberId,
+      Option(request.groupInstanceId),
+      request.generationId,
+      partitions.toMap,
+      callback,
+      RequestLocal(bufferSupplier)
+    )
+
+    future
+  }
+
+  private def createOffsetAndMetadata(
+    currentTimeMs: Long,
+    offset: Long,
+    leaderEpoch: Int,
+    metadata: String,
+    commitTimestamp: Long,
+    expireTimestamp: Option[Long]
+  ): OffsetAndMetadata = {
+    new OffsetAndMetadata(
+      offset = offset,
+      leaderEpoch = leaderEpoch match {
+        case RecordBatch.NO_PARTITION_LEADER_EPOCH => Optional.empty[Integer]
+        case committedLeaderEpoch => Optional.of[Integer](committedLeaderEpoch)
+      },
+      metadata = metadata match {
+        case null => OffsetAndMetadata.NoMetadata
+        case metadata => metadata
+      },
+      commitTimestamp = commitTimestamp match {
+        case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimeMs
+        case customTimestamp => customTimestamp
+      },
+      expireTimestamp = expireTimestamp
+    )
+  }
+
+  override def deleteOffsets(
+    context: RequestContext,
+    request: OffsetDeleteRequestData,
+    bufferSupplier: BufferSupplier
+  ): CompletableFuture[OffsetDeleteResponseData] = {
+    val future = new CompletableFuture[OffsetDeleteResponseData]()
+
+    val partitions = mutable.ArrayBuffer[TopicPartition]()
+    request.topics.forEach { topic =>
+      topic.partitions.forEach { partition =>
+        partitions += new TopicPartition(topic.name, partition.partitionIndex)
+      }
+    }
+
+    val (groupError, topicPartitionResults) = coordinator.handleDeleteOffsets(
+      request.groupId,
+      partitions,
+      RequestLocal(bufferSupplier)
+    )
+
+    if (groupError != Errors.NONE) {
+      future.completeExceptionally(groupError.exception)
+    } else {
+      val response = new OffsetDeleteResponseData()
+      topicPartitionResults.forKeyValue { (topicPartition, error) =>
+        var topic = response.topics.find(topicPartition.topic)
+        if (topic == null) {
+          topic = new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setName(topicPartition.topic)
+          response.topics.add(topic)
+        }
+        topic.partitions.add(new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+          .setPartitionIndex(topicPartition.partition)
+          .setErrorCode(error.code))
+      }
+
+      future.complete(response)
     }
 
     future

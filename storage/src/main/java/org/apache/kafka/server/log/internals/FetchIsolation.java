@@ -14,18 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.source;
+package org.apache.kafka.server.log.internals;
 
-/**
- * An enum to represent the level of support for exactly-once semantics from a source connector.
- */
-public enum ExactlyOnceSupport {
-    /**
-     * Signals that a connector supports exactly-once semantics.
-     */
-    SUPPORTED,
-    /**
-     * Signals that a connector does not support exactly-once semantics.
-     */
-    UNSUPPORTED
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.requests.FetchRequest;
+
+public enum FetchIsolation {
+    LOG_END,
+    HIGH_WATERMARK,
+    TXN_COMMITTED;
+
+    public static FetchIsolation of(FetchRequest request) {
+        return of(request.replicaId(), request.isolationLevel());
+    }
+
+    public static FetchIsolation of(int replicaId, IsolationLevel isolationLevel) {
+        if (!FetchRequest.isConsumer(replicaId)) {
+            return LOG_END;
+        } else if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+            return TXN_COMMITTED;
+        } else {
+            return HIGH_WATERMARK;
+        }
+    }
 }

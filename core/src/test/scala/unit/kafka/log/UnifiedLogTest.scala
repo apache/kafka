@@ -26,7 +26,7 @@ import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException
 import kafka.log.remote.RemoteLogManager
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
-import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, PartitionMetadataFile}
+import kafka.server.{BrokerTopicStats, KafkaConfig, PartitionMetadataFile}
 import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
@@ -38,7 +38,7 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, LogConfig, LogOffsetMetadata, RecordValidationException}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, FetchIsolation, LogConfig, LogOffsetMetadata, RecordValidationException}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
@@ -92,7 +92,7 @@ class UnifiedLogTest {
       val readInfo = log.read(
         startOffset = fetchOffset,
         maxLength = 2048,
-        isolation = FetchHighWatermark,
+        isolation = FetchIsolation.HIGH_WATERMARK,
         minOneMessage = false)
       assertEquals(expectedSize, readInfo.records.sizeInBytes)
       assertEquals(expectedOffsets, readInfo.records.records.asScala.map(_.offset))
@@ -285,9 +285,9 @@ class UnifiedLogTest {
     assertTrue(readInfo.records.sizeInBytes > 0)
 
     val upperBoundOffset = isolation match {
-      case FetchLogEnd => log.logEndOffset
-      case FetchHighWatermark => log.highWatermark
-      case FetchTxnCommitted => log.lastStableOffset
+      case FetchIsolation.LOG_END => log.logEndOffset
+      case FetchIsolation.HIGH_WATERMARK => log.highWatermark
+      case FetchIsolation.TXN_COMMITTED => log.lastStableOffset
     }
 
     for (record <- readInfo.records.records.asScala)
@@ -324,7 +324,7 @@ class UnifiedLogTest {
     )), leaderEpoch = 0)
 
     (log.logStartOffset until log.logEndOffset).foreach { offset =>
-      assertNonEmptyFetch(log, offset, FetchLogEnd)
+      assertNonEmptyFetch(log, offset, FetchIsolation.LOG_END)
     }
   }
 
@@ -345,11 +345,11 @@ class UnifiedLogTest {
 
     def assertHighWatermarkBoundedFetches(): Unit = {
       (log.logStartOffset until log.highWatermark).foreach { offset =>
-        assertNonEmptyFetch(log, offset, FetchHighWatermark)
+        assertNonEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK)
       }
 
       (log.highWatermark to log.logEndOffset).foreach { offset =>
-        assertEmptyFetch(log, offset, FetchHighWatermark)
+        assertEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK)
       }
     }
 
@@ -441,11 +441,11 @@ class UnifiedLogTest {
 
     def assertLsoBoundedFetches(): Unit = {
       (log.logStartOffset until log.lastStableOffset).foreach { offset =>
-        assertNonEmptyFetch(log, offset, FetchTxnCommitted)
+        assertNonEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED)
       }
 
       (log.lastStableOffset to log.logEndOffset).foreach { offset =>
-        assertEmptyFetch(log, offset, FetchTxnCommitted)
+        assertEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED)
       }
     }
 
@@ -2941,7 +2941,7 @@ class UnifiedLogTest {
         val readInfo = log.read(
           startOffset = currentLogEndOffset,
           maxLength = Int.MaxValue,
-          isolation = FetchTxnCommitted,
+          isolation = FetchIsolation.TXN_COMMITTED,
           minOneMessage = false)
 
         if (readInfo.records.sizeInBytes() > 0)
@@ -3371,13 +3371,12 @@ class UnifiedLogTest {
     // now check that a fetch includes the aborted transaction
     val fetchDataInfo = log.read(0L,
       maxLength = 2048,
-      isolation = FetchTxnCommitted,
+      isolation = FetchIsolation.TXN_COMMITTED,
       minOneMessage = true)
-    assertEquals(1, fetchDataInfo.abortedTransactions.size)
 
-    assertTrue(fetchDataInfo.abortedTransactions.isDefined)
-    assertEquals(new FetchResponseData.AbortedTransaction().setProducerId(pid).setFirstOffset(0),
-      fetchDataInfo.abortedTransactions.get.head)
+    assertTrue(fetchDataInfo.abortedTransactions.isPresent)
+    assertEquals(1, fetchDataInfo.abortedTransactions.get.size)
+    assertEquals(new FetchResponseData.AbortedTransaction().setProducerId(pid).setFirstOffset(0), fetchDataInfo.abortedTransactions.get.get(0))
   }
 
   @Test

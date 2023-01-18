@@ -40,12 +40,15 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class FetchRequest extends AbstractRequest {
-
     public static final int CONSUMER_REPLICA_ID = -1;
 
     // default values for older versions where a request level limit did not exist
     public static final int DEFAULT_RESPONSE_MAX_BYTES = Integer.MAX_VALUE;
     public static final long INVALID_LOG_START_OFFSET = -1L;
+
+    public static final int ORDINARY_CONSUMER_ID = -1;
+    public static final int DEBUGGING_CONSUMER_ID = -2;
+    public static final int FUTURE_LOCAL_REPLICA_ID = -3;
 
     private final FetchRequestData data;
     private volatile LinkedHashMap<TopicIdPartition, PartitionData> fetchData = null;
@@ -427,6 +430,29 @@ public class FetchRequest extends AbstractRequest {
 
     public static FetchRequest parse(ByteBuffer buffer, short version) {
         return new FetchRequest(new FetchRequestData(new ByteBufferAccessor(buffer), version), version);
+    }
+
+    // Broker ids are non-negative int.
+    public static boolean isValidBrokerId(int brokerId) {
+        return brokerId >= 0;
+    }
+
+    public static boolean isConsumer(int replicaId) {
+        return replicaId < 0 && replicaId != FUTURE_LOCAL_REPLICA_ID;
+    }
+
+    public static String describeReplicaId(int replicaId) {
+        switch (replicaId) {
+            case ORDINARY_CONSUMER_ID: return "consumer";
+            case DEBUGGING_CONSUMER_ID: return "debug consumer";
+            case FUTURE_LOCAL_REPLICA_ID: return "future local replica";
+            default: {
+                if (isValidBrokerId(replicaId))
+                    return "replica [" + replicaId + "]";
+                else
+                    return "invalid replica [" + replicaId + "]";
+            }
+        }
     }
 
     @Override

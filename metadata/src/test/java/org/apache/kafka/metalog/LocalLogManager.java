@@ -501,7 +501,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         this.nodeId = nodeId;
         this.shared = shared;
         this.maxReadOffset = shared.initialMaxReadOffset();
-        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, threadNamePrefix);
+        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext,
+                threadNamePrefix, new ShutdownEvent());
         shared.registerLogManager(this);
     }
 
@@ -601,7 +602,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     public void beginShutdown() {
-        eventQueue.beginShutdown("beginShutdown", () -> {
+        eventQueue.beginShutdown("beginShutdown");
+    }
+
+    class ShutdownEvent implements EventQueue.Event {
+        @Override
+        public void run() throws Exception {
             try {
                 if (initialized && !shutdown) {
                     log.debug("Node {}: beginning shutdown.", nodeId);
@@ -609,13 +615,13 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                     for (MetaLogListenerData listenerData : listeners.values()) {
                         listenerData.beginShutdown();
                     }
-                    shared.unregisterLogManager(this);
+                    shared.unregisterLogManager(LocalLogManager.this);
                 }
             } catch (Exception e) {
                 log.error("Unexpected exception while sending beginShutdown callbacks", e);
             }
             shutdown = true;
-        });
+        }
     }
 
     @Override

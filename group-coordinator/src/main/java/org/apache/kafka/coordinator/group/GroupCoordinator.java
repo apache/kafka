@@ -22,14 +22,20 @@ import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.BufferSupplier;
 
@@ -164,5 +170,49 @@ public interface GroupCoordinator {
         String groupId,
         boolean requireStable
     );
-}
 
+    /**
+     * Commit offsets for a given Group.
+     *
+     * @param context           The request context.
+     * @param request           The OffsetCommitRequest data.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<OffsetCommitResponseData> commitOffsets(
+        RequestContext context,
+        OffsetCommitRequestData request,
+        BufferSupplier bufferSupplier
+    );
+
+    /**
+     * Commit transactional offsets for a given Group.
+     *
+     * @param context           The request context.
+     * @param request           The TnxOffsetCommitRequest data.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<TxnOffsetCommitResponseData> commitTransactionalOffsets(
+        RequestContext context,
+        TxnOffsetCommitRequestData request,
+        BufferSupplier bufferSupplier
+    );
+
+    /**
+     * Delete offsets for a given Group.
+     *
+     * @param context           The request context.
+     * @param request           The OffsetDeleteRequest data.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<OffsetDeleteResponseData> deleteOffsets(
+        RequestContext context,
+        OffsetDeleteRequestData request,
+        BufferSupplier bufferSupplier
+    );
+}

@@ -180,7 +180,10 @@ class BrokerLifecycleManager(
   /**
    * The event queue.
    */
-  private[server] val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
+  private[server] val eventQueue = new KafkaEventQueue(time,
+    logContext,
+    threadNamePrefix.getOrElse(""),
+    new ShutdownEvent())
 
   /**
    * Start the BrokerLifecycleManager.
@@ -239,7 +242,7 @@ class BrokerLifecycleManager(
    * Start shutting down the BrokerLifecycleManager, but do not block.
    */
   def beginShutdown(): Unit = {
-    eventQueue.beginShutdown("beginShutdown", new ShutdownEvent())
+    eventQueue.beginShutdown("beginShutdown");
   }
 
   /**
@@ -470,7 +473,7 @@ class BrokerLifecycleManager(
     override def run(): Unit = {
       if (!initialRegistrationSucceeded) {
         error("Shutting down because we were unable to register with the controller quorum.")
-        eventQueue.beginShutdown("registrationTimeout", new ShutdownEvent())
+        eventQueue.beginShutdown("registrationTimeout");
       }
     }
   }

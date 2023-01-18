@@ -54,7 +54,7 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.log.internals.{AppendOrigin, CleanerConfig, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
 import org.junit.jupiter.params.ParameterizedTest
@@ -70,14 +70,14 @@ object PartitionTest {
     minBytes: Int = 1,
     maxBytes: Int = Int.MaxValue
   ): FetchParams = {
-    FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = replicaId,
-      maxWaitMs = maxWaitMs,
-      minBytes = minBytes,
-      maxBytes = maxBytes,
-      isolation = FetchLogEnd,
-      clientMetadata = None
+    new FetchParams(
+      ApiKeys.FETCH.latestVersion,
+      replicaId,
+      maxWaitMs,
+      minBytes,
+      maxBytes,
+      FetchIsolation.LOG_END,
+      Optional.empty()
     )
   }
 
@@ -86,16 +86,16 @@ object PartitionTest {
     minBytes: Int = 1,
     maxBytes: Int = Int.MaxValue,
     clientMetadata: Option[ClientMetadata] = None,
-    isolation: FetchIsolation = FetchHighWatermark
+    isolation: FetchIsolation = FetchIsolation.HIGH_WATERMARK
   ): FetchParams = {
-    FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = FetchRequest.CONSUMER_REPLICA_ID,
-      maxWaitMs = maxWaitMs,
-      minBytes = minBytes,
-      maxBytes = maxBytes,
-      isolation = isolation,
-      clientMetadata = clientMetadata
+    new FetchParams(
+      ApiKeys.FETCH.latestVersion,
+      FetchRequest.CONSUMER_REPLICA_ID,
+      maxWaitMs,
+      minBytes,
+      maxBytes,
+      isolation,
+      clientMetadata.asJava
     )
   }
 }
@@ -2900,7 +2900,7 @@ class PartitionTest extends AbstractPartitionTest {
     lastFetchedEpoch: Option[Int] = None,
     fetchTimeMs: Long = time.milliseconds(),
     topicId: Uuid = Uuid.ZERO_UUID,
-    isolation: FetchIsolation = FetchHighWatermark
+    isolation: FetchIsolation = FetchIsolation.HIGH_WATERMARK
   ): LogReadInfo = {
     val fetchParams = consumerFetchParams(
       maxBytes = maxBytes,

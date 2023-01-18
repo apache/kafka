@@ -35,6 +35,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import static java.util.concurrent.TimeUnit.HOURS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -165,7 +166,7 @@ public class KafkaEventQueueTest {
         queue.close();
     }
 
-    private final static long ONE_HOUR_NS = TimeUnit.NANOSECONDS.convert(1, TimeUnit.HOURS);
+    private final static long ONE_HOUR_NS = TimeUnit.NANOSECONDS.convert(1, HOURS);
 
     @Test
     public void testScheduleDeferredWithTagReplacement() throws Exception {
@@ -214,7 +215,7 @@ public class KafkaEventQueueTest {
         final AtomicInteger count = new AtomicInteger(0);
         CompletableFuture<Integer> future = new CompletableFuture<>();
         queue.scheduleDeferred("myDeferred",
-            __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + TimeUnit.HOURS.toNanos(1)),
+            __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(1)),
             new FutureEvent<>(future, () -> count.getAndAdd(1)));
         queue.beginShutdown("testShutdownBeforeDeferred");
         assertThrows(ExecutionException.class, () -> future.get());
@@ -257,7 +258,7 @@ public class KafkaEventQueueTest {
         future.complete(null);
         TestUtils.waitForCondition(() -> queue.isEmpty(), "Failed to see the queue become empty.");
         queue.scheduleDeferred("later",
-                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + TimeUnit.HOURS.toNanos(1)),
+                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(1)),
                 () -> { });
         assertFalse(queue.isEmpty());
         queue.scheduleDeferred("soon",
@@ -269,5 +270,146 @@ public class KafkaEventQueueTest {
         assertTrue(queue.isEmpty());
         queue.close();
         assertTrue(queue.isEmpty());
+    }
+
+    /**
+     * Test that we continue handling events after Event#handleException itself throws an exception.
+     */
+    @Test
+    public void testHandleExceptionThrowingAnException() throws Exception {
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+                "testHandleExceptionThrowingAnException");
+        CompletableFuture<Void> initialFuture = new CompletableFuture<>();
+        queue.append(() -> initialFuture.get());
+        AtomicInteger counter = new AtomicInteger(0);
+        queue.append(new EventQueue.Event() {
+            @Override
+            public void run() throws Exception {
+                counter.incrementAndGet();
+                throw new IllegalStateException("First exception");
+            }
+
+            @Override
+            public void handleException(Throwable e) {
+                if (e instanceof IllegalStateException) {
+                    counter.incrementAndGet();
+                    throw new RuntimeException("Second exception");
+                }
+            }
+        });
+        queue.append(() -> counter.incrementAndGet());
+        assertEquals(3, queue.size());
+        initialFuture.complete(null);
+        TestUtils.waitForCondition(() -> counter.get() == 3,
+                "Failed to see all events execute as planned.");
+        queue.close();
+    }
+
+    private static class InterruptableEvent implements EventQueue.Event {
+        private final CompletableFuture<Void> runFuture;
+        private final CompletableFuture<Thread> queueThread;
+        private final AtomicInteger numCallsToRun;
+        private final AtomicInteger numInterruptedExceptionsSeen;
+
+        InterruptableEvent(
+            CompletableFuture<Thread> queueThread,
+            AtomicInteger numCallsToRun,
+            AtomicInteger numInterruptedExceptionsSeen
+        ) {
+            this.runFuture = new CompletableFuture<>();
+            this.queueThread = queueThread;
+            this.numCallsToRun = numCallsToRun;
+            this.numInterruptedExceptionsSeen = numInterruptedExceptionsSeen;
+        }
+
+        @Override
+        public void run() throws Exception {
+            numCallsToRun.incrementAndGet();
+            queueThread.complete(Thread.currentThread());
+            runFuture.get();
+        }
+
+        @Override
+        public void handleException(Throwable e) {
+            if (e instanceof InterruptedException) {
+                numInterruptedExceptionsSeen.incrementAndGet();
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    @Test
+    public void testInterruptedExceptionHandling() throws Exception {
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+                "testInterruptedExceptionHandling");
+        CompletableFuture<Thread> queueThread = new CompletableFuture<>();
+        AtomicInteger numCallsToRun = new AtomicInteger(0);
+        AtomicInteger numInterruptedExceptionsSeen = new AtomicInteger(0);
+        queue.append(new InterruptableEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queue.append(new InterruptableEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queue.append(new InterruptableEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queue.append(new InterruptableEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queueThread.get().interrupt();
+        TestUtils.retryOnExceptionWithTimeout(30000,
+                () -> assertEquals(1, numCallsToRun.get()));
+        TestUtils.retryOnExceptionWithTimeout(30000,
+                () -> assertEquals(3, numInterruptedExceptionsSeen.get()));
+        queue.close();
+    }
+
+    static class ExceptionTrapperEvent implements EventQueue.Event {
+        final CompletableFuture<Throwable> exception = new CompletableFuture<>();
+
+        @Override
+        public void run() throws Exception {
+            exception.complete(null);
+        }
+
+        @Override
+        public void handleException(Throwable e) {
+            exception.complete(e);
+        }
+    }
+
+    @Test
+    public void testInterruptedWithEmptyQueue() throws Exception {
+        CompletableFuture<Void> cleanupFuture = new CompletableFuture<>();
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+                "testInterruptedWithEmptyQueue", () -> cleanupFuture.complete(null));
+        CompletableFuture<Thread> queueThread = new CompletableFuture<>();
+        queue.append(() -> queueThread.complete(Thread.currentThread()));
+        TestUtils.retryOnExceptionWithTimeout(30000, () -> assertEquals(0, queue.size()));
+        queueThread.get().interrupt();
+        cleanupFuture.get();
+        ExceptionTrapperEvent ieTrapper = new ExceptionTrapperEvent();
+        queue.append(ieTrapper);
+        assertEquals(InterruptedException.class, ieTrapper.exception.get().getClass());
+        queue.close();
+        ExceptionTrapperEvent reTrapper = new ExceptionTrapperEvent();
+        queue.append(reTrapper);
+        assertEquals(RejectedExecutionException.class, reTrapper.exception.get().getClass());
+    }
+
+    @Test
+    public void testInterruptedWithDeferredEvents() throws Exception {
+        CompletableFuture<Void> cleanupFuture = new CompletableFuture<>();
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+                "testInterruptedWithDeferredEvents", () -> cleanupFuture.complete(null));
+        CompletableFuture<Thread> queueThread = new CompletableFuture<>();
+        queue.append(() -> queueThread.complete(Thread.currentThread()));
+        ExceptionTrapperEvent ieTrapper1 = new ExceptionTrapperEvent();
+        ExceptionTrapperEvent ieTrapper2 = new ExceptionTrapperEvent();
+        queue.scheduleDeferred("ie2",
+                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(2)),
+                ieTrapper2);
+        queue.scheduleDeferred("ie1",
+                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(1)),
+                ieTrapper1);
+        TestUtils.retryOnExceptionWithTimeout(30000, () -> assertEquals(2, queue.size()));
+        queueThread.get().interrupt();
+        cleanupFuture.get();
+        assertEquals(InterruptedException.class, ieTrapper1.exception.get().getClass());
+        assertEquals(InterruptedException.class, ieTrapper2.exception.get().getClass());
+        queue.close();
     }
 }
