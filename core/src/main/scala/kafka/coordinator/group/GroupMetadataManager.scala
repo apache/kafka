@@ -821,7 +821,7 @@ class GroupMetadataManager(brokerId: Int,
         else currentEpoch
       }
     })
-    if(epochOpt.isPresent) {
+    if (epochOpt.isPresent) {
       epochOpt.getAsInt == updatedEpoch
     } else {
       true
