@@ -297,7 +297,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                     currValueSize = unpackedReversedTimestampAndValueSizes.get(currIndex).valueSize;
                     cumValueSize = cumulativeValueSizes.get(currIndex);
                 } else {
-                    int timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
+                    final int timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
                     currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
                     currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
                     cumValueSize += Math.max(currValueSize, 0);
@@ -311,8 +311,8 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                     // found result
                     if (includeValue) {
                         if (currValueSize >= 0) {
-                            byte[] value = new byte[currValueSize];
-                            int valueSegmentIndex = segmentValue.length - cumValueSize;
+                            final byte[] value = new byte[currValueSize];
+                            final int valueSegmentIndex = segmentValue.length - cumValueSize;
                             System.arraycopy(segmentValue, valueSegmentIndex, value, 0, currValueSize);
                             return new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, value);
                         } else {
@@ -371,7 +371,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             if (isEmpty) {
                 initializeWithRecord(value, timestamp, nextTimestamp);
             } else {
-                int lastIndex = find(minTimestamp, false).index;
+                final int lastIndex = find(minTimestamp, false).index;
                 insertHelper(timestamp, value, lastIndex + 1);
             }
         }
@@ -390,12 +390,12 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             final boolean needsMinTsUpdate = isLastIndex(index - 1);
             truncateDeserHelpersToIndex(index - 1);
             unpackedReversedTimestampAndValueSizes.add(new TimestampAndValueSize(timestamp, value.valueSize()));
-            int prevCumValueSize = deserIndex == -1 ? 0 : cumulativeValueSizes.get(deserIndex);
+            final int prevCumValueSize = deserIndex == -1 ? 0 : cumulativeValueSizes.get(deserIndex);
             cumulativeValueSizes.add(prevCumValueSize + value.value().length);
             deserIndex++;
 
             // update serialization and other props
-            int segmentTimestampIndex = 2 * TIMESTAMP_SIZE + index * (TIMESTAMP_SIZE + VALUE_SIZE);
+            final int segmentTimestampIndex = 2 * TIMESTAMP_SIZE + index * (TIMESTAMP_SIZE + VALUE_SIZE);
             segmentValue = ByteBuffer.allocate(segmentValue.length + TIMESTAMP_SIZE + VALUE_SIZE + value.value().length)
                 .put(segmentValue, 0, segmentTimestampIndex)
                 .putLong(timestamp)
@@ -418,8 +418,8 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             }
             final ValueAndValueSize value = new ValueAndValueSize(valueOrNull);
 
-            int oldValueSize = Math.max(unpackedReversedTimestampAndValueSizes.get(index).valueSize, 0);
-            int oldCumValueSize = cumulativeValueSizes.get(index);
+            final int oldValueSize = Math.max(unpackedReversedTimestampAndValueSizes.get(index).valueSize, 0);
+            final int oldCumValueSize = cumulativeValueSizes.get(index);
 
             final boolean needsMinTsUpdate = isLastIndex(index);
             unpackedReversedTimestampAndValueSizes.set(index, new TimestampAndValueSize(timestamp, value.valueSize()));
@@ -427,7 +427,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             truncateDeserHelpersToIndex(index);
 
             // update serialization and other props
-            int segmentTimestampIndex = 2 * TIMESTAMP_SIZE + index * (TIMESTAMP_SIZE + VALUE_SIZE);
+            final int segmentTimestampIndex = 2 * TIMESTAMP_SIZE + index * (TIMESTAMP_SIZE + VALUE_SIZE);
             segmentValue = ByteBuffer.allocate(segmentValue.length - oldValueSize + value.value().length)
                 .put(segmentValue, 0, segmentTimestampIndex)
                 .putLong(timestamp)

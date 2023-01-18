@@ -97,7 +97,7 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
         // test inserting at each possible index
         for (int insertIdx = 0; insertIdx <= testCase.records.size(); insertIdx++) {
             // build record to insert
-            long newRecordTimestamp;
+            final long newRecordTimestamp;
             if (insertIdx == 0) {
                 newRecordTimestamp = testCase.records.get(0).timestamp + 1;
                 if (newRecordTimestamp == testCase.nextTimestamp) {
@@ -111,9 +111,9 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
                     continue;
                 }
             }
-            TestRecord newRecord = new TestRecord("new".getBytes(), newRecordTimestamp);
+            final TestRecord newRecord = new TestRecord("new".getBytes(), newRecordTimestamp);
 
-            SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
+            final SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
 
             // insert() first requires a call to find()
             if (insertIdx > 0) {
@@ -122,7 +122,7 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             segmentValue.insert(newRecord.timestamp, newRecord.value, insertIdx);
 
             // create expected results
-            List<TestRecord> expectedRecords = new ArrayList<>(testCase.records);
+            final List<TestRecord> expectedRecords = new ArrayList<>(testCase.records);
             expectedRecords.add(insertIdx, newRecord);
 
             verifySegmentContents(segmentValue, new TestCase("expected", testCase.nextTimestamp, expectedRecords));
@@ -143,16 +143,16 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
                     updatedRecordTimestamp = testCase.records.get(updateIdx).timestamp;
                 }
             }
-            TestRecord updatedRecord = new TestRecord("updated".getBytes(), updatedRecordTimestamp);
+            final TestRecord updatedRecord = new TestRecord("updated".getBytes(), updatedRecordTimestamp);
 
-            SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
+            final SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
 
             // updateRecord() first requires a call to find()
             segmentValue.find(testCase.records.get(updateIdx).timestamp, false);
             segmentValue.updateRecord(updatedRecord.timestamp, updatedRecord.value, updateIdx);
 
             // create expected results
-            List<TestRecord> expectedRecords = new ArrayList<>(testCase.records);
+            final List<TestRecord> expectedRecords = new ArrayList<>(testCase.records);
             expectedRecords.remove(updateIdx);
             expectedRecords.add(updateIdx, updatedRecord);
 
@@ -177,11 +177,11 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
         }
 
         // verify results
-        for (Map.Entry<Long, Integer> entry : expectedRecordIndices.entrySet()) {
-            TestRecord expectedRecord = testCase.records.get(entry.getValue());
-            long expectedValidTo = entry.getValue() == 0 ? testCase.nextTimestamp : testCase.records.get(entry.getValue() - 1).timestamp;
+        for (final Map.Entry<Long, Integer> entry : expectedRecordIndices.entrySet()) {
+            final TestRecord expectedRecord = testCase.records.get(entry.getValue());
+            final long expectedValidTo = entry.getValue() == 0 ? testCase.nextTimestamp : testCase.records.get(entry.getValue() - 1).timestamp;
 
-            SegmentSearchResult result = segmentValue.find(entry.getKey(), true);
+            final SegmentSearchResult result = segmentValue.find(entry.getKey(), true);
 
             assertThat(result.includesValue(), equalTo(true));
             assertThat(result.index(), equalTo(entry.getValue()));
@@ -223,15 +223,15 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
         verifySegmentContents(segmentValue, testCase);
     }
 
-    private static SegmentValue buildSegmentWithInsertLatest(TestCase testCase) {
+    private static SegmentValue buildSegmentWithInsertLatest(final TestCase testCase) {
         if (testCase.records.size() == 0) {
             return RocksDBVersionedStoreSegmentValueFormatter.newSegmentValueWithTombstone(testCase.nextTimestamp);
         }
 
         SegmentValue segmentValue = null;
         for (int recordIdx = testCase.records.size() - 1; recordIdx >= 0; recordIdx--) {
-            TestRecord record = testCase.records.get(recordIdx);
-            long validTo = recordIdx == 0 ? testCase.nextTimestamp : testCase.records.get(recordIdx - 1).timestamp;
+            final TestRecord record = testCase.records.get(recordIdx);
+            final long validTo = recordIdx == 0 ? testCase.nextTimestamp : testCase.records.get(recordIdx - 1).timestamp;
 
             if (segmentValue == null) {
                 // initialize
@@ -248,22 +248,22 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
         return segmentValue;
     }
 
-    private static SegmentValue buildSegmentWithInsertEarliest(TestCase testCase) {
+    private static SegmentValue buildSegmentWithInsertEarliest(final TestCase testCase) {
         final SegmentValue segmentValue = RocksDBVersionedStoreSegmentValueFormatter.newSegmentValueWithTombstone(testCase.nextTimestamp);
         for (int recordIdx = 0; recordIdx < testCase.records.size(); recordIdx++) {
-            TestRecord record = testCase.records.get(recordIdx);
+            final TestRecord record = testCase.records.get(recordIdx);
             segmentValue.insertAsEarliest(record.timestamp, record.value);
         }
         return segmentValue;
     }
 
-    private static void verifySegmentContents(SegmentValue segmentValue, TestCase expectedRecords) {
+    private static void verifySegmentContents(final SegmentValue segmentValue, final TestCase expectedRecords) {
         // verify expected records
         for (int recordIdx = 0; recordIdx < expectedRecords.records.size(); recordIdx++) {
-            TestRecord expectedRecord = expectedRecords.records.get(recordIdx);
-            long expectedValidTo = recordIdx == 0 ? expectedRecords.nextTimestamp : expectedRecords.records.get(recordIdx - 1).timestamp;
+            final TestRecord expectedRecord = expectedRecords.records.get(recordIdx);
+            final long expectedValidTo = recordIdx == 0 ? expectedRecords.nextTimestamp : expectedRecords.records.get(recordIdx - 1).timestamp;
 
-            SegmentSearchResult result = segmentValue.find(expectedRecord.timestamp, true);
+            final SegmentSearchResult result = segmentValue.find(expectedRecord.timestamp, true);
 
             assertThat(result.index(), equalTo(recordIdx));
             assertThat(result.value(), equalTo(expectedRecord.value));
@@ -281,7 +281,7 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
         final byte[] value;
         final long timestamp;
 
-        TestRecord(byte[] value, long timestamp) {
+        TestRecord(final byte[] value, final long timestamp) {
             this.value = value;
             this.timestamp = timestamp;
         }
@@ -292,11 +292,11 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
         final long nextTimestamp;
         final String name;
 
-        TestCase(String name, long nextTimestamp, TestRecord... records) {
+        TestCase(final String name, final long nextTimestamp, final TestRecord... records) {
             this(name, nextTimestamp, Arrays.asList(records));
         }
 
-        TestCase(String name, long nextTimestamp, List<TestRecord> records) {
+        TestCase(final String name, final long nextTimestamp, final List<TestRecord> records) {
             this.records = records;
             this.nextTimestamp = nextTimestamp;
             this.name = name;
