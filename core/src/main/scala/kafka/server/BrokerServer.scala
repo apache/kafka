@@ -283,6 +283,7 @@ class BrokerServer(
       tokenManager.startup() // does nothing, we just need a token manager in order to compile right now...
 
       // Create group coordinator, but don't start it until we've started replica manager.
+      // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       groupCoordinator = GroupCoordinatorAdapter(
         config,
         replicaManager,
