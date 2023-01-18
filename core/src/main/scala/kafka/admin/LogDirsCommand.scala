@@ -16,13 +16,12 @@
   */
 
 package kafka.admin
-
 import java.io.PrintStream
 import java.util.Properties
-
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Json}
+import kafka.utils.Json
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, LogDirDescription}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Map

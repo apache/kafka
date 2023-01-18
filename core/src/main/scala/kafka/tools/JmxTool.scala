@@ -23,13 +23,13 @@ import java.text.SimpleDateFormat
 import javax.management._
 import javax.management.remote._
 import javax.rmi.ssl.SslRMIClientSocketFactory
-
 import joptsimple.OptionParser
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.math._
-import kafka.utils.{CommandLineUtils, Exit, Logging}
+import kafka.utils.{Exit, Logging}
+import org.apache.kafka.server.util.CommandLineUtils
 
 
 /**

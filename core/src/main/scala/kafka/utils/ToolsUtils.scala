@@ -18,6 +18,7 @@ package kafka.utils
 
 import joptsimple.OptionParser
 import org.apache.kafka.common.{Metric, MetricName}
+import org.apache.kafka.server.util.CommandLineUtils
 
 import scala.collection.mutable
 
@@ -32,7 +33,7 @@ object ToolsUtils {
       org.apache.kafka.common.utils.Utils.getPort(hostPortData) != null
     }
     val isValid = !validHostPort.isEmpty && validHostPort.size == hostPorts.length
-    if(!isValid)
+    if (!isValid)
       CommandLineUtils.printUsageAndDie(parser, "Please provide valid host:port like host1:9091,host2:9092\n ")
   }
 

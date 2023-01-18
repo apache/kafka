@@ -19,11 +19,12 @@
 package kafka.tools
 
 import joptsimple._
-import kafka.utils.{CommandLineUtils, Exit, IncludeList, ToolsUtils}
+import kafka.utils.{Exit, IncludeList, ToolsUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ListTopicsOptions, OffsetSpec}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.CommandLineUtils
 
 import java.util.Properties
 import java.util.concurrent.ExecutionException

@@ -22,14 +22,14 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.AtomicLong
 import java.util.{Properties, Random}
-
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple.OptionException
-import kafka.utils.{CommandLineUtils, ToolsUtils}
+import kafka.utils.ToolsUtils
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
+import org.apache.kafka.server.util.CommandLineUtils
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable

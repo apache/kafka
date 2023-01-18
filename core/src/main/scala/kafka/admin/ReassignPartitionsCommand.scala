@@ -21,7 +21,7 @@ import java.util.Optional
 import java.util.concurrent.ExecutionException
 import kafka.common.AdminCommandFailedException
 import kafka.server.DynamicConfig
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Json, Logging}
+import kafka.utils.{CoreUtils, Exit, Json, Logging}
 import kafka.utils.Implicits._
 import kafka.utils.json.JsonValue
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.{ReplicaNotAvailableException, UnknownTopi
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, KafkaFuture, TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}

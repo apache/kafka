@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
 
@@ -302,7 +303,7 @@ object ConsoleConsumer extends Logging {
     var topicArg: String = _
     var includedTopicsArg: String = _
     var filterSpec: TopicFilter = _
-    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
+    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt))
     val consumerProps = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
@@ -315,7 +316,7 @@ object ConsoleConsumer extends Logging {
       Utils.loadProps(options.valueOf(messageFormatterConfigOpt))
     else
       new Properties()
-    formatterArgs ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
+    formatterArgs ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
     val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
     val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
@@ -352,9 +353,11 @@ object ConsoleConsumer extends Logging {
     } else if (options.has(offsetOpt))
       CommandLineUtils.printUsageAndDie(parser, "The partition is required when offset is specified.")
 
-    def invalidOffset(offset: String): Nothing =
+    def invalidOffset(offset: String): Nothing = {
       CommandLineUtils.printUsageAndDie(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
         "'earliest', 'latest', or a non-negative long.")
+      Exit.exit(1)
+    }
 
     val offsetArg =
       if (options.has(offsetOpt)) {
@@ -409,8 +412,10 @@ object ConsoleConsumer extends Logging {
       try
         parser.parse(args: _*)
       catch {
-        case e: OptionException =>
+        case e: OptionException => {
           CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+          Exit.exit(1)
+        }
       }
     }
   }

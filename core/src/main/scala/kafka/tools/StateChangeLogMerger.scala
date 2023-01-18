@@ -23,12 +23,12 @@ import scala.util.matching.Regex
 import collection.mutable
 import java.util.Date
 import java.text.SimpleDateFormat
+import kafka.utils.{CoreUtils, Exit, Logging}
 
-import kafka.utils.{CommandLineUtils, CoreUtils, Exit, Logging}
 import java.io.{BufferedOutputStream, OutputStream}
 import java.nio.charset.StandardCharsets
-
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.server.util.CommandLineUtils
 
 /**
  * A utility that merges the state change logs (possibly obtained from different brokers and over multiple days).

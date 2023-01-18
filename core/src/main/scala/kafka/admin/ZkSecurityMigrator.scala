@@ -19,11 +19,12 @@ package kafka.admin
 
 import joptsimple.{ArgumentAcceptingOptionSpec, OptionSet}
 import kafka.server.KafkaConfig
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging}
+import kafka.utils.{Exit, Logging}
 import kafka.utils.Implicits._
 import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
@@ -100,6 +101,7 @@ object ZkSecurityMigrator extends Logging {
         false
       case _ =>
         CommandLineUtils.printUsageAndDie(opts.parser, usageMessage)
+        Exit.exit(1)
     }
     val zkUrl = opts.options.valueOf(opts.zkUrlOpt)
     val zkSessionTimeout = opts.options.valueOf(opts.zkSessionTimeoutOpt).intValue

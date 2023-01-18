@@ -24,14 +24,13 @@ import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common.MessageReader
 import kafka.utils.Implicits._
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, ToolsUtils}
+import kafka.utils.{Exit, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.utils.Utils
-
-import scala.jdk.CollectionConverters._
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 object ConsoleProducer {
 
@@ -280,8 +279,8 @@ object ConsoleProducer {
                              else compressionCodecOptionValue
                            else CompressionType.NONE.name
     val readerClass = options.valueOf(messageReaderOpt)
-    val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
-    val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)
+    val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt))
+    val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt))
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
       try
@@ -289,6 +288,7 @@ object ConsoleProducer {
       catch {
         case e: OptionException =>
           CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+          Exit.exit(1)
       }
     }
   }

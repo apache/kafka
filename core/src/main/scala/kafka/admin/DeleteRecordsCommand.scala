@@ -19,14 +19,14 @@ package kafka.admin
 
 import java.io.PrintStream
 import java.util.Properties
-
 import kafka.common.AdminCommandFailedException
 import kafka.utils.json.JsonValue
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Json}
+import kafka.utils.{CoreUtils, Json}
 import org.apache.kafka.clients.admin.{Admin, RecordsToDelete}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq

@@ -18,7 +18,6 @@
 package kafka.admin
 
 import java.util.Properties
-
 import joptsimple._
 import joptsimple.util.EnumConverter
 import kafka.security.authorizer.{AclAuthorizer, AclEntry, AuthorizerUtils}
@@ -33,6 +32,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -202,8 +202,8 @@ object AclCommand extends Logging {
       val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSaslEnabled)
       val authorizerPropertiesWithoutTls =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
-          val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
-          defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
+          val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt)
+          defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, false).asScala
         } else {
           defaultProps
         }
@@ -430,8 +430,8 @@ object AclCommand extends Logging {
     } yield new AccessControlEntry(principal.toString, host, operation, permissionType)
   }
 
-  private def getHosts(opts: AclCommandOptions, hostOptionSpec: ArgumentAcceptingOptionSpec[String],
-                       principalOptionSpec: ArgumentAcceptingOptionSpec[String]): Set[String] = {
+  private def getHosts(opts: AclCommandOptions, hostOptionSpec: OptionSpec[String],
+                       principalOptionSpec: OptionSpec[String]): Set[String] = {
     if (opts.options.has(hostOptionSpec))
       opts.options.valuesOf(hostOptionSpec).asScala.map(_.trim).toSet
     else if (opts.options.has(principalOptionSpec))
@@ -440,7 +440,7 @@ object AclCommand extends Logging {
       Set.empty[String]
   }
 
-  private def getPrincipals(opts: AclCommandOptions, principalOptionSpec: ArgumentAcceptingOptionSpec[String]): Set[KafkaPrincipal] = {
+  private def getPrincipals(opts: AclCommandOptions, principalOptionSpec: OptionSpec[String]): Set[KafkaPrincipal] = {
     if (opts.options.has(principalOptionSpec))
       opts.options.valuesOf(principalOptionSpec).asScala.map(s => JSecurityUtils.parseKafkaPrincipal(s.trim)).toSet
     else
@@ -651,11 +651,11 @@ object AclCommand extends Logging {
       if (actions != 1)
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --add, --remove. ")
 
-      CommandLineUtils.checkInvalidArgs(parser, options, listOpt, Set(producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostsOpt, denyPrincipalsOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, listOpt, producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostsOpt, denyPrincipalsOpt)
 
       //when --producer or --consumer is specified , user should not specify operations as they are inferred and we also disallow --deny-principals and --deny-hosts.
-      CommandLineUtils.checkInvalidArgs(parser, options, producerOpt, Set(operationsOpt, denyPrincipalsOpt, denyHostsOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, consumerOpt, Set(operationsOpt, denyPrincipalsOpt, denyHostsOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, producerOpt, operationsOpt, denyPrincipalsOpt, denyHostsOpt)
+      CommandLineUtils.checkInvalidArgs(parser, options, consumerOpt, operationsOpt, denyPrincipalsOpt, denyHostsOpt)
 
       if (options.has(listPrincipalsOpt) && !options.has(listOpt))
         CommandLineUtils.printUsageAndDie(parser, "The --principal option is only available if --list is set")
