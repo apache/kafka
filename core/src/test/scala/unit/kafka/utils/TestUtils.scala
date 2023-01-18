@@ -1971,16 +1971,23 @@ object TestUtils extends Logging {
     )
   }
 
+  def currentIsr(admin: Admin, partition: TopicPartition): Set[Int] = {
+    val description = admin.describeTopics(Set(partition.topic).asJava)
+      .allTopicNames
+      .get
+      .asScala
+
+    description
+      .values
+      .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
+      .map(_.id)
+      .toSet
+  }
+
   def waitForBrokersInIsr(client: Admin, partition: TopicPartition, brokerIds: Set[Int]): Unit = {
     waitUntilTrue(
       () => {
-        val description = client.describeTopics(Set(partition.topic).asJava).allTopicNames.get.asScala
-        val isr = description
-          .values
-          .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
-          .map(_.id)
-          .toSet
-
+        val isr = currentIsr(client, partition)
         brokerIds.subsetOf(isr)
       },
       s"Expected brokers $brokerIds to be in the ISR for $partition"
