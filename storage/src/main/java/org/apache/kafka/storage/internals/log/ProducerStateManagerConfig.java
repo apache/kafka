@@ -20,14 +20,15 @@ import java.util.Collections;
 import java.util.Set;
 
 public class ProducerStateManagerConfig {
-    public static final Set<String> RECONFIGURABLE_CONFIGS = Collections.singleton("producer.id.expiration.ms");
+    public static final String PRODUCER_ID_EXPIRATION_MS = "producer.id.expiration.ms";
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Collections.singleton(PRODUCER_ID_EXPIRATION_MS);
     private volatile int producerIdExpirationMs;
 
     public ProducerStateManagerConfig(int producerIdExpirationMs) {
         this.producerIdExpirationMs = producerIdExpirationMs;
     }
 
-    public void updateProducerIdExpirationMs(int producerIdExpirationMs) {
+    public void setProducerIdExpirationMs(int producerIdExpirationMs) {
         this.producerIdExpirationMs = producerIdExpirationMs;
     }
 

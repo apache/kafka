@@ -218,7 +218,7 @@ class UnifiedLogTest {
 
     truncateFunc(reopened)(0L)
     assertEquals(None, reopened.firstUnstableOffset)
-    assertTrue(reopened.producerStateManager.activeProducers.isEmpty)
+    assertEquals(java.util.Collections.emptyMap(), reopened.producerStateManager.activeProducers)
   }
 
   @Test

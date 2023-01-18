@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Crc32C;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,11 +73,6 @@ import java.util.stream.Stream;
  * been deleted.
  */
 public class ProducerStateManager {
-    private static final Logger log = LoggerFactory.getLogger(ProducerStateManager.class.getName());
-
-    // Remove these once UnifiedLog moves to storage module.
-    public static final String DELETED_FILE_SUFFIX = ".deleted";
-    public static final String PRODUCER_SNAPSHOT_FILE_SUFFIX = ".snapshot";
 
     public static final long LATE_TRANSACTION_BUFFER_MS = 5 * 60 * 1000;
 
@@ -97,8 +93,22 @@ public class ProducerStateManager {
     private static final int CRC_OFFSET = VERSION_OFFSET + 2;
     private static final int PRODUCER_ENTRIES_OFFSET = CRC_OFFSET + 4;
 
-    private static final Schema PRODUCER_SNAPSHOT_ENTRY_SCHEMA = new Schema(new Field(PRODUCER_ID_FIELD, Type.INT64, "The producer ID"), new Field(PRODUCER_EPOCH_FIELD, Type.INT16, "Current epoch of the producer"), new Field(LAST_SEQUENCE_FIELD, Type.INT32, "Last written sequence of the producer"), new Field(LAST_OFFSET_FIELD, Type.INT64, "Last written offset of the producer"), new Field(OFFSET_DELTA_FIELD, Type.INT32, "The difference of the last sequence and first sequence in the last written batch"), new Field(TIMESTAMP_FIELD, Type.INT64, "Max timestamp from the last written entry"), new Field(COORDINATOR_EPOCH_FIELD, Type.INT32, "The epoch of the last transaction coordinator to send an end transaction marker"), new Field(CURRENT_TXN_FIRST_OFFSET_FIELD, Type.INT64, "The first offset of the on-going transaction (-1 if there is none)"));
-    private static final Schema PID_SNAPSHOT_MAP_SCHEMA = new Schema(new Field(VERSION_FIELD, Type.INT16, "Version of the snapshot file"), new Field(CRC_FIELD, Type.UNSIGNED_INT32, "CRC of the snapshot data"), new Field(PRODUCER_ENTRIES_FIELD, new ArrayOf(PRODUCER_SNAPSHOT_ENTRY_SCHEMA), "The entries in the producer table"));
+    private static final Schema PRODUCER_SNAPSHOT_ENTRY_SCHEMA =
+            new Schema(new Field(PRODUCER_ID_FIELD, Type.INT64, "The producer ID"),
+                    new Field(PRODUCER_EPOCH_FIELD, Type.INT16, "Current epoch of the producer"),
+                    new Field(LAST_SEQUENCE_FIELD, Type.INT32, "Last written sequence of the producer"),
+                    new Field(LAST_OFFSET_FIELD, Type.INT64, "Last written offset of the producer"),
+                    new Field(OFFSET_DELTA_FIELD, Type.INT32, "The difference of the last sequence and first sequence in the last written batch"),
+                    new Field(TIMESTAMP_FIELD, Type.INT64, "Max timestamp from the last written entry"),
+                    new Field(COORDINATOR_EPOCH_FIELD, Type.INT32, "The epoch of the last transaction coordinator to send an end transaction marker"),
+                    new Field(CURRENT_TXN_FIRST_OFFSET_FIELD, Type.INT64, "The first offset of the on-going transaction (-1 if there is none)"));
+    private static final Schema PID_SNAPSHOT_MAP_SCHEMA =
+            new Schema(new Field(VERSION_FIELD, Type.INT16, "Version of the snapshot file"),
+                    new Field(CRC_FIELD, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
+                    new Field(PRODUCER_ENTRIES_FIELD, new ArrayOf(PRODUCER_SNAPSHOT_ENTRY_SCHEMA), "The entries in the producer table"));
+
+    private final Logger log;
+
     private final TopicPartition topicPartition;
     private volatile File logDir;
     private final int maxTransactionTimeoutMs;
@@ -128,6 +138,7 @@ public class ProducerStateManager {
         this.maxTransactionTimeoutMs = maxTransactionTimeoutMs;
         this.producerStateManagerConfig = producerStateManagerConfig;
         this.time = time;
+        log = new LogContext("[ProducerStateManager partition=" + topicPartition + ")").logger(ProducerStateManager.class);
         snapshots = loadSnapshots();
     }
 
@@ -152,7 +163,7 @@ public class ProducerStateManager {
 
 
     /**
-     * Load producer state snapshots by scanning the _logDir.
+     * Load producer state snapshots by scanning the logDir.
      */
     private ConcurrentSkipListMap<Long, SnapshotFile> loadSnapshots() throws IOException {
         ConcurrentSkipListMap<Long, SnapshotFile> offsetToSnapshots = new ConcurrentSkipListMap<>();
@@ -280,7 +291,7 @@ public class ProducerStateManager {
                     updateOldestTxnTimestamp();
                     return;
                 } catch (CorruptSnapshotException e) {
-                    log.warn("Failed to load producer snapshot from '${snapshot.file}': ${e.getMessage}");
+                    log.warn("Failed to load producer snapshot from '{}': {}", snapshot.file(), e.getMessage());
                     removeAndDeleteSnapshot(snapshot.offset);
                 }
             } else {
@@ -353,9 +364,9 @@ public class ProducerStateManager {
      */
     public void update(ProducerAppendInfo appendInfo) {
         if (appendInfo.producerId() == RecordBatch.NO_PRODUCER_ID)
-            throw new IllegalArgumentException("Invalid producer id " + appendInfo.producerId() + " passed to update " + "for partition $topicPartition");
+            throw new IllegalArgumentException("Invalid producer id " + appendInfo.producerId() + " passed to update " + "for partition" + topicPartition);
 
-        log.trace("Updated producer " + appendInfo.producerId() + " state to" + appendInfo);
+        log.trace("Updated producer {} state to {}", appendInfo.producerId(), appendInfo);
         ProducerStateEntry updatedEntry = appendInfo.toEntry();
         ProducerStateEntry producerStateEntry = producers.get(appendInfo.producerId());
         if (producerStateEntry != null) {
@@ -412,7 +423,7 @@ public class ProducerStateManager {
     }
 
     private File producerSnapshotFile(File logDir, long offset) {
-        return new File(logDir, filenamePrefixFromOffset(offset) + PRODUCER_SNAPSHOT_FILE_SUFFIX);
+        return new File(logDir, filenamePrefixFromOffset(offset) + LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
     }
 
     /**
@@ -523,7 +534,7 @@ public class ProducerStateManager {
     public void completeTxn(CompletedTxn completedTxn) {
         TxnMetadata txnMetadata = ongoingTxns.remove(completedTxn.firstOffset);
         if (txnMetadata == null)
-            throw new IllegalArgumentException("Attempted to complete transaction $completedTxn on partition $topicPartition " + "which was not started");
+            throw new IllegalArgumentException("Attempted to complete transaction " + completedTxn + " on partition " + topicPartition + "which was not started");
 
         txnMetadata.lastOffset = OptionalLong.of(completedTxn.lastOffset);
         unreplicatedTxns.put(completedTxn.firstOffset, txnMetadata);
@@ -573,10 +584,10 @@ public class ProducerStateManager {
             // deletion, so ignoring the exception here just means that the intended operation was
             // already completed.
             try {
-                snapshotFile.renameTo(DELETED_FILE_SUFFIX);
+                snapshotFile.renameTo(LogFileUtils.DELETED_FILE_SUFFIX);
                 return Optional.of(snapshotFile);
             } catch (NoSuchFileException ex) {
-                log.info("Failed to rename producer state snapshot ${snapshot.file.getAbsoluteFile} with deletion suffix because it was already deleted");
+                log.info("Failed to rename producer state snapshot {} with deletion suffix because it was already deleted", snapshotFile.file().getAbsoluteFile());
             }
         }
         return Optional.empty();
@@ -589,15 +600,16 @@ public class ProducerStateManager {
 
             Short version = struct.getShort(VERSION_FIELD);
             if (version != PRODUCER_SNAPSHOT_VERSION)
-                throw new CorruptSnapshotException("Snapshot contained an unknown file version $version");
+                throw new CorruptSnapshotException("Snapshot contained an unknown file version " + version);
 
             long crc = struct.getUnsignedInt(CRC_FIELD);
             long computedCrc = Crc32C.compute(buffer, PRODUCER_ENTRIES_OFFSET, buffer.length - PRODUCER_ENTRIES_OFFSET);
             if (crc != computedCrc)
-                throw new CorruptSnapshotException("Snapshot is corrupt (CRC is no longer valid). " + "Stored crc: $crc. Computed crc: $computedCrc");
+                throw new CorruptSnapshotException("Snapshot is corrupt (CRC is no longer valid). " + "Stored crc: " + crc + ". Computed crc: " + computedCrc);
 
-            List<ProducerStateEntry> entries = new ArrayList<>();
-            for (Object producerEntryObj : struct.getArray(PRODUCER_ENTRIES_FIELD)) {
+            Object[] producerEntryFields = struct.getArray(PRODUCER_ENTRIES_FIELD);
+            List<ProducerStateEntry> entries = new ArrayList<>(producerEntryFields.length);
+            for (Object producerEntryObj : producerEntryFields) {
                 Struct producerEntryStruct = (Struct) producerEntryObj;
                 long producerId = producerEntryStruct.getLong(PRODUCER_ID_FIELD);
                 short producerEpoch = producerEntryStruct.getShort(PRODUCER_EPOCH_FIELD);
@@ -630,7 +642,8 @@ public class ProducerStateManager {
             Struct producerEntryStruct = struct.instance(PRODUCER_ENTRIES_FIELD);
             producerEntryStruct.set(PRODUCER_ID_FIELD, producerId)
                     .set(PRODUCER_EPOCH_FIELD, entry.producerEpoch())
-                    .set(LAST_SEQUENCE_FIELD, entry.lastSeq()).set(LAST_OFFSET_FIELD, entry.lastDataOffset())
+                    .set(LAST_SEQUENCE_FIELD, entry.lastSeq())
+                    .set(LAST_OFFSET_FIELD, entry.lastDataOffset())
                     .set(OFFSET_DELTA_FIELD, entry.lastOffsetDelta())
                     .set(TIMESTAMP_FIELD, entry.lastTimestamp())
                     .set(COORDINATOR_EPOCH_FIELD, entry.coordinatorEpoch())
@@ -654,14 +667,17 @@ public class ProducerStateManager {
     }
 
     private static boolean isSnapshotFile(File file) {
-        return file.getName().endsWith(PRODUCER_SNAPSHOT_FILE_SUFFIX);
+        return file.getName().endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
     }
 
     // visible for testing
     public static List<SnapshotFile> listSnapshotFiles(File dir) throws IOException {
         if (dir.exists() && dir.isDirectory()) {
             try (Stream<Path> paths = Files.list(dir.toPath())) {
-                return paths.filter(path -> path.toFile().isFile() && isSnapshotFile(path.toFile())).map(path -> new SnapshotFile(path.toFile())).collect(Collectors.toList());
+                return paths.filter(path -> {
+                    File file = path.toFile();
+                    return file.isFile() && isSnapshotFile(file);
+                }).map(path -> new SnapshotFile(path.toFile())).collect(Collectors.toList());
             }
         } else {
             return Collections.emptyList();

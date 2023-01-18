@@ -17,6 +17,8 @@
 package org.apache.kafka.storage.internals.log;
 
 public final class LogFileUtils {
+    public static final String PRODUCER_SNAPSHOT_FILE_SUFFIX = ".snapshot";
+    public static final String DELETED_FILE_SUFFIX = ".deleted";
 
     private LogFileUtils() {
     }

@@ -1036,13 +1036,13 @@ class DynamicProducerStateManagerConfig(val producerStateManagerConfig: Producer
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     if (producerStateManagerConfig.producerIdExpirationMs() != newConfig.producerIdExpirationMs) {
       info(s"Reconfigure ${KafkaConfig.ProducerIdExpirationMsProp} from ${producerStateManagerConfig.producerIdExpirationMs()} to ${newConfig.producerIdExpirationMs}")
-      producerStateManagerConfig.updateProducerIdExpirationMs(newConfig.producerIdExpirationMs)
+      producerStateManagerConfig.setProducerIdExpirationMs(newConfig.producerIdExpirationMs)
     }
   }
 
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     if (newConfig.producerIdExpirationMs < 0)
-      throw new ConfigException(s"${KafkaConfig.ProducerIdExpirationMsProp} cannot be less than 0, current value is ${newConfig.producerIdExpirationMs}")
+      throw new ConfigException(s"${KafkaConfig.ProducerIdExpirationMsProp} cannot be less than 0, current value is ${producerStateManagerConfig.producerIdExpirationMs}")
   }
 
   override def reconfigurableConfigs: Set[String] = ProducerStateManagerConfig.RECONFIGURABLE_CONFIGS.asScala
