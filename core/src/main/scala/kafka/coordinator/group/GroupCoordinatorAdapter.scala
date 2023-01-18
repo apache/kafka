@@ -567,11 +567,7 @@ private[group] class GroupCoordinatorAdapter(
     partitionIndex: Int,
     partitionLeaderEpoch: OptionalInt
   ): Unit = {
-    coordinator.onResignation(partitionIndex, toOption(partitionLeaderEpoch))
-  }
-
-  private def toOption(optional: OptionalInt): Option[Int] = {
-    if (optional.isPresent) Some(optional.getAsInt) else None
+    coordinator.onResignation(partitionIndex, partitionLeaderEpoch)
   }
 
   override def offsetsTopicConfigs(): Properties = {
