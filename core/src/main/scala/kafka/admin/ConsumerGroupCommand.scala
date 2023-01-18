@@ -691,7 +691,8 @@ object ConsumerGroupCommand extends Logging {
     // Visibility for testing
     protected def createAdminClient(configOverrides: Map[String, String]): Admin = {
       val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
-      props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+      if (opts.options.has(opts.bootstrapServerOpt))
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
       configOverrides.forKeyValue { (k, v) => props.put(k, v)}
       Admin.create(props)
     }
@@ -969,7 +970,7 @@ object ConsumerGroupCommand extends Logging {
   }
 
   class ConsumerGroupCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
-    val BootstrapServerDoc = "REQUIRED: The server(s) to connect to."
+    val BootstrapServerDoc = "The server(s) to connect to."
     val GroupDoc = "The consumer group we wish to act on."
     val TopicDoc = "The topic whose consumer group information should be deleted or topic whose should be included in the reset offset process. " +
       "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
@@ -1090,8 +1091,6 @@ object ConsumerGroupCommand extends Logging {
     val allDeleteOffsetsOpts = immutable.Set[OptionSpec[_]](groupOpt, topicOpt)
 
     def checkArgs(): Unit = {
-
-      CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
       if (options.has(describeOpt)) {
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))

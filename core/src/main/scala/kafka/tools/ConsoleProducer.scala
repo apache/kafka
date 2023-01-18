@@ -24,7 +24,7 @@ import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common.MessageReader
 import kafka.utils.Implicits._
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, ToolsUtils}
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
@@ -91,7 +91,7 @@ object ConsoleProducer {
 
     if (config.bootstrapServer != null)
       props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
-    else
+    else if (config.brokerList != null)
       props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
 
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
@@ -136,8 +136,7 @@ object ConsoleProducer {
       .withRequiredArg
       .describedAs("broker-list")
       .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED unless --broker-list(deprecated) is specified. The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
-      .requiredUnless("broker-list")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
@@ -268,9 +267,6 @@ object ConsoleProducer {
 
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val brokerList = options.valueOf(brokerListOpt)
-
-    val brokerHostsAndPorts = options.valueOf(if (options.has(bootstrapServerOpt)) bootstrapServerOpt else brokerListOpt)
-    ToolsUtils.validatePortOrDie(parser, brokerHostsAndPorts)
 
     val sync = options.has(syncOpt)
     val compressionCodecOptionValue = options.valueOf(compressionCodecOpt)

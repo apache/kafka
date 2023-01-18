@@ -148,7 +148,9 @@ object ConsoleConsumer extends Logging {
     props ++= config.consumerProps
     props ++= config.extraConsumerProps
     setAutoOffsetResetValue(config, props)
-    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
+
+    if (config.bootstrapServer != null)
+      props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     if (props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) == null)
       props.put(ConsumerConfig.CLIENT_ID_CONFIG, "console-consumer")
     CommandLineUtils.maybeMergeOptions(
@@ -264,7 +266,7 @@ object ConsoleConsumer extends Logging {
       .ofType(classOf[java.lang.Integer])
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
       "skip it instead of halt.")
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "The server(s) to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
@@ -374,8 +376,6 @@ object ConsoleConsumer extends Logging {
       }
       else if (fromBeginning) ListOffsetsRequest.EARLIEST_TIMESTAMP
       else ListOffsetsRequest.LATEST_TIMESTAMP
-
-    CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
     // if the group id is provided in more than place (through different means) all values must be the same
     val groupIdsProvided = Set(
