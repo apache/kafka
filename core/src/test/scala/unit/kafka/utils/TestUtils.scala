@@ -1976,6 +1976,7 @@ object TestUtils extends Logging {
       .allTopicNames
       .get
       .asScala
+
     description
       .values
       .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
