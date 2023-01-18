@@ -1778,6 +1778,7 @@ project(':tools') {
   archivesBaseName = "kafka-tools"
 
   dependencies {
+    implementation project(':core')
     implementation project(':clients')
     implementation project(':server-common')
     implementation project(':log4j-appender')
@@ -1790,6 +1791,8 @@ project(':tools') {
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.joptSimple
+    implementation libs.scalaCollectionCompat
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
@@ -1942,6 +1945,7 @@ project(':streams') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
+    testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j

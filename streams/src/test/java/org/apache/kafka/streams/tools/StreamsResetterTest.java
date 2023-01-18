@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.tools;
 
-import kafka.tools.StreamsResetter;
+import org.apache.kafka.tools.StreamsResetter;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
