@@ -356,8 +356,6 @@ object ConsoleConsumer extends Logging {
     def invalidOffset(offset: String): Nothing =
       ToolsUtils.printUsageAndExit(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
         "'earliest', 'latest', or a non-negative long.")
-      Exit.exit(1)
-    }
 
     val offsetArg =
       if (options.has(offsetOpt)) {

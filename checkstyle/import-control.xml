@@ -347,7 +347,7 @@
 
   <subpackage name="server">
     <allow pkg="org.apache.kafka.common" />
-    <allow pkg="joptsimple" />
+    <allow pkg="joptsimple"/>
 
     <!-- This is required to make AlterConfigPolicyTest work. -->
     <allow pkg="org.apache.kafka.server.policy" />
@@ -407,7 +407,8 @@
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
     <allow pkg="kafka.test" />
-    <allow pkg="joptsimple" />
+    <allow pkg="joptsimple"/>
+    <allow pkg="javax.rmi.ssl"/>
   </subpackage>
 
   <subpackage name="trogdor">
