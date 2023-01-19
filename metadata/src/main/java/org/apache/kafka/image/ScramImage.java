@@ -52,16 +52,6 @@ public final class ScramImage {
         }
     }
 
-//    public void write(Consumer<List<ApiMessageAndVersion>> out) {
-//        List<ApiMessageAndVersion> batch = new ArrayList<>();
-//        for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
-//            for (Entry<String, ScramCredentialData> userEntry : mechanismEntry.getValue().entrySet()) {
-//                batch.add(new ApiMessageAndVersion(userEntry.getValue().toRecord(userEntry.getKey(), mechanismEntry.getKey()), (short) 0));
-//            }
-//        }
-//        out.accept(batch);
-//    }
-
     public Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms() {
         return mechanisms;
     }
