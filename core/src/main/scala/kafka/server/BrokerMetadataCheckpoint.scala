@@ -158,7 +158,7 @@ object BrokerMetadataCheckpoint extends Logging {
   def getBrokerMetadataAndOfflineDirs(
     logDirs: collection.Seq[String],
     ignoreMissing: Boolean,
-    kraftMode: Boolean = false
+    kraftMode: Boolean
   ): (RawMetaProperties, collection.Seq[String]) = {
     require(logDirs.nonEmpty, "Must have at least one log dir to read meta.properties")
 
