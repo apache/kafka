@@ -61,6 +61,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.admin.AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG;
+
 public class InternalTopicManager {
     private final static String BUG_ERROR_MESSAGE = "This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the dev-mailing list (https://kafka.apache.org/contact).";
@@ -522,7 +524,7 @@ public class InternalTopicManager {
         for (final Map.Entry<String, KafkaFuture<TopicDescription>> topicFuture : futures.entrySet()) {
             final String topicName = topicFuture.getKey();
             try {
-                final TopicDescription topicDescription = topicFuture.getValue().get(5000, TimeUnit.MILLISECONDS);
+                final TopicDescription topicDescription = topicFuture.getValue().get(Long.parseLong(DEFAULT_API_TIMEOUT_MS_CONFIG), TimeUnit.MILLISECONDS);
                 existedTopicPartition.put(topicName, topicDescription.partitions().size());
             } catch (final InterruptedException fatalException) {
                 // this should not happen; if it ever happens it indicate a bug
@@ -548,7 +550,7 @@ public class InternalTopicManager {
                 tempUnknownTopics.add(topicName);
                 log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
                     "Error message was: {}", topicName, retriableException.toString());
-            } catch (java.util.concurrent.TimeoutException e) {
+            } catch (final java.util.concurrent.TimeoutException e) {
                 throw new RuntimeException(e);
             }
         }
