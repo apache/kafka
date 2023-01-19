@@ -141,7 +141,7 @@ object KafkaRaftServer {
   def initializeLogDirs(config: KafkaConfig): (MetaProperties, BootstrapMetadata, Seq[String]) = {
     val logDirs = (config.logDirs.toSet + config.metadataLogDir).toSeq
     val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
-      getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
+      getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false, kraftMode = true)
 
     if (offlineDirs.contains(config.metadataLogDir)) {
       throw new KafkaException("Cannot start server since `meta.properties` could not be " +
