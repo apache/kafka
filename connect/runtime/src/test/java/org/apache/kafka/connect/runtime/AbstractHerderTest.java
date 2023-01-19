@@ -48,9 +48,7 @@ import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.FutureCallback;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -258,10 +256,9 @@ public class AbstractHerderTest {
 
         when(configStore.contains(CONN1)).thenReturn(true);
 
-        Callback<Void> cb = new FutureCallback<>();
-        herder.pauseConnector(CONN1, cb);
+        herder.pauseConnector(CONN1);
 
-        verify(configStore).putTargetState(CONN1, TargetState.PAUSED, cb);
+        verify(configStore).putTargetState(CONN1, TargetState.PAUSED);
     }
 
     @Test
@@ -272,10 +269,9 @@ public class AbstractHerderTest {
 
         when(configStore.contains(CONN1)).thenReturn(true);
 
-        Callback<Void> cb = new FutureCallback<>();
-        herder.resumeConnector(CONN1, cb);
+        herder.resumeConnector(CONN1);
 
-        verify(configStore).putTargetState(CONN1, TargetState.STARTED, cb);
+        verify(configStore).putTargetState(CONN1, TargetState.STARTED);
     }
 
     @Test

@@ -22,7 +22,6 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
@@ -686,7 +685,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testCreateConnector() {
+    public void testCreateConnector() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
         expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
@@ -705,12 +704,8 @@ public class DistributedHerderTest {
         });
 
         // CONN2 is new, should succeed
-        Capture<Callback<Void>> configBackingStoreCallback = newCapture();
-        configBackingStore.putConnectorConfig(EasyMock.eq(CONN2), EasyMock.eq(CONN2_CONFIG), capture(configBackingStoreCallback));
-        PowerMock.expectLastCall().andAnswer(() -> {
-            configBackingStoreCallback.getValue().onCompletion(null, null);
-            return null;
-        });
+        configBackingStore.putConnectorConfig(CONN2, CONN2_CONFIG);
+        PowerMock.expectLastCall();
         ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, Collections.emptyList(),
             ConnectorType.SOURCE);
         putConnectorCallback.onCompletion(null, new Herder.Created<>(true, info));
@@ -763,13 +758,11 @@ public class DistributedHerderTest {
             return null;
         });
 
-        Capture<Callback<Void>> configBackingStoreCallback = newCapture();
-        configBackingStore.putConnectorConfig(EasyMock.eq(CONN2), EasyMock.eq(CONN2_CONFIG), capture(configBackingStoreCallback));
-        PowerMock.expectLastCall().andAnswer(() -> {
-            configBackingStoreCallback.getValue().onCompletion(new TopicAuthorizationException(Collections.singleton("connect-configs")), null);
-            return null;
-        });
-        putConnectorCallback.onCompletion(EasyMock.anyObject(TopicAuthorizationException.class), EasyMock.isNull());
+        configBackingStore.putConnectorConfig(CONN2, CONN2_CONFIG);
+        PowerMock.expectLastCall().andThrow(new ConnectException("Error writing connector configuration to Kafka"));
+
+        // verify that the exception from config backing store write is propagated via the callback
+        putConnectorCallback.onCompletion(EasyMock.anyObject(ConnectException.class), EasyMock.isNull());
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
@@ -2656,10 +2649,8 @@ public class DistributedHerderTest {
         member.wakeup();
         PowerMock.expectLastCall();
 
-        Capture<Callback<Void>> configBackingStoreCallback = newCapture();
-        configBackingStore.putConnectorConfig(EasyMock.eq(CONN1), EasyMock.eq(CONN1_CONFIG_UPDATED), capture(configBackingStoreCallback));
+        configBackingStore.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED);
         PowerMock.expectLastCall().andAnswer(() -> {
-            configBackingStoreCallback.getValue().onCompletion(null, null);
             // Simulate response to writing config + waiting until end of log to be read
             configUpdateListener.onConnectorConfigUpdate(CONN1);
             return null;

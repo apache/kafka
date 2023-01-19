@@ -20,7 +20,6 @@ import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
-import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collections;
@@ -89,7 +88,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
     }
 
     @Override
-    public synchronized void putConnectorConfig(String connector, Map<String, String> properties, Callback<Void> callback) {
+    public synchronized void putConnectorConfig(String connector, Map<String, String> properties) {
         ConnectorState state = connectors.get(connector);
         if (state == null)
             connectors.put(connector, new ConnectorState(properties));
@@ -139,13 +138,12 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
     }
 
     @Override
-    public synchronized void putTargetState(String connector, TargetState state, Callback<Void> cb) {
+    public synchronized void putTargetState(String connector, TargetState state) {
         ConnectorState connectorState = connectors.get(connector);
         if (connectorState == null)
             throw new IllegalArgumentException("No connector `" + connector + "` configured");
 
         connectorState.targetState = state;
-        cb.onCompletion(null, null);
 
         if (updateListener != null)
             updateListener.onConnectorTargetStateChange(connector);

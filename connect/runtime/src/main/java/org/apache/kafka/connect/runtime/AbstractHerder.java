@@ -235,17 +235,17 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public void pauseConnector(String connector, Callback<Void> callback) {
+    public void pauseConnector(String connector) {
         if (!configBackingStore.contains(connector))
             throw new NotFoundException("Unknown connector " + connector);
-        configBackingStore.putTargetState(connector, TargetState.PAUSED, callback);
+        configBackingStore.putTargetState(connector, TargetState.PAUSED);
     }
 
     @Override
-    public void resumeConnector(String connector, Callback<Void> callback) {
+    public void resumeConnector(String connector) {
         if (!configBackingStore.contains(connector))
             throw new NotFoundException("Unknown connector " + connector);
-        configBackingStore.putTargetState(connector, TargetState.STARTED, callback);
+        configBackingStore.putTargetState(connector, TargetState.STARTED);
     }
 
     @Override

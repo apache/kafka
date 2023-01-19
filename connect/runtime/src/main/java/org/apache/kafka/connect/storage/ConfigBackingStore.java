@@ -19,7 +19,6 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
-import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collection;
@@ -52,9 +51,8 @@ public interface ConfigBackingStore {
      * Update the configuration for a connector.
      * @param connector name of the connector
      * @param properties the connector configuration
-     * @param callback the callback to be invoked after the put is complete; can be {@code null} if no callback is desired
      */
-    void putConnectorConfig(String connector, Map<String, String> properties, Callback<Void> callback);
+    void putConnectorConfig(String connector, Map<String, String> properties);
 
     /**
      * Remove configuration for a connector
@@ -88,9 +86,8 @@ public interface ConfigBackingStore {
      * Transition a connector to a new target state (e.g. paused).
      * @param connector name of the connector
      * @param state the state to transition to
-     * @param callback the callback to be invoked after the put is complete; can be {@code null} if no callback is desired
      */
-    void putTargetState(String connector, TargetState state, Callback<Void> callback);
+    void putTargetState(String connector, TargetState state);
 
     /**
      * Store a new {@link SessionKey} that can be used to validate internal (i.e., non-user-triggered) inter-worker communication.

@@ -484,13 +484,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
      * and the write fails
      */
     @Override
-    public void putConnectorConfig(String connector, Map<String, String> properties, Callback<Void> callback) {
+    public void putConnectorConfig(String connector, Map<String, String> properties) {
         log.debug("Writing connector configuration for connector '{}'", connector);
         Struct connectConfig = new Struct(CONNECTOR_CONFIGURATION_V0);
         connectConfig.put("properties", properties);
         byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
         try {
-            sendPrivileged(CONNECTOR_KEY(connector), serializedConfig, callback);
+            sendPrivileged(CONNECTOR_KEY(connector), serializedConfig);
             configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write connector configuration to Kafka: ", e);
@@ -561,7 +561,12 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
             log.debug("Writing configuration for connector '{}' task {}", connector, index);
             ConnectorTaskId connectorTaskId = new ConnectorTaskId(connector, index);
-            sendPrivileged(TASK_KEY(connectorTaskId), serializedConfig);
+            try {
+                sendPrivileged(TASK_KEY(connectorTaskId), serializedConfig);
+            } catch (ExecutionException | InterruptedException e) {
+                log.error("Failed to write task configuration to Kafka", e);
+                throw new ConnectException("Failed to write task configuration to Kafka", e);
+            }
             index++;
         }
 
@@ -601,15 +606,19 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
      * invoked before invoking this method.
      * @param connector the name of the connector
      * @param state the desired target state for the connector
-     * @param callback the callback to be invoked after the target state has been written; may not be {@code null}
      */
     @Override
-    public void putTargetState(String connector, TargetState state, Callback<Void> callback) {
+    public void putTargetState(String connector, TargetState state) {
         Struct connectTargetState = new Struct(TARGET_STATE_V0);
         connectTargetState.put("state", state.name());
         byte[] serializedTargetState = converter.fromConnectData(topic, TARGET_STATE_V0, connectTargetState);
         log.debug("Writing target state {} for connector {}", state, connector);
-        configLog.send(TARGET_STATE_KEY(connector), serializedTargetState, (metadata, exception) -> callback.onCompletion(exception, null));
+        try {
+            configLog.send(TARGET_STATE_KEY(connector), serializedTargetState).get();
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Failed to write target state to Kafka", e);
+            throw new ConnectException("Error writing target state to Kafka", e);
+        }
     }
 
     /**
@@ -733,17 +742,9 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier);
     }
 
-    private void sendPrivileged(String key, byte[] value) {
-        sendPrivileged(key, value, null);
-    }
-
-    private void sendPrivileged(String key, byte[] value, Callback<Void> callback) {
+    private void sendPrivileged(String key, byte[] value) throws ExecutionException, InterruptedException {
         if (!usesFencableWriter) {
-            configLog.send(key, value, (metadata, exception) -> {
-                if (callback != null) {
-                    callback.onCompletion(exception, null);
-                }
-            });
+            configLog.send(key, value).get();
             return;
         }
 
@@ -753,11 +754,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         try {
             fencableProducer.beginTransaction();
-            fencableProducer.send(new ProducerRecord<>(topic, key, value), (metadata, exception) -> {
-                if (callback != null) {
-                    callback.onCompletion(exception, null);
-                }
-            });
+            fencableProducer.send(new ProducerRecord<>(topic, key, value));
             fencableProducer.commitTransaction();
         } catch (Exception e) {
             log.warn("Failed to perform fencable send to config topic", e);

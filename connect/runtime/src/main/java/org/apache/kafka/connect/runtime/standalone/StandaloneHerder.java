@@ -219,7 +219,7 @@ public class StandaloneHerder extends AbstractHerder {
                 created = true;
             }
 
-            configBackingStore.putConnectorConfig(connName, config, null);
+            configBackingStore.putConnectorConfig(connName, config);
 
             startConnector(connName, (error, result) -> {
                 if (error != null) {

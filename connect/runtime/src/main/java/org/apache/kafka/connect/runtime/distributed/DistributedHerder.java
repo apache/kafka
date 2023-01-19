@@ -1058,19 +1058,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             }
 
                             log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
-                            Callback<Void> cb = (err, result) -> {
-                                if (err != null) {
-                                    // producer send error
-                                    callback.onCompletion(err, null);
-                                } else {
-                                    // Note that we use the updated connector config despite the fact that we don't have an updated
-                                    // snapshot yet. The existing task info should still be accurate.
-                                    callback.onCompletion(null, new Created<>(!exists, new ConnectorInfo(connName, config, configState.tasks(connName),
-                                            connectorType(config))));
-                                }
-                            };
+                            writeToConfigTopicAsLeader(() -> configBackingStore.putConnectorConfig(connName, config));
 
-                            writeToConfigTopicAsLeader(() -> configBackingStore.putConnectorConfig(connName, config, cb));
+                            // Note that we use the updated connector config despite the fact that we don't have an updated
+                            // snapshot yet. The existing task info should still be accurate.
+                            ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
+                                connectorType(config));
+                            callback.onCompletion(null, new Created<>(!exists, info));
                             return null;
                         },
                         forwardErrorCallback(callback)
@@ -1488,7 +1482,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      * exclusively by the leader. For example, {@link ConfigBackingStore#putTargetState(String, TargetState)} does not require this
      * method, as it can be invoked by any worker in the cluster.
      * @param write the action that writes to the config topic, such as {@link ConfigBackingStore#putSessionKey(SessionKey)} or
-     *              {@link ConfigBackingStore#putConnectorConfig(String, Map, Callback)}.
+     *              {@link ConfigBackingStore#putConnectorConfig(String, Map)}.
      */
     private void writeToConfigTopicAsLeader(Runnable write) {
         try {

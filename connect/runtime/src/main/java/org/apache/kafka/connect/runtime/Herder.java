@@ -248,17 +248,15 @@ public interface Herder {
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
      * of its tasks.
      * @param connector name of the connector
-     * @param callback callback to invoke upon completion
      */
-    void pauseConnector(String connector, Callback<Void> callback);
+    void pauseConnector(String connector);
 
     /**
      * Resume the connector. This call will asynchronously start the connector and its tasks (if
      * not started already).
      * @param connector name of the connector
-     * @param callback callback to invoke upon completion
      */
-    void resumeConnector(String connector, Callback<Void> callback);
+    void resumeConnector(String connector);
 
     /**
      * Returns a handle to the plugin factory used by this herder and its worker.

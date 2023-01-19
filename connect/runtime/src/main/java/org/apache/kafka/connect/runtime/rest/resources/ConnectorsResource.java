@@ -292,10 +292,8 @@ public class ConnectorsResource implements ConnectResource {
     @Path("/{connector}/pause")
     @Operation(summary = "Pause the specified connector",
                description = "This operation is idempotent and has no effects if the connector is already paused")
-    public Response pauseConnector(@PathParam("connector") String connector, final @Context HttpHeaders headers) throws Throwable {
-        FutureCallback<Void> cb = new FutureCallback<>();
-        herder.pauseConnector(connector, cb);
-        completeRequest(cb);
+    public Response pauseConnector(@PathParam("connector") String connector, final @Context HttpHeaders headers) {
+        herder.pauseConnector(connector);
         return Response.accepted().build();
     }
 
@@ -303,10 +301,8 @@ public class ConnectorsResource implements ConnectResource {
     @Path("/{connector}/resume")
     @Operation(summary = "Resume the specified connector",
                description = "This operation is idempotent and has no effects if the connector is already running")
-    public Response resumeConnector(@PathParam("connector") String connector) throws Throwable {
-        FutureCallback<Void> cb = new FutureCallback<>();
-        herder.resumeConnector(connector, cb);
-        completeRequest(cb);
+    public Response resumeConnector(@PathParam("connector") String connector) {
+        herder.resumeConnector(connector);
         return Response.accepted().build();
     }
 
@@ -389,14 +385,6 @@ public class ConnectorsResource implements ConnectResource {
                 throw new BadRequestException("Connector name configuration (" + includedName + ") doesn't match connector name in the URL (" + connectorName + ")");
         } else {
             connectorConfig.put(ConnectorConfig.NAME_CONFIG, connectorName);
-        }
-    }
-
-    private <T> void completeRequest(FutureCallback<T> cb) throws Throwable {
-        try {
-            cb.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
-        } catch (ExecutionException e) {
-            throw e.getCause();
         }
     }
 
