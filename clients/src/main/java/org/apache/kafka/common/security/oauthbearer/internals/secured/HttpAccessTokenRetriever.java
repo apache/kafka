@@ -242,8 +242,11 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
         // NOTE: the contents of the response should not be logged so that we don't leak any
         // sensitive data.
-        // TODO: is it OK to log the error response body and/or its formatted version?
         String responseBody = null;
+
+        // NOTE: It is OK to log the error response body and/or its formatted version as
+        // per the OAuth spec, it doesn't include sensitive information.
+        // See https://www.ietf.org/rfc/rfc6749.txt, section 5.2
         String errorResponseBody = null;
 
         try (InputStream is = con.getInputStream()) {
@@ -300,6 +303,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
     }
 
     static String formatErrorMessage(String errorResponseBody) {
+        // See https://www.ietf.org/rfc/rfc6749.txt, section 5.2 for the format
+        // of this error message.
         if (errorResponseBody == null || errorResponseBody.trim().equals("")) {
             return "{}";
         }
