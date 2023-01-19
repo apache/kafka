@@ -220,9 +220,11 @@ public class StateManagerUtilTest {
         StateManagerUtil.closeStateManager(
                 logger, "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
-        inOrder.verify(stateManager, never()).close();
-        inOrder.verify(stateManager, never()).baseDir();
-        inOrder.verify(stateDirectory, never()).unlock(taskId);
+        inOrder.verify(stateManager).taskId();
+        inOrder.verify(stateDirectory).lock(taskId);
+        verify(stateManager, never()).close();
+        verify(stateManager, never()).baseDir();
+        verify(stateDirectory, never()).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
     }
 
@@ -235,9 +237,11 @@ public class StateManagerUtilTest {
         StateManagerUtil.closeStateManager(
                 logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
 
-        inOrder.verify(stateManager, never()).close();
-        inOrder.verify(stateManager, never()).baseDir();
-        inOrder.verify(stateDirectory, never()).unlock(taskId);
+        inOrder.verify(stateManager).taskId();
+        inOrder.verify(stateDirectory).lock(taskId);
+        verify(stateManager, never()).close();
+        verify(stateManager, never()).baseDir();
+        verify(stateDirectory, never()).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
     }
 }
