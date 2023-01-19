@@ -237,7 +237,7 @@ class DefaultAutoTopicCreationManager(
           .setName(topic)
           .setNumPartitions(config.offsetsTopicPartitions)
           .setReplicationFactor(config.offsetsTopicReplicationFactor)
-          .setConfigs(convertToTopicConfigCollections(groupCoordinator.offsetsTopicConfigs))
+          .setConfigs(convertToTopicConfigCollections(groupCoordinator.consumerOffsetsTopicConfigs))
       case TRANSACTION_STATE_TOPIC_NAME =>
         new CreatableTopic()
           .setName(topic)

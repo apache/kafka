@@ -158,7 +158,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     TestUtils.createTopicWithAdmin(adminClients.head, Topic.GROUP_METADATA_TOPIC_NAME, servers,
       numPartitions = servers.head.config.offsetsTopicPartitions,
       replicationFactor = numServers,
-      topicConfig = servers.head.groupCoordinator.offsetsTopicConfigs)
+      topicConfig = servers.head.groupCoordinator.consumerOffsetsTopicConfigs)
 
     TestMetricsReporter.testReporters.clear()
   }

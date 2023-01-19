@@ -557,25 +557,25 @@ private[group] class GroupCoordinatorAdapter(
   }
 
   override def onElection(
-    partitionIndex: Int,
-    partitionLeaderEpoch: Int
+    consumerOffsetsPartitionIndex: Int,
+    consumerOffsetsPartitionLeaderEpoch: Int
   ): Unit = {
-    coordinator.onElection(partitionIndex, partitionLeaderEpoch)
+    coordinator.onElection(consumerOffsetsPartitionIndex, consumerOffsetsPartitionLeaderEpoch)
   }
 
   override def onResignation(
-    partitionIndex: Int,
-    partitionLeaderEpoch: OptionalInt
+    consumerOffsetsPartitionIndex: Int,
+    consumerOffsetsPartitionLeaderEpoch: OptionalInt
   ): Unit = {
-    coordinator.onResignation(partitionIndex, partitionLeaderEpoch)
+    coordinator.onResignation(consumerOffsetsPartitionIndex, consumerOffsetsPartitionLeaderEpoch)
   }
 
-  override def offsetsTopicConfigs(): Properties = {
+  override def consumerOffsetsTopicConfigs(): Properties = {
     coordinator.offsetsTopicConfigs
   }
 
-  override def startup(groupMetadataTopicPartitionCount: IntSupplier): Unit = {
-    coordinator.startup(() => groupMetadataTopicPartitionCount.getAsInt)
+  override def startup(consumerOffsetsPartitionCount: IntSupplier): Unit = {
+    coordinator.startup(() => consumerOffsetsPartitionCount.getAsInt)
   }
 
   override def shutdown(): Unit = {

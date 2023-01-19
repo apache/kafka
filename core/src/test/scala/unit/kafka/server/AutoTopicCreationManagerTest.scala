@@ -82,7 +82,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testCreateOffsetTopic(): Unit = {
-    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    Mockito.when(groupCoordinator.consumerOffsetsTopicConfigs).thenReturn(new Properties)
     testCreateTopic(GROUP_METADATA_TOPIC_NAME, true, internalTopicPartitions, internalTopicReplicationFactor)
   }
 
@@ -159,7 +159,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testInvalidReplicationFactorForConsumerOffsetsTopic(): Unit = {
-    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    Mockito.when(groupCoordinator.consumerOffsetsTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.INVALID_REPLICATION_FACTOR, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true)
   }
 
@@ -177,7 +177,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testTopicExistsErrorSwapForConsumerOffsetsTopic(): Unit = {
-    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    Mockito.when(groupCoordinator.consumerOffsetsTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.TOPIC_ALREADY_EXISTS, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true,
       expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
   }
@@ -197,7 +197,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testRequestTimeoutErrorSwapForConsumerOffsetTopic(): Unit = {
-    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    Mockito.when(groupCoordinator.consumerOffsetsTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.REQUEST_TIMED_OUT, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true,
       expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
   }
@@ -216,7 +216,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testUnknownTopicPartitionForConsumerOffsetTopic(): Unit = {
-    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    Mockito.when(groupCoordinator.consumerOffsetsTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true)
   }
 

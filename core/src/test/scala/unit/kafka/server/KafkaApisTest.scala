@@ -1046,7 +1046,7 @@ class KafkaApisTest {
         case CoordinatorType.GROUP =>
           topicConfigOverride.put(KafkaConfig.OffsetsTopicPartitionsProp, numBrokersNeeded.toString)
           topicConfigOverride.put(KafkaConfig.OffsetsTopicReplicationFactorProp, numBrokersNeeded.toString)
-          when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+          when(groupCoordinator.consumerOffsetsTopicConfigs).thenReturn(new Properties)
           authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.GROUP,
             groupId, AuthorizationResult.ALLOWED)
           Topic.GROUP_METADATA_TOPIC_NAME
@@ -1157,7 +1157,7 @@ class KafkaApisTest {
         case Topic.GROUP_METADATA_TOPIC_NAME =>
           topicConfigOverride.put(KafkaConfig.OffsetsTopicPartitionsProp, numBrokersNeeded.toString)
           topicConfigOverride.put(KafkaConfig.OffsetsTopicReplicationFactorProp, numBrokersNeeded.toString)
-          when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+          when(groupCoordinator.consumerOffsetsTopicConfigs).thenReturn(new Properties)
           true
 
         case Topic.TRANSACTION_STATE_TOPIC_NAME =>

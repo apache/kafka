@@ -247,7 +247,7 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Delete the provided partitions' offsets.
+     * Remove the provided deleted partitions offsets.
      *
      * @param topicPartitions   The deleted partitions.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
@@ -262,12 +262,12 @@ public interface GroupCoordinator {
      * given leader epoch. It should load cached state from the partition
      * and begin handling requests for groups mapped to it.
      *
-     * @param partitionIndex        The partition index.
-     * @param partitionLeaderEpoch  The leader epoch of the partition.
+     * @param consumerOffsetsPartitionIndex         The partition index.
+     * @param consumerOffsetsPartitionLeaderEpoch   The leader epoch of the partition.
      */
     void onElection(
-        int partitionIndex,
-        int partitionLeaderEpoch
+        int consumerOffsetsPartitionIndex,
+        int consumerOffsetsPartitionLeaderEpoch
     );
 
     /**
@@ -275,14 +275,14 @@ public interface GroupCoordinator {
      * at the given leader epoch. It should unload cached state and stop
      * handling requests for groups mapped to it.
      *
-     * @param partitionIndex        The partition index.
-     * @param partitionLeaderEpoch  The leader epoch of the partition as an
-     *                              optional value. An empty value means that
-     *                              the topic was deleted.
+     * @param consumerOffsetsPartitionIndex         The partition index.
+     * @param consumerOffsetsPartitionLeaderEpoch   The leader epoch of the partition as an
+     *                                              optional value. An empty value means that
+     *                                              the topic was deleted.
      */
     void onResignation(
-        int partitionIndex,
-        OptionalInt partitionLeaderEpoch
+        int consumerOffsetsPartitionIndex,
+        OptionalInt consumerOffsetsPartitionLeaderEpoch
     );
 
     /**
@@ -291,15 +291,15 @@ public interface GroupCoordinator {
      *
      * @return Properties of the internal topic.
      */
-    Properties offsetsTopicConfigs();
+    Properties consumerOffsetsTopicConfigs();
 
     /**
      * Startup the group coordinator.
      *
-     * @param groupMetadataTopicPartitionCount  A supplier to get the number of partitions
+     * @param consumerOffsetsPartitionCount     A supplier to get the number of partitions
      *                                          of the consumer offsets topic.
      */
-    void startup(IntSupplier groupMetadataTopicPartitionCount);
+    void startup(IntSupplier consumerOffsetsPartitionCount);
 
     /**
      * Shutdown the group coordinator.
