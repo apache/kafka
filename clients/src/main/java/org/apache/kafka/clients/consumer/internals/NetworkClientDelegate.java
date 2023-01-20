@@ -98,7 +98,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             if (unsent.timer.isExpired()) {
                 iterator.remove();
                 unsent.callback.onFailure(new TimeoutException(
-                    "Failed to send request after " + unsent.timer.timeoutMs() + " " + "ms."));
+                    "Failed to send request after " + unsent.timer.timeoutMs() + " ms."));
                 continue;
             }
 
