@@ -183,7 +183,6 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
 
             final SegmentSearchResult result = segmentValue.find(entry.getKey(), true);
 
-            assertThat(result.includesValue(), equalTo(true));
             assertThat(result.index(), equalTo(entry.getValue()));
             assertThat(result.value(), equalTo(expectedRecord.value));
             assertThat(result.validFrom(), equalTo(expectedRecord.timestamp));

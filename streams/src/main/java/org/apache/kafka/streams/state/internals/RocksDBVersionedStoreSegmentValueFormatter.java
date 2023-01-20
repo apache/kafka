@@ -26,9 +26,23 @@ import java.util.List;
  * <pre>
  *     <next_timestamp> + <min_timestamp> + <list of <timestamp, value_size>, reverse-sorted by timestamp> + <list of values, forward-sorted by timestamp>
  * </pre>
- * Negative {@code value_size} is used to indicate that the value stored is a tombstone, in order to
- * distinguish from empty array which has {@code value_size} of zero. In practice, {@code value_size}
- * is always set to -1 for the tombstone case, though this need not be true in general.
+ * where:
+ * <ul>
+ * <li>{@code next_timestamp} is the validTo timestamp of the latest record version stored in this
+ * segment,</li>
+ * <li>{@code min_timestamp} is the validFrom timestamp of the earliest record version stored
+ * in this segment, and</li>
+ * <li>Negative {@code value_size} is used to indicate that the value stored is a tombstone,
+ * in order to distinguish from empty array which has {@code value_size} of zero. In practice,
+ * {@code value_size} is always set to -1 for the tombstone case, though this need not be true
+ * in general.</li>
+ * </ul>
+ * <p>
+ * Note that the value format above does not store the number of record versions contained in the
+ * segment. It is not necessary to store this information separately because this information is
+ * never required on its own. Record versions are always deserialized in order, and we can
+ * determine when we have reached the end of the list based on whether the timestamp of the
+ * record version equals the {@code min_timestamp}.
  */
 final class RocksDBVersionedStoreSegmentValueFormatter {
     private static final int TIMESTAMP_SIZE = 8;
@@ -124,7 +138,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
          * Inserts the provided record into the segment as the latest record in the segment.
          * This operation is allowed even if the segment is empty.
          * <p>
-         * It is the caller's responsibility to enough that this action is desirable. In the event
+         * It is the caller's responsibility to ensure that this action is desirable. In the event
          * that the new record's timestamp is smaller than the current {@code nextTimestamp} of the
          * segment, the operation will still be performed, and the segment's existing contents will
          * be truncated to ensure consistency of timestamps within the segment. This truncation
@@ -190,7 +204,10 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             private final long validFrom;
             private final long validTo;
             private final byte[] value;
-            private final boolean includesValue;
+
+            SegmentSearchResult(final int index, final long validFrom, final long validTo) {
+                this(index, validFrom, validTo, null);
+            }
 
             SegmentSearchResult(final int index, final long validFrom, final long validTo,
                                 final byte[] value) {
@@ -198,15 +215,6 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 this.validFrom = validFrom;
                 this.validTo = validTo;
                 this.value = value;
-                this.includesValue = true;
-            }
-
-            SegmentSearchResult(final int index, final long validFrom, final long validTo) {
-                this.index = index;
-                this.validFrom = validFrom;
-                this.validTo = validTo;
-                this.value = null;
-                this.includesValue = false;
             }
 
             int index() {
@@ -221,16 +229,14 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 return validTo;
             }
 
+            /**
+             * This value will be null if the caller did not specify that the value should be
+             * included with the return result from {@link SegmentValue#find(long, boolean)}.
+             * In this case, it is up to the caller to not call this method, as the "value"
+             * returned will not be meaningful.
+             */
             byte[] value() {
                 return value;
-            }
-
-            /**
-             * @return whether the return value from {@link SegmentSearchResult#value()} is meaningful,
-             *         or if is is null because the return value was not requested
-             */
-            boolean includesValue() {
-                return includesValue;
             }
         }
     }
@@ -293,8 +299,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             int cumValueSize = 0;
             while (currTimestamp != minTimestamp) {
                 if (currIndex <= deserIndex) {
-                    currTimestamp = unpackedReversedTimestampAndValueSizes.get(currIndex).timestamp;
-                    currValueSize = unpackedReversedTimestampAndValueSizes.get(currIndex).valueSize;
+                    final TimestampAndValueSize curr = unpackedReversedTimestampAndValueSizes.get(currIndex);
+                    currTimestamp = curr.timestamp;
+                    currValueSize = curr.valueSize;
                     cumValueSize = cumulativeValueSizes.get(currIndex);
                 } else {
                     final int timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
@@ -350,13 +357,13 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 } else {
                     insert(nextTimestamp, null, 0);
                 }
-                insertHelper(validFrom, value, 0);
+                doInsert(validFrom, value, 0);
             } else {
                 // nextTimestamp is moved into segment automatically as record is added on top
                 if (isEmpty) {
                     initializeWithRecord(value, validFrom, validTo);
                 } else {
-                    insertHelper(validFrom, value, 0);
+                    doInsert(validFrom, value, 0);
                 }
             }
             // update nextTimestamp
@@ -372,17 +379,17 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 initializeWithRecord(value, timestamp, nextTimestamp);
             } else {
                 final int lastIndex = find(minTimestamp, false).index;
-                insertHelper(timestamp, value, lastIndex + 1);
+                doInsert(timestamp, value, lastIndex + 1);
             }
         }
 
         @Override
         public void insert(final long timestamp, final byte[] valueOrNull, final int index) {
             final ValueAndValueSize value = new ValueAndValueSize(valueOrNull);
-            insertHelper(timestamp, value, index);
+            doInsert(timestamp, value, index);
         }
 
-        private void insertHelper(final long timestamp, final ValueAndValueSize value, final int index) {
+        private void doInsert(final long timestamp, final ValueAndValueSize value, final int index) {
             if (isEmpty || index > deserIndex + 1 || index < 0) {
                 throw new IllegalArgumentException("Must invoke find() to deserialize record before insert() at specific index.");
             }
@@ -474,12 +481,14 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             cumulativeValueSizes.subList(index + 1, cumulativeValueSizes.size()).clear();
         }
 
+        /**
+         * This method can only be called if {@code index} has already been deserialized.
+         */
         private boolean isLastIndex(final int index) {
-            if (deserIndex == -1
-                || unpackedReversedTimestampAndValueSizes.get(deserIndex).timestamp != minTimestamp) {
-                return false;
+            if (index < 0) {
+                return isEmpty;
             }
-            return index == deserIndex;
+            return unpackedReversedTimestampAndValueSizes.get(index).timestamp == minTimestamp;
         }
 
         private static class TimestampAndValueSize {
@@ -511,10 +520,19 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 }
             }
 
+            /**
+             * @return the value to be stored into the segment as part of the values list.
+             *         This will never be null.
+             */
             byte[] value() {
                 return valueToStore;
             }
 
+            /**
+             * @return the value size to be stored into the segment as part of the timestamps
+             *         and value sizes list. This will be negative for tombstones, and nonnegative
+             *         otherwise.
+             */
             int valueSize() {
                 return valueSizeToStore;
             }
