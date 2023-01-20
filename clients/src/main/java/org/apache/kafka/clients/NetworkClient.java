@@ -349,9 +349,8 @@ public class NetworkClient implements KafkaClient {
             }
 
             if (!request.isInternalRequest) {
-                if (responses != null) {
+                if (responses != null)
                     responses.add(request.disconnected(now, null, timedOut));
-                }
             } else if (request.header.apiKey() == ApiKeys.METADATA) {
                 metadataUpdater.handleFailedRequest(now, Optional.empty());
             }
@@ -1291,7 +1290,7 @@ public class NetworkClient implements KafkaClient {
         public ClientResponse disconnected(long timeMs, AuthenticationException authenticationException, boolean timedOut) {
             // A timed out request is considered disconnected as well
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
-                true, timedOut, null, authenticationException, null);
+                    true, timedOut, null, authenticationException, null);
         }
 
         @Override

@@ -551,13 +551,13 @@ public class Sender implements Runnable {
         int correlationId = requestHeader.correlationId();
         if (response.wasTimedOut()) {
             log.trace("Cancelled request with header {} due to node {} being disconnected due to timeout",
-                    requestHeader, response.destination());
+                requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
                 completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.REQUEST_TIMED_OUT, String.format("Disconnected from node %s due to timeout", response.destination())),
                         correlationId, now);
         } else if (response.wasDisconnected()) {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
-                    requestHeader, response.destination());
+                requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
                 completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION, String.format("Disconnected from node %s", response.destination())),
                         correlationId, now);
