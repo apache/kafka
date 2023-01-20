@@ -17,7 +17,7 @@
 
 package kafka.coordinator.group
 
-import java.util.Optional
+import java.util.{Optional, OptionalInt}
 import kafka.common.OffsetAndMetadata
 import kafka.server.{DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils._
@@ -190,7 +190,7 @@ class GroupCoordinatorTest {
     val otherGroupMetadataTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, otherGroupPartitionId)
     when(replicaManager.getLog(otherGroupMetadataTopicPartition)).thenReturn(None)
     // Call removeGroupsAndOffsets so that partition removed from loadingPartitions
-    groupCoordinator.groupManager.removeGroupsAndOffsets(otherGroupMetadataTopicPartition, Some(1), group => {})
+    groupCoordinator.groupManager.removeGroupsAndOffsets(otherGroupMetadataTopicPartition, OptionalInt.of(1), group => {})
     groupCoordinator.groupManager.loadGroupsAndOffsets(otherGroupMetadataTopicPartition, 1, group => {}, 0L)
     assertEquals(Errors.NONE, groupCoordinator.handleDescribeGroup(otherGroupId)._1)
   }

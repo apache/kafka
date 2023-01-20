@@ -18,7 +18,6 @@
 package org.apache.kafka.jmh.metadata;
 
 import kafka.controller.KafkaController;
-import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.network.RequestConvertToJson;
@@ -60,6 +59,7 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;

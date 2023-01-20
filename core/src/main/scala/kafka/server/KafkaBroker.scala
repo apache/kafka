@@ -18,7 +18,6 @@
 package kafka.server
 
 import com.yammer.metrics.core.MetricName
-import kafka.coordinator.group.GroupCoordinator
 import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsGroup, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
@@ -28,6 +27,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
