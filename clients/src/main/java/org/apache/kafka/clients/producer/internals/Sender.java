@@ -549,14 +549,18 @@ public class Sender implements Runnable {
     private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, long now) {
         RequestHeader requestHeader = response.requestHeader();
         int correlationId = requestHeader.correlationId();
-        if (response.wasDisconnected()) {
-            log.trace("Cancelled request with header {} due to node {} being disconnected",
-                requestHeader, response.destination());
-            for (ProducerBatch batch : batches.values()) {
-                Errors e = response.wasTimedOut() ? Errors.REQUEST_TIMED_OUT : Errors.NETWORK_EXCEPTION;
-                completeBatch(batch, new ProduceResponse.PartitionResponse(e, String.format("Disconnected from node %s", response.destination())),
+        if (response.wasTimedOut()) {
+            log.trace("Cancelled request with header {} due to node {} being disconnected due to timeout",
+                    requestHeader, response.destination());
+            for (ProducerBatch batch : batches.values())
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.REQUEST_TIMED_OUT, String.format("Disconnected from node %s due to timeout", response.destination())),
                         correlationId, now);
-            }
+        } else if (response.wasDisconnected()) {
+            log.trace("Cancelled request with header {} due to node {} being disconnected",
+                    requestHeader, response.destination());
+            for (ProducerBatch batch : batches.values())
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION, String.format("Disconnected from node %s", response.destination())),
+                        correlationId, now);
         } else if (response.versionMismatch() != null) {
             log.warn("Cancelled request {} due to a version mismatch with node {}",
                     response, response.destination(), response.versionMismatch());
