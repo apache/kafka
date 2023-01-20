@@ -114,6 +114,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private boolean userSpecifiedStatistics = false;
 
     private final RocksDBMetricsRecorder metricsRecorder;
+    private final boolean userManagedIterators;
 
     protected volatile boolean open = false;
     protected StateStoreContext context;
@@ -129,9 +130,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     RocksDBStore(final String name,
                  final String parentDir,
                  final RocksDBMetricsRecorder metricsRecorder) {
+        this(name, parentDir, metricsRecorder, false);
+    }
+
+    RocksDBStore(final String name,
+                 final String parentDir,
+                 final RocksDBMetricsRecorder metricsRecorder,
+                 final boolean userManagedIterators) {
         this.name = name;
         this.parentDir = parentDir;
         this.metricsRecorder = metricsRecorder;
+        this.userManagedIterators = userManagedIterators;
     }
 
     @Deprecated
@@ -351,13 +360,23 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
                                                                                     final PS prefixKeySerializer) {
+        if (userManagedIterators) {
+            throw new IllegalStateException("Must specify openIterators in call to prefixScan()");
+        }
+        return prefixScan(prefix, prefixKeySerializer, openIterators);
+    }
+
+    <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
+                                                                             final PS prefixKeySerializer,
+                                                                             final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
         validateStoreOpen();
         Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
         final Bytes prefixBytes = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
 
-        final KeyValueIterator<Bytes, byte[]> rocksDbPrefixSeekIterator = dbAccessor.prefixScan(prefixBytes);
+        final ManagedKeyValueIterator<Bytes, byte[]> rocksDbPrefixSeekIterator = dbAccessor.prefixScan(prefixBytes);
         openIterators.add(rocksDbPrefixSeekIterator);
+        rocksDbPrefixSeekIterator.onClose(() -> openIterators.remove(rocksDbPrefixSeekIterator));
 
         return rocksDbPrefixSeekIterator;
     }
@@ -400,18 +419,37 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                               final Bytes to) {
-        return range(from, to, true);
+        if (userManagedIterators) {
+            throw new IllegalStateException("Must specify openIterators in call to range()");
+        }
+        return range(from, to, openIterators);
+    }
+
+    synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                       final Bytes to,
+                                                       final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+        return range(from, to, true, openIterators);
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                                      final Bytes to) {
-        return range(from, to, false);
+        if (userManagedIterators) {
+            throw new IllegalStateException("Must specify openIterators in call to reverseRange()");
+        }
+        return reverseRange(from, to, openIterators);
     }
 
-    KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                          final Bytes to,
-                                          final boolean forward) {
+    synchronized KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
+                                                              final Bytes to,
+                                                              final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+        return range(from, to, false, openIterators);
+    }
+
+    private KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                  final Bytes to,
+                                                  final boolean forward,
+                                                  final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
         if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                     + "This may be due to range arguments set in the wrong order, " +
@@ -422,26 +460,43 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         validateStoreOpen();
 
-        final KeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(from, to, forward);
+        final ManagedKeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(from, to, forward);
         openIterators.add(rocksDBRangeIterator);
+        rocksDBRangeIterator.onClose(() -> openIterators.remove(rocksDBRangeIterator));
 
         return rocksDBRangeIterator;
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
-        return all(true);
+        if (userManagedIterators) {
+            throw new IllegalStateException("Must specify openIterators in call to all()");
+        }
+        return all(openIterators);
+    }
+
+    synchronized KeyValueIterator<Bytes, byte[]> all(final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+        return all(true, openIterators);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseAll() {
-        return all(false);
+        if (userManagedIterators) {
+            throw new IllegalStateException("Must specify openIterators in call to reverseAll()");
+        }
+        return reverseAll(openIterators);
     }
 
-    KeyValueIterator<Bytes, byte[]> all(final boolean forward) {
+    KeyValueIterator<Bytes, byte[]> reverseAll(final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+        return all(false, openIterators);
+    }
+
+    private KeyValueIterator<Bytes, byte[]> all(final boolean forward,
+                                                final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> rocksDbIterator = dbAccessor.all(forward);
+        final ManagedKeyValueIterator<Bytes, byte[]> rocksDbIterator = dbAccessor.all(forward);
         openIterators.add(rocksDbIterator);
+        rocksDbIterator.onClose(() -> openIterators.remove(rocksDbIterator));
         return rocksDbIterator;
     }
 
@@ -569,7 +624,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
          */
         byte[] getOnly(final byte[] key) throws RocksDBException;
 
-        KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+        ManagedKeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                               final Bytes to,
                                               final boolean forward);
 
@@ -579,9 +634,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         void deleteRange(final byte[] from,
                          final byte[] to);
 
-        KeyValueIterator<Bytes, byte[]> all(final boolean forward);
+        ManagedKeyValueIterator<Bytes, byte[]> all(final boolean forward);
 
-        KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix);
+        ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix);
 
         long approximateNumEntries() throws RocksDBException;
 
@@ -641,13 +696,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+        public ManagedKeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                      final Bytes to,
                                                      final boolean forward) {
             return new RocksDBRangeIterator(
                     name,
                     db.newIterator(columnFamily),
-                    openIterators,
                     from,
                     to,
                     forward,
@@ -666,23 +720,22 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> all(final boolean forward) {
+        public ManagedKeyValueIterator<Bytes, byte[]> all(final boolean forward) {
             final RocksIterator innerIterWithTimestamp = db.newIterator(columnFamily);
             if (forward) {
                 innerIterWithTimestamp.seekToFirst();
             } else {
                 innerIterWithTimestamp.seekToLast();
             }
-            return new RocksDbIterator(name, innerIterWithTimestamp, openIterators, forward);
+            return new RocksDbIterator(name, innerIterWithTimestamp, forward);
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
+        public ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
             final Bytes to = Bytes.increment(prefix);
             return new RocksDBRangeIterator(
                     name,
                     db.newIterator(columnFamily),
-                    openIterators,
                     prefix,
                     to,
                     true,
