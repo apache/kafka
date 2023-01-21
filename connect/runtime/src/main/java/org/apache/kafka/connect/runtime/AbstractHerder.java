@@ -151,6 +151,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.configBackingStore.stop();
         this.worker.stop();
         this.connectorExecutor.shutdown();
+        try {
+            this.connectorClientConfigOverridePolicy.close();
+        } catch (Exception e) {
+            log.warn("Exception while stop connectorClientConfigOverridePolicy:", e);
+        }
     }
 
     @Override

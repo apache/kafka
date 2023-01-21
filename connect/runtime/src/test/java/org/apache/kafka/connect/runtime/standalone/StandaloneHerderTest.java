@@ -119,10 +119,14 @@ public class StandaloneHerderTest {
     private LoaderSwap loaderSwap;
     protected FutureCallback<Herder.Created<ConnectorInfo>> createCallback;
     @Mock protected StatusBackingStore statusBackingStore;
-
+    private boolean connectorClientConfigOverridePolicyClosed = false;
     private final ConnectorClientConfigOverridePolicy
-        noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
-
+        noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy() {
+            @Override
+            public void close() {
+                connectorClientConfigOverridePolicyClosed = true;
+            }
+        };
 
     @Before
     public void setup() {
@@ -749,6 +753,7 @@ public class StandaloneHerderTest {
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         herder.stop();
+        assertTrue(connectorClientConfigOverridePolicyClosed);
 
         PowerMock.verifyAll();
     }

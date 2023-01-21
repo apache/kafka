@@ -159,6 +159,24 @@ public class AbstractHerderTest {
     }
 
     @Test
+    public void testConnectorClientConfigOverridePolicyClose() {
+        boolean[] connectorClientConfigOverridePolicyClosed = {false};
+        ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy() {
+            @Override
+            public void close() {
+                connectorClientConfigOverridePolicyClosed[0] = true;
+            }
+        };
+
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+            .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+            .defaultAnswer(CALLS_REAL_METHODS));
+
+        herder.stopServices();
+        assertTrue(connectorClientConfigOverridePolicyClosed[0]);
+    }
+
+    @Test
     public void testConnectorStatus() {
         ConnectorTaskId taskId = new ConnectorTaskId(connectorName, 0);
 
