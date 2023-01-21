@@ -43,7 +43,6 @@ import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;

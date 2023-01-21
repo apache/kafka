@@ -57,7 +57,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 
 @Category({IntegrationTest.class})

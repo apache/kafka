@@ -57,7 +57,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import java.util.Arrays;
