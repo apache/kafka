@@ -287,7 +287,7 @@ public class NamedTopologyIntegrationTest {
             Materialized.with(null, serdeScope.decorateSerde(Serdes.String(), props, false)));
 
         streams.start(asList(fkjBuilder.build(), countBuilder.build()));
-       IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         final String countTopicPrefix = TOPIC_PREFIX + "-" + countTopologyName;
         final String fkjTopicPrefix = TOPIC_PREFIX + "-" + fkjTopologyName;
@@ -359,7 +359,7 @@ public class NamedTopologyIntegrationTest {
             assertThat(streams.getTopologyByName(TOPOLOGY_1), is(Optional.empty()));
             streams.addNamedTopology(topology1Builder.build());
             streams.addNamedTopology(topology2Builder.build());
-           IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SINGLE_PARTITION_OUTPUT_STREAM, 3), equalTo(COUNT_OUTPUT_DATA));
@@ -835,7 +835,7 @@ public class NamedTopologyIntegrationTest {
 
             streams.addNamedTopology(builder.build());
 
-           IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 DELAYED_INPUT_STREAM_2,
                 singletonList(
