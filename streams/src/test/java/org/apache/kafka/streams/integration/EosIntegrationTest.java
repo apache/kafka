@@ -504,7 +504,7 @@ public class EosIntegrationTest {
 
             waitForCondition(
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
-                "SteamsTasks did not request commit.");
+                "StreamsTasks did not request commit.");
 
             // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
             //
@@ -626,7 +626,7 @@ public class EosIntegrationTest {
 
             waitForCondition(
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
-                "SteamsTasks did not request commit.");
+                "StreamsTasks did not request commit.");
 
             // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
             //
@@ -761,7 +761,7 @@ public class EosIntegrationTest {
 
             waitForCondition(
                     () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
-                    "SteamsTasks did not request commit.");
+                    "StreamsTasks did not request commit.");
 
             final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, writtenData.size(), CONSUMER_GROUP_ID);
 
