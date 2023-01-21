@@ -744,12 +744,10 @@ object ConsumerGroupCommand extends Logging {
         val topics = opts.options.valuesOf(opts.topicOpt).asScala
         parseTopicPartitionsToReset(topics)
       } else {
-        if (opts.options.has(opts.resetFromFileOpt)) {
+        if (opts.options.has(opts.resetFromFileOpt))
           Nil
-        } else {
-          CommandLineUtils.printUsageAndDie(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.")
-          Exit.exit(1)
-        }
+        else
+          ToolsUtils.printUsageAndDie(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.")
       }
     }
 

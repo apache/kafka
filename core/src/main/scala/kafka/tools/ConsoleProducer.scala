@@ -287,8 +287,7 @@ object ConsoleProducer {
         parser.parse(args: _*)
       catch {
         case e: OptionException =>
-          CommandLineUtils.printUsageAndDie(parser, e.getMessage)
-          Exit.exit(1)
+          ToolsUtils.printUsageAndDie(parser, e.getMessage)
       }
     }
   }

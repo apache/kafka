@@ -412,10 +412,8 @@ object ConsoleConsumer extends Logging {
       try
         parser.parse(args: _*)
       catch {
-        case e: OptionException => {
-          CommandLineUtils.printUsageAndDie(parser, e.getMessage)
-          Exit.exit(1)
-        }
+        case e: OptionException =>
+          ToolsUtils.printUsageAndDie(parser, e.getMessage)
       }
     }
   }

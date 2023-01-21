@@ -141,7 +141,7 @@ public class CommandLineUtils {
         Exit.exit(1, message);
     }
 
-    public static void  printVersionAndDie() {
+    public static void printVersionAndDie() {
         System.out.println(AppInfoParser.getVersion());
         Exit.exit(0);
     }

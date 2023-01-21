@@ -772,8 +772,8 @@ object ConfigCommand extends Logging {
       .withRequiredArg
       .describedAs("command config property file")
       .ofType(classOf[String])
-    val alterOpt: OptionSpec[String] = parser.accepts("alter", "Alter the configuration for the entity.").withOptionalArg()
-    val describeOpt: OptionSpec[String] = parser.accepts("describe", "List configs for the given entity.").withOptionalArg()
+    val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
+    val describeOpt = parser.accepts("describe", "List configs for the given entity.")
     val allOpt = parser.accepts("all", "List all configs for the given topic, broker, or broker-logger entity (includes static configuration when the entity type is brokers)")
 
     val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips)")
@@ -785,7 +785,7 @@ object ConfigCommand extends Logging {
     val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type in command line)")
 
     val nl = System.getProperty("line.separator")
-    val addConfig: OptionSpec[String] = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
+    val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
       "For entity-type '" + ConfigType.Topic + "': " + LogConfig.configNames.asScala.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
@@ -797,7 +797,7 @@ object ConfigCommand extends Logging {
     val addConfigFile = parser.accepts("add-config-file", "Path to a properties file with configs to add. See add-config for a list of valid configurations.")
       .withRequiredArg
       .ofType(classOf[String])
-    val deleteConfig: OptionSpec[String] = parser.accepts("delete-config", "config keys to remove 'k1,k2'")
+    val deleteConfig = parser.accepts("delete-config", "config keys to remove 'k1,k2'")
       .withRequiredArg
       .ofType(classOf[String])
       .withValuesSeparatedBy(',')
