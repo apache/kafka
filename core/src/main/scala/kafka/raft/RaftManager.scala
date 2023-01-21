@@ -65,8 +65,7 @@ object KafkaRaftManager {
         client.poll()
       } catch {
         case t: Throwable =>
-          fatalFaultHandler.handleFault("Unexpected error in raft IO thread", t)
-          throw t
+          throw fatalFaultHandler.handleFault("Unexpected error in raft IO thread", t)
       }
     }
 
