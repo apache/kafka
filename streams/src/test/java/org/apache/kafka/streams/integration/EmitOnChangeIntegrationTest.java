@@ -114,7 +114,7 @@ public class EmitOnChangeIntegrationTest {
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
 
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic,

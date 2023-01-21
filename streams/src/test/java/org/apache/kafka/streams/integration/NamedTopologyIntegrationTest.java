@@ -364,7 +364,7 @@ public class NamedTopologyIntegrationTest {
             assertThat(streams.getTopologyByName(TOPOLOGY_1), is(Optional.empty()));
             streams.addNamedTopology(topology1Builder.build());
             streams.addNamedTopology(topology2Builder.build());
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams));
 
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SINGLE_PARTITION_OUTPUT_STREAM, 3), equalTo(COUNT_OUTPUT_DATA));
@@ -840,10 +840,10 @@ public class NamedTopologyIntegrationTest {
 
             streams.addNamedTopology(builder.build());
 
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(streams);
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 DELAYED_INPUT_STREAM_2,
-                Arrays.asList(
+                singletonList(
                     new KeyValue<>(1, "A")
                 ),
                 TestUtils.producerConfig(

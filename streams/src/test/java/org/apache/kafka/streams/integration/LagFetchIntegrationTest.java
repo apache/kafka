@@ -56,7 +56,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -285,7 +284,7 @@ public class LagFetchIntegrationTest {
                 "Should see empty lag map before streams is started.");
 
             // Get the instance to fully catch up and reach RUNNING state
-            startApplicationAndWaitUntilRunning(Collections.singletonList(streams), Duration.ofSeconds(60));
+            startApplicationAndWaitUntilRunning(streams);
             IntegrationTestUtils.waitUntilMinValuesRecordsReceived(
                 consumerConfiguration,
                 outputTopicName,

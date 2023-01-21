@@ -181,7 +181,7 @@ public class RangeQueryIntegrationTest {
         builder.table(inputStream, stateStoreConfig);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG)) {
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), Duration.ofSeconds(60));
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
 
             writeInputData();
 

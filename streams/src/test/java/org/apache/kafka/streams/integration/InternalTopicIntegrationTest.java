@@ -150,7 +150,7 @@ public class InternalTopicIntegrationTest {
     }
 
     /*
-     * This test just ensures that that the assignor does not get stuck during partition number resolution
+     * This test just ensures that the assignor does not get stuck during partition number resolution
      * for internal repartition topics. See KAFKA-10689
      */
     @Test
@@ -176,12 +176,13 @@ public class InternalTopicIntegrationTest {
                 (x, y) -> x + y
             );
 
-        final KafkaStreams streams = new KafkaStreams(streamsBuilder.build(), streamsProp);
-        startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(60));
+        try (final KafkaStreams streams = new KafkaStreams(streamsBuilder.build(), streamsProp)) {
+            startApplicationAndWaitUntilRunning(streams);
+        }
     }
 
     @Test
-    public void shouldCompactTopicsForKeyValueStoreChangelogs() {
+    public void shouldCompactTopicsForKeyValueStoreChangelogs() throws Exception {
         final String appID = APP_ID + "-compact";
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
@@ -195,19 +196,19 @@ public class InternalTopicIntegrationTest {
             .groupBy(MockMapper.selectValueMapper())
             .count(Materialized.as("Counts"));
 
-        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp);
-        streams.start();
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp)) {
+            startApplicationAndWaitUntilRunning(streams);
 
-        //
-        // Step 2: Produce some input data to the input topic.
-        //
-        produceData(Arrays.asList("hello", "world", "world", "hello world"));
+            //
+            // Step 2: Produce some input data to the input topic.
+            //
+            produceData(Arrays.asList("hello", "world", "world", "hello world"));
 
-        //
-        // Step 3: Verify the state changelog topics are compact
-        //
-        waitForCompletion(streams, 2, 30000L);
-        streams.close();
+            //
+            // Step 3: Verify the state changelog topics are compact
+            //
+            waitForCompletion(streams, 2, 30000L);
+        }
 
         final Properties changelogProps = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "Counts", null));
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, changelogProps.getProperty(TopicConfig.CLEANUP_POLICY_CONFIG));
@@ -218,7 +219,7 @@ public class InternalTopicIntegrationTest {
     }
 
     @Test
-    public void shouldCompactAndDeleteTopicsForWindowStoreChangelogs() {
+    public void shouldCompactAndDeleteTopicsForWindowStoreChangelogs() throws Exception {
         final String appID = APP_ID + "-compact-delete";
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
@@ -235,19 +236,20 @@ public class InternalTopicIntegrationTest {
             .windowedBy(TimeWindows.of(ofSeconds(1L)).grace(ofMillis(0L)))
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("CountWindows").withRetention(ofSeconds(2L)));
 
-        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp);
-        streams.start();
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp)) {
+            startApplicationAndWaitUntilRunning(streams);
 
-        //
-        // Step 2: Produce some input data to the input topic.
-        //
-        produceData(Arrays.asList("hello", "world", "world", "hello world"));
+            //
+            // Step 2: Produce some input data to the input topic.
+            //
+            produceData(Arrays.asList("hello", "world", "world", "hello world"));
 
-        //
-        // Step 3: Verify the state changelog topics are compact
-        //
-        waitForCompletion(streams, 2, 30000L);
-        streams.close();
+            //
+            // Step 3: Verify the state changelog topics are compact
+            //
+            waitForCompletion(streams, 2, 30000L);
+        }
+
         final Properties properties = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "CountWindows", null));
         final List<String> policies = Arrays.asList(properties.getProperty(TopicConfig.CLEANUP_POLICY_CONFIG).split(","));
         assertEquals(2, policies.size());

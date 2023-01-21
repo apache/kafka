@@ -223,7 +223,7 @@ public class RegexSourceIntegrationTest {
             assertThat(topology.describe().subtopologies().size(), greaterThan(1));
             streams = new KafkaStreams(topology, streamsConfiguration);
 
-            startApplicationAndWaitUntilRunning(Collections.singletonList(streams), Duration.ofSeconds(30));
+            startApplicationAndWaitUntilRunning(streams);
 
             CLUSTER.createTopic(topic2);
 

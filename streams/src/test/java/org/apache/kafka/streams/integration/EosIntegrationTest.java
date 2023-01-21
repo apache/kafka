@@ -87,9 +87,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
-import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 import static org.apache.kafka.test.TestUtils.consumerConfig;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -281,7 +281,7 @@ public class EosIntegrationTest {
             );
 
             try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
-                startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
+                startApplicationAndWaitUntilRunning(streams);
 
                 final List<KeyValue<Long, Long>> committedRecords = readResult(outputTopic, inputData.size(), CONSUMER_GROUP_ID);
                 checkResultPerKey(committedRecords, inputData, "The committed records do not match what expected");
@@ -339,7 +339,7 @@ public class EosIntegrationTest {
             properties);
 
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
-            startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
+            startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> firstBurstOfData = prepareData(0L, 5L, 0L);
             final List<KeyValue<Long, Long>> secondBurstOfData = prepareData(5L, 8L, 0L);
@@ -380,7 +380,7 @@ public class EosIntegrationTest {
         // after fail over, we should read 40 committed records (even if 50 record got written)
 
         try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, eosConfig, MAX_POLL_INTERVAL_MS)) {
-            startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
+            startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L);
@@ -488,7 +488,7 @@ public class EosIntegrationTest {
         // We need more processing time under "with state" situation, so increasing the max.poll.interval.ms
         // to avoid unexpected rebalance during test, which will cause unexpected fail over triggered
         try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, eosConfig, 3 * MAX_POLL_INTERVAL_MS)) {
-            startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
+            startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L, 2L, 3L);
@@ -607,8 +607,8 @@ public class EosIntegrationTest {
             final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, eosConfig, MAX_POLL_INTERVAL_MS);
             final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, eosConfig, MAX_POLL_INTERVAL_MS)
         ) {
-            startKafkaStreamsAndWaitForRunningState(streams1, MAX_WAIT_TIME_MS);
-            startKafkaStreamsAndWaitForRunningState(streams2, MAX_WAIT_TIME_MS);
+            startApplicationAndWaitUntilRunning(streams1);
+            startApplicationAndWaitUntilRunning(streams2);
 
             final List<KeyValue<Long, Long>> committedDataBeforeStall = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeStall = prepareData(10L, 15L, 0L, 1L);
@@ -757,7 +757,7 @@ public class EosIntegrationTest {
         try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, eosConfig, MAX_POLL_INTERVAL_MS)) {
             writeInputData(writtenData);
 
-            startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
+            startApplicationAndWaitUntilRunning(streams);
 
             waitForCondition(
                     () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
@@ -866,7 +866,7 @@ public class EosIntegrationTest {
                         this.context = context;
 
                         if (withState) {
-                            state = (KeyValueStore<Long, Long>) context.getStateStore(storeName);
+                            state = context.getStateStore(storeName);
                         }
                     }
 

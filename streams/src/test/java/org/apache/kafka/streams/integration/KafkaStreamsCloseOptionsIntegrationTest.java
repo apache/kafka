@@ -162,7 +162,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
         // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
-        IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(30));
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close(new CloseOptions().leaveGroup(true).timeout(Duration.ofSeconds(30)));
