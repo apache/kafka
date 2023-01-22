@@ -349,7 +349,7 @@ public class StandaloneHerderTest {
         taskConfigs.put("k", "v");
         EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, config, true))).andReturn(Collections.singletonList(taskConfigs));
 
-        worker.stopAndAwaitTasks(Collections.singletonList(taskId));
+        worker.stopAndAwaitTasks(Collections.singletonList(taskId), false);
         EasyMock.expectLastCall();
         statusBackingStore.put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.DESTROYED, WORKER_ID, 0));
         EasyMock.expectLastCall();
@@ -1182,15 +1182,19 @@ public class StandaloneHerderTest {
     }
 
     private void expectStop() {
+        expectStop(false);
+    }
+
+    private void expectStop(boolean deletedConnector) {
         ConnectorTaskId task = new ConnectorTaskId(CONNECTOR_NAME, 0);
-        worker.stopAndAwaitTasks(singletonList(task));
+        worker.stopAndAwaitTasks(singletonList(task), deletedConnector);
         EasyMock.expectLastCall();
         worker.stopAndAwaitConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall();
     }
 
     private void expectDestroy() {
-        expectStop();
+        expectStop(true);
     }
 
     private static Map<String, String> connectorConfig(SourceSink sourceSink) {

@@ -243,7 +243,7 @@ public class ErrorHandlingTaskTest {
         // verify if invocation happened exactly 1 time
         verifyInitializeSink();
         verify(reporter).close();
-        verify(sinkTask).stop();
+        verify(sinkTask).stop(false);
         verify(consumer).close();
         verify(headerConverter).close();
     }
