@@ -311,7 +311,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     @Override
     protected void close() {
         if (started) {
-            Utils.closeQuietly(task::stop, "source task");
+            Utils.closeQuietly(() -> task.stop(isDeletedConnector()), "source task");
         }
 
         closeProducer(Duration.ofSeconds(30));

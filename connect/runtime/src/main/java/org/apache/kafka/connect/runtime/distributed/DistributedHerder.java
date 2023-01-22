@@ -1947,8 +1947,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private Callable<Void> getTaskStoppingCallable(final ConnectorTaskId taskId) {
+        return getTaskStoppingCallable(taskId, false);
+    }
+
+    private Callable<Void> getTaskStoppingCallable(final ConnectorTaskId taskId, boolean deletedConnector) {
         return () -> {
-            worker.stopAndAwaitTask(taskId);
+            worker.stopAndAwaitTask(taskId, deletedConnector);
             return null;
         };
     }
@@ -2565,7 +2569,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // this would avoid having to close a connection and then reopen it when the task is assigned back to this
                 // worker again.
                 for (final ConnectorTaskId taskId : tasks) {
-                    callables.add(getTaskStoppingCallable(taskId));
+                    callables.add(getTaskStoppingCallable(taskId, !configState.contains(taskId.connector())));
                 }
 
                 // The actual timeout for graceful task/connector stop is applied in worker's

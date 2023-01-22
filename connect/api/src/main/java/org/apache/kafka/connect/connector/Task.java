@@ -49,4 +49,17 @@ public interface Task {
      * Stop this task.
      */
     void stop();
+
+    /**
+     * Stop this task, while also indicating that the task is being stopped because the connector was
+     * deleted.
+     * <p>
+     * Tasks are not required to override this method, unless they need to perform additional cleanup
+     * actions in cases where the connector has been deleted.
+     *
+     * @param deletedConnector indicates if the connector has been deleted.
+     */
+    default void stop(boolean deletedConnector) {
+        stop();
+    }
 }

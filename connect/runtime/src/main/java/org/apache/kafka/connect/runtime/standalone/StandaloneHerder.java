@@ -118,7 +118,7 @@ public class StandaloneHerder extends AbstractHerder {
         // should just clean up the stuff we normally would, i.e. cleanly checkpoint and shutdown all
         // the tasks.
         for (String connName : connectors()) {
-            removeConnectorTasks(connName);
+            removeConnectorTasks(connName, false);
             worker.stopAndAwaitConnector(connName);
         }
         stopServices();
@@ -167,7 +167,7 @@ public class StandaloneHerder extends AbstractHerder {
                 return;
             }
 
-            removeConnectorTasks(connName);
+            removeConnectorTasks(connName, true);
             worker.stopAndAwaitConnector(connName);
             configBackingStore.removeConnectorConfig(connName);
             onDeletion(connName);
@@ -467,10 +467,10 @@ public class StandaloneHerder extends AbstractHerder {
         }
     }
 
-    private void removeConnectorTasks(String connName) {
+    private void removeConnectorTasks(String connName, boolean deletedConnector) {
         Collection<ConnectorTaskId> tasks = configState.tasks(connName);
         if (!tasks.isEmpty()) {
-            worker.stopAndAwaitTasks(tasks);
+            worker.stopAndAwaitTasks(tasks, deletedConnector);
             configBackingStore.removeTaskConfigs(connName);
             tasks.forEach(this::onDeletion);
         }
@@ -488,7 +488,7 @@ public class StandaloneHerder extends AbstractHerder {
         List<Map<String, String>> newTaskConfigs = recomputeTaskConfigs(connName);
 
         if (taskConfigsChanged(configState, connName, newTaskConfigs)) {
-            removeConnectorTasks(connName);
+            removeConnectorTasks(connName, false);
             List<Map<String, String>> rawTaskConfigs = reverseTransform(connName, configState, newTaskConfigs);
             configBackingStore.putTaskConfigs(connName, rawTaskConfigs);
             createConnectorTasks(connName);
