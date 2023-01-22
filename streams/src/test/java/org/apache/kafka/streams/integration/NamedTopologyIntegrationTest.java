@@ -286,7 +286,8 @@ public class NamedTopologyIntegrationTest {
             (value1, value2) -> String.valueOf(value1 + value2),
             Materialized.with(null, serdeScope.decorateSerde(Serdes.String(), props, false)));
 
-        streams.start(asList(fkjBuilder.build(), countBuilder.build()));
+        streams.addNamedTopology(fkjBuilder.build());
+        streams.addNamedTopology(countBuilder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         final String countTopicPrefix = TOPIC_PREFIX + "-" + countTopologyName;
@@ -314,7 +315,7 @@ public class NamedTopologyIntegrationTest {
             .groupByKey()
             .count(ROCKSDB_STORE)
             .toStream().to(OUTPUT_STREAM_1);
-        streams.start(topology1Builder.build());
+        streams.addNamedTopology(topology1Builder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         final List<KeyValue<String, Long>> results = waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3);
         assertThat(results, equalTo(COUNT_OUTPUT_DATA));
@@ -329,7 +330,9 @@ public class NamedTopologyIntegrationTest {
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(ROCKSDB_STORE).toStream().to(OUTPUT_STREAM_1);
         topology2Builder.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
         topology3Builder.stream(INPUT_STREAM_3).groupBy((k, v) -> k).count(ROCKSDB_STORE).toStream().to(OUTPUT_STREAM_3);
-        streams.start(asList(topology1Builder.build(), topology2Builder.build(), topology3Builder.build()));
+        streams.addNamedTopology(topology1Builder.build());
+        streams.addNamedTopology(topology2Builder.build());
+        streams.addNamedTopology(topology3Builder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
@@ -397,7 +400,8 @@ public class NamedTopologyIntegrationTest {
             topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(Materialized.as(topology1Store)).toStream().to(OUTPUT_STREAM_1);
             topology2Builder2.stream(SINGLE_PARTITION_INPUT_STREAM).groupByKey().count(Materialized.as(topology2Store)).toStream().to(SINGLE_PARTITION_OUTPUT_STREAM);
 
-            streams2.start(asList(topology1Builder2.build(), topology2Builder2.build()));
+            streams2.addNamedTopology(topology1Builder2.build());
+            streams2.addNamedTopology(topology2Builder2.build());
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(asList(streams, streams2));
 
             verifyMetadataForTopology(
@@ -430,7 +434,7 @@ public class NamedTopologyIntegrationTest {
     @Test
     public void shouldAddNamedTopologyToRunningApplicationWithEmptyInitialTopology() throws Exception {
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         streams.addNamedTopology(topology1Builder.build()).all().get();
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
@@ -440,7 +444,7 @@ public class NamedTopologyIntegrationTest {
     public void shouldAddNamedTopologyToRunningApplicationWithSingleInitialNamedTopology() throws Exception {
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
         topology2Builder.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
-        streams.start(topology1Builder.build());
+        streams.addNamedTopology(topology1Builder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         streams.addNamedTopology(topology2Builder.build()).all().get();
 
@@ -453,7 +457,8 @@ public class NamedTopologyIntegrationTest {
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(ROCKSDB_STORE).toStream().to(OUTPUT_STREAM_1);
         topology2Builder.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(ROCKSDB_STORE).toStream().to(OUTPUT_STREAM_2);
         topology3Builder.stream(INPUT_STREAM_3).groupBy((k, v) -> k).count(ROCKSDB_STORE).toStream().to(OUTPUT_STREAM_3);
-        streams.start(asList(topology1Builder.build(), topology2Builder.build()));
+        streams.addNamedTopology(topology1Builder.build());
+        streams.addNamedTopology(topology2Builder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         streams.addNamedTopology(topology3Builder.build()).all().get();
@@ -472,8 +477,8 @@ public class NamedTopologyIntegrationTest {
         topology2Builder.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
         topology2Builder2.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
 
-        streams.start(topology1Builder.build());
-        streams2.start(topology1Builder2.build());
+        streams.addNamedTopology(topology1Builder.build());
+        streams2.addNamedTopology(topology1Builder2.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(asList(streams, streams2));
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
@@ -492,8 +497,8 @@ public class NamedTopologyIntegrationTest {
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
         topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
 
-        streams.start(topology1Builder.build());
-        streams2.start(topology1Builder2.build());
+        streams.addNamedTopology(topology1Builder.build());
+        streams2.addNamedTopology(topology1Builder2.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(asList(streams, streams2));
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
@@ -545,7 +550,8 @@ public class NamedTopologyIntegrationTest {
             topology2Builder.stream(DELAYED_INPUT_STREAM_2).map((k, v) -> {
                 throw new IllegalStateException("Should not process any records for removed topology-2");
             });
-            streams.start(asList(topology1Builder.build(), topology2Builder.build()));
+            streams.addNamedTopology(topology1Builder.build());
+            streams.addNamedTopology(topology2Builder.build());
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             streams.removeNamedTopology("topology-2").all().get();
@@ -569,7 +575,7 @@ public class NamedTopologyIntegrationTest {
             final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
             inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
             inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
-            streams.start(singletonList(topology1Builder.build()));
+            streams.addNamedTopology(topology1Builder.build());
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
@@ -599,7 +605,9 @@ public class NamedTopologyIntegrationTest {
         topology1Builder.stream(Pattern.compile(INPUT_STREAM_1)).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_1);
         topology2Builder.stream(Pattern.compile(INPUT_STREAM_2)).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_2);
         topology3Builder.stream(Pattern.compile(INPUT_STREAM_3)).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_3);
-        streams.start(asList(topology1Builder.build(), topology2Builder.build(), topology3Builder.build()));
+        streams.addNamedTopology(topology1Builder.build());
+        streams.addNamedTopology(topology2Builder.build());
+        streams.addNamedTopology(topology3Builder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
@@ -612,7 +620,9 @@ public class NamedTopologyIntegrationTest {
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_1);
         topology2Builder.stream(Pattern.compile(INPUT_STREAM_2)).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_2);
         topology3Builder.stream(Pattern.compile(INPUT_STREAM_3)).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_3);
-        streams.start(asList(topology1Builder.build(), topology2Builder.build(), topology3Builder.build()));
+        streams.addNamedTopology(topology1Builder.build());
+        streams.addNamedTopology(topology2Builder.build());
+        streams.addNamedTopology(topology3Builder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
@@ -628,7 +638,7 @@ public class NamedTopologyIntegrationTest {
             final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
             inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
             inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
-            streams.start();
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
             final NamedTopology namedTopology = topology1Builder.build();
             streams.addNamedTopology(namedTopology).all().get();
 
@@ -666,7 +676,7 @@ public class NamedTopologyIntegrationTest {
         final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
         inputStream1.map(KeyValue::new).groupByKey().count().toStream().to(COUNT_OUTPUT);
         inputStream1.map(KeyValue::new).groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         final NamedTopology namedTopology = topology1Builder.build();
         streams.addNamedTopology(namedTopology).all().get();
 
@@ -709,8 +719,9 @@ public class NamedTopologyIntegrationTest {
             streams.setUncaughtExceptionHandler(handler);
             streams2.setUncaughtExceptionHandler(handler);
 
-            streams.start(topology1Builder.build());
-            streams2.start(topology1Builder2.build());
+            streams.addNamedTopology(topology1Builder.build());
+            streams2.addNamedTopology(topology1Builder2.build());
+            
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(asList(streams, streams2));
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
 
@@ -767,8 +778,8 @@ public class NamedTopologyIntegrationTest {
         streams.setUncaughtExceptionHandler(handler);
         streams2.setUncaughtExceptionHandler(handler);
 
-        streams.start(topology1Builder.build());
-        streams2.start(topology1Builder2.build());
+        streams.addNamedTopology(topology1Builder.build());
+        streams2.addNamedTopology(topology1Builder2.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(asList(streams, streams2));
 
         retryOnExceptionWithTimeout(() -> {
