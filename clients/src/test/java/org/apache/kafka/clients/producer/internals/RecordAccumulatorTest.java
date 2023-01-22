@@ -332,9 +332,9 @@ public class RecordAccumulatorTest {
         List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < numThreads; i++) {
             threads.add(new Thread(() -> {
-                for (int i1 = 0; i1 < msgs; i1++) {
+                for (int j = 0; j < msgs; j++) {
                     try {
-                        accum.append(topic, i1 % numParts, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
+                        accum.append(topic, j % numParts, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
