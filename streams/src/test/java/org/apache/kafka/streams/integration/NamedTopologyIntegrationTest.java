@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.LagInfo;
@@ -87,6 +88,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.KeyQueryMetadata.NOT_AVAILABLE;
 import static org.apache.kafka.streams.KeyValue.pair;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.extractThreadId;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
@@ -400,9 +402,8 @@ public class NamedTopologyIntegrationTest {
             topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(Materialized.as(topology1Store)).toStream().to(OUTPUT_STREAM_1);
             topology2Builder2.stream(SINGLE_PARTITION_INPUT_STREAM).groupByKey().count(Materialized.as(topology2Store)).toStream().to(SINGLE_PARTITION_OUTPUT_STREAM);
 
-            streams2.addNamedTopology(topology1Builder2.build());
-            streams2.addNamedTopology(topology2Builder2.build());
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(asList(streams, streams2));
+            streams2.start(asList(topology1Builder2.build(), topology2Builder2.build()));
+            waitForApplicationState(asList(streams, streams2), State.RUNNING, Duration.ofSeconds(60));
 
             verifyMetadataForTopology(
                 TOPOLOGY_1,
@@ -434,7 +435,7 @@ public class NamedTopologyIntegrationTest {
     @Test
     public void shouldAddNamedTopologyToRunningApplicationWithEmptyInitialTopology() throws Exception {
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
-        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        streams.start();
         streams.addNamedTopology(topology1Builder.build()).all().get();
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
@@ -638,7 +639,7 @@ public class NamedTopologyIntegrationTest {
             final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
             inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
             inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+            streams.start();
             final NamedTopology namedTopology = topology1Builder.build();
             streams.addNamedTopology(namedTopology).all().get();
 
@@ -676,7 +677,7 @@ public class NamedTopologyIntegrationTest {
         final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
         inputStream1.map(KeyValue::new).groupByKey().count().toStream().to(COUNT_OUTPUT);
         inputStream1.map(KeyValue::new).groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
-        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        streams.start();
         final NamedTopology namedTopology = topology1Builder.build();
         streams.addNamedTopology(namedTopology).all().get();
 
