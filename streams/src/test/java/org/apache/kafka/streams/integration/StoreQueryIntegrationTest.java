@@ -78,12 +78,12 @@ import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.anyOf;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
@@ -360,8 +360,8 @@ public class StoreQueryIntegrationTest {
 
         startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
-        assertTrue(kafkaStreams1.metadataForLocalThreads().size() > 1);
-        assertTrue(kafkaStreams2.metadataForLocalThreads().size() > 1);
+        assertThat(kafkaStreams1.metadataForLocalThreads().size(), greaterThan(1));
+        assertThat(kafkaStreams2.metadataForLocalThreads().size(), greaterThan(1));
 
         produceValueRange(key, 0, batch1NumMessages);
 
@@ -431,8 +431,8 @@ public class StoreQueryIntegrationTest {
         kafkaStreams2.start(builder2A.build());
         waitForApplicationState(kafkaStreamsList, State.RUNNING, Duration.ofSeconds(60));
 
-        assertTrue(kafkaStreams1.metadataForLocalThreads().size() > 1);
-        assertTrue(kafkaStreams2.metadataForLocalThreads().size() > 1);
+        assertThat(kafkaStreams1.metadataForLocalThreads().size(), greaterThan(1));
+        assertThat(kafkaStreams2.metadataForLocalThreads().size(), greaterThan(1));
 
         produceValueRange(key, 0, batch1NumMessages);
 

@@ -58,7 +58,6 @@ import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -225,7 +224,7 @@ public class RegexSourceIntegrationTest {
             assertThat(topology.describe().subtopologies().size(), greaterThan(1));
             streams = new KafkaStreams(topology, streamsConfiguration);
 
-            startApplicationAndWaitUntilRunning(Collections.singletonList(streams), Duration.ofSeconds(30));
+            startApplicationAndWaitUntilRunning(streams);
 
             CLUSTER.createTopic(topic2);
 
