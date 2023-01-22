@@ -30,7 +30,6 @@ import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThr
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -114,7 +113,7 @@ public class EmitOnChangeIntegrationTest {
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
 
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic,

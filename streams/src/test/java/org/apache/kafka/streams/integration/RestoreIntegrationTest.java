@@ -434,27 +434,32 @@ public class RestoreIntegrationTest {
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
         purgeLocalStreamsState(props1);
-        final KafkaStreams client1 = new KafkaStreams(builder.build(), props1);
+        final KafkaStreams streams1 = new KafkaStreams(builder.build(), props1);
 
         final Properties props2 = props(stateUpdaterEnabled);
         props2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-2").getPath());
         purgeLocalStreamsState(props2);
-        final KafkaStreams client2 = new KafkaStreams(builder.build(), props2);
+        final KafkaStreams streams2 = new KafkaStreams(builder.build(), props2);
 
         final Set<KafkaStreams.State> transitionedStates1 = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final Set<KafkaStreams.State> transitionedStates2 = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final TrackingStateRestoreListener restoreListener = new TrackingStateRestoreListener();
-        client1.setGlobalStateRestoreListener(restoreListener);
-        client1.setStateListener((newState, oldState) -> transitionedStates1.add(newState));
-        client2.setStateListener((newState, oldState) -> transitionedStates2.add(newState));
+        streams1.setGlobalStateRestoreListener(restoreListener);
+        streams1.setStateListener((newState, oldState) -> transitionedStates1.add(newState));
+        streams2.setStateListener((newState, oldState) -> transitionedStates2.add(newState));
 
-        startApplicationAndWaitUntilRunning(asList(client1, client2), Duration.ofSeconds(60));
+        try {
+            startApplicationAndWaitUntilRunning(asList(streams1, streams2), Duration.ofSeconds(60));
 
-        waitForCompletion(client1, 1, 30 * 1000L);
-        waitForCompletion(client2, 1, 30 * 1000L);
-        waitForStandbyCompletion(client1, 1, 30 * 1000L);
-        waitForStandbyCompletion(client2, 1, 30 * 1000L);
+            waitForCompletion(streams1, 1, 30 * 1000L);
+            waitForCompletion(streams2, 1, 30 * 1000L);
+            waitForStandbyCompletion(streams1, 1, 30 * 1000L);
+            waitForStandbyCompletion(streams2, 1, 30 * 1000L);
+        } catch (final Exception e) {
+            streams1.close();
+            streams2.close();
+        }
 
         // Sometimes the store happens to have already been closed sometime during startup, so just keep track
         // of where it started and make sure it doesn't happen more times from there
@@ -463,21 +468,23 @@ public class RestoreIntegrationTest {
 
         transitionedStates1.clear();
         transitionedStates2.clear();
-        client2.close();
-        waitForTransitionTo(transitionedStates2, State.NOT_RUNNING, Duration.ofSeconds(60));
-        waitForTransitionTo(transitionedStates1, State.REBALANCING, Duration.ofSeconds(60));
-        waitForTransitionTo(transitionedStates1, State.RUNNING, Duration.ofSeconds(60));
+        try {
+            streams2.close();
+            waitForTransitionTo(transitionedStates2, State.NOT_RUNNING, Duration.ofSeconds(60));
+            waitForTransitionTo(transitionedStates1, State.REBALANCING, Duration.ofSeconds(60));
+            waitForTransitionTo(transitionedStates1, State.RUNNING, Duration.ofSeconds(60));
 
-        waitForCompletion(client1, 1, 30 * 1000L);
-        waitForStandbyCompletion(client1, 1, 30 * 1000L);
+            waitForCompletion(streams1, 1, 30 * 1000L);
+            waitForStandbyCompletion(streams1, 1, 30 * 1000L);
 
-        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
+            assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
 
-        // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
-        // total: the active and standby tasks on instance 2
-        assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(initialStoreCloseCount + 2));
-
-        client1.close();
+            // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
+            // total: the active and standby tasks on instance 2
+            assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(initialStoreCloseCount + 2));
+        } finally {
+            streams1.close();
+        }
         waitForTransitionTo(transitionedStates1, State.NOT_RUNNING, Duration.ofSeconds(60));
 
         assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(initialStoreCloseCount + 4));
