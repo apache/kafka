@@ -801,10 +801,7 @@ object ConsumerGroupCommand extends Logging {
         partitionsToReset.map { topicPartition =>
           logStartOffsets.get(topicPartition) match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
-            case _ => {
-              CommandLineUtils.printUsageAndDie(opts.parser, s"Error getting starting offset of topic partition: $topicPartition")
-              Exit.exit(1)
-            }
+            case _ => ToolsUtils.printUsageAndDie(opts.parser, s"Error getting starting offset of topic partition: $topicPartition")
           }
         }.toMap
       } else if (opts.options.has(opts.resetToLatestOpt)) {
@@ -812,10 +809,7 @@ object ConsumerGroupCommand extends Logging {
         partitionsToReset.map { topicPartition =>
           logEndOffsets.get(topicPartition) match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
-            case _ => {
-              CommandLineUtils.printUsageAndDie(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
-              Exit.exit(1)
-            }
+            case _ => ToolsUtils.printUsageAndDie(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
           }
         }.toMap
       } else if (opts.options.has(opts.resetShiftByOpt)) {
@@ -836,10 +830,7 @@ object ConsumerGroupCommand extends Logging {
           val logTimestampOffset = logTimestampOffsets.get(topicPartition)
           logTimestampOffset match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
-            case _ => {
-              CommandLineUtils.printUsageAndDie(opts.parser, s"Error getting offset by timestamp of topic partition: $topicPartition")
-              Exit.exit(1)
-            }
+            case _ => ToolsUtils.printUsageAndDie(opts.parser, s"Error getting offset by timestamp of topic partition: $topicPartition")
           }
         }.toMap
       } else if (opts.options.has(opts.resetByDurationOpt)) {
@@ -853,10 +844,7 @@ object ConsumerGroupCommand extends Logging {
           val logTimestampOffset = logTimestampOffsets.get(topicPartition)
           logTimestampOffset match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
-            case _ => {
-              CommandLineUtils.printUsageAndDie(opts.parser, s"Error getting offset by timestamp of topic partition: $topicPartition")
-              Exit.exit(1)
-            }
+            case _ => ToolsUtils.printUsageAndDie(opts.parser, s"Error getting offset by timestamp of topic partition: $topicPartition")
           }
         }.toMap
       } else if (resetPlanFromFile.isDefined) {
@@ -887,16 +875,12 @@ object ConsumerGroupCommand extends Logging {
 
         val preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(groupId, partitionsToResetWithoutCommittedOffset).map {
           case (topicPartition, LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
-          case (topicPartition, _) => {
-            CommandLineUtils.printUsageAndDie(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
-            Exit.exit(1)
-          }
+          case (topicPartition, _) => ToolsUtils.printUsageAndDie(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
         }
 
         preparedOffsetsForPartitionsWithCommittedOffset ++ preparedOffsetsForPartitionsWithoutCommittedOffset
       } else {
-        CommandLineUtils.printUsageAndDie(opts.parser, "Option '%s' requires one of the following scenarios: %s".format(opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts))
-        Exit.exit(1)
+        ToolsUtils.printUsageAndDie(opts.parser, "Option '%s' requires one of the following scenarios: %s".format(opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts))
       }
     }
 
@@ -1049,7 +1033,7 @@ object ConsumerGroupCommand extends Logging {
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val allGroupsOpt = parser.accepts("all-groups", AllGroupsDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
-    val timeoutMsOpt: OptionSpec[Long] = parser.accepts("timeout", TimeoutMsDoc)
+    val timeoutMsOpt = parser.accepts("timeout", TimeoutMsDoc)
                              .withRequiredArg
                              .describedAs("timeout (ms)")
                              .ofType(classOf[Long])
@@ -1063,7 +1047,7 @@ object ConsumerGroupCommand extends Logging {
     val dryRunOpt = parser.accepts("dry-run", DryRunDoc)
     val executeOpt = parser.accepts("execute", ExecuteDoc)
     val exportOpt = parser.accepts("export", ExportDoc)
-    val resetToOffsetOpt: OptionSpec[Long] = parser.accepts("to-offset", ResetToOffsetDoc)
+    val resetToOffsetOpt = parser.accepts("to-offset", ResetToOffsetDoc)
                            .withRequiredArg()
                            .describedAs("offset")
                            .ofType(classOf[Long])
