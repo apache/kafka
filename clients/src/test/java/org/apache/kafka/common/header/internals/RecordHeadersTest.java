@@ -128,7 +128,7 @@ public class RecordHeadersTest {
     }
 
     @Test
-    public void testReadOnly() throws IOException {
+    public void testReadOnly() {
         RecordHeaders headers = new RecordHeaders();
         headers.add(new RecordHeader("key", "value".getBytes()));
         Iterator<Header> headerIteratorBeforeClose = headers.iterator();
@@ -190,7 +190,7 @@ public class RecordHeadersTest {
     }
 
     @Test
-    public void testNew() throws IOException {
+    public void testNew() {
         RecordHeaders headers = new RecordHeaders();
         headers.add(new RecordHeader("key", "value".getBytes()));
         headers.setReadOnly();

@@ -280,7 +280,6 @@ public class SenderTest {
     /*
      * Send multiple requests. Verify that the client side quota metrics have the right values
      */
-    @SuppressWarnings("deprecation")
     @Test
     public void testQuotaMetrics() {
         MockSelector selector = new MockSelector(time);
@@ -640,7 +639,7 @@ public class SenderTest {
      * polls are necessary to send requests.
      */
     @Test
-    public void testInitProducerIdWithMaxInFlightOne() throws Exception {
+    public void testInitProducerIdWithMaxInFlightOne() {
         final long producerId = 123456L;
         createMockClientWithMaxFlightOneMetadataPending();
 
@@ -668,7 +667,7 @@ public class SenderTest {
      * polls are necessary to send requests.
      */
     @Test
-    public void testIdempotentInitProducerIdWithMaxInFlightOne() throws Exception {
+    public void testIdempotentInitProducerIdWithMaxInFlightOne() {
         final long producerId = 123456L;
         createMockClientWithMaxFlightOneMetadataPending();
 
@@ -774,7 +773,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -824,7 +823,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -924,7 +923,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -984,7 +983,7 @@ public class SenderTest {
         appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
 
         // make sure the next sequence number accounts for multi-message batches.
@@ -1256,7 +1255,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -1338,7 +1337,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
 
         // Send second ProduceRequest
@@ -1779,7 +1778,7 @@ public class SenderTest {
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
+        Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -2315,7 +2314,7 @@ public class SenderTest {
         sender.runOnce();  // connect.
         sender.runOnce();  // send.
         String id = client.requests().peek().destination();
-        Node node = new Node(Integer.valueOf(id), "localhost", 0);
+        Node node = new Node(Integer.parseInt(id), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
         assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
         client.disconnect(id);
@@ -2425,7 +2424,7 @@ public class SenderTest {
             assertEquals(2, txnManager.sequenceNumber(tp).longValue(), "The next sequence should be 2");
             String id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
-            Node node = new Node(Integer.valueOf(id), "localhost", 0);
+            Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
@@ -2443,7 +2442,7 @@ public class SenderTest {
             assertFalse(f2.isDone(), "The future shouldn't have been done.");
             id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
-            node = new Node(Integer.valueOf(id), "localhost", 0);
+            node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
@@ -2460,7 +2459,7 @@ public class SenderTest {
             sender.runOnce(); // send the seconcd produce request
             id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
-            node = new Node(Integer.valueOf(id), "localhost", 0);
+            node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 

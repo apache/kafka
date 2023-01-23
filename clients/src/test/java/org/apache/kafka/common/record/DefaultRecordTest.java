@@ -205,7 +205,7 @@ public class DefaultRecordTest {
     }
 
     @Test
-    public void testInvalidValueSizePartial() throws IOException {
+    public void testInvalidValueSizePartial() {
         byte attributes = 0;
         long timestampDelta = 2;
         int offsetDelta = 1;
