@@ -17,6 +17,7 @@
 package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -84,6 +85,13 @@ public interface MigrationClient {
         Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
         ZkMigrationLeadershipState state
     );
+
+    ZkMigrationLeadershipState writeConfigs(
+        ConfigResource configResource,
+        Map<String, String> configMap,
+        ZkMigrationLeadershipState state
+    );
+
 
     void readAllMetadata(Consumer<List<ApiMessageAndVersion>> batchConsumer, Consumer<Integer> brokerIdConsumer);
 

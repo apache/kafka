@@ -423,9 +423,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     state.withMigrationZkVersion(migrationZkVersion)
   }
 
-  def writeConfigs(resource: ConfigResource,
-                   configs: util.Map[String, String],
-                   state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+  override def writeConfigs(resource: ConfigResource,
+                            configs: util.Map[String, String],
+                            state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     val configType = resource.`type`() match {
       case ConfigResource.Type.BROKER => Some(ConfigType.Broker)
       case ConfigResource.Type.TOPIC => Some(ConfigType.Topic)

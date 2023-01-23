@@ -61,6 +61,15 @@ public final class ConfigurationsImage {
         }
     }
 
+    public Map<String, String> configMap(ConfigResource configResource) {
+        ConfigurationImage configurationImage = data.get(configResource);
+        if (configurationImage != null) {
+            return configurationImage.toMap();
+        } else {
+            return Collections.emptyMap();
+        }
+    }
+
     public void write(ImageWriter writer, ImageWriterOptions options) {
         for (Entry<ConfigResource, ConfigurationImage> entry : data.entrySet()) {
             ConfigResource configResource = entry.getKey();

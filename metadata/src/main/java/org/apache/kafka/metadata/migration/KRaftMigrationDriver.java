@@ -499,8 +499,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     });
                 }
 
+                if (delta.configsDelta() != null) {
+                    delta.configsDelta().changes().forEach((configResource, configDelta) -> {
+                        apply("Updating config resource " + configResource, migrationState ->
+                            zkMigrationClient.writeConfigs(
+                                configResource, image.configs().configMap(configResource), migrationState));
+                    });
+                }
 
-                apply("Write MetadataDelta to Zk", state -> zkMigrationClient.writeMetadataDeltaToZookeeper(delta, image, state));
                 // TODO: Unhappy path: Probably relinquish leadership and let new controller
                 //  retry the write?
                 propagator.sendRPCsToBrokersFromMetadataDelta(delta, image,
