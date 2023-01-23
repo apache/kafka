@@ -89,6 +89,8 @@ object Defaults {
 
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
+  val BrokerServerMaxStartupTimeMs = Long.MaxValue
+  val ControllerServerMaxStartupTimeMs = Long.MaxValue
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassName = ""
@@ -376,6 +378,8 @@ object KafkaConfig {
   val MetadataMaxRetentionMillisProp = "metadata.max.retention.ms"
   val QuorumVotersProp = RaftConfig.QUORUM_VOTERS_CONFIG
   val MetadataMaxIdleIntervalMsProp = "metadata.max.idle.interval.ms"
+  val BrokerServerMaxStartupTimeMs = "broker.server.max.startup.time.ms"
+  val ControllerServerMaxStartupTimeMs = "controller.server.max.startup.time.ms"
 
   /** ZK to KRaft Migration configs */
   val MigrationEnabledProp = "zookeeper.metadata.migration.enable"
@@ -713,6 +717,10 @@ object KafkaConfig {
   val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
   val MetadataLogSegmentBytesDoc = "The maximum size of a single metadata log file."
   val MetadataLogSegmentMinBytesDoc = "Override the minimum size for a single metadata log file. This should be used for testing only."
+  val BrokerServerMaxStartupTimeMsDoc = "The maximum number of milliseconds we will wait for the BrokerServer to come up. " +
+  "By default there is no limit. This should be used for testing only."
+  val ControllerServerMaxStartupTimeMsDoc = "The maximum number of milliseconds we will wait for the ControllerServer to come up. " +
+  "By default there is no limit. This should be used for testing only."
 
   val MetadataLogSegmentMillisDoc = "The maximum time before a new metadata log file is rolled out (in milliseconds)."
   val MetadataMaxRetentionBytesDoc = "The maximum combined size of the metadata log and snapshots before deleting old " +
@@ -1086,7 +1094,7 @@ object KafkaConfig {
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
   @nowarn("cat=deprecation")
-  private[server] val configDef = {
+  val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
     import ConfigDef.Type._
@@ -1135,10 +1143,6 @@ object KafkaConfig {
        */
       .define(MetadataSnapshotMaxNewRecordBytesProp, LONG, Defaults.MetadataSnapshotMaxNewRecordBytes, atLeast(1), HIGH, MetadataSnapshotMaxNewRecordBytesDoc)
       .define(MetadataSnapshotMaxIntervalMsProp, LONG, Defaults.MetadataSnapshotMaxIntervalMs, atLeast(0), HIGH, MetadataSnapshotMaxIntervalMsDoc)
-
-      /*
-       * KRaft mode private configs. Note that these configs are defined as internal. We will make them public in the 3.0.0 release.
-       */
       .define(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
       .define(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
       .define(InitialBrokerRegistrationTimeoutMsProp, INT, Defaults.InitialBrokerRegistrationTimeoutMs, null, MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
@@ -1153,6 +1157,8 @@ object KafkaConfig {
       .define(MetadataMaxRetentionBytesProp, LONG, Defaults.MetadataMaxRetentionBytes, null, HIGH, MetadataMaxRetentionBytesDoc)
       .define(MetadataMaxRetentionMillisProp, LONG, LogConfig.DEFAULT_RETENTION_MS, null, HIGH, MetadataMaxRetentionMillisDoc)
       .define(MetadataMaxIdleIntervalMsProp, INT, Defaults.MetadataMaxIdleIntervalMs, atLeast(0), LOW, MetadataMaxIdleIntervalMsDoc)
+      .defineInternal(BrokerServerMaxStartupTimeMs, LONG, Defaults.BrokerServerMaxStartupTimeMs, atLeast(0), MEDIUM, BrokerServerMaxStartupTimeMsDoc)
+      .defineInternal(ControllerServerMaxStartupTimeMs, LONG, Defaults.ControllerServerMaxStartupTimeMs, atLeast(0),MEDIUM, ControllerServerMaxStartupTimeMsDoc)
       .define(MigrationEnabledProp, BOOLEAN, false, HIGH, "Enable ZK to KRaft migration")
 
       /************* Authorizer Configuration ***********/
@@ -1660,6 +1666,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def metadataLogSegmentMillis = getLong(KafkaConfig.MetadataLogSegmentMillisProp)
   def metadataRetentionBytes = getLong(KafkaConfig.MetadataMaxRetentionBytesProp)
   def metadataRetentionMillis = getLong(KafkaConfig.MetadataMaxRetentionMillisProp)
+  val brokerServerMaxStartupTimeMs = getLong(KafkaConfig.BrokerServerMaxStartupTimeMs)
+  val controllerServerMaxStartupTimeMs = getLong(KafkaConfig.ControllerServerMaxStartupTimeMs)
 
   def numNetworkThreads = getInt(KafkaConfig.NumNetworkThreadsProp)
   def backgroundThreads = getInt(KafkaConfig.BackgroundThreadsProp)

@@ -47,7 +47,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.log.internals.LogDirFailureChannel
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.server.util.{FutureUtils, KafkaScheduler}
 import org.apache.kafka.snapshot.SnapshotWriter
 
 import java.net.InetAddress
@@ -179,6 +179,8 @@ class BrokerServer(
 
   override def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
+    val startupDeadlineNs = FutureUtils.getDeadlineNsFromDelayMs(time.nanoseconds(),
+      config.brokerServerMaxStartupTimeMs)
     try {
       sharedServer.startForBroker()
 
@@ -216,7 +218,10 @@ class BrokerServer(
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(sharedServer.controllerQuorumVotersFuture.get()).asScala
+      val voterConnections = FutureUtils.waitWithLogging(logger.underlying,
+        "controller quorum voters future", sharedServer.controllerQuorumVotersFuture,
+        startupDeadlineNs, time)
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(
@@ -436,13 +441,8 @@ class BrokerServer(
         config.numIoThreads, s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix)
 
-      info("Waiting for broker metadata to catch up.")
-      try {
-        lifecycleManager.initialCatchUpFuture.get()
-      } catch {
-        case t: Throwable => throw new RuntimeException("Received a fatal error while " +
-          "waiting for the broker to catch up with the current cluster metadata.", t)
-      }
+      FutureUtils.waitWithLogging(logger.underlying, "broker metadata to catch up",
+        lifecycleManager.initialCatchUpFuture, startupDeadlineNs, time)
 
       // Apply the metadata log changes that we've accumulated.
       metadataPublisher = new BrokerMetadataPublisher(config,
@@ -465,12 +465,9 @@ class BrokerServer(
       // publish operation to complete. This first operation will initialize logManager,
       // replicaManager, groupCoordinator, and txnCoordinator. The log manager may perform
       // a potentially lengthy recovery-from-unclean-shutdown operation here, if required.
-      try {
-        metadataListener.startPublishing(metadataPublisher).get()
-      } catch {
-        case t: Throwable => throw new RuntimeException("Received a fatal error while " +
-          "waiting for the broker to catch up with the current cluster metadata.", t)
-      }
+      FutureUtils.waitWithLogging(logger.underlying,
+        "the broker to catch up with the current cluster metadata",
+        metadataListener.startPublishing(metadataPublisher), startupDeadlineNs, time)
 
       // Log static broker configurations.
       new KafkaConfig(config.originals(), true)
@@ -492,20 +489,12 @@ class BrokerServer(
 
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.
-      try {
-        lifecycleManager.setReadyToUnfence().get()
-      } catch {
-        case t: Throwable => throw new RuntimeException("Received a fatal error while " +
-          "waiting for the broker to be unfenced.", t)
-      }
-      
+      FutureUtils.waitWithLogging(logger.underlying, "the broker to be unfenced",
+        lifecycleManager.setReadyToUnfence(), startupDeadlineNs, time)
+
       // Block here until all the authorizer futures are complete
-      try {
-        CompletableFuture.allOf(authorizerFutures.values.toSeq: _*).join()
-      } catch {
-        case t: Throwable => throw new RuntimeException("Received a fatal error while " +
-          "waiting for all of the authorizer futures to be completed.", t)
-      }
+      FutureUtils.waitWithLogging(logger.underlying, "all of the authorizer futures to be completed",
+        CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadlineNs, time)
 
       maybeChangeStatus(STARTING, STARTED)
     } catch {
