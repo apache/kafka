@@ -100,6 +100,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -662,11 +663,9 @@ public class DistributedHerderTest {
 
     @Test
     public void testHaltCleansUpWorker() {
-        EasyMock.expect(worker.connectorNames()).andReturn(Collections.singleton(CONN1));
-        worker.stopAndAwaitConnector(CONN1);
+        worker.stopAndAwaitConnectors();
         PowerMock.expectLastCall();
-        EasyMock.expect(worker.taskIds()).andReturn(Collections.singleton(TASK1));
-        worker.stopAndAwaitTask(TASK1);
+        worker.stopAndAwaitTasks();
         PowerMock.expectLastCall();
         member.stop();
         PowerMock.expectLastCall();
@@ -3629,6 +3628,21 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void shouldThrowWhenStartAndStopExecutorThrowsRejectedExecutionExceptionAndHerderNotStopping() {
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+
+        PowerMock.replayAll();
+
+        herder.startAndStopExecutor.shutdown();
+        assertThrows(RejectedExecutionException.class, herder::tick);
+
+        PowerMock.verifyAll();
+    }
+
     private void expectRebalance(final long offset,
                                  final List<String> assignedConnectors,
                                  final List<ConnectorTaskId> assignedTasks) {
@@ -3835,8 +3849,10 @@ public class DistributedHerderTest {
             member.wakeup();
             EasyMock.expectLastCall();
         }
-        EasyMock.expect(worker.connectorNames()).andReturn(Collections.emptySet());
-        EasyMock.expect(worker.taskIds()).andReturn(Collections.emptySet());
+        worker.stopAndAwaitConnectors();
+        EasyMock.expectLastCall();
+        worker.stopAndAwaitTasks();
+        EasyMock.expectLastCall();
         member.stop();
         EasyMock.expectLastCall();
         statusBackingStore.stop();
