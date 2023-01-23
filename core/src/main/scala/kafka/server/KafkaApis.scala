@@ -1903,7 +1903,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           .map(_.name)
           .toSet
 
-          /* The cluster metatdata topic is an internal topic with a different implementation. The user should not be
+          /* The cluster metadata topic is an internal topic with a different implementation. The user should not be
            * allowed to create it as a regular topic.
            */
           if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {
