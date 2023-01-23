@@ -32,6 +32,7 @@ import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverri
 import org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.distributed.SampleConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -160,20 +161,14 @@ public class AbstractHerderTest {
 
     @Test
     public void testConnectorClientConfigOverridePolicyClose() {
-        boolean[] connectorClientConfigOverridePolicyClosed = {false};
-        ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy() {
-            @Override
-            public void close() {
-                connectorClientConfigOverridePolicyClosed[0] = true;
-            }
-        };
+        SampleConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new SampleConnectorClientConfigOverridePolicy();
 
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
             .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
             .defaultAnswer(CALLS_REAL_METHODS));
 
         herder.stopServices();
-        assertTrue(connectorClientConfigOverridePolicyClosed[0]);
+        assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
     }
 
     @Test
