@@ -238,6 +238,7 @@ class RaftManagerTest {
     assertTrue(ioThread.isThreadFailed)
     assertFalse(ioThread.isRunning)
 
-    assertEquals(exception, faultHandler.firstException)
+    val caughtException = faultHandler.firstException.getCause
+    assertEquals(exception, caughtException)
   }
 }
