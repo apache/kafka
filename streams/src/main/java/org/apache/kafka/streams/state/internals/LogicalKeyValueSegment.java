@@ -31,6 +31,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
@@ -43,10 +44,10 @@ import org.slf4j.LoggerFactory;
  * stores a key into a shared physical store by prepending the key with a prefix (unique to
  * the specific logical segment), and storing the combined key into the physical store.
  */
-class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segment {
+class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segment, VersionedStoreSegment {
     private static final Logger log = LoggerFactory.getLogger(LogicalKeyValueSegment.class);
 
-    public final long id;
+    private final long id;
     private final String name;
     private final RocksDBStore physicalStore;
     private final PrefixKeyFormatter prefixKeyFormatter;
@@ -61,6 +62,11 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
         this.physicalStore = Objects.requireNonNull(physicalStore);
 
         this.prefixKeyFormatter = new PrefixKeyFormatter(serializeLongToBytes(id));
+    }
+
+    @Override
+    public long id() {
+        return id;
     }
 
     @Override
