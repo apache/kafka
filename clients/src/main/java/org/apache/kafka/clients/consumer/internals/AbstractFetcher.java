@@ -346,11 +346,11 @@ public abstract class AbstractFetcher<K, V> {
 
     protected void handleError(final SubscriptionState subscriptions,
                                final Node fetchTarget,
-                               final RuntimeException e) {
+                               final Throwable t) {
         FetchSessionHandler handler = sessionHandler(fetchTarget.id());
 
         if (handler != null) {
-            handler.handleError(e);
+            handler.handleError(t);
             handler.sessionTopicPartitions().forEach(subscriptions::clearPreferredReadReplica);
         }
     }

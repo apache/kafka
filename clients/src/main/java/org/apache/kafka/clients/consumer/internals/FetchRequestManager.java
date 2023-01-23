@@ -23,12 +23,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.FetchSessionHandler.FetchRequestData;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.AbstractRequestFutureCompletionHandler;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.common.KafkaException;
@@ -72,7 +70,7 @@ public class FetchRequestManager<K, V> extends AbstractFetcher<K, V> implements 
             return new NetworkClientDelegate.PollResult(requestState.remainingBackoffMs(currentTimeMs));
 
         List<UnsentRequest> requests = new ArrayList<>();
-        requestState.updateLastSend(currentTimeMs);
+        requestState.onSendAttempt(currentTimeMs);
 
         Map<Node, FetchRequestData> fetchRequestMap = prepareFetchRequests(metadata, subscriptions);
 
@@ -82,37 +80,30 @@ public class FetchRequestManager<K, V> extends AbstractFetcher<K, V> implements 
             final FetchRequest.Builder request = createFetchRequest(data);
             nodesWithPendingFetchRequests.add(fetchTarget.id());
 
-            AbstractRequestFutureCompletionHandler handler = new AbstractRequestFutureCompletionHandler() {
-                @Override
-                public void handleResponse(final ClientResponse r, final RuntimeException e) {
-                    try {
-                        if (e != null) {
-                            long currentTimeMs = r.receivedTimeMs();
-                            requestState.updateLastFailedAttempt(currentTimeMs);
-
-                            if (e instanceof RetriableException) {
-                                log.debug("FetchResponse request failed due to retriable exception", e);
-                                return;
-                            }
-
-                            handleError(subscriptions, fetchTarget, e);
-
-                            log.warn("FetchResponse request failed due to fatal exception", e);
-                            nonRetriableErrorHandler.handle(e);
-                        } else {
-                            handleSuccess(metadata, fetchTarget, r, data);
-                            requestState.reset();
+            UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(request, Optional.of(fetchTarget));
+            unsentRequest.future().whenComplete((clientResponse, t) -> {
+                try {
+                    if (t != null) {
+                        requestState.onFailedAttempt(fetchContext.time.milliseconds());
+                        if (t instanceof RetriableException) {
+                            log.debug("FetchResponse request failed due to retriable exception", t);
+                            return;
                         }
-                    } finally {
-                        nodesWithPendingFetchRequests.remove(fetchTarget.id());
-                    }
-                }
-            };
 
-            UnsentRequest unsentRequest = NetworkClientDelegate.UnsentRequest.makeUnsentRequest(
-                request,
-                handler,
-                fetchTarget);
+                        handleError(subscriptions, fetchTarget, t);
+
+                        log.warn("FetchResponse request failed due to fatal exception", t);
+                        nonRetriableErrorHandler.handle(t);
+                    } else {
+                        requestState.onSuccessfulAttempt(fetchContext.time.milliseconds());
+                        handleSuccess(metadata, fetchTarget, clientResponse, data);
+                        requestState.reset();
+                    }
+                } finally {
+                    nodesWithPendingFetchRequests.remove(fetchTarget.id());
+                }
+            });
+
             requests.add(unsentRequest);
         }
 
