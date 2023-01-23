@@ -66,6 +66,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.AbstractHerder.keysWithVariableValues;
@@ -886,48 +887,50 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testConnectorPluginConfig() throws Exception {
+    public void testSinkConnectorPluginConfig() throws ClassNotFoundException {
+        testConnectorPluginConfig("sink", SampleSinkConnector::new, SampleSinkConnector::config);
+    }
 
+    @Test
+    public void testSourceConnectorPluginConfig() throws ClassNotFoundException {
+        testConnectorPluginConfig("source", SampleSourceConnector::new, SampleSourceConnector::config);
+    }
+
+    @Test
+    public void testConverterPluginConfig() throws ClassNotFoundException {
+        testConnectorPluginConfig("converter", SampleConverterWithHeaders::new, SampleConverterWithHeaders::config);
+    }
+
+    @Test
+    public void testHeaderConverterPluginConfig() throws ClassNotFoundException {
+        testConnectorPluginConfig("header-converter", SampleHeaderConverter::new, SampleHeaderConverter::config);
+    }
+
+    @Test
+    public void testPredicatePluginConfig() throws ClassNotFoundException {
+        testConnectorPluginConfig("predicate", SamplePredicate::new, SamplePredicate::config);
+    }
+
+    @Test
+    public void testTransformationPluginConfig() throws ClassNotFoundException {
+        testConnectorPluginConfig("transformation", SampleTransformation::new, SampleTransformation::config);
+    }
+
+    private <T> void testConnectorPluginConfig(String pluginName, Supplier<T> newPluginInstance, Function<T, ConfigDef> pluginConfig) throws ClassNotFoundException {
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
 
-        when(plugins.newPlugin(anyString())).then(invocation -> {
-            String name = invocation.getArgument(0);
-            switch (name) {
-                case "sink": return new SampleSinkConnector();
-                case "source": return new SampleSourceConnector();
-                case "converter": return new SampleConverterWithHeaders();
-                case "header-converter": return new SampleHeaderConverter();
-                case "predicate": return new SamplePredicate();
-                default: return new SampleTransformation<>();
-            }
-        });
+        when(plugins.pluginClass(pluginName)).then(invocation -> newPluginInstance.get().getClass());
+        when(plugins.newPlugin(anyString())).then(invocation -> newPluginInstance.get());
         when(herder.plugins()).thenReturn(plugins);
 
-        List<ConfigKeyInfo> sinkConnectorConfigs = herder.connectorPluginConfig("sink");
-        assertNotNull(sinkConnectorConfigs);
-        assertEquals(new SampleSinkConnector().config().names().size(), sinkConnectorConfigs.size());
+        List<ConfigKeyInfo> configs = herder.connectorPluginConfig(pluginName);
+        assertNotNull(configs);
 
-        List<ConfigKeyInfo> sourceConnectorConfigs = herder.connectorPluginConfig("source");
-        assertNotNull(sourceConnectorConfigs);
-        assertEquals(new SampleSourceConnector().config().names().size(), sourceConnectorConfigs.size());
-
-        List<ConfigKeyInfo> converterConfigs = herder.connectorPluginConfig("converter");
-        assertNotNull(converterConfigs);
-        assertEquals(new SampleConverterWithHeaders().config().names().size(), converterConfigs.size());
-
-        List<ConfigKeyInfo> headerConverterConfigs = herder.connectorPluginConfig("header-converter");
-        assertNotNull(headerConverterConfigs);
-        assertEquals(new SampleHeaderConverter().config().names().size(), headerConverterConfigs.size());
-
-        List<ConfigKeyInfo> predicateConfigs = herder.connectorPluginConfig("predicate");
-        assertNotNull(predicateConfigs);
-        assertEquals(new SamplePredicate().config().names().size(), predicateConfigs.size());
-
-        List<ConfigKeyInfo> transformationConfigs = herder.connectorPluginConfig("transformation");
-        assertNotNull(transformationConfigs);
-        assertEquals(new SampleTransformation<>().config().names().size(), transformationConfigs.size());
+        ConfigDef expectedConfig = pluginConfig.apply(newPluginInstance.get());
+        assertEquals(expectedConfig.names().size(), configs.size());
+        verify(plugins).withClassLoader(newPluginInstance.get().getClass().getClassLoader());
     }
 
     @Test(expected = NotFoundException.class)
@@ -937,17 +940,19 @@ public class AbstractHerderTest {
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
         when(worker.getPlugins()).thenReturn(plugins);
-        when(plugins.newPlugin(anyString())).thenThrow(new ClassNotFoundException());
+        when(plugins.pluginClass(anyString())).thenThrow(new ClassNotFoundException());
         herder.connectorPluginConfig(connName);
     }
 
     @Test(expected = BadRequestException.class)
+    @SuppressWarnings({"rawTypes", "unchecked"})
     public void testGetConnectorConfigDefWithInvalidPluginType() throws Exception {
         String connName = "AnotherPlugin";
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
         when(worker.getPlugins()).thenReturn(plugins);
+        when(plugins.pluginClass(anyString())).thenReturn((Class) Object.class);
         when(plugins.newPlugin(anyString())).thenReturn(new DirectoryConfigProvider());
         herder.connectorPluginConfig(connName);
     }
