@@ -19,7 +19,7 @@ package kafka.admin
 
 import joptsimple.{ArgumentAcceptingOptionSpec, OptionSet}
 import kafka.server.KafkaConfig
-import kafka.utils.{Exit, Logging}
+import kafka.utils.{Exit, Logging, ToolsUtils}
 import kafka.utils.Implicits._
 import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
@@ -100,8 +100,7 @@ object ZkSecurityMigrator extends Logging {
         info("zookeeper.acl option is unsecure")
         false
       case _ =>
-        CommandLineUtils.printUsageAndDie(opts.parser, usageMessage)
-        Exit.exit(1)
+        ToolsUtils.printUsageAndDie(opts.parser, usageMessage)
     }
     val zkUrl = opts.options.valueOf(opts.zkUrlOpt)
     val zkSessionTimeout = opts.options.valueOf(opts.zkSessionTimeoutOpt).intValue

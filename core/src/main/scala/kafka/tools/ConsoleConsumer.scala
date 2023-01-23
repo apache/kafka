@@ -353,11 +353,9 @@ object ConsoleConsumer extends Logging {
     } else if (options.has(offsetOpt))
       CommandLineUtils.printUsageAndDie(parser, "The partition is required when offset is specified.")
 
-    def invalidOffset(offset: String): Nothing = {
-      CommandLineUtils.printUsageAndDie(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
+    def invalidOffset(offset: String): Nothing =
+      ToolsUtils.printUsageAndDie(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
         "'earliest', 'latest', or a non-negative long.")
-      Exit.exit(1)
-    }
 
     val offsetArg =
       if (options.has(offsetOpt)) {
