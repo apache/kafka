@@ -41,8 +41,20 @@ import java.util.List;
  * Note that the value format above does not store the number of record versions contained in the
  * segment. It is not necessary to store this information separately because this information is
  * never required on its own. Record versions are always deserialized in order, and we can
- * determine when we have reached the end of the list based on whether the timestamp of the
- * record version equals the {@code min_timestamp}.
+ * determine when we have reached the end of the list based on whether the (validFrom) timestamp of
+ * the record version equals the {@code min_timestamp}.
+ * <p>
+ * Additionally, there is one edge case / exception to the segment value format described above.
+ * If the latest record version (for a particular key) is a tombstone, and the segment in which
+ * this tombstone is to be stored contains currently no record versions, then this will result in
+ * an "empty" segment -- i.e., the segment will contain only a single tombstone with no validTo
+ * timestamp associated with it. When this happens, the serialized segment will contain the
+ * tombstone's (validFrom) timestamp and nothing else. Upon deserializing an empty segment, the
+ * tombstone's timestamp can be fetched as the {@code next_timestamp} of the segment. (An empty
+ * segment can be thought of as having {@code min_timestamp} and {@code next_timestamp} both equal
+ * to the timestamp of the single tombstone record version. To avoid the redundancy of serializing
+ * the same timestamp twice, it is only serialized once and stored as the first timestamp of the
+ * segment, which happens to be {@code next_timestamp}.)
  */
 final class RocksDBVersionedStoreSegmentValueFormatter {
     private static final int TIMESTAMP_SIZE = 8;
@@ -76,7 +88,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
      * Requires that the segment is not empty. Caller is responsible for verifying that this
      * is the case before calling this method.
      *
-     * @return the timestamp of the earliest record in the provided segment.
+     * @return the (validFrom) timestamp of the earliest record in the provided segment.
      */
     static long getMinTimestamp(final byte[] segmentValue) {
         return ByteBuffer.wrap(segmentValue).getLong(TIMESTAMP_SIZE);
@@ -93,7 +105,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
      * Creates a new segment value that contains the provided record.
      *
      * @param value the record value
-     * @param validFrom the record's timestamp
+     * @param validFrom the record's (validFrom) timestamp
      * @param validTo the record's validTo timestamp
      * @return the newly created segment value
      */
@@ -105,7 +117,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
     /**
      * Creates a new empty segment value.
      *
-     * @param timestamp the timestamp of the tombstone for this empty segment value
+     * @param timestamp the (validFrom) timestamp of the tombstone for this empty segment value
      * @return the newly created segment value
      */
     static SegmentValue newSegmentValueWithTombstone(final long timestamp) {
@@ -121,9 +133,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         boolean isEmpty();
 
         /**
-         * Finds the latest record in this segment with timestamp not exceeding the provided
-         * timestamp bound. This method requires that the provided timestamp bound exists in
-         * this segment, i.e., the segment is not empty, and the provided timestamp bound is
+         * Finds the latest record in this segment with (validFrom) timestamp not exceeding the
+         * provided timestamp bound. This method requires that the provided timestamp bound exists
+         * in this segment, i.e., the segment is not empty, and the provided timestamp bound is
          * at least minTimestamp and is smaller than nextTimestamp.
          *
          * @param timestamp the timestamp to find
@@ -139,13 +151,14 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
          * This operation is allowed even if the segment is empty.
          * <p>
          * It is the caller's responsibility to ensure that this action is desirable. In the event
-         * that the new record's timestamp is smaller than the current {@code nextTimestamp} of the
-         * segment, the operation will still be performed, and the segment's existing contents will
-         * be truncated to ensure consistency of timestamps within the segment. This truncation
-         * behavior helps reconcile inconsistencies between different segments, or between a segment
-         * and the latest value store, of a {@link RocksDBVersionedStore} instance.
+         * that the new record's (validFrom) timestamp is smaller than the current
+         * {@code nextTimestamp} of the segment, the operation will still be performed, and the
+         * segment's existing contents will be truncated to ensure consistency of timestamps within
+         * the segment. This truncation behavior helps reconcile inconsistencies between different
+         * segments, or between a segment and the latest value store, of a
+         * {@link RocksDBVersionedStore} instance.
          *
-         * @param validFrom the timestamp of the record to insert
+         * @param validFrom the (validFrom) timestamp of the record to insert
          * @param validTo the validTo timestamp of the record to insert
          * @param value the value of the record to insert
          */
@@ -154,10 +167,10 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         /**
          * Inserts the provided record into the segment as the earliest record in the segment.
          * This operation is allowed even if the segment is empty. It is the caller's responsibility
-         * to ensure that this action is valid, i.e., that record's timestamp is smaller than the
-         * current {@code minTimestamp} of the segment, or the segment is empty.
+         * to ensure that this action is valid, i.e., that record's (validFrom) timestamp is smaller
+         * than the current {@code minTimestamp} of the segment, or the segment is empty.
          *
-         * @param timestamp the timestamp of the record to insert
+         * @param timestamp the (validFrom) timestamp of the record to insert
          * @param value the value of the record to insert
          */
         void insertAsEarliest(long timestamp, byte[] value);
@@ -169,9 +182,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
          * index n requires that index n-1 has already been deserialized).
          * <p>
          * It is the caller's responsibility to ensure that this action makes sense, i.e., that the
-         * insertion index is correct for the timestamp of the record being inserted.
+         * insertion index is correct for the (validFrom) timestamp of the record being inserted.
          *
-         * @param timestamp the timestamp of the record to insert
+         * @param timestamp the (validFrom) timestamp of the record to insert
          * @param value the value of the record to insert
          * @param index the index that the newly inserted record should occupy
          * @throws IllegalArgumentException if the segment is empty, if the provided index is out of
@@ -180,15 +193,15 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         void insert(long timestamp, byte[] value, int index);
 
         /**
-         * Updates the record at the provided index with the provided value and timestamp. This
-         * operation requires that the segment is not empty, and that {@link SegmentValue#find(long, boolean)}
-         * has already been called in order to deserialize the relevant index (i.e., the one being
-         * updated).
+         * Updates the record at the provided index with the provided value and (validFrom)
+         * timestamp. This operation requires that the segment is not empty, and that
+         * {@link SegmentValue#find(long, boolean)} has already been called in order to deserialize
+         * the relevant index (i.e., the one being updated).
          * <p>
          * It is the caller's responsibility to ensure that this action makes sense, i.e., that the
-         * updated timestamp does not violate timestamp order within the segment.
+         * updated (validFrom) timestamp does not violate timestamp order within the segment.
          *
-         * @param timestamp the updated record timestamp
+         * @param timestamp the updated record (validFrom) timestamp
          * @param value the updated record value
          * @param index the index of the record to update
          */
