@@ -753,7 +753,7 @@ public class ExpiringCredentialRefreshingLoginTest {
             int numWaiters) {
         List<KafkaFutureImpl<Long>> retvalWaiters = new ArrayList<>(numWaiters);
         for (int i = 1; i <= numWaiters; ++i) {
-            KafkaFutureImpl<Long> waiter = new KafkaFutureImpl<Long>();
+            KafkaFutureImpl<Long> waiter = new KafkaFutureImpl<>();
             mockScheduler.addWaiter(i * refreshEveryMillis, waiter);
             retvalWaiters.add(waiter);
         }

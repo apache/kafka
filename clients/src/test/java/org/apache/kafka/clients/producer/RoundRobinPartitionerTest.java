@@ -51,7 +51,7 @@ public class RoundRobinPartitionerTest {
         int countForPart2 = 0;
         Partitioner partitioner = new RoundRobinPartitioner();
         Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), partitions,
-            Collections.<String>emptySet(), Collections.<String>emptySet());
+            Collections.emptySet(), Collections.emptySet());
         for (int i = 1; i <= 100; i++) {
             int part = partitioner.partition("test", null, null, null, null, cluster);
             assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
@@ -64,7 +64,7 @@ public class RoundRobinPartitionerTest {
     }
 
     @Test
-    public void testRoundRobinWithKeyBytes() throws InterruptedException {
+    public void testRoundRobinWithKeyBytes() {
         final String topicA = "topicA";
         final String topicB = "topicB";
 
@@ -72,7 +72,7 @@ public class RoundRobinPartitionerTest {
                 new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
                 new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+                Collections.emptySet(), Collections.emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
@@ -96,7 +96,7 @@ public class RoundRobinPartitionerTest {
     }
     
     @Test
-    public void testRoundRobinWithNullKeyBytes() throws InterruptedException {
+    public void testRoundRobinWithNullKeyBytes() {
         final String topicA = "topicA";
         final String topicB = "topicB";
 
@@ -104,7 +104,7 @@ public class RoundRobinPartitionerTest {
                 new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
                 new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+                Collections.emptySet(), Collections.emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
