@@ -2735,7 +2735,7 @@ project(':connect:runtime') {
   task genConnectOpenAPIDocs(type: io.swagger.v3.plugins.gradle.tasks.ResolveTask, dependsOn: setVersionInOpenAPISpec) {
     classpath = sourceSets.main.runtimeClasspath
 
-    buildClasspath = classpath + configurations.swagger.asCollection()
+    buildClasspath = classpath + configurations.swagger
     outputFileName = 'connect_rest'
     outputFormat = 'YAML'
     prettyPrint = 'TRUE'
