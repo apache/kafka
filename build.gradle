@@ -410,14 +410,11 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/ConnectorPluginsResourceTest.*",
-      "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
+      "**/DistributedHerderTest.*",
       "**/KafkaConfigBackingStoreTest.*",
-      "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
-      "**/SourceTaskOffsetCommitterTest.*",
+      "**/KafkaBasedLogTest.*", "**/StandaloneHerderTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*"
+      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*"
     ])
   }
 
