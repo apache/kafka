@@ -101,6 +101,10 @@ public class MockClient implements KafkaClient {
         this.metadataUpdater = metadataUpdater;
     }
 
+    public MockClient(Time time, List<Node> staticNodes) {
+        this(time, new StaticMetadataUpdater(staticNodes));
+    }
+
     public boolean isConnected(String idString) {
         return connectionState(idString).state == ConnectionState.State.CONNECTED;
     }
@@ -656,6 +660,19 @@ public class MockClient implements KafkaClient {
         public void update(Time time, MetadataUpdate update) {
             throw new UnsupportedOperationException();
         }
+    }
+
+    private static class StaticMetadataUpdater extends NoOpMetadataUpdater {
+        private final List<Node> nodes;
+        public StaticMetadataUpdater(List<Node> nodes) {
+            this.nodes = nodes;
+        }
+
+        @Override
+        public List<Node> fetchNodes() {
+            return nodes;
+        }
+
     }
 
     private static class DefaultMockMetadataUpdater implements MockMetadataUpdater {

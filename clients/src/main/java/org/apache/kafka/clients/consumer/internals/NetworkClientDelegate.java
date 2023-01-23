@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle network poll and send operations.
@@ -72,17 +73,16 @@ public class NetworkClientDelegate implements AutoCloseable {
      * @param currentTimeMs current time
      * @return a list of client response
      */
-    public List<ClientResponse> poll(final long timeoutMs, final long currentTimeMs) {
+    public void poll(final long timeoutMs, final long currentTimeMs) {
         trySend(currentTimeMs);
 
         long pollTimeoutMs = timeoutMs;
         if (!unsentRequests.isEmpty()) {
             pollTimeoutMs = Math.min(retryBackoffMs, pollTimeoutMs);
         }
-        List<ClientResponse> res = this.client.poll(pollTimeoutMs, currentTimeMs);
+
+        this.client.poll(pollTimeoutMs, currentTimeMs);
         checkDisconnects();
-        wakeup();
-        return res;
     }
 
     /**
@@ -97,8 +97,8 @@ public class NetworkClientDelegate implements AutoCloseable {
             unsent.timer.update(currentTimeMs);
             if (unsent.timer.isExpired()) {
                 iterator.remove();
-                unsent.callback.ifPresent(c -> c.onFailure(new TimeoutException(
-                        "Failed to send request after " + unsent.timer.timeoutMs() + " " + "ms.")));
+                unsent.callback.onFailure(new TimeoutException(
+                    "Failed to send request after " + unsent.timer.timeoutMs() + " ms."));
                 continue;
             }
 
@@ -118,7 +118,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             return false;
         }
         ClientRequest request = makeClientRequest(r, node, currentTimeMs);
-        if (!client.isReady(node, currentTimeMs)) {
+        if (!client.ready(node, currentTimeMs)) {
             // enqueue the request again if the node isn't ready yet. The request will be handled in the next iteration
             // of the event loop
             log.debug("Node is not ready, handle the request in the next event loop: node={}, request={}", node, r);
@@ -136,26 +136,31 @@ public class NetworkClientDelegate implements AutoCloseable {
             if (u.node.isPresent() && client.connectionFailed(u.node.get())) {
                 iter.remove();
                 AuthenticationException authenticationException = client.authenticationException(u.node.get());
-                u.callback.ifPresent(r -> r.onFailure(authenticationException));
+                u.callback.onFailure(authenticationException);
             }
         }
     }
 
-    private ClientRequest makeClientRequest(final UnsentRequest unsent, final Node node, final long currentTimeMs) {
+    private ClientRequest makeClientRequest(
+        final UnsentRequest unsent,
+        final Node node,
+        final long currentTimeMs
+    ) {
         return client.newClientRequest(
-                node.idString(),
-                unsent.abstractBuilder,
-                currentTimeMs,
-                true,
-                (int) unsent.timer.remainingMs(),
-                unsent.callback.orElse(new DefaultRequestFutureCompletionHandler()));
+            node.idString(),
+            unsent.requestBuilder,
+            currentTimeMs,
+            true,
+            (int) unsent.timer.remainingMs(),
+            unsent.callback
+        );
     }
 
     public Node leastLoadedNode() {
         return this.client.leastLoadedNode(time.milliseconds());
     }
 
-    public void add(final UnsentRequest r) {
+    public void send(final UnsentRequest r) {
         r.setTimer(this.time, this.requestTimeoutMs);
         unsentRequests.add(r);
     }
@@ -189,79 +194,67 @@ public class NetworkClientDelegate implements AutoCloseable {
             this.unsentRequests = Collections.unmodifiableList(unsentRequests);
         }
     }
-
     public static class UnsentRequest {
-        private final AbstractRequest.Builder abstractBuilder;
-        private final Optional<AbstractRequestFutureCompletionHandler> callback;
+        private final AbstractRequest.Builder<?> requestBuilder;
+        private final FutureCompletionHandler callback;
         private Optional<Node> node; // empty if random node can be choosen
         private Timer timer;
 
-        public UnsentRequest(final AbstractRequest.Builder abstractBuilder,
-                             final AbstractRequestFutureCompletionHandler callback) {
-            this(abstractBuilder, callback, null);
-        }
-
-        public UnsentRequest(final AbstractRequest.Builder abstractBuilder,
-                             final AbstractRequestFutureCompletionHandler callback,
-                             final Node node) {
-            Objects.requireNonNull(abstractBuilder);
-            this.abstractBuilder = abstractBuilder;
-            this.node = Optional.ofNullable(node);
-            this.callback = Optional.ofNullable(callback);
+        public UnsentRequest(
+            final AbstractRequest.Builder<?> requestBuilder,
+            final Optional<Node> node
+        ) {
+            Objects.requireNonNull(requestBuilder);
+            this.requestBuilder = requestBuilder;
+            this.node = node;
+            this.callback = new FutureCompletionHandler();
         }
 
         public void setTimer(final Time time, final long requestTimeoutMs) {
             this.timer = time.timer(requestTimeoutMs);
         }
 
-        public static UnsentRequest makeUnsentRequest(
-                final AbstractRequest.Builder<?> requestBuilder,
-                final AbstractRequestFutureCompletionHandler callback,
-                final Node node) {
-            return new UnsentRequest(requestBuilder, callback, node);
+        CompletableFuture<ClientResponse> future() {
+            return callback.future;
+        }
+
+        RequestCompletionHandler callback() {
+            return callback;
+        }
+
+        AbstractRequest.Builder<?> requestBuilder() {
+            return requestBuilder;
         }
 
         @Override
         public String toString() {
-            return abstractBuilder.toString();
+            return "UnsentRequest(builder=" + requestBuilder + ")";
         }
     }
 
-    public static class DefaultRequestFutureCompletionHandler extends AbstractRequestFutureCompletionHandler {
-        @Override
-        public void handleResponse(ClientResponse r, Exception t) {}
-    }
+    public static class FutureCompletionHandler implements RequestCompletionHandler {
+        private final CompletableFuture<ClientResponse> future;
 
-    public abstract static class AbstractRequestFutureCompletionHandler implements RequestCompletionHandler {
-        private final RequestFuture<ClientResponse> future;
-
-        AbstractRequestFutureCompletionHandler() {
-            this.future = new RequestFuture<>();
+        FutureCompletionHandler() {
+            this.future = new CompletableFuture<>();
         }
-
-        abstract public void handleResponse(ClientResponse r, Exception e);
 
         public void onFailure(final RuntimeException e) {
-            future.raise(e);
-            handleResponse(null, e);
+            future.completeExceptionally(e);
         }
 
         @Override
         public void onComplete(final ClientResponse response) {
-            fireCompletion(response);
-            handleResponse(response, null);
-        }
-
-        private void fireCompletion(final ClientResponse response) {
             if (response.authenticationException() != null) {
-                future.raise(response.authenticationException());
+                onFailure(response.authenticationException());
             } else if (response.wasDisconnected()) {
-                future.raise(DisconnectException.INSTANCE);
+                onFailure(DisconnectException.INSTANCE);
             } else if (response.versionMismatch() != null) {
-                future.raise(response.versionMismatch());
+                onFailure(response.versionMismatch());
             } else {
                 future.complete(response);
             }
         }
     }
+
 }
