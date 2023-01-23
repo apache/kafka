@@ -588,6 +588,16 @@ class DynamicBrokerConfigTest {
     assertTrue(m.currentReporters.isEmpty)
   }
 
+  @Test
+  def testNonInternalValuesDoesNotExposeInternalConfigs(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.put(KafkaConfig.MetadataLogSegmentMinBytesProp, "1024")
+    val config = new KafkaConfig(props)
+    assertFalse(config.nonInternalValues.containsKey(KafkaConfig.MetadataLogSegmentMinBytesProp))
+    config.updateCurrentConfig(new KafkaConfig(props))
+    assertFalse(config.nonInternalValues.containsKey(KafkaConfig.MetadataLogSegmentMinBytesProp))
+  }
 }
 
 class TestDynamicThreadPool() extends BrokerReconfigurable {
