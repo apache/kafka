@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.List;
 
 public class Producer extends Thread {
     private final KafkaProducer<Integer, String> producer;
@@ -92,6 +93,30 @@ public class Producer extends Thread {
         }
         System.out.println("Producer sent " + numRecords + " records successfully");
         latch.countDown();
+    }
+    
+    public void sendToMultipleTopics(List<String> topics, String message) {
+        // Round-robin send a message to a list of topics
+        int i = 0;
+        while (true) {
+            String topic = topics.get(i % topics.size());
+            ProducerRecord<Integer, String> record = new ProducerRecord<>(topic, message);
+            producer.send(record);
+            i++;
+        }
+    }
+
+    public void sendWithKey(String topic, String message, String key) {
+        // Send a message to a specific topic with a key for custom partitioning
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, message);
+        producer.send(record);
+    }
+
+    public void sendWithTimestamp(String topic, String message, long timestamp) {
+        // Send a message to a specific topic with a timestamp for custom time-based event streaming
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, message);
+        record.timestamp(timestamp);
+        producer.send(record);
     }
 }
 
