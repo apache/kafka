@@ -239,7 +239,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      * @param uponShutdown       any {@link AutoCloseable} objects that should be closed when this herder is {@link #stop() stopped},
      *                           after all services and resources owned by this herder are stopped
      */
-    // TODO: Do we really need two separate public constructors?
     public DistributedHerder(DistributedConfig config,
                              Time time,
                              Worker worker,
