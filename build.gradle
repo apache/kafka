@@ -52,6 +52,26 @@ spotless {
   }
 }
 
+task copyGitHooks(type: Copy) {
+  description 'Copies the git hooks.'
+  from("${rootDir}/bin/git-hooks/") {
+    include '*'
+  }
+  into "${rootDir}/.git/hooks"
+}
+
+task installGitHooks(type: Exec) {
+  description 'Installs the git hooks.'
+  group 'git hooks'
+  workingDir rootDir
+  commandLine 'chmod'
+  args '-R', '+x', '.git/hooks/'
+  dependsOn copyGitHooks
+  doLast {
+    logger.info('Git hook installed successfully.')
+  }
+}
+
 ext {
   gradleVersion = versions.gradle
   minJavaVersion = "8"
@@ -87,11 +107,11 @@ ext {
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
 
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
-  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
+  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && !version.contains("-alpha") && !version.matches("[0-9]*\\.[0-9]*\\.[0-9]*-[0-9]*-(ccs|ce)")
 
-  mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
-  mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
-  mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+  mavenUrl = propertyOrElse(project, 'mavenUrl', '')
+  mavenUsername = propertyOrElse(project, 'mavenUsername', '')
+  mavenPassword = propertyOrElse(project, 'mavenPassword', '')
 
   userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
 
@@ -181,6 +201,16 @@ def determineCommitId() {
   }
 }
 
+def propertyOrElse(project, propertyName, defaultValue) {
+  if (project.hasProperty(propertyName))
+    project.property(propertyName)
+  // Workaround for KC-1802, system properties set by init scripts are not included
+  // in project properties since Gradle 7.1. This can be removed once we update the
+  // packaging code to set credentials via a gradle.properties file instead.
+  else
+    System.getProperty("org.gradle.project.$propertyName", defaultValue)
+}
+
 apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
@@ -203,7 +233,7 @@ if (file('.git').exists()) {
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
         'TROGDOR.md',
-        '**/README.md',
+        '**/*README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
@@ -236,7 +266,9 @@ subprojects {
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
-  def shouldPublish = !project.name.equals('jmh-benchmarks')
+  // We also don't publish artifacts for kafka-streams-upgrade-system-tests since they are not necessary,
+  // and were resulting in conflicts due to duplicate artifacts
+  def shouldPublish = !project.name.equals('jmh-benchmarks') && !(project.path.startsWith(':streams') && project.name.startsWith("upgrade-system-tests"))
 
   if (shouldPublish) {
     apply plugin: 'maven-publish'
@@ -278,6 +310,7 @@ subprojects {
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
     if (JavaVersion.current().isJava9Compatible())
       options.compilerArgs << "--release" << minJavaVersion
+    dependsOn installGitHooks
   }
 
   if (shouldPublish) {
@@ -650,6 +683,9 @@ subprojects {
       "-Xlint:unused"
     ]
 
+    if (versions.baseScala == '2.13')
+      scalaCompileOptions.additionalParameters += ["-Wconf:msg=@nowarn annotation does not suppress any warnings:s"] // See https://github.com/scala/scala/pull/9960
+
     // See README.md for details on this option and the meaning of each value
     if (userScalaOptimizerMode.equals("method"))
       scalaCompileOptions.additionalParameters += ["-opt:l:method"]
@@ -761,6 +797,26 @@ gradle.taskGraph.whenReady { taskGraph ->
   taskGraph.getAllTasks().findAll { it.name.contains('spotbugsScoverage') || it.name.contains('spotbugsTest') }.each { task ->
     task.enabled = false
   }
+}
+
+// Skip publish tasks for projects that do not have a separate artifact per scala version when the
+// scala version is not the default. This is necessary because some repositories ensure immutability
+// of non snapshot artifacts - i.e. they don't allow the same artifact to be published a second time.
+def defaultScalaSuffix = "2.13"
+gradle.taskGraph.whenReady { taskGraph ->
+  def skippedPublish = false
+  taskGraph.getAllTasks().each { task ->
+    if (task.name.equals("publishMavenJavaPublicationToMavenRepository") &&
+        !versions.baseScala.equals(defaultScalaSuffix) &&
+        task.project.hasProperty("archivesBaseName") &&
+        !task.project.archivesBaseName.endsWith("_${versions.baseScala}")) {
+      task.enabled = false
+      skippedPublish = true
+    }
+  }
+  if (skippedPublish)
+    println("Skipping publish for projects that don't have a separate artifact per Scala version since " +
+      "the Scala version (`${versions.baseScala}`) is not the default (`$defaultScalaSuffix`)")
 }
 
 def fineTuneEclipseClasspathFile(eclipse, project) {
@@ -2946,3 +3002,4 @@ task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
   else
     options.links "https://docs.oracle.com/javase/8/docs/api/"
 }
+
