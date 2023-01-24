@@ -164,7 +164,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
                                         adminZkClient: AdminZkClient,
                                         migrationState: ZkMigrationLeadershipState,
                                         entity: Map[String, String],
-                                        quotas: Map[String, Double],
+                                        quotas: Map[String, java.lang.Double],
                                         zkEntityType: String,
                                         zkEntityName: String): ZkMigrationLeadershipState = {
     val nextMigrationState = migrationClient.writeClientQuotas(

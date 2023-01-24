@@ -23,18 +23,21 @@ import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, NewTopic}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasResult, AlterConfigOp, AlterConfigsResult, ConfigEntry, NewTopic}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
+import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util
+import java.util.Properties
 import java.util.concurrent.TimeUnit
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -147,6 +150,10 @@ class ZkMigrationIntegrationTest {
       kraftCluster.startup()
       val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
 
+      // Allocate a transactional producer ID while in ZK mode
+      allocateProducerId(zkCluster.bootstrapServers())
+      val producerIdBlock = readProducerIdBlock(zkClient)
+
       // Enable migration configs and restart brokers
       val clientProps = kraftCluster.controllerClientProperties()
       val voters = clientProps.get(RaftConfig.QUORUM_VOTERS_CONFIG)
@@ -161,24 +168,86 @@ class ZkMigrationIntegrationTest {
       // Wait for migration to begin
       TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
 
-      // Alter the topic config
+      // Alter the metadata
       admin = zkCluster.createAdminClient()
-      val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, "test")
-      val alterConfigs = Seq(
-        new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_BYTES_CONFIG, "204800"), AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_MS_CONFIG, null), AlterConfigOp.OpType.DELETE)
-      ).asJavaCollection
-      val alterConfigResult = admin.incrementalAlterConfigs(Map(topicResource -> alterConfigs).asJava)
-      alterConfigResult.all().get(60, TimeUnit.SECONDS)
+      alterTopicConfig(admin).all().get(60, TimeUnit.SECONDS)
+      alterClientQuotas(admin).all().get(60, TimeUnit.SECONDS)
 
-      // Check that the ZK data was updated by dual write
-      val propsAfter = zkClient.getEntityConfigs(ConfigType.Topic, "test")
-      assertEquals("204800", propsAfter.getProperty(TopicConfig.SEGMENT_BYTES_CONFIG))
-      assertFalse(propsAfter.containsKey(TopicConfig.SEGMENT_MS_CONFIG))
+      // Verify the changes made to KRaft are seen in ZK
+      verifyTopicConfigs(zkClient)
+      verifyClientQuotas(zkClient)
+      allocateProducerId(zkCluster.bootstrapServers())
+      verifyProducerId(producerIdBlock, zkClient)
 
     } finally {
       zkCluster.stop()
       kraftCluster.close()
+    }
+  }
+
+  def allocateProducerId(bootstrapServers: String): Unit = {
+    val props = new Properties()
+    props.put("bootstrap.servers", bootstrapServers)
+    props.put("transactional.id", "some-transaction-id")
+    val producer = new KafkaProducer[String, String](props, new StringSerializer(), new StringSerializer())
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(new ProducerRecord[String, String]("test", "", "one"))
+    producer.commitTransaction()
+    producer.flush()
+    producer.close()
+  }
+
+  def readProducerIdBlock(zkClient: KafkaZkClient): ProducerIdsBlock = {
+    val (dataOpt, _) = zkClient.getDataAndVersion(ProducerIdBlockZNode.path)
+    dataOpt.map(ProducerIdBlockZNode.parseProducerIdBlockData).get
+  }
+
+  def alterTopicConfig(admin: Admin): AlterConfigsResult = {
+    val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, "test")
+    val alterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_BYTES_CONFIG, "204800"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_MS_CONFIG, null), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
+    admin.incrementalAlterConfigs(Map(topicResource -> alterConfigs).asJava)
+  }
+
+  def alterClientQuotas(admin: Admin): AlterClientQuotasResult = {
+    val quotas = new util.ArrayList[ClientQuotaAlteration]()
+    quotas.add(new ClientQuotaAlteration(
+      new ClientQuotaEntity(Map("user" -> "user1").asJava),
+      List(new ClientQuotaAlteration.Op("consumer_byte_rate", 1000.0)).asJava))
+    quotas.add(new ClientQuotaAlteration(
+      new ClientQuotaEntity(Map("user" -> "user1", "client-id" -> "clientA").asJava),
+      List(new ClientQuotaAlteration.Op("consumer_byte_rate", 800.0), new ClientQuotaAlteration.Op("producer_byte_rate", 100.0)).asJava))
+    quotas.add(new ClientQuotaAlteration(
+      new ClientQuotaEntity(Map("ip" -> "8.8.8.8").asJava),
+      List(new ClientQuotaAlteration.Op("connection_creation_rate", 10.0)).asJava))
+    admin.alterClientQuotas(quotas)
+  }
+
+  def verifyTopicConfigs(zkClient: KafkaZkClient): Unit = {
+    TestUtils.retry(10000) {
+      val propsAfter = zkClient.getEntityConfigs(ConfigType.Topic, "test")
+      assertEquals("204800", propsAfter.getProperty(TopicConfig.SEGMENT_BYTES_CONFIG))
+      assertFalse(propsAfter.containsKey(TopicConfig.SEGMENT_MS_CONFIG))
+    }
+  }
+
+  def verifyClientQuotas(zkClient: KafkaZkClient): Unit = {
+    TestUtils.retry(10000) {
+      assertEquals("1000.0", zkClient.getEntityConfigs(ConfigType.User, "user1").getProperty("consumer_byte_rate"))
+      assertEquals("800.0", zkClient.getEntityConfigs("users/user1/clients", "clientA").getProperty("consumer_byte_rate"))
+      assertEquals("100.0", zkClient.getEntityConfigs("users/user1/clients", "clientA").getProperty("producer_byte_rate"))
+      assertEquals("10.0", zkClient.getEntityConfigs(ConfigType.Ip, "8.8.8.8").getProperty("connection_creation_rate"))
+    }
+  }
+
+  def verifyProducerId(firstProducerIdBlock: ProducerIdsBlock, zkClient: KafkaZkClient): Unit = {
+    TestUtils.retry(10000) {
+      val producerIdBlock = readProducerIdBlock(zkClient)
+      System.err.println(s"ProducerIdBlock: $producerIdBlock")
+      assertTrue(firstProducerIdBlock.firstProducerId() < producerIdBlock.firstProducerId())
     }
   }
 }

@@ -499,12 +499,25 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     });
                 }
 
+                // For configs and client quotas, we need to send all of the data to the ZK client since we persist
+                // everything for a given entity in a single ZK node.
                 if (delta.configsDelta() != null) {
-                    delta.configsDelta().changes().forEach((configResource, configDelta) -> {
+                    delta.configsDelta().changes().forEach((configResource, configDelta) ->
                         apply("Updating config resource " + configResource, migrationState ->
-                            zkMigrationClient.writeConfigs(
-                                configResource, image.configs().configMap(configResource), migrationState));
+                            zkMigrationClient.writeConfigs(configResource, image.configs().configMap(configResource), migrationState)));
+                }
+
+                if (delta.clientQuotasDelta() != null) {
+                    delta.clientQuotasDelta().changes().forEach((clientQuotaEntity, clientQuotaDelta) -> {
+                        Map<String, Double> quotaMap = image.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
+                        apply("Updating client quota " + clientQuotaEntity, migrationState ->
+                            zkMigrationClient.writeClientQuotas(clientQuotaEntity, quotaMap, migrationState));
                     });
+                }
+
+                if (delta.producerIdsDelta() != null) {
+                    apply("Updating next producer ID", migrationState ->
+                        zkMigrationClient.writeProducerId(delta.producerIdsDelta().nextProducerId(), migrationState));
                 }
 
                 // TODO: Unhappy path: Probably relinquish leadership and let new controller
