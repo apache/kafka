@@ -541,6 +541,8 @@ public class InternalTopicManager {
                     tempUnknownTopics.add(topicName);
                     log.debug("The leader of topic {} is not available.\n" +
                         "Error message was: {}", topicName, cause.toString());
+                } else if (cause instanceof java.util.concurrent.TimeoutException) {
+                    throw new RuntimeException();
                 } else {
                     log.error("Unexpected error during topic description for {}.\n" +
                         "Error message was: {}", topicName, cause.toString());
@@ -550,8 +552,6 @@ public class InternalTopicManager {
                 tempUnknownTopics.add(topicName);
                 log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
                     "Error message was: {}", topicName, retriableException.toString());
-            } catch (final java.util.concurrent.TimeoutException e) {
-                throw new RuntimeException(e);
             }
         }
 
