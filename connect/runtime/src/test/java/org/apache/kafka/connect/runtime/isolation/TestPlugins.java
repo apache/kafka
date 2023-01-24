@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -42,6 +43,8 @@ import java.util.stream.Collectors;
 import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
+
+import org.apache.kafka.connect.components.Versioned;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +64,7 @@ import org.slf4j.LoggerFactory;
  * and reference the names of the different plugins directly via the {@link TestPlugin} enum.
  */
 public class TestPlugins {
+    private static final Predicate<String> REMOVE_CLASS_FILTER = s -> s.contains("NonExistentInterface");
     public enum TestPlugin {
         /**
          * A plugin which will always throw an exception during loading
@@ -111,20 +115,62 @@ public class TestPlugins {
         /**
          * A plugin which shares a jar file with {@link TestPlugin#MULTIPLE_PLUGINS_IN_JAR_THING_ONE}
          */
-        MULTIPLE_PLUGINS_IN_JAR_THING_TWO("multiple-plugins-in-jar", "test.plugins.ThingTwo");
+        MULTIPLE_PLUGINS_IN_JAR_THING_TWO("multiple-plugins-in-jar", "test.plugins.ThingTwo"),
+        /**
+         * A plugin which is incorrectly packaged, and is missing a superclass definition.
+         */
+        FAIL_TO_INITIALIZE_MISSING_SUPERCLASS("fail-to-initialize", "test.plugins.MissingSuperclass", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is packaged with other incorrectly packaged plugins, but itself has no issues loading.
+         */
+        FAIL_TO_INITIALIZE_CO_LOCATED("fail-to-initialize", "test.plugins.CoLocatedPlugin", true, REMOVE_CLASS_FILTER),
+        /**
+         * A connector which is incorrectly packaged, and throws during static initialization.
+         */
+        FAIL_TO_INITIALIZE_STATIC_INITIALIZER_THROWS_CONNECTOR("fail-to-initialize", "test.plugins.StaticInitializerThrowsConnector", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
+         */
+        FAIL_TO_INITIALIZE_VERSION_METHOD_THROWS_CONNECTOR("fail-to-initialize", "test.plugins.VersionMethodThrowsConnector", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which throws an exception from default constructor.
+         */
+        FAIL_TO_INITIALIZE_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR("fail-to-initialize", "test.plugins.DefaultConstructorThrowsConnector", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which has a private default constructor.
+         */
+        FAIL_TO_INITIALIZE_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR("fail-to-initialize", "test.plugins.DefaultConstructorPrivateConnector", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which has a private default constructor.
+         */
+        FAIL_TO_INITIALIZE_NO_DEFAULT_CONSTRUCTOR_CONNECTOR("fail-to-initialize", "test.plugins.NoDefaultConstructorConnector", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
+         */
+        FAIL_TO_INITIALIZE_INNER_CLASS_CONNECTOR("fail-to-initialize", "test.plugins.OuterClass$InnerClass", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
+         */
+        FAIL_TO_INITIALIZE_STATIC_INITIALIZER_THROWS_REST_EXTENSION("fail-to-initialize", "test.plugins.StaticInitializerThrowsRestExtension", false, REMOVE_CLASS_FILTER);
 
         private final String resourceDir;
         private final String className;
         private final boolean includeByDefault;
+        private final Predicate<String> removeRuntimeClasses;
 
         TestPlugin(String resourceDir, String className) {
             this(resourceDir, className, true);
         }
 
         TestPlugin(String resourceDir, String className, boolean includeByDefault) {
+            this(resourceDir, className, includeByDefault, ignored -> false);
+        }
+
+        TestPlugin(String resourceDir, String className, boolean includeByDefault, Predicate<String> removeRuntimeClasses) {
             this.resourceDir = resourceDir;
             this.className = className;
             this.includeByDefault = includeByDefault;
+            this.removeRuntimeClasses = removeRuntimeClasses;
         }
 
         public String resourceDir() {
@@ -137,6 +183,10 @@ public class TestPlugins {
 
         public boolean includeByDefault() {
             return includeByDefault;
+        }
+
+        public Predicate<String> removeRuntimeClasses() {
+            return removeRuntimeClasses;
         }
     }
 
@@ -152,7 +202,7 @@ public class TestPlugins {
                 if (pluginJars.containsKey(testPlugin.resourceDir())) {
                     log.debug("Skipping recompilation of " + testPlugin.resourceDir());
                 }
-                pluginJars.put(testPlugin.resourceDir(), createPluginJar(testPlugin.resourceDir()));
+                pluginJars.put(testPlugin.resourceDir(), createPluginJar(testPlugin.resourceDir(), testPlugin.removeRuntimeClasses()));
             }
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
@@ -228,14 +278,14 @@ public class TestPlugins {
                 .toArray(TestPlugin[]::new);
     }
 
-    private static File createPluginJar(String resourceDir) throws IOException {
+    private static File createPluginJar(String resourceDir, Predicate<String> removeRuntimeClasses) throws IOException {
         Path inputDir = resourceDirectoryPath("test-plugins/" + resourceDir);
         Path binDir = Files.createTempDirectory(resourceDir + ".bin.");
         compileJavaSources(inputDir, binDir);
         File jarFile = Files.createTempFile(resourceDir + ".", ".jar").toFile();
         try (JarOutputStream jar = openJarFile(jarFile)) {
-            writeJar(jar, inputDir);
-            writeJar(jar, binDir);
+            writeJar(jar, inputDir, removeRuntimeClasses);
+            writeJar(jar, binDir, removeRuntimeClasses);
         }
         removeDirectory(binDir);
         jarFile.deleteOnExit();
@@ -315,10 +365,11 @@ public class TestPlugins {
         }
     }
 
-    private static void writeJar(JarOutputStream jar, Path inputDir) throws IOException {
+    private static void writeJar(JarOutputStream jar, Path inputDir, Predicate<String> removeRuntimeClasses) throws IOException {
         List<Path> paths = Files.walk(inputDir)
             .filter(Files::isRegularFile)
             .filter(path -> !path.toFile().getName().endsWith(".java"))
+            .filter(path -> !removeRuntimeClasses.test(path.toFile().getName()))
             .collect(Collectors.toList());
         for (Path path : paths) {
             try (InputStream in = new BufferedInputStream(new FileInputStream(path.toFile()))) {
