@@ -23,8 +23,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
-import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -228,9 +226,8 @@ public class DistributedHerderTest {
     private SinkConnectorConfig conn1SinkConfig;
     private SinkConnectorConfig conn1SinkConfigUpdated;
     private short connectProtocolVersion;
-    private final ConnectorClientConfigOverridePolicy
-        noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
-
+    private final SampleConnectorClientConfigOverridePolicy
+        noneConnectorClientConfigOverridePolicy = new SampleConnectorClientConfigOverridePolicy();
 
     @Before
     public void setUp() throws Exception {
@@ -3556,6 +3553,7 @@ public class DistributedHerderTest {
     public void testHerderStopServicesClosesUponShutdown() {
         assertEquals(1, shutdownCalled.getCount());
         herder.stopServices();
+        assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
         assertEquals(0, shutdownCalled.getCount());
     }
 
@@ -3833,6 +3831,7 @@ public class DistributedHerderTest {
         herderExecutor.shutdown();
         assertTrue("herder thread did not finish in time", herderExecutor.awaitTermination(10, TimeUnit.SECONDS));
         herderFuture.get();
+        assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
     }
 
     private void expectHerderStartup() {
