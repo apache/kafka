@@ -2850,7 +2850,8 @@ project(':connect:mirror') {
   }
 
   javadoc {
-    enabled = false
+    enabled = true
+    include "**/*"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
