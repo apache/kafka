@@ -200,7 +200,7 @@ class RaftManagerTest {
   @Test
   def testShutdownIoThread(): Unit = {
     val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val faultHandler = mock(classOf[FaultHandler])
+    val faultHandler = new MockFaultHandler("RaftManagerTestFaultHandler")
     val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft", faultHandler)
 
     when(raftClient.isRunning).thenReturn(true)
@@ -219,6 +219,7 @@ class RaftManagerTest {
     ioThread.run()
     assertFalse(ioThread.isRunning)
     assertTrue(ioThread.isShutdownComplete)
+    assertNull(faultHandler.firstException)
   }
 
   @Test
