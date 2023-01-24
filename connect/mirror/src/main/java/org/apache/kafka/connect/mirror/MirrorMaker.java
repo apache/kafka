@@ -90,8 +90,6 @@ public class MirrorMaker {
     private static final Logger log = LoggerFactory.getLogger(MirrorMaker.class);
 
     private static final long SHUTDOWN_TIMEOUT_SECONDS = 60L;
-    private static final ConnectorClientConfigOverridePolicy CLIENT_CONFIG_OVERRIDE_POLICY =
-            new AllConnectorClientConfigOverridePolicy();
 
     private static final List<Class<?>> CONNECTOR_CLASSES = Arrays.asList(
         MirrorSourceConnector.class,
@@ -241,7 +239,9 @@ public class MirrorMaker {
         SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
         KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase);
         offsetBackingStore.configure(distributedConfig);
-        Worker worker = new Worker(workerId, time, plugins, distributedConfig, offsetBackingStore, CLIENT_CONFIG_OVERRIDE_POLICY);
+        ConnectorClientConfigOverridePolicy clientConfigOverridePolicy = new AllConnectorClientConfigOverridePolicy();
+        clientConfigOverridePolicy.configure(config.originals());
+        Worker worker = new Worker(workerId, time, plugins, distributedConfig, offsetBackingStore, clientConfigOverridePolicy);
         WorkerConfigTransformer configTransformer = worker.configTransformer();
         Converter internalValueConverter = worker.getInternalValueConverter();
         StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter, sharedAdmin, clientIdBase);
@@ -258,7 +258,7 @@ public class MirrorMaker {
         // Do not provide a restClient to the DistributedHerder to indicate that request forwarding is disabled
         Herder herder = new DistributedHerder(distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                advertisedUrl, null, CLIENT_CONFIG_OVERRIDE_POLICY, sharedAdmin);
+                advertisedUrl, null, clientConfigOverridePolicy, sharedAdmin);
         herders.put(sourceAndTarget, herder);
     }
 
