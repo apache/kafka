@@ -69,9 +69,11 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
 
     @Override
     public synchronized void close() {
-        if (closeCallback != null) {
-            closeCallback.run();
+        if (closeCallback == null) {
+            throw new IllegalStateException("RocksDbIterator expects close callback to be set immediately upon creation");
         }
+        closeCallback.run();
+
         iter.close();
         open = false;
     }

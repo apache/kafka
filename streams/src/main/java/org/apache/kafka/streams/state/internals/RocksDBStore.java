@@ -114,7 +114,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private boolean userSpecifiedStatistics = false;
 
     private final RocksDBMetricsRecorder metricsRecorder;
-    private final boolean userManagedIterators;
+    // if true, then open iterators (for range, prefix scan, and other operations) will be
+    // managed automatically (by this store instance). if false, then these iterators must be
+    // managed elsewhere (by the caller of those methods).
+    private final boolean autoManagedIterators;
 
     protected volatile boolean open = false;
     protected StateStoreContext context;
@@ -130,17 +133,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     RocksDBStore(final String name,
                  final String parentDir,
                  final RocksDBMetricsRecorder metricsRecorder) {
-        this(name, parentDir, metricsRecorder, false);
+        this(name, parentDir, metricsRecorder, true);
     }
 
     RocksDBStore(final String name,
                  final String parentDir,
                  final RocksDBMetricsRecorder metricsRecorder,
-                 final boolean userManagedIterators) {
+                 final boolean autoManagedIterators) {
         this.name = name;
         this.parentDir = parentDir;
         this.metricsRecorder = metricsRecorder;
-        this.userManagedIterators = userManagedIterators;
+        this.autoManagedIterators = autoManagedIterators;
     }
 
     @Deprecated
@@ -360,15 +363,24 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
                                                                                     final PS prefixKeySerializer) {
-        if (userManagedIterators) {
+        if (!autoManagedIterators) {
             throw new IllegalStateException("Must specify openIterators in call to prefixScan()");
         }
-        return prefixScan(prefix, prefixKeySerializer, openIterators);
+        return doPrefixScan(prefix, prefixKeySerializer, openIterators);
     }
 
     <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
                                                                              final PS prefixKeySerializer,
                                                                              final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+        if (autoManagedIterators) {
+            throw new IllegalStateException("Cannot specify openIterators when using auto-managed iterators");
+        }
+        return doPrefixScan(prefix, prefixKeySerializer, openIterators);
+    }
+
+    <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> doPrefixScan(final P prefix,
+                                                                               final PS prefixKeySerializer,
+                                                                               final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
         validateStoreOpen();
         Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
@@ -419,30 +431,36 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                               final Bytes to) {
-        if (userManagedIterators) {
+        if (!autoManagedIterators) {
             throw new IllegalStateException("Must specify openIterators in call to range()");
         }
-        return range(from, to, openIterators);
+        return range(from, to, true, openIterators);
     }
 
     synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                        final Bytes to,
                                                        final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+        if (autoManagedIterators) {
+            throw new IllegalStateException("Cannot specify openIterators when using auto-managed iterators");
+        }
         return range(from, to, true, openIterators);
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                                      final Bytes to) {
-        if (userManagedIterators) {
+        if (!autoManagedIterators) {
             throw new IllegalStateException("Must specify openIterators in call to reverseRange()");
         }
-        return reverseRange(from, to, openIterators);
+        return range(from, to, false, openIterators);
     }
 
     synchronized KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                               final Bytes to,
                                                               final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+        if (autoManagedIterators) {
+            throw new IllegalStateException("Cannot specify openIterators when using auto-managed iterators");
+        }
         return range(from, to, false, openIterators);
     }
 
@@ -469,25 +487,31 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
-        if (userManagedIterators) {
+        if (!autoManagedIterators) {
             throw new IllegalStateException("Must specify openIterators in call to all()");
         }
-        return all(openIterators);
+        return all(true, openIterators);
     }
 
     synchronized KeyValueIterator<Bytes, byte[]> all(final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+        if (autoManagedIterators) {
+            throw new IllegalStateException("Cannot specify openIterators when using auto-managed iterators");
+        }
         return all(true, openIterators);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseAll() {
-        if (userManagedIterators) {
+        if (!autoManagedIterators) {
             throw new IllegalStateException("Must specify openIterators in call to reverseAll()");
         }
-        return reverseAll(openIterators);
+        return all(false, openIterators);
     }
 
     KeyValueIterator<Bytes, byte[]> reverseAll(final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+        if (autoManagedIterators) {
+            throw new IllegalStateException("Cannot specify openIterators when using auto-managed iterators");
+        }
         return all(false, openIterators);
     }
 

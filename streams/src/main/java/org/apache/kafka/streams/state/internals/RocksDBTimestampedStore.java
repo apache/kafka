@@ -383,9 +383,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
         @Override
         public synchronized void close() {
-            if (closeCallback != null) {
-                closeCallback.run();
+            if (closeCallback == null) {
+                throw new IllegalStateException("RocksDBDualCFIterator expects close callback to be set immediately upon creation");
             }
+            closeCallback.run();
+
             iterNoTimestamp.close();
             iterWithTimestamp.close();
             open = false;

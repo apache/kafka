@@ -171,8 +171,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         return new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
     }
 
-    private RocksDBStore getRocksDBStoreWithUserManagedIterators() {
-        return new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder, true);
+    private RocksDBStore getRocksDBStoreWithCustomManagedIterators() {
+        return new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder, false);
     }
 
     private InternalMockProcessorContext getProcessorContext(final Properties streamsProps) {
@@ -532,8 +532,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldAllowUserManagedIterators() {
-        rocksDBStore = getRocksDBStoreWithUserManagedIterators();
+    public void shouldAllowCustomManagedIterators() {
+        rocksDBStore = getRocksDBStoreWithCustomManagedIterators();
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         final Set<KeyValueIterator<Bytes, byte[]>> openIterators = new HashSet<>();
 
@@ -564,8 +564,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldRequireOpenIteratorsWhenUsingUserManagedIterators() {
-        rocksDBStore = getRocksDBStoreWithUserManagedIterators();
+    public void shouldRequireOpenIteratorsWhenUsingCustomManagedIterators() {
+        rocksDBStore = getRocksDBStoreWithCustomManagedIterators();
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
 
         assertThrows(IllegalStateException.class,
@@ -576,6 +576,22 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             () -> rocksDBStore.reverseRange(null, new Bytes(stringSerializer.serialize(null, "1"))));
         assertThrows(IllegalStateException.class, () -> rocksDBStore.all());
         assertThrows(IllegalStateException.class, () -> rocksDBStore.reverseAll());
+    }
+
+    @Test
+    public void shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators() {
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        final Set<KeyValueIterator<Bytes, byte[]>> openIterators = new HashSet<>();
+
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.prefixScan("abcd", stringSerializer, openIterators));
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators));
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.reverseRange(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators));
+        assertThrows(IllegalStateException.class, () -> rocksDBStore.all(openIterators));
+        assertThrows(IllegalStateException.class, () -> rocksDBStore.reverseAll(openIterators));
     }
 
     @Test
