@@ -747,7 +747,7 @@ object ConsumerGroupCommand extends Logging {
         if (opts.options.has(opts.resetFromFileOpt))
           Nil
         else
-          ToolsUtils.printUsageAndDie(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.")
+          ToolsUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.")
       }
     }
 
@@ -801,7 +801,7 @@ object ConsumerGroupCommand extends Logging {
         partitionsToReset.map { topicPartition =>
           logStartOffsets.get(topicPartition) match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
-            case _ => ToolsUtils.printUsageAndDie(opts.parser, s"Error getting starting offset of topic partition: $topicPartition")
+            case _ => ToolsUtils.printUsageAndExit(opts.parser, s"Error getting starting offset of topic partition: $topicPartition")
           }
         }.toMap
       } else if (opts.options.has(opts.resetToLatestOpt)) {
@@ -809,7 +809,7 @@ object ConsumerGroupCommand extends Logging {
         partitionsToReset.map { topicPartition =>
           logEndOffsets.get(topicPartition) match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
-            case _ => ToolsUtils.printUsageAndDie(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
+            case _ => ToolsUtils.printUsageAndExit(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
           }
         }.toMap
       } else if (opts.options.has(opts.resetShiftByOpt)) {
@@ -830,7 +830,7 @@ object ConsumerGroupCommand extends Logging {
           val logTimestampOffset = logTimestampOffsets.get(topicPartition)
           logTimestampOffset match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
-            case _ => ToolsUtils.printUsageAndDie(opts.parser, s"Error getting offset by timestamp of topic partition: $topicPartition")
+            case _ => ToolsUtils.printUsageAndExit(opts.parser, s"Error getting offset by timestamp of topic partition: $topicPartition")
           }
         }.toMap
       } else if (opts.options.has(opts.resetByDurationOpt)) {
@@ -844,7 +844,7 @@ object ConsumerGroupCommand extends Logging {
           val logTimestampOffset = logTimestampOffsets.get(topicPartition)
           logTimestampOffset match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
-            case _ => ToolsUtils.printUsageAndDie(opts.parser, s"Error getting offset by timestamp of topic partition: $topicPartition")
+            case _ => ToolsUtils.printUsageAndExit(opts.parser, s"Error getting offset by timestamp of topic partition: $topicPartition")
           }
         }.toMap
       } else if (resetPlanFromFile.isDefined) {
@@ -875,12 +875,12 @@ object ConsumerGroupCommand extends Logging {
 
         val preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(groupId, partitionsToResetWithoutCommittedOffset).map {
           case (topicPartition, LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
-          case (topicPartition, _) => ToolsUtils.printUsageAndDie(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
+          case (topicPartition, _) => ToolsUtils.printUsageAndExit(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
         }
 
         preparedOffsetsForPartitionsWithCommittedOffset ++ preparedOffsetsForPartitionsWithoutCommittedOffset
       } else {
-        ToolsUtils.printUsageAndDie(opts.parser, "Option '%s' requires one of the following scenarios: %s".format(opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts))
+        ToolsUtils.printUsageAndExit(opts.parser, "Option '%s' requires one of the following scenarios: %s".format(opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts))
       }
     }
 

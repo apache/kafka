@@ -67,7 +67,7 @@ object ToolsUtils {
   }
 
   /**
-   * This is a simple wrapper around `CommandLineUtils.printUsageAndDie`.
+   * This is a simple wrapper around `CommandLineUtils.printUsageAndExit`.
    * It is needed for tools migration (KAFKA-14525), as there is no Java equivalent for return type `Nothing`.
    * Can be removed once [[kafka.admin.ConsumerGroupCommand]], [[kafka.tools.ConsoleConsumer]]
    * and [[kafka.tools.ConsoleProducer]] are migrated.
@@ -75,8 +75,8 @@ object ToolsUtils {
    * @param parser Command line options parser.
    * @param message Error message.
    */
-  def printUsageAndDie(parser: OptionParser, message: String): Nothing = {
+  def printUsageAndExit(parser: OptionParser, message: String): Nothing = {
     CommandLineUtils.printUsageAndExit(parser, message)
-    throw new AssertionError("printUsageAndDie should not return, but it did.")
+    throw new AssertionError("printUsageAndExit should not return, but it did.")
   }
 }

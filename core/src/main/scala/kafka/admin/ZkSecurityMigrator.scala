@@ -100,7 +100,7 @@ object ZkSecurityMigrator extends Logging {
         info("zookeeper.acl option is unsecure")
         false
       case _ =>
-        ToolsUtils.printUsageAndDie(opts.parser, usageMessage)
+        ToolsUtils.printUsageAndExit(opts.parser, usageMessage)
     }
     val zkUrl = opts.options.valueOf(opts.zkUrlOpt)
     val zkSessionTimeout = opts.options.valueOf(opts.zkSessionTimeoutOpt).intValue

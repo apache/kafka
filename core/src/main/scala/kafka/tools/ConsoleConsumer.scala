@@ -354,7 +354,7 @@ object ConsoleConsumer extends Logging {
       CommandLineUtils.printUsageAndExit(parser, "The partition is required when offset is specified.")
 
     def invalidOffset(offset: String): Nothing =
-      ToolsUtils.printUsageAndDie(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
+      ToolsUtils.printUsageAndExit(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
         "'earliest', 'latest', or a non-negative long.")
 
     val offsetArg =
@@ -411,7 +411,7 @@ object ConsoleConsumer extends Logging {
         parser.parse(args: _*)
       catch {
         case e: OptionException =>
-          ToolsUtils.printUsageAndDie(parser, e.getMessage)
+          ToolsUtils.printUsageAndExit(parser, e.getMessage)
       }
     }
   }
