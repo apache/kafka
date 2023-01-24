@@ -239,7 +239,13 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         int responseCode = con.getResponseCode();
         log.debug("handleOutput - responseCode: {}", responseCode);
 
+        // NOTE: the contents of the response should not be logged so that we don't leak any
+        // sensitive data.
         String responseBody = null;
+
+        // NOTE: It is OK to log the error response body and/or its formatted version as
+        // per the OAuth spec, it doesn't include sensitive information.
+        // See https://www.ietf.org/rfc/rfc6749.txt, section 5.2
         String errorResponseBody = null;
 
         try (InputStream is = con.getInputStream()) {
@@ -261,7 +267,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         }
 
         if (responseCode == HttpURLConnection.HTTP_OK || responseCode == HttpURLConnection.HTTP_CREATED) {
-            log.debug("handleOutput - responseCode: {}, response: {}, error response: {}", responseCode, responseBody,
+            log.debug("handleOutput - responseCode: {}, error response: {}", responseCode,
                 errorResponseBody);
 
             if (responseBody == null || responseBody.isEmpty())
@@ -270,8 +276,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
             return responseBody;
         } else {
-            log.warn("handleOutput - error response code: {}, response body: {}, error response body: {}", responseCode,
-                responseBody, errorResponseBody);
+            log.warn("handleOutput - error response code: {}, error response body: {}", responseCode,
+                formatErrorMessage(errorResponseBody));
 
             if (UNRETRYABLE_HTTP_CODES.contains(responseCode)) {
                 // We know that this is a non-transient error, so let's not keep retrying the
@@ -296,6 +302,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
     }
 
     static String formatErrorMessage(String errorResponseBody) {
+        // See https://www.ietf.org/rfc/rfc6749.txt, section 5.2 for the format
+        // of this error message.
         if (errorResponseBody == null || errorResponseBody.trim().equals("")) {
             return "{}";
         }
@@ -316,7 +324,6 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
     }
 
     static String parseAccessToken(String responseBody) throws IOException {
-        log.debug("parseAccessToken - responseBody: {}", responseBody);
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode = mapper.readTree(responseBody);
         JsonNode accessTokenNode = rootNode.at("/access_token");
