@@ -17,18 +17,22 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -37,10 +41,13 @@ import org.slf4j.Logger;
 
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
+
+import static org.apache.kafka.clients.consumer.internals.PrototypeAsyncConsumer.CLIENT_ID_METRIC_TAG;
 
 /**
  * Background thread runnable that consumes {@code ApplicationEvent} and
@@ -60,6 +67,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
+    private final Metrics metrics;
     private final ConsumerConfig config;
     // empty if groupId is null
     private final Optional<CoordinatorRequestManager> coordinatorManager;
@@ -80,6 +88,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final ApplicationEventProcessor processor,
                             final ConsumerMetadata metadata,
                             final SubscriptionState subscriptions,
+                            final Metrics metrics,
                             final NetworkClientDelegate networkClient,
                             final CoordinatorRequestManager coordinatorManager,
                             final FetchRequestManager<?, ?> fetchRequestManager) {
@@ -93,6 +102,7 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.config = config;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
+        this.metrics = metrics;
         this.networkClientDelegate = networkClient;
         this.coordinatorManager = Optional.ofNullable(coordinatorManager);
         this.fetchRequestManager = fetchRequestManager;
@@ -105,6 +115,8 @@ public class DefaultBackgroundThread extends KafkaThread {
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                    final ConsumerMetadata metadata,
+                                   final SubscriptionState subscriptions,
+                                   final Metrics metrics,
                                    final KafkaClient networkClient) {
         super(BACKGROUND_THREAD_NAME, true);
         try {
@@ -113,8 +125,9 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.applicationEventQueue = applicationEventQueue;
             this.backgroundEventQueue = backgroundEventQueue;
             this.config = config;
-            // subscriptionState is initialized by the polling thread
             this.metadata = metadata;
+            this.subscriptions = subscriptions;
+            this.metrics = metrics;
             this.networkClientDelegate = new NetworkClientDelegate(
                     this.time,
                     this.config,
@@ -123,31 +136,43 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             String groupId = rebalanceConfig.groupId;
+            int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+            long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
             this.coordinatorManager = groupId == null ?
                     Optional.empty() :
                     Optional.of(new CoordinatorRequestManager(
                         time,
                         logContext,
-                        config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
+                        retryBackoffMs,
                         errorEventHandler,
                         groupId
                     ));
 
+            String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
+            Deserializer<?> keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+            keyDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), true);
+            Deserializer<?> valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+            valueDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), false);
+            IsolationLevel isolationLevel = IsolationLevel.valueOf(config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
+
+            String metricGrpPrefix = "consumer";
+
+            FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry(Collections.singleton(CLIENT_ID_METRIC_TAG), metricGrpPrefix);
+
             // TODO: KIRK - Need to make sure this configuration is legit.
-            this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.NONE);
             final FetchContext<?, ?> fetchContext = new FetchContext<>(logContext,
                                                                        time,
                                                                        config,
-                                                                       null,
-                                                                       null,
-                                                                       -1,
-                                                                       -1,
-                                                                       null,
-                                                                       null,
-                                                                       null);
+                                                                       keyDeserializer,
+                                                                       valueDeserializer,
+                                                                       retryBackoffMs,
+                                                                       requestTimeoutMs,
+                                                                       isolationLevel,
+                                                                       metrics,
+                                                                       metricsRegistry);
 
             // TODO: KIRK - Do we need a shared ApiVersions or should there be multiple?
-            this.fetchRequestManager = new FetchRequestManager<>(fetchContext, new ApiVersions(), errorEventHandler, new RequestState(1));
+            this.fetchRequestManager = new FetchRequestManager<>(fetchContext, new ApiVersions(), errorEventHandler, new RequestState(retryBackoffMs));
             this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, metadata, subscriptions, fetchRequestManager);
         } catch (final Exception e) {
             close();

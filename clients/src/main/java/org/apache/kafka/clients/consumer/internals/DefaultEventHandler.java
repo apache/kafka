@@ -40,8 +40,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * An {@code EventHandler} that uses a single background thread to consume {@code ApplicationEvent} and produce
- * {@code BackgroundEvent} from the {@ConsumerBackgroundThread}.
+ * An {@link EventHandler} that uses a single background thread to consume {@link ApplicationEvent} and produce
+ * {@link BackgroundEvent} from the {@link DefaultBackgroundThread}.
  */
 public class DefaultEventHandler implements EventHandler {
     private static final String METRIC_GRP_PREFIX = "consumer";
@@ -126,6 +126,8 @@ public class DefaultEventHandler implements EventHandler {
             this.applicationEventQueue,
             this.backgroundEventQueue,
             metadata,
+            subscriptionState,
+            metrics,
             networkClient);
     }
 
@@ -137,6 +139,8 @@ public class DefaultEventHandler implements EventHandler {
                         final BlockingQueue<ApplicationEvent> applicationEventQueue,
                         final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                         final ConsumerMetadata metadata,
+                        final SubscriptionState subscriptionState,
+                        final Metrics metrics,
                         final KafkaClient networkClient) {
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
@@ -148,6 +152,8 @@ public class DefaultEventHandler implements EventHandler {
             this.applicationEventQueue,
             this.backgroundEventQueue,
             metadata,
+            subscriptionState,
+            metrics,
             networkClient);
         backgroundThread.start();
     }

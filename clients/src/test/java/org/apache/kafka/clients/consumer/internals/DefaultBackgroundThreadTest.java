@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -55,6 +56,7 @@ public class DefaultBackgroundThreadTest {
     private MockTime time;
     private ConsumerMetadata metadata;
     private SubscriptionState subscriptions;
+    private Metrics metrics;
     private NetworkClientDelegate networkClient;
     private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
@@ -70,6 +72,7 @@ public class DefaultBackgroundThreadTest {
         this.time = new MockTime(0);
         this.metadata = mock(ConsumerMetadata.class);
         this.subscriptions = mock(SubscriptionState.class);
+        this.metrics = mock(Metrics.class);
         this.networkClient = mock(NetworkClientDelegate.class);
         this.applicationEventsQueue = (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
         this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
@@ -154,6 +157,7 @@ public class DefaultBackgroundThreadTest {
                 processor,
                 this.metadata,
                 this.subscriptions,
+                this.metrics,
                 this.networkClient,
                 this.coordinatorManager,
                 this.fetchRequestManager);

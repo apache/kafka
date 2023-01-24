@@ -4962,7 +4962,7 @@ public class FetcherTest {
         buildFetcher();
         assignFromUser(singleton(tp0));
         client.prepareResponse(listOffsetResponse(tp0, Errors.NONE, ListOffsetsRequest.LATEST_TIMESTAMP, 5L));
-        assertEquals(singletonMap(tp0, 5L), metadataFetcher.endOffsets(metadata, subscriptions,singleton(tp0), time.timer(5000L)));
+        assertEquals(singletonMap(tp0, 5L), metadataFetcher.endOffsets(metadata, subscriptions, singleton(tp0), time.timer(5000L)));
     }
 
     @Test
@@ -4970,7 +4970,7 @@ public class FetcherTest {
         buildFetcher();
         assignFromUser(singleton(tp0));
         client.prepareResponse(listOffsetResponse(tp0, Errors.NONE, ListOffsetsRequest.LATEST_TIMESTAMP, 5L));
-        assertEquals(singletonMap(tp0, 5L), metadataFetcher.endOffsets(metadata, subscriptions,asList(tp0, tp0), time.timer(5000L)));
+        assertEquals(singletonMap(tp0, 5L), metadataFetcher.endOffsets(metadata, subscriptions, asList(tp0, tp0), time.timer(5000L)));
     }
 
     @Test
@@ -4982,13 +4982,13 @@ public class FetcherTest {
         expectedOffsets.put(tp2, 9L);
         assignFromUser(expectedOffsets.keySet());
         client.prepareResponse(listOffsetResponse(expectedOffsets, Errors.NONE, ListOffsetsRequest.LATEST_TIMESTAMP, ListOffsetsResponse.UNKNOWN_EPOCH));
-        assertEquals(expectedOffsets, metadataFetcher.endOffsets(metadata, subscriptions,asList(tp0, tp1, tp2), time.timer(5000L)));
+        assertEquals(expectedOffsets, metadataFetcher.endOffsets(metadata, subscriptions, asList(tp0, tp1, tp2), time.timer(5000L)));
     }
 
     @Test
     public void testEndOffsetsEmpty() {
         buildFetcher();
-        assertEquals(emptyMap(), metadataFetcher.endOffsets(metadata, subscriptions,emptyList(), time.timer(5000L)));
+        assertEquals(emptyMap(), metadataFetcher.endOffsets(metadata, subscriptions, emptyList(), time.timer(5000L)));
     }
 
     private MockClient.RequestMatcher offsetsForLeaderEpochRequestMatcher(

@@ -324,6 +324,10 @@
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.clients.consumer" />
+
+      <subpackage name="internals">
+        <allow pkg="org.apache.kafka.clients" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="producer">

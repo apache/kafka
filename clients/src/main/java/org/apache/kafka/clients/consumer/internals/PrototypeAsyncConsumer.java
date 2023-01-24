@@ -70,7 +70,7 @@ import java.util.regex.Pattern;
  * for detail implementation.
  */
 public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
-    private static final String CLIENT_ID_METRIC_TAG = "client-id";
+    static final String CLIENT_ID_METRIC_TAG = "client-id";
     private static final String JMX_PREFIX = "kafka.consumer";
 
     private final LogContext logContext;

@@ -68,7 +68,7 @@
     <suppress checks="ParameterNumber"
               files="(KafkaConsumer|ConsumerCoordinator).java"/>
     <suppress checks="ParameterNumber"
-              files="Fetcher.java"/>
+              files="FetchContext.java"/>
     <suppress checks="ParameterNumber"
               files="Sender.java"/>
     <suppress checks="ParameterNumber"
