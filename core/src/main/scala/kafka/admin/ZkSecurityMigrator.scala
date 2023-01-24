@@ -71,7 +71,7 @@ object ZkSecurityMigrator extends Logging {
     val jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val opts = new ZkSecurityMigratorOptions(args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, usageMessage)
+    CommandLineUtils.maybePrintHelpOrVersion(opts, usageMessage)
 
     // Must have either SASL or TLS mutual authentication enabled to use this tool.
     // Instantiate the client config we will use so that we take into account config provided via the CLI option

@@ -125,7 +125,7 @@ object LogDirsCommand {
 
         options = parser.parse(args : _*)
 
-        CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to query log directory usage on the specified brokers.")
+        CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to query log directory usage on the specified brokers.")
 
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, describeOpt)
     }

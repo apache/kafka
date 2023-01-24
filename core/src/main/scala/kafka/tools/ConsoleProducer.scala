@@ -259,7 +259,7 @@ object ConsoleProducer {
 
     options = tryParse(parser, args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from standard input and publish it to Kafka.")
+    CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from standard input and publish it to Kafka.")
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
 

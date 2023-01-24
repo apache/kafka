@@ -99,7 +99,7 @@ object JmxTool extends Logging {
 
 
     if(args.isEmpty)
-      CommandLineUtils.printUsageAndDie(parser, "Dump JMX values to standard output.")
+      CommandLineUtils.printUsageAndExit(parser, "Dump JMX values to standard output.")
 
     val options = parser.parse(args : _*)
 
@@ -207,7 +207,7 @@ object JmxTool extends Logging {
       }
 
     if(numExpectedAttributes.isEmpty) {
-      CommandLineUtils.printUsageAndDie(parser, s"No matched attributes for the queried objects $queries.")
+      CommandLineUtils.printUsageAndExit(parser, s"No matched attributes for the queried objects $queries.")
     }
 
     // print csv header

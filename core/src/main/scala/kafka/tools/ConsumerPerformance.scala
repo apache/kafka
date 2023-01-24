@@ -260,13 +260,13 @@ object ConsumerPerformance extends LazyLogging {
       options = parser.parse(args: _*)
     catch {
       case e: OptionException =>
-        CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+        CommandLineUtils.printUsageAndExit(parser, e.getMessage)
     }
 
     if(options.has(numThreadsOpt) || options.has(numFetchersOpt))
       println("WARNING: option [threads] and [num-fetch-threads] have been deprecated and will be ignored by the test")
 
-    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps in performance test for the full zookeeper consumer")
+    CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps in performance test for the full zookeeper consumer")
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)
 

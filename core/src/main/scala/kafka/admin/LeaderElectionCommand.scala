@@ -44,7 +44,7 @@ object LeaderElectionCommand extends Logging {
 
   def run(args: Array[String], timeout: Duration): Unit = {
     val commandOptions = new LeaderElectionCommandOptions(args)
-    CommandLineUtils.printHelpAndExitIfNeeded(
+    CommandLineUtils.maybePrintHelpOrVersion(
       commandOptions,
       "This tool attempts to elect a new leader for a set of topic partitions. The type of elections supported are preferred replicas and unclean replicas."
     )

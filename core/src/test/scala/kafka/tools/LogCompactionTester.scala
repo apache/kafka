@@ -99,7 +99,7 @@ object LogCompactionTester {
     val options = parser.parse(args: _*)
 
     if (args.isEmpty)
-      CommandLineUtils.printUsageAndDie(parser, "A tool to test log compaction. Valid options are: ")
+      CommandLineUtils.printUsageAndExit(parser, "A tool to test log compaction. Valid options are: ")
 
     CommandLineUtils.checkRequiredArgs(parser, options, brokerOpt, numMessagesOpt)
 

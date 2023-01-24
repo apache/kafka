@@ -115,11 +115,11 @@ object ReplicaVerificationTool extends Logging {
     val options = parser.parse(args: _*)
 
     if (args.isEmpty || options.has(helpOpt)) {
-      CommandLineUtils.printUsageAndDie(parser, "Validate that all replicas for a set of topics have the same data.")
+      CommandLineUtils.printUsageAndExit(parser, "Validate that all replicas for a set of topics have the same data.")
     }
 
     if (options.has(versionOpt)) {
-      CommandLineUtils.printVersionAndDie()
+      CommandLineUtils.printVersionAndExit()
     }
     CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
 

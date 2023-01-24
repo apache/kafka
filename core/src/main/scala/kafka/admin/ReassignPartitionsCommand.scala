@@ -1331,20 +1331,20 @@ object ReassignPartitionsCommand extends Logging {
   def validateAndParseArgs(args: Array[String]): ReassignPartitionsCommandOptions = {
     val opts = new ReassignPartitionsCommandOptions(args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, helpText)
+    CommandLineUtils.maybePrintHelpOrVersion(opts, helpText)
 
     // Determine which action we should perform.
     val validActions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt,
                            opts.cancelOpt, opts.listOpt)
     val allActions = validActions.filter(opts.options.has _)
     if (allActions.size != 1) {
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: %s".format(
+      CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: %s".format(
         validActions.map("--" + _.options().get(0)).mkString(", ")))
     }
     val action = allActions.head
 
     if (!opts.options.has(opts.bootstrapServerOpt))
-      CommandLineUtils.printUsageAndDie(opts.parser, "Please specify --bootstrap-server")
+      CommandLineUtils.printUsageAndExit(opts.parser, "Please specify --bootstrap-server")
 
     // Make sure that we have all the required arguments for our action.
     val requiredArgs = Map(
@@ -1401,7 +1401,7 @@ object ReassignPartitionsCommand extends Logging {
       if (!opt.equals(action) &&
         !requiredArgs(action).contains(opt) &&
         !permittedArgs(action).contains(opt)) {
-        CommandLineUtils.printUsageAndDie(opts.parser,
+        CommandLineUtils.printUsageAndExit(opts.parser,
           """Option "%s" can't be used with action "%s"""".format(opt, action))
       }
     })

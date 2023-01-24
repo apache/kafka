@@ -34,7 +34,7 @@ object ToolsUtils {
     }
     val isValid = !validHostPort.isEmpty && validHostPort.size == hostPorts.length
     if (!isValid)
-      CommandLineUtils.printUsageAndDie(parser, "Please provide valid host:port like host1:9091,host2:9092\n ")
+      CommandLineUtils.printUsageAndExit(parser, "Please provide valid host:port like host1:9091,host2:9092\n ")
   }
 
   /**
@@ -76,7 +76,7 @@ object ToolsUtils {
    * @param message Error message.
    */
   def printUsageAndDie(parser: OptionParser, message: String): Nothing = {
-    CommandLineUtils.printUsageAndDie(parser, message)
+    CommandLineUtils.printUsageAndExit(parser, message)
     throw new AssertionError("printUsageAndDie should not return, but it did.")
   }
 }

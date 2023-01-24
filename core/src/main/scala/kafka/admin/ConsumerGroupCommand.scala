@@ -49,17 +49,17 @@ object ConsumerGroupCommand extends Logging {
     val opts = new ConsumerGroupCommandOptions(args)
     try {
       opts.checkArgs()
-      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
+      CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
 
       // should have exactly one action
       val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).count(opts.options.has)
       if (actions != 1)
-        CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets")
+        CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets")
 
       run(opts)
     } catch {
       case e: OptionException =>
-        CommandLineUtils.printUsageAndDie(opts.parser, e.getMessage)
+        CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage)
     }
   }
 
@@ -85,7 +85,7 @@ object ConsumerGroupCommand extends Logging {
       }
     } catch {
       case e: IllegalArgumentException =>
-        CommandLineUtils.printUsageAndDie(opts.parser, e.getMessage)
+        CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage)
       case e: Throwable =>
         printError(s"Executing consumer group command failed due to ${e.getMessage}", Some(e))
     } finally {
@@ -1095,15 +1095,15 @@ object ConsumerGroupCommand extends Logging {
 
       if (options.has(describeOpt)) {
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-          CommandLineUtils.printUsageAndDie(parser,
+          CommandLineUtils.printUsageAndExit(parser,
             s"Option $describeOpt takes one of these options: ${allGroupSelectionScopeOpts.mkString(", ")}")
         val mutuallyExclusiveOpts: Set[OptionSpec[_]] = Set(membersOpt, offsetsOpt, stateOpt)
         if (mutuallyExclusiveOpts.toList.map(o => if (options.has(o)) 1 else 0).sum > 1) {
-          CommandLineUtils.printUsageAndDie(parser,
+          CommandLineUtils.printUsageAndExit(parser,
             s"Option $describeOpt takes at most one of these options: ${mutuallyExclusiveOpts.mkString(", ")}")
         }
         if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
-          CommandLineUtils.printUsageAndDie(parser,
+          CommandLineUtils.printUsageAndExit(parser,
             s"Option $describeOpt does not take a value for $stateOpt")
       } else {
         if (options.has(timeoutMsOpt))
@@ -1112,22 +1112,22 @@ object ConsumerGroupCommand extends Logging {
 
       if (options.has(deleteOpt)) {
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-          CommandLineUtils.printUsageAndDie(parser,
+          CommandLineUtils.printUsageAndExit(parser,
             s"Option $deleteOpt takes one of these options: ${allGroupSelectionScopeOpts.mkString(", ")}")
         if (options.has(topicOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"The consumer does not support topic-specific offset " +
+          CommandLineUtils.printUsageAndExit(parser, s"The consumer does not support topic-specific offset " +
             "deletion from a consumer group.")
       }
 
       if (options.has(deleteOffsetsOpt)) {
         if (!options.has(groupOpt) || !options.has(topicOpt))
-          CommandLineUtils.printUsageAndDie(parser,
+          CommandLineUtils.printUsageAndExit(parser,
             s"Option $deleteOffsetsOpt takes the following options: ${allDeleteOffsetsOpts.mkString(", ")}")
       }
 
       if (options.has(resetOffsetsOpt)) {
         if (options.has(dryRunOpt) && options.has(executeOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $resetOffsetsOpt only accepts one of $executeOpt and $dryRunOpt")
+          CommandLineUtils.printUsageAndExit(parser, s"Option $resetOffsetsOpt only accepts one of $executeOpt and $dryRunOpt")
 
         if (!options.has(dryRunOpt) && !options.has(executeOpt)) {
           Console.err.println("WARN: No action will be performed as the --execute option is missing." +
@@ -1137,7 +1137,7 @@ object ConsumerGroupCommand extends Logging {
         }
 
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-          CommandLineUtils.printUsageAndDie(parser,
+          CommandLineUtils.printUsageAndExit(parser,
             s"Option $resetOffsetsOpt takes one of these options: ${allGroupSelectionScopeOpts.mkString(", ")}")
         CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt,   (allResetOffsetScenarioOpts - resetToOffsetOpt).asJava)
         CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, (allResetOffsetScenarioOpts - resetToDatetimeOpt).asJava)

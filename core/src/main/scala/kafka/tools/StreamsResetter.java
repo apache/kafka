@@ -281,13 +281,13 @@ public class StreamsResetter {
         try {
             options = optionParser.parse(args);
             if (args.length == 0 || options.has(helpOption)) {
-                CommandLineUtils.printUsageAndDie(optionParser, USAGE);
+                CommandLineUtils.printUsageAndExit(optionParser, USAGE);
             }
             if (options.has(versionOption)) {
-                CommandLineUtils.printVersionAndDie();
+                CommandLineUtils.printVersionAndExit();
             }
         } catch (final OptionException e) {
-            CommandLineUtils.printUsageAndDie(optionParser, e.getMessage());
+            CommandLineUtils.printUsageAndExit(optionParser, e.getMessage());
         }
 
         final Set<OptionSpec<?>> allScenarioOptions = new HashSet<>();

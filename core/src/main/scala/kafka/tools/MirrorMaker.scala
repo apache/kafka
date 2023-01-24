@@ -86,7 +86,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     info("Starting mirror maker")
     try {
       val opts = new MirrorMakerOptions(args)
-      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to continuously copy data between two Kafka clusters.")
+      CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to continuously copy data between two Kafka clusters.")
       opts.checkArgs()
     } catch {
       case ct: ControlThrowable => throw ct

@@ -606,21 +606,21 @@ object TopicCommand extends Logging {
 
     def checkArgs(): Unit = {
       if (args.isEmpty)
-        CommandLineUtils.printUsageAndDie(parser, "Create, delete, describe, or change a topic.")
+        CommandLineUtils.printUsageAndExit(parser, "Create, delete, describe, or change a topic.")
 
-      CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to create, delete, describe, or change a topic.")
+      CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to create, delete, describe, or change a topic.")
 
       // should have exactly one action
       val actions = Seq(createOpt, listOpt, alterOpt, describeOpt, deleteOpt).count(options.has)
       if (actions != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete")
+        CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete")
 
       // check required args
       if (!has(bootstrapServerOpt))
         throw new IllegalArgumentException("--bootstrap-server must be specified")
       if (has(describeOpt) && has(ifExistsOpt)) {
         if (!has(topicOpt) && !has(topicIdOpt))
-          CommandLineUtils.printUsageAndDie(parser, "--topic or --topic-id is required to describe a topic")
+          CommandLineUtils.printUsageAndExit(parser, "--topic or --topic-id is required to describe a topic")
         if (has(topicOpt) && has(topicIdOpt))
           println("Only topic id will be used when both --topic and --topic-id are specified and topicId is not Uuid.ZERO_UUID")
       }

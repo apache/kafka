@@ -51,7 +51,7 @@ object AclCommand extends Logging {
 
     val opts = new AclCommandOptions(args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manage acls on kafka.")
+    CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to manage acls on kafka.")
 
     opts.checkArgs()
 
@@ -324,7 +324,7 @@ object AclCommand extends Logging {
   private def getResourceToAcls(opts: AclCommandOptions): Map[ResourcePattern, Set[AccessControlEntry]] = {
     val patternType = opts.options.valueOf(opts.resourcePatternType)
     if (!patternType.isSpecific)
-      CommandLineUtils.printUsageAndDie(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
+      CommandLineUtils.printUsageAndExit(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
 
     val resourceToAcl = getResourceFilterToAcls(opts).map {
       case (filter, acls) =>
@@ -332,7 +332,7 @@ object AclCommand extends Logging {
     }
 
     if (resourceToAcl.values.exists(_.isEmpty))
-      CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.")
+      CommandLineUtils.printUsageAndExit(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.")
 
     resourceToAcl
   }
@@ -471,7 +471,7 @@ object AclCommand extends Logging {
       opts.options.valuesOf(opts.userPrincipalOpt).forEach(user => resourceFilters += new ResourcePatternFilter(JResourceType.USER, user.trim, patternType))
 
     if (resourceFilters.isEmpty && dieIfNoResourceFound)
-      CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
+      CommandLineUtils.printUsageAndExit(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
 
     resourceFilters
   }
@@ -487,7 +487,7 @@ object AclCommand extends Logging {
     for ((resource, acls) <- resourceToAcls) {
       val validOps = AclEntry.supportedOperations(resource.resourceType) + AclOperation.ALL
       if ((acls.map(_.operation) -- validOps).nonEmpty)
-        CommandLineUtils.printUsageAndDie(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.mkString(",")}")
+        CommandLineUtils.printUsageAndExit(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.mkString(",")}")
     }
   }
 
@@ -634,7 +634,7 @@ object AclCommand extends Logging {
 
     def checkArgs(): Unit = {
       if (options.has(bootstrapServerOpt) && options.has(authorizerOpt))
-        CommandLineUtils.printUsageAndDie(parser, "Only one of --bootstrap-server or --authorizer must be specified")
+        CommandLineUtils.printUsageAndExit(parser, "Only one of --bootstrap-server or --authorizer must be specified")
 
       if (!options.has(bootstrapServerOpt)) {
         CommandLineUtils.checkRequiredArgs(parser, options, authorizerPropertiesOpt)
@@ -642,14 +642,14 @@ object AclCommand extends Logging {
       }
 
       if (options.has(commandConfigOpt) && !options.has(bootstrapServerOpt))
-        CommandLineUtils.printUsageAndDie(parser, "The --command-config option can only be used with --bootstrap-server option")
+        CommandLineUtils.printUsageAndExit(parser, "The --command-config option can only be used with --bootstrap-server option")
 
       if (options.has(authorizerPropertiesOpt) && options.has(bootstrapServerOpt))
-        CommandLineUtils.printUsageAndDie(parser, "The --authorizer-properties option can only be used with --authorizer option")
+        CommandLineUtils.printUsageAndExit(parser, "The --authorizer-properties option can only be used with --authorizer option")
 
       val actions = Seq(addOpt, removeOpt, listOpt).count(options.has)
       if (actions != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --add, --remove. ")
+        CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --list, --add, --remove. ")
 
       CommandLineUtils.checkInvalidArgs(parser, options, listOpt, producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostsOpt, denyPrincipalsOpt)
 
@@ -658,16 +658,16 @@ object AclCommand extends Logging {
       CommandLineUtils.checkInvalidArgs(parser, options, consumerOpt, operationsOpt, denyPrincipalsOpt, denyHostsOpt)
 
       if (options.has(listPrincipalsOpt) && !options.has(listOpt))
-        CommandLineUtils.printUsageAndDie(parser, "The --principal option is only available if --list is set")
+        CommandLineUtils.printUsageAndExit(parser, "The --principal option is only available if --list is set")
 
       if (options.has(producerOpt) && !options.has(topicOpt))
-        CommandLineUtils.printUsageAndDie(parser, "With --producer you must specify a --topic")
+        CommandLineUtils.printUsageAndExit(parser, "With --producer you must specify a --topic")
 
       if (options.has(idempotentOpt) && !options.has(producerOpt))
-        CommandLineUtils.printUsageAndDie(parser, "The --idempotent option is only available if --producer is set")
+        CommandLineUtils.printUsageAndExit(parser, "The --idempotent option is only available if --producer is set")
 
       if (options.has(consumerOpt) && (!options.has(topicOpt) || !options.has(groupOpt) || (!options.has(producerOpt) && (options.has(clusterOpt) || options.has(transactionalIdOpt)))))
-        CommandLineUtils.printUsageAndDie(parser, "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified.")
+        CommandLineUtils.printUsageAndExit(parser, "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified.")
     }
   }
 }
