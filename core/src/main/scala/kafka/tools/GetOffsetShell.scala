@@ -19,12 +19,13 @@
 package kafka.tools
 
 import joptsimple._
-import kafka.utils.{Exit, IncludeList, ToolsUtils}
+import kafka.utils.{Exit, ToolsUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ListTopicsOptions, OffsetSpec}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.util.CommandLineUtils
+import org.apache.kafka.server.util.IncludeList
 
 import java.util.Properties
 import java.util.concurrent.ExecutionException
@@ -210,7 +211,7 @@ object GetOffsetShell {
       Option(matcher.group(group)).filter(s => s != null && s.nonEmpty)
     }
 
-    val topicFilter = IncludeList(group(1).getOrElse(".*"))
+    val topicFilter = new IncludeList(group(1).getOrElse(".*"))
     val partitionFilter = group(2).map(_.toInt) match {
       case Some(partition) =>
         UniquePartitionFilter(partition)
@@ -233,7 +234,7 @@ object GetOffsetShell {
     partitionIds: String
   ): TopicFilterAndPartitionFilter = {
     TopicFilterAndPartitionFilter(
-      IncludeList(topicOpt.getOrElse(".*")),
+      new IncludeList(topicOpt.getOrElse(".*")),
       PartitionsSetFilter(createPartitionSet(partitionIds))
     )
   }

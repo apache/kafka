@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.server.util.IncludeList
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.HashMap
@@ -309,7 +310,7 @@ object MirrorMaker extends Logging {
       val consumerRebalanceListener = new InternalRebalanceListener(this, customRebalanceListener)
       includeOpt.foreach { include =>
         try {
-          consumer.subscribe(Pattern.compile(IncludeList(include).regex), consumerRebalanceListener)
+          consumer.subscribe(Pattern.compile(new IncludeList(include).getRegex), consumerRebalanceListener)
         } catch {
           case pse: RuntimeException =>
             error(s"Invalid expression syntax: $include")
