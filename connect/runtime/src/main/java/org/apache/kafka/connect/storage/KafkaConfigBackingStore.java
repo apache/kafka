@@ -24,6 +24,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
@@ -72,6 +73,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
@@ -262,7 +264,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             .field(ONLY_FAILED_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
             .build();
 
-    private static final long READ_TO_END_TIMEOUT_MS = 30000;
+    private static final long READ_WRITE_TIMEOUT_MS = 30000;
 
     private final Object lock;
     private final Converter converter;
@@ -491,7 +493,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
         try {
             sendPrivileged(CONNECTOR_KEY(connector), serializedConfig);
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            configLog.readToEnd().get(READ_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write connector configuration to Kafka: ", e);
             throw new ConnectException("Error writing connector configuration to Kafka", e);
@@ -511,9 +513,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     public void removeConnectorConfig(String connector) {
         log.debug("Removing connector configuration for connector '{}'", connector);
         try {
-            sendPrivileged(CONNECTOR_KEY(connector), null);
-            sendPrivileged(TARGET_STATE_KEY(connector), null);
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            List<ProducerKeyValue> keyValues = Arrays.asList(
+                    new ProducerKeyValue(CONNECTOR_KEY(connector), null),
+                    new ProducerKeyValue(TARGET_STATE_KEY(connector), null)
+            );
+            sendPrivileged(keyValues);
+
+            configLog.readToEnd().get(READ_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to remove connector configuration from Kafka: ", e);
             throw new ConnectException("Error removing connector configuration from Kafka", e);
@@ -545,7 +551,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         // Make sure we're at the end of the log. We should be the only writer, but we want to make sure we don't have
         // any outstanding lagging data to consume.
         try {
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            configLog.readToEnd().get(READ_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write root configuration to Kafka: ", e);
             throw new ConnectException("Error writing root configuration to Kafka", e);
@@ -553,21 +559,24 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         int taskCount = configs.size();
 
-        // Start sending all the individual updates
+        // Send all the individual updates
         int index = 0;
+        List<ProducerKeyValue> keyValues = new ArrayList<>();
         for (Map<String, String> taskConfig: configs) {
             Struct connectConfig = new Struct(TASK_CONFIGURATION_V0);
             connectConfig.put("properties", taskConfig);
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
             log.debug("Writing configuration for connector '{}' task {}", connector, index);
             ConnectorTaskId connectorTaskId = new ConnectorTaskId(connector, index);
-            try {
-                sendPrivileged(TASK_KEY(connectorTaskId), serializedConfig);
-            } catch (ExecutionException | InterruptedException e) {
-                log.error("Failed to write task configuration to Kafka", e);
-                throw new ConnectException("Failed to write task configuration to Kafka", e);
-            }
+            keyValues.add(new ProducerKeyValue(TASK_KEY(connectorTaskId), serializedConfig));
             index++;
+        }
+
+        try {
+            sendPrivileged(keyValues);
+        } catch (ExecutionException | InterruptedException | TimeoutException e) {
+            log.error("Failed to write task configuration to Kafka", e);
+            throw new ConnectException("Failed to write task configuration to Kafka", e);
         }
 
         // Finally, send the commit to update the number of tasks and apply the new configs, then wait until we read to
@@ -575,17 +584,18 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         try {
             // Read to end to ensure all the task configs have been written
             if (taskCount > 0) {
-                configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                configLog.readToEnd().get(READ_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             }
             // Write the commit message
             Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
             connectConfig.put("tasks", taskCount);
             byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
             log.debug("Writing commit for connector '{}' with {} tasks.", connector, taskCount);
+
             sendPrivileged(COMMIT_TASKS_KEY(connector), serializedConfig);
 
             // Read to end to ensure all the commit messages have been written
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            configLog.readToEnd().get(READ_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write root configuration to Kafka: ", e);
             throw new ConnectException("Error writing root configuration to Kafka", e);
@@ -614,8 +624,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         byte[] serializedTargetState = converter.fromConnectData(topic, TARGET_STATE_V0, connectTargetState);
         log.debug("Writing target state {} for connector {}", state, connector);
         try {
-            configLog.send(TARGET_STATE_KEY(connector), serializedTargetState).get();
-        } catch (InterruptedException | ExecutionException e) {
+            configLog.send(TARGET_STATE_KEY(connector), serializedTargetState).get(READ_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write target state to Kafka", e);
             throw new ConnectException("Error writing target state to Kafka", e);
         }
@@ -640,7 +650,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         log.debug("Writing task count record {} for connector {}", taskCount, connector);
         try {
             sendPrivileged(TASK_COUNT_RECORD_KEY(connector), serializedTaskCountRecord);
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            configLog.readToEnd().get(READ_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write task count record with {} tasks for connector {} to Kafka: ", taskCount, connector, e);
             throw new ConnectException("Error writing task count record to Kafka", e);
@@ -667,7 +677,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         byte[] serializedSessionKey = converter.fromConnectData(topic, SESSION_KEY_V0, sessionKeyStruct);
         try {
             sendPrivileged(SESSION_KEY_KEY, serializedSessionKey);
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            configLog.readToEnd().get(READ_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write session key to Kafka: ", e);
             throw new ConnectException("Error writing session key to Kafka", e);
@@ -690,7 +700,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         byte[] serializedValue = converter.fromConnectData(topic, value.schema(), value);
         try {
             sendPrivileged(key, serializedValue);
-            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            configLog.readToEnd().get(READ_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write {} to Kafka: ", restartRequest, e);
             throw new ConnectException("Error writing " + restartRequest + " to Kafka", e);
@@ -742,9 +752,32 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier);
     }
 
-    private void sendPrivileged(String key, byte[] value) throws ExecutionException, InterruptedException {
+    /**
+     * Send a single record to the config topic synchronously. Note that {@link #claimWritePrivileges()} must be
+     * successfully invoked before calling this method if this store is configured to use a fencable writer.
+     * @param key the record key
+     * @param value the record value
+     */
+    private void sendPrivileged(String key, byte[] value) throws ExecutionException, InterruptedException, TimeoutException {
+        sendPrivileged(Collections.singletonList(new ProducerKeyValue(key, value)));
+    }
+
+    /**
+     * Send one or more records to the config topic synchronously. Note that {@link #claimWritePrivileges()} must be
+     * successfully invoked before calling this method if this store is configured to use a fencable writer.
+     * @param keyValues the list of producer record key/value pairs
+     */
+    private void sendPrivileged(List<ProducerKeyValue> keyValues) throws ExecutionException, InterruptedException, TimeoutException {
         if (!usesFencableWriter) {
-            configLog.send(key, value).get();
+            List<Future<RecordMetadata>> producerFutures = new ArrayList<>();
+            keyValues.forEach(
+                    keyValue -> producerFutures.add(configLog.send(keyValue.key, keyValue.value))
+            );
+
+            for (Future<RecordMetadata> future : producerFutures) {
+                future.get(READ_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            }
+
             return;
         }
 
@@ -754,12 +787,24 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         try {
             fencableProducer.beginTransaction();
-            fencableProducer.send(new ProducerRecord<>(topic, key, value));
+            keyValues.forEach(
+                    keyValue -> fencableProducer.send(new ProducerRecord<>(topic, keyValue.key, keyValue.value))
+            );
             fencableProducer.commitTransaction();
         } catch (Exception e) {
             log.warn("Failed to perform fencable send to config topic", e);
             relinquishWritePrivileges();
             throw new PrivilegedWriteException("Failed to perform fencable send to config topic", e);
+        }
+    }
+
+    private static class ProducerKeyValue {
+        final String key;
+        final byte[] value;
+
+        ProducerKeyValue(String key, byte[] value) {
+            this.key = key;
+            this.value = value;
         }
     }
 

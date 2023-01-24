@@ -344,7 +344,7 @@ public class KafkaConfigBackingStoreTest {
         storeLog.send(EasyMock.anyObject(), EasyMock.anyObject());
         EasyMock.expectLastCall().andReturn(producerFuture);
 
-        producerFuture.get();
+        producerFuture.get(EasyMock.anyLong(), EasyMock.anyObject());
         EasyMock.expectLastCall().andThrow(new ExecutionException(new TopicAuthorizationException(Collections.singleton("test"))));
 
         expectStop();
@@ -407,7 +407,7 @@ public class KafkaConfigBackingStoreTest {
         expectConvert(KafkaConfigBackingStore.TARGET_STATE_V0, TARGET_STATE_PAUSED, CONFIGS_SERIALIZED.get(1));
         storeLog.send("target-state-" + CONNECTOR_IDS.get(1), CONFIGS_SERIALIZED.get(1));
         EasyMock.expectLastCall().andReturn(producerFuture);
-        producerFuture.get();
+        producerFuture.get(EasyMock.anyLong(), EasyMock.anyObject());
         EasyMock.expectLastCall().andReturn(null);
 
         // Reclaim write privileges
@@ -1549,7 +1549,7 @@ public class KafkaConfigBackingStoreTest {
         storeLog.send(EasyMock.eq(configKey), EasyMock.aryEq(serialized));
         EasyMock.expectLastCall().andReturn(producerFuture);
 
-        producerFuture.get();
+        producerFuture.get(EasyMock.anyLong(), EasyMock.anyObject());
         EasyMock.expectLastCall().andReturn(null);
 
         EasyMock.expect(converter.toConnectData(EasyMock.eq(TOPIC), EasyMock.aryEq(serialized)))
