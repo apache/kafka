@@ -175,14 +175,19 @@ class MigrationPropagator(
 
   override def sendRPCsToBrokersFromMetadataImage(image: MetadataImage, zkControllerEpoch: Int): Unit = {
     publishMetadata(image)
-    requestBatch.newBatch()
 
+    val zkBrokers = image.cluster().zkBrokers().keySet().asScala.map(_.toInt).toSeq
+    val partitions = image.topics().partitions()
+    requestBatch.newBatch()
+    requestBatch.addUpdateMetadataRequestForBrokers(zkBrokers, partitions.keySet().asScala)
+    requestBatch.sendRequestsToBrokers(zkControllerEpoch)
+
+    requestBatch.newBatch()
     // When we need to send RPCs from the image, we're sending 'full' requests meaning we let
     // every broker know about all the metadata and all the LISR requests it needs to handle.
     // Note that we cannot send StopReplica requests from the image. We don't have any state
     // about brokers that host a replica but are not part of the replica set known by the Controller.
-    val zkBrokers = image.cluster().zkBrokers().keySet().asScala.map(_.toInt).toSeq
-    val partitions = image.topics().partitions()
+
     partitions.asScala.foreach{ case (tp, partitionRegistration) =>
       val leaderIsrAndControllerEpochOpt = MigrationControllerChannelContext.partitionLeadershipInfo(image, tp)
       leaderIsrAndControllerEpochOpt match {
@@ -194,7 +199,6 @@ class MigrationPropagator(
         case None => None
       }
     }
-    requestBatch.addUpdateMetadataRequestForBrokers(zkBrokers, partitions.keySet().asScala)
     requestBatch.sendRequestsToBrokers(zkControllerEpoch)
   }
 
