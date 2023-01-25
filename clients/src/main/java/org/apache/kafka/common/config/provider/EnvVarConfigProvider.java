@@ -64,7 +64,7 @@ public class EnvVarConfigProvider implements ConfigProvider {
     @Override
     public ConfigData get(String path, Set<String> keys) {
 
-        if(path != null && !path.isEmpty()) {
+        if (path != null && !path.isEmpty()) {
             log.error("Path is not supported for EnvVarConfigProvider, invalid value '{}'", path);
             throw new ConfigException("Path is not supported for EnvVarConfigProvider, invalid value '" + path + "'");
         }

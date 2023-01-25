@@ -28,7 +28,9 @@ import java.util.Map;
 import java.util.HashSet;
 import java.util.HashMap;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class EnvVarConfigProviderTest {
 
@@ -86,9 +88,7 @@ class EnvVarConfigProviderTest {
     }
     @Test
     void testNotNullPathNonEmptyThrowsException() {
-        assertThrows(ConfigException.class, () -> {
-            envVarConfigProvider.get( "test-path", Collections.singleton("var1"));
-        });
+        assertThrows(ConfigException.class, () -> envVarConfigProvider.get("test-path", Collections.singleton("var1")));
     }
 
 }
