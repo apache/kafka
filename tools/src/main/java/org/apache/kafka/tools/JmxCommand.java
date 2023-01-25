@@ -278,7 +278,7 @@ public class JmxCommand {
     }
 
     private static void maybePrintDataRows(String reportFormat, Map<ObjectName, Integer> numExpectedAttributes, List<String> keys, Map<String, Object> attributes) {
-        if (attributes.keySet().size() == sumValues(numExpectedAttributes) + 1) {
+        if (attributes.size() == sumValues(numExpectedAttributes) + 1) {
             switch (reportFormat) {
                 case "properties":
                     keys.forEach(key -> System.out.println(String.format("%s=%s", key, attributes.get(key))));
@@ -313,7 +313,7 @@ public class JmxCommand {
             objectNameOpt = parser.accepts("object-name", "A JMX object name to use as a query. This can contain wild cards, and this option " +
                             "can be given multiple times to specify more than one query. If no objects are specified " +
                             "all objects will be queried.")
-                    .withOptionalArg()
+                    .withRequiredArg()
                     .describedAs("name")
                     .ofType(String.class);
             attributesOpt = parser.accepts("attributes", "The list of attributes to include in the query. This is a comma-separated list. If no " +
@@ -323,37 +323,37 @@ public class JmxCommand {
                     .ofType(String.class);
             reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in MS with which to poll jmx stats; default value is 2 seconds. " +
                             "Value of -1 equivalent to setting one-time to true")
-                    .withOptionalArg()
+                    .withRequiredArg()
                     .describedAs("ms")
                     .ofType(Integer.class)
                     .defaultsTo(2000);
             oneTimeOpt = parser.accepts("one-time", "Flag to indicate run once only.")
-                    .withOptionalArg()
+                    .withRequiredArg()
                     .describedAs("one-time")
                     .ofType(Boolean.class)
                     .defaultsTo(false);
             dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
                             "See java.text.SimpleDateFormat for options.")
-                    .withOptionalArg()
+                    .withRequiredArg()
                     .describedAs("format")
                     .ofType(String.class);
             jmxServiceUrlOpt = parser.accepts("jmx-url", "The url to connect to poll JMX data. See Oracle javadoc for JMXServiceURL for details.")
-                    .withOptionalArg()
+                    .withRequiredArg()
                     .describedAs("service-url")
                     .ofType(String.class)
                     .defaultsTo("service:jmx:rmi:///jndi/rmi://:9999/jmxrmi");
             reportFormatOpt = parser.accepts("report-format", "output format name: either 'original', 'properties', 'csv', 'tsv' ")
-                    .withOptionalArg()
+                    .withRequiredArg()
                     .describedAs("report-format")
                     .ofType(String.class)
                     .defaultsTo("original");
             jmxAuthPropOpt = parser.accepts("jmx-auth-prop", "A mechanism to pass property in the form 'username=password' " +
                             "when enabling remote JMX with password authentication.")
-                    .withOptionalArg()
+                    .withRequiredArg()
                     .describedAs("jmx-auth-prop")
                     .ofType(String.class);
             jmxSslEnableOpt = parser.accepts("jmx-ssl-enable", "Flag to enable remote JMX with SSL.")
-                    .withOptionalArg()
+                    .withRequiredArg()
                     .describedAs("ssl-enable")
                     .ofType(Boolean.class)
                     .defaultsTo(false);
