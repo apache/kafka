@@ -89,7 +89,7 @@ public interface StateRestoreListener {
                       final long totalRestored);
 
     /**
-     * Method called when restoring the {@link StateStore} is paused due to the task being migrated out of the host.
+     * Method called when restoring the {@link StateStore} is suspended due to the task being migrated out of the host.
      * If the migrated task is recycled or re-assigned back to the current host, another
      * {@link #onRestoreStart(TopicPartition, String, long, long)} would be called.
      *
@@ -97,8 +97,8 @@ public interface StateRestoreListener {
      * @param storeName the name of the store just restored
      * @param totalRestored the total number of records restored for this TopicPartition before being paused
      */
-    default void onRestorePaused(final TopicPartition topicPartition,
-                                 final String storeName,
-                                 final long totalRestored) {
+    default void onRestoreSuspended(final TopicPartition topicPartition,
+                                    final String storeName,
+                                    final long totalRestored) {
     }
 }

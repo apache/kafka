@@ -995,7 +995,7 @@ public class StoreChangelogReader implements ChangelogReader {
                     if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
                         try {
                             final String storeName = changelogMetadata.storeMetadata.store().name();
-                            stateRestoreListener.onRestorePaused(partition, storeName, changelogMetadata.totalRestored);
+                            stateRestoreListener.onRestoreSuspended(partition, storeName, changelogMetadata.totalRestored);
                         } catch (final Exception e) {
                             throw new StreamsException("State restore listener failed on restore paused", e);
                         }

@@ -71,9 +71,9 @@ public class MockStateRestoreListener implements StateRestoreListener {
     }
 
     @Override
-    public void onRestorePaused(final TopicPartition topicPartition,
-                                final String storeName,
-                                final long totalRestored) {
+    public void onRestoreSuspended(final TopicPartition topicPartition,
+                                   final String storeName,
+                                   final long totalRestored) {
         restoreTopicPartition = topicPartition;
         storeNameCalledStates.put(RESTORE_PAUSED, storeName);
         totalNumRestored = totalRestored;
