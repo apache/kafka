@@ -410,14 +410,11 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/ConnectorPluginsResourceTest.*",
-      "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
+      "**/DistributedHerderTest.*",
       "**/KafkaConfigBackingStoreTest.*",
-      "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
-      "**/SourceTaskOffsetCommitterTest.*",
+      "**/KafkaBasedLogTest.*", "**/StandaloneHerderTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*"
+      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*"
     ])
   }
 
@@ -2428,6 +2425,7 @@ project(':jmh-benchmarks') {
     }
     implementation project(':server-common')
     implementation project(':clients')
+    implementation project(':group-coordinator')
     implementation project(':metadata')
     implementation project(':storage')
     implementation project(':streams')

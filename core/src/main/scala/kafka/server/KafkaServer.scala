@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
-import kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorAdapter}
+import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsReporter
@@ -49,6 +49,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, Node}
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
@@ -224,7 +225,7 @@ class KafkaServer(
 
         /* load metadata */
         val (preloadedBrokerMetadataCheckpoint, initialOfflineDirs) =
-          BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(config.logDirs, ignoreMissing = true)
+          BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(config.logDirs, ignoreMissing = true, kraftMode = false)
 
         if (preloadedBrokerMetadataCheckpoint.version != 0) {
           throw new RuntimeException(s"Found unexpected version in loaded `meta.properties`: " +
@@ -444,7 +445,12 @@ class KafkaServer(
 
         /* start group coordinator */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
-        groupCoordinator = GroupCoordinator(config, replicaManager, Time.SYSTEM, metrics)
+        groupCoordinator = GroupCoordinatorAdapter(
+          config,
+          replicaManager,
+          Time.SYSTEM,
+          metrics
+        )
         groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions))
 
         /* create producer ids manager */
@@ -506,7 +512,6 @@ class KafkaServer(
           metadataSupport = zkSupport,
           replicaManager = replicaManager,
           groupCoordinator = groupCoordinator,
-          newGroupCoordinator = new GroupCoordinatorAdapter(groupCoordinator, time),
           txnCoordinator = transactionCoordinator,
           autoTopicCreationManager = autoTopicCreationManager,
           brokerId = config.brokerId,
@@ -563,6 +568,13 @@ class KafkaServer(
           }
         }
         socketServer.enableRequestProcessing(authorizerFutures)
+        // Block here until all the authorizer futures are complete
+        try {
+          CompletableFuture.allOf(authorizerFutures.values.toSeq: _*).join()
+        } catch {
+          case t: Throwable => throw new RuntimeException("Received a fatal error while " +
+            "waiting for all of the authorizer futures to be completed.", t)
+        }
 
         _brokerState = BrokerState.RUNNING
         shutdownLatch = new CountDownLatch(1)

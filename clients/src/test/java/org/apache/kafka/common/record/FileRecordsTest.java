@@ -431,7 +431,7 @@ public class FileRecordsTest {
     }
 
     @Test
-    public void testFormatConversionWithNoMessages() throws IOException {
+    public void testFormatConversionWithNoMessages() {
         TopicPartition tp = new TopicPartition("topic-1", 0);
         LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, MemoryRecords.EMPTY, RecordBatch.MAGIC_VALUE_V0,
             0, Time.SYSTEM);

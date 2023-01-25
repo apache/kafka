@@ -36,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * This class is threadsafe, although it is mutable. Readers are recommended to use {@link
  * Position#copy()} to avoid seeing mutations to the Position after they get the reference. For
  * examples, when a store executes a {@link org.apache.kafka.streams.processor.StateStore#query(Query,
- * PositionBound, boolean)} request and returns its current position via {@link
+ * PositionBound, QueryConfig)} request and returns its current position via {@link
  * QueryResult#setPosition(Position)}, it should pass a copy of its position instead of the mutable
  * reference.
  */

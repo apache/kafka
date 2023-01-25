@@ -23,8 +23,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
-import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -100,6 +98,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -227,9 +226,8 @@ public class DistributedHerderTest {
     private SinkConnectorConfig conn1SinkConfig;
     private SinkConnectorConfig conn1SinkConfigUpdated;
     private short connectProtocolVersion;
-    private final ConnectorClientConfigOverridePolicy
-        noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
-
+    private final SampleConnectorClientConfigOverridePolicy
+        noneConnectorClientConfigOverridePolicy = new SampleConnectorClientConfigOverridePolicy();
 
     @Before
     public void setUp() throws Exception {
@@ -662,11 +660,9 @@ public class DistributedHerderTest {
 
     @Test
     public void testHaltCleansUpWorker() {
-        EasyMock.expect(worker.connectorNames()).andReturn(Collections.singleton(CONN1));
-        worker.stopAndAwaitConnector(CONN1);
+        worker.stopAndAwaitConnectors();
         PowerMock.expectLastCall();
-        EasyMock.expect(worker.taskIds()).andReturn(Collections.singleton(TASK1));
-        worker.stopAndAwaitTask(TASK1);
+        worker.stopAndAwaitTasks();
         PowerMock.expectLastCall();
         member.stop();
         PowerMock.expectLastCall();
@@ -3557,6 +3553,7 @@ public class DistributedHerderTest {
     public void testHerderStopServicesClosesUponShutdown() {
         assertEquals(1, shutdownCalled.getCount());
         herder.stopServices();
+        assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
         assertEquals(0, shutdownCalled.getCount());
     }
 
@@ -3626,6 +3623,21 @@ public class DistributedHerderTest {
         configUpdateListener.onConnectorConfigUpdate(CONN1); // read updated config
         herder.tick();
         herder.tick();
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void shouldThrowWhenStartAndStopExecutorThrowsRejectedExecutionExceptionAndHerderNotStopping() {
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+
+        PowerMock.replayAll();
+
+        herder.startAndStopExecutor.shutdown();
+        assertThrows(RejectedExecutionException.class, herder::tick);
+
         PowerMock.verifyAll();
     }
 
@@ -3819,6 +3831,7 @@ public class DistributedHerderTest {
         herderExecutor.shutdown();
         assertTrue("herder thread did not finish in time", herderExecutor.awaitTermination(10, TimeUnit.SECONDS));
         herderFuture.get();
+        assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
     }
 
     private void expectHerderStartup() {
@@ -3835,8 +3848,10 @@ public class DistributedHerderTest {
             member.wakeup();
             EasyMock.expectLastCall();
         }
-        EasyMock.expect(worker.connectorNames()).andReturn(Collections.emptySet());
-        EasyMock.expect(worker.taskIds()).andReturn(Collections.emptySet());
+        worker.stopAndAwaitConnectors();
+        EasyMock.expectLastCall();
+        worker.stopAndAwaitTasks();
+        EasyMock.expectLastCall();
         member.stop();
         EasyMock.expectLastCall();
         statusBackingStore.stop();

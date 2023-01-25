@@ -33,6 +33,7 @@ import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -120,14 +121,16 @@ public class DefaultBackgroundThreadTest {
         assertEquals(10, backgroundThread.handlePollResult(failure));
     }
 
-    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(final Time time,
-                                                                                   final long timeout) {
+    private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(
+        final Time time,
+        final long timeout
+    ) {
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
                                 .setKey("foobar")),
-                null);
+            Optional.empty());
         req.setTimer(time, timeout);
         return req;
     }

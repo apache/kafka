@@ -1516,7 +1516,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   override def values: util.Map[String, _] =
     if (this eq currentConfig) super.values else currentConfig.values
   override def nonInternalValues: util.Map[String, _] =
-    if (this eq currentConfig) super.nonInternalValues else currentConfig.values
+    if (this eq currentConfig) super.nonInternalValues else currentConfig.nonInternalValues
   override def originalsStrings: util.Map[String, String] =
     if (this eq currentConfig) super.originalsStrings else currentConfig.originalsStrings
   override def originalsWithPrefix(prefix: String): util.Map[String, AnyRef] =

@@ -157,7 +157,8 @@ case class MetaProperties(
 object BrokerMetadataCheckpoint extends Logging {
   def getBrokerMetadataAndOfflineDirs(
     logDirs: collection.Seq[String],
-    ignoreMissing: Boolean
+    ignoreMissing: Boolean,
+    kraftMode: Boolean
   ): (RawMetaProperties, collection.Seq[String]) = {
     require(logDirs.nonEmpty, "Must have at least one log dir to read meta.properties")
 
@@ -188,8 +189,13 @@ object BrokerMetadataCheckpoint extends Logging {
     if (brokerMetadataMap.isEmpty) {
       (new RawMetaProperties(), offlineDirs)
     } else {
-      val parsedProperties = brokerMetadataMap.values.map(props => MetaProperties.parse(new RawMetaProperties(props)))
-      val numDistinctMetaProperties = parsedProperties.toSet.size
+      // KRaft mode has to support handling both meta.properties versions 0 and 1 and has to
+      // reconcile have multiple versions in different directories.
+      val numDistinctMetaProperties = if (kraftMode) {
+        brokerMetadataMap.values.map(props => MetaProperties.parse(new RawMetaProperties(props))).toSet.size
+      } else {
+        brokerMetadataMap.values.toSet.size
+      }
       if (numDistinctMetaProperties > 1) {
         val builder = new StringBuilder
 

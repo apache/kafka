@@ -14,21 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 
-import java.util.Queue;
+public class SampleConnectorClientConfigOverridePolicy extends NoneConnectorClientConfigOverridePolicy {
+    private boolean closed;
 
-public class ErrorEventHandler {
-    private final Queue<BackgroundEvent> backgroundEventQueue;
-
-    public ErrorEventHandler(Queue<BackgroundEvent> backgroundEventQueue) {
-        this.backgroundEventQueue = backgroundEventQueue;
+    @Override
+    public void close() {
+        closed = true;
     }
 
-    public void handle(Throwable e) {
-        backgroundEventQueue.add(new ErrorBackgroundEvent(e));
+    public boolean isClosed() {
+        return closed;
     }
 }

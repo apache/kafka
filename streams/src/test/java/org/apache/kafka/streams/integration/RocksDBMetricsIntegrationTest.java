@@ -37,7 +37,6 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -64,6 +63,8 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -232,7 +233,7 @@ public class RocksDBMetricsIntegrationTest {
         kafkaStreams.cleanUp();
         produceRecords();
 
-        StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams, TIMEOUT);
+        startApplicationAndWaitUntilRunning(kafkaStreams);
 
         metricsVerifier.verify(kafkaStreams, "rocksdb-state-id");
         metricsVerifier.verify(kafkaStreams, "rocksdb-window-state-id");
