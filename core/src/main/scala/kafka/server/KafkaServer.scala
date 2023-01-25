@@ -568,6 +568,13 @@ class KafkaServer(
           }
         }
         socketServer.enableRequestProcessing(authorizerFutures)
+        // Block here until all the authorizer futures are complete
+        try {
+          CompletableFuture.allOf(authorizerFutures.values.toSeq: _*).join()
+        } catch {
+          case t: Throwable => throw new RuntimeException("Received a fatal error while " +
+            "waiting for all of the authorizer futures to be completed.", t)
+        }
 
         _brokerState = BrokerState.RUNNING
         shutdownLatch = new CountDownLatch(1)

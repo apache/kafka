@@ -291,6 +291,13 @@ class ControllerServer(
        * and KIP-801 for details.
        */
       socketServer.enableRequestProcessing(authorizerFutures)
+      // Block here until all the authorizer futures are complete
+      try {
+        CompletableFuture.allOf(authorizerFutures.values.toSeq: _*).join()
+      } catch {
+        case t: Throwable => throw new RuntimeException("Received a fatal error while " +
+          "waiting for all of the authorizer futures to be completed.", t)
+      }
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)
