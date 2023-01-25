@@ -21,8 +21,8 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.{Callable, ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
-import com.yammer.metrics.core.Meter
-import kafka.metrics.KafkaMetricsGroup
+import com.yammer.metrics.core.{Gauge, Meter, MetricName}
+import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import kafka.network.Processor.ListenerMetricTag
 import kafka.server.KafkaConfig
 import kafka.utils.Implicits.MapExtensionMethods
@@ -748,6 +748,22 @@ class ConnectionQuotasTest {
       s"Number of connections on EXTERNAL listener:")
   }
 
+  @Test
+  def testTotalConnectionCountMetrics(): Unit = {
+    val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
+    addListenersAndVerify(config, connectionQuotas)
+
+    val numConnections = 100
+    val totalConnectionCountGauge = getGauge[Int]("TotalConnectionCount")
+    val futures = listeners.values.map { listener =>
+      executor.submit((() => acceptConnections(connectionQuotas, listener, numConnections, 10)): Runnable)
+    }
+
+    futures.foreach(_.get(10, TimeUnit.SECONDS))
+    assertEquals(numConnections * listeners.size, totalConnectionCountGauge.value())
+  }
+
   private def addListenersAndVerify(config: KafkaConfig, connectionQuotas: ConnectionQuotas) : Unit = {
     addListenersAndVerify(config, Map.empty.asJava, connectionQuotas)
   }
@@ -950,5 +966,17 @@ class ConnectionQuotasTest {
         () => connectionQuotas.inc(listenerName, listenerDesc.defaultIp, blockedPercentMeters(listenerName.value))
       )
     }
+  }
+
+  private def getGauge[T](filter: MetricName => Boolean): Gauge[T] = {
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.find { case (k, _) => filter(k) }
+      .getOrElse { fail(s"Unable to find metric") }
+      .asInstanceOf[(Any, Gauge[Any])]
+      ._2
+      .asInstanceOf[Gauge[T]]
+  }
+
+  private def getGauge[T](metricName: String): Gauge[T] = {
+    getGauge(mName => mName.getName.endsWith(metricName))
   }
 }
