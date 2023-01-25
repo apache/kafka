@@ -360,17 +360,22 @@ public class DelegatingClassLoader extends URLClassLoader {
         builder.useParallelExecutor();
         Reflections reflections = new InternalReflections(builder);
 
-        return new PluginScanResult(
-                getPluginDesc(reflections, SinkConnector.class, loader),
-                getPluginDesc(reflections, SourceConnector.class, loader),
-                getPluginDesc(reflections, Converter.class, loader),
-                getPluginDesc(reflections, HeaderConverter.class, loader),
-                getTransformationPluginDesc(loader, reflections),
-                getPredicatePluginDesc(loader, reflections),
-                getServiceLoaderPluginDesc(ConfigProvider.class, loader),
-                getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
-                getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
-        );
+        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
+        try {
+            return new PluginScanResult(
+                    getPluginDesc(reflections, SinkConnector.class, loader),
+                    getPluginDesc(reflections, SourceConnector.class, loader),
+                    getPluginDesc(reflections, Converter.class, loader),
+                    getPluginDesc(reflections, HeaderConverter.class, loader),
+                    getTransformationPluginDesc(loader, reflections),
+                    getPredicatePluginDesc(loader, reflections),
+                    getServiceLoaderPluginDesc(ConfigProvider.class, loader),
+                    getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
+                    getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
+            );
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
+        }
     }
 
     @SuppressWarnings({"unchecked"})
@@ -415,16 +420,11 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @SuppressWarnings("unchecked")
     private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
         Collection<PluginDesc<T>> result = new ArrayList<>();
-        try {
-            ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
-            for (T pluginImpl : serviceLoader) {
-                result.add(pluginDesc((Class<? extends T>) pluginImpl.getClass(),
-                    versionFor(pluginImpl), loader));
-            }
-        } finally {
-            Plugins.compareAndSwapLoaders(savedLoader);
+        ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
+        for (T pluginImpl : serviceLoader) {
+            result.add(pluginDesc((Class<? extends T>) pluginImpl.getClass(),
+                versionFor(pluginImpl), loader));
         }
         return result;
     }
