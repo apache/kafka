@@ -30,6 +30,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -305,6 +306,16 @@ public class PluginsTest {
         assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertTrue(samples.containsKey("configure")); // HeaderConverter::configure was called
+        assertPluginClassLoaderAlwaysActive(samples);
+    }
+
+    @Test
+    public void newConnectorShouldInstantiateWithPluginClassLoader() {
+        Connector plugin = plugins.newConnector(TestPlugin.SAMPLING_CONNECTOR.className());
+
+        assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
+        Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
+        assertTrue(samples.containsKey("<init>")); // constructor was called
         assertPluginClassLoaderAlwaysActive(samples);
     }
 

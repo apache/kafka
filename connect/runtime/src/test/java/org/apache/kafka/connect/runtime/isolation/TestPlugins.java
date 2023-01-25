@@ -91,6 +91,11 @@ public class TestPlugins {
          */
         SAMPLING_CONFIG_PROVIDER("sampling-config-provider", "test.plugins.SamplingConfigProvider"),
         /**
+         * A {@link org.apache.kafka.common.config.provider.ConfigProvider}
+         * which samples information about its method calls.
+         */
+        SAMPLING_CONNECTOR("sampling-connector", "test.plugins.SamplingConnector"),
+        /**
          * A plugin which uses a {@link java.util.ServiceLoader}
          * to load internal classes, and samples information about their initialization.
          */
