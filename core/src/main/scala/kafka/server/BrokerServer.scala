@@ -498,6 +498,14 @@ class BrokerServer(
         case t: Throwable => throw new RuntimeException("Received a fatal error while " +
           "waiting for the broker to be unfenced.", t)
       }
+      
+      // Block here until all the authorizer futures are complete
+      try {
+        CompletableFuture.allOf(authorizerFutures.values.toSeq: _*).join()
+      } catch {
+        case t: Throwable => throw new RuntimeException("Received a fatal error while " +
+          "waiting for all of the authorizer futures to be completed.", t)
+      }
 
       maybeChangeStatus(STARTING, STARTED)
     } catch {
