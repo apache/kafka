@@ -23,11 +23,6 @@
 
   <module name="FileTabCharacter"/>
 
-  <!-- header -->
-  <module name="Header">
-    <property name="headerFile" value="${headerFile}" />
-  </module>
-
   <module name="TreeWalker">
 
     <!-- code cleanup -->
@@ -91,7 +86,6 @@
       <property name="allowEmptyConstructors" value="true"/>
       <property name="allowEmptyMethods" value="true"/>
     </module>
-    <module name="Indentation"/>
     <module name="MethodParamPad"/>
     <module name="ParenPad"/>
     <module name="TypecastParenPad"/>
