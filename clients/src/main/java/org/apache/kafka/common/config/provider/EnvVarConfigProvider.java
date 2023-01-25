@@ -57,12 +57,17 @@ public class EnvVarConfigProvider implements ConfigProvider {
     }
 
     /**
-     * @param s    unused
+     * @param path    path, not used for environment variables
      * @param keys the keys whose values will be retrieved.
      * @return the configuration data.
      */
     @Override
-    public ConfigData get(String s, Set<String> keys) {
+    public ConfigData get(String path, Set<String> keys) {
+
+        if(path != null && !path.isEmpty()) {
+            log.error("Path is not supported for EnvVarConfigProvider, invalid value '{}'", path);
+            throw new ConfigException("Path is not supported for EnvVarConfigProvider, invalid value '" + path + "'");
+        }
 
         if (envVarMap == null) {
             return new ConfigData(new HashMap<>());

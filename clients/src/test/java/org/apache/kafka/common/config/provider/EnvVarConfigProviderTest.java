@@ -17,6 +17,7 @@
 package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigData;
+import org.apache.kafka.common.config.ConfigException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -27,8 +28,7 @@ import java.util.Map;
 import java.util.HashSet;
 import java.util.HashMap;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 class EnvVarConfigProviderTest {
 
@@ -70,10 +70,25 @@ class EnvVarConfigProviderTest {
     }
 
     @Test
+    public void testGetOneKeyWithEmptyPath() {
+        ConfigData config = envVarConfigProvider.get("", Collections.singleton("var1"));
+        Map<String, String> data = config.data();
+
+        assertEquals(1, data.size());
+        assertEquals("value1", data.get("var1"));
+    }
+
+    @Test
     void testGetWhitelistedEnvVars() {
         Set<String> whiteList = new HashSet<>(Arrays.asList("var1", "var2"));
-        Set<String> keys = envVarConfigProvider.get("", whiteList).data().keySet();
+        Set<String> keys = envVarConfigProvider.get(null, whiteList).data().keySet();
         assertEquals(whiteList, keys);
+    }
+    @Test
+    void testNotNullPathNonEmptyThrowsException() {
+        assertThrows(ConfigException.class, () -> {
+            envVarConfigProvider.get( "test-path", Collections.singleton("var1"));
+        });
     }
 
 }
