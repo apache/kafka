@@ -25,30 +25,30 @@ import java.util.Map.Entry;
 /**
  * Base class for plugins so we can sample information about their initialization
  */
-public abstract class SamplingTestPlugin {
+public interface SamplingTestPlugin {
 
     /**
      * @return the ClassLoader used to statically initialize this plugin class
      */
-    public abstract ClassLoader staticClassloader();
+    ClassLoader staticClassloader();
 
     /**
      * @return the ClassLoader used to initialize this plugin instance
      */
-    public abstract ClassLoader classloader();
+    ClassLoader classloader();
 
     /**
      * @return a group of other SamplingTestPlugin instances known by this plugin
      * This should only return direct children, and not reference this instance directly
      */
-    public Map<String, SamplingTestPlugin> otherSamples() {
+    default Map<String, SamplingTestPlugin> otherSamples() {
         return Collections.emptyMap();
     }
 
     /**
      * @return a flattened list of child samples including this entry keyed as "this"
      */
-    public Map<String, SamplingTestPlugin> flatten() {
+    default Map<String, SamplingTestPlugin> flatten() {
         Map<String, SamplingTestPlugin> out = new HashMap<>();
         Map<String, SamplingTestPlugin> otherSamples = otherSamples();
         if (otherSamples != null) {
@@ -71,7 +71,7 @@ public abstract class SamplingTestPlugin {
      * Stores only the last invocation of each method if there are multiple invocations.
      * @param samples The collection of samples to which this method call should be added
      */
-    public void logMethodCall(Map<String, SamplingTestPlugin> samples) {
+    default void logMethodCall(Map<String, SamplingTestPlugin> samples) {
         StackTraceElement[] stackTraces = Thread.currentThread().getStackTrace();
         if (stackTraces.length < 2) {
             return;
@@ -88,7 +88,7 @@ public abstract class SamplingTestPlugin {
         ));
     }
 
-    public static class MethodCallSample extends SamplingTestPlugin {
+    class MethodCallSample implements SamplingTestPlugin {
 
         private final StackTraceElement caller;
         private final ClassLoader staticClassLoader;

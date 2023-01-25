@@ -34,7 +34,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
  * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
  * <p>Samples data about its initialization environment for later analysis.
  */
-public class SamplingConfigProvider extends SamplingTestPlugin implements ConfigProvider {
+public class SamplingConfigProvider implements SamplingTestPlugin, ConfigProvider {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
   private final ClassLoader classloader;

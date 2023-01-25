@@ -21,7 +21,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.storage.Converter;
 
