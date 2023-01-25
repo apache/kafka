@@ -91,7 +91,7 @@ public class TestPlugins {
          */
         SAMPLING_CONFIG_PROVIDER("sampling-config-provider", "test.plugins.SamplingConfigProvider"),
         /**
-         * A {@link org.apache.kafka.common.config.provider.ConfigProvider}
+         * A {@link org.apache.kafka.connect.sink.SinkConnector}
          * which samples information about its method calls.
          */
         SAMPLING_CONNECTOR("sampling-connector", "test.plugins.SamplingConnector"),
