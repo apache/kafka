@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.RequestManager;
@@ -25,7 +24,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
 
 public class ApplicationEventProcessor {
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
@@ -80,7 +78,7 @@ public class ApplicationEventProcessor {
         }
 
         CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
-        CompletableFuture<ClientResponse> res = manager.add(event.offsets());
+        manager.add(event.offsets());
         return true;
     }
 }
