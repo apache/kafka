@@ -24,7 +24,6 @@ import java.nio.channels.{Selector => NSelector, _}
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.ConnectionQuotas._
@@ -48,6 +47,7 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, Req
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
+import org.apache.kafka.server.util.FutureUtils
 import org.slf4j.event.Level
 
 import scala.collection._
@@ -189,10 +189,14 @@ class SocketServer(val config: KafkaConfig,
    *                              processor corresponding to the [[EndPoint]]. Any endpoint
    *                              that does not appear in this map will be started once all
    *                              authorizerFutures are complete.
+   *
+   * @return                      A future which is completed when all of the acceptor threads have
+   *                              successfully started. If any of them do not start, the future will
+   *                              be completed with an exception.
    */
   def enableRequestProcessing(
     authorizerFutures: Map[Endpoint, CompletableFuture[Void]]
-  ): Unit = this.synchronized {
+  ): CompletableFuture[Void] = this.synchronized {
     if (stopped) {
       throw new RuntimeException("Can't enable request processing: SocketServer is stopped.")
     }
@@ -200,19 +204,36 @@ class SocketServer(val config: KafkaConfig,
     def chainAcceptorFuture(acceptor: Acceptor): Unit = {
       // Because of ephemeral ports, we need to match acceptors to futures by looking at
       // the listener name, rather than the endpoint object.
-      authorizerFutures.find {
+      val authorizerFuture = authorizerFutures.find {
         case (endpoint, _) => acceptor.endPoint.listenerName.value().equals(endpoint.listenerName().get())
       } match {
-        case None => chainFuture(allAuthorizerFuturesComplete, acceptor.startFuture)
-        case Some((_, future)) => chainFuture(future, acceptor.startFuture)
+        case None => allAuthorizerFuturesComplete
+        case Some((_, future)) => future
       }
+      authorizerFuture.whenComplete((_, e) => {
+        if (e != null) {
+          // If the authorizer failed to start, fail the acceptor's startedFuture.
+          acceptor.startedFuture.completeExceptionally(e)
+        } else {
+          // Once the authorizer has started, attempt to start the associated acceptor. The Acceptor.start()
+          // function will complete the acceptor started future (either successfully or not)
+          acceptor.start()
+        }
+      })
     }
 
     info("Enabling request processing.")
     controlPlaneAcceptorOpt.foreach(chainAcceptorFuture)
     dataPlaneAcceptors.values().forEach(chainAcceptorFuture)
-    chainFuture(CompletableFuture.allOf(authorizerFutures.values.toArray: _*),
+    FutureUtils.chainFuture(CompletableFuture.allOf(authorizerFutures.values.toArray: _*),
         allAuthorizerFuturesComplete)
+
+    // Construct a future that will be completed when all Acceptors have been successfully started.
+    // Alternately, if any of them fail to start, this future will be completed exceptionally.
+    val allAcceptors = dataPlaneAcceptors.values().asScala.toSeq ++ controlPlaneAcceptorOpt
+    val enableFuture = new CompletableFuture[Void]
+    FutureUtils.chainFuture(CompletableFuture.allOf(allAcceptors.map(_.startedFuture).toArray: _*), enableFuture)
+    enableFuture
   }
 
   def createDataPlaneAcceptorAndProcessors(endpoint: EndPoint): Unit = synchronized {
@@ -289,13 +310,13 @@ class SocketServer(val config: KafkaConfig,
     try {
       val acceptor = dataPlaneAcceptors.get(endpoints(listenerName))
       if (acceptor != null) {
-        acceptor.serverChannel.socket.getLocalPort
+        acceptor.localPort
       } else {
-        controlPlaneAcceptorOpt.map(_.serverChannel.socket().getLocalPort).getOrElse(throw new KafkaException("Could not find listenerName : " + listenerName + " in data-plane or control-plane"))
+        controlPlaneAcceptorOpt.map(_.localPort).getOrElse(throw new KafkaException("Could not find listenerName : " + listenerName + " in data-plane or control-plane"))
       }
     } catch {
       case e: Exception =>
-        throw new KafkaException("Tried to check server's port before server was started or checked for port of non-existing protocol", e)
+        throw new KafkaException("Tried to check for port of non-existing protocol", e)
     }
   }
 
@@ -312,7 +333,13 @@ class SocketServer(val config: KafkaConfig,
       val acceptor = dataPlaneAcceptors.get(endpoint)
       // There is no authorizer future for this new listener endpoint. So start the
       // listener once all authorizer futures are complete.
-      chainFuture(allAuthorizerFuturesComplete, acceptor.startFuture)
+      allAuthorizerFuturesComplete.whenComplete((_, e) => {
+        if (e != null) {
+          acceptor.startedFuture.completeExceptionally(e)
+        } else {
+          acceptor.start()
+        }
+      })
     }
   }
 
@@ -387,15 +414,6 @@ object SocketServer {
   ): Unit = {
     CoreUtils.swallow(channel.socket().close(), logging, Level.ERROR)
     CoreUtils.swallow(channel.close(), logging, Level.ERROR)
-  }
-
-  def chainFuture(sourceFuture: CompletableFuture[Void],
-                  destinationFuture: CompletableFuture[Void]): Unit = {
-    sourceFuture.whenComplete((_, t) => if (t != null) {
-      destinationFuture.completeExceptionally(t)
-    } else {
-      destinationFuture.complete(null)
-    })
   }
 }
 
@@ -573,7 +591,20 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private val listenBacklogSize = config.socketListenBacklogSize
 
   private val nioSelector = NSelector.open()
-  private[network] val serverChannel = openServerSocket(endPoint.host, endPoint.port, listenBacklogSize)
+
+  // If the port is configured as 0, we are using a random (ephemeral) port, so we need to open
+  // the socket before we can find out what port we have. If it is set to a nonzero value, defer
+  // opening the socket until we start the Acceptor. The reason for deferring the socket opening
+  // is so that systems which assume that the socket being open indicates readiness are not
+  // confused.
+  private[network] var serverChannel: ServerSocketChannel  = _
+  private[network] val localPort: Int  = if (endPoint.port != 0) {
+    endPoint.port
+  } else {
+    serverChannel = openServerSocket(endPoint.host, endPoint.port, listenBacklogSize)
+    serverChannel.socket().getLocalPort()
+  }
+
   private[network] val processors = new ArrayBuffer[Processor]()
   // Build the metric name explicitly in order to keep the existing name for compatibility
   private val blockedPercentMeterMetricName = explicitMetricName(
@@ -585,23 +616,35 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private var currentProcessorIndex = 0
   private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
   private var started = false
-  private[network] val startFuture = new CompletableFuture[Void]()
+  private[network] val startedFuture = new CompletableFuture[Void]()
 
   val thread = KafkaThread.nonDaemon(
     s"${threadPrefix()}-kafka-socket-acceptor-${endPoint.listenerName}-${endPoint.securityProtocol}-${endPoint.port}",
     this)
 
-  startFuture.thenRun(() => synchronized {
-    if (!shouldRun.get()) {
-      debug(s"Ignoring start future for ${endPoint.listenerName} since the acceptor has already been shut down.")
-    } else {
+  def start(): Unit = synchronized {
+    try {
+      if (!shouldRun.get()) {
+        throw new ClosedChannelException()
+      }
+      if (serverChannel == null) {
+        serverChannel = openServerSocket(endPoint.host, endPoint.port, listenBacklogSize)
+      }
       debug(s"Starting processors for listener ${endPoint.listenerName}")
-      started = true
       processors.foreach(_.start())
       debug(s"Starting acceptor thread for listener ${endPoint.listenerName}")
       thread.start()
+      startedFuture.complete(null)
+      started = true
+    } catch {
+      case e: ClosedChannelException =>
+        debug(s"Refusing to start acceptor for ${endPoint.listenerName} since the acceptor has already been shut down.")
+        startedFuture.completeExceptionally(e)
+      case t: Throwable =>
+        error(s"Unable to start acceptor for ${endPoint.listenerName}", t)
+        startedFuture.completeExceptionally(new RuntimeException(s"Unable to start acceptor for ${endPoint.listenerName}", t))
     }
-  })
+  }
 
   private[network] case class DelayedCloseSocket(socket: SocketChannel, endThrottleTimeMs: Long) extends Ordered[DelayedCloseSocket] {
     override def compare(that: DelayedCloseSocket): Int = endThrottleTimeMs compare that.endThrottleTimeMs
