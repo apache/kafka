@@ -17,6 +17,7 @@
 package org.apache.kafka.server.util;
 
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.server.util.TopicFilter.IncludeList;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 public class TopicFilterTest {
     @Test
     public void testIncludeLists() {
-        IncludeList topicFilter1 = new IncludeList("yes1,yes2");
+        IncludeList topicFilter1 = new TopicFilter.IncludeList("yes1,yes2");
         assertTrue(topicFilter1.isTopicAllowed("yes2", true));
         assertTrue(topicFilter1.isTopicAllowed("yes2", false));
         assertFalse(topicFilter1.isTopicAllowed("no1", true));

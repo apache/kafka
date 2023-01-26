@@ -35,7 +35,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
-import org.apache.kafka.server.util.IncludeList
+import org.apache.kafka.server.util.TopicFilter.IncludeList
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._

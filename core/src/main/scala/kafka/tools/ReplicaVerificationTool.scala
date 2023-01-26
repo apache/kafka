@@ -42,7 +42,7 @@ import java.util.regex.{Pattern, PatternSyntaxException}
 import java.util.{Date, Optional, Properties}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
-import org.apache.kafka.server.util.IncludeList
+import org.apache.kafka.server.util.TopicFilter.IncludeList
 
 /**
  * For verifying the consistency among replicas.

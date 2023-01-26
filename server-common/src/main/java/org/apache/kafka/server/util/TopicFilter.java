@@ -14,8 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.server.util;
+
+import org.apache.kafka.common.internals.Topic;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -23,6 +26,7 @@ import java.util.regex.PatternSyntaxException;
 public abstract class TopicFilter {
 
     protected final String regex;
+    private final Pattern pattern;
     public TopicFilter(String rawRegex) {
         this.regex = rawRegex
                 .trim()
@@ -31,7 +35,7 @@ public abstract class TopicFilter {
                 .replaceAll("^[\"']+", "")
                 .replaceAll("[\"']+$", ""); // property files may bring quotes
         try {
-            Pattern.compile(regex);
+            this.pattern = Pattern.compile(regex);
         } catch (PatternSyntaxException e) {
             throw new RuntimeException(regex + " is an invalid regex.");
         }
@@ -44,7 +48,26 @@ public abstract class TopicFilter {
         return this.regex;
     }
 
-    public String getRegex() {
-        return regex;
+    public Pattern getPattern() {
+        return pattern;
     }
+
+    public static class IncludeList extends TopicFilter {
+        private final Logger log = LoggerFactory.getLogger(IncludeList.class);
+        public IncludeList(String rawRegex) {
+            super(rawRegex);
+        }
+
+        @Override
+        public boolean isTopicAllowed(String topic, boolean excludeInternalTopics) {
+            boolean allowed = topic.matches(regex) && !(Topic.isInternal(topic) && excludeInternalTopics);
+            if (allowed) {
+                log.debug("{} allowed", topic);
+            } else {
+                log.debug("{} filtered", topic);
+            }
+            return allowed;
+        }
+    }
+
 }

@@ -25,7 +25,13 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.util.CommandLineUtils
-import org.apache.kafka.server.util.IncludeList
+import org.apache.kafka.server.util.TopicFilter.IncludeList
+import org.apache.kafka.server.util.TopicPartitionFilter
+import org.apache.kafka.server.util.TopicPartitionFilter.TopicFilterAndPartitionFilter
+import org.apache.kafka.server.util.TopicPartitionFilter.CompositeTopicPartitionFilter
+import org.apache.kafka.server.util.PartitionFilter.UniquePartitionFilter
+import org.apache.kafka.server.util.PartitionFilter.PartitionRangeFilter
+import org.apache.kafka.server.util.PartitionFilter.PartitionsSetFilter
 
 import java.util.Properties
 import java.util.concurrent.ExecutionException
@@ -199,7 +205,7 @@ object GetOffsetShell {
   ): TopicPartitionFilter = {
     val ruleSpecs = topicPartitions.split(",")
     val rules = ruleSpecs.map(ruleSpec => parseRuleSpec(ruleSpec))
-    CompositeTopicPartitionFilter(rules)
+    new CompositeTopicPartitionFilter(rules)
   }
 
   def parseRuleSpec(ruleSpec: String): TopicPartitionFilter = {
@@ -214,13 +220,13 @@ object GetOffsetShell {
     val topicFilter = new IncludeList(group(1).getOrElse(".*"))
     val partitionFilter = group(2).map(_.toInt) match {
       case Some(partition) =>
-        UniquePartitionFilter(partition)
+        new UniquePartitionFilter(partition)
       case None =>
         val lowerRange = group(3).map(_.toInt).getOrElse(0)
         val upperRange = group(4).map(_.toInt).getOrElse(Int.MaxValue)
-        PartitionRangeFilter(lowerRange, upperRange)
+        new PartitionRangeFilter(lowerRange, upperRange)
     }
-    TopicFilterAndPartitionFilter(
+    new TopicFilterAndPartitionFilter(
       topicFilter,
       partitionFilter
     )
@@ -233,9 +239,9 @@ object GetOffsetShell {
     topicOpt: Option[String],
     partitionIds: String
   ): TopicFilterAndPartitionFilter = {
-    TopicFilterAndPartitionFilter(
+    new TopicFilterAndPartitionFilter(
       new IncludeList(topicOpt.getOrElse(".*")),
-      PartitionsSetFilter(createPartitionSet(partitionIds))
+      new PartitionsSetFilter(createPartitionSet(partitionIds))
     )
   }
 
@@ -275,63 +281,3 @@ object GetOffsetShell {
   }
 }
 
-trait PartitionFilter {
-
-  /**
-   * Used to filter partitions based on a certain criteria, for example, a set of partition ids.
-   */
-  def isPartitionAllowed(partition: Int): Boolean
-}
-
-case class PartitionsSetFilter(partitionIds: Set[Int]) extends PartitionFilter {
-  override def isPartitionAllowed(partition: Int): Boolean = partitionIds.isEmpty || partitionIds.contains(partition)
-}
-
-case class UniquePartitionFilter(partition: Int) extends PartitionFilter {
-  override def isPartitionAllowed(partition: Int): Boolean = partition == this.partition
-}
-
-case class PartitionRangeFilter(lowerRange: Int, upperRange: Int) extends PartitionFilter {
-  override def isPartitionAllowed(partition: Int): Boolean = partition >= lowerRange && partition < upperRange
-}
-
-trait TopicPartitionFilter {
-
-  /**
-   * Used to filter topics based on a certain criteria, for example, a set of topic names or a regular expression.
-   */
-  def isTopicAllowed(topic: String): Boolean
-
-  /**
-   * Used to filter topic-partitions based on a certain criteria, for example, a topic pattern and a set of partition ids.
-   */
-  def isTopicPartitionAllowed(partition: TopicPartition): Boolean
-}
-
-/**
- * Creates a topic-partition filter based on a topic filter and a partition filter
- */
-case class TopicFilterAndPartitionFilter(
-  topicFilter: IncludeList,
-  partitionFilter: PartitionFilter
-) extends TopicPartitionFilter {
-
-  override def isTopicPartitionAllowed(partition: TopicPartition): Boolean = {
-    isTopicAllowed(partition.topic) && partitionFilter.isPartitionAllowed(partition.partition)
-  }
-
-  override def isTopicAllowed(topic: String): Boolean = {
-    topicFilter.isTopicAllowed(topic, false)
-  }
-}
-
-case class CompositeTopicPartitionFilter(filters: Array[TopicPartitionFilter]) extends TopicPartitionFilter {
-
-  override def isTopicAllowed(topic: String): Boolean = {
-    filters.exists(_.isTopicAllowed(topic))
-  }
-
-  override def isTopicPartitionAllowed(tp: TopicPartition): Boolean = {
-    filters.exists(_.isTopicPartitionAllowed(tp))
-  }
-}
