@@ -53,8 +53,9 @@ import java.util.stream.Collectors;
  * e.g. [localhost:9092 test 10000 1 20]
  */
 public class EndToEndLatency {
-
     private final static long POLL_TIMEOUT_MS = 60000;
+    private final static short DEFAULT_REPLICATION_FACTOR = 1;
+    private final static int DEFAULT_NUM_PARTITIONS = 1;
 
     public static void main(String... args) {
         Exit.exit(mainNoExit(args));
@@ -150,9 +151,10 @@ public class EndToEndLatency {
     }
 
     private static void setupConsumer(String topic, KafkaConsumer<byte[], byte[]> consumer) {
-        List<TopicPartition> topicPartitions = consumer.
-                partitionsFor(topic).
-                stream().map(p -> new TopicPartition(p.topic(), p.partition()))
+        List<TopicPartition> topicPartitions = consumer
+                .partitionsFor(topic)
+                .stream()
+                .map(p -> new TopicPartition(p.topic(), p.partition()))
                 .collect(Collectors.toList());
         consumer.assign(topicPartitions);
         consumer.seekToEnd(topicPartitions);
@@ -175,20 +177,17 @@ public class EndToEndLatency {
     }
 
     private static void createTopic(Optional<String> propertiesFile, String brokers, String topic) throws IOException {
-        short defaultReplicationFactor = 1;
-        int defaultNumPartitions = 1;
-
         System.out.printf("Topic \"%s\" does not exist. " +
                         "Will create topic with %d partition(s) and replication factor = %d%n",
-                topic, defaultNumPartitions, defaultReplicationFactor);
+                topic, DEFAULT_NUM_PARTITIONS, DEFAULT_REPLICATION_FACTOR);
 
         Properties adminProps = loadPropsWithBootstrapServers(propertiesFile, brokers);
         Admin adminClient = Admin.create(adminProps);
-        NewTopic newTopic = new NewTopic(topic, defaultNumPartitions, defaultReplicationFactor);
+        NewTopic newTopic = new NewTopic(topic, DEFAULT_NUM_PARTITIONS, DEFAULT_REPLICATION_FACTOR);
         try {
             adminClient.createTopics(Collections.singleton(newTopic)).all().get();
         } catch (ExecutionException | InterruptedException e) {
-            System.out.printf("Creation of topic %s failed", topic);
+            System.out.printf("Creation of topic %s failed%n", topic);
             throw new RuntimeException(e);
         } finally {
             Utils.closeQuietly(adminClient, "AdminClient");
@@ -221,5 +220,4 @@ public class EndToEndLatency {
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         return new KafkaProducer<>(producerProps);
     }
-
 }
