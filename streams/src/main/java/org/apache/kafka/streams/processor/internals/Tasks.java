@@ -45,8 +45,8 @@ class Tasks implements TasksRegistry {
     private final Logger log;
 
     // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
-    private final Map<TaskId, Task> activeTasksPerId = new TreeMap<>();
-    private final Map<TaskId, Task> standbyTasksPerId = new TreeMap<>();
+    private final Map<TaskId, Task> activeTasksPerId = Collections.synchronizedSortedMap(new TreeMap<>());
+    private final Map<TaskId, Task> standbyTasksPerId = Collections.synchronizedSortedMap(new TreeMap<>());
 
     // Tasks may have been assigned for a NamedTopology that is not yet known by this host. When that occurs we stash
     // these unknown tasks until either the corresponding NamedTopology is added and we can create them at last, or

@@ -1269,16 +1269,23 @@ public class StreamThread extends Thread {
         );
     }
 
-    public Map<TaskId, Task> activeTaskMap() {
-        return taskManager.activeTaskMap();
+    /**
+     * Getting the list of current active tasks of the thread;
+     * Note that the returned list may be used by other thread than the StreamThread itself,
+     * and hence need to be read-only
+     */
+    public Set<Task> readOnlyActiveTasks() {
+        return readyOnlyAllTasks().stream()
+            .filter(Task::isActive).collect(Collectors.toSet());
     }
 
-    public List<Task> activeTasks() {
-        return taskManager.activeTaskIterable();
-    }
-
-    public Map<TaskId, Task> allTasks() {
-        return taskManager.allTasks();
+    /**
+     * Getting the list of all owned tasks of the thread, including both active and standby;
+     * Note that the returned list may be used by other thread than the StreamThread itself,
+     * and hence need to be read-only
+     */
+    public Set<Task> readyOnlyAllTasks() {
+        return taskManager.readOnlyAllTasks();
     }
 
     /**

@@ -363,8 +363,8 @@ public class KafkaStreamsTest {
             }).when(thread).join();
         }
 
-        when(thread.activeTasks()).thenReturn(emptyList());
-        when(thread.allTasks()).thenReturn(Collections.emptyMap());
+        when(thread.readOnlyActiveTasks()).thenReturn(Collections.emptySet());
+        when(thread.readyOnlyAllTasks()).thenReturn(Collections.emptySet());
     }
 
     @Test
