@@ -23,7 +23,6 @@ import java.util.regex.PatternSyntaxException;
 public abstract class TopicFilter {
 
     protected final String regex;
-
     public TopicFilter(String rawRegex) {
         this.regex = rawRegex
                 .trim()

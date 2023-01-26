@@ -23,10 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class TopicFilterTest {
-
     @Test
     public void testIncludeLists() {
-
         IncludeList topicFilter1 = new IncludeList("yes1,yes2");
         assertTrue(topicFilter1.isTopicAllowed("yes2", true));
         assertTrue(topicFilter1.isTopicAllowed("yes2", false));
@@ -37,6 +35,9 @@ public class TopicFilterTest {
         assertTrue(topicFilter2.isTopicAllowed("alltopics", true));
         assertFalse(topicFilter2.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, true));
         assertTrue(topicFilter2.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, false));
+
+        assertFalse(topicFilter2.isTopicAllowed(Topic.TRANSACTION_STATE_TOPIC_NAME, true));
+        assertTrue(topicFilter2.isTopicAllowed(Topic.TRANSACTION_STATE_TOPIC_NAME, false));
 
         IncludeList topicFilter3 = new IncludeList("included-topic.+");
         assertTrue(topicFilter3.isTopicAllowed("included-topic1", true));

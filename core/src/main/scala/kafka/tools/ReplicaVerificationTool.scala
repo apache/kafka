@@ -155,7 +155,7 @@ object ReplicaVerificationTool extends Logging {
     val topicIds = topicsMetadata.map( metadata => metadata.name() -> metadata.topicId()).toMap
 
     val filteredTopicMetadata = topicsMetadata.filter { topicMetaData =>
-      topicsIncludeFilter.isTopicAllowed(topicMetaData.name, excludeInternalTopics = false)
+      topicsIncludeFilter.isTopicAllowed(topicMetaData.name, false)
     }
 
     if (filteredTopicMetadata.isEmpty) {

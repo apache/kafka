@@ -22,9 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class IncludeList extends TopicFilter {
-
     private static final Logger log = LoggerFactory.getLogger(IncludeList.class);
-
     public IncludeList(String rawRegex) {
         super(rawRegex);
     }
@@ -39,5 +37,4 @@ public class IncludeList extends TopicFilter {
         }
         return allowed;
     }
-
 }
