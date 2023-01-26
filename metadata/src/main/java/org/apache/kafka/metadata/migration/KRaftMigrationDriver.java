@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -403,7 +404,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 AtomicInteger count = new AtomicInteger(0);
                 zkMigrationClient.readAllMetadata(batch -> {
                     try {
-                        log.info("Migrating {} records from ZK: {}", batch.size(), batch);
+                        log.info("Migrating {} records from ZK", batch.size());
                         CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
                         count.addAndGet(batch.size());
                         future.get();
@@ -446,6 +447,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             // Ignore sending RPCs to the brokers since we're no longer in the state.
             if (migrationState == MigrationState.KRAFT_CONTROLLER_TO_BROKER_COMM) {
                 if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
+                    log.trace("Sending initial RPCs to brokers for new KRaft controller");
                     propagator.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.zkControllerEpoch());
                     // Migration leadership state doesn't change since we're not doing any Zk writes.
                     transitionTo(MigrationState.DUAL_WRITE);
@@ -470,10 +472,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void run() throws Exception {
             KRaftMigrationDriver.this.image = image;
+            String metadataType = isSnapshot ? "snapshot" : "delta";
 
             if (migrationState != MigrationState.DUAL_WRITE) {
-                log.trace("Received metadata change, but the controller is not in dual-write " +
-                        "mode. Ignoring the change to be replicated to Zookeeper");
+                log.trace("Received metadata {}, but the controller is not in dual-write " +
+                    "mode. Ignoring the change to be replicated to Zookeeper", metadataType);
                 return;
             }
             if (delta.featuresDelta() != null) {
@@ -522,10 +525,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
                 // TODO: Unhappy path: Probably relinquish leadership and let new controller
                 //  retry the write?
+                log.trace("Sending RPCs to brokers for metadata {}.", metadataType);
                 propagator.sendRPCsToBrokersFromMetadataDelta(delta, image,
                         migrationLeadershipState.zkControllerEpoch());
             } else {
-                String metadataType = isSnapshot ? "snapshot" : "delta";
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
             }
         }
