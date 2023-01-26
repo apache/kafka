@@ -62,55 +62,54 @@ import java.util.stream.Stream;
  */
 public class JmxCommand {
     public static void main(String[] args) {
-        Exit.exit(mainNoExit(args));
-    }
-
-    static int mainNoExit(String... args) {
         try {
-            execute(args);
-            return 0;
+            JmxCommandOptions options = new JmxCommandOptions(args);
+            if (CommandLineUtils.isPrintHelpNeeded(options)) {
+                CommandLineUtils.printUsageAndExit(options.parser, "Dump JMX values to standard output.");
+                return;
+            }
+            if (CommandLineUtils.isPrintVersionNeeded(options)) {
+                CommandLineUtils.printVersionAndExit();
+                return;
+            }
+
+            Optional<String[]> attributesInclude = options.attributesInclude();
+            Optional<DateFormat> dateFormat = options.dateFormat();
+            String reportFormat = options.parseFormat();
+            boolean keepGoing = true;
+
+            MBeanServerConnection conn = connectToBeanServer(options);
+            List<ObjectName> queries = options.queries();
+            boolean hasPatternQueries = queries.stream().filter(Objects::nonNull).anyMatch(ObjectName::isPattern);
+
+            Set<ObjectName> found = findObjectsIfNoPattern(options, conn, queries, hasPatternQueries);
+            Map<ObjectName, Integer> numExpectedAttributes =
+                    findNumExpectedAttributes(conn, attributesInclude, hasPatternQueries, queries, found);
+
+            List<String> keys = new ArrayList<>();
+            keys.add("time");
+            keys.addAll(new TreeSet<>(queryAttributes(conn, found, attributesInclude).keySet()));
+            maybePrintCsvHeader(reportFormat, keys, numExpectedAttributes);
+
+            while (keepGoing) {
+                long start = System.currentTimeMillis();
+                Map<String, Object> attributes = queryAttributes(conn, found, attributesInclude);
+                attributes.put("time", dateFormat.isPresent() ? dateFormat.get().format(new Date()) : String.valueOf(System.currentTimeMillis()));
+                maybePrintDataRows(reportFormat, numExpectedAttributes, keys, attributes);
+                if (options.isOneTime()) {
+                    keepGoing = false;
+                } else {
+                    TimeUnit.MILLISECONDS.sleep(Math.max(0, options.interval() - (System.currentTimeMillis() - start)));
+                }
+            }
+            Exit.exit(0);
         } catch (TerseException e) {
             System.err.println(e.getMessage());
-            return 1;
+            Exit.exit(1);
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
-            return 1;
-        }
-    }
-
-    static void execute(String... args) throws Exception {
-        JmxCommandOptions options = new JmxCommandOptions(args);
-        CommandLineUtils.maybePrintHelpOrVersion(options, "Dump JMX values to standard output.");
-
-        Optional<String[]> attributesInclude = options.attributesInclude();
-        Optional<DateFormat> dateFormat = options.dateFormat();
-        String reportFormat = options.parseFormat();
-        boolean keepGoing = true;
-
-        MBeanServerConnection conn = connectToBeanServer(options);
-        List<ObjectName> queries = options.queries();
-        boolean hasPatternQueries = queries.stream().filter(Objects::nonNull).anyMatch(ObjectName::isPattern);
-
-        Set<ObjectName> found = findObjectsIfNoPattern(options, conn, queries, hasPatternQueries);
-        Map<ObjectName, Integer> numExpectedAttributes =
-                findNumExpectedAttributes(conn, attributesInclude, hasPatternQueries, queries, found);
-
-        List<String> keys = new ArrayList<>();
-        keys.add("time");
-        keys.addAll(new TreeSet<>(queryAttributes(conn, found, attributesInclude).keySet()));
-        maybePrintCsvHeader(reportFormat, keys, numExpectedAttributes);
-
-        while (keepGoing) {
-            long start = System.currentTimeMillis();
-            Map<String, Object> attributes = queryAttributes(conn, found, attributesInclude);
-            attributes.put("time", dateFormat.isPresent() ? dateFormat.get().format(new Date()) : String.valueOf(System.currentTimeMillis()));
-            maybePrintDataRows(reportFormat, numExpectedAttributes, keys, attributes);
-            if (options.isOneTime()) {
-                keepGoing = false;
-            } else {
-                TimeUnit.MILLISECONDS.sleep(Math.max(0, options.interval() - (System.currentTimeMillis() - start)));
-            }
+            Exit.exit(1);
         }
     }
 
@@ -328,7 +327,7 @@ public class JmxCommand {
                     .ofType(Integer.class)
                     .defaultsTo(2000);
             oneTimeOpt = parser.accepts("one-time", "Flag to indicate run once only.")
-                    .withRequiredArg()
+                    .withOptionalArg()
                     .describedAs("one-time")
                     .ofType(Boolean.class)
                     .defaultsTo(false);
