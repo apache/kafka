@@ -55,6 +55,12 @@ import java.util.List;
  * to the timestamp of the single tombstone record version. To avoid the redundancy of serializing
  * the same timestamp twice, it is only serialized once and stored as the first timestamp of the
  * segment, which happens to be {@code next_timestamp}.)
+ * <p>
+ * After an "empty" segment has formed, it's possible that the segment will continue to be empty
+ * even as newer records are added. (For example, if additional puts happen with later timestamps
+ * such that those puts only affect later segments, then the earlier empty segment will remain
+ * empty.) As a result, when deserializing segments, callers should always check whether or not
+ * they are empty.
  */
 final class RocksDBVersionedStoreSegmentValueFormatter {
     private static final int TIMESTAMP_SIZE = 8;
