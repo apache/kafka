@@ -23,12 +23,12 @@ import scala.util.matching.Regex
 import collection.mutable
 import java.util.Date
 import java.text.SimpleDateFormat
+import kafka.utils.{CoreUtils, Exit, Logging}
 
-import kafka.utils.{CommandLineUtils, CoreUtils, Exit, Logging}
 import java.io.{BufferedOutputStream, OutputStream}
 import java.nio.charset.StandardCharsets
-
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.server.util.CommandLineUtils
 
 /**
  * A utility that merges the state change logs (possibly obtained from different brokers and over multiple days).
@@ -89,7 +89,7 @@ object StateChangeLogMerger extends Logging {
                               .defaultsTo("9999-12-31 23:59:59,999")
                               
     if(args.isEmpty)
-      CommandLineUtils.printUsageAndDie(parser, "A tool for merging the log files from several brokers to reconnstruct a unified history of what happened.")
+      CommandLineUtils.printUsageAndExit(parser, "A tool for merging the log files from several brokers to reconnstruct a unified history of what happened.")
 
 
     val options = parser.parse(args : _*)
