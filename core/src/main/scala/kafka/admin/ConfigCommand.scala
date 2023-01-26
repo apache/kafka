@@ -23,7 +23,7 @@ import java.util.{Collections, Properties}
 import joptsimple._
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging, PasswordEncoder}
+import kafka.utils.{Exit, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
@@ -37,6 +37,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
 import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
@@ -84,7 +85,7 @@ object ConfigCommand extends Logging {
     try {
       val opts = new ConfigCommandOptions(args)
 
-      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manipulate and describe entity config for a topic, client, user, broker or ip")
+      CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to manipulate and describe entity config for a topic, client, user, broker or ip")
 
       opts.checkArgs()
 
@@ -863,10 +864,10 @@ object ConfigCommand extends Logging {
       // should have exactly one action
       val actions = Seq(alterOpt, describeOpt).count(options.has _)
       if (actions != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --describe, --alter")
+        CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --describe, --alter")
       // check required args
-      CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, Set(describeOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(alterOpt, addConfig, deleteConfig))
+      CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, describeOpt)
+      CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, alterOpt, addConfig, deleteConfig)
 
       val entityTypeVals = entityTypes
       if (entityTypeVals.size != entityTypeVals.distinct.size)

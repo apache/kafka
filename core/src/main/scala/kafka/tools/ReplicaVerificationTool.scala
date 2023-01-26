@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, FetchResponse, ListOffsetsRequest}
 import org.apache.kafka.common.serialization.StringDeserializer
+import org.apache.kafka.server.util.CommandLineUtils
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 
@@ -114,11 +115,11 @@ object ReplicaVerificationTool extends Logging {
     val options = parser.parse(args: _*)
 
     if (args.isEmpty || options.has(helpOpt)) {
-      CommandLineUtils.printUsageAndDie(parser, "Validate that all replicas for a set of topics have the same data.")
+      CommandLineUtils.printUsageAndExit(parser, "Validate that all replicas for a set of topics have the same data.")
     }
 
     if (options.has(versionOpt)) {
-      CommandLineUtils.printVersionAndDie()
+      CommandLineUtils.printVersionAndExit()
     }
     CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
 

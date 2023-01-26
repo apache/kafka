@@ -24,7 +24,7 @@ import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Logging, ShutdownableThread}
+import kafka.utils.{CoreUtils, Exit, Logging, ShutdownableThread}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
@@ -39,6 +39,7 @@ import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.fault.ProcessExitingFaultHandler
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.snapshot.SnapshotReader
 
 import scala.jdk.CollectionConverters._
@@ -435,7 +436,7 @@ object TestRaftServer extends Logging {
   def main(args: Array[String]): Unit = {
     val opts = new TestRaftServerOptions(args)
     try {
-      CommandLineUtils.printHelpAndExitIfNeeded(opts,
+      CommandLineUtils.maybePrintHelpOrVersion(opts,
         "Standalone raft server for performance testing")
 
       val configFile = opts.options.valueOf(opts.configOpt)
@@ -460,7 +461,7 @@ object TestRaftServer extends Logging {
       Exit.exit(0)
     } catch {
       case e: OptionException =>
-        CommandLineUtils.printUsageAndDie(opts.parser, e.getMessage)
+        CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage)
       case e: Throwable =>
         fatal("Exiting raft server due to fatal exception", e)
         Exit.exit(1)
