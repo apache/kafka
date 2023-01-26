@@ -151,6 +151,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class KafkaConsumerTest {
+
     private final String topic = "test";
     private final Uuid topicId = Uuid.randomUuid();
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
@@ -168,6 +169,7 @@ public class KafkaConsumerTest {
     private final int defaultApiTimeoutMs = 60000;
     private final int requestTimeoutMs = defaultApiTimeoutMs / 2;
     private final int heartbeatIntervalMs = 1000;
+    private final int onSelectedInterceptor = 3;
 
     // Set auto commit interval lower than heartbeat so we don't need to deal with
     // a concurrent heartbeat request
@@ -499,6 +501,30 @@ public class KafkaConsumerTest {
 
         } finally {
             // cleanup since we are using mutable static variables in MockConsumerInterceptor
+            MockConsumerInterceptor.resetCounters();
+        }
+    }
+
+    @Test
+    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
+        try {
+            Properties props = new Properties();
+            props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor, "
+                    + "org.apache.kafka.test.MockConsumerInterceptor, "
+                    + "org.apache.kafka.test.MockConsumerInterceptor");
+
+            MockConsumerInterceptor.setThrowConfigExceptionThreshold(onSelectedInterceptor);
+
+            assertThrows(KafkaException.class, () -> {
+                new KafkaConsumer<>(
+                        props, new StringDeserializer(), new StringDeserializer());
+            });
+
+            assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
+            assertEquals(2, MockConsumerInterceptor.CLOSE_COUNT.get());
+
+        } finally {
             MockConsumerInterceptor.resetCounters();
         }
     }
