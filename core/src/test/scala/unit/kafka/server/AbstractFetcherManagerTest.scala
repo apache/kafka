@@ -336,8 +336,6 @@ class AbstractFetcherManagerTest {
     override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = Some(OffsetAndEpoch(1, 0))
 
     override protected val isOffsetForLeaderEpochSupported: Boolean = false
-
-    override protected def buildRemoteLogAuxState(partition: TopicPartition, currentLeaderEpoch: Int, fetchOffset: Long, epochForFetchOffset: Int, leaderLogStartOffset: Long): Long = 1
   }
 
 }

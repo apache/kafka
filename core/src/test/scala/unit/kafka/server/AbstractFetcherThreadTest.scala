@@ -664,16 +664,7 @@ class AbstractFetcherThreadTest {
   def testFencedOffsetResetAfterMovedToRemoteTier(): Unit = {
     val partition = new TopicPartition("topic", 0)
     var isErrorHandled = false
-    val fetcher = new MockFetcherThread(new MockLeaderEndPoint) {
-      override protected def buildRemoteLogAuxState(partition: TopicPartition,
-                                                    currentLeaderEpoch: Int,
-                                                    fetchOffset: Long,
-                                                    epochForFetchOffset: Int,
-                                                    leaderLogStartOffset: Long): Long = {
-        isErrorHandled = true
-        throw new FencedLeaderEpochException(s"Epoch $currentLeaderEpoch is fenced")
-      }
-    }
+    val fetcher = new MockFetcherThread(new MockLeaderEndPoint)
 
     val replicaLog = Seq(
       mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
@@ -1488,18 +1479,6 @@ class AbstractFetcherThreadTest {
     }
 
     override protected val isOffsetForLeaderEpochSupported: Boolean = true
-
-    override protected def buildRemoteLogAuxState(topicPartition: TopicPartition,
-                                                  currentLeaderEpoch: Int,
-                                                  fetchOffset: Long,
-                                                  epochForFetchOffset: Int,
-                                                  leaderLogStartOffset: Long): Long = {
-      truncateFullyAndStartAt(topicPartition, fetchOffset)
-      replicaPartitionState(topicPartition).logStartOffset = leaderLogStartOffset
-      // skipped building leader epoch cache and producer snapshots as they are not verified.
-      leaderLogStartOffset
-    }
-
   }
 
 }
