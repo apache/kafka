@@ -25,7 +25,6 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, ProducerIdsRecord}
-import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
@@ -168,7 +167,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
                                         zkEntityType: String,
                                         zkEntityName: String): ZkMigrationLeadershipState = {
     val nextMigrationState = migrationClient.writeClientQuotas(
-      new ClientQuotaEntity(entity.asJava),
+      entity.asJava,
       quotas.asJava,
       migrationState)
     val newProps = ZkAdminManager.clientQuotaPropsToDoubleMap(

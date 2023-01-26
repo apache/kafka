@@ -365,12 +365,12 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
   }
 
   override def writeClientQuotas(
-    entity: ClientQuotaEntity,
+    entity: util.Map[String, String],
     quotas: util.Map[String, java.lang.Double],
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = {
 
-    val entityMap = entity.entries().asScala
+    val entityMap = entity.asScala
     val hasUser = entityMap.contains(ClientQuotaEntity.USER)
     val hasClient = entityMap.contains(ClientQuotaEntity.CLIENT_ID)
     val hasIp = entityMap.contains(ClientQuotaEntity.IP)

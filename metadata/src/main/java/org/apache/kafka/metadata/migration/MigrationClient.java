@@ -18,8 +18,6 @@ package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.quota.ClientQuotaEntity;
-import org.apache.kafka.image.ClientQuotaDelta;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -95,7 +93,7 @@ public interface MigrationClient {
     );
 
     ZkMigrationLeadershipState writeClientQuotas(
-        ClientQuotaEntity clientQuotaEntity,
+        Map<String, String> clientQuotaEntity,
         Map<String, Double> quotas,
         ZkMigrationLeadershipState state
     );

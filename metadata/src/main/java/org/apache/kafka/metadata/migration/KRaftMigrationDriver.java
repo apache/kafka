@@ -514,7 +514,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     delta.clientQuotasDelta().changes().forEach((clientQuotaEntity, clientQuotaDelta) -> {
                         Map<String, Double> quotaMap = image.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
                         apply("Updating client quota " + clientQuotaEntity, migrationState ->
-                            zkMigrationClient.writeClientQuotas(clientQuotaEntity, quotaMap, migrationState));
+                            zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, migrationState));
                     });
                 }
 
