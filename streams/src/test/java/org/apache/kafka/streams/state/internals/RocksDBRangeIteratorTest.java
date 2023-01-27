@@ -393,7 +393,7 @@ public class RocksDBRangeIteratorTest {
             true,
             true
         );
-        rocksDBRangeIterator.onClose(() -> {});
+        rocksDBRangeIterator.onClose(() -> { });
         rocksDBRangeIterator.close();
         verify(rocksIterator);
     }
