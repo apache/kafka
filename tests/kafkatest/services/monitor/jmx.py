@@ -141,7 +141,7 @@ class JmxMixin(object):
             self.read_jmx_output(self.idx(node), node)
 
     def jmx_class_name(self):
-        return "org.apache.kafka.tools.JmxCommand"
+        return "org.apache.kafka.tools.JmxTool"
 
 class JmxTool(JmxMixin, KafkaPathResolverMixin):
     """

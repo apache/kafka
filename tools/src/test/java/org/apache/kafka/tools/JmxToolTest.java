@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
-public class JmxCommandTest {
+public class JmxToolTest {
     private final ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
 
     private static JMXConnectorServer jmxAgent;
@@ -223,7 +223,7 @@ public class JmxCommandTest {
     private String execute(String[] args, boolean err) {
         Runnable runnable = () -> {
             try {
-                JmxCommand.main(args);
+                JmxTool.main(args);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

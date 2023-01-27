@@ -60,10 +60,10 @@ import java.util.stream.Stream;
  * This tool only works reliably if the JmxServer is fully initialized prior to invoking the tool.
  * See KAFKA-4620 for details.
  */
-public class JmxCommand {
+public class JmxTool {
     public static void main(String[] args) {
         try {
-            JmxCommandOptions options = new JmxCommandOptions(args);
+            JmxToolOptions options = new JmxToolOptions(args);
             if (CommandLineUtils.isPrintHelpNeeded(options)) {
                 CommandLineUtils.printUsageAndExit(options.parser, "Dump JMX values to standard output.");
                 return;
@@ -125,7 +125,7 @@ public class JmxCommand {
         return Arrays.stream(mBeanInfo.getAttributes()).map(MBeanFeatureInfo::getName).toArray(String[]::new);
     }
 
-    private static MBeanServerConnection connectToBeanServer(JmxCommandOptions options) throws Exception {
+    private static MBeanServerConnection connectToBeanServer(JmxToolOptions options) throws Exception {
         JMXConnector connector;
         MBeanServerConnection serverConn = null;
         boolean connected = false;
@@ -162,7 +162,7 @@ public class JmxCommand {
         return serverConn;
     }
 
-    private static Set<ObjectName> findObjectsIfNoPattern(JmxCommandOptions options,
+    private static Set<ObjectName> findObjectsIfNoPattern(JmxToolOptions options,
                                                           MBeanServerConnection conn,
                                                           List<ObjectName> queries,
                                                           boolean hasPatternQueries) throws Exception {
@@ -295,7 +295,7 @@ public class JmxCommand {
         }
     }
 
-    private static class JmxCommandOptions extends CommandDefaultOptions {
+    private static class JmxToolOptions extends CommandDefaultOptions {
         private final OptionSpec<String> objectNameOpt;
         private final OptionSpec<String> attributesOpt;
         private final OptionSpec<Integer> reportingIntervalOpt;
@@ -307,7 +307,7 @@ public class JmxCommand {
         private final OptionSpec<Boolean> jmxSslEnableOpt;
         private final OptionSpec<Void> waitOpt;
 
-        public JmxCommandOptions(String[] args) {
+        public JmxToolOptions(String[] args) {
             super(args);
             objectNameOpt = parser.accepts("object-name", "A JMX object name to use as a query. This can contain wild cards, and this option " +
                             "can be given multiple times to specify more than one query. If no objects are specified " +
