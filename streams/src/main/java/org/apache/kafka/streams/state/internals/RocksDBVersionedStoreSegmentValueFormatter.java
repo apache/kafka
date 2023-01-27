@@ -44,23 +44,30 @@ import java.util.List;
  * determine when we have reached the end of the list based on whether the (validFrom) timestamp of
  * the record version equals the {@code min_timestamp}.
  * <p>
- * Additionally, there is one edge case / exception to the segment value format described above.
- * If the latest record version (for a particular key) is a tombstone, and the segment in which
- * this tombstone is to be stored contains currently no record versions, then this will result in
- * an "empty" segment -- i.e., the segment will contain only a single tombstone with no validTo
- * timestamp associated with it. When this happens, the serialized segment will contain the
- * tombstone's (validFrom) timestamp and nothing else. Upon deserializing an empty segment, the
- * tombstone's timestamp can be fetched as the {@code next_timestamp} of the segment. (An empty
- * segment can be thought of as having {@code min_timestamp} and {@code next_timestamp} both equal
- * to the timestamp of the single tombstone record version. To avoid the redundancy of serializing
- * the same timestamp twice, it is only serialized once and stored as the first timestamp of the
- * segment, which happens to be {@code next_timestamp}.)
+ * There is one edge case with regards to the segment value format described above, which is useful
+ * to know for understanding the code in this file, but not relevant for callers of the class.
+ * In the typical case, all record (validFrom) timestamps and the {@code next_timestamp} of the
+ * segment will form a strictly increasing sequence, i.e., it is not valid to have a record version
+ * with validTo timestamp equal to (or less than) its validFrom timestamp. The one edge case /
+ * exception is when the latest record version (for a particular key) is a tombstone, and the
+ * segment in which this tombstone is to be stored contains currently no record versions.
+ * This case will result in a "degenerate" segment containing the single tombstone, with both
+ * {@code min_timestamp} and {@code next_timestamp} equal to the (validFrom) timestamp of the
+ * tombstone. (It is valid to interpret this tombstone's validTo timestamp as being equal to its
+ * validFrom timestamp, as querying for the latest record version as of a later timestamp will
+ * correctly return that no record version is present.) Note also that after a "degenerate" segment
+ * has formed, it's possible that the segment will remain degenerate even as newer record versions
+ * are added. (For example, if additional puts happen with later timestamps such that those puts
+ * only affect later segments, then the earlier degenerate segment will remain degenerate.)
  * <p>
- * After an "empty" segment has formed, it's possible that the segment will continue to be empty
- * even as newer records are added. (For example, if additional puts happen with later timestamps
- * such that those puts only affect later segments, then the earlier empty segment will remain
- * empty.) As a result, when deserializing segments, callers should always check whether or not
- * they are empty.
+ * Callers of this class need not concern themselves with this detail because all the exposed
+ * methods function as expected, even in the degenerate segment case. All methods may still be
+ * called, with the exception of {@link SegmentValue#find(long, boolean)} and those that depend
+ * on it (i.e., {@link SegmentValue#updateRecord(long, byte[], int)} and
+ * {@link SegmentValue#insert(long, byte[], int)}). Missing support for calling these methods on
+ * degenerate segments is not an issue because the same timestamp bounds restrictions required for
+ * calling {@link SegmentValue#find(long, boolean)} on regular segments serve to prevent callers
+ * from calling the method on degenerate segments as well.
  */
 final class RocksDBVersionedStoreSegmentValueFormatter {
     private static final int TIMESTAMP_SIZE = 8;
@@ -74,26 +81,6 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
     }
 
     /**
-     * Returns whether the provided segment is "empty." An empty segment is one that
-     * contains only a single tombstone with no validTo timestamp specified. In this case,
-     * the serialized segment contains only the timestamp of the tombstone (stored as the segment's
-     * {@code nextTimestamp}) and nothing else.
-     * <p>
-     * This can happen if, e.g., the only record inserted for a particular key is
-     * a tombstone. In this case, the tombstone must be stored in a segment
-     * (as the latest value store does not store tombstones), but also has no validTo
-     * timestamp associated with it.
-     *
-     * @return whether the segment is "empty"
-     */
-    static boolean isEmpty(final byte[] segmentValue) {
-        return segmentValue.length <= TIMESTAMP_SIZE;
-    }
-
-    /**
-     * Requires that the segment is not empty. Caller is responsible for verifying that this
-     * is the case before calling this method.
-     *
      * @return the (validFrom) timestamp of the earliest record in the provided segment.
      */
     static long getMinTimestamp(final byte[] segmentValue) {
@@ -109,6 +96,10 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
 
     /**
      * Creates a new segment value that contains the provided record.
+     * <p>
+     * This method may also be used to create a "degenerate" segment with {@code null} value and
+     * {@code validFrom} timestamp equal to {@code validTo}. (For more on degenerate segments,
+     * see the main javadoc for this class.)
      *
      * @param value the record value
      * @param validFrom the record's (validFrom) timestamp
@@ -120,41 +111,25 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         return new PartiallyDeserializedSegmentValue(value, validFrom, validTo);
     }
 
-    /**
-     * Creates a new empty segment value.
-     *
-     * @param timestamp the (validFrom) timestamp of the tombstone for this empty segment value
-     * @return the newly created segment value
-     */
-    static SegmentValue newSegmentValueWithTombstone(final long timestamp) {
-        return new PartiallyDeserializedSegmentValue(timestamp);
-    }
-
     interface SegmentValue {
-
-        /**
-         * @return whether the segment is empty. See
-         * {@link RocksDBVersionedStoreSegmentValueFormatter#isEmpty(byte[])} for details.
-         */
-        boolean isEmpty();
 
         /**
          * Finds the latest record in this segment with (validFrom) timestamp not exceeding the
          * provided timestamp bound. This method requires that the provided timestamp bound exists
-         * in this segment, i.e., the segment is not empty, and the provided timestamp bound is
-         * at least minTimestamp and is smaller than nextTimestamp.
+         * in this segment, i.e., that the provided timestamp bound is at least minTimestamp and
+         * is smaller than nextTimestamp. As a result of this requirement, it is not permitted to
+         * call this method on degenerate segments.
          *
          * @param timestamp the timestamp to find
          * @param includeValue whether the value of the found record should be returned with the result
          * @return the record that is found
-         * @throws IllegalArgumentException if the segment is empty, or if the provided timestamp
-         *         is not contained within this segment
+         * @throws IllegalArgumentException if the provided timestamp is not contained within this segment
          */
         SegmentSearchResult find(long timestamp, boolean includeValue);
 
         /**
          * Inserts the provided record into the segment as the latest record in the segment.
-         * This operation is allowed even if the segment is empty.
+         * This operation is allowed even if the segment is degenerate.
          * <p>
          * It is the caller's responsibility to ensure that this action is desirable. In the event
          * that the new record's (validFrom) timestamp is smaller than the current
@@ -172,9 +147,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
 
         /**
          * Inserts the provided record into the segment as the earliest record in the segment.
-         * This operation is allowed even if the segment is empty. It is the caller's responsibility
+         * This operation is allowed even if the segment is degenerate. It is the caller's responsibility
          * to ensure that this action is valid, i.e., that record's (validFrom) timestamp is smaller
-         * than the current {@code minTimestamp} of the segment, or the segment is empty.
+         * than the current {@code minTimestamp} of the segment.
          *
          * @param timestamp the (validFrom) timestamp of the record to insert
          * @param value the value of the record to insert
@@ -183,9 +158,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
 
         /**
          * Inserts the provided record into the segment at the provided index. This operation
-         * requires that the segment is not empty, and that {@link SegmentValue#find(long, boolean)}
-         * has already been called in order to deserialize the relevant index (to insert into
-         * index n requires that index n-1 has already been deserialized).
+         * requires that the segment is not degenerate, and that
+         * {@link SegmentValue#find(long, boolean)} has already been called in order to deserialize
+         * the relevant index (to insert into index n requires that index n-1 has already been deserialized).
          * <p>
          * It is the caller's responsibility to ensure that this action makes sense, i.e., that the
          * insertion index is correct for the (validFrom) timestamp of the record being inserted.
@@ -193,16 +168,16 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
          * @param timestamp the (validFrom) timestamp of the record to insert
          * @param value the value of the record to insert
          * @param index the index that the newly inserted record should occupy
-         * @throws IllegalArgumentException if the segment is empty, if the provided index is out of
+         * @throws IllegalArgumentException if the segment is degenerate, if the provided index is out of
          *         bounds, or if {@code find()} has not been called to deserialize the relevant index.
          */
         void insert(long timestamp, byte[] value, int index);
 
         /**
          * Updates the record at the provided index with the provided value and (validFrom)
-         * timestamp. This operation requires that the segment is not empty, and that
-         * {@link SegmentValue#find(long, boolean)} has already been called in order to deserialize
-         * the relevant index (i.e., the one being updated).
+         * timestamp. This operation requires that {@link SegmentValue#find(long, boolean)} has
+         * already been called in order to deserialize the relevant index (i.e., the one being updated).
+         * (As a result, it is not valid to call this method on a degenerate segment.)
          * <p>
          * It is the caller's responsibility to ensure that this action makes sense, i.e., that the
          * updated (validFrom) timestamp does not violate timestamp order within the segment.
@@ -264,7 +239,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         private byte[] segmentValue;
         private long nextTimestamp;
         private long minTimestamp;
-        private boolean isEmpty;
+        private boolean isDegenerate;
 
         private int deserIndex = -1; // index up through which this segment has been deserialized (inclusive)
         private List<TimestampAndValueSize> unpackedReversedTimestampAndValueSizes;
@@ -274,11 +249,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             this.segmentValue = segmentValue;
             this.nextTimestamp =
                 RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(segmentValue);
-            this.isEmpty = RocksDBVersionedStoreSegmentValueFormatter.isEmpty(segmentValue);
-            if (!isEmpty) {
-                this.minTimestamp =
-                    RocksDBVersionedStoreSegmentValueFormatter.getMinTimestamp(segmentValue);
-            }
+            this.minTimestamp =
+                RocksDBVersionedStoreSegmentValueFormatter.getMinTimestamp(segmentValue);
+            this.isDegenerate = nextTimestamp == minTimestamp;
             resetDeserHelpers();
         }
 
@@ -287,23 +260,8 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             initializeWithRecord(new ValueAndValueSize(valueOrNull), validFrom, validTo);
         }
 
-        private PartiallyDeserializedSegmentValue(final long timestamp) {
-            this.nextTimestamp = timestamp;
-            this.segmentValue = ByteBuffer.allocate(TIMESTAMP_SIZE).putLong(nextTimestamp).array();
-            this.isEmpty = true;
-            resetDeserHelpers();
-        }
-
-        @Override
-        public boolean isEmpty() {
-            return isEmpty;
-        }
-
         @Override
         public SegmentSearchResult find(final long timestamp, final boolean includeValue) {
-            if (isEmpty) {
-                throw new IllegalArgumentException("Cannot find on empty segment value.");
-            }
             if (timestamp < minTimestamp) {
                 throw new IllegalArgumentException("Timestamp is too small to be found in this segment.");
             }
@@ -371,7 +329,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
 
             if (nextTimestamp != validFrom) {
                 // move nextTimestamp into list as tombstone and add new record on top
-                if (isEmpty) {
+                if (isDegenerate) {
                     initializeWithRecord(new ValueAndValueSize(null), nextTimestamp, validFrom);
                 } else {
                     insert(nextTimestamp, null, 0);
@@ -379,7 +337,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 doInsert(validFrom, value, 0);
             } else {
                 // nextTimestamp is moved into segment automatically as record is added on top
-                if (isEmpty) {
+                if (isDegenerate) {
                     initializeWithRecord(value, validFrom, validTo);
                 } else {
                     doInsert(validFrom, value, 0);
@@ -394,7 +352,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         public void insertAsEarliest(final long timestamp, final byte[] valueOrNull) {
             final ValueAndValueSize value = new ValueAndValueSize(valueOrNull);
 
-            if (isEmpty) {
+            if (isDegenerate) {
                 initializeWithRecord(value, timestamp, nextTimestamp);
             } else {
                 final int lastIndex = find(minTimestamp, false).index;
@@ -409,7 +367,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         }
 
         private void doInsert(final long timestamp, final ValueAndValueSize value, final int index) {
-            if (isEmpty || index > deserIndex + 1 || index < 0) {
+            if (isDegenerate || index > deserIndex + 1 || index < 0) {
                 throw new IllegalArgumentException("Must invoke find() to deserialize record before insert() at specific index.");
             }
 
@@ -484,7 +442,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 .putInt(value.valueSize())
                 .put(value.value())
                 .array();
-            this.isEmpty = false;
+            this.isDegenerate = nextTimestamp == minTimestamp;
             resetDeserHelpers();
         }
 
@@ -505,7 +463,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
          */
         private boolean isLastIndex(final int index) {
             if (index < 0) {
-                return isEmpty;
+                return false;
             }
             return unpackedReversedTimestampAndValueSizes.get(index).timestamp == minTimestamp;
         }
