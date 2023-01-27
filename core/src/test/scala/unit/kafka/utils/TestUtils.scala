@@ -306,8 +306,7 @@ object TestUtils extends Logging {
 
     val props = new Properties
     if (zkConnect == null) {
-      props.setProperty(KafkaConfig.BrokerServerMaxStartupTimeMs, TimeUnit.MINUTES.toMillis(10).toString)
-      props.setProperty(KafkaConfig.ControllerServerMaxStartupTimeMs, TimeUnit.MINUTES.toMillis(10).toString)
+      props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
       props.put(KafkaConfig.NodeIdProp, nodeId.toString)
       props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
       props.put(KafkaConfig.AdvertisedListenersProp, listeners)

@@ -295,8 +295,7 @@ abstract class QuorumTestHarness extends Logging {
       throw new RuntimeException("Only one KRaft controller is supported for now.")
     }
     val props = propsList(0)
-    props.setProperty(KafkaConfig.BrokerServerMaxStartupTimeMs, TimeUnit.MINUTES.toMillis(10).toString)
-    props.setProperty(KafkaConfig.ControllerServerMaxStartupTimeMs, TimeUnit.MINUTES.toMillis(10).toString)
+    props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
     props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
     if (props.getProperty(KafkaConfig.NodeIdProp) == null) {
       props.setProperty(KafkaConfig.NodeIdProp, "1000")

@@ -17,13 +17,16 @@
 
 package org.apache.kafka.server.util;
 
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.TimeUnit;
-
+import static java.util.concurrent.TimeUnit.HOURS;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -32,34 +35,38 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class DeadlineTest {
     private static final Logger log = LoggerFactory.getLogger(FutureUtilsTest.class);
 
+    private static Time monoTime(long monotonicTime){
+        return new MockTime(0, 0, monotonicTime);
+    }
+
     @Test
     public void testOneMillisecondDeadline() {
-        assertEquals(TimeUnit.MILLISECONDS.toNanos(1),
-                Deadline.fromDelay(0, 1, TimeUnit.MILLISECONDS).nanoseconds());
+        assertEquals(MILLISECONDS.toNanos(1),
+            Deadline.fromDelay(monoTime(0), 1, MILLISECONDS).nanoseconds());
     }
 
     @Test
     public void testOneMillisecondDeadlineWithBase() {
         final long nowNs = 123456789L;
-        assertEquals(nowNs + TimeUnit.MILLISECONDS.toNanos(1),
-                Deadline.fromDelay(nowNs, 1, TimeUnit.MILLISECONDS).nanoseconds());
+        assertEquals(nowNs + MILLISECONDS.toNanos(1),
+            Deadline.fromDelay(monoTime(nowNs), 1, MILLISECONDS).nanoseconds());
     }
 
     @Test
     public void testNegativeDelayFails() {
         assertEquals("Negative delays are not allowed.",
             assertThrows(RuntimeException.class,
-                () -> Deadline.fromDelay(123456789L, -1L, TimeUnit.MILLISECONDS)).
+                () -> Deadline.fromDelay(monoTime(123456789L), -1L, MILLISECONDS)).
                     getMessage());
     }
 
     @Test
     public void testMaximumDelay() {
         assertEquals(Long.MAX_VALUE,
-                Deadline.fromDelay(123L, Long.MAX_VALUE, TimeUnit.HOURS).nanoseconds());
+            Deadline.fromDelay(monoTime(123L), Long.MAX_VALUE, HOURS).nanoseconds());
         assertEquals(Long.MAX_VALUE,
-                Deadline.fromDelay(0, Long.MAX_VALUE / 2, TimeUnit.MILLISECONDS).nanoseconds());
+            Deadline.fromDelay(monoTime(0), Long.MAX_VALUE / 2, MILLISECONDS).nanoseconds());
         assertEquals(Long.MAX_VALUE,
-                Deadline.fromDelay(Long.MAX_VALUE, Long.MAX_VALUE, TimeUnit.NANOSECONDS).nanoseconds());
+            Deadline.fromDelay(monoTime(Long.MAX_VALUE), Long.MAX_VALUE, NANOSECONDS).nanoseconds());
     }
 }

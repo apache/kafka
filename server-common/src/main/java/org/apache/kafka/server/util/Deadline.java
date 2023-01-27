@@ -19,7 +19,6 @@ package org.apache.kafka.server.util;
 import org.apache.kafka.common.utils.Time;
 
 import java.math.BigInteger;
-import java.util.Date;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -38,17 +37,10 @@ public class Deadline {
         long delay,
         TimeUnit timeUnit
     ) {
-        return fromDelay(time.nanoseconds(), delay, timeUnit);
-    }
-
-    public static Deadline fromDelay(
-        long nowNs,
-        long delay,
-        TimeUnit timeUnit
-    ) {
         if (delay < 0) {
             throw new RuntimeException("Negative delays are not allowed.");
         }
+        long nowNs = time.nanoseconds();
         BigInteger deadlineNs = BigInteger.valueOf(nowNs).
                 add(BigInteger.valueOf(timeUnit.toNanos(delay)));
         if (deadlineNs.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) >= 0) {
