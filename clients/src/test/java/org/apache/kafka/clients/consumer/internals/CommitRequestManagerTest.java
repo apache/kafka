@@ -73,7 +73,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testPollAndAutocommit() {
+    public void testPollAndAutoCommit() {
         CommitRequestManager commitRequestManger = create(true, 100);
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
@@ -87,6 +87,14 @@ public class CommitRequestManagerTest {
         commitRequestManger.clientPoll(time.milliseconds());
         res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
+    }
+
+    @Test
+    public void testAutoCommitFuture() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        commitRequestManger.sendAutoCommit(new HashMap<>()).complete(null);
+        commitRequestManger.sendAutoCommit(new HashMap<>()).completeExceptionally(new RuntimeException("mock " +
+                "exception"));
     }
 
     private CommitRequestManager create(final boolean autoCommitEnabled, final long autoCommitInterval) {

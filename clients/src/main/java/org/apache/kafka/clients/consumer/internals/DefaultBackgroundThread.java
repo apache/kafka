@@ -179,19 +179,20 @@ public class DefaultBackgroundThread extends KafkaThread {
      * 3. Poll the networkClient to send and retrieve the response.
      */
     void runOnce() {
-        drainAndProcess();
+        drain();
         final long currentTimeMs = time.milliseconds();
         final long pollWaitTimeMs = requestManagerRegistry.values().stream()
                 .filter(Optional::isPresent)
-                .map(m -> handlePollResult(m.get().poll(currentTimeMs)))
+                .map(m -> m.get().poll(currentTimeMs))
+                .map(this::handlePollResult)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
     }
 
-    private void drainAndProcess() {
+    private void drain() {
         Queue<ApplicationEvent> events = pollApplicationEvent();
         for (ApplicationEvent event : events) {
-            log.debug("processing application event: {}", event);
+            log.debug("Consuming application event: {}", event);
             consumeApplicationEvent(event);
         }
     }
@@ -214,7 +215,6 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     private void consumeApplicationEvent(final ApplicationEvent event) {
-        log.debug("try consuming event: {}", Optional.ofNullable(event));
         Objects.requireNonNull(event);
         applicationEventProcessor.process(event);
     }

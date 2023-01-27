@@ -74,11 +74,21 @@ public class ApplicationEventProcessor {
     private boolean process(final CommitApplicationEvent event) {
         Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
         if (!commitRequestManger.isPresent()) {
+            // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
+            // upfront so we should never get to this block.
+            backgroundEventQueue.add(new ErrorBackgroundEvent(
+                    new RuntimeException("Unable to commit offset. Most likely because the group.id wasn't set")));
             return false;
         }
 
         CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
-        manager.add(event.offsets());
+        manager.add(event.offsets()).whenComplete((r, e) -> {
+            if (e != null) {
+                event.future().completeExceptionally(e);
+                return;
+            }
+            event.future().complete(null);
+        });
         return true;
     }
 }

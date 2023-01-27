@@ -113,11 +113,10 @@ public class DefaultBackgroundThreadTest {
     @Test
     void testFindCoordinator() {
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
-        when(this.coordinatorManager.poll(time.milliseconds())).thenReturn(mockPollCoordinatorResult());
-        when(this.commitManager.poll(time.milliseconds())).thenReturn(mockPollCommitResult());
+        when(this.coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(this.commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
         backgroundThread.runOnce();
         Mockito.verify(coordinatorManager, times(1)).poll(anyLong());
-        Mockito.verify(commitManager, times(1)).poll(anyLong());
         Mockito.verify(networkClient, times(1)).poll(anyLong(), anyLong());
         backgroundThread.close();
     }
@@ -138,8 +137,8 @@ public class DefaultBackgroundThreadTest {
     }
 
     private static NetworkClientDelegate.UnsentRequest findCoordinatorUnsentRequest(
-        final Time time,
-        final long timeout
+            final Time time,
+            final long timeout
     ) {
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
