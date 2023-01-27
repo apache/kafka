@@ -220,7 +220,18 @@ public class Plugins {
         return newPlugin(klass);
     }
 
-    public Connector newConnector(String connectorClassOrAlias) {
+    public IsolatedConnector<?> newConnector(String connectorClassOrAlias) {
+        Connector connector = newRawConnector(connectorClassOrAlias);
+        if (connector instanceof SourceConnector) {
+            return new IsolatedSourceConnector(this, (SourceConnector) connector);
+        } else if (connector instanceof SinkConnector) {
+            return new IsolatedSinkConnector(this, (SinkConnector) connector);
+        } else {
+            throw new IllegalArgumentException("taskClass must be either a SourceTask or a SinkTask");
+        }
+    }
+
+    Connector newRawConnector(String connectorClassOrAlias) {
         Class<? extends Connector> klass = connectorClass(connectorClassOrAlias);
         return newPlugin(klass);
     }
