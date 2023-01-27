@@ -160,7 +160,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      * Waits if necessary for this future to complete, and then returns its result.
      */
     @Override
-    public abstract T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+    public T get() throws InterruptedException, ExecutionException {
         try {
             return completableFuture.get();
         } catch (ExecutionException e) {
