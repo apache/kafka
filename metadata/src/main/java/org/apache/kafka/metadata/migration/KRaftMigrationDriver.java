@@ -447,10 +447,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             // Ignore sending RPCs to the brokers since we're no longer in the state.
             if (migrationState == MigrationState.KRAFT_CONTROLLER_TO_BROKER_COMM) {
                 if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
-                    log.trace("Sending initial RPCs to brokers for new KRaft controller");
+                    log.trace("Sending RPCs to broker before moving to dual-write mode using " +
+                        "at offset and epoch {}", image.highestOffsetAndEpoch());
                     propagator.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.zkControllerEpoch());
                     // Migration leadership state doesn't change since we're not doing any Zk writes.
                     transitionTo(MigrationState.DUAL_WRITE);
+                } else {
+                    log.trace("Ignoring using metadata image {} since migration leadership state is at a greater offset and epoch {}",
+                        image, migrationLeadershipState.offsetAndEpoch());
                 }
             }
         }
