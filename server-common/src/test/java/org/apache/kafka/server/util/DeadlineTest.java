@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class DeadlineTest {
     private static final Logger log = LoggerFactory.getLogger(FutureUtilsTest.class);
 
-    private static Time monoTime(long monotonicTime){
+    private static Time monoTime(long monotonicTime) {
         return new MockTime(0, 0, monotonicTime);
     }
 
