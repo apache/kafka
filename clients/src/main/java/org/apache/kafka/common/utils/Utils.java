@@ -1230,7 +1230,7 @@ public final class Utils {
         if (buffer.hasArray()) {
             out.write(buffer.array(), buffer.position() + buffer.arrayOffset(), length);
         } else {
-            Channels.newChannel(out).write(buffer);
+            Channels.newChannel(out).write(buffer.asReadOnlyBuffer());
         }
     }
 
