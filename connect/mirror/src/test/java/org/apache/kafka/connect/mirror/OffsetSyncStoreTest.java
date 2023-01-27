@@ -46,8 +46,9 @@ public class OffsetSyncStoreTest {
     public void testOffsetTranslation() {
         FakeOffsetSyncStore store = new FakeOffsetSyncStore();
 
+        // Emit synced downstream offset without dead-reckoning
         store.sync(tp, 100, 200);
-        assertEquals(250L, store.translateDownstream(tp, 150).getAsLong(),
+        assertEquals(201L, store.translateDownstream(tp, 150).getAsLong(),
                 "Failure in translating downstream offset 250");
 
         // Translate exact offsets

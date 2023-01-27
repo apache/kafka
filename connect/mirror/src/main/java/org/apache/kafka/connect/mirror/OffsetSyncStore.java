@@ -56,8 +56,7 @@ class OffsetSyncStore implements AutoCloseable {
                 // Offset is too far in the past to translate accurately
                 return OptionalLong.of(-1L);
             }
-            long upstreamStep = upstreamOffset - offsetSync.get().upstreamOffset();
-            return OptionalLong.of(offsetSync.get().downstreamOffset() + upstreamStep);
+            return OptionalLong.of(offsetSync.get().downstreamOffset() + (offsetSync.get().upstreamOffset() == upstreamOffset ? 0 : 1));
         } else {
             return OptionalLong.empty();
         }
