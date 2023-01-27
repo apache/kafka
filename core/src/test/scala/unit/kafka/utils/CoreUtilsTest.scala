@@ -60,9 +60,9 @@ class CoreUtilsTest extends Logging {
 
     CoreUtils.tryAll(Seq(
       () => recordingFunction(Right("valid-0")),
-      () => recordingFunction(Left(new TestException("exception-1"))),
+      () => recordingFunction(Left(TestException("exception-1"))),
       () => recordingFunction(Right("valid-2")),
-      () => recordingFunction(Left(new TestException("exception-3")))
+      () => recordingFunction(Left(TestException("exception-3")))
     ))
     var expected = Map(
       "valid-0" -> Right("valid-0"),
@@ -85,33 +85,14 @@ class CoreUtilsTest extends Logging {
 
     recorded.clear()
     CoreUtils.tryAll(Seq(
-      () => recordingFunction(Left(new TestException("exception-0"))),
-      () => recordingFunction(Left(new TestException("exception-1")))
+      () => recordingFunction(Left(TestException("exception-0"))),
+      () => recordingFunction(Left(TestException("exception-1")))
     ))
     expected = Map(
       "exception-0" -> Left(TestException("exception-0")),
       "exception-1" -> Left(TestException("exception-1"))
     )
     assertEquals(expected, recorded)
-  }
-
-  @Test
-  def testCircularIterator(): Unit = {
-    val l = List(1, 2)
-    val itl = CoreUtils.circularIterator(l)
-    assertEquals(1, itl.next())
-    assertEquals(2, itl.next())
-    assertEquals(1, itl.next())
-    assertEquals(2, itl.next())
-    assertFalse(itl.isEmpty)
-
-    val s = Set(1, 2)
-    val its = CoreUtils.circularIterator(s)
-    assertEquals(1, its.next())
-    assertEquals(2, its.next())
-    assertEquals(1, its.next())
-    assertEquals(2, its.next())
-    assertEquals(1, its.next())
   }
 
   @Test
@@ -223,7 +204,7 @@ class CoreUtilsTest extends Logging {
     val map = new ConcurrentHashMap[Int, AtomicInteger]().asScala
     implicit val executionContext = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(nThreads))
     try {
-      Await.result(Future.traverse(1 to count) { i =>
+      Await.result(Future.traverse(1 to count) { _ =>
         Future {
           CoreUtils.atomicGetOrUpdate(map, 0, {
             createdCount.incrementAndGet
