@@ -40,32 +40,6 @@ public class FutureUtilsTest {
     private static final Logger log = LoggerFactory.getLogger(FutureUtilsTest.class);
 
     @Test
-    public void testOneMillisecondDeadline() {
-        assertEquals(TimeUnit.MILLISECONDS.toNanos(1), FutureUtils.getDeadlineNsFromDelayMs(0, 1));
-    }
-
-    @Test
-    public void testOneMillisecondDeadlineWithBase() {
-        final long nowNs = 123456789L;
-        assertEquals(nowNs + TimeUnit.MILLISECONDS.toNanos(1), FutureUtils.getDeadlineNsFromDelayMs(nowNs, 1));
-    }
-
-    @Test
-    public void testNegativeDelayFails() {
-        assertEquals("Negative delays are not allowed.",
-            assertThrows(RuntimeException.class,
-                () -> FutureUtils.getDeadlineNsFromDelayMs(123456789L, -1L)).
-                    getMessage());
-    }
-
-    @Test
-    public void testMaximumDelay() {
-        assertEquals(Long.MAX_VALUE, FutureUtils.getDeadlineNsFromDelayMs(123L, Long.MAX_VALUE));
-        assertEquals(Long.MAX_VALUE, FutureUtils.getDeadlineNsFromDelayMs(Long.MAX_VALUE / 2, Long.MAX_VALUE));
-        assertEquals(Long.MAX_VALUE, FutureUtils.getDeadlineNsFromDelayMs(Long.MAX_VALUE, Long.MAX_VALUE));
-    }
-
-    @Test
     public void testWaitWithLogging() throws Throwable {
         ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(1);
         CompletableFuture<Integer> future = new CompletableFuture<>();
@@ -73,7 +47,7 @@ public class FutureUtilsTest {
         assertEquals(123, FutureUtils.waitWithLogging(log,
             "the future to be completed",
             future,
-            FutureUtils.getDeadlineNsFromDelayMs(Time.SYSTEM.nanoseconds(), 15000),
+            Deadline.fromDelay(Time.SYSTEM, 30, TimeUnit.SECONDS),
             Time.SYSTEM));
         executorService.shutdownNow();
         executorService.awaitTermination(1, TimeUnit.MINUTES);
@@ -90,8 +64,8 @@ public class FutureUtilsTest {
                 "the future to be completed",
                 future,
                 immediateTimeout ?
-                    Time.SYSTEM.nanoseconds() - 10000 :
-                    Time.SYSTEM.nanoseconds() + 10000,
+                    Deadline.fromDelay(Time.SYSTEM, 0, TimeUnit.SECONDS) :
+                    Deadline.fromDelay(Time.SYSTEM, 1, TimeUnit.MILLISECONDS),
                 Time.SYSTEM);
         });
         executorService.shutdownNow();
@@ -108,10 +82,10 @@ public class FutureUtilsTest {
         assertEquals("Received a fatal error while waiting for the future to be completed",
             assertThrows(RuntimeException.class, () -> {
                 FutureUtils.waitWithLogging(log,
-                        "the future to be completed",
-                        future,
-                        FutureUtils.getDeadlineNsFromDelayMs(Time.SYSTEM.nanoseconds(), 5000),
-                        Time.SYSTEM);
+                    "the future to be completed",
+                    future,
+                    Deadline.fromDelay(Time.SYSTEM, 30, TimeUnit.SECONDS),
+                    Time.SYSTEM);
             }).getMessage());
         executorService.shutdown();
         executorService.awaitTermination(1, TimeUnit.MINUTES);

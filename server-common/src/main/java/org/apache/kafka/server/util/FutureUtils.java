@@ -27,37 +27,14 @@ import java.util.concurrent.TimeoutException;
 
 public class FutureUtils {
     /**
-     * Based on the current time and a delay, computes a monotonic deadline in the future.
-     *
-     * @param nowNs     The current time in monotonic nanoseconds.
-     * @param delayMs   The delay in milliseconds.
-     * @return          The monotonic deadline in the future. This value is capped at
-     *                  Long.MAX_VALUE.
-     */
-    public static long getDeadlineNsFromDelayMs(
-        long nowNs,
-        long delayMs
-    ) {
-        if (delayMs < 0) {
-            throw new RuntimeException("Negative delays are not allowed.");
-        }
-        BigInteger delayNs = BigInteger.valueOf(delayMs).multiply(BigInteger.valueOf(1_000_000));
-        BigInteger deadlineNs = BigInteger.valueOf(nowNs).add(delayNs);
-        if (deadlineNs.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) >= 0) {
-            return Long.MAX_VALUE;
-        } else {
-            return deadlineNs.longValue();
-        }
-    }
-
-    /**
      * Wait for a future until a specific time in the future, with copious logging.
      *
      * @param log           The slf4j object to use to log success and failure.
      * @param action        The action we are waiting for.
      * @param future        The future we are waiting for.
-     * @param deadlineNs    The deadline in the future we are waiting for.
+     * @param deadline      The deadline in the future we are waiting for.
      * @param time          The clock object.
+     *
      * @return              The result of the future.
      * @param <T>           The type of the future.
      *
@@ -68,12 +45,12 @@ public class FutureUtils {
         Logger log,
         String action,
         CompletableFuture<T> future,
-        long deadlineNs,
+        Deadline deadline,
         Time time
     ) throws Throwable {
         log.info("Waiting for {}", action);
         try {
-            T result = time.waitForFuture(future, deadlineNs);
+            T result = time.waitForFuture(future, deadline.nanoseconds());
             log.info("Finished waiting for {}", action);
             return result;
         } catch (TimeoutException t)  {
