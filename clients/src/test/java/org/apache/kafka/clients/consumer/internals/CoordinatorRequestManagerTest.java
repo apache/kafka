@@ -17,186 +17,178 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.RequestTestUtils;
-import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
-import java.util.Properties;
+import java.util.Optional;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 public class CoordinatorRequestManagerTest {
+    private static final int RETRY_BACKOFF_MS = 500;
+    private static final String GROUP_ID = "group-1";
     private MockTime time;
-    private MockClient client;
-    private SubscriptionState subscriptions;
-    private ConsumerMetadata metadata;
-    private LogContext logContext;
     private ErrorEventHandler errorEventHandler;
     private Node node;
-    private final Properties properties = new Properties();
-    private String groupId;
-    private int requestTimeoutMs;
-    private RequestState coordinatorRequestState;
 
     @BeforeEach
     public void setup() {
-        this.logContext = new LogContext();
         this.time = new MockTime(0);
-        this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST);
-        this.metadata = new ConsumerMetadata(0, Long.MAX_VALUE, false,
-                false, subscriptions, logContext, new ClusterResourceListeners());
-        this.client = new MockClient(time, metadata);
-        this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
-        this.node = metadata.fetch().nodes().get(0);
+        this.node = new Node(1, "localhost", 9092);
         this.errorEventHandler = mock(ErrorEventHandler.class);
-        properties.put(RETRY_BACKOFF_MS_CONFIG, "100");
-        this.groupId = "group-1";
-        this.requestTimeoutMs = 500;
-        this.coordinatorRequestState = mock(RequestState.class);
-        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(RETRY_BACKOFF_MS_CONFIG, 100);
-    }
-    
-    @Test
-    public void testPoll() {
-        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
-        when(coordinatorRequestState.canSendRequest(time.milliseconds())).thenReturn(true);
-        NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());
-        assertEquals(1, res.unsentRequests.size());
-
-        when(coordinatorRequestState.canSendRequest(time.milliseconds())).thenReturn(false);
-        NetworkClientDelegate.PollResult res2 = coordinatorManager.poll(time.milliseconds());
-        assertTrue(res2.unsentRequests.isEmpty());
     }
 
     @Test
-    public void testOnResponse() {
-        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
-        FindCoordinatorResponse resp = FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node);
-        coordinatorManager.onResponse(time.milliseconds(), resp, null);
-        verify(errorEventHandler, never()).handle(any());
-        assertNotNull(coordinatorManager.coordinator());
+    public void testSuccessfulResponse() {
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
+        expectFindCoordinatorRequest(coordinatorManager, Errors.NONE);
 
-        FindCoordinatorResponse retriableErrorResp =
-                FindCoordinatorResponse.prepareResponse(Errors.COORDINATOR_NOT_AVAILABLE,
-                groupId, node);
-        coordinatorManager.onResponse(time.milliseconds(), retriableErrorResp, null);
-        verify(errorEventHandler, never()).handle(Errors.COORDINATOR_NOT_AVAILABLE.exception());
-        assertFalse(coordinatorManager.coordinator().isPresent());
-
-        coordinatorManager.onResponse(
-                time.milliseconds(), null,
-                new RuntimeException("some error"));
-        assertFalse(coordinatorManager.coordinator().isPresent());
-    }
-
-    @Test
-    public void testFindCoordinatorBackoff() {
-        this.coordinatorRequestState = new RequestState(
-                100,
-                2,
-                1000,
-                0);
-        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
-
-        NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());
-        assertEquals(1, res.unsentRequests.size());
-        coordinatorManager.onResponse(
-                time.milliseconds(), FindCoordinatorResponse.prepareResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, "key",
-                this.node), null);
-        // Need to wait for 100ms until the next send
-        res = coordinatorManager.poll(time.milliseconds());
-        assertTrue(res.unsentRequests.isEmpty());
-        this.time.sleep(50);
-        res = coordinatorManager.poll(time.milliseconds());
-        assertTrue(res.unsentRequests.isEmpty());
-        this.time.sleep(50);
-        // should be able to send after 100ms
-        res = coordinatorManager.poll(time.milliseconds());
-        assertEquals(1, res.unsentRequests.size());
-        coordinatorManager.onResponse(
-                time.milliseconds(), FindCoordinatorResponse.prepareResponse(Errors.NONE, "key",
-                        this.node), null);
-    }
-
-    @Test
-    public void testPollWithExistingCoordinator() {
-        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager();
-        FindCoordinatorResponse resp = FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node);
-        coordinatorManager.onResponse(time.milliseconds(), resp, null);
-        verify(errorEventHandler, never()).handle(any());
-        assertNotNull(coordinatorManager.coordinator());
+        Optional<Node> coordinatorOpt = coordinatorManager.coordinator();
+        assertTrue(coordinatorOpt.isPresent());
+        assertEquals(Integer.MAX_VALUE - node.id(), coordinatorOpt.get().id());
+        assertEquals(node.host(), coordinatorOpt.get().host());
+        assertEquals(node.port(), coordinatorOpt.get().port());
 
         NetworkClientDelegate.PollResult pollResult = coordinatorManager.poll(time.milliseconds());
-        assertEquals(Long.MAX_VALUE, pollResult.timeUntilNextPollMs);
-        assertTrue(pollResult.unsentRequests.isEmpty());
+        assertEquals(Collections.emptyList(), pollResult.unsentRequests);
     }
 
     @Test
-    public void testRequestFutureCompletionHandler() {
-        NetworkClientDelegate.AbstractRequestFutureCompletionHandler h = new MockRequestFutureCompletionHandlerBase();
-        try {
-            h.onFailure(new RuntimeException());
-        } catch (Exception e) {
-            assertEquals("MockRequestFutureCompletionHandlerBase should throw an exception", e.getMessage());
-        }
+    public void testMarkCoordinatorUnknown() {
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
+
+        expectFindCoordinatorRequest(coordinatorManager, Errors.NONE);
+        assertTrue(coordinatorManager.coordinator().isPresent());
+
+        // It may take time for metadata to converge between after a coordinator has
+        // been demoted. This can cause a tight loop in which FindCoordinator continues to
+        // return node X while that node continues to reply with NOT_COORDINATOR. Hence we
+        // still want to ensure a backoff after successfully finding the coordinator.
+        coordinatorManager.markCoordinatorUnknown("coordinator changed", time.milliseconds());
+        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
+
+        time.sleep(RETRY_BACKOFF_MS - 1);
+        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
+
+        time.sleep(RETRY_BACKOFF_MS);
+        expectFindCoordinatorRequest(coordinatorManager, Errors.NONE);
+        assertTrue(coordinatorManager.coordinator().isPresent());
+    }
+
+    @Test
+    public void testBackoffAfterRetriableFailure() {
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
+        expectFindCoordinatorRequest(coordinatorManager, Errors.COORDINATOR_LOAD_IN_PROGRESS);
+        verifyNoInteractions(errorEventHandler);
+
+        time.sleep(RETRY_BACKOFF_MS - 1);
+        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
+
+        time.sleep(1);
+        expectFindCoordinatorRequest(coordinatorManager, Errors.NONE);
+    }
+
+    @Test
+    public void testPropagateAndBackoffAfterFatalError() {
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
+        expectFindCoordinatorRequest(coordinatorManager, Errors.GROUP_AUTHORIZATION_FAILED);
+
+        verify(errorEventHandler).handle(argThat(exception -> {
+            if (!(exception instanceof GroupAuthorizationException)) {
+                return false;
+            }
+            GroupAuthorizationException groupAuthException = (GroupAuthorizationException) exception;
+            return groupAuthException.groupId().equals(GROUP_ID);
+        }));
+
+        time.sleep(RETRY_BACKOFF_MS - 1);
+        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
+
+        time.sleep(1);
+        assertEquals(1, coordinatorManager.poll(time.milliseconds()).unsentRequests.size());
+        assertEquals(Optional.empty(), coordinatorManager.coordinator());
     }
 
     @Test
     public void testNullGroupIdShouldThrow() {
-        this.groupId = null;
-        assertThrows(RuntimeException.class, this::setupCoordinatorManager);
-    }
-
-    private static class MockRequestFutureCompletionHandlerBase extends NetworkClientDelegate.AbstractRequestFutureCompletionHandler {
-        @Override
-        public void handleResponse(ClientResponse r, Exception t) {
-            throw new RuntimeException("MockRequestFutureCompletionHandlerBase should throw an exception");
-        }
+        assertThrows(RuntimeException.class, () -> setupCoordinatorManager(null));
     }
 
     @Test
     public void testFindCoordinatorResponseVersions() {
         // v4
-        FindCoordinatorResponse respNew = FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, this.node);
-        assertTrue(respNew.coordinatorByKey(groupId).isPresent());
-        assertEquals(groupId, respNew.coordinatorByKey(groupId).get().key());
-        assertEquals(this.node.id(), respNew.coordinatorByKey(groupId).get().nodeId());
+        FindCoordinatorResponse respNew = FindCoordinatorResponse.prepareResponse(Errors.NONE, GROUP_ID, this.node);
+        assertTrue(respNew.coordinatorByKey(GROUP_ID).isPresent());
+        assertEquals(GROUP_ID, respNew.coordinatorByKey(GROUP_ID).get().key());
+        assertEquals(this.node.id(), respNew.coordinatorByKey(GROUP_ID).get().nodeId());
 
         // <= v3
         FindCoordinatorResponse respOld = FindCoordinatorResponse.prepareOldResponse(Errors.NONE, this.node);
-        assertTrue(respOld.coordinatorByKey(groupId).isPresent());
-        assertEquals(this.node.id(), respNew.coordinatorByKey(groupId).get().nodeId());
+        assertTrue(respOld.coordinatorByKey(GROUP_ID).isPresent());
+        assertEquals(this.node.id(), respNew.coordinatorByKey(GROUP_ID).get().nodeId());
     }
 
-    private CoordinatorRequestManager setupCoordinatorManager() {
+    private void expectFindCoordinatorRequest(
+        CoordinatorRequestManager  coordinatorManager,
+        Errors error
+    ) {
+        NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+
+        NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+        unsentRequest.future().complete(buildResponse(unsentRequest, error));
+
+        boolean expectCoordinatorFound = error == Errors.NONE;
+        assertEquals(expectCoordinatorFound, coordinatorManager.coordinator().isPresent());
+    }
+
+    private CoordinatorRequestManager setupCoordinatorManager(String groupId) {
         return new CoordinatorRequestManager(
-                this.logContext,
-                this.errorEventHandler,
-                this.groupId,
-                this.coordinatorRequestState);
+            time,
+            new LogContext(),
+            RETRY_BACKOFF_MS,
+            this.errorEventHandler,
+            groupId
+        );
+    }
+
+    private ClientResponse buildResponse(
+        NetworkClientDelegate.UnsentRequest request,
+        Errors error
+    ) {
+        AbstractRequest abstractRequest = request.requestBuilder().build();
+        assertTrue(abstractRequest instanceof FindCoordinatorRequest);
+        FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) abstractRequest;
+
+        FindCoordinatorResponse findCoordinatorResponse =
+            FindCoordinatorResponse.prepareResponse(error, GROUP_ID, node);
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.FIND_COORDINATOR, findCoordinatorRequest.version(), "", 1),
+            request.callback(),
+            node.idString(),
+            time.milliseconds(),
+            time.milliseconds(),
+            false,
+            null,
+            null,
+            findCoordinatorResponse
+        );
     }
 }

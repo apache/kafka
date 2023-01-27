@@ -20,7 +20,7 @@ package kafka.coordinator.group
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, OptionalInt}
 import com.yammer.metrics.core.Gauge
 
 import javax.management.ObjectName
@@ -669,7 +669,7 @@ class GroupMetadataManagerTest {
     loadOffsetsAndGroup(groupTopicPartition, groupEpoch)
     assertEquals(groupEpoch, groupMetadataManager.epochForPartitionId.get(groupTopicPartition.partition()))
 
-    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, Some(groupEpoch), _ => ())
+    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, OptionalInt.of(groupEpoch), _ => ())
     assertTrue(groupMetadataManager.getGroup(groupId).isEmpty,
       "Removed group remained in cache")
     assertEquals(groupEpoch, groupMetadataManager.epochForPartitionId.get(groupTopicPartition.partition()))
@@ -685,7 +685,7 @@ class GroupMetadataManagerTest {
     val groupEpoch = 2
     loadOffsetsAndGroup(groupTopicPartition, groupEpoch)
 
-    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, Some(groupEpoch), _ => ())
+    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, OptionalInt.of(groupEpoch), _ => ())
     assertEquals(groupEpoch, groupMetadataManager.epochForPartitionId.get(groupTopicPartition.partition()))
     assertTrue(groupMetadataManager.getGroup(groupId).isEmpty,
     "Removed group remained in cache")
@@ -696,7 +696,7 @@ class GroupMetadataManagerTest {
     val groupEpoch = 2
     val initiallyLoaded = loadOffsetsAndGroup(groupTopicPartition, groupEpoch)
 
-    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, Some(groupEpoch - 1), _ => ())
+    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, OptionalInt.of(groupEpoch - 1), _ => ())
     assertEquals(groupEpoch, groupMetadataManager.epochForPartitionId.get(groupTopicPartition.partition()))
     val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
     assertEquals(initiallyLoaded.groupId, group.groupId)
@@ -718,7 +718,7 @@ class GroupMetadataManagerTest {
     val groupEpoch = 2
     val initiallyLoaded = loadOffsetsAndGroup(groupTopicPartition, groupEpoch)
 
-    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, None, _ => ())
+    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, OptionalInt.empty, _ => ())
     assertTrue(groupMetadataManager.getGroup(groupId).isEmpty,
       "Removed group remained in cache")
     assertEquals(groupEpoch, groupMetadataManager.epochForPartitionId.get(groupTopicPartition.partition()),

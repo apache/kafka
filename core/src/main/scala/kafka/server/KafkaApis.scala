@@ -20,7 +20,6 @@ package kafka.server
 import kafka.admin.AdminUtils
 import kafka.api.ElectLeadersRequestOps
 import kafka.controller.ReplicaAssignment
-import kafka.coordinator.group._
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
@@ -65,6 +64,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
@@ -76,7 +76,7 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, OptionalInt}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
@@ -90,9 +90,6 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val metadataSupport: MetadataSupport,
                 val replicaManager: ReplicaManager,
                 val groupCoordinator: GroupCoordinator,
-                // newGroupCoordinator is temporary here. It will be removed when
-                // the migration to the new interface is completed in this class.
-                val newGroupCoordinator: org.apache.kafka.coordinator.group.GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
                 val autoTopicCreationManager: AutoTopicCreationManager,
                 val brokerId: Int,
@@ -310,9 +307,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (topicPartition.topic == GROUP_METADATA_TOPIC_NAME
               && partitionState.deletePartition) {
             val leaderEpoch = if (partitionState.leaderEpoch >= 0)
-              Some(partitionState.leaderEpoch)
+              OptionalInt.of(partitionState.leaderEpoch)
             else
-              None
+              OptionalInt.empty
             groupCoordinator.onResignation(topicPartition.partition, leaderEpoch)
           } else if (topicPartition.topic == TRANSACTION_STATE_TOPIC_NAME
                      && partitionState.deletePartition) {
@@ -357,8 +354,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
       val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
-      if (deletedPartitions.nonEmpty)
-        groupCoordinator.handleDeletedPartitions(deletedPartitions, requestLocal)
+      if (deletedPartitions.nonEmpty) {
+        groupCoordinator.onPartitionsDeleted(deletedPartitions.asJava, requestLocal.bufferSupplier)
+      }
 
       if (zkSupport.adminManager.hasDelayedTopicOperations) {
         updateMetadataRequest.partitionStates.forEach { partitionState =>
@@ -538,7 +536,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       .setGroupInstanceId(offsetCommitRequest.data.groupInstanceId)
       .setTopics(authorizedTopicsRequest.asJava)
 
-    newGroupCoordinator.commitOffsets(
+    groupCoordinator.commitOffsets(
       request.context,
       offsetCommitRequestData,
       requestLocal.bufferSupplier
@@ -1437,7 +1435,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     groupOffsetFetch: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
-    newGroupCoordinator.fetchAllOffsets(
+    groupCoordinator.fetchAllOffsets(
       requestContext,
       groupOffsetFetch.groupId,
       requireStable
@@ -1475,7 +1473,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupOffsetFetch.topics.asScala
     )(_.name)
 
-    newGroupCoordinator.fetchOffsets(
+    groupCoordinator.fetchOffsets(
       requestContext,
       groupOffsetFetch.groupId,
       authorizedTopics.asJava,
@@ -1628,7 +1626,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    newGroupCoordinator.describeGroups(
+    groupCoordinator.describeGroups(
       request.context,
       authorizedGroups.asJava
     ).handle[Unit] { (results, exception) =>
@@ -1663,7 +1661,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val listGroupsRequest = request.body[ListGroupsRequest]
     val hasClusterDescribe = authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
 
-    newGroupCoordinator.listGroups(
+    groupCoordinator.listGroups(
       request.context,
       listGroupsRequest.data
     ).handle[Unit] { (response, exception) =>
@@ -1701,7 +1699,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      newGroupCoordinator.joinGroup(
+      groupCoordinator.joinGroup(
         request.context,
         joinGroupRequest.data,
         requestLocal.bufferSupplier
@@ -1735,7 +1733,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      newGroupCoordinator.syncGroup(
+      groupCoordinator.syncGroup(
         request.context,
         syncGroupRequest.data,
         requestLocal.bufferSupplier
@@ -1759,7 +1757,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val (authorizedGroups, unauthorizedGroups) =
       authHelper.partitionSeqByAuthorized(request.context, DELETE, GROUP, groups)(identity)
 
-    newGroupCoordinator.deleteGroups(
+    groupCoordinator.deleteGroups(
       request.context,
       authorizedGroups.toList.asJava,
       requestLocal.bufferSupplier
@@ -1800,7 +1798,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, heartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      newGroupCoordinator.heartbeat(
+      groupCoordinator.heartbeat(
         request.context,
         heartbeatRequest.data
       ).handle[Unit] { (response, exception) =>
@@ -1820,7 +1818,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, leaveGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      newGroupCoordinator.leaveGroup(
+      groupCoordinator.leaveGroup(
         request.context,
         leaveGroupRequest.normalizedData()
       ).handle[Unit] { (response, exception) =>
@@ -1905,7 +1903,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           .map(_.name)
           .toSet
 
-          /* The cluster metatdata topic is an internal topic with a different implementation. The user should not be
+          /* The cluster metadata topic is an internal topic with a different implementation. The user should not be
            * allowed to create it as a regular topic.
            */
           if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {
@@ -2312,7 +2310,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // as soon as the end transaction marker has been written for a transactional offset commit,
         // call to the group coordinator to materialize the offsets into the cache
         try {
-          groupCoordinator.scheduleHandleTxnCompletion(producerId, successfulOffsetsPartitions, result)
+          groupCoordinator.onTransactionCompleted(producerId, successfulOffsetsPartitions.asJava, result)
         } catch {
           case e: Exception =>
             error(s"Received an exception while trying to update the offsets cache on transaction marker append", e)
@@ -2586,7 +2584,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setTransactionalId(txnOffsetCommitRequest.data.transactionalId)
           .setTopics(authorizedTopicCommittedOffsets.asJava)
 
-        newGroupCoordinator.commitTransactionalOffsets(
+        groupCoordinator.commitTransactionalOffsets(
           request.context,
           txnOffsetCommitRequestData,
           requestLocal.bufferSupplier
@@ -3215,7 +3213,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setGroupId(offsetDeleteRequest.data.groupId)
         .setTopics(authorizedTopicPartitions)
 
-      newGroupCoordinator.deleteOffsets(
+      groupCoordinator.deleteOffsets(
         request.context,
         offsetDeleteRequestData,
         requestLocal.bufferSupplier

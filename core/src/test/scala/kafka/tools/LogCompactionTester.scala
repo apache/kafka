@@ -33,6 +33,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer}
 import org.apache.kafka.common.utils.{AbstractIterator, Utils}
+import org.apache.kafka.server.util.CommandLineUtils
 
 import scala.jdk.CollectionConverters._
 
@@ -98,7 +99,7 @@ object LogCompactionTester {
     val options = parser.parse(args: _*)
 
     if (args.isEmpty)
-      CommandLineUtils.printUsageAndDie(parser, "A tool to test log compaction. Valid options are: ")
+      CommandLineUtils.printUsageAndExit(parser, "A tool to test log compaction. Valid options are: ")
 
     CommandLineUtils.checkRequiredArgs(parser, options, brokerOpt, numMessagesOpt)
 

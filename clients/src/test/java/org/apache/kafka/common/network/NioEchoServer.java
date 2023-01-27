@@ -111,8 +111,8 @@ public class NioEchoServer extends Thread {
         serverSocketChannel.configureBlocking(false);
         serverSocketChannel.socket().bind(new InetSocketAddress(serverHost, 0));
         this.port = serverSocketChannel.socket().getLocalPort();
-        this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
-        this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
+        this.socketChannels = Collections.synchronizedList(new ArrayList<>());
+        this.newChannels = Collections.synchronizedList(new ArrayList<>());
         this.credentialCache = credentialCache;
         this.tokenCache = tokenCache;
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
@@ -191,7 +191,7 @@ public class NioEchoServer extends Thread {
             long thisMaxWaitMs = maxAggregateWaitMs - currentElapsedMs;
             String metricName = namePrefix + metricType.metricNameSuffix();
             if (expectedValue == 0.0) {
-                Double expected = expectedValue;
+                double expected = expectedValue;
                 if (metricType == MetricType.MAX || metricType == MetricType.AVG)
                     expected = Double.NaN;
 
