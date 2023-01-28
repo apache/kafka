@@ -24,10 +24,11 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollContext;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -210,7 +211,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     void runOnce() {
         drainAndProcess();
 
-        final long currentTimeMs = time.milliseconds();
+        final PollContext pollContext = new PollContext(metadata, subscriptions, time.milliseconds());
 
         List<RequestManager> requestManagers = new ArrayList<>();
         coordinatorManager.ifPresent(requestManagers::add);
@@ -219,12 +220,12 @@ public class DefaultBackgroundThread extends KafkaThread {
         long pollWaitTimeMs = MAX_POLL_TIMEOUT_MS;
 
         for (final RequestManager requestManager : requestManagers) {
-            final PollResult pollResult = requestManager.poll(currentTimeMs);
+            final PollResult pollResult = requestManager.poll(pollContext);
             final long timeUntilNextPollMs = handlePollResult(pollResult);
             pollWaitTimeMs = Math.min(pollWaitTimeMs, timeUntilNextPollMs);
         }
 
-        networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
+        networkClientDelegate.poll(pollWaitTimeMs, pollContext.currentTimeMs);
 
         // Handle any fetch responses that may be available.
         Optional<? extends Fetch<?, ?>> fetchOpt = fetchRequestManager.fetch(metadata, subscriptions);
@@ -243,7 +244,7 @@ public class DefaultBackgroundThread extends KafkaThread {
         }
     }
 
-    long handlePollResult(NetworkClientDelegate.PollResult res) {
+    long handlePollResult(PollResult res) {
         if (!res.unsentRequests.isEmpty()) {
             networkClientDelegate.addAll(res.unsentRequests);
         }

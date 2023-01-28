@@ -26,6 +26,9 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollContext;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.slf4j.Logger;
 
 import java.util.Objects;
@@ -37,8 +40,8 @@ import java.util.Optional;
  * Whether there is an existing coordinator.
  * Whether there is an inflight request.
  * Whether the backoff timer has expired.
- * The {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult} contains either a wait timer
- * or a singleton list of {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}.
+ * The {@link PollResult} contains either a wait timer
+ * or a singleton list of {@link UnsentRequest}.
  *
  * The {@link FindCoordinatorRequest} will be handled by the {@link #onResponse(long, FindCoordinatorResponse)}  callback, which
  * subsequently invokes {@code onResponse} to handle the exception and response. Note that the coordinator node will be
@@ -78,32 +81,29 @@ public class CoordinatorRequestManager implements RequestManager {
      * Otherwise, this returns will return a PollResult with a singleton list of UnsentRequest and Long.MAX_VALUE backoff time.
      * Note that this method does not involve any actual network IO, and it only determines if we need to send a new request or not.
      *
-     * @param currentTimeMs current time in ms.
-     * @return {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult}. This will not be {@code null}.
+     * @param pollContext current time in ms.
+     * @return {@link PollResult}. This will not be {@code null}.
      */
     @Override
-    public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
+    public PollResult poll(final PollContext pollContext) {
         if (this.coordinator != null) {
-            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE);
+            return new PollResult(Long.MAX_VALUE);
         }
 
-        if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
-            NetworkClientDelegate.UnsentRequest request = makeFindCoordinatorRequest(currentTimeMs);
-            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, request);
+        if (coordinatorRequestState.canSendRequest(pollContext.currentTimeMs)) {
+            UnsentRequest request = makeFindCoordinatorRequest(pollContext.currentTimeMs);
+            return new PollResult(Long.MAX_VALUE, request);
         }
 
-        return new NetworkClientDelegate.PollResult(coordinatorRequestState.remainingBackoffMs(currentTimeMs));
+        return new PollResult(coordinatorRequestState.remainingBackoffMs(pollContext.currentTimeMs));
     }
 
-    private NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
+    private UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
         coordinatorRequestState.onSendAttempt(currentTimeMs);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 .setKey(this.groupId);
-        NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
-            new FindCoordinatorRequest.Builder(data),
-            Optional.empty()
-        );
+        UnsentRequest unsentRequest = new UnsentRequest(new FindCoordinatorRequest.Builder(data));
 
         unsentRequest.future().whenComplete((clientResponse, throwable) -> {
             long responseTimeMs = time.milliseconds();

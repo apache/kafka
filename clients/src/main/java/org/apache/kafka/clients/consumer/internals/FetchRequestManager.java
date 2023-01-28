@@ -27,6 +27,7 @@ import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.FetchSessionHandler.FetchRequestData;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollContext;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.common.KafkaException;
@@ -36,11 +37,12 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
+import org.slf4j.Logger;
 
 public class FetchRequestManager<K, V> extends AbstractFetcher<K, V> implements RequestManager {
 
+    private final Logger log;
     private final ErrorEventHandler nonRetriableErrorHandler;
-
     private final RequestState requestState;
 
     FetchRequestManager(final FetchContext<K, V> fetchContext,
@@ -48,6 +50,7 @@ public class FetchRequestManager<K, V> extends AbstractFetcher<K, V> implements 
                         final ErrorEventHandler nonRetriableErrorHandler,
                         final RequestState requestState) {
         super(fetchContext, apiVersions);
+        this.log = fetchContext.logContext.logger(FetchRequestManager.class);
         this.nonRetriableErrorHandler = nonRetriableErrorHandler;
         this.requestState = requestState;
     }
@@ -63,16 +66,16 @@ public class FetchRequestManager<K, V> extends AbstractFetcher<K, V> implements 
     }
 
     @Override
-    public PollResult poll(final Metadata metadata,
-                           final SubscriptionState subscriptions,
-                           final long currentTimeMs) {
-        if (!requestState.canSendRequest(currentTimeMs))
-            return new NetworkClientDelegate.PollResult(requestState.remainingBackoffMs(currentTimeMs));
+    public PollResult poll(final PollContext pollContext) {
+        log.debug("Calling poll with pollContext {}", pollContext);
+
+        if (!requestState.canSendRequest(pollContext.currentTimeMs))
+            return new PollResult(requestState.remainingBackoffMs(pollContext.currentTimeMs));
 
         List<UnsentRequest> requests = new ArrayList<>();
-        requestState.onSendAttempt(currentTimeMs);
+        requestState.onSendAttempt(pollContext.currentTimeMs);
 
-        Map<Node, FetchRequestData> fetchRequestMap = prepareFetchRequests(metadata, subscriptions);
+        Map<Node, FetchRequestData> fetchRequestMap = prepareFetchRequests(pollContext.metadata, pollContext.subscriptions);
 
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
             final Node fetchTarget = entry.getKey();
@@ -80,7 +83,7 @@ public class FetchRequestManager<K, V> extends AbstractFetcher<K, V> implements 
             final FetchRequest.Builder request = createFetchRequest(data);
             nodesWithPendingFetchRequests.add(fetchTarget.id());
 
-            UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(request, Optional.of(fetchTarget));
+            UnsentRequest unsentRequest = new UnsentRequest(request, Optional.of(fetchTarget));
             unsentRequest.future().whenComplete((clientResponse, t) -> {
                 try {
                     if (t != null) {
@@ -90,13 +93,13 @@ public class FetchRequestManager<K, V> extends AbstractFetcher<K, V> implements 
                             return;
                         }
 
-                        handleError(subscriptions, fetchTarget, t);
+                        handleError(pollContext.subscriptions, fetchTarget, t);
 
                         log.warn("FetchResponse request failed due to fatal exception", t);
                         nonRetriableErrorHandler.handle(t);
                     } else {
                         requestState.onSuccessfulAttempt(fetchContext.time.milliseconds());
-                        handleSuccess(metadata, fetchTarget, clientResponse, data);
+                        handleSuccess(pollContext.metadata, fetchTarget, clientResponse, data);
                         requestState.reset();
                     }
                 } finally {
@@ -107,7 +110,7 @@ public class FetchRequestManager<K, V> extends AbstractFetcher<K, V> implements 
             requests.add(unsentRequest);
         }
 
-        return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, requests);
+        return new PollResult(Long.MAX_VALUE, requests);
     }
 
     /**

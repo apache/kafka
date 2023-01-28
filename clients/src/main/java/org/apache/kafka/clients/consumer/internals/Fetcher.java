@@ -31,6 +31,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 
 import java.util.Map;
 import org.apache.kafka.common.requests.FetchResponse;
+import org.slf4j.Logger;
 
 /**
  * This class manages the fetching process with the brokers.
@@ -54,12 +55,15 @@ import org.apache.kafka.common.requests.FetchResponse;
  * </ul>
  */
 public class Fetcher<K, V> extends AbstractFetcher<K, V> {
+
+    private final Logger log;
     private final ConsumerNetworkClient client;
 
     public Fetcher(FetchContext<K, V> fetchContext,
                    ApiVersions apiVersions,
                    ConsumerNetworkClient client) {
         super(fetchContext, apiVersions);
+        this.log = fetchContext.logContext.logger(Fetcher.class);
         this.client = client;
     }
 

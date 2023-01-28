@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollContext;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 
 /**
@@ -24,15 +24,6 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollRes
  * the next poll event.
  */
 public interface RequestManager {
-    default PollResult poll(long currentTimeMs) {
-        // Do nothing
-        return null;
-    }
 
-    default PollResult poll(final Metadata metadata,
-                            final SubscriptionState subscriptions,
-                            final long currentTimeMs) {
-        // Do nothing
-        return null;
-    }
+    PollResult poll(final PollContext pollContext);
 }

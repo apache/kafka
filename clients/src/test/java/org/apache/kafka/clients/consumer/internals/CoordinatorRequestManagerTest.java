@@ -17,6 +17,9 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollContext;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -46,6 +49,8 @@ public class CoordinatorRequestManagerTest {
     private static final String GROUP_ID = "group-1";
     private MockTime time;
     private ErrorEventHandler errorEventHandler;
+    private ConsumerMetadata metadata;
+    private SubscriptionState subscriptions;
     private Node node;
 
     @BeforeEach
@@ -53,6 +58,8 @@ public class CoordinatorRequestManagerTest {
         this.time = new MockTime(0);
         this.node = new Node(1, "localhost", 9092);
         this.errorEventHandler = mock(ErrorEventHandler.class);
+        this.metadata = mock(ConsumerMetadata.class);
+        this.subscriptions = mock(SubscriptionState.class);
     }
 
     @Test
@@ -66,7 +73,7 @@ public class CoordinatorRequestManagerTest {
         assertEquals(node.host(), coordinatorOpt.get().host());
         assertEquals(node.port(), coordinatorOpt.get().port());
 
-        NetworkClientDelegate.PollResult pollResult = coordinatorManager.poll(time.milliseconds());
+        PollResult pollResult = coordinatorManager.poll(new PollContext(metadata, subscriptions, time.milliseconds()));
         assertEquals(Collections.emptyList(), pollResult.unsentRequests);
     }
 
@@ -82,10 +89,10 @@ public class CoordinatorRequestManagerTest {
         // return node X while that node continues to reply with NOT_COORDINATOR. Hence we
         // still want to ensure a backoff after successfully finding the coordinator.
         coordinatorManager.markCoordinatorUnknown("coordinator changed", time.milliseconds());
-        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
+        assertEquals(Collections.emptyList(), coordinatorManager.poll(new PollContext(metadata, subscriptions, time.milliseconds())).unsentRequests);
 
         time.sleep(RETRY_BACKOFF_MS - 1);
-        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
+        assertEquals(Collections.emptyList(), coordinatorManager.poll(new PollContext(metadata, subscriptions, time.milliseconds())).unsentRequests);
 
         time.sleep(RETRY_BACKOFF_MS);
         expectFindCoordinatorRequest(coordinatorManager, Errors.NONE);
@@ -99,7 +106,7 @@ public class CoordinatorRequestManagerTest {
         verifyNoInteractions(errorEventHandler);
 
         time.sleep(RETRY_BACKOFF_MS - 1);
-        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
+        assertEquals(Collections.emptyList(), coordinatorManager.poll(new PollContext(metadata, subscriptions, time.milliseconds())).unsentRequests);
 
         time.sleep(1);
         expectFindCoordinatorRequest(coordinatorManager, Errors.NONE);
@@ -119,10 +126,10 @@ public class CoordinatorRequestManagerTest {
         }));
 
         time.sleep(RETRY_BACKOFF_MS - 1);
-        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
+        assertEquals(Collections.emptyList(), coordinatorManager.poll(new PollContext(metadata, subscriptions, time.milliseconds())).unsentRequests);
 
         time.sleep(1);
-        assertEquals(1, coordinatorManager.poll(time.milliseconds()).unsentRequests.size());
+        assertEquals(1, coordinatorManager.poll(new PollContext(metadata, subscriptions, time.milliseconds())).unsentRequests.size());
         assertEquals(Optional.empty(), coordinatorManager.coordinator());
     }
 
@@ -149,10 +156,10 @@ public class CoordinatorRequestManagerTest {
         CoordinatorRequestManager  coordinatorManager,
         Errors error
     ) {
-        NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());
+        PollResult res = coordinatorManager.poll(new PollContext(metadata, subscriptions, time.milliseconds()));
         assertEquals(1, res.unsentRequests.size());
 
-        NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+        UnsentRequest unsentRequest = res.unsentRequests.get(0);
         unsentRequest.future().complete(buildResponse(unsentRequest, error));
 
         boolean expectCoordinatorFound = error == Errors.NONE;
@@ -169,10 +176,7 @@ public class CoordinatorRequestManagerTest {
         );
     }
 
-    private ClientResponse buildResponse(
-        NetworkClientDelegate.UnsentRequest request,
-        Errors error
-    ) {
+    private ClientResponse buildResponse(UnsentRequest request, Errors error) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
         assertTrue(abstractRequest instanceof FindCoordinatorRequest);
         FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) abstractRequest;

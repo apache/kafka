@@ -63,9 +63,9 @@ import org.slf4j.helpers.MessageFormatter;
  * This class manages the fetching process with the brokers.
  */
 public abstract class AbstractFetcher<K, V> {
-    protected final Logger log;
-    protected final FetchContext<K, V> fetchContext;
 
+    private final Logger log;
+    protected final FetchContext<K, V> fetchContext;
     protected final ApiVersions apiVersions;
     protected final ConcurrentLinkedQueue<CompletedFetch<K, V>> completedFetches;
     protected final Map<Integer, FetchSessionHandler> sessionHandlers;
@@ -74,7 +74,7 @@ public abstract class AbstractFetcher<K, V> {
     protected CompletedFetch<K, V> nextInLineFetch = null;
 
     public AbstractFetcher(FetchContext<K, V> fetchContext, ApiVersions apiVersions) {
-        this.log = fetchContext.logger(getClass());
+        this.log = fetchContext.logContext.logger(AbstractFetcher.class);
         this.fetchContext = fetchContext;
         this.apiVersions = apiVersions;
         this.completedFetches = new ConcurrentLinkedQueue<>();

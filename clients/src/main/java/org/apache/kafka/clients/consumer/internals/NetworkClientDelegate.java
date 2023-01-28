@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
@@ -185,6 +186,30 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests.addAll(requests);
     }
 
+    public static class PollContext {
+
+        public final Metadata metadata;
+
+        public final SubscriptionState subscriptions;
+
+        public final long currentTimeMs;
+
+        public PollContext(final Metadata metadata, final SubscriptionState subscriptions, final long currentTimeMs) {
+            this.metadata = metadata;
+            this.subscriptions = subscriptions;
+            this.currentTimeMs = currentTimeMs;
+        }
+
+        @Override
+        public String toString() {
+            return "PollContext{" +
+                    "metadata=" + metadata +
+                    ", subscriptions=" + subscriptions +
+                    ", currentTimeMs=" + currentTimeMs +
+                    '}';
+        }
+    }
+
     public static class PollResult {
         public final long timeUntilNextPollMs;
         public final List<UnsentRequest> unsentRequests;
@@ -202,19 +227,20 @@ public class NetworkClientDelegate implements AutoCloseable {
             this(timeMsTillNextPoll, Collections.emptyList());
         }
     }
+
     public static class UnsentRequest {
         private final AbstractRequest.Builder<?> requestBuilder;
         private final FutureCompletionHandler callback;
-        private Optional<Node> node; // empty if random node can be choosen
+        private final Optional<Node> node; // empty if random node can be choosen
         private Timer timer;
 
-        public UnsentRequest(
-            final AbstractRequest.Builder<?> requestBuilder,
-            final Optional<Node> node
-        ) {
-            Objects.requireNonNull(requestBuilder);
-            this.requestBuilder = requestBuilder;
-            this.node = node;
+        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder) {
+            this(requestBuilder, Optional.empty());
+        }
+
+        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder, final Optional<Node> node) {
+            this.requestBuilder = Objects.requireNonNull(requestBuilder);
+            this.node = Objects.requireNonNull(node);
             this.callback = new FutureCompletionHandler();
         }
 

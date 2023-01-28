@@ -47,6 +47,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 public class CompletedFetch<K, V> {
+
     private final Logger log;
     private final TopicPartition partition;
     private final Iterator<? extends RecordBatch> batches;
@@ -56,7 +57,6 @@ public class CompletedFetch<K, V> {
     private final FetchResponseMetricAggregator metricAggregator;
     private final short responseVersion;
     private final FetchContext<K, V> fetchContext;
-
     private int recordsRead;
     private int bytesRead;
     private RecordBatch currentBatch;
@@ -77,7 +77,7 @@ public class CompletedFetch<K, V> {
                           final Long fetchOffset,
                           final short responseVersion) {
         this.fetchContext = fetchContext;
-        this.log = fetchContext.logger(getClass());
+        this.log = fetchContext.logContext.logger(CompletedFetch.class);
         this.partition = partition;
         this.partitionData = partitionData;
         this.metricAggregator = metricAggregator;

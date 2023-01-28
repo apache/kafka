@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.metrics.Metrics;
@@ -23,7 +24,11 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.slf4j.Logger;
+
+import java.util.Collections;
+import java.util.Locale;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.*;
 
 public class FetchContext<K, V> {
 
@@ -89,13 +94,13 @@ public class FetchContext<K, V> {
                         final FetcherMetricsRegistry metricsRegistry) {
         this(logContext,
              time,
-             config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
-             config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG),
-             config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG),
-             config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
-             config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG),
-             config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG),
-             config.getString(ConsumerConfig.CLIENT_RACK_CONFIG),
+             config.getInt(FETCH_MIN_BYTES_CONFIG),
+             config.getInt(FETCH_MAX_BYTES_CONFIG),
+             config.getInt(FETCH_MAX_WAIT_MS_CONFIG),
+             config.getInt(MAX_PARTITION_FETCH_BYTES_CONFIG),
+             config.getInt(MAX_POLL_RECORDS_CONFIG),
+             config.getBoolean(CHECK_CRCS_CONFIG),
+             config.getString(CLIENT_RACK_CONFIG),
              keyDeserializer,
              valueDeserializer,
              retryBackoffMs,
@@ -105,8 +110,31 @@ public class FetchContext<K, V> {
              metricsRegistry);
     }
 
-    public Logger logger(Class<?> clazz) {
-        return logContext.logger(clazz);
+    @SuppressWarnings("unchecked")
+    public FetchContext(final LogContext logContext,
+                        final Time time,
+                        final ConsumerConfig config,
+                        final Metrics metrics,
+                        final FetcherMetricsRegistry metricsRegistry) {
+        this.logContext = logContext;
+        this.time = time;
+        this.minBytes = config.getInt(FETCH_MIN_BYTES_CONFIG);
+        this.maxBytes = config.getInt(FETCH_MAX_BYTES_CONFIG);
+        this.maxWaitMs = config.getInt(FETCH_MAX_WAIT_MS_CONFIG);
+        this.fetchSize = config.getInt(MAX_PARTITION_FETCH_BYTES_CONFIG);
+        this.maxPollRecords = config.getInt(MAX_POLL_RECORDS_CONFIG);
+        this.checkCrcs = config.getBoolean(CHECK_CRCS_CONFIG);
+        this.clientRackId = config.getString(CLIENT_RACK_CONFIG);
+        this.keyDeserializer = config.getConfiguredInstance(KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+        this.valueDeserializer = config.getConfiguredInstance(VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+        this.retryBackoffMs = config.getLong(RETRY_BACKOFF_MS_CONFIG);
+        this.requestTimeoutMs = config.getInt(REQUEST_TIMEOUT_MS_CONFIG);
+        this.isolationLevel = IsolationLevel.valueOf(config.getString(ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
+        this.fetchManagerMetrics = new FetchManagerMetrics(metrics, metricsRegistry);
+
+        String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
+        this.keyDeserializer.configure(config.originals(Collections.singletonMap(CLIENT_ID_CONFIG, clientId)), true);
+        this.valueDeserializer.configure(config.originals(Collections.singletonMap(CLIENT_ID_CONFIG, clientId)), false);
     }
 
 }
