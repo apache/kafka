@@ -1778,7 +1778,6 @@ project(':tools') {
   archivesBaseName = "kafka-tools"
 
   dependencies {
-    implementation project(':core')
     implementation project(':clients')
     implementation project(':server-common')
     implementation project(':log4j-appender')
