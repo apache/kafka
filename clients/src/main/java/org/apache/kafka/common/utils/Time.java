@@ -17,7 +17,10 @@
 package org.apache.kafka.common.utils;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
 /**
@@ -86,4 +89,30 @@ public interface Time {
         return timer(timeout.toMillis());
     }
 
+    /**
+     * Wait for a future to complete, or time out.
+     *
+     * @param future        The future to wait for.
+     * @param deadlineNs    The time in the future, in monotonic nanoseconds, to time out.
+     * @return              The result of the future.
+     * @param <T>           The type of the future.
+     */
+    default <T> T waitForFuture(
+        CompletableFuture<T> future,
+        long deadlineNs
+    ) throws TimeoutException, InterruptedException, ExecutionException  {
+        TimeoutException timeoutException = null;
+        while (true) {
+            long nowNs = nanoseconds();
+            if (deadlineNs <= nowNs) {
+                throw (timeoutException == null) ? new TimeoutException() : timeoutException;
+            }
+            long deltaNs = deadlineNs - nowNs;
+            try {
+                return future.get(deltaNs, TimeUnit.NANOSECONDS);
+            } catch (TimeoutException t) {
+                timeoutException = t;
+            }
+        }
+    }
 }

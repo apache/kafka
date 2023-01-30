@@ -155,6 +155,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
             ControllerNode controllerNode = nodes.controllerNodes().get(node.id());
 
             Map<String, String> props = new HashMap<>(configProps);
+            props.put(KafkaConfig$.MODULE$.ServerMaxStartupTimeMsProp(),
+                    Long.toString(TimeUnit.MINUTES.toMillis(10)));
             props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), roles(node.id()));
             props.put(KafkaConfig$.MODULE$.NodeIdProp(),
                     Integer.toString(node.id()));
