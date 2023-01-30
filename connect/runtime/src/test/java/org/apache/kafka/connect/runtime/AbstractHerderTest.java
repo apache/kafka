@@ -69,9 +69,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.AbstractHerder.keysWithVariableValues;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.partialMockBuilder;
 import static org.easymock.EasyMock.strictMock;
@@ -917,7 +919,17 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testConnectorPluginConfig() throws Exception {
+    public void testPredicatePluginConfig() throws ClassNotFoundException {
+        testConnectorPluginConfig("predicate", SamplePredicate::new, SamplePredicate::config);
+    }
+
+    @Test
+    public void testTransformationPluginConfig() throws ClassNotFoundException {
+        testConnectorPluginConfig("transformation", SampleTransformation::new, SampleTransformation::config);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> void testConnectorPluginConfig(String pluginName, Supplier<T> newPluginInstance, Function<T, ConfigDef> pluginConfig) throws ClassNotFoundException {
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(
                         Worker.class,
@@ -931,43 +943,25 @@ public class AbstractHerderTest {
                 .addMockedMethod("generation")
                 .createMock();
 
-        EasyMock.expect(plugins.newPlugin(EasyMock.anyString())).andAnswer(() -> {
-            String name = (String) EasyMock.getCurrentArguments()[0];
-            switch (name) {
-                case "sink": return new SampleSinkConnector();
-                case "source": return new SampleSourceConnector();
-                case "converter": return new SampleConverterWithHeaders();
-                case "header-converter": return new SampleHeaderConverter();
-                case "predicate": return new SamplePredicate();
-                default: return new SampleTransformation<>();
-            }
-        }).anyTimes();
+        @SuppressWarnings("rawtypes")
+        Class pluginClass = newPluginInstance.get().getClass();
+
+        EasyMock.expect(plugins.pluginClass(pluginName)).andAnswer(() -> pluginClass);
+        EasyMock.expect(plugins.newPlugin(anyString())).andAnswer(newPluginInstance::get);
+        // Make sure that we used the correct class loader when interacting with the plugin
+        // The result of this method is used exclusively in try-with-resources blocks, which allow for null values
+        EasyMock.expect(plugins.withClassLoader(pluginClass.getClassLoader())).andReturn(null);
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+
         replayAll();
 
-        List<ConfigKeyInfo> sinkConnectorConfigs = herder.connectorPluginConfig("sink");
-        assertNotNull(sinkConnectorConfigs);
-        assertEquals(new SampleSinkConnector().config().names().size(), sinkConnectorConfigs.size());
+        List<ConfigKeyInfo> configs = herder.connectorPluginConfig(pluginName);
+        assertNotNull(configs);
 
-        List<ConfigKeyInfo> sourceConnectorConfigs = herder.connectorPluginConfig("source");
-        assertNotNull(sourceConnectorConfigs);
-        assertEquals(new SampleSourceConnector().config().names().size(), sourceConnectorConfigs.size());
+        ConfigDef expectedConfig = pluginConfig.apply(newPluginInstance.get());
+        assertEquals(expectedConfig.names().size(), configs.size());
 
-        List<ConfigKeyInfo> converterConfigs = herder.connectorPluginConfig("converter");
-        assertNotNull(converterConfigs);
-        assertEquals(new SampleConverterWithHeaders().config().names().size(), converterConfigs.size());
-
-        List<ConfigKeyInfo> headerConverterConfigs = herder.connectorPluginConfig("header-converter");
-        assertNotNull(headerConverterConfigs);
-        assertEquals(new SampleHeaderConverter().config().names().size(), headerConverterConfigs.size());
-
-        List<ConfigKeyInfo> predicateConfigs = herder.connectorPluginConfig("predicate");
-        assertNotNull(predicateConfigs);
-        assertEquals(new SamplePredicate().config().names().size(), predicateConfigs.size());
-
-        List<ConfigKeyInfo> transformationConfigs = herder.connectorPluginConfig("transformation");
-        assertNotNull(transformationConfigs);
-        assertEquals(new SampleTransformation<>().config().names().size(), transformationConfigs.size());
+        PowerMock.verifyAll();
     }
 
     @Test(expected = NotFoundException.class)
@@ -980,12 +974,13 @@ public class AbstractHerderTest {
                 .addMockedMethod("generation")
                 .createMock();
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugin(anyString())).andThrow(new ClassNotFoundException());
+        EasyMock.expect(plugins.pluginClass(connName)).andThrow(new ClassNotFoundException());
         replayAll();
         herder.connectorPluginConfig(connName);
     }
 
     @Test(expected = BadRequestException.class)
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public void testGetConnectorConfigDefWithInvalidPluginType() throws Exception {
         String connName = "AnotherPlugin";
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
@@ -995,6 +990,8 @@ public class AbstractHerderTest {
                 .addMockedMethod("generation")
                 .createMock();
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.pluginClass(connName)).andReturn((Class) DirectoryConfigProvider.class);
+        EasyMock.expect(plugins.withClassLoader(anyObject())).andReturn(null);
         EasyMock.expect(plugins.newPlugin(anyString())).andReturn(new DirectoryConfigProvider());
         replayAll();
         herder.connectorPluginConfig(connName);
