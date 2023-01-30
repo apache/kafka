@@ -246,7 +246,6 @@ class ZkMigrationIntegrationTest {
   def verifyProducerId(firstProducerIdBlock: ProducerIdsBlock, zkClient: KafkaZkClient): Unit = {
     TestUtils.retry(10000) {
       val producerIdBlock = readProducerIdBlock(zkClient)
-      System.err.println(s"ProducerIdBlock: $producerIdBlock")
       assertTrue(firstProducerIdBlock.firstProducerId() < producerIdBlock.firstProducerId())
     }
   }
