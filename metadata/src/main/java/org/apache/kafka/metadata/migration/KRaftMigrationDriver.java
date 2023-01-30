@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
@@ -28,10 +30,12 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -41,6 +45,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -405,7 +410,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 zkMigrationClient.readAllMetadata(batch -> {
                     try {
                         if (log.isTraceEnabled()) {
-                            log.trace("Migrating {} records from ZK: {}", batch.size(), batch);
+                            log.trace("Migrating {} records from ZK: {}", batch.size(), recordBatchToString(batch));
                         } else {
                             log.info("Migrating {} records from ZK", batch.size());
                         }
@@ -540,5 +545,30 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
             }
         }
+    }
+
+    static String recordBatchToString(Collection<ApiMessageAndVersion> batch) {
+        String batchString = batch.stream().map(apiMessageAndVersion -> {
+            if (apiMessageAndVersion.message().apiKey() == MetadataRecordType.CONFIG_RECORD.id()) {
+                StringBuilder sb = new StringBuilder();
+                sb.append("ApiMessageAndVersion(");
+                ConfigRecord record = (ConfigRecord) apiMessageAndVersion.message();
+                sb.append("ConfigRecord(");
+                sb.append("resourceType=");
+                sb.append(record.resourceType());
+                sb.append(", resourceName=");
+                sb.append(record.resourceName());
+                sb.append(", name=");
+                sb.append(record.name());
+                sb.append(")");
+                sb.append(" at version ");
+                sb.append(apiMessageAndVersion.version());
+                sb.append(")");
+                return sb.toString();
+            } else {
+                return apiMessageAndVersion.toString();
+            }
+        }).collect(Collectors.joining(","));
+        return "[" + batchString + "]";
     }
 }
