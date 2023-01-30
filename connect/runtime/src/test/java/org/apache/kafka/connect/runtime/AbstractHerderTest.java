@@ -946,7 +946,7 @@ public class AbstractHerderTest {
     }
 
     @Test(expected = BadRequestException.class)
-    @SuppressWarnings({"rawTypes", "unchecked"})
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public void testGetConnectorConfigDefWithInvalidPluginType() throws Exception {
         String connName = "AnotherPlugin";
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
