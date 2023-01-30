@@ -310,54 +310,54 @@ public class JmxTool {
         public JmxToolOptions(String[] args) {
             super(args);
             objectNameOpt = parser.accepts("object-name", "A JMX object name to use as a query. This can contain wild cards, and this option " +
-                            "can be given multiple times to specify more than one query. If no objects are specified " +
-                            "all objects will be queried.")
-                    .withRequiredArg()
-                    .describedAs("name")
-                    .ofType(String.class);
+                    "can be given multiple times to specify more than one query. If no objects are specified " +
+                    "all objects will be queried.")
+                .withRequiredArg()
+                .describedAs("name")
+                .ofType(String.class);
             attributesOpt = parser.accepts("attributes", "The list of attributes to include in the query. This is a comma-separated list. If no " +
-                            "attributes are specified all objects will be queried.")
-                    .withRequiredArg()
-                    .describedAs("name")
-                    .ofType(String.class);
+                    "attributes are specified all objects will be queried.")
+                .withRequiredArg()
+                .describedAs("name")
+                .ofType(String.class);
             reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in MS with which to poll jmx stats; default value is 2 seconds. " +
-                            "Value of -1 equivalent to setting one-time to true")
-                    .withRequiredArg()
-                    .describedAs("ms")
-                    .ofType(Integer.class)
-                    .defaultsTo(2000);
+                    "Value of -1 equivalent to setting one-time to true")
+                .withRequiredArg()
+                .describedAs("ms")
+                .ofType(Integer.class)
+                .defaultsTo(2000);
             oneTimeOpt = parser.accepts("one-time", "Flag to indicate run once only.")
-                    .withOptionalArg()
-                    .describedAs("one-time")
-                    .ofType(Boolean.class)
-                    .defaultsTo(false);
+                .withOptionalArg()
+                .describedAs("one-time")
+                .ofType(Boolean.class)
+                .defaultsTo(false);
             dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
-                            "See java.text.SimpleDateFormat for options.")
-                    .withRequiredArg()
-                    .describedAs("format")
-                    .ofType(String.class);
+                    "See java.text.SimpleDateFormat for options.")
+                .withRequiredArg()
+                .describedAs("format")
+                .ofType(String.class);
             jmxServiceUrlOpt = parser.accepts("jmx-url", "The url to connect to poll JMX data. See Oracle javadoc for JMXServiceURL for details.")
-                    .withRequiredArg()
-                    .describedAs("service-url")
-                    .ofType(String.class)
-                    .defaultsTo("service:jmx:rmi:///jndi/rmi://:9999/jmxrmi");
+                .withRequiredArg()
+                .describedAs("service-url")
+                .ofType(String.class)
+                .defaultsTo("service:jmx:rmi:///jndi/rmi://:9999/jmxrmi");
             reportFormatOpt = parser.accepts("report-format", "output format name: either 'original', 'properties', 'csv', 'tsv' ")
-                    .withRequiredArg()
-                    .describedAs("report-format")
-                    .ofType(String.class)
-                    .defaultsTo("original");
+                .withRequiredArg()
+                .describedAs("report-format")
+                .ofType(String.class)
+                .defaultsTo("original");
             jmxAuthPropOpt = parser.accepts("jmx-auth-prop", "A mechanism to pass property in the form 'username=password' " +
-                            "when enabling remote JMX with password authentication.")
-                    .withRequiredArg()
-                    .describedAs("jmx-auth-prop")
-                    .ofType(String.class);
+                    "when enabling remote JMX with password authentication.")
+                .withRequiredArg()
+                .describedAs("jmx-auth-prop")
+                .ofType(String.class);
             jmxSslEnableOpt = parser.accepts("jmx-ssl-enable", "Flag to enable remote JMX with SSL.")
-                    .withRequiredArg()
-                    .describedAs("ssl-enable")
-                    .ofType(Boolean.class)
-                    .defaultsTo(false);
+                .withRequiredArg()
+                .describedAs("ssl-enable")
+                .ofType(Boolean.class)
+                .defaultsTo(false);
             waitOpt = parser.accepts("wait", "Wait for requested JMX objects to become available before starting output. " +
-                    "Only supported when the list of objects is non-empty and contains no object name patterns.");
+                "Only supported when the list of objects is non-empty and contains no object name patterns.");
             options = parser.parse(args);
         }
 
@@ -388,11 +388,9 @@ public class JmxTool {
         }
 
         public Optional<DateFormat> dateFormat() {
-            if (options.has(dateFormatOpt)) {
-                return Optional.of(new SimpleDateFormat(options.valueOf(dateFormatOpt)));
-            } else {
-                return Optional.empty();
-            }
+            return options.has(dateFormatOpt)
+                ? Optional.of(new SimpleDateFormat(options.valueOf(dateFormatOpt)))
+                : Optional.empty();
         }
 
         public boolean hasWait() {
@@ -401,11 +399,7 @@ public class JmxTool {
 
         private String parseFormat() {
             String reportFormat = options.valueOf(reportFormatOpt).toLowerCase(Locale.ROOT);
-            if (Arrays.asList("properties", "csv", "tsv").contains(reportFormat)) {
-                return reportFormat;
-            } else {
-                return "original";
-            }
+            return Arrays.asList("properties", "csv", "tsv").contains(reportFormat) ? reportFormat : "original";
         }
 
         public boolean hasJmxAuthPropOpt() {
