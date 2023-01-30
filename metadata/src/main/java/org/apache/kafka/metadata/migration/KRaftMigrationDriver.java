@@ -453,8 +453,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     // Migration leadership state doesn't change since we're not doing any Zk writes.
                     transitionTo(MigrationState.DUAL_WRITE);
                 } else {
-                    log.trace("Ignoring using metadata image {} since migration leadership state is at a greater offset and epoch {}",
-                        image, migrationLeadershipState.offsetAndEpoch());
+                    log.trace("Ignoring using metadata image since migration leadership state is at a greater offset and epoch {}",
+                        migrationLeadershipState.offsetAndEpoch());
                 }
             }
         }
