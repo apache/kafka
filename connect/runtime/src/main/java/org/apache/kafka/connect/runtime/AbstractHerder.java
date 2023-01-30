@@ -797,12 +797,18 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public List<ConfigKeyInfo> connectorPluginConfig(String pluginName) {
-        List<ConfigKeyInfo> results = new ArrayList<>();
-        ConfigDef configDefs;
+        Plugins p = plugins();
+        Class<?> pluginClass;
         try {
-            Plugins p = plugins();
+            pluginClass = p.pluginClass(pluginName);
+        } catch (ClassNotFoundException cnfe) {
+            throw new NotFoundException("Unknown plugin " + pluginName + ".");
+        }
+
+        try (LoaderSwap loaderSwap = p.withClassLoader(pluginClass.getClassLoader())) {
             Object plugin = p.newPlugin(pluginName);
             PluginType pluginType = PluginType.from(plugin.getClass());
+            ConfigDef configDefs;
             switch (pluginType) {
                 case SINK:
                 case SOURCE:
@@ -823,13 +829,14 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 default:
                     throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
             }
-        } catch (ClassNotFoundException cnfe) {
-            throw new NotFoundException("Unknown plugin " + pluginName + ".");
+            List<ConfigKeyInfo> results = new ArrayList<>();
+            for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
+                results.add(AbstractHerder.convertConfigKey(configKey));
+            }
+            return results;
+        } catch (ClassNotFoundException e) {
+            throw new ConnectException("Failed to load plugin class or one of its dependencies", e);
         }
-        for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
-            results.add(AbstractHerder.convertConfigKey(configKey));
-        }
-        return results;
     }
 
 }
