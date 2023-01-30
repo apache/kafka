@@ -98,6 +98,68 @@ public class DedicatedMirrorIntegrationTest {
     }
 
     /**
+     * Tests a single-node cluster without the REST server enabled.
+     */
+    @Test
+    public void testSingleNodeCluster() throws Exception {
+        Properties brokerProps = new Properties();
+        EmbeddedKafkaCluster clusterA = startKafkaCluster("A", 1, brokerProps);
+        EmbeddedKafkaCluster clusterB = startKafkaCluster("B", 1, brokerProps);
+
+        clusterA.start();
+        clusterB.start();
+
+        try (Admin adminA = clusterA.createAdminClient();
+             Admin adminB = clusterB.createAdminClient()) {
+
+            // Cluster aliases
+            final String a = "A";
+            final String b = "B";
+            final String ab = a + "->" + b;
+            final String ba = b + "->" + a;
+            final String testTopicPrefix = "test-topic-";
+
+            Map<String, String> mmProps = new HashMap<String, String>() {{
+                    put("dedicated.mode.enable.internal.rest", "false");
+                    put("listeners", "http://localhost:0");
+                    // Refresh topics very frequently to quickly pick up on topics that are created
+                    // after the MM2 nodes are brought up during testing
+                    put("refresh.topics.interval.seconds", "1");
+                    put("clusters", String.join(", ", a, b));
+                    put(a + ".bootstrap.servers", clusterA.bootstrapServers());
+                    put(b + ".bootstrap.servers", clusterB.bootstrapServers());
+                    put(ab + ".enabled", "true");
+                    put(ab + ".topics", "^" + testTopicPrefix + ".*");
+                    put(ba + ".enabled", "false");
+                    put(ba + ".emit.heartbeats.enabled", "false");
+                    put("replication.factor", "1");
+                    put("checkpoints.topic.replication.factor", "1");
+                    put("heartbeats.topic.replication.factor", "1");
+                    put("offset-syncs.topic.replication.factor", "1");
+                    put("offset.storage.replication.factor", "1");
+                    put("status.storage.replication.factor", "1");
+                    put("config.storage.replication.factor", "1");
+                }};
+
+            // Bring up a single-node cluster
+            startMirrorMaker("single node", mmProps);
+
+            final int numMessages = 10;
+            String topic = testTopicPrefix + "1";
+
+            // Create the topic on cluster A
+            createTopic(adminA, topic);
+            // and wait for MirrorMaker to create it on cluster B
+            awaitTopicCreation(b, adminB, a + "." + topic);
+
+            // Write data to the topic on cluster A
+            writeToTopic(clusterA, topic, numMessages);
+            // and wait for MirrorMaker to copy it to cluster B
+            awaitTopicContent(clusterB, b, a + "." + topic, numMessages);
+        }
+    }
+
+    /**
      * Test that a multi-node dedicated cluster is able to dynamically detect new topics at runtime
      * and reconfigure its connectors and their tasks to replicate those topics correctly.
      * See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters">KIP-710</a>
