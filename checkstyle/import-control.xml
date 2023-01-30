@@ -23,6 +23,7 @@
   <!-- THINK HARD ABOUT THE LAYERING OF THE PROJECT BEFORE CHANGING THIS FILE -->
 
   <!-- common library dependencies -->
+  <allow pkg="com" />
   <allow pkg="java" />
   <allow pkg="javax.management" />
   <allow pkg="org.slf4j" />

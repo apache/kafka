@@ -1056,6 +1056,22 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
+   * Force delete all logs marked for deletion.
+   */
+  def forceDeleteLogs(): Unit = {
+    logsToBeDeleted.forEach(l => {
+      val removedLog = l._1
+      try {
+        removedLog.delete()
+        info(s"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
+      } catch {
+        case e: KafkaStorageException =>
+          error(s"Exception while deleting $removedLog in dir ${removedLog.parentDir}.", e)
+      }
+    })
+  }
+
+  /**
     * Mark the partition directory in the source log directory for deletion and
     * rename the future log of this partition in the destination log directory to be the current log
     *

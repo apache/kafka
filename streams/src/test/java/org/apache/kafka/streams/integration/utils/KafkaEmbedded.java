@@ -121,6 +121,7 @@ public class KafkaEmbedded {
     public void stopAsync() {
         log.debug("Shutting down embedded Kafka broker at {} (with ZK ensemble at {}) ...",
                   brokerList(), zookeeperConnect());
+        kafka.logManager().forceDeleteLogs();
         kafka.shutdown();
     }
 
