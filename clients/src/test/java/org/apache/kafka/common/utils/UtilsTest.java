@@ -197,7 +197,7 @@ public class UtilsTest {
         int numBytes = source.remaining();
         int position = source.position();
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(dest));
-        Utils.writeTo(out, source, source.remaining());
+        Utils.writeTo(out, source);
         dest.flip();
         assertEquals(numBytes, dest.remaining());
         assertEquals(position, source.position());

@@ -179,17 +179,15 @@ public class DefaultRecord implements Record {
         if (key == null) {
             ByteUtils.writeVarint(-1, out);
         } else {
-            int keySize = key.remaining();
-            ByteUtils.writeVarint(keySize, out);
-            Utils.writeTo(out, key, keySize);
+            ByteUtils.writeVarint(key.remaining(), out);
+            Utils.writeTo(out, key);
         }
 
         if (value == null) {
             ByteUtils.writeVarint(-1, out);
         } else {
-            int valueSize = value.remaining();
-            ByteUtils.writeVarint(valueSize, out);
-            Utils.writeTo(out, value, valueSize);
+            ByteUtils.writeVarint(value.remaining(), out);
+            Utils.writeTo(out, value);
         }
 
         if (headers == null)

@@ -1226,9 +1226,9 @@ public final class Utils {
      * @param length The number of bytes to write
      * @throws IOException For any errors writing to the output
      */
-    public static void writeTo(DataOutputStream out, ByteBuffer buffer, int length) throws IOException {
+    public static void writeTo(DataOutputStream out, ByteBuffer buffer) throws IOException {
         if (buffer.hasArray()) {
-            out.write(buffer.array(), buffer.position() + buffer.arrayOffset(), length);
+            out.write(buffer.array(), buffer.position() + buffer.arrayOffset(), buffer.remaining());
         } else {
             Channels.newChannel(out).write(buffer.asReadOnlyBuffer());
         }

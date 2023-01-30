@@ -471,17 +471,15 @@ public final class LegacyRecord {
         if (key == null) {
             out.writeInt(-1);
         } else {
-            int size = key.remaining();
-            out.writeInt(size);
-            Utils.writeTo(out, key, size);
+            out.writeInt(key.remaining());
+            Utils.writeTo(out, key);
         }
         // write the value
         if (value == null) {
             out.writeInt(-1);
         } else {
-            int size = value.remaining();
-            out.writeInt(size);
-            Utils.writeTo(out, value, size);
+            out.writeInt(key.remaining());
+            Utils.writeTo(out, value);
         }
     }
 
