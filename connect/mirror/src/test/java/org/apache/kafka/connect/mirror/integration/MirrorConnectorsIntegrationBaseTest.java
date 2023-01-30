@@ -52,6 +52,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Tag;
@@ -300,13 +301,8 @@ public class MirrorConnectorsIntegrationBaseTest {
         assertTrue(backup.kafka().consume(1, CHECKPOINT_DURATION_MS, "primary.checkpoints.internal").count() > 0,
             "Checkpoints were not emitted downstream to backup cluster.");
 
-        Map<TopicPartition, OffsetAndMetadata> backupOffsets = backupClient.remoteConsumerOffsets(consumerGroupName, PRIMARY_CLUSTER_ALIAS,
-            Duration.ofMillis(CHECKPOINT_DURATION_MS));
-
-        for (int i = 0; i < NUM_PARTITIONS; i++) {
-            assertTrue(backupOffsets.containsKey(new TopicPartition("primary.test-topic-1", i)),
-                   "Offsets not translated downstream to backup cluster. Found: " + backupOffsets);
-        }
+        Map<TopicPartition, OffsetAndMetadata> backupOffsets = waitForAnyCheckpoint(
+                backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, "primary.test-topic-1");
 
         // Failover consumer group to backup cluster.
         try (Consumer<byte[], byte[]> primaryConsumer = backup.kafka().createConsumer(Collections.singletonMap("group.id", consumerGroupName))) {
@@ -322,11 +318,8 @@ public class MirrorConnectorsIntegrationBaseTest {
                 "Checkpoints were not emitted upstream to primary cluster.");
         }
 
-        waitForCondition(() -> primaryClient.remoteConsumerOffsets(consumerGroupName, BACKUP_CLUSTER_ALIAS,
-            Duration.ofMillis(CHECKPOINT_DURATION_MS)).containsKey(new TopicPartition("backup.test-topic-1", 0)), CHECKPOINT_DURATION_MS, "Offsets not translated downstream to primary cluster.");
-
-        Map<TopicPartition, OffsetAndMetadata> primaryOffsets = primaryClient.remoteConsumerOffsets(consumerGroupName, BACKUP_CLUSTER_ALIAS,
-                Duration.ofMillis(CHECKPOINT_DURATION_MS));
+        Map<TopicPartition, OffsetAndMetadata> primaryOffsets = waitForAnyCheckpoint(
+                primaryClient, consumerGroupName, BACKUP_CLUSTER_ALIAS, "backup.test-topic-1");
  
         primaryClient.close();
         backupClient.close();
@@ -413,7 +406,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             assertEquals(0, offset.offset(), "Offset of last partition is not zero");
         }
     }
-    
+
     @Test
     public void testOneWayReplicationWithAutoOffsetSync() throws InterruptedException {
         produceMessages(primary, "test-topic-1");
@@ -686,7 +679,35 @@ public class MirrorConnectorsIntegrationBaseTest {
     protected void produce(EmbeddedConnectCluster cluster, String topic, Integer partition, String key, String value) {
         cluster.kafka().produce(topic, partition, key, value);
     }
-    
+
+    protected static Map<TopicPartition, OffsetAndMetadata> waitForAnyCheckpoint(
+            MirrorClient client, String consumerGroupName, String remoteClusterAlias, String topicName
+    ) throws InterruptedException {
+        AtomicReference<Map<TopicPartition, OffsetAndMetadata>> ret = new AtomicReference<>();
+        waitForCondition(
+                () -> {
+                    Map<TopicPartition, OffsetAndMetadata> offsets = client.remoteConsumerOffsets(
+                            consumerGroupName, remoteClusterAlias, Duration.ofMillis(3000));
+                    for (int i = 0; i < NUM_PARTITIONS; i++) {
+                        if (!offsets.containsKey(new TopicPartition(topicName, i))) {
+                            log.info("Checkpoint is missing for {}: {}-{}", consumerGroupName, topicName, i);
+                            return false;
+                        }
+                    }
+                    ret.set(offsets);
+                    return true;
+                },
+                CHECKPOINT_DURATION_MS,
+                String.format(
+                        "Offsets for consumer group %s not translated from %s for topic %s",
+                        consumerGroupName,
+                        remoteClusterAlias,
+                        topicName
+                )
+        );
+        return ret.get();
+    }
+
     /*
      * given consumer group, topics and expected number of records, make sure the consumer group
      * offsets are eventually synced to the expected offset numbers
