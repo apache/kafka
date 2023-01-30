@@ -404,7 +404,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 AtomicInteger count = new AtomicInteger(0);
                 zkMigrationClient.readAllMetadata(batch -> {
                     try {
-                        log.info("Migrating {} records from ZK", batch.size());
+                        if (log.isTraceEnabled()) {
+                            log.trace("Migrating {} records from ZK: {}", batch.size(), batch);
+                        } else {
+                            log.info("Migrating {} records from ZK", batch.size());
+                        }
                         CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
                         count.addAndGet(batch.size());
                         future.get();
@@ -511,7 +515,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 if (delta.configsDelta() != null) {
                     delta.configsDelta().changes().forEach((configResource, configDelta) ->
                         apply("Updating config resource " + configResource, migrationState ->
-                            zkMigrationClient.writeConfigs(configResource, image.configs().configMap(configResource), migrationState)));
+                            zkMigrationClient.writeConfigs(configResource, image.configs().configMapForResource(configResource), migrationState)));
                 }
 
                 if (delta.clientQuotasDelta() != null) {
