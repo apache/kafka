@@ -575,8 +575,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         try {
             sendPrivileged(keyValues);
         } catch (ExecutionException | InterruptedException | TimeoutException e) {
-            log.error("Failed to write task configuration to Kafka", e);
-            throw new ConnectException("Failed to write task configuration to Kafka", e);
+            log.error("Failed to write task configurations to Kafka", e);
+            throw new ConnectException("Error writing task configurations to Kafka", e);
         }
 
         // Finally, send the commit to update the number of tasks and apply the new configs, then wait until we read to
