@@ -1223,7 +1223,6 @@ public final class Utils {
      * in the buffer.
      * @param out The output to write to
      * @param buffer The buffer to write from
-     * @param length The number of bytes to write
      * @throws IOException For any errors writing to the output
      */
     public static void writeTo(DataOutputStream out, ByteBuffer buffer) throws IOException {
