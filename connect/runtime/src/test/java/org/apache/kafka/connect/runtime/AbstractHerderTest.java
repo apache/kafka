@@ -930,6 +930,7 @@ public class AbstractHerderTest {
 
         ConfigDef expectedConfig = pluginConfig.apply(newPluginInstance.get());
         assertEquals(expectedConfig.names().size(), configs.size());
+        // Make sure that we used the correct class loader when interacting with the plugin
         verify(plugins).withClassLoader(newPluginInstance.get().getClass().getClassLoader());
     }
 
