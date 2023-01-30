@@ -1257,15 +1257,6 @@ public final class Utils {
         return res;
     }
 
-    public static <T> List<T> concatListsUnmodifiable(List<T> left, List<T> right) {
-        return concatLists(left, right, Collections::unmodifiableList);
-    }
-
-    public static <T> List<T> concatLists(List<T> left, List<T> right, Function<List<T>, List<T>> finisher) {
-        return Stream.concat(left.stream(), right.stream())
-                .collect(Collectors.collectingAndThen(Collectors.toList(), finisher));
-    }
-
     public static int to32BitField(final Set<Byte> bytes) {
         int value = 0;
         for (final byte b : bytes)
@@ -1289,18 +1280,6 @@ public final class Utils {
             count++;
         }
         return result;
-    }
-
-    public static <K1, V1, K2, V2> Map<K2, V2> transformMap(
-            Map<? extends K1, ? extends V1> map,
-            Function<K1, K2> keyMapper,
-            Function<V1, V2> valueMapper) {
-        return map.entrySet().stream().collect(
-            Collectors.toMap(
-                entry -> keyMapper.apply(entry.getKey()),
-                entry -> valueMapper.apply(entry.getValue())
-            )
-        );
     }
 
     /**
@@ -1452,12 +1431,6 @@ public final class Utils {
      */    
     public static boolean isBlank(String str) {
         return str == null || str.trim().isEmpty();
-    }
-
-    public static <K, V> Map<K, V> initializeMap(Collection<K> keys, Supplier<V> valueSupplier) {
-        Map<K, V> res = new HashMap<>(keys.size());
-        keys.forEach(key -> res.put(key, valueSupplier.get()));
-        return res;
     }
 
     /**
