@@ -317,10 +317,10 @@ class BrokerToControllerRequestThread(
       debug("Controller changed to " + (if (isNetworkClientForZkController) "kraft" else "zk") + " mode. " +
         s"Resetting network client with new controller information : ${controllerInformation}")
       // Close existing network client.
-      if (networkClient != null) {
-        networkClient.initiateClose()
-        networkClient.close()
-      }
+      val oldClient = networkClient
+      oldClient.initiateClose()
+      oldClient.close()
+
       isNetworkClientForZkController = controllerInformation.isZkController
       updateControllerAddress(controllerInformation.node.orNull)
       controllerInformation.node.foreach(n => metadataUpdater.setNodes(Seq(n).asJava))
