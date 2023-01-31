@@ -32,9 +32,9 @@ public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoC
 
 
     /**
-     * Workers will invoke this while constructing producer for SourceConnectors, DLQs for SinkConnectors and
-     * consumers for SinkConnectors to validate if all of the overridden client configurations are allowed per the
-     * policy implementation. This would also be invoked during the validation of connector configs via the REST API.
+     * Workers will invoke this before configuring per-connector Kafka admin, producer, and consumer client instances
+     * to validate if all the overridden client configurations are allowed per the policy implementation.
+     * This would also be invoked during the validation of connector configs via the REST API.
      * <p>
      * If there are any policy violations, the connector will not be started.
      *

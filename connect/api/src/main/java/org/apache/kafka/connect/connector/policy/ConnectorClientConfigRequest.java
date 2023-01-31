@@ -44,13 +44,22 @@ public class ConnectorClientConfigRequest {
     }
 
     /**
-     * <p>Provides Config with prefix "{@code producer.override.}" for {@link ConnectorType#SOURCE}.
-     * <p>Provides Config with prefix "{@code consumer.override.}" for {@link ConnectorType#SINK}.
-     * <p>Provides Config with prefix "{@code producer.override.}" for {@link ConnectorType#SINK} for DLQ.
-     * <p>Provides Config with prefix "{@code admin.override.}" for {@link ConnectorType#SINK} for DLQ.
+     * Provides configs with prefix "{@code producer.override.}" for {@link ConnectorType#SOURCE source connectors} and
+     * also {@link ConnectorType#SINK sink connectors} that are configured with a DLQ topic.
+     * <p>
+     * Provides configs with prefix "{@code consumer.override.}" for {@link ConnectorType#SINK sink connectors} and also
+     * {@link ConnectorType#SOURCE source connectors} that are configured with a connector specific offsets topic (see
+     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-618%3A+Exactly-Once+Support+for+Source+Connectors">KIP-618</a>
+     * for more details).
+     * <p>
+     * Provides configs with prefix "{@code admin.override.}" for {@link ConnectorType#SINK sink connectors} configured
+     * with a DLQ topic and {@link ConnectorType#SOURCE source connectors} that are configured with exactly-once semantics,
+     * a connector specific offsets topic or topic creation enabled (see
+     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-158%3A+Kafka+Connect+should+allow+source+connectors+to+set+topic-specific+settings+for+new+topics">KIP-158</a>
+     * for more details).
      *
-     * @return The client properties specified in the Connector Config with prefix "{@code producer.override.}" ,
-     * "{@code consumer.override.}" and "{@code admin.override.}". The configs don't include the prefixes.
+     * @return The client override properties specified in the Connector Config with prefix "{@code producer.override.}",
+     * "{@code consumer.override.}" or "{@code admin.override.}". The returned configs don't include the prefixes.
      */
     public Map<String, Object> clientProps() {
         return clientProps;

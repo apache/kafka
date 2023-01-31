@@ -89,7 +89,9 @@ public abstract class SinkTask implements Task {
 
     /**
      * Put the records in the sink. This should either write them to the downstream system or batch them for
-     * later writing
+     * later writing. If this method returns before the records are written to the downstream system, the task must
+     * implement {@link #flush(Map)} or {@link #preCommit(Map)} to ensure that offsets are only committed for records
+     * that have been written to the downstream system (hence avoiding data loss during failures).
      * <p>
      * If this operation fails, the SinkTask may throw a {@link org.apache.kafka.connect.errors.RetriableException} to
      * indicate that the framework should attempt to retry the same call again. Other exceptions will cause the task to
