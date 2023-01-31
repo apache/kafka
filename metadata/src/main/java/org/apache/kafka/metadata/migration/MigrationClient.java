@@ -17,6 +17,7 @@
 package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -82,6 +83,23 @@ public interface MigrationClient {
 
     ZkMigrationLeadershipState updateTopicPartitions(
         Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState writeConfigs(
+        ConfigResource configResource,
+        Map<String, String> configMap,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState writeClientQuotas(
+        Map<String, String> clientQuotaEntity,
+        Map<String, Double> quotas,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState writeProducerId(
+        long nextProducerId,
         ZkMigrationLeadershipState state
     );
 

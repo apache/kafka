@@ -58,6 +58,10 @@ public final class ConfigurationImage {
         return properties;
     }
 
+    public Map<String, String> toMap() {
+        return Collections.unmodifiableMap(data);
+    }
+
     public void write(
         ConfigResource configResource,
         ImageWriter writer,
