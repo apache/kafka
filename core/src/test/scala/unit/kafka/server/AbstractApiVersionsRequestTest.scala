@@ -74,9 +74,9 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     enableUnstableLastVersion: Boolean = false
   ): Unit = {
     val expectedApis = if (!cluster.isKRaftTest) {
-      ApiKeys.apisForListener(ApiMessageType.ListenerType.ZK_BROKER)
+      ApiKeys.apisForListener(ApiMessageType.ListenerType.ZK_BROKER, enableUnstableLastVersion)
     } else if (cluster.controllerListenerName().asScala.contains(listenerName)) {
-      ApiKeys.apisForListener(ApiMessageType.ListenerType.CONTROLLER)
+      ApiKeys.apisForListener(ApiMessageType.ListenerType.CONTROLLER, enableUnstableLastVersion)
     } else {
       ApiVersionsResponse.intersectForwardableApis(
         ApiMessageType.ListenerType.BROKER,

@@ -116,7 +116,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         int throttleTimeMs,
         ApiMessageType.ListenerType listenerType
     ) {
-        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType, true), Features.emptySupportedFeatures());
+        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType, false), Features.emptySupportedFeatures());
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
