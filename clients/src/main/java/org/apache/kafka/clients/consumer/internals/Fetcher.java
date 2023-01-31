@@ -78,23 +78,6 @@ public class Fetcher<K, V> extends AbstractFetcher<K, V> {
     }
 
     /**
-     * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
-     * visibility for testing.
-     * @return true if there are completed fetches, false otherwise
-     */
-    protected boolean hasCompletedFetches() {
-        return !completedFetches.isEmpty();
-    }
-
-    /**
-     * Return whether we have any completed fetches that are fetchable. This method is thread-safe.
-     * @return true if there are completed fetches that can be returned, false otherwise
-     */
-    public boolean hasAvailableFetches(SubscriptionState subscriptions) {
-        return completedFetches.stream().anyMatch(fetch -> subscriptions.isFetchable(fetch.partition()));
-    }
-
-    /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
      * @return number of fetches sent

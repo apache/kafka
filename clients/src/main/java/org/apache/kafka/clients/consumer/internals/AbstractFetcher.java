@@ -86,6 +86,24 @@ public abstract class AbstractFetcher<K, V> {
 
     protected abstract void maybeThrowAuthFailure(Node node);
 
+
+    /**
+     * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
+     * visibility for testing.
+     * @return true if there are completed fetches, false otherwise
+     */
+    protected boolean hasCompletedFetches() {
+        return !completedFetches.isEmpty();
+    }
+
+    /**
+     * Return whether we have any completed fetches that are fetchable. This method is thread-safe.
+     * @return true if there are completed fetches that can be returned, false otherwise
+     */
+    public boolean hasAvailableFetches(SubscriptionState subscriptions) {
+        return completedFetches.stream().anyMatch(fetch -> subscriptions.isFetchable(fetch.partition()));
+    }
+
     protected FetchRequest.Builder createFetchRequest(final FetchRequestData data) {
         final short maxVersion;
 
@@ -103,70 +121,6 @@ public abstract class AbstractFetcher<K, V> {
             .removed(data.toForget())
             .replaced(data.toReplace())
             .rackId(fetchContext.clientRackId);
-    }
-
-    /**
-     * Return the fetched records, empty the record buffer and update the consumed position.
-     * <p/>
-     * NOTE: returning an {@link Fetch#isEmpty empty} fetch guarantees the consumed position is not updated.
-     *
-     * @return A {@link Fetch} for the requested partitions
-     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
-     *         the defaultResetPolicy is NONE
-     * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
-     */
-    public Fetch<K, V> collectFetch(Metadata metadata, SubscriptionState subscriptions) {
-        Fetch<K, V> fetch = Fetch.empty();
-        Queue<CompletedFetch<K, V>> pausedCompletedFetches = new ArrayDeque<>();
-        int recordsRemaining = fetchContext.maxPollRecords;
-
-        try {
-            while (recordsRemaining > 0) {
-                if (nextInLineFetch == null || nextInLineFetch.isConsumed()) {
-                    CompletedFetch<K, V> records = completedFetches.peek();
-                    if (records == null) break;
-
-                    if (!records.isInitialized()) {
-                        try {
-                            nextInLineFetch = initializeCompletedFetch(metadata, subscriptions, records);
-                        } catch (Exception e) {
-                            // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
-                            // (2) there are no fetched records with actual content preceding this exception.
-                            // The first condition ensures that the completedFetches is not stuck with the same completedFetch
-                            // in cases such as the TopicAuthorizationException, and the second condition ensures that no
-                            // potential data loss due to an exception in a following record.
-                            FetchResponseData.PartitionData partition = records.partitionData();
-                            if (fetch.isEmpty() && FetchResponse.recordsOrFail(partition).sizeInBytes() == 0) {
-                                completedFetches.poll();
-                            }
-                            throw e;
-                        }
-                    } else {
-                        nextInLineFetch = records;
-                    }
-                    completedFetches.poll();
-                } else if (subscriptions.isPaused(nextInLineFetch.partition())) {
-                    // when the partition is paused we add the records back to the completedFetches queue instead of draining
-                    // them so that they can be returned on a subsequent poll if the partition is resumed at that time
-                    log.debug("Skipping fetching records for assigned partition {} because it is paused", nextInLineFetch.partition());
-                    pausedCompletedFetches.add(nextInLineFetch);
-                    nextInLineFetch = null;
-                } else {
-                    Fetch<K, V> nextFetch = fetchRecords(subscriptions, nextInLineFetch, recordsRemaining);
-                    recordsRemaining -= nextFetch.numRecords();
-                    fetch.add(nextFetch);
-                }
-            }
-        } catch (KafkaException e) {
-            if (fetch.isEmpty())
-                throw e;
-        } finally {
-            // add any polled completed fetches for paused partitions back to the completed fetches queue to be
-            // re-evaluated in the next poll
-            completedFetches.addAll(pausedCompletedFetches);
-        }
-
-        return fetch;
     }
 
     protected Fetch<K, V> fetchRecords(SubscriptionState subscriptions, CompletedFetch<K, V> completedFetch, int maxRecords) {
@@ -226,6 +180,70 @@ public abstract class AbstractFetcher<K, V> {
         completedFetch.drain(subscriptions);
 
         return Fetch.empty();
+    }
+
+    /**
+     * Return the fetched records, empty the record buffer and update the consumed position.
+     * <p/>
+     * NOTE: returning an {@link Fetch#isEmpty empty} fetch guarantees the consumed position is not updated.
+     *
+     * @return A {@link Fetch} for the requested partitions
+     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     *         the defaultResetPolicy is NONE
+     * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
+     */
+    public Fetch<K, V> fetch(Metadata metadata, SubscriptionState subscriptions) {
+        Fetch<K, V> fetch = Fetch.empty();
+        Queue<CompletedFetch<K, V>> pausedCompletedFetches = new ArrayDeque<>();
+        int recordsRemaining = fetchContext.maxPollRecords;
+
+        try {
+            while (recordsRemaining > 0) {
+                if (nextInLineFetch == null || nextInLineFetch.isConsumed()) {
+                    CompletedFetch<K, V> records = completedFetches.peek();
+                    if (records == null) break;
+
+                    if (!records.isInitialized()) {
+                        try {
+                            nextInLineFetch = initializeCompletedFetch(metadata, subscriptions, records);
+                        } catch (Exception e) {
+                            // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
+                            // (2) there are no fetched records with actual content preceding this exception.
+                            // The first condition ensures that the completedFetches is not stuck with the same completedFetch
+                            // in cases such as the TopicAuthorizationException, and the second condition ensures that no
+                            // potential data loss due to an exception in a following record.
+                            FetchResponseData.PartitionData partition = records.partitionData();
+                            if (fetch.isEmpty() && FetchResponse.recordsOrFail(partition).sizeInBytes() == 0) {
+                                completedFetches.poll();
+                            }
+                            throw e;
+                        }
+                    } else {
+                        nextInLineFetch = records;
+                    }
+                    completedFetches.poll();
+                } else if (subscriptions.isPaused(nextInLineFetch.partition())) {
+                    // when the partition is paused we add the records back to the completedFetches queue instead of draining
+                    // them so that they can be returned on a subsequent poll if the partition is resumed at that time
+                    log.debug("Skipping fetching records for assigned partition {} because it is paused", nextInLineFetch.partition());
+                    pausedCompletedFetches.add(nextInLineFetch);
+                    nextInLineFetch = null;
+                } else {
+                    Fetch<K, V> nextFetch = fetchRecords(subscriptions, nextInLineFetch, recordsRemaining);
+                    recordsRemaining -= nextFetch.numRecords();
+                    fetch.add(nextFetch);
+                }
+            }
+        } catch (KafkaException e) {
+            if (fetch.isEmpty())
+                throw e;
+        } finally {
+            // add any polled completed fetches for paused partitions back to the completed fetches queue to be
+            // re-evaluated in the next poll
+            completedFetches.addAll(pausedCompletedFetches);
+        }
+
+        return fetch;
     }
 
     protected List<TopicPartition> fetchablePartitions(SubscriptionState subscriptions) {

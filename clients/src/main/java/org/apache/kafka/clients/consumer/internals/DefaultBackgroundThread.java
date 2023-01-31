@@ -228,10 +228,8 @@ public class DefaultBackgroundThread extends KafkaThread {
         networkClientDelegate.poll(pollWaitTimeMs, pollContext.currentTimeMs);
 
         // Handle any fetch responses that may be available.
-        Optional<? extends Fetch<?, ?>> fetchOpt = fetchRequestManager.fetch(metadata, subscriptions);
-        fetchOpt.ifPresent(fetch -> {
-            // TODO: KIRK - How do we make this available for the polling thread?
-        });
+        // TODO: KIRK - How do we make this available for the polling thread?
+        Fetch<?, ?> fetch = fetchRequestManager.fetch(metadata, subscriptions);
     }
 
     private void drainAndProcess() {
