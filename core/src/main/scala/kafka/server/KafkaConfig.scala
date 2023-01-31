@@ -620,7 +620,7 @@ object KafkaConfig {
   val PasswordEncoderIterationsProp =  "password.encoder.iterations"
 
   /** Internal Configurations **/
-  val UnreleasedApisEnableProd = "unreleased.apis.enable"
+  val UnstableApiVersionsEnableProp = "unstable.api.versions.enable"
 
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
@@ -1409,7 +1409,7 @@ object KafkaConfig {
 
       /** Internal Configurations **/
       // This indicates whether unreleased APIs should be advertised by this broker.
-      .defineInternal(UnreleasedApisEnableProd, BOOLEAN, false, LOW)
+      .defineInternal(UnstableApiVersionsEnableProp, BOOLEAN, false, LOW)
   }
 
   /** ********* Remote Log Management Configuration *********/
@@ -1935,7 +1935,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val quorumRetryBackoffMs = getInt(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
 
   /** Internal Configurations **/
-  val advertiseUnreleasedApis = getBoolean(KafkaConfig.UnreleasedApisEnableProd)
+  val unstableApiVersionsEnabled = getBoolean(KafkaConfig.UnstableApiVersionsEnableProp)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)

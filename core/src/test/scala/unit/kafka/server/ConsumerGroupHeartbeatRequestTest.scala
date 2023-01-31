@@ -43,7 +43,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertThrows(classOf[EOFException], () => connectAndReceive(consumerGroupHeartbeatRequest))
   }
 
-  @ClusterTest(serverProperties = Array(new ClusterConfigProperty(key = "unreleased.apis.enable", value = "true")))
+  @ClusterTest(serverProperties = Array(new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")))
   def testConsumerGroupHeartbeatIsAccessibleWhenEnabled(): Unit = {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
       new ConsumerGroupHeartbeatRequestData()

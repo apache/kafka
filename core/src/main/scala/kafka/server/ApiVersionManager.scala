@@ -46,7 +46,7 @@ object ApiVersionManager {
       forwardingManager,
       supportedFeatures,
       metadataCache,
-      config.advertiseUnreleasedApis
+      config.unstableApiVersionsEnabled
     )
   }
 }
