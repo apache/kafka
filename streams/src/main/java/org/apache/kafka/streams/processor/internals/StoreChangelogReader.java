@@ -986,8 +986,23 @@ public class StoreChangelogReader implements ChangelogReader {
         for (final TopicPartition partition : revokedChangelogs) {
             final ChangelogMetadata changelogMetadata = changelogs.remove(partition);
             if (changelogMetadata != null) {
+                // if the changelog is still in REGISTERED, it means it has not initialized and started
+                // restoring yet, and hence we should not try to remove the changelog partition
                 if (!changelogMetadata.state().equals(ChangelogState.REGISTERED)) {
                     revokedInitializedChangelogs.add(partition);
+
+                    // if the changelog is not in RESTORING, it means
+                    // the corresponding onRestoreStart was not called; in this case
+                    // we should not call onRestoreSuspended either
+                    if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE &&
+                        changelogMetadata.state().equals(ChangelogState.RESTORING)) {
+                        try {
+                            final String storeName = changelogMetadata.storeMetadata.store().name();
+                            stateRestoreListener.onRestoreSuspended(partition, storeName, changelogMetadata.totalRestored);
+                        } catch (final Exception e) {
+                            throw new StreamsException("State restore listener failed on restore paused", e);
+                        }
+                    }
                 }
 
                 changelogMetadata.clear();
