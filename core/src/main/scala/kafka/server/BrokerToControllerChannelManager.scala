@@ -399,7 +399,12 @@ class BrokerToControllerRequestThread(
         s"connection to the stale controller ${activeControllerAddress().map(_.idString).getOrElse("null")}")
       // just close the controller connection and wait for metadata cache update in doWork
       activeControllerAddress().foreach { controllerAddress =>
-        networkClient.disconnect(controllerAddress.idString)
+        try {
+          // We don't care if disconnect has an error, just log it and get a new network client
+          networkClient.disconnect(controllerAddress.idString)
+        } catch {
+          case t: Throwable => error("Had an error while disconnecting from NetworkClient.", t)
+        }
         updateControllerAddress(null)
       }
 

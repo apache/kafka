@@ -35,6 +35,7 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.jupiter.api.extension.ExtendWith
+import org.slf4j.LoggerFactory
 
 import java.util
 import java.util.Properties
@@ -44,6 +45,8 @@ import scala.jdk.CollectionConverters._
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ZkMigrationIntegrationTest {
+
+  val log = LoggerFactory.getLogger(classOf[ZkMigrationIntegrationTest])
 
   class MetadataDeltaVerifier {
     val metadataDelta = new MetadataDelta(MetadataImage.EMPTY)
@@ -155,6 +158,7 @@ class ZkMigrationIntegrationTest {
       val producerIdBlock = readProducerIdBlock(zkClient)
 
       // Enable migration configs and restart brokers
+      log.info("Restart brokers in migration mode")
       val clientProps = kraftCluster.controllerClientProperties()
       val voters = clientProps.get(RaftConfig.QUORUM_VOTERS_CONFIG)
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
@@ -166,14 +170,17 @@ class ZkMigrationIntegrationTest {
       readyFuture.get(30, TimeUnit.SECONDS)
 
       // Wait for migration to begin
+      log.info("Waiting for ZK migration to begin")
       TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
 
       // Alter the metadata
+      log.info("Updating metadata with AdminClient")
       admin = zkCluster.createAdminClient()
       alterTopicConfig(admin).all().get(60, TimeUnit.SECONDS)
       alterClientQuotas(admin).all().get(60, TimeUnit.SECONDS)
 
       // Verify the changes made to KRaft are seen in ZK
+      log.info("Verifying metadata changes with ZK")
       verifyTopicConfigs(zkClient)
       verifyClientQuotas(zkClient)
       allocateProducerId(zkCluster.bootstrapServers())
