@@ -16,20 +16,21 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.admin.NewTopic;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.TopicDescription;
+import java.util.Arrays;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -52,31 +53,26 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicAdmin.TopicCreationResponse;
 import org.apache.kafka.connect.util.TopicCreationGroup;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
-import org.easymock.IAnswer;
-import org.easymock.IExpectationSetters;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.api.easymock.annotation.MockStrict;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeoutException;
 
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
@@ -94,12 +90,17 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABL
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
-@PowerMockIgnore({"javax.management.*",
-        "org.apache.log4j.*"})
-@RunWith(PowerMockRunner.class)
+@SuppressWarnings("unchecked")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class AbstractWorkerSourceTaskTest {
 
     private static final String TOPIC = "topic";
@@ -117,7 +118,8 @@ public class AbstractWorkerSourceTaskTest {
     private static final byte[] SERIALIZED_KEY = "converted-key".getBytes();
     private static final byte[] SERIALIZED_RECORD = "converted-record".getBytes();
 
-    @Mock private SourceTask sourceTask;
+    @Mock
+    private SourceTask sourceTask;
     @Mock private TopicAdmin admin;
     @Mock private KafkaProducer<byte[], byte[]> producer;
     @Mock private Converter keyConverter;
@@ -129,7 +131,7 @@ public class AbstractWorkerSourceTaskTest {
     @Mock private ConnectorOffsetBackingStore offsetStore;
     @Mock private StatusBackingStore statusBackingStore;
     @Mock private WorkerSourceTaskContext sourceTaskContext;
-    @MockStrict private TaskStatus.Listener statusListener;
+    @Mock private TaskStatus.Listener statusListener;
 
     private final ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private final ConnectorTaskId taskId1 = new ConnectorTaskId("job", 1);
@@ -139,7 +141,6 @@ public class AbstractWorkerSourceTaskTest {
     private SourceConnectorConfig sourceConfig;
     private MockConnectMetrics metrics = new MockConnectMetrics();
     @Mock private ErrorHandlingMetrics errorHandlingMetrics;
-    private Capture<Callback> producerCallbacks;
 
     private AbstractWorkerSourceTask workerTask;
 
@@ -148,8 +149,7 @@ public class AbstractWorkerSourceTaskTest {
         Map<String, String> workerProps = workerProps();
         plugins = new Plugins(workerProps);
         config = new StandaloneConfig(workerProps);
-        sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorPropsWithGroups(TOPIC), true);
-        producerCallbacks = EasyMock.newCapture();
+        sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorPropsWithGroups(), true);
         metrics = new MockConnectMetrics();
     }
 
@@ -162,21 +162,21 @@ public class AbstractWorkerSourceTaskTest {
         return props;
     }
 
-    private Map<String, String> sourceConnectorPropsWithGroups(String topic) {
+    private Map<String, String> sourceConnectorPropsWithGroups() {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put("name", "foo-connector");
         props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(1));
-        props.put(TOPIC_CONFIG, topic);
+        props.put(TOPIC_CONFIG, TOPIC);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(TOPIC_CREATION_GROUPS_CONFIG, String.join(",", "foo", "bar"));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
-        props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + "foo" + "." + INCLUDE_REGEX_CONFIG, topic);
+        props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + "foo" + "." + INCLUDE_REGEX_CONFIG, TOPIC);
         props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + "bar" + "." + INCLUDE_REGEX_CONFIG, ".*");
-        props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + "bar" + "." + EXCLUDE_REGEX_CONFIG, topic);
+        props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + "bar" + "." + EXCLUDE_REGEX_CONFIG, TOPIC);
         return props;
     }
 
@@ -235,45 +235,76 @@ public class AbstractWorkerSourceTaskTest {
     public void testSendRecordsConvertsData() {
         createWorkerTask();
 
-        List<SourceRecord> records = new ArrayList<>();
         // Can just use the same record for key and value
-        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD));
+        List<SourceRecord> records = Collections.singletonList(
+            new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
+        );
 
-        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
-
-        expectTopicCreation(TOPIC);
-
-        PowerMock.replayAll();
-
+        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
+        when(transformationChain.apply(any(SourceRecord.class)))
+                .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(statusBackingStore.getTopic(anyString(), anyString())).thenAnswer((Answer<TopicStatus>) invocation -> {
+            String connector = invocation.getArgument(0, String.class);
+            String topic = invocation.getArgument(1, String.class);
+            return new TopicStatus(topic, new ConnectorTaskId(connector, 0), Time.SYSTEM.milliseconds());
+        });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+                .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA), eq(RECORD)))
+                .thenReturn(SERIALIZED_RECORD);
         workerTask.toSend = records;
         workerTask.sendRecords();
+
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(ProducerRecord.class);
+        ArgumentCaptor<Callback> producerCallbacks = ArgumentCaptor.forClass(Callback.class);
+        verify(producer).send(sent.capture(), producerCallbacks.capture());
+
+        for (Callback cb : producerCallbacks.getAllValues()) {
+            cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0, 0L, 0, 0),
+                    null);
+        }
+
         assertEquals(SERIALIZED_KEY, sent.getValue().key());
         assertEquals(SERIALIZED_RECORD, sent.getValue().value());
 
-        PowerMock.verifyAll();
+        ArgumentCaptor<SourceRecord> recordCapture = ArgumentCaptor.forClass(SourceRecord.class);
+        ArgumentCaptor<String> connectorCapture = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> topicCapture = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<NewTopic> newTopicCapture = ArgumentCaptor.forClass(NewTopic.class);
+
+        verify(transformationChain).apply(recordCapture.capture());
+        verify(statusBackingStore).getTopic(connectorCapture.capture(), topicCapture.capture());
+
+        assertEquals("job", connectorCapture.getValue());
+        assertEquals(TOPIC, topicCapture.getValue());
+
+        verify(admin).createOrFindTopics(newTopicCapture.capture());
+        assertEquals(TOPIC, newTopicCapture.getValue().name());
     }
 
     @Test
     public void testSendRecordsPropagatesTimestamp() {
         final Long timestamp = System.currentTimeMillis();
-
         createWorkerTask();
 
-        List<SourceRecord> records = Collections.singletonList(
+        when(transformationChain.apply(any(SourceRecord.class)))
+                .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+                .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA), eq(RECORD)))
+                .thenReturn(SERIALIZED_RECORD);
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
+
+        workerTask.toSend = Collections.singletonList(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
-
-        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
-
-        expectTopicCreation(TOPIC);
-
-        PowerMock.replayAll();
-
-        workerTask.toSend = records;
         workerTask.sendRecords();
-        assertEquals(timestamp, sent.getValue().timestamp());
 
-        PowerMock.verifyAll();
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(producer).send(sent.capture(), any());
+
+        assertEquals(timestamp, sent.getValue().timestamp());
     }
 
     @Test
@@ -281,19 +312,18 @@ public class AbstractWorkerSourceTaskTest {
         final Long timestamp = -3L;
         createWorkerTask();
 
-        List<SourceRecord> records = Collections.singletonList(
+        when(transformationChain.apply(any(SourceRecord.class)))
+                .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+                .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA), eq(RECORD)))
+                .thenReturn(SERIALIZED_RECORD);
+
+        workerTask.toSend = Collections.singletonList(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
-
-        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
-
-        PowerMock.replayAll();
-
-        workerTask.toSend = records;
         assertThrows(InvalidRecordException.class, workerTask::sendRecords);
-        assertFalse(sent.hasCaptured());
-
-        PowerMock.verifyAll();
+        verifyNoInteractions(producer);
     }
 
     @Test
@@ -301,21 +331,23 @@ public class AbstractWorkerSourceTaskTest {
         final Long timestamp = -1L;
         createWorkerTask();
 
-        List<SourceRecord> records = Collections.singletonList(
+        when(transformationChain.apply(any(SourceRecord.class)))
+                .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+                .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA), eq(RECORD)))
+                .thenReturn(SERIALIZED_RECORD);
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
+
+        workerTask.toSend = Collections.singletonList(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
-
-        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
-
-        expectTopicCreation(TOPIC);
-
-        PowerMock.replayAll();
-
-        workerTask.toSend = records;
         workerTask.sendRecords();
-        assertNull(sent.getValue().timestamp());
 
-        PowerMock.verifyAll();
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(producer).send(sent.capture(), any());
+
+        assertNull(sent.getValue().timestamp());
     }
 
     @Test
@@ -328,22 +360,34 @@ public class AbstractWorkerSourceTaskTest {
 
         createWorkerTask();
 
-        List<SourceRecord> records = new ArrayList<>();
-        records.add(new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, null, connectHeaders));
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
 
-        expectTopicCreation(TOPIC);
-
-        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecord(TOPIC, true, headers);
-
-        PowerMock.replayAll();
-
-        workerTask.toSend = records;
+        workerTask.toSend = Collections.singletonList(
+            new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD,
+                null, connectHeaders)
+        );
         workerTask.sendRecords();
+
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(
+            ProducerRecord.class);
+        verify(producer).send(sent.capture(), any());
+
         assertEquals(SERIALIZED_KEY, sent.getValue().key());
         assertEquals(SERIALIZED_RECORD, sent.getValue().value());
         assertEquals(headers, sent.getValue().headers());
-
-        PowerMock.verifyAll();
     }
 
     @Test
@@ -353,47 +397,62 @@ public class AbstractWorkerSourceTaskTest {
 
         createWorkerTask(stringConverter, testConverter, stringConverter);
 
-        List<SourceRecord> records = new ArrayList<>();
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
 
         String stringA = "Árvíztűrő tükörfúrógép";
-        org.apache.kafka.connect.header.Headers headersA = new ConnectHeaders();
         String encodingA = "latin2";
-        headersA.addString("encoding", encodingA);
-
-        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "a", Schema.STRING_SCHEMA, stringA, null, headersA));
-
         String stringB = "Тестовое сообщение";
-        org.apache.kafka.connect.header.Headers headersB = new ConnectHeaders();
         String encodingB = "koi8_r";
-        headersB.addString("encoding", encodingB);
 
-        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "b", Schema.STRING_SCHEMA, stringB, null, headersB));
+        org.apache.kafka.connect.header.Headers headersA = new ConnectHeaders()
+            .addString("encoding", encodingA);
+        org.apache.kafka.connect.header.Headers headersB = new ConnectHeaders()
+            .addString("encoding", encodingB);
 
-        expectTopicCreation(TOPIC);
-
-        Capture<ProducerRecord<byte[], byte[]>> sentRecordA = expectSendRecord(TOPIC, false, null);
-        Capture<ProducerRecord<byte[], byte[]>> sentRecordB = expectSendRecord(TOPIC, false, null);
-
-        PowerMock.replayAll();
-
-        workerTask.toSend = records;
+        workerTask.toSend = Arrays.asList(
+            new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "a",
+                Schema.STRING_SCHEMA, stringA, null, headersA),
+            new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "b",
+                Schema.STRING_SCHEMA, stringB, null, headersB)
+        );
         workerTask.sendRecords();
 
-        assertEquals(ByteBuffer.wrap("a".getBytes()), ByteBuffer.wrap(sentRecordA.getValue().key()));
-        assertEquals(
-                ByteBuffer.wrap(stringA.getBytes(encodingA)),
-                ByteBuffer.wrap(sentRecordA.getValue().value())
-        );
-        assertEquals(encodingA, new String(sentRecordA.getValue().headers().lastHeader("encoding").value()));
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(
+            ProducerRecord.class);
+        verify(producer, times(2)).send(sent.capture(), any());
 
-        assertEquals(ByteBuffer.wrap("b".getBytes()), ByteBuffer.wrap(sentRecordB.getValue().key()));
-        assertEquals(
-                ByteBuffer.wrap(stringB.getBytes(encodingB)),
-                ByteBuffer.wrap(sentRecordB.getValue().value())
-        );
-        assertEquals(encodingB, new String(sentRecordB.getValue().headers().lastHeader("encoding").value()));
+        List<ProducerRecord<byte[], byte[]>> capturedValues = sent.getAllValues();
+        assertEquals(2, capturedValues.size());
 
-        PowerMock.verifyAll();
+        ProducerRecord<byte[], byte[]> sentRecordA = capturedValues.get(0);
+        ProducerRecord<byte[], byte[]> sentRecordB = capturedValues.get(1);
+
+        assertEquals(ByteBuffer.wrap("a".getBytes()), ByteBuffer.wrap(sentRecordA.key()));
+        assertEquals(
+            ByteBuffer.wrap(stringA.getBytes(encodingA)),
+            ByteBuffer.wrap(sentRecordA.value())
+        );
+        assertEquals(encodingA, new String(sentRecordA.headers().lastHeader("encoding").value()));
+
+        assertEquals(ByteBuffer.wrap("b".getBytes()), ByteBuffer.wrap(sentRecordB.key()));
+        assertEquals(
+            ByteBuffer.wrap(stringB.getBytes(encodingB)),
+            ByteBuffer.wrap(sentRecordB.value())
+        );
+        assertEquals(encodingB, new String(sentRecordB.headers().lastHeader("encoding").value()));
     }
 
     @Test
@@ -403,18 +462,30 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
         TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
-        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.singletonMap(TOPIC, topicDesc));
 
-        expectSendRecord();
-        expectSendRecord();
-
-        PowerMock.replayAll();
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.describeTopics(TOPIC)).thenReturn(Collections.singletonMap(TOPIC, topicDesc));
 
         workerTask.toSend = Arrays.asList(record1, record2);
         workerTask.sendRecords();
+
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(
+            ProducerRecord.class);
+        verify(producer, times(2)).send(sent.capture(), any());
     }
 
     @Test
@@ -424,18 +495,33 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
-        // First round - call to describe the topic times out
-        EasyMock.expect(admin.describeTopics(TOPIC))
-                .andThrow(new RetriableException(new TimeoutException("timeout")));
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
+        when(admin.describeTopics(TOPIC))
+            .thenAnswer(new Answer<Map<String, TopicDescription>>() {
+                boolean firstCall = true;
 
-        // Second round - calls to describe and create succeed
-        expectTopicCreation(TOPIC);
-        // Exactly two records are sent
-        expectSendRecord();
-        expectSendRecord();
-
-        PowerMock.replayAll();
+                @Override
+                public Map<String, TopicDescription> answer(InvocationOnMock invocation) {
+                    if (firstCall) {
+                        firstCall = false;
+                        throw new RetriableException(new TimeoutException("timeout"));
+                    }
+                    return Collections.emptyMap();
+                }
+            });
 
         workerTask.toSend = Arrays.asList(record1, record2);
         workerTask.sendRecords();
@@ -453,19 +539,33 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        // First call to describe the topic times out
-        expectPreliminaryCalls();
-        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
-        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture)))
-                .andThrow(new RetriableException(new TimeoutException("timeout")));
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
+        when(admin.createOrFindTopics(any(NewTopic.class)))
+            .thenAnswer(new Answer<TopicAdmin.TopicCreationResponse>() {
+                boolean firstCall = true;
 
-        // Second round
-        expectTopicCreation(TOPIC);
-        expectSendRecord();
-        expectSendRecord();
-
-        PowerMock.replayAll();
+                @Override
+                public TopicAdmin.TopicCreationResponse answer(InvocationOnMock invocation) {
+                    if (firstCall) {
+                        firstCall = false;
+                        throw new RetriableException(new TimeoutException("timeout"));
+                    }
+                    return createdTopic(TOPIC);
+                }
+            });
 
         workerTask.toSend = Arrays.asList(record1, record2);
         workerTask.sendRecords();
@@ -485,32 +585,56 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, OTHER_TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        // First round
-        expectPreliminaryCalls(OTHER_TOPIC);
-        expectTopicCreation(TOPIC);
-        expectSendRecord();
-        expectSendRecord();
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.describeTopics(anyString())).thenAnswer(new Answer<Map<String, TopicDescription>>() {
+            int counter = 0;
 
-        // First call to describe the topic times out
-        EasyMock.expect(admin.describeTopics(OTHER_TOPIC))
-                .andThrow(new RetriableException(new TimeoutException("timeout")));
+            @Override
+            public Map<String, TopicDescription> answer(InvocationOnMock invocation) {
+                counter++;
+                if (counter == 2) {
+                    throw new RetriableException(new TimeoutException("timeout"));
+                }
 
-        // Second round
-        expectTopicCreation(OTHER_TOPIC);
-        expectSendRecord(OTHER_TOPIC, false, emptyHeaders());
+                return Collections.emptyMap();
+            }
+        });
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenAnswer(
+            (Answer<TopicCreationResponse>) invocation -> {
+                NewTopic newTopic = invocation.getArgument(0);
+                return createdTopic(newTopic.name());
+            });
 
-        PowerMock.replayAll();
-
-        // Try to send 3, make first pass, second fail. Should save last two
+        // Try to send 3, make first pass, second fail. Should save last record
         workerTask.toSend = Arrays.asList(record1, record2, record3);
         workerTask.sendRecords();
-        assertEquals(Arrays.asList(record3), workerTask.toSend);
+        assertEquals(Collections.singletonList(record3), workerTask.toSend);
 
         // Next they all succeed
         workerTask.sendRecords();
         assertNull(workerTask.toSend);
 
-        PowerMock.verifyAll();
+        verify(admin, times(3)).describeTopics(anyString());
+
+        ArgumentCaptor<NewTopic> newTopicCaptor = ArgumentCaptor.forClass(NewTopic.class);
+        verify(admin, times(2)).createOrFindTopics(newTopicCaptor.capture());
+
+        assertEquals(Arrays.asList(TOPIC, OTHER_TOPIC), newTopicCaptor.getAllValues()
+            .stream()
+            .map(NewTopic::name)
+            .collect(Collectors.toList()));
     }
 
     @Test
@@ -522,34 +646,51 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, OTHER_TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        // First round
-        expectPreliminaryCalls(OTHER_TOPIC);
-        expectTopicCreation(TOPIC);
-        expectSendRecord();
-        expectSendRecord();
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.describeTopics(anyString())).thenReturn(Collections.emptyMap());
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenAnswer(new Answer<TopicAdmin.TopicCreationResponse>() {
+            int counter = 0;
 
-        EasyMock.expect(admin.describeTopics(OTHER_TOPIC)).andReturn(Collections.emptyMap());
-        // First call to create the topic times out
-        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture)))
-                .andThrow(new RetriableException(new TimeoutException("timeout")));
-
-        // Second round
-        expectTopicCreation(OTHER_TOPIC);
-        expectSendRecord(OTHER_TOPIC, false, emptyHeaders());
-
-        PowerMock.replayAll();
+            @Override
+            public TopicAdmin.TopicCreationResponse answer(InvocationOnMock invocation) {
+                counter++;
+                if (counter == 2) {
+                    throw new RetriableException(new TimeoutException("timeout"));
+                }
+                NewTopic newTopic = invocation.getArgument(0);
+                return createdTopic(newTopic.name());
+            }
+        });
 
         // Try to send 3, make first pass, second fail. Should save last two
         workerTask.toSend = Arrays.asList(record1, record2, record3);
         workerTask.sendRecords();
-        assertEquals(Arrays.asList(record3), workerTask.toSend);
+        assertEquals(Collections.singletonList(record3), workerTask.toSend);
 
         // Next they all succeed
         workerTask.sendRecords();
         assertNull(workerTask.toSend);
 
-        PowerMock.verifyAll();
+        verify(admin, times(3)).describeTopics(anyString());
+        ArgumentCaptor<NewTopic> newTopicCaptor = ArgumentCaptor.forClass(NewTopic.class);
+        verify(admin, times(3)).createOrFindTopics(newTopicCaptor.capture());
+
+        assertEquals(Arrays.asList(TOPIC, OTHER_TOPIC, OTHER_TOPIC), newTopicCaptor.getAllValues()
+            .stream()
+            .map(NewTopic::name)
+            .collect(Collectors.toList()));
     }
 
     @Test
@@ -559,11 +700,22 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
-        EasyMock.expect(admin.describeTopics(TOPIC))
-                .andThrow(new ConnectException(new TopicAuthorizationException("unauthorized")));
-
-        PowerMock.replayAll();
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.describeTopics(TOPIC)).thenThrow(
+            new ConnectException(new TopicAuthorizationException("unauthorized"))
+        );
 
         workerTask.toSend = Arrays.asList(record1, record2);
         assertThrows(ConnectException.class, workerTask::sendRecords);
@@ -576,18 +728,27 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
-        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
-
-        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture)))
-                .andThrow(new ConnectException(new TopicAuthorizationException("unauthorized")));
-
-        PowerMock.replayAll();
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenThrow(
+            new ConnectException(new TopicAuthorizationException("unauthorized"))
+        );
 
         workerTask.toSend = Arrays.asList(record1, record2);
         assertThrows(ConnectException.class, workerTask::sendRecords);
-        assertTrue(newTopicCapture.hasCaptured());
+        verify(admin).createOrFindTopics(any());
     }
 
     @Test
@@ -597,17 +758,25 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
-        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
-
-        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(TopicAdmin.EMPTY_CREATION);
-
-        PowerMock.replayAll();
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(TopicAdmin.EMPTY_CREATION);
 
         workerTask.toSend = Arrays.asList(record1, record2);
         assertThrows(ConnectException.class, workerTask::sendRecords);
-        assertTrue(newTopicCapture.hasCaptured());
+        verify(admin).createOrFindTopics(any());
     }
 
     @Test
@@ -617,19 +786,25 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
-        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
-
-        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(foundTopic(TOPIC));
-
-        expectSendRecord();
-        expectSendRecord();
-
-        PowerMock.replayAll();
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(foundTopic(TOPIC));
 
         workerTask.toSend = Arrays.asList(record1, record2);
         workerTask.sendRecords();
+        verify(producer, times(2)).send(any(ProducerRecord.class), any(Callback.class));
     }
 
     @Test
@@ -639,93 +814,25 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
-        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
-
-        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(createdTopic(TOPIC));
-
-        expectSendRecord();
-        expectSendRecord();
-
-        PowerMock.replayAll();
+        when(transformationChain.apply(any(SourceRecord.class)))
+            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+            anyString()))
+            .thenAnswer((Answer<byte[]>) invocation -> {
+                String headerValue = invocation.getArgument(3, String.class);
+                return headerValue.getBytes(StandardCharsets.UTF_8);
+            });
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+            .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+            eq(RECORD)))
+            .thenReturn(SERIALIZED_RECORD);
+        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
 
         workerTask.toSend = Arrays.asList(record1, record2);
         workerTask.sendRecords();
-    }
-
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(
-            String topic,
-            boolean anyTimes,
-            Headers headers
-    ) {
-        if (headers != null)
-            expectConvertHeadersAndKeyValue(topic, anyTimes, headers);
-
-        expectApplyTransformationChain(anyTimes);
-
-        Capture<ProducerRecord<byte[], byte[]>> sent = EasyMock.newCapture();
-
-        IExpectationSetters<Future<RecordMetadata>> expect = EasyMock.expect(
-                producer.send(EasyMock.capture(sent), EasyMock.capture(producerCallbacks)));
-
-        IAnswer<Future<RecordMetadata>> expectResponse = () -> {
-            synchronized (producerCallbacks) {
-                for (Callback cb : producerCallbacks.getValues()) {
-                    cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0, 0L, 0, 0), null);
-                }
-                producerCallbacks.reset();
-            }
-            return null;
-        };
-
-        if (anyTimes)
-            expect.andStubAnswer(expectResponse);
-        else
-            expect.andAnswer(expectResponse);
-
-        expectTaskGetTopic(anyTimes);
-
-        return sent;
-    }
-
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordAnyTimes() {
-        return expectSendRecord(TOPIC, true, emptyHeaders());
-    }
-
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord() {
-        return expectSendRecord(TOPIC, false, emptyHeaders());
-    }
-
-    private void expectTaskGetTopic(boolean anyTimes) {
-        final Capture<String> connectorCapture = EasyMock.newCapture();
-        final Capture<String> topicCapture = EasyMock.newCapture();
-        IExpectationSetters<TopicStatus> expect = EasyMock.expect(statusBackingStore.getTopic(
-                EasyMock.capture(connectorCapture),
-                EasyMock.capture(topicCapture)));
-        if (anyTimes) {
-            expect.andStubAnswer(() -> new TopicStatus(
-                    topicCapture.getValue(),
-                    new ConnectorTaskId(connectorCapture.getValue(), 0),
-                    Time.SYSTEM.milliseconds()));
-        } else {
-            expect.andAnswer(() -> new TopicStatus(
-                    topicCapture.getValue(),
-                    new ConnectorTaskId(connectorCapture.getValue(), 0),
-                    Time.SYSTEM.milliseconds()));
-        }
-        if (connectorCapture.hasCaptured() && topicCapture.hasCaptured()) {
-            assertEquals("job", connectorCapture.getValue());
-            assertEquals(TOPIC, topicCapture.getValue());
-        }
-    }
-
-    private void expectTopicCreation(String topic) {
-        if (config.topicCreationEnable()) {
-            EasyMock.expect(admin.describeTopics(topic)).andReturn(Collections.emptyMap());
-            Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-            EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(createdTopic(topic));
-        }
+        verify(producer, times(2)).send(any(ProducerRecord.class), any(Callback.class));
     }
 
     private TopicAdmin.TopicCreationResponse createdTopic(String topic) {
@@ -738,49 +845,6 @@ public class AbstractWorkerSourceTaskTest {
         Set<String> created = Collections.emptySet();
         Set<String> existing = Collections.singleton(topic);
         return new TopicAdmin.TopicCreationResponse(created, existing);
-    }
-
-    private void expectPreliminaryCalls() {
-        expectPreliminaryCalls(TOPIC);
-    }
-
-    private void expectPreliminaryCalls(String topic) {
-        expectConvertHeadersAndKeyValue(topic, true, emptyHeaders());
-        expectApplyTransformationChain(false);
-        PowerMock.expectLastCall();
-    }
-
-    private void expectConvertHeadersAndKeyValue(String topic, boolean anyTimes, Headers headers) {
-        for (Header header : headers) {
-            IExpectationSetters<byte[]> convertHeaderExpect = EasyMock.expect(headerConverter.fromConnectHeader(topic, header.key(), Schema.STRING_SCHEMA, new String(header.value())));
-            if (anyTimes)
-                convertHeaderExpect.andStubReturn(header.value());
-            else
-                convertHeaderExpect.andReturn(header.value());
-        }
-        IExpectationSetters<byte[]> convertKeyExpect = EasyMock.expect(keyConverter.fromConnectData(topic, headers, KEY_SCHEMA, KEY));
-        if (anyTimes)
-            convertKeyExpect.andStubReturn(SERIALIZED_KEY);
-        else
-            convertKeyExpect.andReturn(SERIALIZED_KEY);
-        IExpectationSetters<byte[]> convertValueExpect = EasyMock.expect(valueConverter.fromConnectData(topic, headers, RECORD_SCHEMA, RECORD));
-        if (anyTimes)
-            convertValueExpect.andStubReturn(SERIALIZED_RECORD);
-        else
-            convertValueExpect.andReturn(SERIALIZED_RECORD);
-    }
-
-    private void expectApplyTransformationChain(boolean anyTimes) {
-        final Capture<SourceRecord> recordCapture = EasyMock.newCapture();
-        IExpectationSetters<SourceRecord> convertKeyExpect = EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture)));
-        if (anyTimes)
-            convertKeyExpect.andStubAnswer(recordCapture::getValue);
-        else
-            convertKeyExpect.andAnswer(recordCapture::getValue);
-    }
-
-    private RecordHeaders emptyHeaders() {
-        return new RecordHeaders();
     }
 
     private void createWorkerTask() {
@@ -838,7 +902,5 @@ public class AbstractWorkerSourceTaskTest {
             protected void finalOffsetCommit(boolean failed) {
             }
         };
-
     }
-
 }
