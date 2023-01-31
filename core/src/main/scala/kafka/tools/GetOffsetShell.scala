@@ -33,7 +33,6 @@ import org.apache.kafka.server.util.PartitionFilter.UniquePartitionFilter
 import org.apache.kafka.server.util.PartitionFilter.PartitionRangeFilter
 import org.apache.kafka.server.util.PartitionFilter.PartitionsSetFilter
 
-import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
@@ -205,8 +204,8 @@ object GetOffsetShell {
     topicPartitions: String
   ): TopicPartitionFilter = {
     val ruleSpecs = topicPartitions.split(",")
-    val rules = ruleSpecs.map(ruleSpec => parseRuleSpec(ruleSpec))
-    new CompositeTopicPartitionFilter(new util.ArrayList[TopicPartitionFilter]()(rules))
+    val rules = ruleSpecs.toSeq.map(ruleSpec => parseRuleSpec(ruleSpec))
+    new CompositeTopicPartitionFilter(rules.asJava)
   }
 
   def parseRuleSpec(ruleSpec: String): TopicPartitionFilter = {

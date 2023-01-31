@@ -6,9 +6,9 @@ public interface PartitionFilter {
     /**
      * Used to filter partitions based on a certain criteria, for example, a set of partition ids.
      */
-    public boolean isPartitionAllowed(int partition);
+    boolean isPartitionAllowed(int partition);
 
-    public static class PartitionsSetFilter implements PartitionFilter {
+    class PartitionsSetFilter implements PartitionFilter {
         private final Set<Integer> partitionIds;
         public PartitionsSetFilter(Set<Integer> partitionIds) {
             this.partitionIds = partitionIds;
