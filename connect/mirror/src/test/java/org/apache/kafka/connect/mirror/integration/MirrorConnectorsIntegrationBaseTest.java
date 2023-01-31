@@ -689,7 +689,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     protected void produceMessages(EmbeddedConnectCluster cluster, String topicName) {
         Map<String, String> recordSent = generateRecords(NUM_RECORDS_PRODUCED);
         for (Map.Entry<String, String> entry : recordSent.entrySet()) {
-            cluster.kafka().produce(topicName, entry.getKey(), entry.getValue());
+            produce(cluster, topicName, null, entry.getKey(), entry.getValue());
         }
     }
 
@@ -700,7 +700,11 @@ public class MirrorConnectorsIntegrationBaseTest {
         int cnt = 0;
         for (int r = 0; r < NUM_RECORDS_PER_PARTITION; r++)
             for (int p = 0; p < numPartitions; p++)
-                cluster.kafka().produce(topicName, p, "key", "value-" + cnt++);
+                produce(cluster, topicName, p, "key", "value-" + cnt++);
+    }
+
+    protected void produce(EmbeddedConnectCluster cluster, String topic, Integer partition, String key, String value) {
+        cluster.kafka().produce(topic, partition, key, value);
     }
     
     /*
