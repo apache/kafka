@@ -2071,6 +2071,10 @@ project(':streams:streams-scala') {
     include "**/org/apache/kafka/streams/scala/**"
   }
 
+  scaladoc {
+    scalaDocOptions.additionalParameters = ["-no-link-warnings"]
+  }
+
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.runtimeClasspath) {
       exclude('kafka-streams*')
