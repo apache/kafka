@@ -542,16 +542,14 @@ public class InternalTopicManager {
                     log.debug("The leader of topic {} is not available.\n" +
                         "Error message was: {}", topicName, cause.toString());
                 } else if (cause instanceof TimeoutException) {
-                    throw new RuntimeException();
+                    tempUnknownTopics.add(topicName);
+                    log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
+                            "Error message was: {}", topicName, retriableException.toString());
                 } else {
                     log.error("Unexpected error during topic description for {}.\n" +
                         "Error message was: {}", topicName, cause.toString());
                     throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
                 }
-            } catch (final TimeoutException retriableException) {
-                tempUnknownTopics.add(topicName);
-                log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
-                    "Error message was: {}", topicName, retriableException.toString());
             }
         }
 
