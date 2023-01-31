@@ -20,6 +20,8 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -43,7 +45,6 @@ import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.connect.util.clusters.UngracefulShutdownException;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -449,7 +450,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(
             consumerProps, "primary.test-topic-1");
 
-        waitForConsumerGroupOffsetSync(backup, backupConsumer, Collections.singletonList("primary.test-topic-1"), 
+        waitForConsumerGroupFullSync(backup, Collections.singletonList("primary.test-topic-1"),
             consumerGroupName, NUM_RECORDS_PRODUCED);
 
         ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
@@ -479,7 +480,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
             "group.id", consumerGroupName), "primary.test-topic-1", "primary.test-topic-2");
 
-        waitForConsumerGroupOffsetSync(backup, backupConsumer, Arrays.asList("primary.test-topic-1", "primary.test-topic-2"), 
+        waitForConsumerGroupFullSync(backup, Arrays.asList("primary.test-topic-1", "primary.test-topic-2"),
             consumerGroupName, NUM_RECORDS_PRODUCED);
 
         records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
@@ -712,14 +713,14 @@ public class MirrorConnectorsIntegrationBaseTest {
      * given consumer group, topics and expected number of records, make sure the consumer group
      * offsets are eventually synced to the expected offset numbers
      */
-    protected static <T> void waitForConsumerGroupOffsetSync(EmbeddedConnectCluster connect,
-            Consumer<T, T> consumer, List<String> topics, String consumerGroupId, int numRecords)
-            throws InterruptedException {
+    protected static <T> void waitForConsumerGroupFullSync(
+            EmbeddedConnectCluster connect, List<String> topics, String consumerGroupId, int numRecords
+    ) throws InterruptedException {
         try (Admin adminClient = connect.kafka().createAdminClient()) {
-            List<TopicPartition> tps = new ArrayList<>(NUM_PARTITIONS * topics.size());
+            Map<TopicPartition, OffsetSpec> tps = new HashMap<>(NUM_PARTITIONS * topics.size());
             for (int partitionIndex = 0; partitionIndex < NUM_PARTITIONS; partitionIndex++) {
                 for (String topic : topics) {
-                    tps.add(new TopicPartition(topic, partitionIndex));
+                    tps.put(new TopicPartition(topic, partitionIndex), OffsetSpec.latest());
                 }
             }
             long expectedTotalOffsets = numRecords * topics.size();
@@ -730,11 +731,20 @@ public class MirrorConnectorsIntegrationBaseTest {
                 long consumerGroupOffsetTotal = consumerGroupOffsets.values().stream()
                     .mapToLong(OffsetAndMetadata::offset).sum();
 
-                Map<TopicPartition, Long> offsets = consumer.endOffsets(tps, CONSUMER_POLL_TIMEOUT_MS);
-                long totalOffsets = offsets.values().stream().mapToLong(l -> l).sum();
+                Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsets =
+                        adminClient.listOffsets(tps).all().get();
+                long totalOffsets = offsets.values().stream()
+                        .mapToLong(ListOffsetsResult.ListOffsetsResultInfo::offset).sum();
 
+                for (TopicPartition tp : offsets.keySet()) {
+                    if (consumerGroupOffsets.containsKey(tp)) {
+                        assertTrue(consumerGroupOffsets.get(tp).offset() <= offsets.get(tp).offset(),
+                                "Consumer group committed downstream offsets beyond the log end, this would lead to negative lag metrics"
+                        );
+                    }
+                }
                 // make sure the consumer group offsets are synced to expected number
-                return totalOffsets == expectedTotalOffsets && consumerGroupOffsetTotal > 0;
+                return totalOffsets == expectedTotalOffsets && consumerGroupOffsetTotal == expectedTotalOffsets;
             }, OFFSET_SYNC_DURATION_MS, "Consumer group offset sync is not complete in time");
         }
     }
@@ -772,7 +782,8 @@ public class MirrorConnectorsIntegrationBaseTest {
         mm2Props.put("offset.storage.replication.factor", "1");
         mm2Props.put("status.storage.replication.factor", "1");
         mm2Props.put("replication.factor", "1");
-        
+        // Sync offsets as soon as possible to ensure the final record in a finite test has its offset translated.
+        mm2Props.put("offset.lag.max", "0");
         return mm2Props;
     }
     
