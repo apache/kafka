@@ -17,19 +17,12 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -114,22 +107,12 @@ public enum ApiKeys {
     ALLOCATE_PRODUCER_IDS(ApiMessageType.ALLOCATE_PRODUCER_IDS, true, true),
     CONSUMER_GROUP_HEARTBEAT(ApiMessageType.CONSUMER_GROUP_HEARTBEAT);
 
-    private static final Set<ApiMessageType.ApiStabilityType> ALL_API_STABILITY_TYPES =
-        new HashSet<>(Arrays.asList(
-            ApiMessageType.ApiStabilityType.STABLE,
-            ApiMessageType.ApiStabilityType.EVOLVING
-        ));
-
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
 
     static {
-        // Only stable APIs are included by default.
         for (ApiMessageType.ListenerType listenerType : ApiMessageType.ListenerType.values()) {
-            APIS_BY_LISTENER.put(listenerType, filterApisForListener(
-                listenerType,
-                Collections.singleton(ApiMessageType.ApiStabilityType.STABLE)
-            ));
+            APIS_BY_LISTENER.put(listenerType, filterApisForListener(listenerType));
         }
     }
 
@@ -226,6 +209,32 @@ public enum ApiKeys {
         return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
     }
 
+    public boolean isVersionEnabled(short apiVersion, boolean enableUnstableLastVersion) {
+        if (!messageType.latestVersionUnstable() || enableUnstableLastVersion) {
+            return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
+        } else {
+            return apiVersion >= oldestVersion() && apiVersion <= latestVersion() - 1;
+        }
+    }
+
+    public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion) {
+        if (!messageType.latestVersionUnstable() || enableUnstableLastVersion) {
+            return Optional.of(new ApiVersionsResponseData.ApiVersion()
+                .setApiKey(messageType.apiKey())
+                .setMinVersion(oldestVersion())
+                .setMaxVersion(latestVersion()));
+        } else {
+            if (latestVersion() - 1 >= oldestVersion()) {
+                return Optional.of(new ApiVersionsResponseData.ApiVersion()
+                    .setApiKey(messageType.apiKey())
+                    .setMinVersion(oldestVersion())
+                    .setMaxVersion((short) (latestVersion() - 1)));
+            } else {
+                return Optional.empty();
+            }
+        }
+    }
+
     public short requestHeaderVersion(short apiVersion) {
         return messageType.requestHeaderVersion(apiVersion);
     }
@@ -236,10 +245,6 @@ public enum ApiKeys {
 
     public boolean inScope(ApiMessageType.ListenerType listener) {
         return messageType.listeners().contains(listener);
-    }
-
-    public boolean isExposed(Set<ApiMessageType.ApiStabilityType> types) {
-        return types.contains(messageType.apiStability());
     }
 
     private static String toHtml() {
@@ -296,32 +301,28 @@ public enum ApiKeys {
         return EnumSet.copyOf(apis);
     }
 
-    public static EnumSet<ApiKeys> apisForListener(
-        ApiMessageType.ListenerType listener
-    ) {
+    public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {
         return APIS_BY_LISTENER.get(listener);
     }
 
     public static EnumSet<ApiKeys> apisForListener(
         ApiMessageType.ListenerType listener,
-        boolean includeUnreleasedApis
+        boolean enableUnstableLastVersion
     ) {
-        if (includeUnreleasedApis) {
-            // This is only used during development, so we consider it as an exceptional path.
-            return filterApisForListener(listener, ALL_API_STABILITY_TYPES);
+        if (!enableUnstableLastVersion) {
+            return APIS_BY_LISTENER.get(listener);
         }
 
-        return APIS_BY_LISTENER.get(listener);
-    }
-
-    private static EnumSet<ApiKeys> filterApisForListener(
-        ApiMessageType.ListenerType listener,
-        Set<ApiMessageType.ApiStabilityType> apiStabilityTypes
-    ) {
         List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.inScope(listener) && apiKey.isExposed(apiStabilityTypes))
+            .filter(apiKey -> apiKey.inScope(listener))
             .collect(Collectors.toList());
         return EnumSet.copyOf(apis);
     }
 
+    private static EnumSet<ApiKeys> filterApisForListener(ApiMessageType.ListenerType listener) {
+        List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
+            .filter(apiKey -> apiKey.inScope(listener) && apiKey.toApiVersion(false).isPresent())
+            .collect(Collectors.toList());
+        return EnumSet.copyOf(apis);
+    }
 }

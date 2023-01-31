@@ -116,11 +116,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         int throttleTimeMs,
         ApiMessageType.ListenerType listenerType
     ) {
-        return createApiVersionsResponse(
-            throttleTimeMs,
-            filterApis(ApiKeys.apisForListener(listenerType), RecordVersion.current()),
-            Features.emptySupportedFeatures()
-        );
+        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType, true), Features.emptySupportedFeatures());
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
@@ -150,39 +146,22 @@ public class ApiVersionsResponse extends AbstractResponse {
         Map<String, Short> finalizedFeatures,
         long finalizedFeaturesEpoch,
         NodeApiVersions controllerApiVersions,
-        ListenerType listenerType
-    ) {
-        return createApiVersionsResponse(
-            throttleTimeMs,
-            minRecordVersion,
-            latestSupportedFeatures,
-            finalizedFeatures,
-            finalizedFeaturesEpoch,
-            controllerApiVersions,
-            ApiKeys.apisForListener(listenerType)
-        );
-    }
-
-    public static ApiVersionsResponse createApiVersionsResponse(
-        int throttleTimeMs,
-        RecordVersion minRecordVersion,
-        Features<SupportedVersionRange> latestSupportedFeatures,
-        Map<String, Short> finalizedFeatures,
-        long finalizedFeaturesEpoch,
-        NodeApiVersions controllerApiVersions,
-        Set<ApiKeys> enabledApis
+        ListenerType listenerType,
+        boolean enableUnstableLastVersion
     ) {
         ApiVersionCollection apiKeys;
         if (controllerApiVersions != null) {
             apiKeys = intersectForwardableApis(
-                enabledApis,
+                listenerType,
                 minRecordVersion,
-                controllerApiVersions.allSupportedApiVersions()
+                controllerApiVersions.allSupportedApiVersions(),
+                enableUnstableLastVersion
             );
         } else {
             apiKeys = filterApis(
-                enabledApis,
-                minRecordVersion
+                minRecordVersion,
+                listenerType,
+                enableUnstableLastVersion
             );
         }
 
@@ -215,22 +194,33 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public static ApiVersionCollection filterApis(
-        Set<ApiKeys> enabledApis,
-        RecordVersion minRecordVersion
+        RecordVersion minRecordVersion,
+        ApiMessageType.ListenerType listenerType
+    ) {
+        return filterApis(minRecordVersion, listenerType, false);
+    }
+
+    public static ApiVersionCollection filterApis(
+        RecordVersion minRecordVersion,
+        ApiMessageType.ListenerType listenerType,
+        boolean enableUnstableLastVersion
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-        for (ApiKeys apiKey : enabledApis) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType, enableUnstableLastVersion)) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
-                apiKeys.add(ApiVersionsResponse.toApiVersion(apiKey));
+                apiKey.toApiVersion(enableUnstableLastVersion).ifPresent(apiKeys::add);
             }
         }
         return apiKeys;
     }
 
-    public static ApiVersionCollection collectApis(Set<ApiKeys> apiKeys) {
+    public static ApiVersionCollection collectApis(
+        Set<ApiKeys> apiKeys,
+        boolean enableUnstableLastVersion
+    ) {
         ApiVersionCollection res = new ApiVersionCollection();
         for (ApiKeys apiKey : apiKeys) {
-            res.add(ApiVersionsResponse.toApiVersion(apiKey));
+            apiKey.toApiVersion(enableUnstableLastVersion).ifPresent(res::add);
         }
         return res;
     }
@@ -239,27 +229,35 @@ public class ApiVersionsResponse extends AbstractResponse {
      * Find the common range of supported API versions between the locally
      * known range and that of another set.
      *
-     * @param enabledApis the set of enabled APIs
+     * @param listenerType the listener type which constrains the set of exposed APIs
      * @param minRecordVersion min inter broker magic
      * @param activeControllerApiVersions controller ApiVersions
+     * @param enableUnstableLastVersion whether unstable versions should be advertised or not
      * @return commonly agreed ApiVersion collection
      */
     public static ApiVersionCollection intersectForwardableApis(
-        final Set<ApiKeys> enabledApis,
+        final ApiMessageType.ListenerType listenerType,
         final RecordVersion minRecordVersion,
-        final Map<ApiKeys, ApiVersion> activeControllerApiVersions
+        final Map<ApiKeys, ApiVersion> activeControllerApiVersions,
+        boolean enableUnstableLastVersion
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-        for (ApiKeys apiKey : enabledApis) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType, enableUnstableLastVersion)) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
-                ApiVersion brokerApiVersion = toApiVersion(apiKey);
+                final Optional<ApiVersion> brokerApiVersion = apiKey.toApiVersion(enableUnstableLastVersion);
+                if (!brokerApiVersion.isPresent()) {
+                    // Broker does not support this API key.
+                    continue;
+                }
 
                 final ApiVersion finalApiVersion;
                 if (!apiKey.forwardable) {
-                    finalApiVersion = brokerApiVersion;
+                    finalApiVersion = brokerApiVersion.get();
                 } else {
-                    Optional<ApiVersion> intersectVersion = intersect(brokerApiVersion,
-                        activeControllerApiVersions.getOrDefault(apiKey, null));
+                    Optional<ApiVersion> intersectVersion = intersect(
+                        brokerApiVersion.get(),
+                        activeControllerApiVersions.getOrDefault(apiKey, null)
+                    );
                     if (intersectVersion.isPresent()) {
                         finalApiVersion = intersectVersion.get();
                     } else {
@@ -328,15 +326,15 @@ public class ApiVersionsResponse extends AbstractResponse {
         if (thisVersion == null || other == null) return Optional.empty();
         if (thisVersion.apiKey() != other.apiKey())
             throw new IllegalArgumentException("thisVersion.apiKey: " + thisVersion.apiKey()
-                + " must be equal to other.apiKey: " + other.apiKey());
+                                                   + " must be equal to other.apiKey: " + other.apiKey());
         short minVersion = (short) Math.max(thisVersion.minVersion(), other.minVersion());
         short maxVersion = (short) Math.min(thisVersion.maxVersion(), other.maxVersion());
         return minVersion > maxVersion
-                ? Optional.empty()
-                : Optional.of(new ApiVersion()
-                    .setApiKey(thisVersion.apiKey())
-                    .setMinVersion(minVersion)
-                    .setMaxVersion(maxVersion));
+            ? Optional.empty()
+            : Optional.of(new ApiVersion()
+                              .setApiKey(thisVersion.apiKey())
+                              .setMinVersion(minVersion)
+                              .setMaxVersion(maxVersion));
     }
 
     public static ApiVersion toApiVersion(ApiKeys apiKey) {

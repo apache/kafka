@@ -99,9 +99,10 @@ public class ApiVersionsResponseTest {
         );
 
         ApiVersionCollection commonResponse = ApiVersionsResponse.intersectForwardableApis(
-            ApiKeys.apisForListener(ApiMessageType.ListenerType.ZK_BROKER),
+            ApiMessageType.ListenerType.ZK_BROKER,
             RecordVersion.current(),
-            activeControllerApiVersions
+            activeControllerApiVersions,
+            true
         );
 
         verifyVersions(forwardableAPIKey.id, minVersion, maxVersion, commonResponse);
@@ -119,7 +120,8 @@ public class ApiVersionsResponseTest {
             Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
-            ListenerType.ZK_BROKER
+            ListenerType.ZK_BROKER,
+            true
         );
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
@@ -138,7 +140,8 @@ public class ApiVersionsResponseTest {
             Utils.mkMap(Utils.mkEntry("feature", (short) 3)),
             10L,
             null,
-            ListenerType.ZK_BROKER
+            ListenerType.ZK_BROKER,
+            true
         );
 
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
@@ -165,7 +168,8 @@ public class ApiVersionsResponseTest {
             Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
-            ListenerType.ZK_BROKER
+            ListenerType.ZK_BROKER,
+            true
         );
         assertEquals(new HashSet<>(ApiKeys.zkBrokerApis()), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
@@ -183,7 +187,8 @@ public class ApiVersionsResponseTest {
             Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
-            ListenerType.ZK_BROKER
+            ListenerType.ZK_BROKER,
+            true
         );
 
         // Ensure that APIs needed for the KRaft mode are not exposed through ApiVersions until we are ready for them

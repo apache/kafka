@@ -158,7 +158,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("%n");
         generateAccessor("listeners", "EnumSet<ListenerType>");
         buffer.printf("%n");
-        generateAccessor("apiStability", "ApiStabilityType");
+        generateAccessor("latestVersionUnstable", "boolean");
         buffer.printf("%n");
         generateAccessor("apiKey", "short");
         buffer.printf("%n");
@@ -173,8 +173,6 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         generateHeaderVersion("response");
         buffer.printf("%n");
         generateListenerTypesEnum();
-        buffer.printf("%n");
-        generateApiStabilityTypesEnum();
         buffer.printf("%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -223,7 +221,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 apiData.requestSpec.struct().versions().lowest(),
                 apiData.requestSpec.struct().versions().highest(),
                 generateListenerTypeEnumSet(listeners),
-                "ApiStabilityType." + apiData.requestSpec.apiStabilityType().get().name(),
+                apiData.requestSpec.latestVersionUnstable(),
                 (numProcessed == apis.size()) ? ";" : ",");
         }
     }
@@ -236,7 +234,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("private final short lowestSupportedVersion;%n");
         buffer.printf("private final short highestSupportedVersion;%n");
         buffer.printf("private final EnumSet<ListenerType> listeners;%n");
-        buffer.printf("private final ApiStabilityType apiStability;%n");
+        buffer.printf("private final boolean latestVersionUnstable;%n");
         headerGenerator.addImport(MessageGenerator.SCHEMA_CLASS);
         headerGenerator.addImport(MessageGenerator.ENUM_SET_CLASS);
     }
@@ -245,7 +243,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("ApiMessageType(String name, short apiKey, " +
             "Schema[] requestSchemas, Schema[] responseSchemas, " +
             "short lowestSupportedVersion, short highestSupportedVersion, " +
-            "EnumSet<ListenerType> listeners, ApiStabilityType apiStability) {%n");
+            "EnumSet<ListenerType> listeners, boolean latestVersionUnstable) {%n");
         buffer.incrementIndent();
         buffer.printf("this.name = name;%n");
         buffer.printf("this.apiKey = apiKey;%n");
@@ -254,7 +252,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("this.lowestSupportedVersion = lowestSupportedVersion;%n");
         buffer.printf("this.highestSupportedVersion = highestSupportedVersion;%n");
         buffer.printf("this.listeners = listeners;%n");
-        buffer.printf("this.apiStability = apiStability;%n");
+        buffer.printf("this.latestVersionUnstable = latestVersionUnstable;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -405,18 +403,6 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         while (listenerIter.hasNext()) {
             RequestListenerType scope = listenerIter.next();
             buffer.printf("%s%s%n", scope.name(), listenerIter.hasNext() ? "," : ";");
-        }
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void generateApiStabilityTypesEnum() {
-        buffer.printf("public enum ApiStabilityType {%n");
-        buffer.incrementIndent();
-        Iterator<RequestApiStabilityType> iter = Arrays.stream(RequestApiStabilityType.values()).iterator();
-        while (iter.hasNext()) {
-            RequestApiStabilityType type = iter.next();
-            buffer.printf("%s%s%n", type.name(), iter.hasNext() ? "," : ";");
         }
         buffer.decrementIndent();
         buffer.printf("}%n");

@@ -173,10 +173,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
 
-      if (!apiVersionManager.isApiEnabled(request.header.apiKey)) {
+      if (!apiVersionManager.isApiEnabled(request.header.apiKey, request.header.apiVersion)) {
         // The socket server will reject APIs which are not exposed in this scope and close the connection
         // before handing them to the request handler, so this path should not be exercised in practice
-        throw new IllegalStateException(s"API ${request.header.apiKey} is not enabled")
+        throw new IllegalStateException(s"API ${request.header.apiKey} with version ${request.header.apiVersion} is not enabled")
       }
 
       request.header.apiKey match {

@@ -29,7 +29,7 @@ trait ApiVersionManager {
   def listenerType: ListenerType
   def enabledApis: collection.Set[ApiKeys]
   def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse
-  def isApiEnabled(apiKey: ApiKeys): Boolean = enabledApis.contains(apiKey)
+  def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean
   def newRequestMetrics: RequestChannel.Metrics = new network.RequestChannel.Metrics(enabledApis)
 }
 
@@ -41,13 +41,12 @@ object ApiVersionManager {
     supportedFeatures: BrokerFeatures,
     metadataCache: MetadataCache
   ): ApiVersionManager = {
-    val apisForListener = ApiKeys.apisForListener(listenerType, config.advertiseUnreleasedApis)
     new DefaultApiVersionManager(
       listenerType,
-      apisForListener.asScala,
       forwardingManager,
       supportedFeatures,
-      metadataCache
+      metadataCache,
+      config.advertiseUnreleasedApis
     )
   }
 }
@@ -55,37 +54,46 @@ object ApiVersionManager {
 class SimpleApiVersionManager(
   val listenerType: ListenerType,
   val enabledApis: collection.Set[ApiKeys],
-  brokerFeatures: Features[SupportedVersionRange]
+  brokerFeatures: Features[SupportedVersionRange],
+  enableUnstableLastVersion: Boolean
 ) extends ApiVersionManager {
 
   def this(
     listenerType: ListenerType,
-    includeUnreleasedApis: Boolean
+    enableUnstableLastVersion: Boolean
   ) = {
     this(
       listenerType,
-      ApiKeys.apisForListener(listenerType, includeUnreleasedApis).asScala,
-      BrokerFeatures.defaultSupportedFeatures()
+      ApiKeys.apisForListener(listenerType, enableUnstableLastVersion).asScala,
+      BrokerFeatures.defaultSupportedFeatures(),
+      enableUnstableLastVersion
     )
   }
 
-  def this(listenerType: ListenerType) = {
-    this(listenerType, false)
-  }
-
-  private val apiVersions = ApiVersionsResponse.collectApis(enabledApis.asJava)
+  private val apiVersions = ApiVersionsResponse.collectApis(enabledApis.asJava, enableUnstableLastVersion)
 
   override def apiVersionResponse(requestThrottleMs: Int): ApiVersionsResponse = {
     ApiVersionsResponse.createApiVersionsResponse(requestThrottleMs, apiVersions, brokerFeatures)
+  }
+
+  override def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
+    if (apiKey == null) {
+      false
+    } else if (apiKey == ApiKeys.API_VERSIONS) {
+      // ApiVersions API is a particular where we always accept unsupported versions.
+      apiKey.inScope(listenerType)
+    } else {
+      apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
+    }
   }
 }
 
 class DefaultApiVersionManager(
   val listenerType: ListenerType,
-  val enabledApis: collection.Set[ApiKeys],
   forwardingManager: Option[ForwardingManager],
   features: BrokerFeatures,
-  metadataCache: MetadataCache
+  metadataCache: MetadataCache,
+  enableUnstableLastVersion: Boolean
 ) extends ApiVersionManager {
 
   override def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse = {
@@ -94,13 +102,29 @@ class DefaultApiVersionManager(
     val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
 
     ApiVersionsResponse.createApiVersionsResponse(
-        throttleTimeMs,
-        metadataCache.metadataVersion().highestSupportedRecordVersion,
-        supportedFeatures,
-        finalizedFeatures.features.map(kv => (kv._1, kv._2.asInstanceOf[java.lang.Short])).asJava,
-        finalizedFeatures.epoch,
-        controllerApiVersions.orNull,
-        enabledApis.asJava
+      throttleTimeMs,
+      metadataCache.metadataVersion().highestSupportedRecordVersion,
+      supportedFeatures,
+      finalizedFeatures.features.map(kv => (kv._1, kv._2.asInstanceOf[java.lang.Short])).asJava,
+      finalizedFeatures.epoch,
+      controllerApiVersions.orNull,
+      listenerType,
+      enableUnstableLastVersion
     )
+  }
+
+  override def enabledApis: collection.Set[ApiKeys] = {
+    ApiKeys.apisForListener(listenerType, enableUnstableLastVersion).asScala
+  }
+
+  override def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
+    if (apiKey == null) {
+      false
+    } else if (apiKey == ApiKeys.API_VERSIONS) {
+      // ApiVersions API is a particular where we always accept unsupported versions.
+      apiKey.inScope(listenerType)
+    } else {
+      apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
+    }
   }
 }

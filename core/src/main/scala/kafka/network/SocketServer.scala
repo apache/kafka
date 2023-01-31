@@ -1063,10 +1063,10 @@ private[kafka] class Processor(
 
   protected def parseRequestHeader(buffer: ByteBuffer): RequestHeader = {
     val header = RequestHeader.parse(buffer)
-    if (apiVersionManager.isApiEnabled(header.apiKey)) {
+    if (apiVersionManager.isApiEnabled(header.apiKey, header.apiVersion)) {
       header
     } else {
-      throw new InvalidRequestException(s"Received request api key ${header.apiKey} which is not enabled")
+      throw new InvalidRequestException(s"Received request api key ${header.apiKey} with version ${header.apiVersion} which is not enabled")
     }
   }
 

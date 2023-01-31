@@ -39,7 +39,7 @@ public final class MessageSpec {
 
     private final List<RequestListenerType> listeners;
 
-    private final Optional<RequestApiStabilityType> apiStabilityType;
+    private final boolean latestVersionUnstable;
 
     @JsonCreator
     public MessageSpec(@JsonProperty("name") String name,
@@ -50,7 +50,7 @@ public final class MessageSpec {
                        @JsonProperty("commonStructs") List<StructSpec> commonStructs,
                        @JsonProperty("flexibleVersions") String flexibleVersions,
                        @JsonProperty("listeners") List<RequestListenerType> listeners,
-                       @JsonProperty("apiStability") RequestApiStabilityType apiStabilityType
+                       @JsonProperty("latestVersionUnstable") boolean latestVersionUnstable
     ) {
         this.struct = new StructSpec(name, validVersions, fields);
         this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
@@ -75,20 +75,11 @@ public final class MessageSpec {
         }
         this.listeners = listeners;
 
-        if (apiStabilityType == null) {
-            if (type == MessageSpecType.REQUEST) {
-                this.apiStabilityType = Optional.of(RequestApiStabilityType.STABLE);
-            } else {
-                this.apiStabilityType = Optional.empty();
-            }
-        } else {
-            if (type == MessageSpecType.REQUEST) {
-                this.apiStabilityType = Optional.of(apiStabilityType);
-            } else {
-                throw new RuntimeException("The `apiStability` property is only valid for " +
-                    "messages with type `request`");
-            }
+        if (latestVersionUnstable && type != MessageSpecType.REQUEST) {
+            throw new RuntimeException("The `latestVersionUnstable` property is only valid for " +
+                "messages with type `request`");
         }
+        this.latestVersionUnstable = latestVersionUnstable;
     }
 
     public StructSpec struct() {
@@ -143,9 +134,9 @@ public final class MessageSpec {
         return listeners;
     }
 
-    @JsonProperty("apiStability")
-    public Optional<RequestApiStabilityType> apiStabilityType() {
-        return apiStabilityType;
+    @JsonProperty("latestVersionUnstable")
+    public boolean latestVersionUnstable() {
+        return latestVersionUnstable;
     }
 
     public String dataClassName() {

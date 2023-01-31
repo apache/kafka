@@ -48,7 +48,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   def testApiVersionsRequestIncludesUnreleasedApis(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request, cluster.clientListener())
-    validateApiVersionsResponse(apiVersionsResponse, shouldIncludeUnreleasedApi = true)
+    validateApiVersionsResponse(apiVersionsResponse, enableUnstableLastVersion = true)
   }
 
   @ClusterTest(clusterType = Type.ZK)
