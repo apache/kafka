@@ -77,14 +77,7 @@ class SimpleApiVersionManager(
   }
 
   override def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
-    if (apiKey == null) {
-      false
-    } else if (apiKey == ApiKeys.API_VERSIONS) {
-      // ApiVersions API is a particular where we always accept unsupported versions.
-      apiKey.inScope(listenerType)
-    } else {
-      apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
-    }
+    apiKey != null && apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
   }
 }
 
@@ -118,13 +111,6 @@ class DefaultApiVersionManager(
   }
 
   override def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
-    if (apiKey == null) {
-      false
-    } else if (apiKey == ApiKeys.API_VERSIONS) {
-      // ApiVersions API is a particular where we always accept unsupported versions.
-      apiKey.inScope(listenerType)
-    } else {
-      apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
-    }
+    apiKey != null && apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
   }
 }

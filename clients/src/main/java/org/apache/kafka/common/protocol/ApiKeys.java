@@ -210,6 +210,10 @@ public enum ApiKeys {
     }
 
     public boolean isVersionEnabled(short apiVersion, boolean enableUnstableLastVersion) {
+        // ApiVersions API is a particular where we always accept any, even
+        // unsupported, versions.
+        if (this == ApiKeys.API_VERSIONS) return true;
+
         if (!messageType.latestVersionUnstable() || enableUnstableLastVersion) {
             return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
         } else {
