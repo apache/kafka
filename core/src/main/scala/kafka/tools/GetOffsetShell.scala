@@ -33,6 +33,7 @@ import org.apache.kafka.server.util.PartitionFilter.UniquePartitionFilter
 import org.apache.kafka.server.util.PartitionFilter.PartitionRangeFilter
 import org.apache.kafka.server.util.PartitionFilter.PartitionsSetFilter
 
+import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
@@ -205,7 +206,7 @@ object GetOffsetShell {
   ): TopicPartitionFilter = {
     val ruleSpecs = topicPartitions.split(",")
     val rules = ruleSpecs.map(ruleSpec => parseRuleSpec(ruleSpec))
-    new CompositeTopicPartitionFilter(rules)
+    new CompositeTopicPartitionFilter(new util.ArrayList[TopicPartitionFilter]()(rules))
   }
 
   def parseRuleSpec(ruleSpec: String): TopicPartitionFilter = {
@@ -241,16 +242,16 @@ object GetOffsetShell {
   ): TopicFilterAndPartitionFilter = {
     new TopicFilterAndPartitionFilter(
       new IncludeList(topicOpt.getOrElse(".*")),
-      new PartitionsSetFilter(createPartitionSet(partitionIds))
+      new PartitionsSetFilter(createPartitionSet(partitionIds).asJava)
     )
   }
 
-  def createPartitionSet(partitionsString: String): Set[Int] = {
+  def createPartitionSet(partitionsString: String): Set[Integer] = {
     if (partitionsString == null || partitionsString.isEmpty)
       Set.empty
     else
       partitionsString.split(",").map { partitionString =>
-        try partitionString.toInt
+        try Integer.valueOf(partitionString)
         catch {
           case _: NumberFormatException =>
             throw new IllegalArgumentException(s"--partitions expects a comma separated list of numeric " +

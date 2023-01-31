@@ -21,7 +21,6 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.CountDownLatch
-import java.util.regex.Pattern
 import java.util.{Collections, Properties}
 import kafka.consumer.BaseConsumerRecord
 import kafka.utils._
@@ -310,7 +309,7 @@ object MirrorMaker extends Logging {
       val consumerRebalanceListener = new InternalRebalanceListener(this, customRebalanceListener)
       includeOpt.foreach { include =>
         try {
-          consumer.subscribe(new IncludeList(include).getPattern), consumerRebalanceListener)
+          consumer.subscribe(new IncludeList(include).getPattern, consumerRebalanceListener)
         } catch {
           case pse: RuntimeException =>
             error(s"Invalid expression syntax: $include")
