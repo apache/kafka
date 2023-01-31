@@ -592,17 +592,18 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
 
   private val nioSelector = NSelector.open()
 
-  // If the port is configured as 0, we are using a random (ephemeral) port, so we need to open
-  // the socket before we can find out what port we have. If it is set to a nonzero value, defer
-  // opening the socket until we start the Acceptor. The reason for deferring the socket opening
-  // is so that systems which assume that the socket being open indicates readiness are not
-  // confused.
+  // If the port is configured as 0, we are using a wildcard port, so we need to open the socket
+  // before we can find out what port we have. If it is set to a nonzero value, defer opening
+  // the socket until we start the Acceptor. The reason for deferring the socket opening is so
+  // that systems which assume that the socket being open indicates readiness are not confused.
   private[network] var serverChannel: ServerSocketChannel  = _
   private[network] val localPort: Int  = if (endPoint.port != 0) {
     endPoint.port
   } else {
     serverChannel = openServerSocket(endPoint.host, endPoint.port, listenBacklogSize)
-    serverChannel.socket().getLocalPort()
+    val newPort = serverChannel.socket().getLocalPort()
+    info(s"Opened wildcard endpoint ${endPoint.host}:${newPort}")
+    newPort
   }
 
   private[network] val processors = new ArrayBuffer[Processor]()
@@ -629,6 +630,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       }
       if (serverChannel == null) {
         serverChannel = openServerSocket(endPoint.host, endPoint.port, listenBacklogSize)
+        debug(s"Opened endpoint ${endPoint.host}:${endPoint.port}")
       }
       debug(s"Starting processors for listener ${endPoint.listenerName}")
       processors.foreach(_.start())

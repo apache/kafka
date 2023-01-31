@@ -162,7 +162,18 @@ class SocketServerTest {
               listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
               localAddr: InetAddress = null,
               port: Int = 0): Socket = {
-    val socket = new Socket("localhost", s.boundPort(listenerName), localAddr, port)
+    val boundPort = try {
+      s.boundPort(listenerName)
+    } catch {
+      case e: Throwable => throw new RuntimeException("Unable to find bound port for listener " +
+        s"${listenerName}", e)
+    }
+    val socket = try {
+      new Socket("localhost", boundPort, localAddr, port)
+    } catch {
+      case e: Throwable => throw new RuntimeException(s"Unable to connect to remote port ${boundPort} " +
+        s"with local port ${port} on listener ${listenerName}", e)
+    }
     sockets += socket
     socket
   }
@@ -362,6 +373,7 @@ class SocketServerTest {
     val config = KafkaConfig.fromProps(testProps)
     val connectionQueueSize = 1
     val testableServer = new TestableSocketServer(config, connectionQueueSize)
+    testableServer.enableRequestProcessing(Map()).get(1, TimeUnit.MINUTES)
 
     val socket1 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
     sendRequest(socket1, producerRequestBytes())
