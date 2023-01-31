@@ -2052,6 +2052,8 @@ class Log(@volatile private var _dir: File,
             )
           }
           // FIXME: this code path involves not only data plane segments but also KRaft metadata logs.  Should find a way to distinguish after moving to KRaft.
+          
+          // XXX: An internal dashboard depends on parsing this warn log line. Get SRE reviews before changing the format.
           warn(s"Attempted truncating to offset $targetOffset. Resulted in truncated to $offsetTruncatedTo from the original log end offset $originalLogEndOffset, " +
             s"with $messagesTruncated messages and $bytesTruncated bytes truncated")
           LogTruncationStats.logTruncatedBytesRate.mark(bytesTruncated)
