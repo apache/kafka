@@ -187,7 +187,8 @@ public class ConnectMetricsRegistry {
         sourceRecordWriteTotal = createTemplate("source-record-write-total", SOURCE_TASK_GROUP_NAME,
                                                 "The number of records output from the transformations and written to Kafka for this" +
                                                 " task belonging to the named source connector in this worker, since the task was " +
-                                                "last restarted.",
+                                                "last restarted. This is after transformations are applied and excludes any records " +
+                                                "filtered out by the transformations.",
                                                 sourceTaskTags);
         sourceRecordPollBatchTimeMax = createTemplate("poll-batch-max-time-ms", SOURCE_TASK_GROUP_NAME,
                                                       "The maximum time in milliseconds taken by this task to poll for a batch of " +
