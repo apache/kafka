@@ -111,8 +111,9 @@ public enum ApiKeys {
         new EnumMap<>(ApiMessageType.ListenerType.class);
 
     static {
+        // We only cache stable apis/versions by default.
         for (ApiMessageType.ListenerType listenerType : ApiMessageType.ListenerType.values()) {
-            APIS_BY_LISTENER.put(listenerType, filterApisForListener(listenerType));
+            APIS_BY_LISTENER.put(listenerType, filterApisForListener(listenerType, false));
         }
     }
 
@@ -210,7 +211,7 @@ public enum ApiKeys {
     }
 
     public boolean isVersionEnabled(short apiVersion, boolean enableUnstableLastVersion) {
-        // ApiVersions API is a particular where we always accept any, even
+        // ApiVersions API is a particular case that we always accept any, even
         // unsupported, versions.
         if (this == ApiKeys.API_VERSIONS) return true;
 
@@ -313,19 +314,20 @@ public enum ApiKeys {
         ApiMessageType.ListenerType listener,
         boolean enableUnstableLastVersion
     ) {
-        if (!enableUnstableLastVersion) {
+        if (enableUnstableLastVersion) {
+            // This is only enabled during development so recomputing is not an issue.
+            return filterApisForListener(listener, true);
+        } else {
             return APIS_BY_LISTENER.get(listener);
         }
-
-        List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.inScope(listener))
-            .collect(Collectors.toList());
-        return EnumSet.copyOf(apis);
     }
 
-    private static EnumSet<ApiKeys> filterApisForListener(ApiMessageType.ListenerType listener) {
+    private static EnumSet<ApiKeys> filterApisForListener(
+        ApiMessageType.ListenerType listener,
+        boolean enableUnstableLastVersion
+    ) {
         List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.inScope(listener) && apiKey.toApiVersion(false).isPresent())
+            .filter(apiKey -> apiKey.inScope(listener) && apiKey.toApiVersion(enableUnstableLastVersion).isPresent())
             .collect(Collectors.toList());
         return EnumSet.copyOf(apis);
     }

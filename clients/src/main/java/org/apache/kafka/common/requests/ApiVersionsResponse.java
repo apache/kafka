@@ -326,15 +326,15 @@ public class ApiVersionsResponse extends AbstractResponse {
         if (thisVersion == null || other == null) return Optional.empty();
         if (thisVersion.apiKey() != other.apiKey())
             throw new IllegalArgumentException("thisVersion.apiKey: " + thisVersion.apiKey()
-                                                   + " must be equal to other.apiKey: " + other.apiKey());
+                + " must be equal to other.apiKey: " + other.apiKey());
         short minVersion = (short) Math.max(thisVersion.minVersion(), other.minVersion());
         short maxVersion = (short) Math.min(thisVersion.maxVersion(), other.maxVersion());
         return minVersion > maxVersion
-            ? Optional.empty()
-            : Optional.of(new ApiVersion()
-                              .setApiKey(thisVersion.apiKey())
-                              .setMinVersion(minVersion)
-                              .setMaxVersion(maxVersion));
+                ? Optional.empty()
+                : Optional.of(new ApiVersion()
+                    .setApiKey(thisVersion.apiKey())
+                    .setMinVersion(minVersion)
+                    .setMaxVersion(maxVersion));
     }
 
     public static ApiVersion toApiVersion(ApiKeys apiKey) {
