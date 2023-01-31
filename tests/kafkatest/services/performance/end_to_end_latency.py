@@ -124,4 +124,4 @@ class EndToEndLatencyService(PerformanceService):
         self.results[idx-1] = results
 
     def java_class_name(self):
-        return "kafka.tools.EndToEndLatency"
+        return "org.apache.kafka.tools.EndToEndLatency"
