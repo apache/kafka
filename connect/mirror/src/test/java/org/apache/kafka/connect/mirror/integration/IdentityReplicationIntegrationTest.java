@@ -233,6 +233,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         // have been automatically synchronized from primary to backup by the background job, so no
         // more records to consume from the replicated topic by the same consumer group at backup cluster
         assertEquals(0, records.count(), "consumer record size is not zero");
+        backupConsumer.close();
 
         // now create a new topic in primary cluster
         primary.kafka().createTopic("test-topic-2", NUM_PARTITIONS);
