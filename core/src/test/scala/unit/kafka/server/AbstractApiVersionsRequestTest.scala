@@ -21,7 +21,7 @@ import kafka.test.ClusterInstance
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
-import org.apache.kafka.common.message.{ApiMessageType, ApiVersionsResponseData}
+import org.apache.kafka.common.message.ApiMessageType
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.RecordVersion
@@ -74,9 +74,15 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     enableUnstableLastVersion: Boolean = false
   ): Unit = {
     val expectedApis = if (!cluster.isKRaftTest) {
-      ApiKeys.apisForListener(ApiMessageType.ListenerType.ZK_BROKER, enableUnstableLastVersion)
+      ApiVersionsResponse.collectApis(
+        ApiKeys.apisForListener(ApiMessageType.ListenerType.ZK_BROKER),
+        enableUnstableLastVersion
+      )
     } else if (cluster.controllerListenerName().asScala.contains(listenerName)) {
-      ApiKeys.apisForListener(ApiMessageType.ListenerType.CONTROLLER, enableUnstableLastVersion)
+      ApiVersionsResponse.collectApis(
+        ApiKeys.apisForListener(ApiMessageType.ListenerType.CONTROLLER),
+        enableUnstableLastVersion
+      )
     } else {
       ApiVersionsResponse.intersectForwardableApis(
         ApiMessageType.ListenerType.BROKER,
@@ -86,7 +92,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       )
     }
 
-    assertEquals(expectedApis.size(), apiVersionsResponse.data.apiKeys().size(),
+    assertEquals(expectedApis.size, apiVersionsResponse.data.apiKeys.size,
       "API keys in ApiVersionsResponse must match API keys supported by broker.")
 
     val defaultApiVersionsResponse = if (!cluster.isKRaftTest) {
@@ -94,10 +100,10 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     } else if(cluster.controllerListenerName().asScala.contains(listenerName)) {
       ApiVersionsResponse.defaultApiVersionsResponse(ListenerType.CONTROLLER)
     } else {
-      ApiVersionsResponse.createApiVersionsResponse(0, expectedApis.asInstanceOf[ApiVersionsResponseData.ApiVersionCollection])
+      ApiVersionsResponse.createApiVersionsResponse(0, expectedApis)
     }
 
-    for (expectedApiVersion: ApiVersion <- defaultApiVersionsResponse.data.apiKeys().asScala) {
+    for (expectedApiVersion: ApiVersion <- defaultApiVersionsResponse.data.apiKeys.asScala) {
       val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
       assertNotNull(actualApiVersion, s"API key ${expectedApiVersion.apiKey()} is supported by broker, but not received in ApiVersionsResponse.")
       assertEquals(expectedApiVersion.apiKey, actualApiVersion.apiKey, "API key must be supported by the broker.")

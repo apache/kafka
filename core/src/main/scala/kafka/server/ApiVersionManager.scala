@@ -64,7 +64,7 @@ class SimpleApiVersionManager(
   ) = {
     this(
       listenerType,
-      ApiKeys.apisForListener(listenerType, enableUnstableLastVersion).asScala,
+      ApiKeys.apisForListener(listenerType).asScala,
       BrokerFeatures.defaultSupportedFeatures(),
       enableUnstableLastVersion
     )
@@ -89,6 +89,8 @@ class DefaultApiVersionManager(
   enableUnstableLastVersion: Boolean
 ) extends ApiVersionManager {
 
+  val enabledApis = ApiKeys.apisForListener(listenerType).asScala
+
   override def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse = {
     val supportedFeatures = features.supportedFeatures
     val finalizedFeatures = metadataCache.features()
@@ -104,10 +106,6 @@ class DefaultApiVersionManager(
       listenerType,
       enableUnstableLastVersion
     )
-  }
-
-  override def enabledApis: collection.Set[ApiKeys] = {
-    ApiKeys.apisForListener(listenerType, enableUnstableLastVersion).asScala
   }
 
   override def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {

@@ -111,9 +111,8 @@ public enum ApiKeys {
         new EnumMap<>(ApiMessageType.ListenerType.class);
 
     static {
-        // We only cache stable apis/versions by default.
         for (ApiMessageType.ListenerType listenerType : ApiMessageType.ListenerType.values()) {
-            APIS_BY_LISTENER.put(listenerType, filterApisForListener(listenerType, false));
+            APIS_BY_LISTENER.put(listenerType, filterApisForListener(listenerType));
         }
     }
 
@@ -310,24 +309,9 @@ public enum ApiKeys {
         return APIS_BY_LISTENER.get(listener);
     }
 
-    public static EnumSet<ApiKeys> apisForListener(
-        ApiMessageType.ListenerType listener,
-        boolean enableUnstableLastVersion
-    ) {
-        if (enableUnstableLastVersion) {
-            // This is only enabled during development so recomputing is not an issue.
-            return filterApisForListener(listener, true);
-        } else {
-            return APIS_BY_LISTENER.get(listener);
-        }
-    }
-
-    private static EnumSet<ApiKeys> filterApisForListener(
-        ApiMessageType.ListenerType listener,
-        boolean enableUnstableLastVersion
-    ) {
+    private static EnumSet<ApiKeys> filterApisForListener(ApiMessageType.ListenerType listener) {
         List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.inScope(listener) && apiKey.toApiVersion(enableUnstableLastVersion).isPresent())
+            .filter(apiKey -> apiKey.inScope(listener))
             .collect(Collectors.toList());
         return EnumSet.copyOf(apis);
     }

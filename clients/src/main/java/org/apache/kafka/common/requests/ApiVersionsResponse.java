@@ -206,7 +206,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         boolean enableUnstableLastVersion
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType, enableUnstableLastVersion)) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 apiKey.toApiVersion(enableUnstableLastVersion).ifPresent(apiKeys::add);
             }
@@ -242,7 +242,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         boolean enableUnstableLastVersion
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType, enableUnstableLastVersion)) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 final Optional<ApiVersion> brokerApiVersion = apiKey.toApiVersion(enableUnstableLastVersion);
                 if (!brokerApiVersion.isPresent()) {
