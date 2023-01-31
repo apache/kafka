@@ -418,7 +418,16 @@ public class AbstractConfig {
      * @return A configured instance of the class
      */
     public <T> T getConfiguredInstance(String key, Class<T> t) {
-        return getConfiguredInstance(key, t, Collections.emptyMap());
+        T configuredInstance = null;
+
+        try {
+            configuredInstance = getConfiguredInstance(key, t, Collections.emptyMap());
+        } catch (Exception e) {
+            maybeClose(configuredInstance, "AutoCloseable object constructed and configured during failed call to getConfiguredInstance");
+            throw e;
+        }
+
+        return configuredInstance;
     }
 
     /**
@@ -432,8 +441,15 @@ public class AbstractConfig {
      */
     public <T> T getConfiguredInstance(String key, Class<T> t, Map<String, Object> configOverrides) {
         Class<?> c = getClass(key);
+        T configuredInstance = null;
 
-        return getConfiguredInstance(c, t, originals(configOverrides));
+        try {
+            configuredInstance = getConfiguredInstance(c, t, originals(configOverrides));
+        } catch (Exception e) {
+            maybeClose(configuredInstance, "AutoCloseable object constructed and configured during failed call to getConfiguredInstance");
+            throw e;
+        }
+        return configuredInstance;
     }
 
     /**
@@ -487,11 +503,17 @@ public class AbstractConfig {
             }
         } catch (Exception e) {
             for (Object object : objects) {
-                Utils.closeQuietly((AutoCloseable) object, "AutoCloseable object constructed and configured during failed call to getConfiguredInstances");
+                maybeClose(object, "AutoCloseable object constructed and configured during failed call to getConfiguredInstances");
             }
             throw e;
         }
         return objects;
+    }
+
+    private static void maybeClose(Object object, String name) {
+        if (object instanceof AutoCloseable) {
+            Utils.closeQuietly((AutoCloseable) object, name);
+        }
     }
 
     private Map<String, String> extractPotentialVariables(Map<?, ?> configMap) {

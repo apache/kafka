@@ -137,7 +137,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
-    private final int targetInterceptor = 3;
     private final String topic = "topic";
     private final Collection<Node> nodes = Collections.singletonList(NODE);
     private final Cluster emptyCluster = new Cluster(
@@ -572,12 +571,13 @@ public class KafkaProducerTest {
     }
     @Test
     public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
+        final int targetInterceptor = 3;
         try {
             Properties props = new Properties();
             props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor, "
-                    + "org.apache.kafka.test.MockProducerInterceptor, "
-                    + "org.apache.kafka.test.MockProducerInterceptor");
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, org.apache.kafka.test.MockProducerInterceptor.class.getName() + ", "
+                    +  org.apache.kafka.test.MockProducerInterceptor.class.getName() + ", "
+                    +  org.apache.kafka.test.MockProducerInterceptor.class.getName());
             props.setProperty(MockProducerInterceptor.APPEND_STRING_PROP, "something");
 
             MockProducerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
