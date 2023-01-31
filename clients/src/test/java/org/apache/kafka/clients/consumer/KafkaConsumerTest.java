@@ -169,7 +169,7 @@ public class KafkaConsumerTest {
     private final int defaultApiTimeoutMs = 60000;
     private final int requestTimeoutMs = defaultApiTimeoutMs / 2;
     private final int heartbeatIntervalMs = 1000;
-    private final int onSelectedInterceptor = 3;
+    private final int targetInterceptor = 3;
 
     // Set auto commit interval lower than heartbeat so we don't need to deal with
     // a concurrent heartbeat request
@@ -514,7 +514,7 @@ public class KafkaConsumerTest {
                     + "org.apache.kafka.test.MockConsumerInterceptor, "
                     + "org.apache.kafka.test.MockConsumerInterceptor");
 
-            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(onSelectedInterceptor);
+            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
             assertThrows(KafkaException.class, () -> {
                 new KafkaConsumer<>(

@@ -137,7 +137,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
-    private final int onSelectedInterceptor = 3;
+    private final int targetInterceptor = 3;
     private final String topic = "topic";
     private final Collection<Node> nodes = Collections.singletonList(NODE);
     private final Cluster emptyCluster = new Cluster(
@@ -580,7 +580,7 @@ public class KafkaProducerTest {
                     + "org.apache.kafka.test.MockProducerInterceptor");
             props.setProperty(MockProducerInterceptor.APPEND_STRING_PROP, "something");
 
-            MockProducerInterceptor.setThrowOnConfigExceptionThreshold(onSelectedInterceptor);
+            MockProducerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
             assertThrows(KafkaException.class, () -> {
                 new KafkaProducer<>(
