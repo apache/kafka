@@ -16,12 +16,9 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Map;
 
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
@@ -30,7 +27,7 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
  * {@link Predicate} is true (or false, according to {@code negate}).
  * @param <R>
  */
-public class PredicatedTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
+public class PredicatedTransformation<R extends ConnectRecord<R>> implements AutoCloseable {
 
     static final String PREDICATE_CONFIG = "predicate";
     static final String NEGATE_CONFIG = "negate";
@@ -38,30 +35,27 @@ public class PredicatedTransformation<R extends ConnectRecord<R>> implements Tra
     final Transformation<R> delegate;
     final boolean negate;
 
+    PredicatedTransformation(Transformation<R> delegate) {
+        this(null, false, delegate);
+    }
+
     PredicatedTransformation(Predicate<R> predicate, boolean negate, Transformation<R> delegate) {
         this.predicate = predicate;
         this.negate = negate;
         this.delegate = delegate;
     }
 
-    @Override
-    public void configure(Map<String, ?> configs) {
-        throw new ConnectException(PredicatedTransformation.class.getName() + ".configure() " +
-                "should never be called directly.");
+    public Class<? extends Transformation<R>> transformClass() {
+        @SuppressWarnings("unchecked")
+        Class<? extends Transformation<R>> transformClass = (Class<? extends Transformation<R>>) delegate.getClass();
+        return transformClass;
     }
 
-    @Override
     public R apply(R record) {
-        if (negate ^ predicate.test(record)) {
+        if (predicate == null || negate ^ predicate.test(record)) {
             return delegate.apply(record);
         }
         return record;
-    }
-
-    @Override
-    public ConfigDef config() {
-        throw new ConnectException(PredicatedTransformation.class.getName() + ".config() " +
-                "should never be called directly.");
     }
 
     @Override

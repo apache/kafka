@@ -270,10 +270,10 @@ public class ConnectorConfig extends AbstractConfig {
     /**
      * Returns the initialized list of {@link Transformation} which are specified in {@link #TRANSFORMS_CONFIG}.
      */
-    public <R extends ConnectRecord<R>> List<Transformation<R>> transformations() {
+    public <R extends ConnectRecord<R>> List<PredicatedTransformation<R>> transformations() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
 
-        final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
+        final List<PredicatedTransformation<R>> transformations = new ArrayList<>(transformAliases.size());
         for (String alias : transformAliases) {
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
 
@@ -291,7 +291,7 @@ public class ConnectorConfig extends AbstractConfig {
                     predicate.configure(originalsWithPrefix(predicatePrefix));
                     transformations.add(new PredicatedTransformation<>(predicate, negate == null ? false : Boolean.parseBoolean(negate.toString()), transformation));
                 } else {
-                    transformations.add(transformation);
+                    transformations.add(new PredicatedTransformation<>(transformation));
                 }
             } catch (Exception e) {
                 throw new ConnectException(e);

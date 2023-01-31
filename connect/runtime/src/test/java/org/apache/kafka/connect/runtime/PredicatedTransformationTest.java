@@ -17,11 +17,16 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.junit.Test;
 
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class PredicatedTransformationTest {
 
@@ -39,8 +44,12 @@ public class PredicatedTransformationTest {
     private void applyAndAssert(boolean predicateResult, boolean negate,
                                 SourceRecord expectedResult) {
 
-        SamplePredicate predicate = new SamplePredicate(predicateResult);
-        SampleTransformation<SourceRecord> predicatedTransform = new SampleTransformation<>(transformed);
+        @SuppressWarnings("unchecked")
+        Predicate<SourceRecord> predicate = mock(Predicate.class);
+        when(predicate.test(any())).thenReturn(predicateResult);
+        @SuppressWarnings("unchecked")
+        Transformation<SourceRecord> predicatedTransform = mock(Transformation.class);
+        when(predicatedTransform.apply(any())).thenReturn(transformed);
         PredicatedTransformation<SourceRecord> pt = new PredicatedTransformation<>(
                 predicate,
                 negate,
@@ -49,7 +58,7 @@ public class PredicatedTransformationTest {
         assertEquals(expectedResult, pt.apply(initial));
 
         pt.close();
-        assertTrue(predicate.closed);
-        assertTrue(predicatedTransform.closed);
+        verify(predicate).close();
+        verify(predicatedTransform).close();
     }
 }

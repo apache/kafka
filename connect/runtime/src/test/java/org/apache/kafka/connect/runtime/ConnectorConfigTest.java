@@ -22,6 +22,7 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.junit.Test;
@@ -33,6 +34,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -48,6 +50,8 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
     };
 
+    private static final SinkRecord DUMMY_RECORD = new SinkRecord(null, 0, null, null, null, null, 0L);
+
     public static abstract class TestConnector extends Connector {
     }
 
@@ -62,7 +66,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
         @Override
         public R apply(R record) {
-            return null;
+            return record.newRecord(null, magicNumber, null, null, null, null, 0L);
         }
 
         @Override
@@ -147,10 +151,10 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<Transformation<R>> transformations = config.transformations();
+        final List<PredicatedTransformation<SinkRecord>> transformations = config.transformations();
         assertEquals(1, transformations.size());
-        final SimpleTransformation<R> xform = (SimpleTransformation<R>) transformations.get(0);
-        assertEquals(42, xform.magicNumber);
+        final PredicatedTransformation<SinkRecord> xform = transformations.get(0);
+        assertEquals(42, xform.apply(DUMMY_RECORD).kafkaPartition().intValue());
     }
 
     @Test
@@ -175,10 +179,10 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.b.type", SimpleTransformation.class.getName());
         props.put("transforms.b.magic.number", "84");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<Transformation<R>> transformations = config.transformations();
+        final List<PredicatedTransformation<SinkRecord>> transformations = config.transformations();
         assertEquals(2, transformations.size());
-        assertEquals(42, ((SimpleTransformation<R>) transformations.get(0)).magicNumber);
-        assertEquals(84, ((SimpleTransformation<R>) transformations.get(1)).magicNumber);
+        assertEquals(42, transformations.get(0).apply(DUMMY_RECORD).kafkaPartition().intValue());
+        assertEquals(84, transformations.get(1).apply(DUMMY_RECORD).kafkaPartition().intValue());
     }
 
     @Test
@@ -282,23 +286,20 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     private void assertPredicatedTransform(Map<String, String> props, boolean expectedNegated) {
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<Transformation<R>> transformations = config.transformations();
+        final List<PredicatedTransformation<SinkRecord>> transformations = config.transformations();
         assertEquals(1, transformations.size());
-        assertTrue(transformations.get(0) instanceof PredicatedTransformation);
-        PredicatedTransformation<?> predicated = (PredicatedTransformation<?>) transformations.get(0);
+        PredicatedTransformation<SinkRecord> predicated = transformations.get(0);
 
         assertEquals(expectedNegated, predicated.negate);
 
-        assertTrue(predicated.delegate instanceof ConnectorConfigTest.SimpleTransformation);
-        assertEquals(42, ((SimpleTransformation<?>) predicated.delegate).magicNumber);
+        assertFalse(predicated.predicate.test(DUMMY_RECORD));
+        assertEquals(expectedNegated ? 42 : 0, predicated.apply(DUMMY_RECORD).kafkaPartition().intValue());
 
-        assertTrue(predicated.predicate instanceof ConnectorConfigTest.TestPredicate);
-        assertEquals(84, ((TestPredicate<?>) predicated.predicate).param);
+        SinkRecord matchingRecord = DUMMY_RECORD.newRecord(null, 84, null, null, null, null, 0L);
+        assertTrue(predicated.predicate.test(matchingRecord));
+        assertEquals(expectedNegated ? 84 : 42, predicated.apply(matchingRecord).kafkaPartition().intValue());
 
         predicated.close();
-
-        assertEquals(0, ((SimpleTransformation<?>) predicated.delegate).magicNumber);
-        assertEquals(0, ((TestPredicate<?>) predicated.predicate).param);
     }
 
     @Test
@@ -381,7 +382,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
         @Override
         public boolean test(R record) {
-            return false;
+            return record.kafkaPartition() == param;
         }
 
         @Override

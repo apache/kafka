@@ -70,6 +70,7 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
+import org.mockito.stubbing.OngoingStubbing;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -122,6 +123,8 @@ public class ErrorHandlingTaskTest {
 
     @Mock
     Plugins plugins;
+    @Mock
+    PredicatedTransformation<?> transformation;
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
 
@@ -294,6 +297,7 @@ public class ErrorHandlingTaskTest {
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.reporters(singletonList(reporter));
+        mockSinkTransform();
         createSinkTask(initialState, retryWithToleranceOperator);
 
 
@@ -346,6 +350,7 @@ public class ErrorHandlingTaskTest {
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.reporters(singletonList(reporter));
+        mockSourceTransform();
         createSourceTask(initialState, retryWithToleranceOperator);
 
         // valid json
@@ -407,6 +412,7 @@ public class ErrorHandlingTaskTest {
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.reporters(singletonList(reporter));
+        mockSourceTransform();
         createSourceTask(initialState, retryWithToleranceOperator, badConverter());
 
         // valid json
@@ -494,15 +500,25 @@ public class ErrorHandlingTaskTest {
         }
     }
 
+    private void mockSinkTransform() {
+        FaultyPassthrough<SinkRecord> faultyPassthrough = new FaultyPassthrough<>();
+        @SuppressWarnings("unchecked")
+        Class<? extends Transformation<?>> value = (Class<? extends Transformation<?>>) (Class<?>) FaultyPassthrough.class;
+        OngoingStubbing<Class<? extends Transformation<?>>> transformClass = when(transformation.transformClass());
+        transformClass.thenReturn(value);
+        when(transformation.apply(any())).thenAnswer(invocation -> faultyPassthrough.apply(invocation.getArgument(0)));
+    }
+
     private void createSinkTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
         oo.put("schemas.enable", "false");
         converter.configure(oo);
-
+        @SuppressWarnings("unchecked")
+        PredicatedTransformation<SinkRecord> transform = (PredicatedTransformation<SinkRecord>) transformation;
         TransformationChain<SinkRecord> sinkTransforms =
-                new TransformationChain<>(singletonList(new FaultyPassthrough<SinkRecord>()), retryWithToleranceOperator);
+                new TransformationChain<>(singletonList(transform), retryWithToleranceOperator);
 
         workerSinkTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig,
@@ -531,8 +547,20 @@ public class ErrorHandlingTaskTest {
         return converter;
     }
 
+    private void mockSourceTransform() {
+        FaultyPassthrough<SourceRecord> faultyPassthrough = new FaultyPassthrough<>();
+        @SuppressWarnings("unchecked")
+        Class<? extends Transformation<?>> value = (Class<? extends Transformation<?>>) (Class<?>) FaultyPassthrough.class;
+        OngoingStubbing<Class<? extends Transformation<?>>> transformClass = when(transformation.transformClass());
+        transformClass.thenReturn(value);
+        when(transformation.apply(any())).thenAnswer(invocation -> faultyPassthrough.apply(invocation.getArgument(0)));
+    }
+
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator, Converter converter) {
-        TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SourceRecord>()), retryWithToleranceOperator);
+        @SuppressWarnings("unchecked")
+        PredicatedTransformation<SourceRecord> transform = (PredicatedTransformation<SourceRecord>) transformation;
+        TransformationChain<SourceRecord> sourceTransforms =
+                new TransformationChain<>(singletonList(transform), retryWithToleranceOperator);
 
         workerSourceTask = spy(new WorkerSourceTask(
             taskId, sourceTask, statusListener, initialState, converter,
