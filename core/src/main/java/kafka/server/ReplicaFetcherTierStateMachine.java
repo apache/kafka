@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package kafka.server;
 
 import kafka.cluster.Partition;
@@ -48,7 +65,7 @@ import scala.collection.immutable.Seq;
  local log start offset.
  */
 public class ReplicaFetcherTierStateMachine implements TierStateMachine {
-    private static final Logger logger = LoggerFactory.getLogger(ReplicaFetcherTierStateMachine.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ReplicaFetcherTierStateMachine.class);
 
     private LeaderEndPoint leader;
     private ReplicaManager replicaMgr;
@@ -73,8 +90,8 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
 
         long offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderStartOffset, epoch, fetchPartitionData.logStartOffset);
 
-        Tuple2<Object, Object> _AndLeaderEndOffset = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch());
-        long leaderEndOffset = (long) _AndLeaderEndOffset._2;
+        Tuple2<Object, Object> fetchLatestOffsetResult = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch());
+        long leaderEndOffset = (long) fetchLatestOffsetResult._2;
 
         long initialLag = leaderEndOffset - offsetToFetch;
 
@@ -133,11 +150,11 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
      * It tries to build the required state for this partition from leader and remote storage so that it can start
      * fetching records from the leader.
      */
-    private Long buildRemoteLogAuxState(TopicPartition topicPartition,
+    protected Long buildRemoteLogAuxState(TopicPartition topicPartition,
                                         Integer currentLeaderEpoch,
                                         Long leaderLocalLogStartOffset,
                                         Integer epochForLeaderLocalLogStartOffset,
-                                        Long leaderLogStartOffset) throws IOException, RemoteStorageException{
+                                        Long leaderLogStartOffset) throws IOException, RemoteStorageException {
 
         UnifiedLog log = replicaMgr.localLogOrException(topicPartition);
 
@@ -165,11 +182,11 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                     // This gives the respective leader epoch, that will handle any gaps in epochs.
                     // For ex, leader epoch cache contains:
                     // leader-epoch   start-offset
-                    //  0 		          20
-                    //  1 		          85
+                    //  0               20
+                    //  1               85
                     //  <2> - gap no messages were appended in this leader epoch.
-                    //  3 		          90
-                    //  4 		          98
+                    //  3               90
+                    //  4               98
                     // There is a gap in leader epoch. For leaderLocalLogStartOffset as 90, leader-epoch is 3.
                     // fetchEarlierEpochEndOffset(2) will return leader-epoch as 1, end-offset as 90.
                     // So, for offset 89, we should return leader epoch as 1 like below.
@@ -198,7 +215,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                     log.leaderEpochCache().get().assign(epochs);
                 }
 
-                logger.debug("Updated the epoch cache from remote tier till offset: {} with size: {} for {}", leaderLocalLogStartOffset, epochs.size(), partition);
+                LOGGER.debug("Updated the epoch cache from remote tier till offset: {} with size: {} for {}", leaderLocalLogStartOffset, epochs.size(), partition);
 
                 // Restore producer snapshot
                 File snapshotFile = UnifiedLog.producerSnapshotFile(log.dir(), nextOffset);
@@ -207,8 +224,8 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                 // Reload producer snapshots.
                 log.producerStateManager().truncateFullyAndReloadSnapshots();
                 log.loadProducerState(nextOffset);
-                logger.debug("Built the leader epoch cache and producer snapshots from remote tier for {}, " +
-                        "with active producers size: {}, leaderLogStartOffset: {}, and logEndOffset: {}",
+                LOGGER.debug("Built the leader epoch cache and producer snapshots from remote tier for {}, " +
+                                "with active producers size: {}, leaderLogStartOffset: {}, and logEndOffset: {}",
                         partition, log.producerStateManager().activeProducers().size(), leaderLogStartOffset, nextOffset);
             } else {
                 throw new RemoteStorageException("Couldn't build the state from remote store for partition: " + topicPartition +

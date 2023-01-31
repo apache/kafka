@@ -73,10 +73,8 @@
   </subpackage>
 
   <subpackage name="server">
-    <subpackage name="builders">
-      <allow pkg="kafka" />
-      <allow pkg="org.apache.kafka" />
-    </subpackage>
+    <allow pkg="kafka" />
+    <allow pkg="org.apache.kafka" />
   </subpackage>
 
   <subpackage name="test">

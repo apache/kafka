@@ -663,7 +663,7 @@ class AbstractFetcherThreadTest {
   @Test
   def testFencedOffsetResetAfterMovedToRemoteTier(): Unit = {
     val partition = new TopicPartition("topic", 0)
-    var isErrorHandled = false
+    val isErrorHandled = false
     val fetcher = new MockFetcherThread(new MockLeaderEndPoint)
 
     val replicaLog = Seq(
@@ -1325,6 +1325,22 @@ class AbstractFetcherThreadTest {
     }
   }
 
+  class MockTierStateMachine(leader: LeaderEndPoint,
+                             fetchBackOffMs: Integer) extends
+    ReplicaFetcherTierStateMachine(leader, null, fetchBackOffMs) {
+
+
+    override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: FetchRequest.PartitionData): PartitionFetchState = {
+
+      currentFetchState
+    }
+
+    override def maybeAdvanceState(topicPartition: TopicPartition, currentFetchState: PartitionFetchState): Optional[PartitionFetchState] = {
+
+      Optional.of(currentFetchState)
+    }
+  }
+
   class PartitionState(var log: mutable.Buffer[RecordBatch],
                        var leaderEpoch: Int,
                        var logStartOffset: Long,
@@ -1350,6 +1366,7 @@ class AbstractFetcherThreadTest {
       clientId = "mock-fetcher",
       leader = mockLeader,
       failedPartitions,
+      new MockTierStateMachine(mockLeader, fetchBackOffMs),
       fetchBackOffMs = fetchBackOffMs,
       brokerTopicStats = new BrokerTopicStats) {
 
