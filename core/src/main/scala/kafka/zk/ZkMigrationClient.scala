@@ -208,7 +208,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
         recordConsumer.accept(List(new ApiMessageAndVersion(new ProducerIdsRecord()
           .setBrokerEpoch(-1)
           .setBrokerId(producerIdBlock.assignedBrokerId)
-          .setNextProducerId(producerIdBlock.firstProducerId), ProducerIdsRecord.HIGHEST_SUPPORTED_VERSION)).asJava)
+          .setNextProducerId(producerIdBlock.firstProducerId()), ProducerIdsRecord.HIGHEST_SUPPORTED_VERSION)).asJava)
       case None => // Nothing to migrate
     }
   }
@@ -364,24 +364,27 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
-  def writeClientQuotas(entity: ClientQuotaEntity,
-                        quotas: util.Map[String, Double],
-                        state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
-    val entityMap = entity.entries().asScala
-    val hasUser = entityMap.contains(ConfigType.User)
-    val hasClient = entityMap.contains(ConfigType.Client)
-    val hasIp = entityMap.contains(ConfigType.Ip)
+  override def writeClientQuotas(
+    entity: util.Map[String, String],
+    quotas: util.Map[String, java.lang.Double],
+    state: ZkMigrationLeadershipState
+  ): ZkMigrationLeadershipState = {
+
+    val entityMap = entity.asScala
+    val hasUser = entityMap.contains(ClientQuotaEntity.USER)
+    val hasClient = entityMap.contains(ClientQuotaEntity.CLIENT_ID)
+    val hasIp = entityMap.contains(ClientQuotaEntity.IP)
     val props = new Properties()
     // We store client quota values as strings in the ZK JSON
     quotas.forEach { case (key, value) => props.put(key, value.toString) }
     val (configType, path) = if (hasUser && !hasClient) {
-      (Some(ConfigType.User), Some(entityMap(ConfigType.User)))
+      (Some(ConfigType.User), Some(entityMap(ClientQuotaEntity.USER)))
     } else if (hasUser && hasClient) {
-      (Some(ConfigType.User), Some(s"${entityMap(ConfigType.User)}/clients/${entityMap(ConfigType.Client)}"))
+      (Some(ConfigType.User), Some(s"${entityMap(ClientQuotaEntity.USER)}/clients/${entityMap(ClientQuotaEntity.CLIENT_ID)}"))
     } else if (hasClient) {
-      (Some(ConfigType.Client), Some(entityMap(ConfigType.Client)))
+      (Some(ConfigType.Client), Some(entityMap(ClientQuotaEntity.CLIENT_ID)))
     } else if (hasIp) {
-      (Some(ConfigType.Ip), Some(entityMap(ConfigType.Ip)))
+      (Some(ConfigType.Ip), Some(entityMap(ClientQuotaEntity.IP)))
     } else {
       (None, None)
     }
@@ -399,7 +402,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
         // If we didn't update the migration state, we failed to write the client quota. Try again
         // after recursively create its parent znodes
         val createPath = if (hasUser && hasClient) {
-          s"${ConfigEntityTypeZNode.path(configType.get)}/${entityMap(ConfigType.User)}/clients"
+          s"${ConfigEntityTypeZNode.path(configType.get)}/${entityMap(ClientQuotaEntity.USER)}/clients"
         } else {
           ConfigEntityTypeZNode.path(configType.get)
         }
@@ -414,7 +417,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
-  def writeProducerId(nextProducerId: Long, state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+  override def writeProducerId(nextProducerId: Long, state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     val newProducerIdBlockData = ProducerIdBlockZNode.generateProducerIdBlockJson(
       new ProducerIdsBlock(-1, nextProducerId, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE))
 
@@ -423,9 +426,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     state.withMigrationZkVersion(migrationZkVersion)
   }
 
-  def writeConfigs(resource: ConfigResource,
-                   configs: util.Map[String, String],
-                   state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+  override def writeConfigs(resource: ConfigResource,
+                            configs: util.Map[String, String],
+                            state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     val configType = resource.`type`() match {
       case ConfigResource.Type.BROKER => Some(ConfigType.Broker)
       case ConfigResource.Type.TOPIC => Some(ConfigType.Topic)
