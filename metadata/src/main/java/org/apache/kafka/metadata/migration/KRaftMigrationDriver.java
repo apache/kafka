@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.image.MetadataSummary;
 import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
@@ -42,7 +43,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -403,10 +403,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void run() throws Exception {
             Set<Integer> brokersInMetadata = new HashSet<>();
+            MigrationSummary summary = new MigrationSummary(time);
             log.info("Starting ZK migration");
             zkRecordConsumer.beginMigration();
             try {
-                AtomicInteger count = new AtomicInteger(0);
                 zkMigrationClient.readAllMetadata(batch -> {
                     try {
                         if (log.isTraceEnabled()) {
@@ -415,7 +415,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                             log.info("Migrating {} records from ZK", batch.size());
                         }
                         CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
-                        count.addAndGet(batch.size());
+                        summary.feed(batch);
                         future.get();
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
@@ -424,10 +424,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     }
                 }, brokersInMetadata::add);
                 OffsetAndEpoch offsetAndEpochAfterMigration = zkRecordConsumer.completeMigration();
-                log.info("Completed migration of metadata from Zookeeper to KRaft. A total of {} metadata records were " +
-                         "generated. The current metadata offset is now {} with an epoch of {}. Saw {} brokers in the " +
+                summary.close();
+                log.info("Completed migration of metadata from Zookeeper to KRaft. {}. " +
+                         "The current metadata offset is now {} with an epoch of {}. Saw {} brokers in the " +
                          "migrated metadata {}.",
-                    count.get(),
+                    summary,
                     offsetAndEpochAfterMigration.offset(),
                     offsetAndEpochAfterMigration.epoch(),
                     brokersInMetadata.size(),
@@ -439,7 +440,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 transitionTo(MigrationState.KRAFT_CONTROLLER_TO_BROKER_COMM);
             } catch (Throwable t) {
                 zkRecordConsumer.abortMigration();
-                // TODO ???
+                summary.close();
+                log.error("Aborted metadata migration from Zookeeper to KRaft. {}.", summary);
             }
         }
 
@@ -456,13 +458,13 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             // Ignore sending RPCs to the brokers since we're no longer in the state.
             if (migrationState == MigrationState.KRAFT_CONTROLLER_TO_BROKER_COMM) {
                 if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
-                    log.trace("Sending RPCs to broker before moving to dual-write mode using " +
-                        "at offset and epoch {}", image.highestOffsetAndEpoch());
+                    log.trace("Sending RPCs to broker before moving to dual-write mode. {}", MetadataSummary.toString(image));
                     propagator.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.zkControllerEpoch());
                     // Migration leadership state doesn't change since we're not doing any Zk writes.
                     transitionTo(MigrationState.DUAL_WRITE);
                 } else {
-                    log.trace("Ignoring using metadata image since migration leadership state is at a greater offset and epoch {}",
+                    log.trace("Ignoring using metadata image {} since migration leadership state is at a greater offset and epoch {}",
+                        image.provenance(),
                         migrationLeadershipState.offsetAndEpoch());
                 }
             }
@@ -538,9 +540,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
                 // TODO: Unhappy path: Probably relinquish leadership and let new controller
                 //  retry the write?
-                log.trace("Sending RPCs to brokers for metadata {}.", metadataType);
-                propagator.sendRPCsToBrokersFromMetadataDelta(delta, image,
-                        migrationLeadershipState.zkControllerEpoch());
+                log.trace("Sending RPCs to brokers for metadata update. {}", MetadataSummary.toString(image));
+                propagator.sendRPCsToBrokersFromMetadataDelta(delta, image, migrationLeadershipState.zkControllerEpoch());
             } else {
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
             }
