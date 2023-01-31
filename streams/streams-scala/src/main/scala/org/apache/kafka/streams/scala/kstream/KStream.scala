@@ -46,7 +46,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
 import scala.jdk.CollectionConverters._
 
 /**
- * Wraps the Java class [[org.apache.kafka.streams.kstream.KStream KStream]] and delegates method calls to the
+ * Wraps the Java class `org.apache.kafka.streams.kstream.KStream` and delegates method calls to the
  * underlying Java object.
  *
  * @tparam K Type of keys
@@ -823,7 +823,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * It's not required to connect global state stores that are added via `addGlobalStore`;
    * read-only access to global state stores is available by default.
    *
-   * @param processorSupplier a function that generates a [[org.apache.kafka.streams.processor.Processor]]
+   * @param processorSupplier a function that generates a `org.apache.kafka.streams.processor.Processor`
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
@@ -844,7 +844,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * It's not required to connect global state stores that are added via `addGlobalStore`;
    * read-only access to global state stores is available by default.
    *
-   * @param processorSupplier a function that generates a [[org.apache.kafka.streams.processor.Processor]]
+   * @param processorSupplier a function that generates a `org.apache.kafka.streams.processor.Processor`
    * @param named             a [[Named]] config used to name the processor in the topology
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
@@ -870,7 +870,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Note that this overload takes a ProcessorSupplier instead of a Function to avoid post-erasure ambiguity with
    * the older (deprecated) overload.
    *
-   * @param processorSupplier a supplier for [[org.apache.kafka.streams.processor.api.Processor]]
+   * @param processorSupplier a supplier for `org.apache.kafka.streams.processor.api.Processor`
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
@@ -888,7 +888,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Note that this overload takes a ProcessorSupplier instead of a Function to avoid post-erasure ambiguity with
    * the older (deprecated) overload.
    *
-   * @param processorSupplier a supplier for [[org.apache.kafka.streams.processor.api.Processor]]
+   * @param processorSupplier a supplier for `org.apache.kafka.streams.processor.api.Processor`
    * @param named             a [[Named]] config used to name the processor in the topology
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
@@ -911,7 +911,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Note that this overload takes a FixedKeyProcessorSupplier instead of a Function to avoid post-erasure ambiguity with
    * the older (deprecated) overload.
    *
-   * @param processorSupplier a supplier for [[org.apache.kafka.streams.processor.api.FixedKeyProcessor]]
+   * @param processorSupplier a supplier for `org.apache.kafka.streams.processor.api.FixedKeyProcessor`
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
@@ -932,7 +932,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Note that this overload takes a ProcessorSupplier instead of a Function to avoid post-erasure ambiguity with
    * the older (deprecated) overload.
    *
-   * @param processorSupplier a supplier for [[org.apache.kafka.streams.processor.api.FixedKeyProcessor]]
+   * @param processorSupplier a supplier for `org.apache.kafka.streams.processor.api.FixedKeyProcessor`
    * @param named             a [[Named]] config used to name the processor in the topology
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
