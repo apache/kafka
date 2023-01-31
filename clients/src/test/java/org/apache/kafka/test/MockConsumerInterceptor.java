@@ -43,7 +43,7 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
     public static final AtomicInteger ON_COMMIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CONFIG_COUNT = new AtomicInteger(0);
     public static final AtomicInteger THROW_CONFIG_EXCEPTION = new AtomicInteger(0);
-    public static final AtomicInteger THROW_CONFIG_EXCEPTION_THRESHOLD = new AtomicInteger(0);
+    public static final AtomicInteger THROW_ON_CONFIG_EXCEPTION_THRESHOLD = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
     public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
     public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_ON_CONSUME = new AtomicReference<>(NO_CLUSTER_ID);
@@ -60,8 +60,8 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
             throw new ConfigException("Mock consumer interceptor expects configuration " + ProducerConfig.CLIENT_ID_CONFIG);
 
         CONFIG_COUNT.incrementAndGet();
-        if (CONFIG_COUNT.get() == THROW_CONFIG_EXCEPTION_THRESHOLD.get()) {
-            throw new ConfigException("Kafka producer creation failed. Failure may not have cleaned up listener thread resource.");
+        if (CONFIG_COUNT.get() == THROW_ON_CONFIG_EXCEPTION_THRESHOLD.get()) {
+            throw new ConfigException("Failed to instantiate interceptor. Reached configuration exception threshold.");
         }
     }
 
@@ -98,8 +98,8 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
         CLOSE_COUNT.incrementAndGet();
     }
 
-    public static void setThrowConfigExceptionThreshold(int value) {
-        THROW_CONFIG_EXCEPTION_THRESHOLD.set(value);
+    public static void setThrowOnConfigExceptionThreshold(int value) {
+        THROW_ON_CONFIG_EXCEPTION_THRESHOLD.set(value);
     }
 
     public static void resetCounters() {

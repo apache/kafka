@@ -24,7 +24,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 
-import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -488,19 +487,7 @@ public class AbstractConfig {
             }
         } catch (Exception e) {
             for (Object object : objects) {
-                if (object instanceof AutoCloseable) {
-                    try {
-                        ((AutoCloseable) object).close();
-                    } catch (Exception ex) {
-                        log.error(String.format("Close exception on %s", object.getClass().getName()), ex);
-                    }
-                } else if (object instanceof Closeable) {
-                    try {
-                        ((Closeable) object).close();
-                    } catch (Exception ex) {
-                        log.error(String.format("Close exception on %s", object.getClass().getName()), ex);
-                    }
-                }
+                Utils.closeQuietly((AutoCloseable) object, "AutoCloseable object constructed and configured during failed call to getConfiguredInstances");
             }
             throw e;
         }

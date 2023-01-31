@@ -514,7 +514,7 @@ public class KafkaConsumerTest {
                     + "org.apache.kafka.test.MockConsumerInterceptor, "
                     + "org.apache.kafka.test.MockConsumerInterceptor");
 
-            MockConsumerInterceptor.setThrowConfigExceptionThreshold(onSelectedInterceptor);
+            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(onSelectedInterceptor);
 
             assertThrows(KafkaException.class, () -> {
                 new KafkaConsumer<>(

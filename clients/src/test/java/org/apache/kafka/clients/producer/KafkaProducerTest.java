@@ -137,6 +137,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
+    private final int onSelectedInterceptor = 3;
     private final String topic = "topic";
     private final Collection<Node> nodes = Collections.singletonList(NODE);
     private final Cluster emptyCluster = new Cluster(
@@ -569,7 +570,30 @@ public class KafkaProducerTest {
             MockProducerInterceptor.resetCounters();
         }
     }
+    @Test
+    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
+        try {
+            Properties props = new Properties();
+            props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor, "
+                    + "org.apache.kafka.test.MockProducerInterceptor, "
+                    + "org.apache.kafka.test.MockProducerInterceptor");
+            props.setProperty(MockProducerInterceptor.APPEND_STRING_PROP, "something");
 
+            MockProducerInterceptor.setThrowOnConfigExceptionThreshold(onSelectedInterceptor);
+
+            assertThrows(KafkaException.class, () -> {
+                new KafkaProducer<>(
+                        props, new StringSerializer(), new StringSerializer());
+            });
+
+            assertEquals(3, MockProducerInterceptor.CONFIG_COUNT.get());
+            assertEquals(2, MockProducerInterceptor.CLOSE_COUNT.get());
+
+        } finally {
+            MockProducerInterceptor.resetCounters();
+        }
+    }
     @Test
     public void testPartitionerClose() {
         try {

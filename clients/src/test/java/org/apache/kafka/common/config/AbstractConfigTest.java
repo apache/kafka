@@ -26,6 +26,8 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.config.provider.MockVaultConfigProvider;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
+import org.apache.kafka.test.MockConsumerInterceptor;
+import org.apache.kafka.test.MockProducerInterceptor;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -54,6 +56,12 @@ public class AbstractConfigTest {
         testInvalidInputs("org.apache.kafka.clients.producer.unknown-metrics-reporter");
         testInvalidInputs("test1,test2");
         testInvalidInputs("org.apache.kafka.common.metrics.FakeMetricsReporter,");
+        testInvalidInputs(TestInterceptorConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor, "
+                + "org.apache.kafka.test.MockConsumerInterceptor, "
+                + "org.apache.kafka.test.MockConsumerInterceptor",  org.apache.kafka.test.MockConsumerInterceptor.class);
+        testInvalidInputs(TestInterceptorConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor, "
+                + "org.apache.kafka.test.MockProducerInterceptor, "
+                + "org.apache.kafka.test.MockProducerInterceptor",  org.apache.kafka.test.MockProducerInterceptor.class);
     }
 
     @Test
@@ -256,6 +264,30 @@ public class AbstractConfigTest {
             fail("Expected a config exception due to invalid props :" + props);
         } catch (KafkaException e) {
             // this is good
+        }
+    }
+    private <T> void testInvalidInputs(String classesConfig, String configValue, Class<T> configurableClass) {
+        Properties props = new Properties();
+        props.setProperty(TestInterceptorConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(TestInterceptorConfig.CLIENT_ID_CONFIG, "fake client");
+
+        if (configurableClass.getName().equals("org.apache.kafka.test.MockProducerInterceptor")) {
+            props.setProperty(MockProducerInterceptor.APPEND_STRING_PROP, "something");
+        }
+        props.put(classesConfig, configValue);
+        TestInterceptorConfig testInterceptorConfig = new TestInterceptorConfig(props);
+
+        try {
+            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(testInterceptorConfig.getOnSelectedInterceptor());
+            testInterceptorConfig.getConfiguredInstances(classesConfig, configurableClass);
+        } catch (KafkaException e) {
+            if (configurableClass.getName().equals("org.apache.kafka.test.MockConsumerInterceptor")) {
+                assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
+                assertEquals(2, MockConsumerInterceptor.CLOSE_COUNT.get());
+            } else {
+                assertEquals(3, MockProducerInterceptor.CONFIG_COUNT.get());
+                assertEquals(2, MockProducerInterceptor.CLOSE_COUNT.get());
+            }
         }
     }
 
@@ -585,7 +617,6 @@ public class AbstractConfigTest {
 
         public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
         private static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters.";
-
         static {
             CONFIG = new ConfigDef().define(METRIC_REPORTER_CLASSES_CONFIG,
                                             Type.LIST,
@@ -596,6 +627,31 @@ public class AbstractConfigTest {
 
         public TestConfig(Map<?, ?> props) {
             super(CONFIG, props);
+        }
+    }
+
+    private static class TestInterceptorConfig extends AbstractConfig {
+        private final int onSelectedInterceptor = 3;
+        private static final ConfigDef CONFIG;
+        private static final String INTERCEPTOR_CLASSES_CONFIG_DOC = "A list of classes to use as interceptors.";
+
+        public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
+        public static final String CLIENT_ID_CONFIG = "client.id";
+        public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
+
+        static {
+            CONFIG = new ConfigDef().define(INTERCEPTOR_CLASSES_CONFIG,
+                    Type.LIST,
+                    "",
+                    Importance.LOW,
+                    INTERCEPTOR_CLASSES_CONFIG_DOC);
+        }
+        public TestInterceptorConfig(Map<?, ?> props) {
+            super(CONFIG, props);
+        }
+
+        public int getOnSelectedInterceptor() {
+            return onSelectedInterceptor;
         }
     }
 
