@@ -55,6 +55,8 @@ public interface EventQueue extends AutoCloseable {
         public void handleException(Throwable e) {
             if (e instanceof RejectedExecutionException) {
                 log.info("Not processing {} because the event queue is closed.", this);
+            } else if (e instanceof QueueClosingException) {
+                log.info("Not processing {} because the event queue is shutting down.", this);
             } else {
                 log.error("Unexpected error handling {}", this, e);
             }
