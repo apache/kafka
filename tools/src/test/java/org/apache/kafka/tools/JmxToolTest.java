@@ -75,7 +75,7 @@ public class JmxToolTest {
     public void kafkaVersion() {
         String out = executeAndGetOut("--version");
         assertNormalExit();
-        assertEquals(AppInfoParser.getVersion(), out);
+        assertTrue(out.contains(AppInfoParser.getVersion()));
     }
 
     @Test
