@@ -389,27 +389,27 @@ public class AbstractConfig {
     private <T> T getConfiguredInstance(Object klass, Class<T> t, Map<String, Object> configPairs) {
         if (klass == null)
             return null;
-
-        Object o;
-        if (klass instanceof String) {
-            try {
-                o = Utils.newInstance((String) klass, t);
-            } catch (ClassNotFoundException e) {
-                throw new KafkaException("Class " + klass + " cannot be found", e);
-            }
-        } else if (klass instanceof Class<?>) {
-            o = Utils.newInstance((Class<?>) klass);
-        } else
-            throw new KafkaException("Unexpected element of type " + klass.getClass().getName() + ", expected String or Class");
-        if (!t.isInstance(o))
-            throw new KafkaException(klass + " is not an instance of " + t.getName());
-        if (o instanceof Configurable)
-            try {
+        Object o = null;
+        try {
+            if (klass instanceof String) {
+                try {
+                    o = Utils.newInstance((String) klass, t);
+                } catch (ClassNotFoundException e) {
+                    throw new KafkaException("Class " + klass + " cannot be found", e);
+                }
+            } else if (klass instanceof Class<?>) {
+                o = Utils.newInstance((Class<?>) klass);
+            } else
+                throw new KafkaException("Unexpected element of type " + klass.getClass().getName() + ", expected String or Class");
+            if (!t.isInstance(o))
+                throw new KafkaException(klass + " is not an instance of " + t.getName());
+            if (o instanceof Configurable)
                 ((Configurable) o).configure(configPairs);
-            } catch (Exception e) {
-                maybeClose(o, "AutoCloseable object constructed and configured during failed call to getConfiguredInstance");
-                throw e;
-            }
+        } catch (Exception e) {
+            maybeClose(o, "AutoCloseable object constructed and configured during failed call to getConfiguredInstance");
+            throw e;
+        }
+
 
         return t.cast(o);
     }
