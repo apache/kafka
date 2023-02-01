@@ -792,6 +792,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     keyValue -> producerFutures.add(configLog.send(keyValue.key, keyValue.value))
             );
 
+            timer.update();
             for (Future<RecordMetadata> future : producerFutures) {
                 future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
                 timer.update();
@@ -810,12 +811,11 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     keyValue -> fencableProducer.send(new ProducerRecord<>(topic, keyValue.key, keyValue.value))
             );
             fencableProducer.commitTransaction();
+            timer.update();
         } catch (Exception e) {
             log.warn("Failed to perform fencable send to config topic", e);
             relinquishWritePrivileges();
             throw new PrivilegedWriteException("Failed to perform fencable send to config topic", e);
-        } finally {
-            timer.update();
         }
     }
 
