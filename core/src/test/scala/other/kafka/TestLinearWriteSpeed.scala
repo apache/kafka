@@ -31,6 +31,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
 import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
+import org.apache.kafka.server.util.CommandLineUtils
 
 import scala.math._
 

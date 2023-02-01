@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.metadata.migration;
 
+import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
@@ -28,18 +30,22 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -403,7 +409,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 AtomicInteger count = new AtomicInteger(0);
                 zkMigrationClient.readAllMetadata(batch -> {
                     try {
-                        log.info("Migrating {} records from ZK: {}", batch.size(), batch);
+                        if (log.isTraceEnabled()) {
+                            log.trace("Migrating {} records from ZK: {}", batch.size(), recordBatchToString(batch));
+                        } else {
+                            log.info("Migrating {} records from ZK", batch.size());
+                        }
                         CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
                         count.addAndGet(batch.size());
                         future.get();
@@ -446,9 +456,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             // Ignore sending RPCs to the brokers since we're no longer in the state.
             if (migrationState == MigrationState.KRAFT_CONTROLLER_TO_BROKER_COMM) {
                 if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
+                    log.trace("Sending RPCs to broker before moving to dual-write mode using " +
+                        "at offset and epoch {}", image.highestOffsetAndEpoch());
                     propagator.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.zkControllerEpoch());
                     // Migration leadership state doesn't change since we're not doing any Zk writes.
                     transitionTo(MigrationState.DUAL_WRITE);
+                } else {
+                    log.trace("Ignoring using metadata image since migration leadership state is at a greater offset and epoch {}",
+                        migrationLeadershipState.offsetAndEpoch());
                 }
             }
         }
@@ -470,10 +485,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void run() throws Exception {
             KRaftMigrationDriver.this.image = image;
+            String metadataType = isSnapshot ? "snapshot" : "delta";
 
             if (migrationState != MigrationState.DUAL_WRITE) {
-                log.trace("Received metadata change, but the controller is not in dual-write " +
-                        "mode. Ignoring the change to be replicated to Zookeeper");
+                log.trace("Received metadata {}, but the controller is not in dual-write " +
+                    "mode. Ignoring the change to be replicated to Zookeeper", metadataType);
                 return;
             }
             if (delta.featuresDelta() != null) {
@@ -499,16 +515,60 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     });
                 }
 
+                // For configs and client quotas, we need to send all of the data to the ZK client since we persist
+                // everything for a given entity in a single ZK node.
+                if (delta.configsDelta() != null) {
+                    delta.configsDelta().changes().forEach((configResource, configDelta) ->
+                        apply("Updating config resource " + configResource, migrationState ->
+                            zkMigrationClient.writeConfigs(configResource, image.configs().configMapForResource(configResource), migrationState)));
+                }
 
-                apply("Write MetadataDelta to Zk", state -> zkMigrationClient.writeMetadataDeltaToZookeeper(delta, image, state));
+                if (delta.clientQuotasDelta() != null) {
+                    delta.clientQuotasDelta().changes().forEach((clientQuotaEntity, clientQuotaDelta) -> {
+                        Map<String, Double> quotaMap = image.clientQuotas().entities().get(clientQuotaEntity).quotaMap();
+                        apply("Updating client quota " + clientQuotaEntity, migrationState ->
+                            zkMigrationClient.writeClientQuotas(clientQuotaEntity.entries(), quotaMap, migrationState));
+                    });
+                }
+
+                if (delta.producerIdsDelta() != null) {
+                    apply("Updating next producer ID", migrationState ->
+                        zkMigrationClient.writeProducerId(delta.producerIdsDelta().nextProducerId(), migrationState));
+                }
+
                 // TODO: Unhappy path: Probably relinquish leadership and let new controller
                 //  retry the write?
+                log.trace("Sending RPCs to brokers for metadata {}.", metadataType);
                 propagator.sendRPCsToBrokersFromMetadataDelta(delta, image,
                         migrationLeadershipState.zkControllerEpoch());
             } else {
-                String metadataType = isSnapshot ? "snapshot" : "delta";
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
             }
         }
+    }
+
+    static String recordBatchToString(Collection<ApiMessageAndVersion> batch) {
+        String batchString = batch.stream().map(apiMessageAndVersion -> {
+            if (apiMessageAndVersion.message().apiKey() == MetadataRecordType.CONFIG_RECORD.id()) {
+                StringBuilder sb = new StringBuilder();
+                sb.append("ApiMessageAndVersion(");
+                ConfigRecord record = (ConfigRecord) apiMessageAndVersion.message();
+                sb.append("ConfigRecord(");
+                sb.append("resourceType=");
+                sb.append(record.resourceType());
+                sb.append(", resourceName=");
+                sb.append(record.resourceName());
+                sb.append(", name=");
+                sb.append(record.name());
+                sb.append(")");
+                sb.append(" at version ");
+                sb.append(apiMessageAndVersion.version());
+                sb.append(")");
+                return sb.toString();
+            } else {
+                return apiMessageAndVersion.toString();
+            }
+        }).collect(Collectors.joining(","));
+        return "[" + batchString + "]";
     }
 }

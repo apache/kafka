@@ -1536,6 +1536,7 @@ project(':server-common') {
     api project(':clients')
     implementation libs.slf4jApi
     implementation libs.metrics
+    implementation libs.joptSimple
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
@@ -2068,6 +2069,10 @@ project(':streams:streams-scala') {
 
   javadoc {
     include "**/org/apache/kafka/streams/scala/**"
+  }
+
+  scaladoc {
+    scalaDocOptions.additionalParameters = ["-no-link-warnings"]
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
