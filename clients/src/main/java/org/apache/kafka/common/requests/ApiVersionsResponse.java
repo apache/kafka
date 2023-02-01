@@ -116,7 +116,23 @@ public class ApiVersionsResponse extends AbstractResponse {
         int throttleTimeMs,
         ApiMessageType.ListenerType listenerType
     ) {
-        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType, false), Features.emptySupportedFeatures());
+        return createApiVersionsResponse(
+            throttleTimeMs,
+            filterApis(RecordVersion.current(), listenerType, true),
+            Features.emptySupportedFeatures()
+        );
+    }
+
+    public static ApiVersionsResponse defaultApiVersionsResponse(
+        int throttleTimeMs,
+        ApiMessageType.ListenerType listenerType,
+        boolean enableUnstableLastVersion
+    ) {
+        return createApiVersionsResponse(
+            throttleTimeMs,
+            filterApis(RecordVersion.current(), listenerType, enableUnstableLastVersion),
+            Features.emptySupportedFeatures()
+        );
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(

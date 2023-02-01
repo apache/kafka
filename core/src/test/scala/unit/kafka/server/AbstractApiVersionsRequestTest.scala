@@ -96,9 +96,9 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       "API keys in ApiVersionsResponse must match API keys supported by broker.")
 
     val defaultApiVersionsResponse = if (!cluster.isKRaftTest) {
-      ApiVersionsResponse.defaultApiVersionsResponse(ListenerType.ZK_BROKER)
+      ApiVersionsResponse.defaultApiVersionsResponse(0, ListenerType.ZK_BROKER, enableUnstableLastVersion)
     } else if(cluster.controllerListenerName().asScala.contains(listenerName)) {
-      ApiVersionsResponse.defaultApiVersionsResponse(ListenerType.CONTROLLER)
+      ApiVersionsResponse.defaultApiVersionsResponse(0, ListenerType.CONTROLLER, enableUnstableLastVersion)
     } else {
       ApiVersionsResponse.createApiVersionsResponse(0, expectedApis)
     }

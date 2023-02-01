@@ -81,6 +81,7 @@ class RequestQuotaTest extends BaseRequestTest {
     properties.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[RequestQuotaTest.TestAuthorizer].getName)
     properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
+    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
   }
 
   @BeforeEach
@@ -643,6 +644,10 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.ALLOCATE_PRODUCER_IDS =>
           new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
+
+        case ApiKeys.CONSUMER_GROUP_HEARTBEAT =>
+          new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
