@@ -50,6 +50,8 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSinkConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSourceConnector;
 import org.apache.kafka.connect.storage.PrivilegedWriteException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
@@ -59,10 +61,8 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
-import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
@@ -898,14 +898,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
+    protected Map<String, ConfigValue> validateSinkConnectorConfig(IsolatedSinkConnector connector, ConfigDef configDef, Map<String, String> config) {
         Map<String, ConfigValue> result = super.validateSinkConnectorConfig(connector, configDef, config);
         validateSinkConnectorGroupId(result);
         return result;
     }
 
     @Override
-    protected Map<String, ConfigValue> validateSourceConnectorConfig(SourceConnector connector, ConfigDef configDef, Map<String, String> config) {
+    protected Map<String, ConfigValue> validateSourceConnectorConfig(IsolatedSourceConnector connector, ConfigDef configDef, Map<String, String> config) {
         Map<String, ConfigValue> result = super.validateSourceConnectorConfig(connector, configDef, config);
         validateSourceConnectorExactlyOnceSupport(config, result, connector);
         validateSourceConnectorTransactionBoundary(config, result, connector);
@@ -925,7 +925,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void validateSourceConnectorExactlyOnceSupport(
             Map<String, String> rawConfig,
             Map<String, ConfigValue> validatedConfig,
-            SourceConnector connector) {
+            IsolatedSourceConnector connector) {
         ConfigValue validatedExactlyOnceSupport = validatedConfig.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG);
         if (validatedExactlyOnceSupport.errorMessages().isEmpty()) {
             // Should be safe to parse the enum from the user-provided value since it's passed validation so far
@@ -972,7 +972,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void validateSourceConnectorTransactionBoundary(
             Map<String, String> rawConfig,
             Map<String, ConfigValue> validatedConfig,
-            SourceConnector connector) {
+            IsolatedSourceConnector connector) {
         ConfigValue validatedTransactionBoundary = validatedConfig.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG);
         if (validatedTransactionBoundary.errorMessages().isEmpty()) {
             // Should be safe to parse the enum from the user-provided value since it's passed validation so far

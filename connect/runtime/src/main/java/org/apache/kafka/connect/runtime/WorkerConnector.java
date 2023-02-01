@@ -17,17 +17,18 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
+import org.apache.kafka.connect.runtime.isolation.IsolatedConnector;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.sink.SinkConnectorContext;
 import org.apache.kafka.connect.source.SourceConnectorContext;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.util.Callback;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,7 +68,7 @@ public class WorkerConnector implements Runnable {
     private final ConnectorStatus.Listener statusListener;
     private final ClassLoader loader;
     private final CloseableConnectorContext ctx;
-    private final Connector connector;
+    private final IsolatedConnector<?> connector;
     private final ConnectorMetricsGroup metrics;
     private final AtomicReference<TargetState> pendingTargetStateChange;
     private final AtomicReference<Callback<TargetState>> pendingStateChangeCallback;
@@ -80,7 +81,7 @@ public class WorkerConnector implements Runnable {
     private final ConnectorOffsetBackingStore offsetStore;
 
     public WorkerConnector(String connName,
-                           Connector connector,
+                           IsolatedConnector<?> connector,
                            ConnectorConfig connectorConfig,
                            CloseableConnectorContext ctx,
                            ConnectMetrics metrics,
@@ -366,11 +367,11 @@ public class WorkerConnector implements Runnable {
     }
 
     public boolean isSinkConnector() {
-        return ConnectUtils.isSinkConnector(connector);
+        return connector.type() == PluginType.SINK;
     }
 
     public boolean isSourceConnector() {
-        return ConnectUtils.isSourceConnector(connector);
+        return connector.type() == PluginType.SOURCE;
     }
 
     protected String connectorType() {
@@ -381,7 +382,7 @@ public class WorkerConnector implements Runnable {
         return "unknown";
     }
 
-    public Connector connector() {
+    public IsolatedConnector<?> connector() {
         return connector;
     }
 
@@ -419,8 +420,14 @@ public class WorkerConnector implements Runnable {
             metricGroup.close();
 
             metricGroup.addImmutableValueMetric(registry.connectorType, connectorType());
-            metricGroup.addImmutableValueMetric(registry.connectorClass, connector.getClass().getName());
-            metricGroup.addImmutableValueMetric(registry.connectorVersion, connector.version());
+            metricGroup.addImmutableValueMetric(registry.connectorClass, connector.pluginClass().getName());
+            String version;
+            try {
+                version = connector.version();
+            } catch (Exception e) {
+                version = DelegatingClassLoader.UNDEFINED_VERSION;
+            }
+            metricGroup.addImmutableValueMetric(registry.connectorVersion, version);
             metricGroup.addValueMetric(registry.connectorStatus, now -> state.toString().toLowerCase(Locale.getDefault()));
         }
 

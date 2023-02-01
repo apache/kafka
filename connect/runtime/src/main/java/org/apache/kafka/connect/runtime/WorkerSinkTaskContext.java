@@ -56,7 +56,11 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
 
     @Override
     public Map<String, String> configs() {
-        return configState.taskConfig(sinkTask.id());
+        try {
+            return configState.taskConfig(sinkTask.id());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override

@@ -19,10 +19,12 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.isolation.IsolatedConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSinkConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSourceConnector;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkConnectorContext;
-import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceConnectorContext;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
@@ -38,6 +40,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.stubbing.OngoingStubbing;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -69,14 +72,14 @@ public class WorkerConnectorTest {
     public MockConnectMetrics metrics;
 
     @Mock private Plugins plugins;
-    @Mock private SourceConnector sourceConnector;
-    @Mock private SinkConnector sinkConnector;
+    @Mock private IsolatedSourceConnector sourceConnector;
+    @Mock private IsolatedSinkConnector sinkConnector;
     @Mock private CloseableConnectorContext ctx;
     @Mock private ConnectorStatus.Listener listener;
     @Mock private CloseableOffsetStorageReader offsetStorageReader;
     @Mock private ConnectorOffsetBackingStore offsetStore;
     @Mock private ClassLoader classLoader;
-    private Connector connector;
+    private IsolatedConnector<?> connector;
 
     @Before
     public void setup() {
@@ -90,11 +93,9 @@ public class WorkerConnectorTest {
     }
 
     @Test
-    public void testInitializeFailure() {
+    public void testInitializeFailure() throws Exception {
         RuntimeException exception = new RuntimeException();
-        connector = sourceConnector;
-
-        when(connector.version()).thenReturn(VERSION);
+        useSourceConnector();
         doThrow(exception).when(connector).initialize(any());
 
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
@@ -111,11 +112,9 @@ public class WorkerConnectorTest {
     }
 
     @Test
-    public void testFailureIsFinalState() {
+    public void testFailureIsFinalState() throws Exception {
         RuntimeException exception = new RuntimeException();
-        connector = sinkConnector;
-
-        when(connector.version()).thenReturn(VERSION);
+        useSinkConnector();
         doThrow(exception).when(connector).initialize(any());
 
         Callback<TargetState> onStateChange = mockCallback();
@@ -139,10 +138,8 @@ public class WorkerConnectorTest {
     }
 
     @Test
-    public void testStartupAndShutdown() {
-        connector = sourceConnector;
-
-        when(connector.version()).thenReturn(VERSION);
+    public void testStartupAndShutdown() throws Exception {
+        useSourceConnector();
 
         Callback<TargetState> onStateChange = mockCallback();
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
@@ -165,9 +162,8 @@ public class WorkerConnectorTest {
     }
 
     @Test
-    public void testStartupAndPause() {
-        connector = sinkConnector;
-        when(connector.version()).thenReturn(VERSION);
+    public void testStartupAndPause() throws Exception {
+        useSinkConnector();
 
         Callback<TargetState> onStateChange = mockCallback();
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, null, null, classLoader);
@@ -196,10 +192,8 @@ public class WorkerConnectorTest {
     }
 
     @Test
-    public void testOnResume() {
-        connector = sourceConnector;
-
-        when(connector.version()).thenReturn(VERSION);
+    public void testOnResume() throws Exception {
+        useSourceConnector();
 
         Callback<TargetState> onStateChange = mockCallback();
 
@@ -228,9 +222,8 @@ public class WorkerConnectorTest {
     }
 
     @Test
-    public void testStartupPaused() {
-        connector = sinkConnector;
-        when(connector.version()).thenReturn(VERSION);
+    public void testStartupPaused() throws Exception {
+        useSinkConnector();
 
         Callback<TargetState> onStateChange = mockCallback();
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, null, null, classLoader);
@@ -253,11 +246,9 @@ public class WorkerConnectorTest {
     }
 
     @Test
-    public void testStartupFailure() {
+    public void testStartupFailure() throws Exception {
         RuntimeException exception = new RuntimeException();
-        connector = sinkConnector;
-
-        when(connector.version()).thenReturn(VERSION);
+        useSinkConnector();
         doThrow(exception).when(connector).start(CONFIG);
 
         Callback<TargetState> onStateChange = mockCallback();
@@ -281,11 +272,9 @@ public class WorkerConnectorTest {
     }
 
     @Test
-    public void testShutdownFailure() {
+    public void testShutdownFailure() throws Exception {
         RuntimeException exception = new RuntimeException();
-        connector = sourceConnector;
-
-        when(connector.version()).thenReturn(VERSION);
+        useSourceConnector();
 
         doThrow(exception).when(connector).stop();
 
@@ -310,10 +299,8 @@ public class WorkerConnectorTest {
     }
 
     @Test
-    public void testTransitionStartedToStarted() {
-        connector = sourceConnector;
-
-        when(connector.version()).thenReturn(VERSION);
+    public void testTransitionStartedToStarted() throws Exception {
+        useSourceConnector();
 
         Callback<TargetState> onStateChange = mockCallback();
 
@@ -339,9 +326,8 @@ public class WorkerConnectorTest {
     }
 
     @Test
-    public void testTransitionPausedToPaused() {
-        connector = sourceConnector;
-        when(connector.version()).thenReturn(VERSION);
+    public void testTransitionPausedToPaused() throws Exception {
+        useSourceConnector();
 
         Callback<TargetState> onStateChange = mockCallback();
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
@@ -371,9 +357,9 @@ public class WorkerConnectorTest {
     }
 
     @Test
-    public void testFailConnectorThatIsNeitherSourceNorSink() {
-        connector = mock(Connector.class);
-        when(connector.version()).thenReturn(VERSION);
+    public void testFailConnectorThatIsNeitherSourceNorSink() throws Exception {
+        useSourceConnector();
+        when(connector.type()).thenReturn(PluginType.UNKNOWN);
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
@@ -442,9 +428,26 @@ public class WorkerConnectorTest {
         return mock(Callback.class);
     }
 
-    private void verifyInitialize() {
+    private void useSinkConnector() throws Exception {
+        connector = sinkConnector;
+        when(connector.version()).thenReturn(VERSION);
+        OngoingStubbing<Class<?>> pluginClass = when(connector.pluginClass());
+        pluginClass.thenReturn(SampleSinkConnector.class);
+        when(connector.type()).thenReturn(PluginType.SINK);
+    }
+
+    private void useSourceConnector() throws Exception {
+        connector = sourceConnector;
+        when(connector.version()).thenReturn(VERSION);
+        OngoingStubbing<Class<?>> pluginClass = when(connector.pluginClass());
+        pluginClass.thenReturn(SampleSourceConnector.class);
+        when(connector.type()).thenReturn(PluginType.SOURCE);
+    }
+
+    private void verifyInitialize() throws Exception {
+        verify(connector).pluginClass();
         verify(connector).version();
-        if (connector instanceof SourceConnector) {
+        if (connector instanceof IsolatedSourceConnector) {
             verify(offsetStore).start();
             verify(connector).initialize(any(SourceConnectorContext.class));
         } else {
@@ -452,13 +455,13 @@ public class WorkerConnectorTest {
         }
     }
 
-    private void verifyCleanShutdown(boolean started) {
+    private void verifyCleanShutdown(boolean started) throws Exception {
         verifyShutdown(true, started);
     }
 
-    private void verifyShutdown(boolean clean, boolean started) {
+    private void verifyShutdown(boolean clean, boolean started) throws Exception {
         verify(ctx).close();
-        if (connector instanceof SourceConnector) {
+        if (connector instanceof IsolatedSourceConnector) {
             verify(offsetStorageReader).close();
             verify(offsetStore).stop();
         }

@@ -40,7 +40,11 @@ import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.WorkerConnector;
 import org.apache.kafka.connect.runtime.distributed.SampleConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.runtime.isolation.IsolatedConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSinkConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSourceConnector;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -60,6 +64,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
+import org.easymock.IExpectationSetters;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -108,7 +113,7 @@ public class StandaloneHerderTest {
 
     private StandaloneHerder herder;
 
-    private Connector connector;
+    private IsolatedConnector<?> connector;
     @Mock protected Worker worker;
     @Mock protected WorkerConfigTransformer transformer;
     @Mock private Plugins plugins;
@@ -122,7 +127,7 @@ public class StandaloneHerderTest {
         noneConnectorClientConfigOverridePolicy = new SampleConnectorClientConfigOverridePolicy();
 
     @Before
-    public void setup() {
+    public void setup() throws Exception {
         worker = PowerMock.createMock(Worker.class);
         String[] methodNames = new String[]{"connectorType", "buildRestartPlan", "recordRestarting"};
         herder = PowerMock.createPartialMock(StandaloneHerder.class, methodNames,
@@ -138,12 +143,10 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateSourceConnector() throws Exception {
-        connector = PowerMock.createMock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
-        expectConfigValidation(connectorMock, true, config);
+        expectConfigValidation(true, SourceSink.SOURCE, config);
 
         PowerMock.replayAll();
 
@@ -155,19 +158,22 @@ public class StandaloneHerderTest {
     }
 
     @Test
-    public void testCreateConnectorFailedValidation() {
+    public void testCreateConnectorFailedValidation() throws Exception {
         // Basic validation should be performed and return an error, but should still evaluate the connector's config
-        connector = PowerMock.createMock(BogusSourceConnector.class);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
         config.remove(ConnectorConfig.NAME_CONFIG);
 
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
+        IsolatedConnector<?> connectorMock = PowerMock.createMock(IsolatedSourceConnector.class);
         EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
         final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
         EasyMock.expect(transformer.transform(EasyMock.capture(configCapture))).andAnswer(configCapture::getValue);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(4);
-        EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
+        IExpectationSetters<IsolatedConnector<?>> newConnector = EasyMock.expect(plugins.newConnector(EasyMock.anyString()));
+        newConnector.andReturn(connectorMock);
+        EasyMock.expect(connectorMock.type()).andReturn(PluginType.SOURCE);
+        IExpectationSetters<Class<?>> pluginClass = EasyMock.expect(connectorMock.pluginClass());
+        pluginClass.andReturn(SourceConnector.class).anyTimes();
         EasyMock.expect(plugins.connectorLoader(EasyMock.anyString())).andReturn(pluginLoader);
         EasyMock.expect(plugins.withClassLoader(pluginLoader)).andReturn(loaderSwap);
 
@@ -191,13 +197,11 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateConnectorAlreadyExists() throws Throwable {
-        connector = PowerMock.createMock(BogusSourceConnector.class);
         // First addition should succeed
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
-        expectConfigValidation(connectorMock, true, config, config);
+        expectConfigValidation(true, SourceSink.SOURCE, config, config);
 
         EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
         final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
@@ -227,12 +231,10 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateSinkConnector() throws Exception {
-        connector = PowerMock.createMock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> config = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = PowerMock.createMock(SinkConnector.class);
-        expectConfigValidation(connectorMock, true, config);
+        expectConfigValidation(true, SourceSink.SINK, config);
         PowerMock.replayAll();
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
@@ -244,12 +246,10 @@ public class StandaloneHerderTest {
 
     @Test
     public void testDestroyConnector() throws Exception {
-        connector = PowerMock.createMock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
-        expectConfigValidation(connectorMock, true, config);
+        expectConfigValidation(true, SourceSink.SOURCE, config);
 
         EasyMock.expect(statusBackingStore.getAll(CONNECTOR_NAME)).andReturn(Collections.emptyList());
         statusBackingStore.put(new ConnectorStatus(CONNECTOR_NAME, AbstractStatus.State.DESTROYED, WORKER_ID, 0));
@@ -285,8 +285,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
-        expectConfigValidation(connectorMock, true, config);
+        expectConfigValidation(true, SourceSink.SOURCE, config);
 
         worker.stopAndAwaitConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall();
@@ -323,8 +322,7 @@ public class StandaloneHerderTest {
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
-        expectConfigValidation(connectorMock, true, config);
+        expectConfigValidation(true, SourceSink.SOURCE, config);
 
         worker.stopAndAwaitConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall();
@@ -369,8 +367,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
-        expectConfigValidation(connectorMock, true, config);
+        expectConfigValidation(true, SourceSink.SOURCE, config);
 
         worker.stopAndAwaitConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall();
@@ -408,8 +405,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
-        expectConfigValidation(connectorMock, true, connectorConfig);
+        expectConfigValidation(true, SourceSink.SOURCE, connectorConfig);
 
         worker.stopAndAwaitTask(taskId);
         EasyMock.expectLastCall();
@@ -449,8 +445,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
-        expectConfigValidation(connectorMock, true, connectorConfig);
+        expectConfigValidation(true, SourceSink.SOURCE, connectorConfig);
 
         worker.stopAndAwaitTask(taskId);
         EasyMock.expectLastCall();
@@ -506,12 +501,10 @@ public class StandaloneHerderTest {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
         EasyMock.expect(herder.buildRestartPlan(restartRequest)).andReturn(Optional.empty()).anyTimes();
 
-        connector = PowerMock.createMock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = PowerMock.createMock(SinkConnector.class);
-        expectConfigValidation(connectorMock, true, connectorConfig);
+        expectConfigValidation(true, SourceSink.SINK, connectorConfig);
         PowerMock.replayAll();
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
@@ -537,12 +530,10 @@ public class StandaloneHerderTest {
         EasyMock.expect(herder.buildRestartPlan(restartRequest))
                 .andReturn(Optional.of(restartPlan)).anyTimes();
 
-        connector = PowerMock.createMock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = PowerMock.createMock(SinkConnector.class);
-        expectConfigValidation(connectorMock, true, connectorConfig);
+        expectConfigValidation(true, SourceSink.SINK, connectorConfig);
 
         PowerMock.replayAll();
 
@@ -570,12 +561,10 @@ public class StandaloneHerderTest {
         herder.onRestart(CONNECTOR_NAME);
         EasyMock.expectLastCall();
 
-        connector = PowerMock.createMock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = PowerMock.createMock(SinkConnector.class);
-        expectConfigValidation(connectorMock, true, connectorConfig);
+        expectConfigValidation(true, SourceSink.SINK, connectorConfig);
 
         worker.stopAndAwaitConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall();
@@ -618,12 +607,10 @@ public class StandaloneHerderTest {
         herder.onRestart(taskId);
         EasyMock.expectLastCall();
 
-        connector = PowerMock.createMock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = PowerMock.createMock(SinkConnector.class);
-        expectConfigValidation(connectorMock, true, connectorConfig);
+        expectConfigValidation(true, SourceSink.SINK, connectorConfig);
 
         worker.stopAndAwaitTasks(Collections.singletonList(taskId));
         EasyMock.expectLastCall();
@@ -674,12 +661,10 @@ public class StandaloneHerderTest {
         herder.onRestart(taskId);
         EasyMock.expectLastCall();
 
-        connector = PowerMock.createMock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = PowerMock.createMock(SinkConnector.class);
-        expectConfigValidation(connectorMock, true, connectorConfig);
+        expectConfigValidation(true, SourceSink.SINK, connectorConfig);
 
         worker.stopAndAwaitConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall();
@@ -722,12 +707,10 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateAndStop() throws Exception {
-        connector = PowerMock.createMock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
-        expectConfigValidation(connectorMock, true, connectorConfig);
+        expectConfigValidation(true, SourceSink.SOURCE, connectorConfig);
 
         // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
         expectStop();
@@ -772,9 +755,8 @@ public class StandaloneHerderTest {
         EasyMock.expectLastCall();
 
         // Create connector
-        connector = PowerMock.createMock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
-        expectConfigValidation(connector, true, connConfig);
+        expectConfigValidation(true, SourceSink.SOURCE, connConfig);
 
         // Validate accessors with 1 connector
         listConnectorsCb.onCompletion(null, singleton(CONNECTOR_NAME));
@@ -827,10 +809,8 @@ public class StandaloneHerderTest {
         // Callback<Herder.Created<ConnectorInfo>> putConnectorConfigCb = PowerMock.createMock(Callback.class);
 
         // Create
-        connector = PowerMock.createMock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
-        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
-        expectConfigValidation(connectorMock, true, connConfig);
+        expectConfigValidation(true, SourceSink.SOURCE, connConfig);
 
         // Should get first config
         connectorConfigCb.onCompletion(null, connConfig);
@@ -850,7 +830,7 @@ public class StandaloneHerderTest {
         EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, newConnConfig, true)))
                 .andReturn(singletonList(taskConfig(SourceSink.SOURCE)));
 
-        expectConfigValidation(connectorMock, false, newConnConfig);
+        expectConfigValidation(false, SourceSink.SOURCE, newConnConfig);
         connectorConfigCb.onCompletion(null, newConnConfig);
         EasyMock.expectLastCall();
         EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
@@ -891,9 +871,9 @@ public class StandaloneHerderTest {
     public void testCorruptConfig() throws Throwable {
         Map<String, String> config = new HashMap<>();
         config.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
-        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSinkConnector.class.getName());
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SinkConnector.class.getName());
         config.put(SinkConnectorConfig.TOPICS_CONFIG, TOPICS_LIST_STR);
-        Connector connectorMock = PowerMock.createMock(SinkConnector.class);
+        IsolatedConnector<?> connectorMock = PowerMock.createMock(IsolatedSinkConnector.class);
         String error = "This is an error in your config!";
         List<String> errors = new ArrayList<>(singletonList(error));
         String key = "foo.invalid.key";
@@ -911,7 +891,11 @@ public class StandaloneHerderTest {
         EasyMock.expect(plugins.connectorLoader(EasyMock.anyString())).andReturn(pluginLoader);
         EasyMock.expect(plugins.withClassLoader(pluginLoader)).andReturn(loaderSwap);
         EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
+        IExpectationSetters<IsolatedConnector<?>> newConnector = EasyMock.expect(plugins.newConnector(EasyMock.anyString()));
+        newConnector.andReturn(connectorMock);
+        EasyMock.expect(connectorMock.type()).andReturn(PluginType.SINK);
+        IExpectationSetters<Class<?>> pluginClass = EasyMock.expect(connectorMock.pluginClass());
+        pluginClass.andReturn(SinkConnector.class);
         EasyMock.expect(connectorMock.config()).andStubReturn(configDef);
         loaderSwap.close();
         EasyMock.expectLastCall();
@@ -937,7 +921,7 @@ public class StandaloneHerderTest {
         PowerMock.verifyAll();
     }
 
-    private void expectAdd(SourceSink sourceSink) {
+    private void expectAdd(SourceSink sourceSink) throws Exception {
         Map<String, String> connectorProps = connectorConfig(sourceSink);
         ConnectorConfig connConfig = sourceSink == SourceSink.SOURCE ?
             new SourceConnectorConfig(plugins, connectorProps, true) :
@@ -985,9 +969,9 @@ public class StandaloneHerderTest {
         EasyMock.expect(herder.connectorType(EasyMock.capture(configCapture)))
             .andStubAnswer(() -> {
                 String connectorClass = configCapture.getValue().get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-                if (BogusSourceConnector.class.getName().equals(connectorClass)) {
+                if (SourceConnector.class.getName().equals(connectorClass)) {
                     return ConnectorType.SOURCE;
-                } else if (BogusSinkConnector.class.getName().equals(connectorClass)) {
+                } else if (SinkConnector.class.getName().equals(connectorClass)) {
                     return ConnectorType.SINK;
                 }
                 return ConnectorType.UNKNOWN;
@@ -1017,7 +1001,7 @@ public class StandaloneHerderTest {
     private static Map<String, String> connectorConfig(SourceSink sourceSink) {
         Map<String, String> props = new HashMap<>();
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
-        Class<? extends Connector> connectorClass = sourceSink == SourceSink.SINK ? BogusSinkConnector.class : BogusSourceConnector.class;
+        Class<? extends Connector> connectorClass = sourceSink == SourceSink.SINK ? SinkConnector.class : SourceConnector.class;
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         if (sourceSink == SourceSink.SINK) {
@@ -1033,7 +1017,7 @@ public class StandaloneHerderTest {
         HashMap<String, String> generatedTaskProps = new HashMap<>();
         // Connectors can add any settings, so these are arbitrary
         generatedTaskProps.put("foo", "bar");
-        Class<? extends Task> taskClass = sourceSink == SourceSink.SINK ? BogusSinkTask.class : BogusSourceTask.class;
+        Class<? extends Task> taskClass = sourceSink == SourceSink.SINK ? SinkTask.class : SourceTask.class;
         generatedTaskProps.put(TaskConfig.TASK_CLASS_CONFIG, taskClass.getName());
         if (sourceSink == SourceSink.SINK)
             generatedTaskProps.put(SinkTask.TOPICS_CONFIG, TOPICS_LIST_STR);
@@ -1041,10 +1025,10 @@ public class StandaloneHerderTest {
     }
 
     private void expectConfigValidation(
-            Connector connectorMock,
             boolean shouldCreateConnector,
+            SourceSink sourceSink,
             Map<String, String>... configs
-    ) {
+    ) throws Exception {
         // config validation
         EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
         final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
@@ -1053,28 +1037,22 @@ public class StandaloneHerderTest {
         EasyMock.expect(plugins.connectorLoader(EasyMock.anyString())).andReturn(pluginLoader);
         EasyMock.expect(plugins.withClassLoader(pluginLoader)).andReturn(loaderSwap);
         if (shouldCreateConnector) {
+            Class<? extends IsolatedConnector<? extends Connector>> isolatedConnector = sourceSink == SourceSink.SOURCE ? IsolatedSourceConnector.class : IsolatedSinkConnector.class;
+            connector = PowerMock.createMock(isolatedConnector);
             EasyMock.expect(worker.getPlugins()).andReturn(plugins);
-            EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
+            IExpectationSetters<IsolatedConnector<?>> newConnector = EasyMock.expect(plugins.newConnector(EasyMock.anyString()));
+            newConnector.andReturn(connector);
         }
-        EasyMock.expect(connectorMock.config()).andStubReturn(new ConfigDef());
+        EasyMock.expect(connector.config()).andStubReturn(new ConfigDef());
 
-        for (Map<String, String> config : configs)
-            EasyMock.expect(connectorMock.validate(config)).andReturn(new Config(Collections.emptyList()));
+        for (Map<String, String> config : configs) {
+            EasyMock.expect(connector.type()).andReturn(sourceSink == SourceSink.SOURCE ? PluginType.SOURCE : PluginType.SINK).times(1);
+            EasyMock.expect(connector.validate(config)).andReturn(new Config(Collections.emptyList()));
+            IExpectationSetters<Class<?>> pluginClass = EasyMock.expect(connector.pluginClass());
+            pluginClass.andReturn(sourceSink == SourceSink.SOURCE ? SourceConnector.class : SinkConnector.class)
+                    .times(sourceSink == SourceSink.SOURCE ? 2 : 1);
+        }
         loaderSwap.close();
         EasyMock.expectLastCall();
     }
-
-    // We need to use a real class here due to some issue with mocking java.lang.Class
-    private abstract class BogusSourceConnector extends SourceConnector {
-    }
-
-    private abstract class BogusSourceTask extends SourceTask {
-    }
-
-    private abstract class BogusSinkConnector extends SinkConnector {
-    }
-
-    private abstract class BogusSinkTask extends SourceTask {
-    }
-
 }
