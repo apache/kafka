@@ -226,13 +226,13 @@ public class MirrorSourceTask extends SourceTask {
                 Iterator<OffsetSync> syncIterator = pendingOffsetSyncs.values().iterator();
                 if (!syncIterator.hasNext()) {
                     // Nothing to sync
-                    log.debug("No more pending offset syncs");
+                    log.trace("No more pending offset syncs");
                     return;
                 }
                 pendingOffsetSync = syncIterator.next();
                 if (!outstandingOffsetSyncs.tryAcquire()) {
                     // Too many outstanding syncs
-                    log.debug("Too many in-flight offset syncs; will try to send remaining offset syncs later");
+                    log.trace("Too many in-flight offset syncs; will try to send remaining offset syncs later");
                     return;
                 }
                 syncIterator.remove();
