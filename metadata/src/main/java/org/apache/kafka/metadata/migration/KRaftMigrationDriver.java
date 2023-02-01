@@ -40,6 +40,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -487,15 +488,16 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         public void run() throws Exception {
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";
+            Optional<String> metadataSummary = log.isTraceEnabled() ?
+                Optional.of(MetadataImageUtil.toSummaryString(image, delta)) : Optional.empty();
 
             if (migrationState != MigrationState.DUAL_WRITE) {
-                if (log.isTraceEnabled()) {
-                    log.trace("Received metadata {}, but the controller is in {}. " +
-                        "The controller will not write this change back to ZooKeeper. {}",
-                        metadataType, migrationState, MetadataImageUtil.toSummaryString(image, delta));
-                }
+                metadataSummary.ifPresent(s -> log.trace("Received metadata {}, but the controller is in {}. " +
+                    "The controller will not write this change back to ZooKeeper. {}",
+                    metadataType, migrationState, s));
                 return;
             }
+
             if (delta.featuresDelta() != null) {
                 propagator.setMetadataVersion(image.features().metadataVersion());
             }
@@ -542,7 +544,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
                 // TODO: Unhappy path: Probably relinquish leadership and let new controller
                 //  retry the write?
-                log.trace("Sending RPCs to brokers for metadata update. {}", MetadataImageUtil.toSummaryString(image, delta));
+                metadataSummary.ifPresent(s -> log.trace("Sending RPCs to brokers. {}", s));
                 propagator.sendRPCsToBrokersFromMetadataDelta(delta, image, migrationLeadershipState.zkControllerEpoch());
             } else {
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
