@@ -232,7 +232,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     // Visible for testing
-    Future<Void> enqueueMetadataChangeEvent(MetadataDelta delta, MetadataImage newImage, MetadataProvenance provenance, boolean isSnapshot) {
+    Future<Void> enqueueMetadataChangeEvent(
+            MetadataDelta delta,
+            MetadataImage newImage,
+            MetadataProvenance provenance,
+            boolean isSnapshot
+    ) {
         MetadataChangeEvent metadataChangeEvent = new MetadataChangeEvent(delta, newImage, provenance, isSnapshot);
         eventQueue.append(metadataChangeEvent);
         return metadataChangeEvent.future;
@@ -252,7 +257,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             } else if (e instanceof QueueClosingException) {
                 log.info("Not processing {} because the event queue is shutting down.", this);
             } else {
-                KRaftMigrationDriver.this.faultHandler.handleFault("Unhandled error in " + this.getClass().getSimpleName(), e);
+                KRaftMigrationDriver.this.faultHandler.handleFault(
+                    "Unhandled error in " + this.getClass().getSimpleName(), e);
             }
         }
     }

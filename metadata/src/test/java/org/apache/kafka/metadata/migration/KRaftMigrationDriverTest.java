@@ -24,11 +24,9 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
-import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -42,7 +40,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -101,33 +98,55 @@ public class KRaftMigrationDriverTest {
         }
 
         @Override
-        public ZkMigrationLeadershipState createTopic(String topicName, Uuid topicId, Map<Integer, PartitionRegistration> topicPartitions, ZkMigrationLeadershipState state) {
+        public ZkMigrationLeadershipState createTopic(
+            String topicName,
+            Uuid topicId,
+            Map<Integer, PartitionRegistration> topicPartitions,
+            ZkMigrationLeadershipState state
+        ) {
             return state;
         }
 
         @Override
-        public ZkMigrationLeadershipState updateTopicPartitions(Map<String, Map<Integer, PartitionRegistration>> topicPartitions, ZkMigrationLeadershipState state) {
+        public ZkMigrationLeadershipState updateTopicPartitions(
+            Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
+            ZkMigrationLeadershipState state
+        ) {
             return state;
         }
 
         @Override
-        public ZkMigrationLeadershipState writeConfigs(ConfigResource configResource, Map<String, String> configMap, ZkMigrationLeadershipState state) {
+        public ZkMigrationLeadershipState writeConfigs(
+            ConfigResource configResource,
+            Map<String, String> configMap,
+            ZkMigrationLeadershipState state
+        ) {
             capturedConfigs.computeIfAbsent(configResource, __ -> new HashMap<>()).putAll(configMap);
             return state;
         }
 
         @Override
-        public ZkMigrationLeadershipState writeClientQuotas(Map<String, String> clientQuotaEntity, Map<String, Double> quotas, ZkMigrationLeadershipState state) {
+        public ZkMigrationLeadershipState writeClientQuotas(
+            Map<String, String> clientQuotaEntity,
+            Map<String, Double> quotas,
+            ZkMigrationLeadershipState state
+        ) {
             return state;
         }
 
         @Override
-        public ZkMigrationLeadershipState writeProducerId(long nextProducerId, ZkMigrationLeadershipState state) {
+        public ZkMigrationLeadershipState writeProducerId(
+            long nextProducerId,
+            ZkMigrationLeadershipState state
+        ) {
             return state;
         }
 
         @Override
-        public void readAllMetadata(Consumer<List<ApiMessageAndVersion>> batchConsumer, Consumer<Integer> brokerIdConsumer) {
+        public void readAllMetadata(
+            Consumer<List<ApiMessageAndVersion>> batchConsumer,
+            Consumer<Integer> brokerIdConsumer
+        ) {
 
         }
 
@@ -142,7 +161,11 @@ public class KRaftMigrationDriverTest {
         }
 
         @Override
-        public ZkMigrationLeadershipState writeMetadataDeltaToZookeeper(MetadataDelta delta, MetadataImage image, ZkMigrationLeadershipState state) {
+        public ZkMigrationLeadershipState writeMetadataDeltaToZookeeper(
+            MetadataDelta delta,
+            MetadataImage image,
+            ZkMigrationLeadershipState state
+        ) {
             return state;
         }
     }
@@ -168,7 +191,11 @@ public class KRaftMigrationDriverTest {
         }
 
         @Override
-        public void sendRPCsToBrokersFromMetadataDelta(MetadataDelta delta, MetadataImage image, int zkControllerEpoch) {
+        public void sendRPCsToBrokersFromMetadataDelta(
+            MetadataDelta delta,
+            MetadataImage image,
+            int zkControllerEpoch
+        ) {
             deltas += 1;
         }
 
@@ -219,7 +246,7 @@ public class KRaftMigrationDriverTest {
         delta.replay(zkBrokerRecord(3));
         MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
         image = delta.apply(provenance);
-        driver.publishLogDelta(delta, image, new LogDeltaManifest(provenance, new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
+        driver.enqueueMetadataChangeEvent(delta, image, provenance, false);
         TestUtils.waitForCondition(() -> driver.migrationState().get(10, TimeUnit.SECONDS).equals(MigrationState.DUAL_WRITE),
             "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
 
@@ -227,7 +254,11 @@ public class KRaftMigrationDriverTest {
         Assertions.assertEquals(0, metadataPropagator.deltas);
 
         delta = new MetadataDelta(image);
-        delta.replay(new ConfigRecord().setResourceType(ConfigResource.Type.BROKER.id()).setResourceName("1").setName("foo").setValue("bar"));
+        delta.replay(new ConfigRecord()
+            .setResourceType(ConfigResource.Type.BROKER.id())
+            .setResourceName("1")
+            .setName("foo")
+            .setValue("bar"));
         provenance = new MetadataProvenance(120, 1, 2);
         image = delta.apply(provenance);
         driver.enqueueMetadataChangeEvent(delta, image, provenance, false).get(10, TimeUnit.SECONDS);
