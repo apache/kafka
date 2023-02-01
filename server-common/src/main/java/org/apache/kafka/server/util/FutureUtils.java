@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BiConsumer;
 
 
 public class FutureUtils {
@@ -65,5 +66,28 @@ public class FutureUtils {
             log.error("Received a fatal error while waiting for {}", action, t);
             throw new RuntimeException("Received a fatal error while waiting for " + action, t);
         }
+    }
+
+    /**
+     * Complete a given destination future when a source future is completed.
+     *
+     * @param sourceFuture          The future to trigger off of.
+     * @param destinationFuture     The future to complete when the source future is completed.
+     * @param <T>                   The destination future type.
+     */
+    public static <T> void chainFuture(
+        CompletableFuture<? extends T> sourceFuture,
+        CompletableFuture<T> destinationFuture
+    ) {
+        sourceFuture.whenComplete(new BiConsumer<T, Throwable>() {
+            @Override
+            public void accept(T val, Throwable throwable) {
+                if (throwable != null) {
+                    destinationFuture.completeExceptionally(throwable);
+                } else {
+                    destinationFuture.complete(val);
+                }
+            }
+        });
     }
 }
