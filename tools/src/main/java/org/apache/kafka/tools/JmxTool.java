@@ -280,13 +280,13 @@ public class JmxTool {
         if (attributes.size() == sumValues(numExpectedAttributes) + 1) {
             switch (reportFormat) {
                 case "properties":
-                    keys.forEach(key -> System.out.println(String.format("%s=%s", key, attributes.get(key))));
+                    keys.forEach(key -> System.out.printf("%s=%s%n", key, attributes.get(key)));
                     break;
                 case "csv":
-                    keys.forEach(key -> System.out.println(String.format("%s,\"%s\"", key, attributes.get(key))));
+                    keys.forEach(key -> System.out.printf("%s,\"%s\"%n", key, attributes.get(key)));
                     break;
                 case "tsv":
-                    keys.forEach(key -> System.out.println(String.format("%s\t%s", key, attributes.get(key))));
+                    keys.forEach(key -> System.out.printf("%s\t%s%n", key, attributes.get(key)));
                     break;
                 default:
                     System.out.println(mkString(keys.stream().map(attributes::get), ","));
@@ -361,12 +361,8 @@ public class JmxTool {
             options = parser.parse(args);
         }
 
-        public JMXServiceURL jmxServiceURL() {
-            try {
-                return new JMXServiceURL(options.valueOf(jmxServiceUrlOpt));
-            } catch (MalformedURLException e) {
-                throw new RuntimeException(e);
-            }
+        public JMXServiceURL jmxServiceURL() throws MalformedURLException {
+            return new JMXServiceURL(options.valueOf(jmxServiceUrlOpt));
         }
 
         public int interval() {

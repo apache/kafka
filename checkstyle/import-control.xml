@@ -407,7 +407,7 @@
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
     <allow pkg="kafka.test" />
-    <allow pkg="joptsimple"/>
+    <allow pkg="joptsimple" />
     <allow pkg="javax.rmi.ssl"/>
   </subpackage>
 

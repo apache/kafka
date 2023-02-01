@@ -22,7 +22,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import javax.management.MBeanServer;
@@ -44,7 +43,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Tag("integration")
 public class JmxToolTest {
     private final ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
 
@@ -97,8 +95,8 @@ public class JmxToolTest {
     }
 
     @Test
-    public void invalidJmxUrl() {
-        String err = executeAndGetErr("--jmx-url", String.format("localhost:9999"));
+    public void malformedURL() {
+        String err = executeAndGetErr("--jmx-url", "localhost:9999");
         assertCommandFailure();
         assertTrue(err.contains("MalformedURLException"));
     }
