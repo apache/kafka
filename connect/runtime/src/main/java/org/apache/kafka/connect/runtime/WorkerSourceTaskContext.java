@@ -42,11 +42,7 @@ public class WorkerSourceTaskContext implements SourceTaskContext {
 
     @Override
     public Map<String, String> configs() {
-        try {
-            return configState.taskConfig(id);
-        } catch (Exception e) {
-            throw new RuntimeException("Unable to transform task config", e);
-        }
+        return configState.taskConfig(id);
     }
 
     @Override
