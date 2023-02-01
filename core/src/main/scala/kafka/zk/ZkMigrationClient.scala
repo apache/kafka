@@ -28,7 +28,6 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.{MigrationClient, ZkMigrationLeadershipState}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
@@ -219,10 +218,6 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     migrateBrokerConfigs(MetadataVersion.latest(), batchConsumer)
     migrateClientQuotas(MetadataVersion.latest(), batchConsumer)
     migrateProducerId(MetadataVersion.latest(), batchConsumer)
-  }
-
-  override def readBrokerIds(): util.Set[Integer] = {
-    zkClient.getSortedBrokerList.map(Integer.valueOf).toSet.asJava
   }
 
   override def readBrokerIdsFromTopicAssignments(): util.Set[Integer] = {
@@ -457,11 +452,5 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
       debug(s"Not updating ZK for $resource since it is not a Broker or Topic entity.")
       state
     }
-  }
-
-  override def writeMetadataDeltaToZookeeper(delta: MetadataDelta,
-                                             image: MetadataImage,
-                                             state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
-    state
   }
 }

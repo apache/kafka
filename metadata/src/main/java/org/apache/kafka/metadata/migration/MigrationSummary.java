@@ -26,7 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-
+/**
+ * Tracks the records generated as part of a ZK migration and creates a textual summary.
+ */
 public class MigrationSummary {
     private final Time time;
     private final long startTimeNanos;
@@ -40,8 +42,7 @@ public class MigrationSummary {
         this.startTimeNanos = time.nanoseconds();
     }
 
-    public void feed(List<ApiMessageAndVersion> recordBatch) {
-
+    public void acceptBatch(List<ApiMessageAndVersion> recordBatch) {
         batches += 1;
         recordBatch.forEach(apiMessageAndVersion -> {
             MetadataRecordType type = MetadataRecordType.fromId(apiMessageAndVersion.message().apiKey());
@@ -51,7 +52,9 @@ public class MigrationSummary {
     }
 
     public void close() {
-        endTimeNanos = time.nanoseconds();
+        if (endTimeNanos == 0) {
+            endTimeNanos = time.nanoseconds();
+        }
     }
 
     public long durationMs() {
@@ -63,11 +66,6 @@ public class MigrationSummary {
     }
 
     public String toString() {
-        return "MigrationSummary(" +
-            "durationMs=" + durationMs() +
-            ", records=" + total +
-            ", batches=" + batches +
-            ", recordTypes=" + counts +
-            ")";
+        return String.format("%d records were generated in %d ms across %d batches. The record types were %s", total, durationMs(), batches, counts);
     }
 }
