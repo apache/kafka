@@ -404,7 +404,12 @@ public class AbstractConfig {
         if (!t.isInstance(o))
             throw new KafkaException(klass + " is not an instance of " + t.getName());
         if (o instanceof Configurable)
-            ((Configurable) o).configure(configPairs);
+            try {
+                ((Configurable) o).configure(configPairs);
+            } catch (Exception e) {
+                maybeClose(o, "AutoCloseable object constructed and configured during failed call to getConfiguredInstance");
+                throw e;
+            }
 
         return t.cast(o);
     }
@@ -418,16 +423,7 @@ public class AbstractConfig {
      * @return A configured instance of the class
      */
     public <T> T getConfiguredInstance(String key, Class<T> t) {
-        T configuredInstance = null;
-
-        try {
-            configuredInstance = getConfiguredInstance(key, t, Collections.emptyMap());
-        } catch (Exception e) {
-            maybeClose(configuredInstance, "AutoCloseable object constructed and configured during failed call to getConfiguredInstance");
-            throw e;
-        }
-
-        return configuredInstance;
+        return getConfiguredInstance(key, t, Collections.emptyMap());
     }
 
     /**
@@ -441,15 +437,8 @@ public class AbstractConfig {
      */
     public <T> T getConfiguredInstance(String key, Class<T> t, Map<String, Object> configOverrides) {
         Class<?> c = getClass(key);
-        T configuredInstance = null;
 
-        try {
-            configuredInstance = getConfiguredInstance(c, t, originals(configOverrides));
-        } catch (Exception e) {
-            maybeClose(configuredInstance, "AutoCloseable object constructed and configured during failed call to getConfiguredInstance");
-            throw e;
-        }
-        return configuredInstance;
+        return getConfiguredInstance(c, t, originals(configOverrides));
     }
 
     /**
