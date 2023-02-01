@@ -278,7 +278,7 @@ public class AbstractConfigTest {
                     () -> testConfig.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, Object.class)
             );
             assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
-            assertEquals(2, MockConsumerInterceptor.CLOSE_COUNT.get());
+            assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
         } finally {
             MockConsumerInterceptor.resetCounters();
         }

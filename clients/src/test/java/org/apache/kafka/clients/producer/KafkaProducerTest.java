@@ -588,7 +588,7 @@ public class KafkaProducerTest {
             });
 
             assertEquals(3, MockProducerInterceptor.CONFIG_COUNT.get());
-            assertEquals(2, MockProducerInterceptor.CLOSE_COUNT.get());
+            assertEquals(3, MockProducerInterceptor.CLOSE_COUNT.get());
 
         } finally {
             MockProducerInterceptor.resetCounters();
