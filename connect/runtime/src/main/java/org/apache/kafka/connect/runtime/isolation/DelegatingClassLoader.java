@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -54,6 +55,7 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.SortedMap;
@@ -265,13 +267,11 @@ public class DelegatingClassLoader extends URLClassLoader {
             log.error("Invalid path in plugin path: {}. Ignoring.", path, e);
         } catch (IOException e) {
             log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
-        } catch (ReflectiveOperationException e) {
-            log.error("Could not instantiate plugins in: {}. Ignoring.", path, e);
         }
     }
 
     private void registerPlugin(Path pluginLocation)
-        throws IOException, ReflectiveOperationException {
+        throws IOException {
         log.info("Loading plugin from: {}", pluginLocation);
         List<URL> pluginUrls = new ArrayList<>();
         for (Path path : PluginUtils.pluginUrls(pluginLocation)) {
@@ -292,7 +292,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private void scanUrlsAndAddPlugins(
             ClassLoader loader,
             URL[] urls
-    ) throws ReflectiveOperationException {
+    ) {
         PluginScanResult plugins = scanPluginPath(loader, urls);
         log.info("Registered loader: {}", loader);
         if (!plugins.isEmpty()) {
@@ -352,7 +352,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private PluginScanResult scanPluginPath(
             ClassLoader loader,
             URL[] urls
-    ) throws ReflectiveOperationException {
+    ) {
         ConfigurationBuilder builder = new ConfigurationBuilder();
         builder.setClassLoaders(new ClassLoader[]{loader});
         builder.addUrls(urls);
@@ -374,12 +374,12 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     @SuppressWarnings({"unchecked"})
-    private Collection<PluginDesc<Predicate<?>>> getPredicatePluginDesc(ClassLoader loader, Reflections reflections) throws ReflectiveOperationException {
+    private Collection<PluginDesc<Predicate<?>>> getPredicatePluginDesc(ClassLoader loader, Reflections reflections) {
         return (Collection<PluginDesc<Predicate<?>>>) (Collection<?>) getPluginDesc(reflections, Predicate.class, loader);
     }
 
     @SuppressWarnings({"unchecked"})
-    private Collection<PluginDesc<Transformation<?>>> getTransformationPluginDesc(ClassLoader loader, Reflections reflections) throws ReflectiveOperationException {
+    private Collection<PluginDesc<Transformation<?>>> getTransformationPluginDesc(ClassLoader loader, Reflections reflections) {
         return (Collection<PluginDesc<Transformation<?>>>) (Collection<?>) getPluginDesc(reflections, Transformation.class, loader);
     }
 
@@ -387,7 +387,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             Reflections reflections,
             Class<T> klass,
             ClassLoader loader
-    ) throws ReflectiveOperationException {
+    ) {
         Set<Class<? extends T>> plugins;
         try {
             plugins = reflections.getSubTypesOf(klass);
@@ -400,7 +400,11 @@ public class DelegatingClassLoader extends URLClassLoader {
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {
             if (PluginUtils.isConcrete(plugin)) {
-                result.add(pluginDesc(plugin, versionFor(plugin), loader));
+                try {
+                    result.add(pluginDesc(plugin, versionFor(plugin), loader));
+                } catch (ReflectiveOperationException | LinkageError e) {
+                    log.error("Unable to instantiate {}{}", plugin, reflectiveErrorDescription(e), e);
+                }
             } else {
                 log.debug("Skipping {} as it is not concrete implementation", plugin);
             }
@@ -419,7 +423,14 @@ public class DelegatingClassLoader extends URLClassLoader {
         Collection<PluginDesc<T>> result = new ArrayList<>();
         try {
             ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
-            for (T pluginImpl : serviceLoader) {
+            for (Iterator<T> iterator = serviceLoader.iterator(); iterator.hasNext(); ) {
+                T pluginImpl;
+                try {
+                    pluginImpl = iterator.next();
+                } catch (ServiceConfigurationError t) {
+                    log.error("Unable to instantiate plugin{}", reflectiveErrorDescription(t.getCause()), t);
+                    continue;
+                }
                 result.add(pluginDesc((Class<? extends T>) pluginImpl.getClass(),
                     versionFor(pluginImpl), loader));
             }
@@ -430,13 +441,36 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     private static <T>  String versionFor(T pluginImpl) {
-        return pluginImpl instanceof Versioned ? ((Versioned) pluginImpl).version() : UNDEFINED_VERSION;
+        try {
+            if (pluginImpl instanceof Versioned) {
+                return ((Versioned) pluginImpl).version();
+            }
+        } catch (Throwable t) {
+            log.error("Failed to get plugin version for " + pluginImpl.getClass(), t);
+        }
+        return UNDEFINED_VERSION;
     }
 
     public static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
         // Temporary workaround until all the plugins are versioned.
         return Connector.class.isAssignableFrom(pluginKlass) ?
             versionFor(pluginKlass.getDeclaredConstructor().newInstance()) : UNDEFINED_VERSION;
+    }
+
+    private static String reflectiveErrorDescription(Throwable t) {
+        if (t instanceof NoSuchMethodException) {
+            return ": Plugin class must have a default constructor, and cannot be a non-static inner class";
+        } else if (t instanceof SecurityException) {
+            return ": Security settings must allow reflective instantiation of plugin classes";
+        } else if (t instanceof IllegalAccessException) {
+            return ": Plugin class default constructor must be public";
+        } else if (t instanceof ExceptionInInitializerError) {
+            return ": Plugin class should not throw exception during static initialization";
+        } else if (t instanceof InvocationTargetException) {
+            return ": Constructor must complete without throwing an exception";
+        } else {
+            return "";
+        }
     }
 
     @Override
