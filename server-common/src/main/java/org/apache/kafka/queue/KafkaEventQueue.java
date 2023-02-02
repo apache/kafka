@@ -250,7 +250,7 @@ public final class KafkaEventQueue implements EventQueue {
                             continue;
                         } else if (shuttingDown) {
                             remove(eventContext);
-                            toDeliver = new QueueClosingException();
+                            toDeliver = new RejectedExecutionException();
                             toRun = eventContext;
                             continue;
                         }

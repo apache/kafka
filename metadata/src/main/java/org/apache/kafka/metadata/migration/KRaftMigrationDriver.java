@@ -28,7 +28,6 @@ import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
-import org.apache.kafka.queue.QueueClosingException;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -265,8 +264,6 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         public void handleException(Throwable e) {
             if (e instanceof RejectedExecutionException) {
                 log.info("Not processing {} because the event queue is closed.", this);
-            } else if (e instanceof QueueClosingException) {
-                log.info("Not processing {} because the event queue is shutting down.", this);
             } else {
                 KRaftMigrationDriver.this.faultHandler.handleFault(
                     "Unhandled error in " + this.getClass().getSimpleName(), e);

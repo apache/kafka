@@ -218,7 +218,7 @@ public class KafkaEventQueueTest {
             __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(1)),
             new FutureEvent<>(future, () -> count.getAndAdd(1)));
         queue.beginShutdown("testShutdownBeforeDeferred");
-        assertThrows(ExecutionException.class, () -> future.get());
+        assertEquals(RejectedExecutionException.class, assertThrows(ExecutionException.class, () -> future.get()).getCause().getClass());
         assertEquals(0, count.get());
         queue.close();
     }
