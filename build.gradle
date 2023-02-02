@@ -1763,6 +1763,7 @@ project(':tools') {
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.log4j
+    implementation libs.joptSimple
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
