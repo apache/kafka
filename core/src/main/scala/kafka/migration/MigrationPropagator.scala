@@ -79,8 +79,7 @@ class MigrationPropagator(
     _image = image
   }
 
-  override def sendRPCsToBrokersFromMetadataDelta(delta: MetadataDelta,
-                                                  image: MetadataImage,
+  override def sendRPCsToBrokersFromMetadataDelta(delta: MetadataDelta, image: MetadataImage,
                                                   zkControllerEpoch: Int): Unit = {
     publishMetadata(image)
     requestBatch.newBatch()
