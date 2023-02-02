@@ -43,7 +43,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -58,6 +57,8 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * serialize events coming from various threads and listeners.
  */
 public class KRaftMigrationDriver implements MetadataPublisher {
+    private final static Consumer<Throwable> NO_OP_HANDLER = ex -> { };
+
     private final Time time;
     private final Logger log;
     private final int nodeId;
@@ -110,7 +111,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     // Visible for testing
-    Future<MigrationState> migrationState() {
+    CompletableFuture<MigrationState> migrationState() {
         CompletableFuture<MigrationState> stateFuture = new CompletableFuture<>();
         eventQueue.append(() -> stateFuture.complete(migrationState));
         return stateFuture;
@@ -220,7 +221,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
     @Override
     public void publishSnapshot(MetadataDelta delta, MetadataImage newImage, SnapshotManifest manifest) {
-        enqueueMetadataChangeEvent(delta, newImage, manifest.provenance(), true);
+        enqueueMetadataChangeEvent(delta, newImage, manifest.provenance(), true, NO_OP_HANDLER);
     }
 
     @Override
@@ -228,19 +229,29 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         if (!leaderAndEpoch.equals(manifest.leaderAndEpoch())) {
             eventQueue.append(new KRaftLeaderEvent(manifest.leaderAndEpoch()));
         }
-        enqueueMetadataChangeEvent(delta, newImage, manifest.provenance(), false);
+        enqueueMetadataChangeEvent(delta, newImage, manifest.provenance(), false, NO_OP_HANDLER);
     }
 
-    // Visible for testing
-    Future<Void> enqueueMetadataChangeEvent(
-            MetadataDelta delta,
-            MetadataImage newImage,
-            MetadataProvenance provenance,
-            boolean isSnapshot
+    /**
+     * Construct and enqueue a {@link MetadataChangeEvent} with a given completion handler. In production use cases,
+     * this handler is a no-op. This method exists so we can add additional logic in our unit tests to wait for the
+     * enqueued event to finish executing.
+     */
+    void enqueueMetadataChangeEvent(
+        MetadataDelta delta,
+        MetadataImage newImage,
+        MetadataProvenance provenance,
+        boolean isSnapshot,
+        Consumer<Throwable> completionHandler
     ) {
-        MetadataChangeEvent metadataChangeEvent = new MetadataChangeEvent(delta, newImage, provenance, isSnapshot);
+        MetadataChangeEvent metadataChangeEvent = new MetadataChangeEvent(
+            delta,
+            newImage,
+            provenance,
+            isSnapshot,
+            completionHandler
+        );
         eventQueue.append(metadataChangeEvent);
-        return metadataChangeEvent.future;
     }
 
     @Override
@@ -472,13 +483,20 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         private final MetadataImage image;
         private final MetadataProvenance provenance;
         private final boolean isSnapshot;
-        CompletableFuture<Void> future = new CompletableFuture<>();
+        private final Consumer<Throwable> completionHandler;
 
-        MetadataChangeEvent(MetadataDelta delta, MetadataImage image, MetadataProvenance provenance, boolean isSnapshot) {
+        MetadataChangeEvent(
+            MetadataDelta delta,
+            MetadataImage image,
+            MetadataProvenance provenance,
+            boolean isSnapshot,
+            Consumer<Throwable> completionHandler
+        ) {
             this.delta = delta;
             this.image = image;
             this.provenance = provenance;
             this.isSnapshot = isSnapshot;
+            this.completionHandler = completionHandler;
         }
 
         @Override
@@ -489,6 +507,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             if (migrationState != MigrationState.DUAL_WRITE) {
                 log.trace("Received metadata {}, but the controller is not in dual-write " +
                     "mode. Ignoring the change to be replicated to Zookeeper", metadataType);
+                completionHandler.accept(null);
                 return;
             }
             if (delta.featuresDelta() != null) {
@@ -547,12 +566,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             } else {
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
             }
-            future.complete(null);
+            completionHandler.accept(null);
         }
 
         @Override
         public void handleException(Throwable e) {
-            future.completeExceptionally(e);
+            completionHandler.accept(e);
             super.handleException(e);
         }
     }

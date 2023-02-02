@@ -24,9 +24,11 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -40,6 +42,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -223,6 +226,29 @@ public class KRaftMigrationDriverTest {
         return record;
     }
 
+    /**
+     * Enqueues a metadata change event with the migration driver and returns a future that can be waited on in
+     * the test code. The future will complete once the metadata change event executes completely.
+     */
+    CompletableFuture<Void> enqueueMetadataChangeEventWithFuture(
+        KRaftMigrationDriver driver,
+        MetadataDelta delta,
+        MetadataImage newImage,
+        MetadataProvenance provenance
+    ) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        Consumer<Throwable> completionHandler = ex -> {
+            if (ex == null) {
+                future.complete(null);
+            } else {
+                future.completeExceptionally(ex);
+            }
+        };
+
+        driver.enqueueMetadataChangeEvent(delta, newImage, provenance, false, completionHandler);
+        return future;
+    }
+
     @Test
     public void testOnlySendNeededRPCsToBrokers() throws Exception {
         // KAFKA-14668 Don't send RPCs to brokers for every metadata change, only when broker or topics change.
@@ -246,7 +272,11 @@ public class KRaftMigrationDriverTest {
         delta.replay(zkBrokerRecord(3));
         MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
         image = delta.apply(provenance);
-        driver.enqueueMetadataChangeEvent(delta, image, provenance, false);
+
+        // Publish a delta with this node (3000) as the leader
+        driver.publishLogDelta(delta, image, new LogDeltaManifest(provenance,
+            new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
+
         TestUtils.waitForCondition(() -> driver.migrationState().get(10, TimeUnit.SECONDS).equals(MigrationState.DUAL_WRITE),
             "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
 
@@ -261,7 +291,7 @@ public class KRaftMigrationDriverTest {
             .setValue("bar"));
         provenance = new MetadataProvenance(120, 1, 2);
         image = delta.apply(provenance);
-        driver.enqueueMetadataChangeEvent(delta, image, provenance, false).get(10, TimeUnit.SECONDS);
+        enqueueMetadataChangeEventWithFuture(driver, delta, image, provenance).get(10, TimeUnit.SECONDS);
 
         Assertions.assertEquals(1, migrationClient.capturedConfigs.size());
         Assertions.assertEquals(1, metadataPropagator.images);
@@ -275,7 +305,7 @@ public class KRaftMigrationDriverTest {
             .setInControlledShutdown(BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value()));
         provenance = new MetadataProvenance(130, 1, 3);
         image = delta.apply(provenance);
-        driver.enqueueMetadataChangeEvent(delta, image, provenance, false).get(10, TimeUnit.SECONDS);
+        enqueueMetadataChangeEventWithFuture(driver, delta, image, provenance).get(10, TimeUnit.SECONDS);
 
         Assertions.assertEquals(1, metadataPropagator.images);
         Assertions.assertEquals(1, metadataPropagator.deltas);
