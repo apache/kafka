@@ -22,6 +22,7 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 import java.util.Objects;
+import java.util.function.Function;
 
 
 /**
@@ -178,5 +179,66 @@ public final class MetadataImage {
             ", producerIdsImage=" + producerIds +
             ", acls=" + acls +
             ")";
+    }
+
+    static <T> void imageSize(StringBuilder sb, String name, T image, Function<T, Integer> mapper) {
+        int count = mapper.apply(image);
+        sb.append(count).append(" ").append(name);
+        if (count != 1) {
+            sb.append("s");
+        }
+        sb.append(" (");
+    }
+
+    static <T> void deltaSizeOrZero(StringBuilder sb, T delta, Function<T, Integer> mapper) {
+        if (delta == null) {
+            sb.append("0");
+        } else {
+            sb.append(mapper.apply(delta));
+        }
+        sb.append(" changed)");
+    }
+
+    /**
+     * Produce a human-readable summary of this MetadataImage and a given MetadataDelta. The MetadataDelta should
+     * already be applied in this image (i.e., it should not be a new and un-applied delta, otherwise the summary output
+     * will not be accurate).
+     */
+    public String toSummaryString(MetadataDelta delta) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Metadata at offset ");
+        sb.append(this.provenance().lastContainedOffset());
+        sb.append(" and epoch ");
+        sb.append(this.provenance().lastContainedEpoch());
+        sb.append(" includes: ");
+
+        imageSize(sb, "broker", this.cluster(), clusterImage -> clusterImage.brokers().size());
+        deltaSizeOrZero(sb, delta.clusterDelta(), clusterDelta -> clusterDelta.changedBrokers().size());
+        sb.append(", ");
+
+        imageSize(sb, "topic", this.topics(), topicsImage -> topicsImage.topicsById().size());
+        deltaSizeOrZero(sb, delta.topicsDelta(), topicsDelta -> topicsDelta.changedTopics().size());
+        sb.append(", ");
+
+        imageSize(sb, "feature", this.features(), featuresImage -> featuresImage.finalizedVersions().size());
+        deltaSizeOrZero(sb, delta.featuresDelta(), featuresDelta -> featuresDelta.changes().size());
+        sb.append(", ");
+
+        imageSize(sb, "config", this.configs(),
+                configsImage -> configsImage.resourceData().values().stream().mapToInt(ConfigurationImage::size).sum());
+        deltaSizeOrZero(sb, delta.configsDelta(),
+                configsDelta -> configsDelta.changes().values().stream().mapToInt(ConfigurationDelta::size).sum());
+
+        if (!this.producerIds().isEmpty()) {
+            sb.append(", ");
+            sb.append("1 producer id (");
+            if (delta.producerIdsDelta() != null) {
+                sb.append("1");
+            } else {
+                sb.append("0");
+            }
+            sb.append(" changed)");
+        }
+        return sb.toString();
     }
 }

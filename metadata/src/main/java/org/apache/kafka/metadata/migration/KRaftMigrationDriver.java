@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
-import org.apache.kafka.image.MetadataImageUtil;
 import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
@@ -405,7 +404,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         public void run() throws Exception {
             Set<Integer> brokersInMetadata = new HashSet<>();
             log.info("Starting ZK migration");
-            MigrationSummary summary = new MigrationSummary(time);
+            MigrationManifest.Builder manifestBuilder = MigrationManifest.newBuilder(time);
             zkRecordConsumer.beginMigration();
             try {
                 zkMigrationClient.readAllMetadata(batch -> {
@@ -416,7 +415,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                             log.info("Migrating {} records from ZK", batch.size());
                         }
                         CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
-                        summary.acceptBatch(batch);
+                        manifestBuilder.acceptBatch(batch);
                         future.get();
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
@@ -425,11 +424,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     }
                 }, brokersInMetadata::add);
                 OffsetAndEpoch offsetAndEpochAfterMigration = zkRecordConsumer.completeMigration();
-                summary.close();
+                MigrationManifest manifest = manifestBuilder.build();
                 log.info("Completed migration of metadata from ZooKeeper to KRaft. {}. " +
                          "The current metadata offset is now {} with an epoch of {}. Saw {} brokers in the " +
                          "migrated metadata {}.",
-                    summary,
+                    manifest,
                     offsetAndEpochAfterMigration.offset(),
                     offsetAndEpochAfterMigration.epoch(),
                     brokersInMetadata.size(),
@@ -441,7 +440,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 transitionTo(MigrationState.KRAFT_CONTROLLER_TO_BROKER_COMM);
             } catch (Throwable t) {
                 zkRecordConsumer.abortMigration();
-                log.error("Aborted metadata migration from ZooKeeper to KRaft. {}.", summary);
+                MigrationManifest partialManifest = manifestBuilder.build();
+                log.error("Aborted metadata migration from ZooKeeper to KRaft. {}.", partialManifest);
             }
         }
 
@@ -458,7 +458,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             // Ignore sending RPCs to the brokers since we're no longer in the state.
             if (migrationState == MigrationState.KRAFT_CONTROLLER_TO_BROKER_COMM) {
                 if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
-                    log.trace("Sending RPCs to broker before moving to dual-write mode. {}", MetadataImageUtil.toSummaryString(image, new MetadataDelta(image)));
+                    log.trace("Sending RPCs to broker before moving to dual-write mode. {}", image.toSummaryString(new MetadataDelta(image)));
                     propagator.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.zkControllerEpoch());
                     // Migration leadership state doesn't change since we're not doing any Zk writes.
                     transitionTo(MigrationState.DUAL_WRITE);
@@ -489,7 +489,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";
             Optional<String> metadataSummary = log.isTraceEnabled() ?
-                Optional.of(MetadataImageUtil.toSummaryString(image, delta)) : Optional.empty();
+                Optional.of(image.toSummaryString(delta)) : Optional.empty();
 
             if (migrationState != MigrationState.DUAL_WRITE) {
                 metadataSummary.ifPresent(s -> log.trace("Received metadata {}, but the controller is in {}. " +
