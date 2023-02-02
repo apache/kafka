@@ -258,7 +258,6 @@ public class JmxToolTest {
             formatter.parse(value);
             return true;
         } catch (ParseException e) {
-            e.printStackTrace();
             return false;
         }
     }
