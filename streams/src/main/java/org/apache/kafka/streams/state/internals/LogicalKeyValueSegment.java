@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -160,13 +161,25 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+        // from bound is inclusive. if the provided bound is null, replace with prefix
+        final Bytes fromBound = from == null
+            ? prefixKeyFormatter.getPrefix()
+            : prefixKeyFormatter.addPrefix(from);
+        // to bound is inclusive. if the provided bound is null, replace with the next prefix.
+        // this requires potentially filtering out the element corresponding to the next prefix
+        // with empty bytes from the returned iterator. this filtering is accomplished by
+        // passing the prefix filter into StrippedPrefixKeyValueIteratorAdapter().
+        final Bytes toBound = to == null
+            ? Bytes.increment(prefixKeyFormatter.getPrefix())
+            : prefixKeyFormatter.addPrefix(to);
         final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes = physicalStore.range(
-            prefixKeyFormatter.addPrefix(from),
-            prefixKeyFormatter.addPrefix(to),
+            fromBound,
+            toBound,
             openIterators);
         return new StrippedPrefixKeyValueIteratorAdapter(
             iteratorWithKeyPrefixes,
-            prefixKeyFormatter::removePrefix);
+            prefixKeyFormatter::removePrefix,
+            prefixKeyFormatter::startsWithPrefix);
     }
 
     @Override
@@ -213,7 +226,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
         }
 
         Bytes addPrefix(final Bytes key) {
-            return key == null ? null : Bytes.wrap(addPrefix(key.get()));
+            return Bytes.wrap(addPrefix(key.get()));
         }
 
         byte[] addPrefix(final byte[] key) {
@@ -237,6 +250,16 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
         Bytes getPrefix() {
             return Bytes.wrap(prefix);
         }
+
+        boolean startsWithPrefix(final Bytes maybePrefixed) {
+            if (maybePrefixed.get().length < prefix.length) {
+                return false;
+            }
+
+            final byte[] maybePrefix = new byte[prefix.length];
+            System.arraycopy(maybePrefixed.get(), 0, maybePrefix, 0, prefix.length);
+            return Arrays.equals(prefix, maybePrefix);
+        }
     }
 
     /**
@@ -247,11 +270,20 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
 
         private final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes;
         private final Function<Bytes, Bytes> prefixRemover;
+        private final Function<Bytes, Boolean> prefixChecker;
 
         StrippedPrefixKeyValueIteratorAdapter(final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes,
                                               final Function<Bytes, Bytes> prefixRemover) {
+            this(iteratorWithKeyPrefixes, prefixRemover, bytes -> true);
+        }
+
+        StrippedPrefixKeyValueIteratorAdapter(final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes,
+                                              final Function<Bytes, Bytes> prefixRemover,
+                                              final Function<Bytes, Boolean> prefixChecker) {
             this.iteratorWithKeyPrefixes = iteratorWithKeyPrefixes;
             this.prefixRemover = prefixRemover;
+            this.prefixChecker = prefixChecker;
+            pruneNonPrefixedElements();
         }
 
         @Override
@@ -261,8 +293,12 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
 
         @Override
         public KeyValue<Bytes, byte[]> next() {
-            final KeyValue<Bytes, byte[]> next = iteratorWithKeyPrefixes.next();
-            return new KeyValue<>(prefixRemover.apply(next.key), next.value);
+            final KeyValue<Bytes, byte[]> nextWithKeyPrefix = iteratorWithKeyPrefixes.next();
+            final KeyValue<Bytes, byte[]> next = new KeyValue<>(
+                prefixRemover.apply(nextWithKeyPrefix.key),
+                nextWithKeyPrefix.value);
+            pruneNonPrefixedElements();
+            return next;
         }
 
         @Override
@@ -278,6 +314,13 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
         @Override
         public void close() {
             iteratorWithKeyPrefixes.close();
+        }
+
+        private void pruneNonPrefixedElements() {
+            while (iteratorWithKeyPrefixes.hasNext()
+                && !prefixChecker.apply(iteratorWithKeyPrefixes.peekNextKey())) {
+                iteratorWithKeyPrefixes.next();
+            }
         }
     }
 

@@ -57,6 +57,7 @@ public class LogicalKeyValueSegmentTest {
 
     private LogicalKeyValueSegment segment1;
     private LogicalKeyValueSegment segment2;
+    private LogicalKeyValueSegment segment3;
 
     @Before
     public void setUp() {
@@ -70,12 +71,14 @@ public class LogicalKeyValueSegmentTest {
 
         segment1 = new LogicalKeyValueSegment(1, "segment-1", physicalStore);
         segment2 = new LogicalKeyValueSegment(2, "segment-2", physicalStore);
+        segment3 = new LogicalKeyValueSegment(3, "segment-3", physicalStore);
     }
 
     @After
     public void tearDown() {
         segment1.close();
         segment2.close();
+        segment3.close();
         physicalStore.close();
     }
 
@@ -157,13 +160,14 @@ public class LogicalKeyValueSegmentTest {
         final KeyValue<String, String> kv2 = new KeyValue<>("2", "two");
         final KeyValue<String, String> kvOther = new KeyValue<>("1", "other");
 
-        segment1.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
-        segment1.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
-        segment1.put(new Bytes(serializeBytes(kv2.key)), serializeBytes(kv2.value));
-        segment2.put(new Bytes(serializeBytes(kvOther.key)), serializeBytes(kvOther.value));
+        segment2.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment2.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
+        segment2.put(new Bytes(serializeBytes(kv2.key)), serializeBytes(kv2.value));
+        segment1.put(new Bytes(serializeBytes(kvOther.key)), serializeBytes(kvOther.value));
+        segment3.put(new Bytes(serializeBytes(kvOther.key)), serializeBytes(kvOther.value));
 
         // non-null bounds
-        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(new Bytes(serializeBytes("1")), new Bytes(serializeBytes("2")))) {
+        try (final KeyValueIterator<Bytes, byte[]> iterator = segment2.range(new Bytes(serializeBytes("1")), new Bytes(serializeBytes("2")))) {
             final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
             expectedContents.add(kv1);
             expectedContents.add(kv2);
@@ -171,7 +175,7 @@ public class LogicalKeyValueSegmentTest {
         }
 
         // null lower bound
-        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(null, new Bytes(serializeBytes("1")))) {
+        try (final KeyValueIterator<Bytes, byte[]> iterator = segment2.range(null, new Bytes(serializeBytes("1")))) {
             final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
             expectedContents.add(kv0);
             expectedContents.add(kv1);
@@ -179,7 +183,7 @@ public class LogicalKeyValueSegmentTest {
         }
 
         // null upper bound
-        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(new Bytes(serializeBytes("0")), null)) {
+        try (final KeyValueIterator<Bytes, byte[]> iterator = segment2.range(new Bytes(serializeBytes("0")), null)) {
             final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
             expectedContents.add(kv0);
             expectedContents.add(kv1);
@@ -188,7 +192,7 @@ public class LogicalKeyValueSegmentTest {
         }
 
         // null upper and lower bounds
-        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(new Bytes(serializeBytes("0")), null)) {
+        try (final KeyValueIterator<Bytes, byte[]> iterator = segment2.range(new Bytes(serializeBytes("0")), null)) {
             final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
             expectedContents.add(kv0);
             expectedContents.add(kv1);
