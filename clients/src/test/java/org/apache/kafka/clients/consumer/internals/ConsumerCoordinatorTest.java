@@ -1484,6 +1484,8 @@ public abstract class ConsumerCoordinatorTest {
                 Utils.mkMap(Utils.mkEntry(topic1, 1), Utils.mkEntry(topic2, 1))));
         client.respond(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NOT_COORDINATOR));
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.poll(time.timer(0)); // failing joinGroup request will require re-poll in order to retry
+        assertFalse(client.hasInFlightRequests());
         coordinator.poll(time.timer(0));
         assertTrue(coordinator.rejoinNeededOrPending());
 
