@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -85,10 +84,10 @@ public class LogicalKeyValueSegmentTest {
         final KeyValue<String, String> kv0 = new KeyValue<>("1", "a");
         final KeyValue<String, String> kv1 = new KeyValue<>("2", "b");
 
-        segment1.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
-        segment1.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
-        segment2.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
-        segment2.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
+        segment1.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment1.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
+        segment2.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment2.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
 
         assertEquals("a", getAndDeserialize(segment1, "1"));
         assertEquals("b", getAndDeserialize(segment1, "2"));
@@ -100,14 +99,14 @@ public class LogicalKeyValueSegmentTest {
     public void shouldPutAll() {
         final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
         entries.add(new KeyValue<>(
-            new Bytes(STRING_SERIALIZER.serialize(null, "1")),
-            STRING_SERIALIZER.serialize(null, "a")));
+            new Bytes(serializeBytes("1")),
+            serializeBytes("a")));
         entries.add(new KeyValue<>(
-            new Bytes(STRING_SERIALIZER.serialize(null, "2")),
-            STRING_SERIALIZER.serialize(null, "b")));
+            new Bytes(serializeBytes("2")),
+            serializeBytes("b")));
         entries.add(new KeyValue<>(
-            new Bytes(STRING_SERIALIZER.serialize(null, "3")),
-            STRING_SERIALIZER.serialize(null, "c")));
+            new Bytes(serializeBytes("3")),
+            serializeBytes("c")));
 
         segment1.putAll(entries);
         segment2.putAll(entries);
@@ -122,9 +121,9 @@ public class LogicalKeyValueSegmentTest {
 
     @Test
     public void shouldPutIfAbsent() {
-        final Bytes keyBytes = new Bytes(STRING_SERIALIZER.serialize(null, "one"));
-        final byte[] valueBytes = STRING_SERIALIZER.serialize(null, "A");
-        final byte[] valueBytesUpdate = STRING_SERIALIZER.serialize(null, "B");
+        final Bytes keyBytes = new Bytes(serializeBytes("one"));
+        final byte[] valueBytes = serializeBytes("A");
+        final byte[] valueBytesUpdate = serializeBytes("B");
 
         segment1.putIfAbsent(keyBytes, valueBytes);
         segment1.putIfAbsent(keyBytes, valueBytesUpdate);
@@ -139,13 +138,13 @@ public class LogicalKeyValueSegmentTest {
         final KeyValue<String, String> kv0 = new KeyValue<>("1", "a");
         final KeyValue<String, String> kv1 = new KeyValue<>("2", "b");
 
-        segment1.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
-        segment1.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
-        segment2.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
-        segment2.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
-        segment1.delete(new Bytes(kv0.key.getBytes(UTF_8)));
+        segment1.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment1.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
+        segment2.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment2.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
+        segment1.delete(new Bytes(serializeBytes(kv0.key)));
 
-        assertNull(segment1.get(new Bytes(kv0.key.getBytes(UTF_8))));
+        assertNull(segment1.get(new Bytes(serializeBytes(kv0.key))));
         assertEquals("b", getAndDeserialize(segment1, "2"));
         assertEquals("a", getAndDeserialize(segment2, "1"));
         assertEquals("b", getAndDeserialize(segment2, "2"));
@@ -158,16 +157,42 @@ public class LogicalKeyValueSegmentTest {
         final KeyValue<String, String> kv2 = new KeyValue<>("2", "two");
         final KeyValue<String, String> kvOther = new KeyValue<>("1", "other");
 
-        segment1.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
-        segment1.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
-        segment1.put(new Bytes(kv2.key.getBytes(UTF_8)), kv2.value.getBytes(UTF_8));
-        segment2.put(new Bytes(kvOther.key.getBytes(UTF_8)), kvOther.value.getBytes(UTF_8));
+        segment1.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment1.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
+        segment1.put(new Bytes(serializeBytes(kv2.key)), serializeBytes(kv2.value));
+        segment2.put(new Bytes(serializeBytes(kvOther.key)), serializeBytes(kvOther.value));
 
-        final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
-        expectedContents.add(kv0);
-        expectedContents.add(kv1);
+        // non-null bounds
+        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(new Bytes(serializeBytes("1")), new Bytes(serializeBytes("2")))) {
+            final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
+            expectedContents.add(kv1);
+            expectedContents.add(kv2);
+            assertEquals(expectedContents, getDeserializedList(iterator));
+        }
 
-        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(null, new Bytes(STRING_SERIALIZER.serialize(null, "1")))) {
+        // null lower bound
+        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(null, new Bytes(serializeBytes("1")))) {
+            final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
+            expectedContents.add(kv0);
+            expectedContents.add(kv1);
+            assertEquals(expectedContents, getDeserializedList(iterator));
+        }
+
+        // null upper bound
+        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(new Bytes(serializeBytes("0")), null)) {
+            final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
+            expectedContents.add(kv0);
+            expectedContents.add(kv1);
+            expectedContents.add(kv2);
+            assertEquals(expectedContents, getDeserializedList(iterator));
+        }
+
+        // null upper and lower bounds
+        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.range(new Bytes(serializeBytes("0")), null)) {
+            final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
+            expectedContents.add(kv0);
+            expectedContents.add(kv1);
+            expectedContents.add(kv2);
             assertEquals(expectedContents, getDeserializedList(iterator));
         }
     }
@@ -179,10 +204,10 @@ public class LogicalKeyValueSegmentTest {
         final KeyValue<String, String> kv2 = new KeyValue<>("2", "two");
         final KeyValue<String, String> kvOther = new KeyValue<>("1", "other");
 
-        segment1.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
-        segment1.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
-        segment1.put(new Bytes(kv2.key.getBytes(UTF_8)), kv2.value.getBytes(UTF_8));
-        segment2.put(new Bytes(kvOther.key.getBytes(UTF_8)), kvOther.value.getBytes(UTF_8));
+        segment1.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment1.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
+        segment1.put(new Bytes(serializeBytes(kv2.key)), serializeBytes(kv2.value));
+        segment2.put(new Bytes(serializeBytes(kvOther.key)), serializeBytes(kvOther.value));
 
         final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
         expectedContents.add(kv0);
@@ -201,14 +226,14 @@ public class LogicalKeyValueSegmentTest {
         final KeyValue<String, String> kv2 = new KeyValue<>("2", "two");
         final KeyValue<String, String> kvOther = new KeyValue<>("1", "other");
 
-        segment1.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
-        segment1.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
-        segment1.put(new Bytes(kv2.key.getBytes(UTF_8)), kv2.value.getBytes(UTF_8));
-        segment2.put(new Bytes(kvOther.key.getBytes(UTF_8)), kvOther.value.getBytes(UTF_8));
-        segment1.deleteRange(new Bytes(kv0.key.getBytes(UTF_8)), new Bytes(kv1.key.getBytes(UTF_8)));
+        segment1.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment1.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
+        segment1.put(new Bytes(serializeBytes(kv2.key)), serializeBytes(kv2.value));
+        segment2.put(new Bytes(serializeBytes(kvOther.key)), serializeBytes(kvOther.value));
+        segment1.deleteRange(new Bytes(serializeBytes(kv0.key)), new Bytes(serializeBytes(kv1.key)));
 
-        assertNull(segment1.get(new Bytes(kv0.key.getBytes(UTF_8))));
-        assertNull(segment1.get(new Bytes(kv1.key.getBytes(UTF_8))));
+        assertNull(segment1.get(new Bytes(serializeBytes(kv0.key))));
+        assertNull(segment1.get(new Bytes(serializeBytes(kv1.key))));
         assertEquals("two", getAndDeserialize(segment1, "2"));
         assertEquals("other", getAndDeserialize(segment2, "1"));
     }
@@ -218,10 +243,10 @@ public class LogicalKeyValueSegmentTest {
         final KeyValue<String, String> kv0 = new KeyValue<>("1", "a");
         final KeyValue<String, String> kv1 = new KeyValue<>("2", "b");
 
-        segment1.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
-        segment1.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
-        segment2.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
-        segment2.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
+        segment1.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment1.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
+        segment2.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment2.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
 
         segment1.destroy();
 
@@ -230,8 +255,8 @@ public class LogicalKeyValueSegmentTest {
 
         segment1 = new LogicalKeyValueSegment(1, "segment-1", physicalStore);
 
-        assertNull(segment1.get(new Bytes(kv0.key.getBytes(UTF_8))));
-        assertNull(segment1.get(new Bytes(kv1.key.getBytes(UTF_8))));
+        assertNull(segment1.get(new Bytes(serializeBytes(kv0.key))));
+        assertNull(segment1.get(new Bytes(serializeBytes(kv1.key))));
     }
 
     @Test
@@ -239,14 +264,14 @@ public class LogicalKeyValueSegmentTest {
         final KeyValue<String, String> kv0 = new KeyValue<>("0", "zero");
         final KeyValue<String, String> kv1 = new KeyValue<>("1", "one");
 
-        segment1.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
-        segment1.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
-        segment2.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
-        segment2.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
+        segment1.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment1.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
+        segment2.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment2.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
 
-        final KeyValueIterator<Bytes, byte[]> range1 = segment1.range(null, new Bytes(STRING_SERIALIZER.serialize(null, "1")));
+        final KeyValueIterator<Bytes, byte[]> range1 = segment1.range(null, new Bytes(serializeBytes("1")));
         final KeyValueIterator<Bytes, byte[]> all1 = segment1.all();
-        final KeyValueIterator<Bytes, byte[]> range2 = segment2.range(null, new Bytes(STRING_SERIALIZER.serialize(null, "1")));
+        final KeyValueIterator<Bytes, byte[]> range2 = segment2.range(null, new Bytes(serializeBytes("1")));
 
         assertTrue(range1.hasNext());
         assertTrue(all1.hasNext());
@@ -259,8 +284,12 @@ public class LogicalKeyValueSegmentTest {
         assertTrue(range2.hasNext());
     }
 
+    private static byte[] serializeBytes(final String s) {
+        return STRING_SERIALIZER.serialize(null, s);
+    }
+
     private static String getAndDeserialize(final LogicalKeyValueSegment segment, final String key) {
-        return STRING_DESERIALIZER.deserialize(null, segment.get(new Bytes(STRING_SERIALIZER.serialize(null, key))));
+        return STRING_DESERIALIZER.deserialize(null, segment.get(new Bytes(serializeBytes(key))));
     }
 
     private static List<KeyValue<String, String>> getDeserializedList(final KeyValueIterator<Bytes, byte[]> iter) {

@@ -65,7 +65,7 @@ public class LogicalKeyValueSegmentsTest {
             SEGMENT_INTERVAL,
             new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME)
         );
-        segments.openExisting(context, -1L);
+        segments.openExisting(context, 0L);
     }
 
     @After
@@ -83,9 +83,9 @@ public class LogicalKeyValueSegmentsTest {
 
     @Test
     public void shouldCreateSegments() {
-        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, -1L);
-        final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(1, context, -1L);
-        final LogicalKeyValueSegment segment3 = segments.getOrCreateSegmentIfLive(2, context, -1L);
+        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, 0L);
+        final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
+        final LogicalKeyValueSegment segment3 = segments.getOrCreateSegmentIfLive(2, context, 2 * SEGMENT_INTERVAL);
 
         final File rocksdbDir = new File(new File(context.stateDir(), DB_FILE_DIR), STORE_NAME);
         assertTrue(rocksdbDir.isDirectory());
@@ -116,9 +116,13 @@ public class LogicalKeyValueSegmentsTest {
 
     @Test
     public void shouldGetSegmentForTimestamp() {
-        final LogicalKeyValueSegment segment = segments.getOrCreateSegmentIfLive(0, context, -1L);
-        segments.getOrCreateSegmentIfLive(1, context, -1L);
-        assertEquals(segment, segments.getSegmentForTimestamp(0L));
+        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, 0L);
+        final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
+
+        assertEquals(segment1, segments.getSegmentForTimestamp(0L));
+        assertEquals(segment1, segments.getSegmentForTimestamp(SEGMENT_INTERVAL - 1));
+        assertEquals(segment2, segments.getSegmentForTimestamp(SEGMENT_INTERVAL));
+        assertEquals(segment2, segments.getSegmentForTimestamp(2 * SEGMENT_INTERVAL - 1));
     }
 
     @Test
@@ -155,7 +159,7 @@ public class LogicalKeyValueSegmentsTest {
 
     @Test
     public void shouldClearSegmentsOnClose() {
-        segments.getOrCreateSegmentIfLive(0, context, -1L);
+        segments.getOrCreateSegmentIfLive(0, context, 0L);
         segments.close();
         assertThat(segments.getSegmentForTimestamp(0), is(nullValue()));
     }
