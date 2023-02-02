@@ -451,11 +451,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
         if (worker.configTransformer() != null) {
-            try {
-                connectorProps = worker.configTransformer().transform(connectorProps);
-            } catch (Exception e) {
-                throw new ConnectException("Unable to transform connector config with config providers", e);
-            }
+            connectorProps = worker.configTransformer().transform(connectorProps);
         }
         String connType = connectorProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         if (connType == null)
