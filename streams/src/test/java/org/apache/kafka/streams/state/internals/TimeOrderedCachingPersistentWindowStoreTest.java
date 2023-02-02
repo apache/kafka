@@ -56,6 +56,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -66,6 +67,7 @@ import java.util.UUID;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
+
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMinutes;
 import static java.time.Instant.ofEpochMilli;
@@ -112,6 +114,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     private TimeOrderedCachingWindowStore cachingStore;
     private RocksDBTimeOrderedWindowSegmentedBytesStore bytesStore;
     private CacheFlushListenerStub<Windowed<String>, String> cacheListener;
+
     @Parameter
     public boolean hasIndex;
 
