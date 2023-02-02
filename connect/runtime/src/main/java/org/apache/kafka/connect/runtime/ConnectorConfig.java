@@ -270,10 +270,10 @@ public class ConnectorConfig extends AbstractConfig {
     /**
      * Returns the initialized list of {@link Transformation} which are specified in {@link #TRANSFORMS_CONFIG}.
      */
-    public <R extends ConnectRecord<R>> List<PredicatedTransformation<R>> transformations() {
+    public <R extends ConnectRecord<R>> List<TransformationStage<R>> transformations() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
 
-        final List<PredicatedTransformation<R>> transformations = new ArrayList<>(transformAliases.size());
+        final List<TransformationStage<R>> transformations = new ArrayList<>(transformAliases.size());
         for (String alias : transformAliases) {
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
 
@@ -281,17 +281,17 @@ public class ConnectorConfig extends AbstractConfig {
                 @SuppressWarnings("unchecked")
                 final Transformation<R> transformation = Utils.newInstance(getClass(prefix + "type"), Transformation.class);
                 Map<String, Object> configs = originalsWithPrefix(prefix);
-                Object predicateAlias = configs.remove(PredicatedTransformation.PREDICATE_CONFIG);
-                Object negate = configs.remove(PredicatedTransformation.NEGATE_CONFIG);
+                Object predicateAlias = configs.remove(TransformationStage.PREDICATE_CONFIG);
+                Object negate = configs.remove(TransformationStage.NEGATE_CONFIG);
                 transformation.configure(configs);
                 if (predicateAlias != null) {
                     String predicatePrefix = PREDICATES_PREFIX + predicateAlias + ".";
                     @SuppressWarnings("unchecked")
                     Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
-                    transformations.add(new PredicatedTransformation<>(predicate, negate == null ? false : Boolean.parseBoolean(negate.toString()), transformation));
+                    transformations.add(new TransformationStage<>(predicate, negate == null ? false : Boolean.parseBoolean(negate.toString()), transformation));
                 } else {
-                    transformations.add(new PredicatedTransformation<>(transformation));
+                    transformations.add(new TransformationStage<>(transformation));
                 }
             } catch (Exception e) {
                 throw new ConnectException(e);
@@ -321,9 +321,9 @@ public class ConnectorConfig extends AbstractConfig {
             protected ConfigDef initialConfigDef() {
                 // All Transformations get these config parameters implicitly
                 return super.initialConfigDef()
-                        .define(PredicatedTransformation.PREDICATE_CONFIG, Type.STRING, "", Importance.MEDIUM,
+                        .define(TransformationStage.PREDICATE_CONFIG, Type.STRING, "", Importance.MEDIUM,
                                 "The alias of a predicate used to determine whether to apply this transformation.")
-                        .define(PredicatedTransformation.NEGATE_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM,
+                        .define(TransformationStage.NEGATE_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM,
                                 "Whether the configured predicate should be negated.");
             }
 
@@ -332,8 +332,8 @@ public class ConnectorConfig extends AbstractConfig {
                 return super.configDefsForClass(typeConfig)
                     .filter(entry -> {
                         // The implicit parameters mask any from the transformer with the same name
-                        if (PredicatedTransformation.PREDICATE_CONFIG.equals(entry.getKey())
-                                || PredicatedTransformation.NEGATE_CONFIG.equals(entry.getKey())) {
+                        if (TransformationStage.PREDICATE_CONFIG.equals(entry.getKey())
+                                || TransformationStage.NEGATE_CONFIG.equals(entry.getKey())) {
                             log.warn("Transformer config {} is masked by implicit config of that name",
                                     entry.getKey());
                             return false;
@@ -350,8 +350,8 @@ public class ConnectorConfig extends AbstractConfig {
 
             @Override
             protected void validateProps(String prefix) {
-                String prefixedNegate = prefix + PredicatedTransformation.NEGATE_CONFIG;
-                String prefixedPredicate = prefix + PredicatedTransformation.PREDICATE_CONFIG;
+                String prefixedNegate = prefix + TransformationStage.NEGATE_CONFIG;
+                String prefixedPredicate = prefix + TransformationStage.PREDICATE_CONFIG;
                 if (props.containsKey(prefixedNegate) &&
                         !props.containsKey(prefixedPredicate)) {
                     throw new ConfigException("Config '" + prefixedNegate + "' was provided " +

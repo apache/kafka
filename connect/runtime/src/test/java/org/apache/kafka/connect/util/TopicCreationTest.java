@@ -19,7 +19,7 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.runtime.PredicatedTransformation;
+import org.apache.kafka.connect.runtime.TransformationStage;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -516,9 +516,9 @@ public class TopicCreationTest {
         topicCreation.addTopic(FOO_TOPIC);
         assertFalse(topicCreation.isTopicCreationRequired(FOO_TOPIC));
 
-        List<PredicatedTransformation<SourceRecord>> transformations = sourceConfig.transformations();
+        List<TransformationStage<SourceRecord>> transformations = sourceConfig.transformations();
         assertEquals(1, transformations.size());
-        PredicatedTransformation<SourceRecord> xform = transformations.get(0);
+        TransformationStage<SourceRecord> xform = transformations.get(0);
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
         assertEquals(Schema.Type.INT8, transformed.valueSchema().type());
         assertEquals((byte) 42, transformed.value());
@@ -623,15 +623,15 @@ public class TopicCreationTest {
         assertEquals(barPartitions, barTopicSpec.numPartitions());
         assertThat(barTopicSpec.configs(), is(barTopicProps));
 
-        List<PredicatedTransformation<SourceRecord>> transformations = sourceConfig.transformations();
+        List<TransformationStage<SourceRecord>> transformations = sourceConfig.transformations();
         assertEquals(2, transformations.size());
 
-        PredicatedTransformation<SourceRecord> castXForm = transformations.get(0);
+        TransformationStage<SourceRecord> castXForm = transformations.get(0);
         SourceRecord transformed = castXForm.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
         assertEquals(Schema.Type.INT8, transformed.valueSchema().type());
         assertEquals((byte) 42, transformed.value());
 
-        PredicatedTransformation<SourceRecord> regexRouterXForm = transformations.get(1);
+        TransformationStage<SourceRecord> regexRouterXForm = transformations.get(1);
         transformed = regexRouterXForm.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
         assertEquals("prefix-topic", transformed.topic());
     }

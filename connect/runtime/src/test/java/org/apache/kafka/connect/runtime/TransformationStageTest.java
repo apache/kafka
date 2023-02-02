@@ -28,7 +28,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-public class PredicatedTransformationTest {
+public class TransformationStageTest {
 
     private final SourceRecord initial = new SourceRecord(singletonMap("initial", 1), null, null, null, null);
     private final SourceRecord transformed = new SourceRecord(singletonMap("transformed", 2), null, null, null, null);
@@ -50,7 +50,7 @@ public class PredicatedTransformationTest {
         @SuppressWarnings("unchecked")
         Transformation<SourceRecord> predicatedTransform = mock(Transformation.class);
         when(predicatedTransform.apply(any())).thenReturn(transformed);
-        PredicatedTransformation<SourceRecord> pt = new PredicatedTransformation<>(
+        TransformationStage<SourceRecord> pt = new TransformationStage<>(
                 predicate,
                 negate,
                 predicatedTransform);

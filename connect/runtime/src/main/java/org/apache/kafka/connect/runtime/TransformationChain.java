@@ -29,10 +29,10 @@ import java.util.StringJoiner;
 public class TransformationChain<R extends ConnectRecord<R>> implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(TransformationChain.class);
 
-    private final List<PredicatedTransformation<R>> transformations;
+    private final List<TransformationStage<R>> transformations;
     private final RetryWithToleranceOperator retryWithToleranceOperator;
 
-    public TransformationChain(List<PredicatedTransformation<R>> transformations, RetryWithToleranceOperator retryWithToleranceOperator) {
+    public TransformationChain(List<TransformationStage<R>> transformations, RetryWithToleranceOperator retryWithToleranceOperator) {
         this.transformations = transformations;
         this.retryWithToleranceOperator = retryWithToleranceOperator;
     }
@@ -40,7 +40,7 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
     public R apply(R record) {
         if (transformations.isEmpty()) return record;
 
-        for (final PredicatedTransformation<R> transformation : transformations) {
+        for (final TransformationStage<R> transformation : transformations) {
             final R current = record;
 
             log.trace("Applying transformation {} to {}",
@@ -56,7 +56,7 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
 
     @Override
     public void close() {
-        for (PredicatedTransformation<R> transformation : transformations) {
+        for (TransformationStage<R> transformation : transformations) {
             transformation.close();
         }
     }
@@ -76,7 +76,7 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
 
     public String toString() {
         StringJoiner chain = new StringJoiner(", ", getClass().getName() + "{", "}");
-        for (PredicatedTransformation<R> transformation : transformations) {
+        for (TransformationStage<R> transformation : transformations) {
             chain.add(transformation.transformClass().getName());
         }
         return chain.toString();

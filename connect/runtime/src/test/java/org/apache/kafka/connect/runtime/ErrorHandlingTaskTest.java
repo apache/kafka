@@ -124,7 +124,7 @@ public class ErrorHandlingTaskTest {
     @Mock
     Plugins plugins;
     @Mock
-    PredicatedTransformation<?> transformation;
+    TransformationStage<?> transformation;
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
 
@@ -516,7 +516,7 @@ public class ErrorHandlingTaskTest {
         oo.put("schemas.enable", "false");
         converter.configure(oo);
         @SuppressWarnings("unchecked")
-        PredicatedTransformation<SinkRecord> transform = (PredicatedTransformation<SinkRecord>) transformation;
+        TransformationStage<SinkRecord> transform = (TransformationStage<SinkRecord>) transformation;
         TransformationChain<SinkRecord> sinkTransforms =
                 new TransformationChain<>(singletonList(transform), retryWithToleranceOperator);
 
@@ -558,7 +558,7 @@ public class ErrorHandlingTaskTest {
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator, Converter converter) {
         @SuppressWarnings("unchecked")
-        PredicatedTransformation<SourceRecord> transform = (PredicatedTransformation<SourceRecord>) transformation;
+        TransformationStage<SourceRecord> transform = (TransformationStage<SourceRecord>) transformation;
         TransformationChain<SourceRecord> sourceTransforms =
                 new TransformationChain<>(singletonList(transform), retryWithToleranceOperator);
 

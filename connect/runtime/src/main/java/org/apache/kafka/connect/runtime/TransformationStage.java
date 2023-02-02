@@ -27,7 +27,7 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
  * {@link Predicate} is true (or false, according to {@code negate}).
  * @param <R>
  */
-public class PredicatedTransformation<R extends ConnectRecord<R>> implements AutoCloseable {
+public class TransformationStage<R extends ConnectRecord<R>> implements AutoCloseable {
 
     static final String PREDICATE_CONFIG = "predicate";
     static final String NEGATE_CONFIG = "negate";
@@ -35,11 +35,11 @@ public class PredicatedTransformation<R extends ConnectRecord<R>> implements Aut
     final Transformation<R> delegate;
     final boolean negate;
 
-    PredicatedTransformation(Transformation<R> delegate) {
+    TransformationStage(Transformation<R> delegate) {
         this(null, false, delegate);
     }
 
-    PredicatedTransformation(Predicate<R> predicate, boolean negate, Transformation<R> delegate) {
+    TransformationStage(Predicate<R> predicate, boolean negate, Transformation<R> delegate) {
         this.predicate = predicate;
         this.negate = negate;
         this.delegate = delegate;

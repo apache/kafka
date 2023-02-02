@@ -151,9 +151,9 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<PredicatedTransformation<SinkRecord>> transformations = config.transformations();
+        final List<TransformationStage<SinkRecord>> transformations = config.transformations();
         assertEquals(1, transformations.size());
-        final PredicatedTransformation<SinkRecord> xform = transformations.get(0);
+        final TransformationStage<SinkRecord> xform = transformations.get(0);
         assertEquals(42, xform.apply(DUMMY_RECORD).kafkaPartition().intValue());
     }
 
@@ -179,7 +179,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.b.type", SimpleTransformation.class.getName());
         props.put("transforms.b.magic.number", "84");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<PredicatedTransformation<SinkRecord>> transformations = config.transformations();
+        final List<TransformationStage<SinkRecord>> transformations = config.transformations();
         assertEquals(2, transformations.size());
         assertEquals(42, transformations.get(0).apply(DUMMY_RECORD).kafkaPartition().intValue());
         assertEquals(84, transformations.get(1).apply(DUMMY_RECORD).kafkaPartition().intValue());
@@ -286,9 +286,9 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     private void assertPredicatedTransform(Map<String, String> props, boolean expectedNegated) {
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<PredicatedTransformation<SinkRecord>> transformations = config.transformations();
+        final List<TransformationStage<SinkRecord>> transformations = config.transformations();
         assertEquals(1, transformations.size());
-        PredicatedTransformation<SinkRecord> predicated = transformations.get(0);
+        TransformationStage<SinkRecord> predicated = transformations.get(0);
 
         assertEquals(expectedNegated, predicated.negate);
 
@@ -446,8 +446,8 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put(prefix + "type", HasDuplicateConfigTransformation.class.getName());
         ConfigDef def = ConnectorConfig.enrich(MOCK_PLUGINS, new ConfigDef(), props, false);
         assertEnrichedConfigDef(def, prefix, HasDuplicateConfigTransformation.MUST_EXIST_KEY, ConfigDef.Type.BOOLEAN);
-        assertEnrichedConfigDef(def, prefix, PredicatedTransformation.PREDICATE_CONFIG, ConfigDef.Type.STRING);
-        assertEnrichedConfigDef(def, prefix, PredicatedTransformation.NEGATE_CONFIG, ConfigDef.Type.BOOLEAN);
+        assertEnrichedConfigDef(def, prefix, TransformationStage.PREDICATE_CONFIG, ConfigDef.Type.STRING);
+        assertEnrichedConfigDef(def, prefix, TransformationStage.NEGATE_CONFIG, ConfigDef.Type.BOOLEAN);
     }
 
     private static void assertEnrichedConfigDef(ConfigDef def, String prefix, String keyName, ConfigDef.Type expectedType) {
@@ -461,9 +461,9 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         private static final String MUST_EXIST_KEY = "must.exist.key";
         private static final ConfigDef CONFIG_DEF = new ConfigDef()
                 // this configDef is duplicate. It should be removed automatically so as to avoid duplicate config error.
-                .define(PredicatedTransformation.PREDICATE_CONFIG, ConfigDef.Type.INT, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM, "fake")
+                .define(TransformationStage.PREDICATE_CONFIG, ConfigDef.Type.INT, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM, "fake")
                 // this configDef is duplicate. It should be removed automatically so as to avoid duplicate config error.
-                .define(PredicatedTransformation.NEGATE_CONFIG, ConfigDef.Type.INT, 123, ConfigDef.Importance.MEDIUM, "fake")
+                .define(TransformationStage.NEGATE_CONFIG, ConfigDef.Type.INT, 123, ConfigDef.Importance.MEDIUM, "fake")
                 // this configDef should appear if above duplicate configDef is removed without any error
                 .define(MUST_EXIST_KEY, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM, "this key must exist");
 
