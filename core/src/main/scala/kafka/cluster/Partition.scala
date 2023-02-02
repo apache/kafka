@@ -944,10 +944,12 @@ class Partition(val topicPartition: TopicPartition,
         val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
         if (outOfSyncReplicaIds.nonEmpty) {
           val outOfSyncReplicaLog = outOfSyncReplicaIds.map { replicaId =>
-            val logEndOffsetMessage = getReplica(replicaId)
+            val replica = getReplica(replicaId)
+            val logEndOffsetMessage = replica
               .map(_.logEndOffset.toString)
               .getOrElse("unknown")
-            s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage)"
+            val lastCaughtUpTimeMessage = replica.map(_.lastCaughtUpTimeMs.toString).getOrElse("unknown")
+            s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage, lastCaughtUpTime: $lastCaughtUpTimeMessage)"
           }.mkString(" ")
           val newIsrLog = (isrState.isr -- outOfSyncReplicaIds).mkString(",")
           info(s"Shrinking ISR from ${isrState.isr.mkString(",")} to $newIsrLog. " +
