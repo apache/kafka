@@ -81,8 +81,8 @@ class KafkaServerKRaftRegistrationTest {
         case t: Throwable => fail("Had some other error waiting for brokers", t)
       }
     } finally {
-      zkCluster.stop()
       kraftCluster.close()
+      zkCluster.stop()
     }
   }
 
@@ -112,8 +112,8 @@ class KafkaServerKRaftRegistrationTest {
       zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       assertThrows(classOf[IllegalArgumentException], () => zkCluster.rollingBrokerRestart())
     } finally {
-      zkCluster.stop()
       kraftCluster.close()
+      zkCluster.stop()
     }
   }
 }

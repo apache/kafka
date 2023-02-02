@@ -558,7 +558,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     propagator.sendRPCsToBrokersFromMetadataDelta(delta, image,
                             migrationLeadershipState.zkControllerEpoch());
                 } else {
-                    log.trace("Not sending RPCs to brokers for metadata {} since no relevant metadata changes", metadataType);
+                    log.trace("Not sending RPCs to brokers for metadata {} since no relevant metadata has changed", metadataType);
                 }
             } else {
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);

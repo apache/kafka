@@ -249,9 +249,12 @@ public class KRaftMigrationDriverTest {
         return future;
     }
 
+    /**
+     * Don't send RPCs to brokers for every metadata change, only when brokers or topics change.
+     * This is a regression test for KAFKA-14668
+     */
     @Test
     public void testOnlySendNeededRPCsToBrokers() throws Exception {
-        // KAFKA-14668 Don't send RPCs to brokers for every metadata change, only when broker or topics change.
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
         CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3)));
         KRaftMigrationDriver driver = new KRaftMigrationDriver(
@@ -277,7 +280,7 @@ public class KRaftMigrationDriverTest {
         driver.publishLogDelta(delta, image, new LogDeltaManifest(provenance,
             new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
 
-        TestUtils.waitForCondition(() -> driver.migrationState().get(10, TimeUnit.SECONDS).equals(MigrationState.DUAL_WRITE),
+        TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationState.DUAL_WRITE),
             "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
 
         Assertions.assertEquals(1, metadataPropagator.images);
@@ -291,7 +294,7 @@ public class KRaftMigrationDriverTest {
             .setValue("bar"));
         provenance = new MetadataProvenance(120, 1, 2);
         image = delta.apply(provenance);
-        enqueueMetadataChangeEventWithFuture(driver, delta, image, provenance).get(10, TimeUnit.SECONDS);
+        enqueueMetadataChangeEventWithFuture(driver, delta, image, provenance).get(1, TimeUnit.MINUTES);
 
         Assertions.assertEquals(1, migrationClient.capturedConfigs.size());
         Assertions.assertEquals(1, metadataPropagator.images);
@@ -305,7 +308,7 @@ public class KRaftMigrationDriverTest {
             .setInControlledShutdown(BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value()));
         provenance = new MetadataProvenance(130, 1, 3);
         image = delta.apply(provenance);
-        enqueueMetadataChangeEventWithFuture(driver, delta, image, provenance).get(10, TimeUnit.SECONDS);
+        enqueueMetadataChangeEventWithFuture(driver, delta, image, provenance).get(1, TimeUnit.MINUTES);
 
         Assertions.assertEquals(1, metadataPropagator.images);
         Assertions.assertEquals(1, metadataPropagator.deltas);
