@@ -1065,7 +1065,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             // Note that we use the updated connector config despite the fact that we don't have an updated
                             // snapshot yet. The existing task info should still be accurate.
                             ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                                // validateConnectorConfig have checked the existence of CONNECTOR_CLASS_CONFIG
                                 connectorType(config));
                             callback.onCompletion(null, new Created<>(!exists, info));
                             return null;

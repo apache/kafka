@@ -736,6 +736,58 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testCreateConnectorConfigBackingStoreError() {
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        member.wakeup();
+        PowerMock.expectLastCall();
+
+        // mock the actual validation since its asynchronous nature is difficult to test and should
+        // be covered sufficiently by the unit tests for the AbstractHerder class
+        Capture<Callback<ConfigInfos>> validateCallback = newCapture();
+        herder.validateConnectorConfig(EasyMock.eq(CONN2_CONFIG), capture(validateCallback));
+        PowerMock.expectLastCall().andAnswer(() -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        });
+
+        configBackingStore.putConnectorConfig(CONN2, CONN2_CONFIG);
+        PowerMock.expectLastCall().andThrow(new ConnectException("Error writing connector configuration to Kafka"));
+
+        // verify that the exception from config backing store write is propagated via the callback
+        putConnectorCallback.onCompletion(EasyMock.anyObject(ConnectException.class), EasyMock.isNull());
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+        // These will occur just before/during the second tick
+        member.wakeup();
+        PowerMock.expectLastCall();
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
+        // First tick runs the initial herder request, which issues an asynchronous request for
+        // connector validation
+        herder.tick();
+
+        // Once that validation is complete, another request is added to the herder request queue
+        // for actually performing the config write; this tick is for that request
+        herder.tick();
+
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testCreateConnectorFailedValidation() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
@@ -2592,6 +2644,7 @@ public class DistributedHerderTest {
         });
         member.wakeup();
         PowerMock.expectLastCall();
+
         configBackingStore.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED);
         PowerMock.expectLastCall().andAnswer(() -> {
             // Simulate response to writing config + waiting until end of log to be read
