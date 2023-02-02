@@ -17,48 +17,65 @@
 
 package org.apache.kafka.image;
 
+import java.util.function.Function;
+
 public class MetadataImageUtil {
+    public static <T> void imageSize(StringBuilder sb, String name, T image, Function<T, Integer> mapper) {
+        int count = mapper.apply(image);
+        sb.append(count).append(" ").append(name);
+        if (count != 1) {
+            sb.append("s");
+        }
+        sb.append(" (");
+    }
+
+    public static <T> void deltaSizeOrZero(StringBuilder sb, T delta, Function<T, Integer> mapper) {
+        if (delta == null) {
+            sb.append("0");
+        } else {
+            sb.append(mapper.apply(delta));
+        }
+        sb.append(" changed)");
+    }
+
     /**
      * Given a MetadataImage and MetadataDelta, produce a succinct human-readable description.
      */
     public static String toSummaryString(MetadataImage image, MetadataDelta delta) {
         StringBuilder sb = new StringBuilder();
-        sb.append("MetadataSummary(");
-        sb.append("offset=");
+        sb.append("Metadata at offset ");
         sb.append(image.provenance().lastContainedOffset());
-        sb.append(", epoch=");
+        sb.append(" and epoch ");
         sb.append(image.provenance().lastContainedEpoch());
-        if (delta.clusterDelta() != null) {
-            sb.append(", numChangedBrokers=");
-            sb.append(delta.clusterDelta().changedBrokers().size());
+        sb.append(" includes: ");
+
+        imageSize(sb, "broker", image.cluster(), clusterImage -> clusterImage.brokers().size());
+        deltaSizeOrZero(sb, delta.clusterDelta(), clusterDelta -> clusterDelta.changedBrokers().size());
+        sb.append(", ");
+
+        imageSize(sb, "topic", image.topics(), topicsImage -> topicsImage.topicsById().size());
+        deltaSizeOrZero(sb, delta.topicsDelta(), topicsDelta -> topicsDelta.changedTopics().size());
+        sb.append(", ");
+
+        imageSize(sb, "feature", image.features(), featuresImage -> featuresImage.finalizedVersions().size());
+        deltaSizeOrZero(sb, delta.featuresDelta(), featuresDelta -> featuresDelta.changes().size());
+        sb.append(", ");
+
+        imageSize(sb, "config", image.configs(),
+            configsImage -> configsImage.resourceData().values().stream().mapToInt(ConfigurationImage::size).sum());
+        deltaSizeOrZero(sb, delta.configsDelta(),
+            configsDelta -> configsDelta.changes().values().stream().mapToInt(ConfigurationDelta::size).sum());
+
+        if (!image.producerIds().isEmpty()) {
+            sb.append(", ");
+            sb.append("1 producer id (");
+            if (delta.producerIdsDelta() != null) {
+                sb.append("1");
+            } else {
+                sb.append("0");
+            }
+            sb.append(" changed)");
         }
-        if (delta.featuresDelta() != null) {
-            sb.append(", changedFeatures=");
-            sb.append(delta.featuresDelta().changes());
-        }
-        if (delta.configsDelta() != null) {
-            sb.append(", numChangedConfigs=");
-            sb.append(delta.configsDelta().changes().size());
-        }
-        if (delta.producerIdsDelta() != null) {
-            sb.append(", changedProducerId=");
-            sb.append(delta.producerIdsDelta().nextProducerId());
-        }
-        if (delta.topicsDelta() != null) {
-            sb.append(", numChangedTopics=");
-            sb.append(delta.topicsDelta().changedTopics().size());
-        }
-        sb.append(", numBrokers=");
-        sb.append(image.cluster().brokers().size());
-        sb.append(", features=");
-        sb.append(image.features().finalizedVersions());
-        sb.append(", numConfigs=");
-        sb.append(image.configs().resourceData().values().stream().mapToInt(configImage -> configImage.data().size()).sum());
-        sb.append(", nextProducerId=");
-        sb.append(image.producerIds().highestSeenProducerId());
-        sb.append(", numTopics=");
-        sb.append(image.topics().topicsById().size());
-        sb.append(")");
         return sb.toString();
     }
 }

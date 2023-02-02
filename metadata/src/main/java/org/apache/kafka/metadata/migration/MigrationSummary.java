@@ -43,11 +43,11 @@ public class MigrationSummary {
     }
 
     public void acceptBatch(List<ApiMessageAndVersion> recordBatch) {
-        batches ++;
+        batches++;
         recordBatch.forEach(apiMessageAndVersion -> {
             MetadataRecordType type = MetadataRecordType.fromId(apiMessageAndVersion.message().apiKey());
             counts.merge(type, 1, (__, count) -> count + 1);
-            total ++;
+            total++;
         });
     }
 

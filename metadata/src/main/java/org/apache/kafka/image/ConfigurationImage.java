@@ -76,6 +76,10 @@ public final class ConfigurationImage {
         }
     }
 
+    public int size() {
+        return data.size();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof ConfigurationImage)) return false;
