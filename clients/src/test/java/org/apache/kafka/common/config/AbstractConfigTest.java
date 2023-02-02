@@ -262,20 +262,21 @@ public class AbstractConfigTest {
 
     @Test
     public void testConfiguredInstancesClosedOnFailure() {
-        final int targetInterceptor = 3;
+
         try {
             Map<String, String> props = new HashMap<>();
             String threeConsumerInterceptors = MockConsumerInterceptor.class.getName() + ", "
                     + MockConsumerInterceptor.class.getName() + ", "
                     + MockConsumerInterceptor.class.getName();
-            props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, threeConsumerInterceptors);
-            props.put("client.id", "test");
-            TestConfig testConfig = new TestConfig(props);
+            props.put(InterceptorTestConfig.INTERCEPTOR_CLASSES_CONFIG, threeConsumerInterceptors);
+            props.put(InterceptorTestConfig.CLIENT_ID_CONFIG, "test");
 
-            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
+            InterceptorTestConfig interceptorTestConfig = new InterceptorTestConfig(props);
+            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(interceptorTestConfig.getTargetInterceptor());
+
             assertThrows(
                     Exception.class,
-                    () -> testConfig.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, Object.class)
+                    () -> interceptorTestConfig.getConfiguredInstances(InterceptorTestConfig.INTERCEPTOR_CLASSES_CONFIG, Object.class)
             );
             assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
             assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
@@ -283,6 +284,7 @@ public class AbstractConfigTest {
             MockConsumerInterceptor.resetCounters();
         }
     }
+
     @Test
     public void testClassConfigs() {
         class RestrictedClassLoader extends ClassLoader {
@@ -619,6 +621,31 @@ public class AbstractConfigTest {
 
         public TestConfig(Map<?, ?> props) {
             super(CONFIG, props);
+        }
+    }
+
+    private static class InterceptorTestConfig extends AbstractConfig {
+        private final int targetInterceptor = 3;
+        private static final ConfigDef CONFIG;
+        private static final String INTERCEPTOR_CLASSES_CONFIG_DOC = "A list of classes to use as interceptors.";
+
+        public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
+        public static final String CLIENT_ID_CONFIG = "client.id";
+        public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
+
+        static {
+            CONFIG = new ConfigDef().define(INTERCEPTOR_CLASSES_CONFIG,
+                    Type.LIST,
+                    "",
+                    Importance.LOW,
+                    INTERCEPTOR_CLASSES_CONFIG_DOC);
+        }
+        public InterceptorTestConfig(Map<?, ?> props) {
+            super(CONFIG, props);
+        }
+
+        public int getTargetInterceptor() {
+            return targetInterceptor;
         }
     }
 
