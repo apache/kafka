@@ -474,7 +474,7 @@ class WorkerSinkTask extends WorkerTask {
     private ConsumerRecords<byte[], byte[]> pollConsumer(long timeoutMs) {
         ConsumerRecords<byte[], byte[]> msgs = consumer.poll(Duration.ofMillis(timeoutMs));
 
-        // Exceptions raised from the task during a rebalance should be rethrown to stop the worker
+        // Exceptions raised from the task during a rebalance should be rethrown to stop the task and mark it as failed
         if (rebalanceException != null) {
             RuntimeException e = rebalanceException;
             rebalanceException = null;
