@@ -17,7 +17,7 @@
 package kafka.server.checkpoints
 
 import kafka.utils.{Logging, TestUtils}
-import org.apache.kafka.server.log.internals.EpochEntry
+import org.apache.kafka.server.log.internals.{EpochEntry, LogDirFailureChannel}
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -28,7 +28,7 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
   def shouldPersistAndOverwriteAndReloadFile(): Unit ={
     val file = TestUtils.tempFile("temp-checkpoint-file", System.nanoTime().toString)
 
-    val checkpoint = new LeaderEpochCheckpointFile(file)
+    val checkpoint = new LeaderEpochCheckpointFile(file, new LogDirFailureChannel(1))
 
     //Given
     val epochs = java.util.Arrays.asList(new EpochEntry(0, 1L), new EpochEntry(1, 2L), new EpochEntry(2, 3L))
@@ -54,12 +54,12 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
     val file = TestUtils.tempFile("temp-checkpoint-file", System.nanoTime().toString)
 
     //Given a file with data in
-    val checkpoint = new LeaderEpochCheckpointFile(file)
+    val checkpoint = new LeaderEpochCheckpointFile(file, new LogDirFailureChannel(1))
     val epochs = java.util.Arrays.asList(new EpochEntry(0, 1L), new EpochEntry(1, 2L), new EpochEntry(2, 3L))
     checkpoint.write(epochs)
 
     //When we recreate
-    val checkpoint2 = new LeaderEpochCheckpointFile(file)
+    val checkpoint2 = new LeaderEpochCheckpointFile(file, new LogDirFailureChannel(1))
 
     //The data should still be there
     assertEquals(epochs, checkpoint2.read())

@@ -24,7 +24,6 @@ import java.io._
 import java.util.Optional
 import java.util.regex.Pattern
 import scala.collection._
-import scala.jdk.CollectionConverters._
 
 object OffsetCheckpointFile {
   private val WhiteSpacesPattern = Pattern.compile("\\s+")
@@ -65,13 +64,18 @@ class OffsetCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureCh
   val checkpoint = new CheckpointFileWithFailureHandler[(TopicPartition, Long)](file, OffsetCheckpointFile.CurrentVersion,
     OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
 
-  def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets.toSeq.asJava)
+  def write(offsets: Map[TopicPartition, Long]): Unit = {
+    val list: java.util.List[(TopicPartition, Long)] = new java.util.ArrayList[(TopicPartition, Long)](offsets.size)
+    offsets.foreach(x => list.add(x))
+    checkpoint.write(list)
+  }
 
   def read(): Map[TopicPartition, Long] = {
     val list = checkpoint.read()
     val result = mutable.Map.empty[TopicPartition, Long]
-    list.forEach { case (tp, offset) => result += tp -> offset }
-    result.toMap
+    result.sizeHint(list.size())
+    list.forEach { case (tp, offset) => result(tp) = offset }
+    result
   }
 
 }

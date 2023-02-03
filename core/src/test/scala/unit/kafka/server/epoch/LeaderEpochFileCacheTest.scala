@@ -20,15 +20,14 @@ package kafka.server.epoch
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochFileCache}
+import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochFileCache, LogDirFailureChannel}
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.io.File
-import java.util.{Collections, Optional, OptionalInt}
+import java.util.{Collections, OptionalInt}
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 /**
@@ -46,19 +45,19 @@ class LeaderEpochFileCacheTest {
 
   @Test
   def testPreviousEpoch(): Unit = {
-    assertEquals(Optional.empty[Integer](), cache.previousEpoch)
+    assertEquals(OptionalInt.empty(), cache.previousEpoch)
 
     cache.assign(2, 10)
-    assertEquals(Optional.empty[Integer](), cache.previousEpoch)
+    assertEquals(OptionalInt.empty(), cache.previousEpoch)
 
     cache.assign(4, 15)
-    assertEquals(Optional.of[Integer](2), cache.previousEpoch)
+    assertEquals(OptionalInt.of(2), cache.previousEpoch)
 
     cache.assign(10, 20)
-    assertEquals(Optional.of[Integer](4), cache.previousEpoch)
+    assertEquals(OptionalInt.of(4), cache.previousEpoch)
 
     cache.truncateFromEnd(18)
-    assertEquals(Optional.of[Integer](2), cache.previousEpoch)
+    assertEquals(OptionalInt.of(2), cache.previousEpoch)
   }
 
   @Test
@@ -68,7 +67,7 @@ class LeaderEpochFileCacheTest {
     val logEndOffset = 11
 
     //Then
-    assertEquals(Optional.of[Integer](2), cache.latestEpoch)
+    assertEquals(OptionalInt.of(2), cache.latestEpoch)
     assertEquals(new EpochEntry(2, 10), cache.epochEntries().get(0))
     assertEquals((2, logEndOffset), toTuple(cache.endOffsetFor(2, logEndOffset))) //should match logEndOffset
   }
@@ -242,14 +241,14 @@ class LeaderEpochFileCacheTest {
   @Test
   def shouldPersistEpochsBetweenInstances(): Unit = {
     val checkpointPath = TestUtils.tempFile().getAbsolutePath
-    val checkpoint = new LeaderEpochCheckpointFile(new File(checkpointPath))
+    val checkpoint = new LeaderEpochCheckpointFile(new File(checkpointPath), new LogDirFailureChannel(1))
 
     //Given
     val cache = new LeaderEpochFileCache(tp, checkpoint)
     cache.assign(2, 6)
 
     //When
-    val checkpoint2 = new LeaderEpochCheckpointFile(new File(checkpointPath))
+    val checkpoint2 = new LeaderEpochCheckpointFile(new File(checkpointPath), new LogDirFailureChannel(1))
     val cache2 = new LeaderEpochFileCache(tp, checkpoint2)
 
     //Then
@@ -274,7 +273,7 @@ class LeaderEpochFileCacheTest {
     logEndOffset = 8
 
     //Then later epochs will be removed
-    assertEquals(Optional.of(1), cache.latestEpoch)
+    assertEquals(OptionalInt.of(1), cache.latestEpoch)
 
     //Then end offset for epoch 1 will have changed
     assertEquals((1, 8), toTuple(cache.endOffsetFor(1, logEndOffset)))
@@ -309,7 +308,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(1, 0) //logEndOffset=0
 
     //Then epoch should go up
-    assertEquals(Optional.of(1), cache.latestEpoch)
+    assertEquals(OptionalInt.of(1), cache.latestEpoch)
     //offset for 1 should still be 0
     assertEquals((1, 0), toTuple(cache.endOffsetFor(1, logEndOffset)))
     //offset for epoch 0 should still be 0
@@ -349,7 +348,7 @@ class LeaderEpochFileCacheTest {
     logEndOffset = 3
 
     //Then epoch should stay, offsets should grow
-    assertEquals(Optional.of(0), cache.latestEpoch)
+    assertEquals(OptionalInt.of(0), cache.latestEpoch)
     assertEquals((0, logEndOffset), toTuple(cache.endOffsetFor(0, logEndOffset)))
 
     //When messages arrive with greater epoch
@@ -360,7 +359,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(1, 5);
     logEndOffset = 6
 
-    assertEquals(Optional.of[Integer](1), cache.latestEpoch)
+    assertEquals(OptionalInt.of(1), cache.latestEpoch)
     assertEquals((1, logEndOffset), toTuple(cache.endOffsetFor(1, logEndOffset)))
 
     //When
@@ -371,7 +370,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(2, 8);
     logEndOffset = 9
 
-    assertEquals(Optional.of[Integer](2), cache.latestEpoch)
+    assertEquals(OptionalInt.of(2), cache.latestEpoch)
     assertEquals((2, logEndOffset), toTuple(cache.endOffsetFor(2, logEndOffset)))
 
     //Older epochs should return the start offset of the first message in the subsequent epoch.
@@ -517,7 +516,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromEnd( 9)
 
     //Then should keep the preceding epochs
-    assertEquals(Some(3), cache.latestEpoch.asScala)
+    assertEquals(OptionalInt.of(3), cache.latestEpoch)
     assertEquals(java.util.Arrays.asList(new EpochEntry(2, 6), new EpochEntry(3, 8)), cache.epochEntries)
   }
 
@@ -566,7 +565,7 @@ class LeaderEpochFileCacheTest {
   @Test
   def shouldFetchLatestEpochOfEmptyCache(): Unit = {
     //Then
-    assertEquals(Optional.empty[Integer](), cache.latestEpoch)
+    assertEquals(OptionalInt.empty(), cache.latestEpoch)
   }
 
   @Test
@@ -601,7 +600,7 @@ class LeaderEpochFileCacheTest {
     assertEquals(OptionalInt.of(4), cache.previousEpoch(10))
 
     cache.truncateFromEnd(18)
-    assertEquals(OptionalInt.of(2), cache.previousEpoch(cache.latestEpoch.get))
+    assertEquals(OptionalInt.of(2), cache.previousEpoch(cache.latestEpoch.getAsInt))
   }
 
   @Test

@@ -250,12 +250,11 @@ class LogSegment private[log] (val log: FileRecords,
       val appendInfo = producerStateManager.prepareUpdate(producerId, origin = AppendOrigin.REPLICATION)
       val maybeCompletedTxn = appendInfo.append(batch, Optional.empty())
       producerStateManager.update(appendInfo)
-      if (maybeCompletedTxn.isPresent) {
-        val completedTxn = maybeCompletedTxn.get()
+      maybeCompletedTxn.ifPresent(completedTxn => {
         val lastStableOffset = producerStateManager.lastStableOffset(completedTxn)
         updateTxnIndex(completedTxn, lastStableOffset)
         producerStateManager.completeTxn(completedTxn)
-      }
+      })
     }
     producerStateManager.updateMapEndOffset(batch.lastOffset + 1)
   }

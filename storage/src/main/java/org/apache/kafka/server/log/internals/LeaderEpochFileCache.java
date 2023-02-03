@@ -77,12 +77,11 @@ public class LeaderEpochFileCache {
                 log.debug("Appended new epoch entry {}. Cache now contains {} entries.", entry, epochs.size());
             }
         });
-        flush();
+        if (entries.size() > 0) flush();
     }
 
     private boolean isUpdateNeeded(EpochEntry entry) {
-        Optional<EpochEntry> lastEntry = latestEntry();
-        return lastEntry.map(epochEntry -> entry.epoch != epochEntry.epoch || entry.startOffset < epochEntry.startOffset).orElse(true);
+        return latestEntry().map(epochEntry -> entry.epoch != epochEntry.epoch || entry.startOffset < epochEntry.startOffset).orElse(true);
     }
 
     private boolean assign(EpochEntry entry) {
@@ -111,7 +110,7 @@ public class LeaderEpochFileCache {
     /**
      * Remove any entries which violate monotonicity prior to appending a new entry
      */
-    public void maybeTruncateNonMonotonicEntries(EpochEntry newEntry) {
+    private void maybeTruncateNonMonotonicEntries(EpochEntry newEntry) {
         List<EpochEntry> removedEpochs = removeFromEnd(entry -> entry.epoch >= newEntry.epoch || entry.startOffset >= newEntry.startOffset);
 
 
@@ -170,14 +169,16 @@ public class LeaderEpochFileCache {
      * Returns the current Leader Epoch if one exists. This is the latest epoch
      * which has messages assigned to it.
      */
-    public Optional<Integer> latestEpoch() {
-        return latestEntry().map(x -> x.epoch);
+    public OptionalInt latestEpoch() {
+        Optional<EpochEntry> entry = latestEntry();
+        return entry.isPresent() ? OptionalInt.of(entry.get().epoch) : OptionalInt.empty();
     }
 
-    public Optional<Integer> previousEpoch() {
+    public OptionalInt previousEpoch() {
         lock.readLock().lock();
         try {
-            return latestEntry().flatMap(entry -> Optional.ofNullable(epochs.lowerEntry(entry.epoch))).map(Map.Entry::getKey);
+            Optional<Map.Entry<Integer, EpochEntry>> lowerEntry = latestEntry().flatMap(entry -> Optional.ofNullable(epochs.lowerEntry(entry.epoch)));
+            return lowerEntry.isPresent() ? OptionalInt.of(lowerEntry.get().getKey()) : OptionalInt.empty();
         } finally {
             lock.readLock().unlock();
         }
@@ -250,7 +251,7 @@ public class LeaderEpochFileCache {
                 // This may happen if a bootstrapping follower sends a request with undefined epoch or
                 // a follower is on the older message format where leader epochs are not recorded
                 epochAndOffset = new AbstractMap.SimpleImmutableEntry<>(UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET);
-            } else if (latestEpoch().isPresent() && latestEpoch().get() == requestedEpoch) {
+            } else if (latestEpoch().isPresent() && latestEpoch().getAsInt() == requestedEpoch) {
                 // For the leader, the latest epoch is always the current leader epoch that is still being written to.
                 // Followers should not have any reason to query for the end offset of the current epoch, but a consumer
                 // might if it is verifying its committed offset following a group rebalance. In this case, we return
@@ -278,7 +279,10 @@ public class LeaderEpochFileCache {
                     }
                 }
             }
-            log.trace("Processed end offset request for epoch {} and returning epoch {} " + "with end offset {} from epoch cache of size {}}", requestedEpoch, epochAndOffset.getKey(), epochAndOffset.getValue(), epochs.size());
+
+            if (log.isTraceEnabled())
+                log.trace("Processed end offset request for epoch {} and returning epoch {} with end offset {} from epoch cache of size {}}", requestedEpoch, epochAndOffset.getKey(), epochAndOffset.getValue(), epochs.size());
+
             return epochAndOffset;
         } finally {
             lock.readLock().unlock();
@@ -297,7 +301,7 @@ public class LeaderEpochFileCache {
 
                 flush();
 
-                log.debug("Cleared entries {} from epoch cache after " + "truncating to end offset {}, leaving {} entries in the cache.", removedEntries, endOffset, epochs.size());
+                log.debug("Cleared entries {} from epoch cache after truncating to end offset {}, leaving {} entries in the cache.", removedEntries, endOffset, epochs.size());
             }
         } finally {
             lock.writeLock().unlock();
@@ -317,9 +321,8 @@ public class LeaderEpochFileCache {
         try {
             List<EpochEntry> removedEntries = removeFromStart(entry -> entry.startOffset <= startOffset);
 
-            EpochEntry firstBeforeStartOffset;
             if (!removedEntries.isEmpty()) {
-                firstBeforeStartOffset = removedEntries.get(removedEntries.size() - 1);
+                EpochEntry firstBeforeStartOffset = removedEntries.get(removedEntries.size() - 1);
                 EpochEntry updatedFirstEntry = new EpochEntry(firstBeforeStartOffset.epoch, startOffset);
                 epochs.put(updatedFirstEntry.epoch, updatedFirstEntry);
 
@@ -335,17 +338,21 @@ public class LeaderEpochFileCache {
     public OptionalInt epochForOffset(long offset) {
         lock.readLock().lock();
         try {
-            OptionalInt previousEpoch = OptionalInt.empty();
+            Integer previousEpoch = null;
             for (EpochEntry epochEntry : epochs.values()) {
                 int epoch = epochEntry.epoch;
                 long startOffset = epochEntry.startOffset;
-                if (startOffset == offset) return OptionalInt.of(epoch);
-                if (startOffset > offset) return previousEpoch;
 
-                previousEpoch = OptionalInt.of(epoch);
+                // Found the exact offset, return the respective epoch.
+                if (startOffset == offset) return OptionalInt.of(epoch);
+
+                // exit from the loop as it is more than the target offset
+                if (startOffset > offset) break;
+
+                previousEpoch = epoch;
             }
 
-            return previousEpoch;
+            return previousEpoch != null ? OptionalInt.of(previousEpoch) : OptionalInt.empty();
         } finally {
             lock.readLock().unlock();
         }
@@ -375,11 +382,21 @@ public class LeaderEpochFileCache {
 
     // Visible for testing
     public List<EpochEntry> epochEntries() {
-        return new ArrayList<>(epochs.values());
+        lock.writeLock().lock();
+        try {
+            return new ArrayList<>(epochs.values());
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     public void flush() {
-        checkpoint.write(epochs.values());
+        lock.writeLock().lock();
+        try {
+            checkpoint.write(epochs.values());
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
 }

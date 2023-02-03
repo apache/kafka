@@ -53,10 +53,6 @@ public class LeaderEpochCheckpointFile implements LeaderEpochCheckpoint {
         checkpoint = new CheckpointFileWithFailureHandler<>(file, CURRENT_VERSION, FORMATTER, logDirFailureChannel, file.getParentFile().getParent());
     }
 
-    public LeaderEpochCheckpointFile(File file) throws IOException {
-        this(file, null);
-    }
-
     public void write(Collection<EpochEntry> epochs) {
         checkpoint.write(epochs);
     }
@@ -69,7 +65,7 @@ public class LeaderEpochCheckpointFile implements LeaderEpochCheckpoint {
         return new File(dir, LEADER_EPOCH_CHECKPOINT_FILENAME);
     }
 
-    public static class Formatter implements EntryFormatter<EpochEntry> {
+    private static class Formatter implements EntryFormatter<EpochEntry> {
 
         public String toString(EpochEntry entry) {
             return entry.epoch + " " + entry.startOffset;
