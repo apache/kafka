@@ -26,6 +26,7 @@ public interface TopicPartitionFilter {
      * Used to filter topics based on a certain criteria, for example, a set of topic names or a regular expression.
      */
     boolean isTopicAllowed(String topic);
+
     /**
      * Used to filter topic-partitions based on a certain criteria, for example, a topic pattern and a set of partition ids.
      */
@@ -67,5 +68,4 @@ public interface TopicPartitionFilter {
             return filters.stream().anyMatch(tp -> tp.isTopicPartitionAllowed(partition));
         }
     }
-
 }

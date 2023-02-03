@@ -48,5 +48,4 @@ public class TopicFilterTest {
         assertTrue(topicFilter4.isTopicAllowed("test-good", true));
         assertFalse(topicFilter4.isTopicAllowed("test-bad", true));
     }
-    
 }

@@ -246,7 +246,6 @@
 
     <!-- This is required to make AlterConfigPolicyTest work. -->
     <allow pkg="org.apache.kafka.server.policy" />
-    <allow pkg="org.apache.kafka.server.util" />
 
     <subpackage name="log">
       <allow pkg="com.fasterxml.jackson" />
