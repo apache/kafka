@@ -1249,7 +1249,7 @@ class LogCleanerTest {
 
   /* extract all the offsets from a log */
   def offsetsInLog(log: UnifiedLog): Iterable[Long] =
-    log.logSegments.flatMap(s => s.log.records.asScala.filter(_.hasValue).filter(_.hasKey).map(m => m.offset))
+    log.logSegments.flatMap(s => s.log.records.asScala.filter(x => x.hasValue && x.hasKey).map(m => m.offset))
 
   def unkeyedMessageCountInLog(log: UnifiedLog) =
     log.logSegments.map(s => s.log.records.asScala.filter(_.hasValue).count(m => !m.hasKey)).sum

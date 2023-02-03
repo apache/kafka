@@ -104,7 +104,7 @@ class KRaftQuorumImplementation(
     var broker: BrokerServer = null
     try {
       broker = new BrokerServer(sharedServer,
-        initialOfflineDirs = Seq())
+        initialOfflineDirs = Seq.empty)
       if (startup) broker.startup()
       broker
     } catch {

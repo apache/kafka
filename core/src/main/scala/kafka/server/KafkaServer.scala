@@ -598,7 +598,7 @@ class KafkaServer(
   protected def createRemoteLogManager(config: KafkaConfig): Option[RemoteLogManager] = {
     val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
     if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
-      if(config.logDirs.size > 1) {
+      if(config.logDirs.lengthCompare(1) > 0) {
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
       }
 

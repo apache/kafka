@@ -303,9 +303,9 @@ object TopicCommand extends Logging {
       val useTopicId = inputTopicId.nonEmpty
 
       val (topicIds, topics) = if (useTopicId)
-        (getTopicIds(inputTopicId, opts.excludeInternalTopics), Seq())
+        (getTopicIds(inputTopicId, opts.excludeInternalTopics), Seq.empty)
       else
-        (Seq(), getTopics(opts.topic, opts.excludeInternalTopics))
+        (Seq.empty, getTopics(opts.topic, opts.excludeInternalTopics))
 
       // Only check topic name when topicId is not provided
       if (useTopicId)
@@ -318,7 +318,7 @@ object TopicCommand extends Logging {
       } else if (topics.nonEmpty) {
         adminClient.describeTopics(TopicCollection.ofTopicNames(topics.asJavaCollection)).allTopicNames().get().values().asScala
       } else {
-        Seq()
+        Seq.empty
       }
 
       val topicNames = topicDescriptions.map(_.name())

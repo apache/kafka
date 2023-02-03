@@ -858,7 +858,7 @@ class ZkAdminManager(val config: KafkaConfig,
             .setErrorCode(Errors.RESOURCE_NOT_FOUND.code)
             .setErrorMessage(usernameMustNotBeEmptyMsg)) }
         val duplicatedUsers = users.get.groupBy(identity).filter(
-          userAndOccurrencesTuple => userAndOccurrencesTuple._2.length > 1).keys
+          userAndOccurrencesTuple => userAndOccurrencesTuple._2.lengthCompare(1) > 0).keys
         duplicatedUsers.filterNot(illegalUsers.contains).foreach { user =>
           userResults += (user -> new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
             .setUser(user)
@@ -970,7 +970,7 @@ class ZkAdminManager(val config: KafkaConfig,
       deletions.filter(deletion => !invalidUsers.contains(deletion.name)).map(deletion => (deletion.name, deletion.mechanism)))
 
     val usersWithDuplicateUserMechanismPairs = initiallyValidUserMechanismPairs.groupBy(identity).filter (
-      userMechanismPairAndOccurrencesTuple => userMechanismPairAndOccurrencesTuple._2.length > 1).keys.map(userMechanismPair => userMechanismPair._1).toSet
+      userMechanismPairAndOccurrencesTuple => userMechanismPairAndOccurrencesTuple._2.lengthCompare(1) > 0).keys.map(userMechanismPair => userMechanismPair._1).toSet
     usersWithDuplicateUserMechanismPairs.foreach { user =>
       retval.results.add(new AlterUserScramCredentialsResult()
         .setUser(user)
@@ -982,7 +982,7 @@ class ZkAdminManager(val config: KafkaConfig,
     val configsByPotentiallyValidUser = potentiallyValidUsers.map(user => (user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user)))).toMap
 
     // check for deletion of a credential that does not exist
-    val invalidDeletions = deletions.filter(deletion => potentiallyValidUsers.contains(deletion.name)).filter(deletion =>
+    val invalidDeletions = deletions.filter(deletion => potentiallyValidUsers.contains(deletion.name) &&
       configsByPotentiallyValidUser(deletion.name).getProperty(mechanismName(deletion.mechanism)) == null)
     val invalidUsersDueToInvalidDeletions = invalidDeletions.map(_.name).toSet
     invalidUsersDueToInvalidDeletions.foreach { user =>

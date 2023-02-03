@@ -408,7 +408,7 @@ object ReassignPartitionsCommand extends Logging {
         true)
     } catch {
       case t: ExecutionException if t.getCause.isInstanceOf[UnknownTopicOrPartitionException] =>
-        PartitionReassignmentState(Seq(), targetReplicas, true)
+        PartitionReassignmentState(Seq.empty, targetReplicas, true)
     }
   }
 

@@ -763,10 +763,7 @@ class KRaftClusterTest {
     image: ClusterImage,
     brokerId: Int
   ): Boolean = {
-    Option(image.brokers().get(brokerId)) match {
-      case None => false
-      case Some(registration) => !registration.fenced()
-    }
+    Option(image.brokers().get(brokerId)).exists(registration => !registration.fenced())
   }
 
   private def brokerIsAbsent(

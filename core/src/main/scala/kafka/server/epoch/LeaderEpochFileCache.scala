@@ -106,7 +106,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
       entry.epoch >= newEntry.epoch || entry.startOffset >= newEntry.startOffset
     }
 
-    if (removedEpochs.size > 1
+    if (removedEpochs.lengthCompare(1) > 0
       || (removedEpochs.nonEmpty && removedEpochs.head.startOffset != newEntry.startOffset)) {
 
       // Only log a warning if there were non-trivial removals. If the start offset of the new entry
