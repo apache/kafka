@@ -181,6 +181,48 @@ public class JaasContextTest {
     }
 
     @Test
+    public void testAsterisk() throws Exception {
+        Map<String, Object> options = new HashMap<>();
+        options.put("option", "*");
+        checkConfiguration("test.testAsterisk required option=*;", "test.testAsterisk", LoginModuleControlFlag.REQUIRED, options);
+    }
+
+    @Test
+    public void testNumericWordStart() throws Exception {
+        Map<String, Object> options = new HashMap<>();
+        options.put("password", "1afka");
+        checkConfiguration("test.testNumericWordStart required password=\"1afka\";", "test.testNumericWordStart", LoginModuleControlFlag.REQUIRED, options);
+    }
+
+    @Test
+    public void testSymbolicWordStart() throws Exception {
+        Map<String, Object> options = new HashMap<>();
+        options.put("password", "#afka");
+        checkConfiguration("test.testSymbolicWordStart required password=\"#afka\";", "test.testSymbolicWordStart", LoginModuleControlFlag.REQUIRED, options);
+    }
+
+    @Test
+    public void testNumericWord() throws Exception {
+        Map<String, Object> options = new HashMap<>();
+        options.put("password", "k3fka");
+        checkConfiguration("test.testNumericWord required password=\"k3fka\";", "test.testNumericWord", LoginModuleControlFlag.REQUIRED, options);
+    }
+
+    @Test
+    public void testSymbolicWord() throws Exception {
+        Map<String, Object> options = new HashMap<>();
+        options.put("password", "kafk@");
+        checkConfiguration("test.testSymbolicWord required password=\"kafk@\";", "test.testSymbolicWord", LoginModuleControlFlag.REQUIRED, options);
+    }
+
+    @Test
+    public void testNumericAndSymbolicAWord() throws Exception {
+        Map<String, Object> options = new HashMap<>();
+        options.put("option1", "k2fk@");
+        checkConfiguration("test.testNumericAndSymbolicAWord required option1=\"k2fk@\";", "test.testNumericAndSymbolicAWord", LoginModuleControlFlag.REQUIRED, options);
+    }
+
+    @Test
     public void testNumericOptionWithQuotes() throws Exception {
         Map<String, Object> options = new HashMap<>();
         options.put("option1", "3");

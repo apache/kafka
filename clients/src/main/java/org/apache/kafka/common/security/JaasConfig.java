@@ -50,12 +50,17 @@ class JaasConfig extends Configuration {
     private final List<AppConfigurationEntry> configEntries;
 
     public JaasConfig(String loginContextName, String jaasConfigParams) {
+        // A-Z, a-z, $, _, -, * are treated as a character; If you have to mix numbers or other symbols, use quote.
         StreamTokenizer tokenizer = new StreamTokenizer(new StringReader(jaasConfigParams));
-        tokenizer.slashSlashComments(true);
-        tokenizer.slashStarComments(true);
-        tokenizer.wordChars('-', '-');
-        tokenizer.wordChars('_', '_');
-        tokenizer.wordChars('$', '$');
+        tokenizer.quoteChar('"');       // '"' is treated as a quote.
+        tokenizer.wordChars('$', '$');  // '$' symbol is allowed.
+        tokenizer.wordChars('_', '_');  // '_' symbol is allowed.
+        tokenizer.wordChars('-', '-');  // '-' symbol is allowed.
+        tokenizer.wordChars('*', '*');  // '*' symbol is allowed.
+        tokenizer.lowerCaseMode(false);
+        tokenizer.slashSlashComments(true); // Allow '//' comments.
+        tokenizer.slashStarComments(true);  // Allow '/*', '*/' comments.
+        tokenizer.eolIsSignificant(true);
 
         try {
             configEntries = new ArrayList<>();
