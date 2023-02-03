@@ -84,42 +84,54 @@ public class LogicalKeyValueSegmentTest {
 
     @Test
     public void shouldPut() {
-        final KeyValue<String, String> kv0 = new KeyValue<>("1", "a");
-        final KeyValue<String, String> kv1 = new KeyValue<>("2", "b");
+        final KeyValue<String, String> sharedKeyV1 = new KeyValue<>("shared", "v1");
+        final KeyValue<String, String> sharedKeyV2 = new KeyValue<>("shared", "v2");
+        final KeyValue<String, String> segment1KeyOnly = new KeyValue<>("segment1_only", "v");
+        final KeyValue<String, String> segment2KeyOnly = new KeyValue<>("segment2_only", "other");
 
-        segment1.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
-        segment1.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
-        segment2.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
-        segment2.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
+        segment1.put(new Bytes(serializeBytes(sharedKeyV1.key)), serializeBytes(sharedKeyV1.value));
+        segment1.put(new Bytes(serializeBytes(segment1KeyOnly.key)), serializeBytes(segment1KeyOnly.value));
+        segment2.put(new Bytes(serializeBytes(sharedKeyV2.key)), serializeBytes(sharedKeyV2.value));
+        segment2.put(new Bytes(serializeBytes(segment2KeyOnly.key)), serializeBytes(segment2KeyOnly.value));
 
-        assertEquals("a", getAndDeserialize(segment1, "1"));
-        assertEquals("b", getAndDeserialize(segment1, "2"));
-        assertEquals("a", getAndDeserialize(segment2, "1"));
-        assertEquals("b", getAndDeserialize(segment2, "2"));
+        assertEquals("v1", getAndDeserialize(segment1, "shared"));
+        assertEquals("v2", getAndDeserialize(segment2, "shared"));
+
+        assertEquals("v", getAndDeserialize(segment1, "segment1_only"));
+        assertNull(getAndDeserialize(segment2, "segment1_only"));
+
+        assertNull(getAndDeserialize(segment1, "segment2_only"));
+        assertEquals("other", getAndDeserialize(segment2, "segment2_only"));
     }
 
     @Test
     public void shouldPutAll() {
-        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>(
-            new Bytes(serializeBytes("1")),
-            serializeBytes("a")));
-        entries.add(new KeyValue<>(
-            new Bytes(serializeBytes("2")),
-            serializeBytes("b")));
-        entries.add(new KeyValue<>(
-            new Bytes(serializeBytes("3")),
-            serializeBytes("c")));
+        final List<KeyValue<Bytes, byte[]>> segment1Records = new ArrayList<>();
+        segment1Records.add(new KeyValue<>(
+            new Bytes(serializeBytes("shared")),
+            serializeBytes("v1")));
+        segment1Records.add(new KeyValue<>(
+            new Bytes(serializeBytes("segment1_only")),
+            serializeBytes("v")));
+        final List<KeyValue<Bytes, byte[]>> segment2Records = new ArrayList<>();
+        segment2Records.add(new KeyValue<>(
+            new Bytes(serializeBytes("shared")),
+            serializeBytes("v2")));
+        segment2Records.add(new KeyValue<>(
+            new Bytes(serializeBytes("segment2_only")),
+            serializeBytes("other")));
 
-        segment1.putAll(entries);
-        segment2.putAll(entries);
+        segment1.putAll(segment1Records);
+        segment2.putAll(segment1Records);
 
-        assertEquals("a", getAndDeserialize(segment1, "1"));
-        assertEquals("b", getAndDeserialize(segment1, "2"));
-        assertEquals("c", getAndDeserialize(segment1, "3"));
-        assertEquals("a", getAndDeserialize(segment2, "1"));
-        assertEquals("b", getAndDeserialize(segment2, "2"));
-        assertEquals("c", getAndDeserialize(segment2, "3"));
+        assertEquals("v1", getAndDeserialize(segment1, "shared"));
+        assertEquals("v2", getAndDeserialize(segment2, "shared"));
+
+        assertEquals("v", getAndDeserialize(segment1, "segment1_only"));
+        assertNull(getAndDeserialize(segment2, "segment1_only"));
+
+        assertNull(getAndDeserialize(segment1, "segment2_only"));
+        assertEquals("other", getAndDeserialize(segment2, "segment2_only"));
     }
 
     @Test
@@ -147,7 +159,7 @@ public class LogicalKeyValueSegmentTest {
         segment2.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
         segment1.delete(new Bytes(serializeBytes(kv0.key)));
 
-        assertNull(segment1.get(new Bytes(serializeBytes(kv0.key))));
+        assertNull(getAndDeserialize(segment1, kv0.key));
         assertEquals("b", getAndDeserialize(segment1, "2"));
         assertEquals("a", getAndDeserialize(segment2, "1"));
         assertEquals("b", getAndDeserialize(segment2, "2"));
@@ -208,17 +220,18 @@ public class LogicalKeyValueSegmentTest {
         final KeyValue<String, String> kv2 = new KeyValue<>("2", "two");
         final KeyValue<String, String> kvOther = new KeyValue<>("1", "other");
 
-        segment1.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
-        segment1.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
-        segment1.put(new Bytes(serializeBytes(kv2.key)), serializeBytes(kv2.value));
-        segment2.put(new Bytes(serializeBytes(kvOther.key)), serializeBytes(kvOther.value));
+        segment2.put(new Bytes(serializeBytes(kv0.key)), serializeBytes(kv0.value));
+        segment2.put(new Bytes(serializeBytes(kv1.key)), serializeBytes(kv1.value));
+        segment2.put(new Bytes(serializeBytes(kv2.key)), serializeBytes(kv2.value));
+        segment1.put(new Bytes(serializeBytes(kvOther.key)), serializeBytes(kvOther.value));
+        segment3.put(new Bytes(serializeBytes(kvOther.key)), serializeBytes(kvOther.value));
 
         final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
         expectedContents.add(kv0);
         expectedContents.add(kv1);
         expectedContents.add(kv2);
 
-        try (final KeyValueIterator<Bytes, byte[]> iterator = segment1.all()) {
+        try (final KeyValueIterator<Bytes, byte[]> iterator = segment2.all()) {
             assertEquals(expectedContents, getDeserializedList(iterator));
         }
     }
@@ -236,8 +249,8 @@ public class LogicalKeyValueSegmentTest {
         segment2.put(new Bytes(serializeBytes(kvOther.key)), serializeBytes(kvOther.value));
         segment1.deleteRange(new Bytes(serializeBytes(kv0.key)), new Bytes(serializeBytes(kv1.key)));
 
-        assertNull(segment1.get(new Bytes(serializeBytes(kv0.key))));
-        assertNull(segment1.get(new Bytes(serializeBytes(kv1.key))));
+        assertNull(getAndDeserialize(segment1, "0"));
+        assertNull(getAndDeserialize(segment1, "1"));
         assertEquals("two", getAndDeserialize(segment1, "2"));
         assertEquals("other", getAndDeserialize(segment2, "1"));
     }
@@ -259,8 +272,8 @@ public class LogicalKeyValueSegmentTest {
 
         segment1 = new LogicalKeyValueSegment(1, "segment-1", physicalStore);
 
-        assertNull(segment1.get(new Bytes(serializeBytes(kv0.key))));
-        assertNull(segment1.get(new Bytes(serializeBytes(kv1.key))));
+        assertNull(getAndDeserialize(segment1, "1"));
+        assertNull(getAndDeserialize(segment1, "2"));
     }
 
     @Test
