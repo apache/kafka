@@ -499,6 +499,8 @@ class WorkerSinkTask extends WorkerTask {
                     new OffsetAndMetadata(msg.offset() + 1)
             );
             if (transRecord != null) {
+                log.trace("{} Appending transformed record from topic {} with key {}, value {}",
+                        this, transRecord.topic(), transRecord.key(), transRecord.value());
                 messageBatch.add(transRecord);
             } else {
                 log.trace(
