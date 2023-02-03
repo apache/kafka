@@ -29,24 +29,24 @@ import java.util.StringJoiner;
 public class TransformationChain<R extends ConnectRecord<R>> implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(TransformationChain.class);
 
-    private final List<TransformationStage<R>> transformations;
+    private final List<TransformationStage<R>> transformationStages;
     private final RetryWithToleranceOperator retryWithToleranceOperator;
 
-    public TransformationChain(List<TransformationStage<R>> transformations, RetryWithToleranceOperator retryWithToleranceOperator) {
-        this.transformations = transformations;
+    public TransformationChain(List<TransformationStage<R>> transformationStages, RetryWithToleranceOperator retryWithToleranceOperator) {
+        this.transformationStages = transformationStages;
         this.retryWithToleranceOperator = retryWithToleranceOperator;
     }
 
     public R apply(R record) {
-        if (transformations.isEmpty()) return record;
+        if (transformationStages.isEmpty()) return record;
 
-        for (final TransformationStage<R> transformation : transformations) {
+        for (final TransformationStage<R> transformationStage : transformationStages) {
             final R current = record;
 
             log.trace("Applying transformation {} to {}",
-                transformation.transformClass().getName(), record);
+                transformationStage.transformClass().getName(), record);
             // execute the operation
-            record = retryWithToleranceOperator.execute(() -> transformation.apply(current), Stage.TRANSFORMATION, transformation.transformClass());
+            record = retryWithToleranceOperator.execute(() -> transformationStage.apply(current), Stage.TRANSFORMATION, transformationStage.transformClass());
 
             if (record == null) break;
         }
@@ -56,8 +56,8 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
 
     @Override
     public void close() {
-        for (TransformationStage<R> transformation : transformations) {
-            transformation.close();
+        for (TransformationStage<R> transformationStage : transformationStages) {
+            transformationStage.close();
         }
     }
 
@@ -66,18 +66,18 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         TransformationChain<?> that = (TransformationChain<?>) o;
-        return Objects.equals(transformations, that.transformations);
+        return Objects.equals(transformationStages, that.transformationStages);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(transformations);
+        return Objects.hash(transformationStages);
     }
 
     public String toString() {
         StringJoiner chain = new StringJoiner(", ", getClass().getName() + "{", "}");
-        for (TransformationStage<R> transformation : transformations) {
-            chain.add(transformation.transformClass().getName());
+        for (TransformationStage<R> transformationStage : transformationStages) {
+            chain.add(transformationStage.transformClass().getName());
         }
         return chain.toString();
     }
