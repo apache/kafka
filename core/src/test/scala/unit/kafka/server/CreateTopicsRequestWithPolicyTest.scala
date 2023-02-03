@@ -19,8 +19,8 @@ package kafka.server
 
 import java.util
 import java.util.Properties
-import kafka.log.LogConfig
 import kafka.utils.TestInfoUtils
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
@@ -57,7 +57,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
 
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic3",
       numPartitions = 11, replicationFactor = 2,
-      config = Map(LogConfig.RetentionMsProp -> 4999.toString))),
+      config = Map(TopicConfig.RETENTION_MS_CONFIG -> 4999.toString))),
       validateOnly = true))
 
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic4",
@@ -81,19 +81,19 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
 
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("policy-topic3",
       numPartitions = 11, replicationFactor = 2,
-      config = Map(LogConfig.RetentionMsProp -> 5001.toString))), validateOnly = true),
+      config = Map(TopicConfig.RETENTION_MS_CONFIG -> 5001.toString))), validateOnly = true),
       Map("policy-topic3" -> error(Errors.POLICY_VIOLATION,
         Some("RetentionMs should be less than 5000ms if replicationFactor > 5"))))
 
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("policy-topic4",
       numPartitions = 11, replicationFactor = 3,
-      config = Map(LogConfig.RetentionMsProp -> 5001.toString))), validateOnly = true),
+      config = Map(TopicConfig.RETENTION_MS_CONFIG -> 5001.toString))), validateOnly = true),
       Map("policy-topic4" -> error(Errors.POLICY_VIOLATION,
         Some("RetentionMs should be less than 5000ms if replicationFactor > 5"))))
 
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("policy-topic5",
       assignment = Map(0 -> List(1), 1 -> List(0)),
-      config = Map(LogConfig.RetentionMsProp -> 5001.toString))), validateOnly = true),
+      config = Map(TopicConfig.RETENTION_MS_CONFIG -> 5001.toString))), validateOnly = true),
       Map("policy-topic5" -> error(Errors.POLICY_VIOLATION,
         Some("Topic partitions should have at least 2 partitions, received 1 for partition 0"))))
 
@@ -165,7 +165,7 @@ object CreateTopicsRequestWithPolicyTest {
           throw new PolicyViolationException(s"Topics should have at least 5 partitions, received $numPartitions")
 
         if (numPartitions > 10) {
-          if (requestMetadata.configs.asScala.get(LogConfig.RetentionMsProp).fold(true)(_.toInt > 5000))
+          if (requestMetadata.configs.asScala.get(TopicConfig.RETENTION_MS_CONFIG).fold(true)(_.toInt > 5000))
             throw new PolicyViolationException("RetentionMs should be less than 5000ms if replicationFactor > 5")
         } else
           require(requestMetadata.configs.isEmpty, s"Topic configs should be empty, but it is ${requestMetadata.configs}")

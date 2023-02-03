@@ -21,7 +21,6 @@ import java.util
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
 import java.util.{Optional, Properties}
 import kafka.api.LeaderAndIsr
-import kafka.log.{AppendOrigin, LogConfig}
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.waitUntilTrue
@@ -39,6 +38,7 @@ import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.Mockito
@@ -227,14 +227,14 @@ class ReplicaManagerConcurrencyTest {
         }
       }
 
-      val fetchParams = FetchParams(
-        requestVersion = ApiKeys.FETCH.latestVersion,
-        replicaId = replicaId,
-        maxWaitMs = random.nextInt(100),
-        minBytes = 1,
-        maxBytes = 1024 * 1024,
-        isolation = FetchIsolation(replicaId, IsolationLevel.READ_UNCOMMITTED),
-        clientMetadata = Some(clientMetadata)
+      val fetchParams = new FetchParams(
+        ApiKeys.FETCH.latestVersion,
+        replicaId,
+        random.nextInt(100),
+        1,
+        1024 * 1024,
+        FetchIsolation.of(replicaId, IsolationLevel.READ_UNCOMMITTED),
+        Optional.of(clientMetadata)
       )
 
       replicaManager.fetchMessages(
@@ -283,7 +283,7 @@ class ReplicaManagerConcurrencyTest {
         timeout = 30000,
         requiredAcks = (-1).toShort,
         internalTopicsAllowed = false,
-        origin = AppendOrigin.Client,
+        origin = AppendOrigin.CLIENT,
         entriesPerPartition = collection.Map(topicPartition -> TestUtils.records(records)),
         responseCallback = produceCallback
       )

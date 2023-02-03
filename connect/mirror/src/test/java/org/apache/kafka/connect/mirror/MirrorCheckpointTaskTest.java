@@ -161,4 +161,14 @@ public class MirrorCheckpointTaskTest {
         assertFalse(checkpoint1.isPresent());
         assertTrue(checkpoint2.isPresent());
     }
+
+    @Test
+    public void testNoCheckpointForTopicWithNullOffsetAndMetadata() {
+        OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
+            new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), Collections.emptyMap());
+        offsetSyncStore.sync(new TopicPartition("topic1", 0), 1L, 3L);
+        Optional<Checkpoint> checkpoint = mirrorCheckpointTask.checkpoint("g1", new TopicPartition("topic1", 0), null);
+        assertFalse(checkpoint.isPresent());
+    }
 }

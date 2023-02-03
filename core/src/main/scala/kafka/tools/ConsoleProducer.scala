@@ -22,15 +22,15 @@ import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet}
-import kafka.common._
-import kafka.message._
+import kafka.common.MessageReader
 import kafka.utils.Implicits._
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, ToolsUtils}
+import kafka.utils.{Exit, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.utils.Utils
-import scala.jdk.CollectionConverters._
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 object ConsoleProducer {
 
@@ -259,7 +259,7 @@ object ConsoleProducer {
 
     options = tryParse(parser, args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from standard input and publish it to Kafka.")
+    CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from standard input and publish it to Kafka.")
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
 
@@ -275,19 +275,19 @@ object ConsoleProducer {
     val compressionCodecOptionValue = options.valueOf(compressionCodecOpt)
     val compressionCodec = if (options.has(compressionCodecOpt))
                              if (compressionCodecOptionValue == null || compressionCodecOptionValue.isEmpty)
-                               DefaultCompressionCodec.name
+                               CompressionType.GZIP.name
                              else compressionCodecOptionValue
-                           else NoCompressionCodec.name
+                           else CompressionType.NONE.name
     val readerClass = options.valueOf(messageReaderOpt)
-    val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
-    val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)
+    val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt))
+    val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt))
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
       try
         parser.parse(args: _*)
       catch {
         case e: OptionException =>
-          CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+          ToolsUtils.printUsageAndExit(parser, e.getMessage)
       }
     }
   }

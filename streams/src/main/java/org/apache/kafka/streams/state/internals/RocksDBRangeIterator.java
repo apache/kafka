@@ -18,11 +18,9 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.rocksdb.RocksIterator;
 
 import java.util.Comparator;
-import java.util.Set;
 
 class RocksDBRangeIterator extends RocksDbIterator {
     // RocksDB's JNI interface does not expose getters/setters that allow the
@@ -35,12 +33,11 @@ class RocksDBRangeIterator extends RocksDbIterator {
 
     RocksDBRangeIterator(final String storeName,
                          final RocksIterator iter,
-                         final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
                          final Bytes from,
                          final Bytes to,
                          final boolean forward,
                          final boolean toInclusive) {
-        super(storeName, iter, openIterators, forward);
+        super(storeName, iter, forward);
         this.forward = forward;
         this.toInclusive = toInclusive;
         if (forward) {

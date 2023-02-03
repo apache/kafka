@@ -50,8 +50,8 @@ import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
-import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
@@ -65,6 +65,7 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -78,6 +79,8 @@ import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.metadata.migration.ZkMigrationState;
+import org.apache.kafka.metadata.migration.ZkRecordConsumer;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
@@ -432,8 +435,8 @@ public final class QuorumController implements Controller {
                                            OptionalLong startProcessingTimeNs,
                                            Throwable exception) {
         if (!startProcessingTimeNs.isPresent()) {
-            log.error("{}: unable to start processing because of {}.", name,
-                exception.getClass().getSimpleName());
+            log.error("{}: unable to start processing because of {}. Reason: {}", name,
+                exception.getClass().getSimpleName(), exception.getMessage());
             if (exception instanceof ApiException) {
                 return exception;
             } else {
@@ -444,8 +447,8 @@ public final class QuorumController implements Controller {
         long deltaNs = endProcessingTime - startProcessingTimeNs.getAsLong();
         long deltaUs = MICROSECONDS.convert(deltaNs, NANOSECONDS);
         if (exception instanceof ApiException) {
-            log.info("{}: failed with {} in {} us", name,
-                exception.getClass().getSimpleName(), deltaUs);
+            log.info("{}: failed with {} in {} us. Reason: {}", name,
+                exception.getClass().getSimpleName(), deltaUs, exception.getMessage());
             return exception;
         }
         if (isActiveController()) {
@@ -564,6 +567,10 @@ public final class QuorumController implements Controller {
     // Visible for testing
     ConfigurationControlManager configurationControl() {
         return configurationControl;
+    }
+
+    public ZkRecordConsumer zkRecordConsumer() {
+        return zkRecordConsumer;
     }
 
     <T> CompletableFuture<T> appendReadEvent(
@@ -819,6 +826,62 @@ public final class QuorumController implements Controller {
         return event.future();
     }
 
+    class MigrationRecordConsumer implements ZkRecordConsumer {
+        private volatile OffsetAndEpoch highestMigrationRecordOffset;
+
+        class MigrationWriteOperation implements ControllerWriteOperation<Void> {
+            private final List<ApiMessageAndVersion> batch;
+
+            MigrationWriteOperation(List<ApiMessageAndVersion> batch) {
+                this.batch = batch;
+            }
+            @Override
+            public ControllerResult<Void> generateRecordsAndResult() {
+                return ControllerResult.atomicOf(batch, null);
+            }
+
+            public void processBatchEndOffset(long offset) {
+                highestMigrationRecordOffset = new OffsetAndEpoch(offset, curClaimEpoch);
+            }
+        }
+        @Override
+        public void beginMigration() {
+            // TODO use KIP-868 transaction
+            ControllerWriteEvent<Void> event = new ControllerWriteEvent<>("Begin ZK Migration",
+                new MigrationWriteOperation(
+                    Collections.singletonList(
+                        new ApiMessageAndVersion(
+                            new ZkMigrationStateRecord().setZkMigrationState(ZkMigrationState.PRE_MIGRATION.value()),
+                            ZkMigrationStateRecord.LOWEST_SUPPORTED_VERSION)
+                    )));
+            queue.append(event);
+        }
+
+        @Override
+        public CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch) {
+            if (queue.size() > 100) { // TODO configure this
+                CompletableFuture<Void> future = new CompletableFuture<>();
+                future.completeExceptionally(new NotControllerException("Cannot accept migration record batch. Controller queue is too large"));
+                return future;
+            }
+            ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>("ZK Migration Batch",
+                new MigrationWriteOperation(recordBatch));
+            queue.append(batchEvent);
+            return batchEvent.future;
+        }
+
+        @Override
+        public OffsetAndEpoch completeMigration() {
+            // TODO write migration record, use KIP-868 transaction
+            return highestMigrationRecordOffset;
+        }
+
+        @Override
+        public void abortMigration() {
+            // TODO use KIP-868 transaction
+        }
+    }
+
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
         @Override
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
@@ -871,6 +934,9 @@ public final class QuorumController implements Controller {
                                 i++;
                             }
                         }
+
+                        controllerMetricsManager.replayBatch(batch.baseOffset(), messages);
+
                         updateLastCommittedState(
                             offset,
                             epoch,
@@ -924,6 +990,7 @@ public final class QuorumController implements Controller {
                         for (ApiMessageAndVersion message : messages) {
                             try {
                                 replay(message.message(), Optional.of(reader.snapshotId()), reader.lastContainedLogOffset());
+                                controllerMetricsManager.replay(message.message());
                             } catch (Throwable e) {
                                 String failureMessage = String.format("Unable to apply %s record " +
                                         "from snapshot %s on standby controller, which was %d of " +
@@ -935,7 +1002,9 @@ public final class QuorumController implements Controller {
                             i++;
                         }
                     }
-                    updateLastCommittedState(reader.lastContainedLogOffset(),
+
+                    updateLastCommittedState(
+                        reader.lastContainedLogOffset(),
                         reader.lastContainedLogEpoch(),
                         reader.lastContainedLogTimestamp());
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
@@ -1343,6 +1412,9 @@ public final class QuorumController implements Controller {
             case NO_OP_RECORD:
                 // NoOpRecord is an empty record and doesn't need to be replayed
                 break;
+            case ZK_MIGRATION_STATE_RECORD:
+                // TODO handle this
+                break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
         }
@@ -1353,6 +1425,7 @@ public final class QuorumController implements Controller {
      */
     private void resetToEmptyState() {
         snapshotRegistry.reset();
+        controllerMetricsManager.reset();
 
         updateLastCommittedState(-1, -1, -1);
     }
@@ -1397,6 +1470,12 @@ public final class QuorumController implements Controller {
      * The controller metrics.
      */
     private final ControllerMetrics controllerMetrics;
+
+
+    /**
+     * Manager for updating controller metrics based on the committed metadata.
+     */
+    private final ControllerMetricsManager controllerMetricsManager;
 
     /**
      * A registry for snapshot data.  This must be accessed only by the event queue thread.
@@ -1558,6 +1637,8 @@ public final class QuorumController implements Controller {
      */
     private final BootstrapMetadata bootstrapMetadata;
 
+    private final ZkRecordConsumer zkRecordConsumer;
+
     /**
      * The maximum number of records per batch to allow.
      */
@@ -1597,6 +1678,7 @@ public final class QuorumController implements Controller {
         this.queue = queue;
         this.time = time;
         this.controllerMetrics = controllerMetrics;
+        this.controllerMetricsManager = new ControllerMetricsManager(controllerMetrics);
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.purgatory = new ControllerPurgatory();
         this.resourceExists = new ConfigResourceExistenceChecker();
@@ -1629,7 +1711,6 @@ public final class QuorumController implements Controller {
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(sessionTimeoutNs).
             setReplicaPlacer(replicaPlacer).
-            setControllerMetrics(controllerMetrics).
             setFeatureControlManager(featureControl).
             setZkMigrationEnabled(zkMigrationEnabled).
             build();
@@ -1644,7 +1725,6 @@ public final class QuorumController implements Controller {
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
-            setControllerMetrics(controllerMetrics).
             setCreateTopicPolicy(createTopicPolicy).
             setFeatureControl(featureControl).
             build();
@@ -1660,6 +1740,7 @@ public final class QuorumController implements Controller {
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
         this.needToCompleteAuthorizerLoad = authorizer.isPresent();
+        this.zkRecordConsumer = new MigrationRecordConsumer();
         updateWriteOffset(-1);
 
         resetToEmptyState();
@@ -2015,11 +2096,6 @@ public final class QuorumController implements Controller {
     @Override
     public int curClaimEpoch() {
         return curClaimEpoch;
-    }
-
-    // Visible for testing
-    MetadataVersion metadataVersion() {
-        return featureControl.metadataVersion();
     }
 
     @Override

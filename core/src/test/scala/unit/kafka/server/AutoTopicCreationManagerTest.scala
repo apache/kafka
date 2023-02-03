@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Collections, Optional, Properties}
 
 import kafka.controller.KafkaController
-import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions, RequestCompletionHandler}
@@ -38,6 +37,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -82,7 +82,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testCreateOffsetTopic(): Unit = {
-    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    Mockito.when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
     testCreateTopic(GROUP_METADATA_TOPIC_NAME, true, internalTopicPartitions, internalTopicReplicationFactor)
   }
 
@@ -159,7 +159,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testInvalidReplicationFactorForConsumerOffsetsTopic(): Unit = {
-    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    Mockito.when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.INVALID_REPLICATION_FACTOR, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true)
   }
 
@@ -177,7 +177,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testTopicExistsErrorSwapForConsumerOffsetsTopic(): Unit = {
-    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    Mockito.when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.TOPIC_ALREADY_EXISTS, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true,
       expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
   }
@@ -197,7 +197,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testRequestTimeoutErrorSwapForConsumerOffsetTopic(): Unit = {
-    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    Mockito.when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.REQUEST_TIMED_OUT, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true,
       expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
   }
@@ -216,7 +216,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testUnknownTopicPartitionForConsumerOffsetTopic(): Unit = {
-    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    Mockito.when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true)
   }
 

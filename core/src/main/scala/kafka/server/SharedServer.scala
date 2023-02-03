@@ -35,7 +35,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import java.util
 import java.util.Collections
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
 
 
@@ -150,6 +150,12 @@ class SharedServer(
     }
   }
 
+  def raftManagerFaultHandler: FaultHandler = faultHandlerFactory.build(
+    name = "raft manager",
+    fatal = true,
+    action = () => {}
+  )
+
   /**
    * The fault handler to use when metadata loading fails.
    */
@@ -225,7 +231,9 @@ class SharedServer(
           time,
           metrics,
           threadNamePrefix,
-          controllerQuorumVotersFuture)
+          controllerQuorumVotersFuture,
+          raftManagerFaultHandler
+        )
         raftManager.startup()
 
         if (sharedServerConfig.processRoles.contains(ControllerRole)) {
@@ -248,7 +256,7 @@ class SharedServer(
             setTime(time).
             setFaultHandler(metadataPublishingFaultHandler).
             setMaxBytesSinceLastSnapshot(sharedServerConfig.metadataSnapshotMaxNewRecordBytes).
-            setMaxTimeSinceLastSnapshotNs(sharedServerConfig.metadataSnapshotMaxIntervalMs).
+            setMaxTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(sharedServerConfig.metadataSnapshotMaxIntervalMs)).
             setDisabledReason(snapshotsDiabledReason).
             build()
           raftManager.register(loader)

@@ -49,7 +49,7 @@ import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
-import static org.apache.kafka.test.StreamsTestUtils.TopologyMetadataBuilder.unamedTopology;
+import static org.apache.kafka.test.StreamsTestUtils.TopologyMetadataBuilder.unnamedTopology;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -72,7 +72,7 @@ class DefaultStateUpdaterTest {
 
     private final static int COMMIT_INTERVAL = 100;
     private final static long CALL_TIMEOUT = 1000;
-    private final static long VERIFICATION_TIMEOUT = 15000;
+    private final static long VERIFICATION_TIMEOUT = 30000;
     private final static TopicPartition TOPIC_PARTITION_A_0 = new TopicPartition("topicA", 0);
     private final static TopicPartition TOPIC_PARTITION_A_1 = new TopicPartition("topicA", 1);
     private final static TopicPartition TOPIC_PARTITION_B_0 = new TopicPartition("topicB", 0);
@@ -90,7 +90,7 @@ class DefaultStateUpdaterTest {
     private final Time time = new MockTime(1L);
     private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
-    private final TopologyMetadata topologyMetadata = unamedTopology().build();
+    private final TopologyMetadata topologyMetadata = unnamedTopology().build();
     private DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", config, changelogReader, topologyMetadata, time);
 
     @AfterEach

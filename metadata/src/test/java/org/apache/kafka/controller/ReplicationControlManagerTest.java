@@ -61,6 +61,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -151,7 +152,6 @@ public class ReplicationControlManagerTest {
         final LogContext logContext = new LogContext();
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
-        final ControllerMetrics metrics = new MockControllerMetrics();
         final FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
@@ -165,7 +165,6 @@ public class ReplicationControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS)).
             setReplicaPlacer(new StripedReplicaPlacer(random)).
-            setControllerMetrics(metrics).
             setFeatureControlManager(featureControl).
             build();
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager.Builder().
@@ -206,7 +205,6 @@ public class ReplicationControlManagerTest {
                 setMaxElectionsPerImbalance(Integer.MAX_VALUE).
                 setConfigurationControl(configurationControl).
                 setClusterControl(clusterControl).
-                setControllerMetrics(metrics).
                 setCreateTopicPolicy(createTopicPolicy).
                 setFeatureControl(featureControl).
                 build();
@@ -583,6 +581,17 @@ public class ReplicationControlManagerTest {
             replicationControl.createTopics(request1, Collections.singleton("foo"));
         assertEquals((short) 0, result1.response().topics().find("foo").errorCode());
 
+        List<ApiMessageAndVersion> records1 = result1.records();
+        assertEquals(3, records1.size());
+        ApiMessageAndVersion record0 = records1.get(0);
+        assertEquals(TopicRecord.class, record0.message().getClass());
+
+        ApiMessageAndVersion record1 = records1.get(1);
+        assertEquals(ConfigRecord.class, record1.message().getClass());
+
+        ApiMessageAndVersion lastRecord = records1.get(2);
+        assertEquals(PartitionRecord.class, lastRecord.message().getClass());
+
         ctx.replay(result1.records());
         assertEquals(
             "notNull",
@@ -608,41 +617,49 @@ public class ReplicationControlManagerTest {
             "Null value not supported for topic configs: foo",
             result2.response().topics().find("bar").errorMessage()
         );
-    }
 
-    @Test
-    public void testBrokerCountMetrics() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
-        ReplicationControlManager replicationControl = ctx.replicationControl;
+        CreateTopicsRequestData request3 = new CreateTopicsRequestData();
+        request3.topics().add(new CreatableTopic().setName("baz")
+            .setNumPartitions(-1).setReplicationFactor((short) -2)
+            .setConfigs(validConfigs));
 
-        ctx.registerBrokers(0);
+        ControllerResult<CreateTopicsResponseData> result3 =
+            replicationControl.createTopics(request3, Collections.singleton("baz"));
+        assertEquals(INVALID_REPLICATION_FACTOR.code(), result3.response().topics().find("baz").errorCode());
+        assertEquals(Collections.emptyList(), result3.records());
 
-        assertEquals(1, ctx.metrics.fencedBrokerCount());
-        assertEquals(0, ctx.metrics.activeBrokerCount());
+        // Test request with multiple topics together.
+        CreateTopicsRequestData request4 = new CreateTopicsRequestData();
+        String batchedTopic1 = "batched-topic-1";
+        request4.topics().add(new CreatableTopic().setName(batchedTopic1)
+            .setNumPartitions(-1).setReplicationFactor((short) -1)
+            .setConfigs(validConfigs));
+        String batchedTopic2 = "batched-topic2";
+        request4.topics().add(new CreatableTopic().setName(batchedTopic2)
+            .setNumPartitions(-1).setReplicationFactor((short) -2)
+            .setConfigs(validConfigs));
 
-        ctx.unfenceBrokers(0);
+        Set<String> request4Topics = new HashSet<>();
+        request4Topics.add(batchedTopic1);
+        request4Topics.add(batchedTopic2);
+        ControllerResult<CreateTopicsResponseData> result4 =
+            replicationControl.createTopics(request4, request4Topics);
 
-        assertEquals(0, ctx.metrics.fencedBrokerCount());
-        assertEquals(1, ctx.metrics.activeBrokerCount());
+        assertEquals(Errors.NONE.code(), result4.response().topics().find(batchedTopic1).errorCode());
+        assertEquals(INVALID_REPLICATION_FACTOR.code(), result4.response().topics().find(batchedTopic2).errorCode());
 
-        ctx.registerBrokers(1);
-        ctx.unfenceBrokers(1);
-
-        assertEquals(2, ctx.metrics.activeBrokerCount());
-
-        ctx.registerBrokers(2);
-        ctx.unfenceBrokers(2);
-
-        assertEquals(0, ctx.metrics.fencedBrokerCount());
-        assertEquals(3, ctx.metrics.activeBrokerCount());
-
-        ControllerResult<Void> result = replicationControl.unregisterBroker(0);
-        ctx.replay(result.records());
-        result = replicationControl.unregisterBroker(2);
-        ctx.replay(result.records());
-
-        assertEquals(0, ctx.metrics.fencedBrokerCount());
-        assertEquals(1, ctx.metrics.activeBrokerCount());
+        assertEquals(3, result4.records().size());
+        assertEquals(TopicRecord.class, result4.records().get(0).message().getClass());
+        TopicRecord batchedTopic1Record = (TopicRecord) result4.records().get(0).message();
+        assertEquals(batchedTopic1, batchedTopic1Record.name());
+        assertEquals(new ConfigRecord()
+            .setResourceName(batchedTopic1)
+            .setResourceType(ConfigResource.Type.TOPIC.id())
+            .setName("foo")
+            .setValue("notNull"),
+            result4.records().get(1).message());
+        assertEquals(PartitionRecord.class, result4.records().get(2).message().getClass());
+        assertEquals(batchedTopic1Record.topicId(), ((PartitionRecord) result4.records().get(2).message()).topicId());
     }
 
     @Test
@@ -716,107 +733,6 @@ public class ReplicationControlManagerTest {
         CreatableTopicResult recreatedTopic = ctx.createTestTopic("foo.bar", 4, (short) 2, NONE.code());
         assertNotEquals(initialTopic.topicId(), recreatedTopic.topicId());
         assertEquals(4, ctx.replicationControl.getTopic(recreatedTopic.topicId()).numPartitions(Long.MAX_VALUE));
-    }
-
-    @Test
-    public void testGlobalTopicAndPartitionMetrics() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
-        ReplicationControlManager replicationControl = ctx.replicationControl;
-        CreateTopicsRequestData request = new CreateTopicsRequestData();
-        request.topics().add(new CreatableTopic().setName("foo").
-            setNumPartitions(1).setReplicationFactor((short) -1));
-
-        ctx.registerBrokers(0, 1, 2);
-        ctx.unfenceBrokers(0, 1, 2);
-
-        List<Uuid> topicsToDelete = new ArrayList<>();
-
-        ControllerResult<CreateTopicsResponseData> result =
-            replicationControl.createTopics(request, Collections.singleton("foo"));
-        topicsToDelete.add(result.response().topics().find("foo").topicId());
-
-        RecordTestUtils.replayAll(replicationControl, result.records());
-        assertEquals(1, ctx.metrics.globalTopicsCount());
-
-        request = new CreateTopicsRequestData();
-        request.topics().add(new CreatableTopic().setName("bar").
-            setNumPartitions(1).setReplicationFactor((short) -1));
-        request.topics().add(new CreatableTopic().setName("baz").
-            setNumPartitions(2).setReplicationFactor((short) -1));
-        result = replicationControl.createTopics(request,
-            new HashSet<>(Arrays.asList("bar", "baz")));
-        RecordTestUtils.replayAll(replicationControl, result.records());
-        assertEquals(3, ctx.metrics.globalTopicsCount());
-        assertEquals(4, ctx.metrics.globalPartitionCount());
-
-        topicsToDelete.add(result.response().topics().find("baz").topicId());
-        ControllerResult<Map<Uuid, ApiError>> deleteResult = replicationControl.deleteTopics(topicsToDelete);
-        RecordTestUtils.replayAll(replicationControl, deleteResult.records());
-        assertEquals(1, ctx.metrics.globalTopicsCount());
-        assertEquals(1, ctx.metrics.globalPartitionCount());
-
-        Uuid topicToDelete = result.response().topics().find("bar").topicId();
-        deleteResult = replicationControl.deleteTopics(Collections.singletonList(topicToDelete));
-        RecordTestUtils.replayAll(replicationControl, deleteResult.records());
-        assertEquals(0, ctx.metrics.globalTopicsCount());
-        assertEquals(0, ctx.metrics.globalPartitionCount());
-    }
-
-    @Test
-    public void testOfflinePartitionAndReplicaImbalanceMetrics() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
-        ReplicationControlManager replicationControl = ctx.replicationControl;
-        ctx.registerBrokers(0, 1, 2, 3);
-        ctx.unfenceBrokers(0, 1, 2, 3);
-
-        CreatableTopicResult foo = ctx.createTestTopic("foo", new int[][] {
-            new int[] {0, 2}, new int[] {0, 1}});
-
-        CreatableTopicResult zar = ctx.createTestTopic("zar", new int[][] {
-            new int[] {0, 1, 2}, new int[] {1, 2, 3}, new int[] {1, 2, 0}});
-
-        ControllerResult<Void> result = replicationControl.unregisterBroker(0);
-        ctx.replay(result.records());
-
-        // All partitions should still be online after unregistering broker 0
-        assertEquals(0, ctx.metrics.offlinePartitionCount());
-        // Three partitions should not have their preferred (first) replica 0
-        assertEquals(3, ctx.metrics.preferredReplicaImbalanceCount());
-
-        result = replicationControl.unregisterBroker(1);
-        ctx.replay(result.records());
-
-        // After unregistering broker 1, 1 partition for topic foo should go offline
-        assertEquals(1, ctx.metrics.offlinePartitionCount());
-        // All five partitions should not have their preferred (first) replica at this point
-        assertEquals(5, ctx.metrics.preferredReplicaImbalanceCount());
-
-        result = replicationControl.unregisterBroker(2);
-        ctx.replay(result.records());
-
-        // After unregistering broker 2, the last partition for topic foo should go offline
-        // and 2 partitions for topic zar should go offline
-        assertEquals(4, ctx.metrics.offlinePartitionCount());
-
-        result = replicationControl.unregisterBroker(3);
-        ctx.replay(result.records());
-
-        // After unregistering broker 3 the last partition for topic zar should go offline
-        assertEquals(5, ctx.metrics.offlinePartitionCount());
-
-        // Deleting topic foo should bring the offline partition count down to 3
-        ArrayList<ApiMessageAndVersion> records = new ArrayList<>();
-        replicationControl.deleteTopic(foo.topicId(), records);
-        ctx.replay(records);
-
-        assertEquals(3, ctx.metrics.offlinePartitionCount());
-
-        // Deleting topic zar should bring the offline partition count down to 0
-        records = new ArrayList<>();
-        replicationControl.deleteTopic(zar.topicId(), records);
-        ctx.replay(records);
-
-        assertEquals(0, ctx.metrics.offlinePartitionCount());
     }
 
     @Test
@@ -2092,7 +2008,6 @@ public class ReplicationControlManagerTest {
             new int[]{1, 2, 3}, new int[]{2, 3, 4}, new int[]{0, 2, 1}}).topicId();
 
         assertTrue(replication.arePartitionLeadersImbalanced());
-        assertEquals(2, ctx.metrics.preferredReplicaImbalanceCount());
 
         ctx.unfenceBrokers(1);
 
@@ -2124,7 +2039,6 @@ public class ReplicationControlManagerTest {
             .setLeader(1);
         assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, (short) 0)), balanceResult.records());
         assertTrue(replication.arePartitionLeadersImbalanced());
-        assertEquals(1, ctx.metrics.preferredReplicaImbalanceCount());
         assertFalse(balanceResult.response());
 
         ctx.unfenceBrokers(0);
@@ -2157,7 +2071,6 @@ public class ReplicationControlManagerTest {
             .setLeader(0);
         assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, (short) 0)), balanceResult.records());
         assertFalse(replication.arePartitionLeadersImbalanced());
-        assertEquals(0, ctx.metrics.preferredReplicaImbalanceCount());
         assertFalse(balanceResult.response());
     }
 

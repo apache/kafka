@@ -19,7 +19,6 @@ package kafka.server
 
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
-import kafka.message.NoCompressionCodec
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.Implicits.MapExtensionMethods
@@ -34,6 +33,7 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.server.log.internals.LogOffsetMetadata
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -1423,7 +1423,7 @@ class AbstractFetcherThreadTest {
       state.logStartOffset = partitionData.logStartOffset
       state.highWatermark = partitionData.highWatermark
 
-      Some(LogAppendInfo(firstOffset = Some(LogOffsetMetadata(fetchOffset)),
+      Some(LogAppendInfo(firstOffset = Some(new LogOffsetMetadata(fetchOffset)),
         lastOffset = lastOffset,
         lastLeaderEpoch = lastEpoch,
         maxTimestamp = maxTimestamp,
@@ -1431,8 +1431,8 @@ class AbstractFetcherThreadTest {
         logAppendTime = Time.SYSTEM.milliseconds(),
         logStartOffset = state.logStartOffset,
         recordConversionStats = RecordConversionStats.EMPTY,
-        sourceCodec = NoCompressionCodec,
-        targetCodec = NoCompressionCodec,
+        sourceCompression = CompressionType.NONE,
+        targetCompression = CompressionType.NONE,
         shallowCount = batches.size,
         validBytes = FetchResponse.recordsSize(partitionData),
         offsetsMonotonic = true,

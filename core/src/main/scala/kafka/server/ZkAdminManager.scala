@@ -18,10 +18,8 @@ package kafka.server
 
 import java.util
 import java.util.Properties
-
 import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.common.TopicAlreadyMarkedForDeletionException
-import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
 import kafka.server.DynamicConfig.QuotaConfigs
@@ -50,6 +48,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.log.internals.LogConfig
 
 import scala.collection.{Map, mutable, _}
 import scala.jdk.CollectionConverters._
@@ -127,7 +126,7 @@ class ZkAdminManager(val config: KafkaConfig,
                                               configs: Properties,
                                               assignments: Map[Int, Seq[Int]]): Unit = {
     metadataAndConfigs.get(topicName).foreach { result =>
-      val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), configs)
+      val logConfig = LogConfig.fromProps(config.extractLogConfigMap, configs)
       val createEntry = configHelper.createTopicConfigEntry(logConfig, configs, includeSynonyms = false, includeDocumentation = false)(_, _)
       val topicConfigs = configHelper.allConfigs(logConfig).map { case (k, v) =>
         val entry = createEntry(k, v)
@@ -510,7 +509,7 @@ class ZkAdminManager(val config: KafkaConfig,
               throw new InvalidRequestException("Default topic resources are not allowed.")
             }
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
-            prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
+            prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys.asScala)
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER =>

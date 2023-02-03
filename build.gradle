@@ -410,14 +410,11 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/ConnectorPluginsResourceTest.*",
-      "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
-      "**/ErrorHandlingTaskTest.*", "**/KafkaConfigBackingStoreTest.*",
-      "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
-      "**/SourceTaskOffsetCommitterTest.*",
+      "**/DistributedHerderTest.*",
+      "**/KafkaConfigBackingStoreTest.*",
+      "**/KafkaBasedLogTest.*", "**/StandaloneHerderTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*"
+      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*"
     ])
   }
 
@@ -1046,7 +1043,7 @@ project(':core') {
 
   task genTopicConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'kafka.log.LogConfig'
+    mainClass = 'org.apache.kafka.server.log.internals.LogConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
   }
@@ -1539,6 +1536,7 @@ project(':server-common') {
     api project(':clients')
     implementation libs.slf4jApi
     implementation libs.metrics
+    implementation libs.joptSimple
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
@@ -1765,6 +1763,7 @@ project(':tools') {
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.log4j
+    implementation libs.joptSimple
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
@@ -1921,6 +1920,7 @@ project(':streams') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j
     testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
@@ -2040,6 +2040,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-30:test',
             ':streams:upgrade-system-tests-31:test',
             ':streams:upgrade-system-tests-32:test',
+            ':streams:upgrade-system-tests-33:test',
             ':streams:examples:test'
     ]
   )
@@ -2056,6 +2057,7 @@ project(':streams:streams-scala') {
 
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':streams').sourceSets.test.output
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
@@ -2068,6 +2070,10 @@ project(':streams:streams-scala') {
 
   javadoc {
     include "**/org/apache/kafka/streams/scala/**"
+  }
+
+  scaladoc {
+    scalaDocOptions.additionalParameters = ["-no-link-warnings"]
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -2397,6 +2403,19 @@ project(':streams:upgrade-system-tests-32') {
   }
 }
 
+project(':streams:upgrade-system-tests-33') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-33"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_33
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.github.johnrengelman.shadow'
@@ -2412,7 +2431,9 @@ project(':jmh-benchmarks') {
     }
     implementation project(':server-common')
     implementation project(':clients')
+    implementation project(':group-coordinator')
     implementation project(':metadata')
+    implementation project(':storage')
     implementation project(':streams')
     implementation project(':core')
     implementation project(':clients').sourceSets.test.output

@@ -21,10 +21,7 @@ import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
-import kafka.log.CleanerConfig;
-import kafka.log.Defaults;
 import kafka.log.LogAppendInfo;
-import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerFeatures;
@@ -32,7 +29,6 @@ import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
 import kafka.server.KafkaConfig;
-import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.OffsetAndEpoch;
 import kafka.server.OffsetTruncationState;
@@ -47,7 +43,6 @@ import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.server.metadata.ZkMetadataCache;
-import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Pool;
 import kafka.utils.TestUtils;
@@ -73,6 +68,10 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.log.internals.CleanerConfig;
+import org.apache.kafka.server.log.internals.LogConfig;
+import org.apache.kafka.server.log.internals.LogDirFailureChannel;
+import org.apache.kafka.server.util.KafkaScheduler;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -110,7 +109,6 @@ import scala.collection.Map;
 @Measurement(iterations = 15)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-
 public class ReplicaFetcherThreadBenchmark {
     @Param({"100", "500", "1000", "5000"})
     private int partitionCount;
@@ -118,7 +116,7 @@ public class ReplicaFetcherThreadBenchmark {
     private ReplicaFetcherBenchThread fetcher;
     private LogManager logManager;
     private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, "scheduler", true);
+    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
     private Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
     private Metrics metrics = new Metrics();
     private ReplicaManager replicaManager;
@@ -144,7 +142,7 @@ public class ReplicaFetcherThreadBenchmark {
             setInitialOfflineDirs(Collections.emptyList()).
             setConfigRepository(new MockConfigRepository()).
             setInitialDefaultConfig(logConfig).
-            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5")).
+            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
             setRecoveryThreadsPerDataDir(1).
             setFlushCheckMs(1000L).
             setFlushRecoveryOffsetCheckpointMs(10000L).
@@ -261,7 +259,7 @@ public class ReplicaFetcherThreadBenchmark {
     }
 
     @TearDown(Level.Trial)
-    public void tearDown() throws IOException {
+    public void tearDown() throws IOException, InterruptedException {
         metrics.close();
         replicaManager.shutdown(false);
         logManager.shutdown();
@@ -288,18 +286,7 @@ public class ReplicaFetcherThreadBenchmark {
     }
 
     private static LogConfig createLogConfig() {
-        Properties logProps = new Properties();
-        logProps.put(LogConfig.SegmentMsProp(), Defaults.SegmentMs());
-        logProps.put(LogConfig.SegmentBytesProp(), Defaults.SegmentSize());
-        logProps.put(LogConfig.RetentionMsProp(), Defaults.RetentionMs());
-        logProps.put(LogConfig.RetentionBytesProp(), Defaults.RetentionSize());
-        logProps.put(LogConfig.SegmentJitterMsProp(), Defaults.SegmentJitterMs());
-        logProps.put(LogConfig.CleanupPolicyProp(), Defaults.CleanupPolicy());
-        logProps.put(LogConfig.MaxMessageBytesProp(), Defaults.MaxMessageSize());
-        logProps.put(LogConfig.IndexIntervalBytesProp(), Defaults.IndexInterval());
-        logProps.put(LogConfig.SegmentIndexBytesProp(), Defaults.MaxIndexSize());
-        logProps.put(LogConfig.FileDeleteDelayMsProp(), Defaults.FileDeleteDelayMs());
-        return LogConfig.apply(logProps, new scala.collection.immutable.HashSet<>());
+        return new LogConfig(new Properties());
     }
 
 

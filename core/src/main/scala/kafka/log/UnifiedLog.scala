@@ -21,16 +21,14 @@ import com.yammer.metrics.core.MetricName
 
 import java.io.{File, IOException}
 import java.nio.file.Files
-import java.util.Optional
-import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, TimeUnit}
-import kafka.common.{LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
-import kafka.log.AppendOrigin.RaftLeader
+import java.util.{Optional, OptionalLong}
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
+import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
-import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server._
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.LeaderEpochFileCache
+import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, OffsetAndEpoch, PartitionMetadataFile, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -40,24 +38,28 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, FetchIsolation, LastRecord, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator, ProducerAppendInfo}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
+import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.util.Scheduler
 
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable, mutable}
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
-    RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
+    RecordConversionStats.EMPTY, CompressionType.NONE, CompressionType.NONE, -1, -1, offsetsMonotonic = false, -1L)
 
   def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
     LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
+      RecordConversionStats.EMPTY, CompressionType.NONE, CompressionType.NONE, -1, -1,
       offsetsMonotonic = false, -1L)
 
   /**
@@ -67,7 +69,7 @@ object LogAppendInfo {
    */
   def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, recordErrors: Seq[RecordError], errorMessage: String): LogAppendInfo =
     LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
+      RecordConversionStats.EMPTY, CompressionType.NONE, CompressionType.NONE, -1, -1,
       offsetsMonotonic = false, -1L, recordErrors, errorMessage)
 }
 
@@ -91,8 +93,8 @@ object LeaderHwChange {
  * @param logAppendTime The log append time (if used) of the message set, otherwise Message.NoTimestamp
  * @param logStartOffset The start offset of the log at the time of this append.
  * @param recordConversionStats Statistics collected during record processing, `null` if `assignOffsets` is `false`
- * @param sourceCodec The source codec used in the message set (send by the producer)
- * @param targetCodec The target codec of the message set(after applying the broker compression configuration if any)
+ * @param sourceCompression The source codec used in the message set (send by the producer)
+ * @param targetCompression The target codec of the message set(after applying the broker compression configuration if any)
  * @param shallowCount The number of shallow messages
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
@@ -109,8 +111,8 @@ case class LogAppendInfo(var firstOffset: Option[LogOffsetMetadata],
                          var logAppendTime: Long,
                          var logStartOffset: Long,
                          var recordConversionStats: RecordConversionStats,
-                         sourceCodec: CompressionCodec,
-                         targetCodec: CompressionCodec,
+                         sourceCompression: CompressionType,
+                         targetCompression: CompressionType,
                          shallowCount: Int,
                          validBytes: Int,
                          offsetsMonotonic: Boolean,
@@ -158,26 +160,6 @@ case class LogReadInfo(fetchedData: FetchDataInfo,
                        logStartOffset: Long,
                        logEndOffset: Long,
                        lastStableOffset: Long)
-
-/**
- * A class used to hold useful metadata about a completed transaction. This is used to build
- * the transaction index after appending to the log.
- *
- * @param producerId The ID of the producer
- * @param firstOffset The first offset (inclusive) of the transaction
- * @param lastOffset The last offset (inclusive) of the transaction. This is always the offset of the
- *                   COMMIT/ABORT control record which indicates the transaction's completion.
- * @param isAborted Whether or not the transaction was aborted
- */
-case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean) {
-  override def toString: String = {
-    "CompletedTxn(" +
-      s"producerId=$producerId, " +
-      s"firstOffset=$firstOffset, " +
-      s"lastOffset=$lastOffset, " +
-      s"isAborted=$isAborted)"
-  }
-}
 
 /**
  * A class used to hold params required to decide to rotate a log segment or not.
@@ -273,6 +255,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
+  private val validatorMetricsRecorder = newValidatorMetricsRecorder(brokerTopicStats.allTopicsStats)
 
   /* The earliest offset which is part of an incomplete transaction. This is used to compute the
    * last stable offset (LSO) in ReplicaManager. Note that it is possible that the "true" first unstable offset
@@ -292,7 +275,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * equals the log end offset (which may never happen for a partition under consistent load). This is needed to
    * prevent the log start offset (which is exposed in fetch responses) from getting ahead of the high watermark.
    */
-  @volatile private var highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(logStartOffset)
+  @volatile private var highWatermarkMetadata: LogOffsetMetadata = new LogOffsetMetadata(logStartOffset)
 
   @volatile var partitionMetadataFile: Option[PartitionMetadataFile] = None
 
@@ -343,12 +326,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         try partMetadataFile.delete()
         catch {
           case e: IOException =>
-            error(s"Error while trying to delete partition metadata file ${partMetadataFile}", e)
+            error(s"Error while trying to delete partition metadata file $partMetadataFile", e)
         }
       }
     } else if (keepPartitionMetadataFile) {
       _topicId.foreach(partMetadataFile.record)
-      scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+      scheduler.scheduleOnce("flush-metadata-file", () => maybeFlushMetadataFile())
     } else {
       // We want to keep the file and the in-memory topic ID in sync.
       _topicId = None
@@ -399,7 +382,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @return the updated high watermark offset
    */
   def updateHighWatermark(hw: Long): Long = {
-    updateHighWatermark(LogOffsetMetadata(hw))
+    updateHighWatermark(new LogOffsetMetadata(hw))
   }
 
   /**
@@ -412,7 +395,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def updateHighWatermark(highWatermarkMetadata: LogOffsetMetadata): Long = {
     val endOffsetMetadata = localLog.logEndOffsetMetadata
     val newHighWatermarkMetadata = if (highWatermarkMetadata.messageOffset < logStartOffset) {
-      LogOffsetMetadata(logStartOffset)
+      new LogOffsetMetadata(logStartOffset)
     } else if (highWatermarkMetadata.messageOffset >= endOffsetMetadata.messageOffset) {
       endOffsetMetadata
     } else {
@@ -464,7 +447,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def maybeUpdateHighWatermark(hw: Long): Option[Long] = {
     lock.synchronized {
       val oldHighWatermark = highWatermarkMetadata
-      updateHighWatermark(LogOffsetMetadata(hw)) match {
+      updateHighWatermark(new LogOffsetMetadata(hw)) match {
         case oldHighWatermark.messageOffset =>
           None
         case newHighWatermark =>
@@ -571,21 +554,29 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     )
   }
 
-  private val tags = {
-    val maybeFutureTag = if (isFuture) Map("is-future" -> "true") else Map.empty[String, String]
-    Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++ maybeFutureTag
+
+  private var metricNames: Map[String, Map[String, String]] = Map.empty
+
+  newMetrics()
+  private[log] def newMetrics(): Unit = {
+    val tags = Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++
+      (if (isFuture) Map("is-future" -> "true") else Map.empty)
+    newGauge(LogMetricNames.NumLogSegments, () => numberOfSegments, tags)
+    newGauge(LogMetricNames.LogStartOffset, () => logStartOffset, tags)
+    newGauge(LogMetricNames.LogEndOffset, () => logEndOffset, tags)
+    newGauge(LogMetricNames.Size, () => size, tags)
+    metricNames = Map(LogMetricNames.NumLogSegments -> tags,
+      LogMetricNames.LogStartOffset -> tags,
+      LogMetricNames.LogEndOffset -> tags,
+      LogMetricNames.Size -> tags)
+
   }
 
-  newGauge(LogMetricNames.NumLogSegments, () => numberOfSegments, tags)
-  newGauge(LogMetricNames.LogStartOffset, () => logStartOffset, tags)
-  newGauge(LogMetricNames.LogEndOffset, () => logEndOffset, tags)
-  newGauge(LogMetricNames.Size, () => size, tags)
-
-  val producerExpireCheck = scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
+  val producerExpireCheck = scheduler.schedule("PeriodicProducerExpirationCheck", () => {
     lock synchronized {
       producerStateManager.removeExpiredProducers(time.milliseconds)
     }
-  }, period = producerIdExpirationCheckIntervalMs, delay = producerIdExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
+  }, producerIdExpirationCheckIntervalMs, producerIdExpirationCheckIntervalMs)
 
   // For compatibility, metrics are defined to be under `Log` class
   override def metricName(name: String, tags: scala.collection.Map[String, String]): MetricName = {
@@ -627,7 +618,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             case Some(partMetadataFile) =>
               if (!partMetadataFile.exists()) {
                 partMetadataFile.record(topicId)
-                scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+                scheduler.scheduleOnce("flush-metadata-file", () => maybeFlushMetadataFile())
               }
             case _ => warn(s"The topic id $topicId will not be persisted to the partition metadata file " +
               "since the partition is deleted")
@@ -683,7 +674,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           .setLastSequence(state.lastSeq)
           .setLastTimestamp(state.lastTimestamp)
           .setCoordinatorEpoch(state.coordinatorEpoch)
-          .setCurrentTxnStartOffset(state.currentTxnFirstOffset.getOrElse(-1L))
+          .setCurrentTxnStartOffset(state.currentTxnFirstOffset.orElse(-1L))
       }
     }.toSeq
   }
@@ -696,8 +687,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   private[log] def lastRecordsOfActiveProducers: Map[Long, LastRecord] = lock synchronized {
     producerStateManager.activeProducers.map { case (producerId, producerIdEntry) =>
-      val lastDataOffset = if (producerIdEntry.lastDataOffset >= 0 ) Some(producerIdEntry.lastDataOffset) else None
-      val lastRecord = LastRecord(lastDataOffset, producerIdEntry.producerEpoch)
+      val lastDataOffset =
+        if (producerIdEntry.lastDataOffset >= 0) OptionalLong.of(producerIdEntry.lastDataOffset)
+        else OptionalLong.empty()
+      val lastRecord = new LastRecord(lastDataOffset, producerIdEntry.producerEpoch)
       producerId -> lastRecord
     }
   }
@@ -779,10 +772,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def appendAsLeader(records: MemoryRecords,
                      leaderEpoch: Int,
-                     origin: AppendOrigin = AppendOrigin.Client,
+                     origin: AppendOrigin = AppendOrigin.CLIENT,
                      interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
                      requestLocal: RequestLocal = RequestLocal.NoCaching): LogAppendInfo = {
-    val validateAndAssignOffsets = origin != AppendOrigin.RaftLeader
+    val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
     append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), ignoreRecordSize = false)
   }
 
@@ -795,7 +788,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
     append(records,
-      origin = AppendOrigin.Replication,
+      origin = AppendOrigin.REPLICATION,
       interBrokerProtocolVersion = MetadataVersion.latest,
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
@@ -848,38 +841,40 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           localLog.checkIfMemoryMappedBufferClosed()
           if (validateAndAssignOffsets) {
             // assign offsets to the message set
-            val offset = new LongRef(localLog.logEndOffset)
-            appendInfo.firstOffset = Some(LogOffsetMetadata(offset.value))
-            val now = time.milliseconds
+            val offset = PrimitiveRef.ofLong(localLog.logEndOffset)
+            appendInfo.firstOffset = Some(new LogOffsetMetadata(offset.value))
             val validateAndOffsetAssignResult = try {
-              LogValidator.validateMessagesAndAssignOffsets(validRecords,
+              val validator = new LogValidator(validRecords,
                 topicPartition,
-                offset,
                 time,
-                now,
-                appendInfo.sourceCodec,
-                appendInfo.targetCodec,
+                appendInfo.sourceCompression,
+                appendInfo.targetCompression,
                 config.compact,
                 config.recordVersion.value,
                 config.messageTimestampType,
                 config.messageTimestampDifferenceMaxMs,
                 leaderEpoch,
                 origin,
-                interBrokerProtocolVersion,
-                brokerTopicStats,
+                interBrokerProtocolVersion
+              )
+              validator.validateMessagesAndAssignOffsets(offset,
+                validatorMetricsRecorder,
                 requestLocal.getOrElse(throw new IllegalArgumentException(
-                  "requestLocal should be defined if assignOffsets is true")))
+                  "requestLocal should be defined if assignOffsets is true")
+                ).bufferSupplier
+              )
             } catch {
               case e: IOException =>
                 throw new KafkaException(s"Error validating messages while appending to log $name", e)
             }
+
             validRecords = validateAndOffsetAssignResult.validatedRecords
-            appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestamp
-            appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.shallowOffsetOfMaxTimestamp
+            appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestampMs
+            appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.shallowOffsetOfMaxTimestampMs
             appendInfo.lastOffset = offset.value - 1
             appendInfo.recordConversionStats = validateAndOffsetAssignResult.recordConversionStats
             if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
-              appendInfo.logAppendTime = now
+              appendInfo.logAppendTime = validateAndOffsetAssignResult.logAppendTimeMs
 
             // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
             // format conversion)
@@ -944,10 +939,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // maybe roll the log if this segment is full
           val segment = maybeRoll(validRecords.sizeInBytes, appendInfo)
 
-          val logOffsetMetadata = LogOffsetMetadata(
-            messageOffset = appendInfo.firstOrLastOffsetOfFirstBatch,
-            segmentBaseOffset = segment.baseOffset,
-            relativePositionInSegment = segment.size)
+          val logOffsetMetadata = new LogOffsetMetadata(
+            appendInfo.firstOrLastOffsetOfFirstBatch,
+            segment.baseOffset,
+            segment.size)
 
           // now that we have valid records, offsets assigned, and timestamps updated, we need to
           // validate the idempotent/transactional state of the producers and collect some metadata
@@ -956,14 +951,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
           maybeDuplicate match {
             case Some(duplicate) =>
-              appendInfo.firstOffset = Some(LogOffsetMetadata(duplicate.firstOffset))
+              appendInfo.firstOffset = Some(new LogOffsetMetadata(duplicate.firstOffset))
               appendInfo.lastOffset = duplicate.lastOffset
               appendInfo.logAppendTime = duplicate.timestamp
               appendInfo.logStartOffset = logStartOffset
             case None =>
               // Before appending update the first offset metadata to include segment information
               appendInfo.firstOffset = appendInfo.firstOffset.map { offsetMetadata =>
-                offsetMetadata.copy(segmentBaseOffset = segment.baseOffset, relativePositionInSegment = segment.size)
+                new LogOffsetMetadata(offsetMetadata.messageOffset, segment.baseOffset, segment.size)
               }
 
               // Append the records, and increment the local log end offset immediately after the append because a
@@ -1089,10 +1084,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       if (batch.hasProducerId) {
         // if this is a client produce request, there will be up to 5 batches which could have been duplicated.
         // If we find a duplicate, we return the metadata of the appended batch to the client.
-        if (origin == AppendOrigin.Client) {
+        if (origin == AppendOrigin.CLIENT) {
           val maybeLastEntry = producerStateManager.lastEntry(batch.producerId)
 
-          maybeLastEntry.flatMap(_.findDuplicateBatch(batch)).foreach { duplicate =>
+          maybeLastEntry.flatMap(_.findDuplicateBatch(batch).asScala).foreach { duplicate =>
             return (updatedProducers, completedTxns.toList, Some(duplicate))
           }
         }
@@ -1100,7 +1095,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // We cache offset metadata for the start of each transaction. This allows us to
         // compute the last stable offset without relying on additional index lookups.
         val firstOffsetMetadata = if (batch.isTransactional)
-          Some(LogOffsetMetadata(batch.baseOffset, appendOffsetMetadata.segmentBaseOffset, relativePositionInSegment))
+          Some(new LogOffsetMetadata(batch.baseOffset, appendOffsetMetadata.segmentBaseOffset, relativePositionInSegment))
         else
           None
 
@@ -1140,7 +1135,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     var firstOffset: Option[LogOffsetMetadata] = None
     var lastOffset = -1L
     var lastLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH
-    var sourceCodec: CompressionCodec = NoCompressionCodec
+    var sourceCompression = CompressionType.NONE
     var monotonic = true
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
@@ -1148,11 +1143,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     var lastOffsetOfFirstBatch = -1L
 
     records.batches.forEach { batch =>
-      if (origin == RaftLeader && batch.partitionLeaderEpoch != leaderEpoch) {
+      if (origin == AppendOrigin.RAFT_LEADER && batch.partitionLeaderEpoch != leaderEpoch) {
         throw new InvalidRecordException("Append from Raft leader did not set the batch epoch correctly")
       }
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
-      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && origin == AppendOrigin.Client && batch.baseOffset != 0)
+      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && origin == AppendOrigin.CLIENT && batch.baseOffset != 0)
         throw new InvalidRecordException(s"The baseOffset of the record batch in the append to $topicPartition should " +
           s"be 0, but it is ${batch.baseOffset}")
 
@@ -1164,7 +1159,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       // Also indicate whether we have the accurate first offset or not
       if (!readFirstMessage) {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          firstOffset = Some(LogOffsetMetadata(batch.baseOffset))
+          firstOffset = Some(new LogOffsetMetadata(batch.baseOffset))
         lastOffsetOfFirstBatch = batch.lastOffset
         readFirstMessage = true
       }
@@ -1200,19 +1195,19 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       shallowMessageCount += 1
       validBytesCount += batchSize
 
-      val messageCodec = CompressionCodec.getCompressionCodec(batch.compressionType.id)
-      if (messageCodec != NoCompressionCodec)
-        sourceCodec = messageCodec
+      val batchCompression = CompressionType.forId(batch.compressionType.id)
+      if (batchCompression != CompressionType.NONE)
+        sourceCompression = batchCompression
     }
 
     // Apply broker-side compression if any
-    val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
+    val targetCompression = BrokerCompressionType.forName(config.compressionType).targetCompressionType(sourceCompression)
     val lastLeaderEpochOpt: Option[Int] = if (lastLeaderEpoch != RecordBatch.NO_PARTITION_LEADER_EPOCH)
       Some(lastLeaderEpoch)
     else
       None
     LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
+      RecordConversionStats.EMPTY, sourceCompression, targetCompression, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
   }
 
   /**
@@ -1259,11 +1254,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
            minOneMessage: Boolean): FetchDataInfo = {
     checkLogStartOffset(startOffset)
     val maxOffsetMetadata = isolation match {
-      case FetchLogEnd => localLog.logEndOffsetMetadata
-      case FetchHighWatermark => fetchHighWatermarkMetadata
-      case FetchTxnCommitted => fetchLastStableOffsetMetadata
+      case FetchIsolation.LOG_END => localLog.logEndOffsetMetadata
+      case FetchIsolation.HIGH_WATERMARK => fetchHighWatermarkMetadata
+      case FetchIsolation.TXN_COMMITTED => fetchLastStableOffsetMetadata
     }
-    localLog.read(startOffset, maxLength, minOneMessage, maxOffsetMetadata, isolation == FetchTxnCommitted)
+    localLog.read(startOffset, maxLength, minOneMessage, maxOffsetMetadata, isolation == FetchIsolation.TXN_COMMITTED)
   }
 
   private[log] def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long): List[AbortedTxn] = {
@@ -1337,7 +1332,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
         val remoteOffset = if (remoteLogEnabled()) {
           if (remoteLogManager.isEmpty) {
-            throw new KafkaException("RemoteLogManager is empty even though the remote log storage is enabled.");
+            throw new KafkaException("RemoteLogManager is empty even though the remote log storage is enabled.")
           }
           if (recordVersion.value < RecordVersion.V2.value) {
             throw new KafkaException("Tiered storage is supported only with versions supporting leader epochs, that means RecordVersion must be >= 2.")
@@ -1602,7 +1597,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     producerStateManager.takeSnapshot()
     updateHighWatermarkWithLogEndOffset()
     // Schedule an asynchronous flush of the old segment
-    scheduler.schedule("flush-log", () => flushUptoOffsetExclusive(newSegment.baseOffset))
+    scheduler.scheduleOnce("flush-log", () => flushUptoOffsetExclusive(newSegment.baseOffset))
     newSegment
   }
 
@@ -1812,10 +1807,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * remove deleted log metrics
    */
   private[log] def removeLogMetrics(): Unit = {
-    removeMetric(LogMetricNames.NumLogSegments, tags)
-    removeMetric(LogMetricNames.LogStartOffset, tags)
-    removeMetric(LogMetricNames.LogEndOffset, tags)
-    removeMetric(LogMetricNames.Size, tags)
+    metricNames.foreach {
+      case (name, tags) => removeMetric(name, tags)
+    }
+    metricNames = Map.empty
   }
 
   /**
@@ -1952,8 +1947,6 @@ object UnifiedLog extends Logging {
 
   def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.transactionIndexFile(dir, offset, suffix)
 
-  def offsetFromFileName(filename: String): Long = LocalLog.offsetFromFileName(filename)
-
   def offsetFromFile(file: File): Long = LocalLog.offsetFromFile(file)
 
   def sizeInBytes(segments: Iterable[LogSegment]): Long = LogSegments.sizeInBytes(segments)
@@ -1974,7 +1967,7 @@ object UnifiedLog extends Logging {
           batch,
           loadedProducers,
           firstOffsetMetadata = None,
-          origin = AppendOrigin.Replication)
+          origin = AppendOrigin.REPLICATION)
         maybeCompletedTxn.foreach(completedTxns += _)
       }
     }
@@ -1989,7 +1982,7 @@ object UnifiedLog extends Logging {
                               origin: AppendOrigin): Option[CompletedTxn] = {
     val producerId = batch.producerId
     val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, origin))
-    appendInfo.append(batch, firstOffsetMetadata)
+    appendInfo.append(batch, firstOffsetMetadata.asJava).asScala
   }
 
   /**
@@ -2000,8 +1993,8 @@ object UnifiedLog extends Logging {
    * @param dir                  The directory in which the log will reside
    * @param topicPartition       The topic partition
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
-   * @param recordVersion The record version
-   * @param logPrefix The logging prefix
+   * @param recordVersion        The record version
+   * @param logPrefix            The logging prefix
    * @return The new LeaderEpochFileCache instance (if created), none otherwise
    */
   def maybeCreateLeaderEpochCache(dir: File,
@@ -2078,7 +2071,7 @@ object UnifiedLog extends Logging {
    * @param time                    The time instance used for checking the clock
    * @param reloadFromCleanShutdown True if the producer state is being built after a clean shutdown,
    *                                false otherwise.
-   * @param logPrefix The logging prefix
+   * @param logPrefix               The logging prefix
    */
   private[log] def rebuildProducerState(producerStateManager: ProducerStateManager,
                                         segments: LogSegments,
@@ -2184,7 +2177,9 @@ object UnifiedLog extends Logging {
                                            parentDir: String,
                                            topicPartition: TopicPartition): Unit = {
     val snapshotsToDelete = segments.flatMap { segment =>
-      producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)}
+      producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)
+    }
+
     def deleteProducerSnapshots(): Unit = {
       LocalLog.maybeHandleIOException(logDirFailureChannel,
         parentDir,
@@ -2196,7 +2191,7 @@ object UnifiedLog extends Logging {
     }
 
     if (asyncDelete)
-      scheduler.schedule("delete-producer-snapshot", () => deleteProducerSnapshots(), delay = config.fileDeleteDelayMs)
+      scheduler.scheduleOnce("delete-producer-snapshot", () => deleteProducerSnapshots(), config.fileDeleteDelayMs)
     else
       deleteProducerSnapshots()
   }
@@ -2204,6 +2199,27 @@ object UnifiedLog extends Logging {
   private[log] def createNewCleanedSegment(dir: File, logConfig: LogConfig, baseOffset: Long): LogSegment = {
     LocalLog.createNewCleanedSegment(dir, logConfig, baseOffset)
   }
+
+  // Visible for benchmarking
+  def newValidatorMetricsRecorder(allTopicsStats: BrokerTopicMetrics): LogValidator.MetricsRecorder = {
+    new LogValidator.MetricsRecorder {
+      def recordInvalidMagic(): Unit =
+        allTopicsStats.invalidMagicNumberRecordsPerSec.mark()
+
+      def recordInvalidOffset(): Unit =
+        allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
+
+      def recordInvalidSequence(): Unit =
+        allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
+
+      def recordInvalidChecksums(): Unit =
+        allTopicsStats.invalidMessageCrcRecordsPerSec.mark()
+
+      def recordNoKeyCompactedTopic(): Unit =
+        allTopicsStats.noKeyCompactedTopicRecordsPerSec.mark()
+    }
+  }
+
 }
 
 object LogMetricNames {

@@ -173,13 +173,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
-        <Source name="LogConfig.scala"/>
-        <Package name="kafka.log"/>
-        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
-    </Match>
-
-    <Match>
         <!-- offsets is a lazy val and it confuses spotBugs with its locking scheme -->
         <Class name="kafka.server.checkpoints.LazyOffsetCheckpointMap"/>
         <Bug pattern="IS2_INCONSISTENT_SYNC"/>
@@ -320,6 +313,20 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.common.security.authenticator.SaslClientAuthenticator"/>
         <Method name="authenticate"/>
         <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+    </Match>
+
+    <Match>
+        <!-- False positive - the volatile read is guarded by a lock. -->
+        <Class name="org.apache.kafka.server.log.internals.AbstractIndex"/>
+        <Method name="incrementEntries"/>
+        <Bug pattern="VO_VOLATILE_INCREMENT"/>
+    </Match>
+
+    <Match>
+        <!-- False positive - `ScheduledThreadPoolExecutor.getQueue()` specifies via its javadoc that its elements are of type `ScheduledFuture` -->
+        <Class name="org.apache.kafka.server.util.KafkaScheduler"/>
+        <Method name="taskRunning"/>
+        <Bug pattern="GC_UNRELATED_TYPES"/>
     </Match>
 
     <Match>
@@ -486,6 +493,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.common.config.AbstractConfig$ResolvingMap"/>
         <Method name="get"/>
         <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+
+    <Match>
+        <!-- False positive - the field is used in other modules and its unit test -->
+        <Class name="org.apache.kafka.common.utils.PrimitiveRef$LongRef"/>
+        <Field name="value"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
     </Match>
 
     <Match>

@@ -103,10 +103,16 @@ class RawMetaProperties(val props: Properties = new Properties()) {
 
 object MetaProperties {
   def parse(properties: RawMetaProperties): MetaProperties = {
-    properties.requireVersion(expectedVersion = 1)
     val clusterId = require(ClusterIdKey, properties.clusterId)
-    val nodeId = require(NodeIdKey, properties.nodeId)
-    new MetaProperties(clusterId, nodeId)
+    if (properties.version == 1) {
+      val nodeId = require(NodeIdKey, properties.nodeId)
+      new MetaProperties(clusterId, nodeId)
+    } else if (properties.version == 0) {
+      val brokerId = require(BrokerIdKey, properties.brokerId)
+      new MetaProperties(clusterId, brokerId)
+    } else {
+      throw new RuntimeException(s"Expected version 0 or 1, but got version ${properties.version}")
+    }
   }
 
   def require[T](key: String, value: Option[T]): T = {
@@ -151,7 +157,8 @@ case class MetaProperties(
 object BrokerMetadataCheckpoint extends Logging {
   def getBrokerMetadataAndOfflineDirs(
     logDirs: collection.Seq[String],
-    ignoreMissing: Boolean
+    ignoreMissing: Boolean,
+    kraftMode: Boolean
   ): (RawMetaProperties, collection.Seq[String]) = {
     require(logDirs.nonEmpty, "Must have at least one log dir to read meta.properties")
 
@@ -182,7 +189,13 @@ object BrokerMetadataCheckpoint extends Logging {
     if (brokerMetadataMap.isEmpty) {
       (new RawMetaProperties(), offlineDirs)
     } else {
-      val numDistinctMetaProperties = brokerMetadataMap.values.toSet.size
+      // KRaft mode has to support handling both meta.properties versions 0 and 1 and has to
+      // reconcile have multiple versions in different directories.
+      val numDistinctMetaProperties = if (kraftMode) {
+        brokerMetadataMap.values.map(props => MetaProperties.parse(new RawMetaProperties(props))).toSet.size
+      } else {
+        brokerMetadataMap.values.toSet.size
+      }
       if (numDistinctMetaProperties > 1) {
         val builder = new StringBuilder
 

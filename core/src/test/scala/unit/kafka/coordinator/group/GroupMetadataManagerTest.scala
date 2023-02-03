@@ -20,15 +20,15 @@ package kafka.coordinator.group
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
-import java.util.{Collections, Optional}
-
+import java.util.{Collections, Optional, OptionalInt}
 import com.yammer.metrics.core.Gauge
+
 import javax.management.ObjectName
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
-import kafka.log.{AppendOrigin, LogAppendInfo, UnifiedLog}
-import kafka.server.{FetchDataInfo, FetchLogEnd, HostedPartition, KafkaConfig, LogOffsetMetadata, ReplicaManager, RequestLocal}
-import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
+import kafka.log.{LogAppendInfo, UnifiedLog}
+import kafka.server.{HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
@@ -42,7 +42,9 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
+import org.apache.kafka.server.log.internals.{AppendOrigin, FetchDataInfo, FetchIsolation, LogOffsetMetadata}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.KafkaScheduler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -81,7 +83,7 @@ class GroupMetadataManagerTest {
       offsetsTopicNumPartitions = config.offsetsTopicPartitions,
       offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
       offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-      offsetsTopicCompressionCodec = config.offsetsTopicCompressionCodec,
+      offsetsTopicCompressionType = config.offsetsTopicCompressionType,
       offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
   }
@@ -667,7 +669,7 @@ class GroupMetadataManagerTest {
     loadOffsetsAndGroup(groupTopicPartition, groupEpoch)
     assertEquals(groupEpoch, groupMetadataManager.epochForPartitionId.get(groupTopicPartition.partition()))
 
-    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, Some(groupEpoch), _ => ())
+    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, OptionalInt.of(groupEpoch), _ => ())
     assertTrue(groupMetadataManager.getGroup(groupId).isEmpty,
       "Removed group remained in cache")
     assertEquals(groupEpoch, groupMetadataManager.epochForPartitionId.get(groupTopicPartition.partition()))
@@ -683,7 +685,7 @@ class GroupMetadataManagerTest {
     val groupEpoch = 2
     loadOffsetsAndGroup(groupTopicPartition, groupEpoch)
 
-    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, Some(groupEpoch), _ => ())
+    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, OptionalInt.of(groupEpoch), _ => ())
     assertEquals(groupEpoch, groupMetadataManager.epochForPartitionId.get(groupTopicPartition.partition()))
     assertTrue(groupMetadataManager.getGroup(groupId).isEmpty,
     "Removed group remained in cache")
@@ -694,7 +696,7 @@ class GroupMetadataManagerTest {
     val groupEpoch = 2
     val initiallyLoaded = loadOffsetsAndGroup(groupTopicPartition, groupEpoch)
 
-    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, Some(groupEpoch - 1), _ => ())
+    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, OptionalInt.of(groupEpoch - 1), _ => ())
     assertEquals(groupEpoch, groupMetadataManager.epochForPartitionId.get(groupTopicPartition.partition()))
     val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
     assertEquals(initiallyLoaded.groupId, group.groupId)
@@ -716,7 +718,7 @@ class GroupMetadataManagerTest {
     val groupEpoch = 2
     val initiallyLoaded = loadOffsetsAndGroup(groupTopicPartition, groupEpoch)
 
-    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, None, _ => ())
+    groupMetadataManager.removeGroupsAndOffsets(groupTopicPartition, OptionalInt.empty, _ => ())
     assertTrue(groupMetadataManager.getGroup(groupId).isEmpty,
       "Removed group remained in cache")
     assertEquals(groupEpoch, groupMetadataManager.epochForPartitionId.get(groupTopicPartition.partition()),
@@ -806,7 +808,7 @@ class GroupMetadataManagerTest {
     verify(logMock).logStartOffset
     verify(logMock).read(ArgumentMatchers.eq(startOffset),
       maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
       minOneMessage = ArgumentMatchers.eq(true))
     verify(replicaManager).getLog(groupTopicPartition)
     verify(replicaManager, times(2)).getLogEndOffset(groupTopicPartition)
@@ -887,14 +889,14 @@ class GroupMetadataManagerTest {
       .thenReturn(segment2End)
     when(logMock.read(ArgumentMatchers.eq(segment1End),
       maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
       minOneMessage = ArgumentMatchers.eq(true)))
-      .thenReturn(FetchDataInfo(LogOffsetMetadata(segment1End), fileRecordsMock))
+      .thenReturn(new FetchDataInfo(new LogOffsetMetadata(segment1End), fileRecordsMock))
     when(logMock.read(ArgumentMatchers.eq(segment2End),
       maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
       minOneMessage = ArgumentMatchers.eq(true)))
-      .thenReturn(FetchDataInfo(LogOffsetMetadata(segment2End), fileRecordsMock))
+      .thenReturn(new FetchDataInfo(new LogOffsetMetadata(segment2End), fileRecordsMock))
     when(fileRecordsMock.sizeInBytes())
       .thenReturn(segment1Records.sizeInBytes)
       .thenReturn(segment2Records.sizeInBytes)
@@ -1172,7 +1174,7 @@ class GroupMetadataManagerTest {
     verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
       any[Option[ReentrantLock]],
@@ -1208,7 +1210,7 @@ class GroupMetadataManagerTest {
     verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
       any[Option[ReentrantLock]],
@@ -1282,7 +1284,7 @@ class GroupMetadataManagerTest {
     verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
       any[Option[ReentrantLock]],
@@ -1322,7 +1324,7 @@ class GroupMetadataManagerTest {
     verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedResponseCallback.capture(),
       any[Option[ReentrantLock]],
@@ -1380,7 +1382,7 @@ class GroupMetadataManagerTest {
     verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       any(),
       any[Option[ReentrantLock]],
@@ -1428,7 +1430,7 @@ class GroupMetadataManagerTest {
     verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       any(),
       any[Option[ReentrantLock]],
@@ -1561,7 +1563,7 @@ class GroupMetadataManagerTest {
     verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       any(),
       any[Option[ReentrantLock]],
@@ -1640,7 +1642,7 @@ class GroupMetadataManagerTest {
     time.sleep(2)
 
     when(partition.appendRecordsToLeader(any[MemoryRecords],
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
@@ -1655,7 +1657,7 @@ class GroupMetadataManagerTest {
     verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
       any(),
       any[Option[ReentrantLock]],
@@ -1681,7 +1683,7 @@ class GroupMetadataManagerTest {
     when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     mockGetPartition()
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
@@ -1724,7 +1726,7 @@ class GroupMetadataManagerTest {
     when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     mockGetPartition()
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
@@ -1792,7 +1794,7 @@ class GroupMetadataManagerTest {
     val recordsCapture: ArgumentCaptor[MemoryRecords] = ArgumentCaptor.forClass(classOf[MemoryRecords])
 
     when(partition.appendRecordsToLeader(recordsCapture.capture(),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
@@ -1886,7 +1888,7 @@ class GroupMetadataManagerTest {
 
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
@@ -1907,7 +1909,7 @@ class GroupMetadataManagerTest {
 
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
@@ -1947,7 +1949,7 @@ class GroupMetadataManagerTest {
 
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
@@ -2020,7 +2022,7 @@ class GroupMetadataManagerTest {
 
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
@@ -2144,13 +2146,13 @@ class GroupMetadataManagerTest {
 
     // expect the offset tombstone
     when(partition.appendRecordsToLeader(any[MemoryRecords],
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
 
     groupMetadataManager.cleanupGroupMetadata()
 
     verify(partition).appendRecordsToLeader(any[MemoryRecords],
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR), requiredAcks = anyInt(),
       any())
     verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
 
@@ -2373,9 +2375,9 @@ class GroupMetadataManagerTest {
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
       maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
       minOneMessage = ArgumentMatchers.eq(true)))
-      .thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), mockRecords))
+      .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), mockRecords))
     when(replicaManager.getLog(groupMetadataTopicPartition)).thenReturn(Some(logMock))
     when(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).thenReturn(Some[Long](18))
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
@@ -2454,7 +2456,7 @@ class GroupMetadataManagerTest {
     verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
@@ -2469,7 +2471,7 @@ class GroupMetadataManagerTest {
     when(replicaManager.appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       capturedRecords.capture(),
       capturedCallback.capture(),
       any[Option[ReentrantLock]],
@@ -2530,9 +2532,9 @@ class GroupMetadataManagerTest {
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
       maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
       minOneMessage = ArgumentMatchers.eq(true)))
-      .thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
+      .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
 
     when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)
 

@@ -17,6 +17,9 @@
 package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -83,9 +86,37 @@ public interface MigrationClient {
         ZkMigrationLeadershipState state
     );
 
+    ZkMigrationLeadershipState writeConfigs(
+        ConfigResource configResource,
+        Map<String, String> configMap,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState writeClientQuotas(
+        Map<String, String> clientQuotaEntity,
+        Map<String, Double> quotas,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState writeProducerId(
+        long nextProducerId,
+        ZkMigrationLeadershipState state
+    );
+
     void readAllMetadata(Consumer<List<ApiMessageAndVersion>> batchConsumer, Consumer<Integer> brokerIdConsumer);
 
     Set<Integer> readBrokerIds();
 
     Set<Integer> readBrokerIdsFromTopicAssignments();
+
+    /**
+     * Convert the Metadata delta to Zookeeper writes and persist the changes. On successful
+     * write, update the migration state with new metadata offset and epoch.
+     * @param delta Changes in the cluster metadata
+     * @param image New metadata after the changes in `delta` are applied
+     * @param state Current migration state before writing to Zookeeper.
+     */
+    ZkMigrationLeadershipState writeMetadataDeltaToZookeeper(MetadataDelta delta,
+                                                             MetadataImage image,
+                                                             ZkMigrationLeadershipState state);
 }

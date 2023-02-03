@@ -28,6 +28,7 @@ import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
 import org.apache.kafka.common.TopicIdPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
@@ -35,6 +36,7 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -74,7 +76,7 @@ class PartitionLockTest extends Logging {
     val logConfig = new LogConfig(new Properties)
     val configRepository = MockConfigRepository.forTopic(topicPartition.topic, createLogProperties(Map.empty))
     logManager = TestUtils.createLogManager(Seq(logDir), logConfig, configRepository,
-      CleanerConfig(enableCleaner = false), mockTime)
+      new CleanerConfig(false), mockTime)
     partition = setupPartitionWithMocks(logManager)
   }
 
@@ -354,9 +356,9 @@ class PartitionLockTest extends Logging {
 
   private def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
-    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
-    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000: java.lang.Integer)
+    logProps.put(TopicConfig.RETENTION_MS_CONFIG, 999: java.lang.Integer)
     overrides.foreach { case (k, v) => logProps.put(k, v) }
     logProps
   }
@@ -369,7 +371,7 @@ class PartitionLockTest extends Logging {
     (0 until numRecords).foreach { _ =>
       val batch = TestUtils.records(records = List(new SimpleRecord("k1".getBytes, "v1".getBytes),
         new SimpleRecord("k2".getBytes, "v2".getBytes)))
-      partition.appendRecordsToLeader(batch, origin = AppendOrigin.Client, requiredAcks = 0, requestLocal)
+      partition.appendRecordsToLeader(batch, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
     }
   }
 
@@ -385,14 +387,14 @@ class PartitionLockTest extends Logging {
     val maxBytes = 1
 
     while (fetchOffset < numRecords) {
-      val fetchParams = FetchParams(
-        requestVersion = ApiKeys.FETCH.latestVersion,
-        replicaId = followerId,
-        maxWaitMs = 0,
-        minBytes = 1,
-        maxBytes = maxBytes,
-        isolation = FetchLogEnd,
-        clientMetadata = None
+      val fetchParams = new FetchParams(
+        ApiKeys.FETCH.latestVersion,
+        followerId,
+        0L,
+        1,
+        maxBytes,
+        FetchIsolation.LOG_END,
+        Optional.empty()
       )
 
       val fetchPartitionData = new FetchRequest.PartitionData(
