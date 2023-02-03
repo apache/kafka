@@ -26,7 +26,7 @@ import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType.{SAFE_DOWNGRADE,
 import org.apache.kafka.clients.admin.MockAdminClient
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion.{IBP_3_3_IV0, IBP_3_3_IV1, IBP_3_3_IV2, IBP_3_3_IV3, IBP_3_4_IV1}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_3_3_IV0, IBP_3_3_IV1, IBP_3_3_IV2, IBP_3_3_IV3, IBP_3_5_IV0}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -174,7 +174,7 @@ class FeatureCommandUnitTest {
   @Test
   def testMetadataVersionsToString(): Unit = {
     assertEquals("3.3-IV0, 3.3-IV1, 3.3-IV2, 3.3-IV3, 3.4-IV0, 3.4-IV1",
-      FeatureCommand.metadataVersionsToString(IBP_3_3_IV0, IBP_3_4_IV1))
+      FeatureCommand.metadataVersionsToString(IBP_3_3_IV0, IBP_3_5_IV0))
   }
 
   @Test
