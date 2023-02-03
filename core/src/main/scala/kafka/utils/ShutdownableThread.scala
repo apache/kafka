@@ -109,5 +109,5 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
     info("Stopped")
   }
 
-  def isRunning: Boolean = !isShutdownInitiated
+  def isRunning: Boolean = !isShutdownInitiated && !isShutdownComplete
 }
