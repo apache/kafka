@@ -106,7 +106,7 @@ object EnvelopeUtils {
     }
   }
 
-  private def parseForwardedRequestHeader(
+  def parseForwardedRequestHeader(
     buffer: ByteBuffer
   ): RequestHeader = {
     try {
