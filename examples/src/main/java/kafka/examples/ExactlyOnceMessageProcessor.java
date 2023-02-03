@@ -35,14 +35,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A demo class for how to write a customized EOS app. It takes a consume-process-produce loop.
  * Important configurations and APIs are commented.
  */
-public class ExactlyOnceMessageProcessor extends Thread {
+public class ExactlyOnceMessageProcessor implements Runnable {
 
     private static final boolean READ_COMMITTED = true;
 
@@ -54,25 +53,23 @@ public class ExactlyOnceMessageProcessor extends Thread {
     private final KafkaProducer<Integer, String> producer;
     private final KafkaConsumer<Integer, String> consumer;
 
-    private final CountDownLatch latch;
-
     public ExactlyOnceMessageProcessor(final String inputTopic,
                                        final String outputTopic,
-                                       final int instanceIdx,
-                                       final CountDownLatch latch) {
+                                       final int instanceIdx) {
         this.inputTopic = inputTopic;
         this.outputTopic = outputTopic;
+        // A unique transactional.id must be provided in order to properly use EOS.
         this.transactionalId = "Processor-" + instanceIdx;
         // It is recommended to have a relatively short txn timeout in order to clear pending offsets faster.
         final int transactionTimeoutMs = 10000;
-        // A unique transactional.id must be provided in order to properly use EOS.
-        producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null).get();
-        // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
+        producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs).get();
+        // Consumer can be in read_committed mode, which means it won't be able to read uncommitted data
+        // Consumer is part of the transaction, so it does not commit its own offsets and auto-commit will be disabled
+        // if the producer that populated the input topic was transactional.
         // Consumer could optionally configure groupInstanceId to avoid unnecessary rebalances.
         this.groupInstanceId = "Txn-consumer-" + instanceIdx;
         consumer = new Consumer(inputTopic, "Eos-consumer",
-            Optional.of(groupInstanceId), READ_COMMITTED, -1, null).get();
-        this.latch = latch;
+            Optional.of(groupInstanceId), READ_COMMITTED, -1, KafkaProperties.TRANSACTIONAL).get();
     }
 
     @Override
@@ -137,7 +134,6 @@ public class ExactlyOnceMessageProcessor extends Thread {
         }
 
         printWithTxnId("Finished processing " + messageProcessed + " records");
-        latch.countDown();
     }
 
     private Map<TopicPartition, OffsetAndMetadata> consumerOffsets() {

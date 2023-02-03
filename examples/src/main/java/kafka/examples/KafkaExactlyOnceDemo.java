@@ -19,18 +19,21 @@ package kafka.examples;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.utils.Exit;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * This exactly once demo driver takes 3 arguments:
@@ -88,40 +91,50 @@ public class KafkaExactlyOnceDemo {
         /* Stage 1: topic cleanup and recreation */
         recreateTopics(numPartitions);
 
-        CountDownLatch prePopulateLatch = new CountDownLatch(1);
 
         /* Stage 2: pre-populate records */
-        Producer producerThread = new Producer(INPUT_TOPIC, false, null, true, numRecords, -1, prePopulateLatch);
-        producerThread.start();
-
-        if (!prePopulateLatch.await(5, TimeUnit.MINUTES)) {
-            throw new TimeoutException("Timeout after 5 minutes waiting for data pre-population");
+        ExecutorService driver = Executors.newFixedThreadPool(2); // populating producer and validating consumer will run here
+        Producer producerTask = new Producer(INPUT_TOPIC, false, null, true, numRecords, -1);
+        try {
+            CompletableFuture.runAsync(producerTask, driver).get(5, TimeUnit.MINUTES);
+        } catch (TimeoutException e) {
+            System.out.println("Timeout after 5 minutes waiting for data pre-population");
+            Exit.exit(1);
         }
 
-        CountDownLatch transactionalCopyLatch = new CountDownLatch(numInstances);
+
 
         /* Stage 3: transactionally process all messages */
+        ExecutorService processorThreads = Executors.newFixedThreadPool(numInstances);
+        CompletableFuture[] messageProcessors = new CompletableFuture[numInstances];
         for (int instanceIdx = 0; instanceIdx < numInstances; instanceIdx++) {
-            ExactlyOnceMessageProcessor messageProcessor = new ExactlyOnceMessageProcessor(
-                INPUT_TOPIC, OUTPUT_TOPIC, instanceIdx, transactionalCopyLatch);
-            messageProcessor.start();
+            messageProcessors[instanceIdx] = CompletableFuture.runAsync(
+                    new ExactlyOnceMessageProcessor(INPUT_TOPIC, OUTPUT_TOPIC, instanceIdx),
+                    processorThreads);
         }
 
-        if (!transactionalCopyLatch.await(5, TimeUnit.MINUTES)) {
-            throw new TimeoutException("Timeout after 5 minutes waiting for transactionally message copy");
+        try {
+            CompletableFuture.allOf(messageProcessors).get(5, TimeUnit.MINUTES);
+        } catch (TimeoutException e) {
+            System.out.println("Timeout after 5 minutes waiting for transactional message copy");
+            Exit.exit(1);
         }
 
-        CountDownLatch consumeLatch = new CountDownLatch(1);
+        /* Stage 4: consume all processed messages to verify exactly once.
+        Consumer uses read committed to guarantee that uncommitted events will not be included in verification
+        but the consumer is not part of the transaction itself
+        */
+        Consumer consumerTask = new Consumer(OUTPUT_TOPIC, "Verify-consumer", Optional.empty(), true, numRecords, KafkaProperties.NON_TRANSACTIONAL);
 
-        /* Stage 4: consume all processed messages to verify exactly once */
-        Consumer consumerThread = new Consumer(OUTPUT_TOPIC, "Verify-consumer", Optional.empty(), true, numRecords, consumeLatch);
-        consumerThread.start();
-
-        if (!consumeLatch.await(5, TimeUnit.MINUTES)) {
-            throw new TimeoutException("Timeout after 5 minutes waiting for output data consumption");
+        try {
+            CompletableFuture.runAsync(consumerTask, driver).get(5, TimeUnit.MINUTES);
+        } catch (TimeoutException e) {
+            System.out.println("Timeout after 5 minutes waiting for output data consumption");
+            Exit.exit(1);
         }
 
-        consumerThread.shutdown();
+        processorThreads.shutdownNow();
+        driver.shutdownNow();
         System.out.println("All finished!");
     }
 

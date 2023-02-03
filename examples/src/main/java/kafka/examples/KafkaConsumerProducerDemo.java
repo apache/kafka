@@ -16,27 +16,36 @@
  */
 package kafka.examples;
 
-import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.Exit;
 
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class KafkaConsumerProducerDemo {
     public static void main(String[] args) throws InterruptedException {
         boolean isAsync = args.length == 0 || !args[0].trim().equalsIgnoreCase("sync");
-        CountDownLatch latch = new CountDownLatch(2);
-        Producer producerThread = new Producer(KafkaProperties.TOPIC, isAsync, null, false, 10000, -1, latch);
-        producerThread.start();
+        ExecutorService threads = Executors.newFixedThreadPool(2);
 
-        Consumer consumerThread = new Consumer(KafkaProperties.TOPIC, "DemoConsumer", Optional.empty(), false, 10000, latch);
-        consumerThread.start();
+        Producer producerTask = new Producer(KafkaProperties.TOPIC, isAsync, null, false, 10000, -1);
+        Consumer consumerTask = new Consumer(KafkaProperties.TOPIC, "DemoConsumer", Optional.empty(), false, 10000, KafkaProperties.NON_TRANSACTIONAL);
 
-        if (!latch.await(5, TimeUnit.MINUTES)) {
-            throw new TimeoutException("Timeout after 5 minutes waiting for demo producer and consumer to finish");
+        try {
+            CompletableFuture.allOf(
+                    CompletableFuture.runAsync(producerTask, threads),
+                    CompletableFuture.runAsync(consumerTask, threads)
+            ).get(5, TimeUnit.MINUTES);
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        } catch (java.util.concurrent.TimeoutException e) {
+            System.out.println("Timeout after 5 minutes waiting for demo producer and consumer to finish");
+            Exit.exit(1);
         }
 
-        consumerThread.shutdown();
+        threads.shutdownNow();
         System.out.println("All finished!");
     }
 }
