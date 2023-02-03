@@ -25,7 +25,7 @@ import org.apache.kafka.connect.storage.Converter;
 /**
  * Fake plugin class for testing classloading isolation.
  * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
- * This is a plugin co-located with other poorly packaged plugins, but should be visible despite other errors.
+ * <p>This is a plugin co-located with other poorly packaged plugins, but should be visible despite other errors.
  */
 public class CoLocatedPlugin implements Converter {
 

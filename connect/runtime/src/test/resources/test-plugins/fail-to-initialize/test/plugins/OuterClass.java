@@ -27,7 +27,7 @@ import org.apache.kafka.connect.sink.SinkConnector;
 /**
  * Fake plugin class for testing classloading isolation.
  * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
- * <p>Defines a connector as an non-static inner class, which does not have a default constructor.
+ * <p>Defines a connector as a non-static inner class, which does not have a default constructor.
  */
 public class OuterClass {
 
