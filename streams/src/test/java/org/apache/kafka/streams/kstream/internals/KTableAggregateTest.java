@@ -18,6 +18,8 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -31,17 +33,21 @@ import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Assert;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Properties;
 
@@ -273,7 +279,7 @@ public class KTableAggregateTest {
         }
     }
 
-    private void assertOutputTopicContains(final Properties config, final List<KeyValueTimestamp<String, Long>> expected) {
+    private void testUpgradeFromConfig(final Properties config, final List<KeyValueTimestamp<String, Long>> expected) {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "input-topic";
         final String output = "output-topic";
@@ -304,21 +310,113 @@ public class KTableAggregateTest {
     }
 
     @Test
-    public void testContinuesToSendIntermediateStateDuringUpgrade() {
-        // upgrading
+    public void testShouldSendTransientStateWhenUpgrading() {
         final Properties upgradingConfig = new Properties();
         upgradingConfig.putAll(CONFIG);
         upgradingConfig.put(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_33);
-        assertOutputTopicContains(upgradingConfig, asList(
+        testUpgradeFromConfig(upgradingConfig, asList(
                 new KeyValueTimestamp<>("1", 1L, 8),
                 new KeyValueTimestamp<>("1", 0L, 9), // transient inconsistent state
                 new KeyValueTimestamp<>("1", 1L, 9)
         ));
+    }
 
-        // not upgrading
-        assertOutputTopicContains(CONFIG, asList(
+    @Test
+    public void testShouldNotSendTransientStateIfNotUpgrading() {
+        testUpgradeFromConfig(CONFIG, asList(
                 new KeyValueTimestamp<>("1", 1L, 8),
                 new KeyValueTimestamp<>("1", 1L, 9)
         ));
+    }
+
+    private static class NoEqualsImpl {
+        private final String x;
+
+        public NoEqualsImpl(final String x) {
+            this.x = x;
+        }
+
+        public String getX() {
+            return x;
+        }
+    }
+
+    private static class NoEqualsImplSerde implements Serde<NoEqualsImpl> {
+        @Override
+        public Serializer<NoEqualsImpl> serializer() {
+            return (topic, data) -> data == null ? null : data.x.getBytes(StandardCharsets.UTF_8);
+        }
+
+        @Override
+        public Deserializer<NoEqualsImpl> deserializer() {
+            return (topic, data) -> data == null ? null : new NoEqualsImpl(new String(data, StandardCharsets.UTF_8));
+        }
+    }
+
+    // `NoEqualsImpl` doesn't implement `equals` but we can still compare two `NoEqualsImpl` instances by comparing their underlying `x` field
+    private List<TestRecord<String, Long>> toComparableList(final List<TestRecord<NoEqualsImpl, Long>> list) {
+        final List<TestRecord<String, Long>> comparableList = new ArrayList<>();
+        list.forEach(tr -> comparableList.add(new TestRecord<>(tr.key().getX(), tr.value(), Instant.ofEpochMilli(tr.timestamp()))));
+        return comparableList;
+    }
+
+    private void testKeyWithNoEquals(
+            final KeyValueMapper<NoEqualsImpl, NoEqualsImpl, KeyValue<NoEqualsImpl, NoEqualsImpl>> keyValueMapper,
+            final List<TestRecord<NoEqualsImpl, Long>> expected) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "input-topic";
+        final String output = "output-topic";
+        final Serde<NoEqualsImpl> noEqualsImplSerde = new NoEqualsImplSerde();
+
+        builder
+                .table(input, Consumed.with(noEqualsImplSerde, noEqualsImplSerde))
+                .groupBy(keyValueMapper, Grouped.with(noEqualsImplSerde, noEqualsImplSerde))
+                .count()
+                .toStream()
+                .to(output);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<NoEqualsImpl, NoEqualsImpl> inputTopic =
+                    driver.createInputTopic(input, noEqualsImplSerde.serializer(), noEqualsImplSerde.serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestOutputTopic<NoEqualsImpl, Long> outputTopic =
+                    driver.createOutputTopic(output, noEqualsImplSerde.deserializer(), new LongDeserializer());
+
+            final NoEqualsImpl a = new NoEqualsImpl("1");
+            final NoEqualsImpl b = new NoEqualsImpl("1");
+            Assert.assertNotEquals(a, b);
+            Assert.assertNotSame(a, b);
+
+            inputTopic.pipeInput(a, a, 8);
+            inputTopic.pipeInput(b, b, 9);
+
+            final List<TestRecord<String, Long>> actualComparable = toComparableList(outputTopic.readRecordsToList());
+            final List<TestRecord<String, Long>> expectedComparable = toComparableList(expected);
+            assertEquals(expectedComparable, actualComparable);
+        }
+    }
+
+    @Test
+    public void testNoEqualsAndNotSameObject() {
+        testKeyWithNoEquals(
+                // key changes, different object reference (deserializer returns a new object reference)
+                (k, v) -> new KeyValue<>(v, v),
+                asList(
+                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(8)),
+                        new TestRecord<>(new NoEqualsImpl("1"), 0L, Instant.ofEpochMilli(9)), // transient inconsistent state
+                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(9))
+                )
+        );
+    }
+
+    @Test
+    public void testNoEqualsAndSameObject() {
+        testKeyWithNoEquals(
+                // key does not change, same object reference
+                KeyValue::new,
+                asList(
+                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(8)),
+                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(9))
+                )
+        );
     }
 }
