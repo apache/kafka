@@ -90,6 +90,11 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
       quotaMetricTags.asJava)
   }
 
+  override protected def quotaValueMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+    metrics.metricName("request-quota-value", QuotaType.Request.toString,
+      "Tracking request-time quota per user/client-id", quotaMetricTags.asJava)
+  }
+
   private def nanosToPercentage(nanos: Long): Double =
     nanos * ClientRequestQuotaManager.NanosToPercentagePerSecond
 }

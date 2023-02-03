@@ -202,6 +202,7 @@ object Defaults {
   val AlterLogDirsReplicationQuotaWindowSizeSeconds: Int = ReplicationQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
   val NumControllerQuotaSamples: Int = ClientQuotaManagerConfig.DefaultNumQuotaSamples
   val ControllerQuotaWindowSizeSeconds: Int = ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
+  val ClientQuotaValueMetricEnable: Boolean = ClientQuotaManagerConfig.DefaultQuotaValueMetricEnable
 
   /** ********* Kafka Metrics Configuration ***********/
   val MetricNumSamples = 2
@@ -527,6 +528,7 @@ object KafkaConfig {
   val AlterLogDirsReplicationQuotaWindowSizeSecondsProp = "alter.log.dirs.replication.quota.window.size.seconds"
   val ControllerQuotaWindowSizeSecondsProp = "controller.quota.window.size.seconds"
   val ClientQuotaCallbackClassProp = "client.quota.callback.class"
+  val ClientQuotaValueMetricEnableProp = "client.quota.value.metric.enable"
 
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_TYPE_CONFIG)
@@ -984,6 +986,9 @@ object KafkaConfig {
     "quotas that are stored in ZooKeeper are applied. For any given request, the most specific quota that matches the user principal " +
     "of the session and the client-id of the request is applied."
 
+  val ClientQuotaValueMetricEnableDoc = "Flag to enable emitting the quota value for each client-id/user metric " +
+    "if dynamic quota values are applied."
+
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
   "('gzip', 'snappy', 'lz4', 'zstd'). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
@@ -1318,6 +1323,7 @@ object KafkaConfig {
       .define(AlterLogDirsReplicationQuotaWindowSizeSecondsProp, INT, Defaults.AlterLogDirsReplicationQuotaWindowSizeSeconds, atLeast(1), LOW, AlterLogDirsReplicationQuotaWindowSizeSecondsDoc)
       .define(ControllerQuotaWindowSizeSecondsProp, INT, Defaults.ControllerQuotaWindowSizeSeconds, atLeast(1), LOW, ControllerQuotaWindowSizeSecondsDoc)
       .define(ClientQuotaCallbackClassProp, CLASS, null, LOW, ClientQuotaCallbackClassDoc)
+      .define(ClientQuotaValueMetricEnableProp, BOOLEAN, Defaults.ClientQuotaValueMetricEnable, LOW, ClientQuotaValueMetricEnableDoc)
 
       /** ********* General Security Configuration ****************/
       .define(ConnectionsMaxReauthMsProp, LONG, Defaults.ConnectionsMaxReauthMsDefault, MEDIUM, ConnectionsMaxReauthMsDoc)
@@ -1912,6 +1918,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val alterLogDirsReplicationQuotaWindowSizeSeconds = getInt(KafkaConfig.AlterLogDirsReplicationQuotaWindowSizeSecondsProp)
   val numControllerQuotaSamples = getInt(KafkaConfig.NumControllerQuotaSamplesProp)
   val controllerQuotaWindowSizeSeconds = getInt(KafkaConfig.ControllerQuotaWindowSizeSecondsProp)
+  val clientQuotaMetricValueEnable = getBoolean(KafkaConfig.ClientQuotaValueMetricEnableProp)
 
   /** ********* Fetch Configuration **************/
   val maxIncrementalFetchSessionCacheSlots = getInt(KafkaConfig.MaxIncrementalFetchSessionCacheSlots)

@@ -24,39 +24,46 @@ import kafka.network.RequestChannel
 import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
 import kafka.utils.{Logging, QuotaUtils, ShutdownableThread}
-import org.apache.kafka.common.{Cluster, MetricName}
-import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
+import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate, Value}
+import org.apache.kafka.common.metrics.{Metrics, _}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
+import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
 
 import scala.jdk.CollectionConverters._
 
 /**
  * Represents the sensors aggregated per client
- * @param metricTags Quota metric tags for the client
- * @param quotaSensor @Sensor that tracks the quota
+ * @param metricTags         Quota metric tags for the client
+ * @param quotaSensor        @Sensor that tracks the quota
  * @param throttleTimeSensor @Sensor that tracks the throttle time
+ * @param quotaValueSensor   @Option[Sensor] that tracks the quota value
  */
-case class ClientSensors(metricTags: Map[String, String], quotaSensor: Sensor, throttleTimeSensor: Sensor)
+case class ClientSensors(metricTags: Map[String, String],
+                         quotaSensor: Sensor,
+                         throttleTimeSensor: Sensor,
+                         quotaValueSensor: Option[Sensor])
 
 /**
  * Configuration settings for quota management
  * @param numQuotaSamples The number of samples to retain in memory
  * @param quotaWindowSizeSeconds The time span of each sample
- *
+ * @param quotaValueMetricEnable Boolean flag for if the client quota value should be reported as a metric
  */
 case class ClientQuotaManagerConfig(numQuotaSamples: Int =
                                         ClientQuotaManagerConfig.DefaultNumQuotaSamples,
                                     quotaWindowSizeSeconds: Int =
-                                        ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds)
+                                        ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds,
+                                    quotaValueMetricEnable: Boolean =
+                                        ClientQuotaManagerConfig.DefaultQuotaValueMetricEnable
+                                   )
 
 object ClientQuotaManagerConfig {
   // Always have 10 whole windows + 1 current window
   val DefaultNumQuotaSamples = 11
   val DefaultQuotaWindowSizeSeconds = 1
+  val DefaultQuotaValueMetricEnable = false
 }
 
 object QuotaTypes {
@@ -269,6 +276,12 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
     val clientSensors = getOrCreateQuotaSensors(session, clientId)
     try {
+
+      clientSensors.quotaValueSensor.foreach(s =>
+        Option(quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags.asJava)).foreach(
+          q => s.record(q.toDouble, timeMs, false))
+      )
+
       clientSensors.quotaSensor.record(value, timeMs, true)
       0
     } catch {
@@ -395,10 +408,18 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         registerQuotaMetrics(metricTags)
       ),
       sensorAccessor.getOrCreate(
-        getThrottleTimeSensorName(metricTags),
+        getQuotaSensorName(metricTags, "ThrottleTime"),
         ClientQuotaManager.InactiveSensorExpirationTimeSeconds,
         sensor => sensor.add(throttleMetricName(metricTags), new Avg)
-      )
+      ),
+      if (config.quotaValueMetricEnable) {
+        Some(sensorAccessor.getOrCreate(
+          getQuotaSensorName(metricTags, "Value"),
+          ClientQuotaManager.InactiveSensorExpirationTimeSeconds,
+          sensor => sensor.add(quotaValueMetricName(metricTags), new Value)
+        ))
+      }
+      else None
     )
     if (quotaCallback.quotaResetRequired(clientQuotaType))
       updateQuotaMetricConfigs()
@@ -416,11 +437,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private def metricTagsToSensorSuffix(metricTags: Map[String, String]): String =
     metricTags.values.mkString(":")
 
-  private def getThrottleTimeSensorName(metricTags: Map[String, String]): String =
-    s"${quotaType}ThrottleTime-${metricTagsToSensorSuffix(metricTags)}"
-
-  private def getQuotaSensorName(metricTags: Map[String, String]): String =
-    s"$quotaType-${metricTagsToSensorSuffix(metricTags)}"
+  private def getQuotaSensorName(metricTags: Map[String, String], infix: String = ""): String =
+    s"${quotaType}${infix}-${metricTagsToSensorSuffix(metricTags)}"
 
   protected def getQuotaMetricConfig(metricTags: Map[String, String]): MetricConfig = {
     getQuotaMetricConfig(quotaLimit(metricTags.asJava))
@@ -551,6 +569,13 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   protected def clientQuotaMetricName(quotaMetricTags: Map[String, String]): MetricName = {
     metrics.metricName("byte-rate", quotaType.toString,
       "Tracking byte-rate per user/client-id",
+      quotaMetricTags.asJava)
+  }
+
+  protected def quotaValueMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+    metrics.metricName("byte-quota-value",
+      quotaType.toString,
+      "Tracking the byte-rate quota value per user/client-id",
       quotaMetricTags.asJava)
   }
 

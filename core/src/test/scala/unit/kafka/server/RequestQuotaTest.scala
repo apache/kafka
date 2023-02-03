@@ -81,6 +81,7 @@ class RequestQuotaTest extends BaseRequestTest {
     properties.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[RequestQuotaTest.TestAuthorizer].getName)
     properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
+    properties.put(KafkaConfig.ClientQuotaValueMetricEnableProp, "true")
   }
 
   @BeforeEach
@@ -132,6 +133,18 @@ class RequestQuotaTest extends BaseRequestTest {
     for (apiKey <- RequestQuotaTest.ClientActions ++ RequestQuotaTest.ClusterActionsWithThrottle)
       submitTest(apiKey, () => checkRequestThrottleTime(apiKey))
 
+    waitAndCheckResults()
+  }
+
+  @Test
+  def testProduceAndRequestQuotaMetricValueWhenOverrideSet(): Unit = {
+    submitTest(ApiKeys.PRODUCE, () => checkSmallQuotaProducerQuotaMetric())
+    waitAndCheckResults()
+  }
+
+  @Test
+  def testConsumerAndRequestQuotaMetricValueWhenOverrideSet(): Unit = {
+    submitTest(ApiKeys.FETCH, () => checkSmallQuotaConsumerQuotaMetric())
     waitAndCheckResults()
   }
 
@@ -190,6 +203,33 @@ class RequestQuotaTest extends BaseRequestTest {
       clientId).throttleTimeSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
   }
+
+  private def byteQuotaMetricValue(clientId: String, quotaType: QuotaType): Double = {
+    val metricName = leaderNode.metrics.metricName("byte-quota-value",
+      quotaType.toString, "", "user", "", "client-id", clientId)
+
+    val sensor = if (quotaType == QuotaType.Fetch) {
+      leaderNode.quotaManagers.fetch.getOrCreateQuotaSensors(session("ANONYMOUS"),
+        clientId).quotaValueSensor
+    }
+    else {
+      leaderNode.quotaManagers.produce.getOrCreateQuotaSensors(session("ANONYMOUS"),
+        clientId).quotaValueSensor
+    }
+
+    metricValue(leaderNode.metrics.metrics.get(metricName), sensor.orNull)
+  }
+
+  private def requestQuotaMetricValue(clientId: String): Double = {
+    val metricName = leaderNode.metrics.metricName("request-quota-value",
+      QuotaType.Request.toString, "", "user", "", "client-id", clientId)
+
+    val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
+      clientId).quotaValueSensor
+
+    metricValue(leaderNode.metrics.metrics.get(metricName), sensor.orNull)
+  }
+
 
   private def requestTimeMetricValue(clientId: String): Double = {
     val metricName = leaderNode.metrics.metricName("request-time", QuotaType.Request.toString,
@@ -758,6 +798,42 @@ class RequestQuotaTest extends BaseRequestTest {
     val client = Client(clientId, apiKey)
     val throttled = client.runUntil(_ => throttleTimeMetricValue(clientId) > 0.0)
     assertTrue(throttled, s"Unauthorized client should have been throttled: $client")
+  }
+
+
+  private def checkSmallQuotaConsumerQuotaMetric(): Unit = {
+    val smallQuotaConsumerClient = Client(smallQuotaConsumerClientId, ApiKeys.FETCH)
+    val updated = smallQuotaConsumerClient.runUntil(_ =>
+      requestQuotaMetricValue(smallQuotaConsumerClientId) > 0)
+
+    val consumeQuotaManager = servers.head.dataPlaneRequestProcessor.quotas.fetch
+    val requestQuotaManager = servers.head.dataPlaneRequestProcessor.quotas.request
+
+    assertTrue(updated, s"Quota metric value should be updated: $updated")
+    assertEquals(Quota.upperBound(byteQuotaMetricValue(smallQuotaConsumerClientId, QuotaType.Fetch)),
+      consumeQuotaManager.quota("some-user", smallQuotaConsumerClientId),
+      s"Byte-rate consume quota metric value should be updated")
+    assertEquals(Quota.upperBound(requestQuotaMetricValue(smallQuotaConsumerClientId)),
+      requestQuotaManager.quota("some-user", smallQuotaConsumerClientId),
+      s"Request-time quota metric value should be updated")
+  }
+
+  private def checkSmallQuotaProducerQuotaMetric(): Unit = {
+    val smallQuotaProducerClient = Client(smallQuotaProducerClientId, ApiKeys.PRODUCE)
+    val updated = smallQuotaProducerClient.runUntil(_ =>
+      byteQuotaMetricValue(smallQuotaProducerClientId, QuotaType.Produce) > 0)
+
+    val produceQuotaManager = servers.head.dataPlaneRequestProcessor.quotas.produce
+    val requestQuotaManager = servers.head.dataPlaneRequestProcessor.quotas.request
+
+    assertTrue(updated, s"Quota metric value should be updated: $updated")
+    assertEquals(
+      Quota.upperBound(byteQuotaMetricValue(smallQuotaProducerClientId, QuotaType.Produce)),
+      produceQuotaManager.quota("some-user", smallQuotaProducerClientId),
+      s"Byte-rate produce quota value should be updated:")
+    assertEquals(Quota.upperBound(requestQuotaMetricValue(smallQuotaProducerClientId)),
+      requestQuotaManager.quota("some-user", smallQuotaProducerClientId),
+      s"Request-time quota metric value should be updated")
   }
 }
 
