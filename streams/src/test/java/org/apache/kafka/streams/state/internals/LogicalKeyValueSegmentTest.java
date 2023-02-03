@@ -122,7 +122,7 @@ public class LogicalKeyValueSegmentTest {
             serializeBytes("other")));
 
         segment1.putAll(segment1Records);
-        segment2.putAll(segment1Records);
+        segment2.putAll(segment2Records);
 
         assertEquals("v1", getAndDeserialize(segment1, "shared"));
         assertEquals("v2", getAndDeserialize(segment2, "shared"));
