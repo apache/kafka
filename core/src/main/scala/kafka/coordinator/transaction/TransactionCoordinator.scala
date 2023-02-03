@@ -16,6 +16,7 @@
  */
 package kafka.coordinator.transaction
 
+import java.util
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager, RequestLocal}
@@ -23,12 +24,14 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.{DescribeTransactionsResponseData, ListTransactionsResponseData}
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
 import org.apache.kafka.server.util.Scheduler
+import scala.jdk.CollectionConverters._
 
 object TransactionCoordinator {
 
@@ -92,6 +95,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
   type InitProducerIdCallback = InitProducerIdResult => Unit
   type AddPartitionsCallback = Errors => Unit
+  type BatchedAddPartitionsCallback = (String, Errors) => Unit
   type EndTxnCallback = Errors => Unit
   type ApiResult[T] = Either[Errors, T]
 
@@ -367,6 +371,66 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             responseCallback, requestLocal = requestLocal)
       }
     }
+  }
+  
+  def handleBatchedAddPartitionsToTransaction(transactions: AddPartitionsToTxnTransactionCollection,
+                                              partitionsMap: util.Map[String, util.List[TopicPartition]],
+                                              responseCallback: BatchedAddPartitionsCallback,
+                                              requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+    transactions.forEach(transaction => {
+      val transactionalId = transaction.transactionalId()
+      val producerId = transaction.producerId()
+      val producerEpoch = transaction.producerEpoch()
+      val partitions = partitionsMap.get(transactionalId).asScala.toSet
+      
+      if (transactionalId == null || transactionalId.isEmpty) {
+        debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
+        responseCallback(transactionalId, Errors.INVALID_REQUEST)
+      } else {
+        // try to update the transaction metadata and append the updated metadata to txn log;
+        // if there is no such metadata treat it as invalid producerId mapping error.
+        val result: ApiResult[(Int, TxnTransitMetadata)] = txnManager.getTransactionState(transactionalId).flatMap {
+          case None => Left(Errors.INVALID_PRODUCER_ID_MAPPING)
+
+          case Some(epochAndMetadata) =>
+            val coordinatorEpoch = epochAndMetadata.coordinatorEpoch
+            val txnMetadata = epochAndMetadata.transactionMetadata
+
+            // generate the new transaction metadata with added partitions
+            txnMetadata.inLock {
+              if (txnMetadata.producerId != producerId) {
+                Left(Errors.INVALID_PRODUCER_ID_MAPPING)
+              } else if (txnMetadata.producerEpoch != producerEpoch) {
+                Left(Errors.PRODUCER_FENCED)
+              } else if (txnMetadata.pendingTransitionInProgress) {
+                // return a retriable exception to let the client backoff and retry
+                Left(Errors.CONCURRENT_TRANSACTIONS)
+              } else if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort) {
+                Left(Errors.CONCURRENT_TRANSACTIONS)
+              } else if (txnMetadata.state == Ongoing && partitions.subsetOf(txnMetadata.topicPartitions)) {
+                // this is an optimization: if the partitions are already in the metadata reply OK immediately
+                Left(Errors.NONE)
+              } else {
+                Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions, time.milliseconds()))
+              }
+            }
+        }
+        
+        def perTransactionResponseCallback(error: Errors): Unit = {
+          responseCallback(transactionalId, error)
+        }
+
+        result match {
+          case Left(err) =>
+            debug(s"Returning $err error code to client for $transactionalId's AddPartitions request")
+            responseCallback(transactionalId, err)
+
+          case Right((coordinatorEpoch, newMetadata)) =>
+            txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
+              perTransactionResponseCallback, requestLocal = requestLocal)
+        }
+      }
+    })
   }
 
   /**

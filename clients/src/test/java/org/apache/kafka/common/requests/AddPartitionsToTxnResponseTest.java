@@ -18,6 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnPartitionResult;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResult;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResultCollection;
@@ -26,6 +28,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -60,6 +63,7 @@ public class AddPartitionsToTxnResponseTest {
 
     @Test
     public void testConstructorWithErrorResponse() {
+        // This test only applies to versions 0-3.
         AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(throttleTimeMs, errorsMap);
 
         assertEquals(expectedErrorCounts, response.errorCounts());
@@ -84,16 +88,41 @@ public class AddPartitionsToTxnResponseTest {
 
         topicCollection.add(topicResult);
 
-        AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
-                                                  .setResults(topicCollection)
-                                                  .setThrottleTimeMs(throttleTimeMs);
-        AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
-
         for (short version : ApiKeys.ADD_PARTITIONS_TO_TXN.allVersions()) {
-            AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
-            assertEquals(expectedErrorCounts, parsedResponse.errorCounts());
-            assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
-            assertEquals(version >= 1, parsedResponse.shouldClientThrottle(version));
+            
+            if (version < 4) {
+                AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
+                        .setResults(topicCollection)
+                        .setThrottleTimeMs(throttleTimeMs);
+                AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
+
+                AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
+                assertEquals(expectedErrorCounts, parsedResponse.errorCounts());
+                assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
+                assertEquals(version >= 1, parsedResponse.shouldClientThrottle(version));
+            } else {
+                AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResultCollection();
+                results.add(new AddPartitionsToTxnResult().setTransactionalId("txn1").setTopicResults(topicCollection));
+                
+                // Create another transaction with new name and errorOne for a single partition.
+                Map<TopicPartition, Errors> txnTwoExpectedErrors = Collections.singletonMap(tp2, errorOne);
+                results.add(AddPartitionsToTxnResponse.resultForTransaction("txn2", txnTwoExpectedErrors));
+
+                AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
+                        .setResultsByTransaction(results)
+                        .setThrottleTimeMs(throttleTimeMs);
+                AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
+
+                Map<Errors, Integer> newExpectedErrorCounts = new HashMap<>();
+                newExpectedErrorCounts.put(errorOne, 2);
+                newExpectedErrorCounts.put(errorTwo, 1);
+                
+                AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
+                assertEquals(txnTwoExpectedErrors, parsedResponse.errorsPerTransaction("txn2"));
+                assertEquals(newExpectedErrorCounts, parsedResponse.errorCounts());
+                assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
+                assertEquals(true, parsedResponse.shouldClientThrottle(version));
+            }
         }
     }
 }
