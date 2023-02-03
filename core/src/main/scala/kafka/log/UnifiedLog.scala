@@ -73,6 +73,22 @@ object LogAppendInfo {
       offsetsMonotonic = false, -1L, recordErrors, errorMessage)
 }
 
+/**
+ * Listener receive notification from the Log.
+ *
+ * Note that the callbacks are executed in the thread that triggers the change
+ * AND that locks may be held during their execution. They are meant to be used
+ * as notification mechanism only.
+ */
+trait LogOffsetsListener {
+  /**
+   * Called when the Log increments its high watermark.
+   */
+  def onHighWatermarkUpdated(offset: Long): Unit = {}
+}
+
+object NoOpLogOffsetsListener extends LogOffsetsListener
+
 sealed trait LeaderHwChange
 object LeaderHwChange {
   case object Increased extends LeaderHwChange
@@ -247,7 +263,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                  @volatile private var _topicId: Option[Uuid],
                  val keepPartitionMetadataFile: Boolean,
                  val remoteStorageSystemEnable: Boolean = false,
-                 remoteLogManager: Option[RemoteLogManager] = None) extends Logging with KafkaMetricsGroup {
+                 remoteLogManager: Option[RemoteLogManager] = None,
+                 @volatile private var logOffsetsListener: LogOffsetsListener = NoOpLogOffsetsListener) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.UnifiedLog._
 
@@ -288,6 +305,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     updateLogStartOffset(logStartOffset)
     maybeIncrementFirstUnstableOffset()
     initializeTopicId()
+
+    logOffsetsListener.onHighWatermarkUpdated(highWatermarkMetadata.messageOffset)
+  }
+
+  def setLogOffsetsListener(listener: LogOffsetsListener): Unit = {
+    logOffsetsListener = listener
   }
 
   def remoteLogEnabled(): Boolean = {
@@ -486,6 +509,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
       highWatermarkMetadata = newHighWatermark
       producerStateManager.onHighWatermarkUpdated(newHighWatermark.messageOffset)
+      logOffsetsListener.onHighWatermarkUpdated(newHighWatermark.messageOffset)
       maybeIncrementFirstUnstableOffset()
     }
     trace(s"Setting high watermark $newHighWatermark")
@@ -708,6 +732,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def close(): Unit = {
     debug("Closing log")
     lock synchronized {
+      logOffsetsListener = NoOpLogOffsetsListener
       maybeFlushMetadataFile()
       localLog.checkIfMemoryMappedBufferClosed()
       producerExpireCheck.cancel(true)
@@ -1879,7 +1904,8 @@ object UnifiedLog extends Logging {
             keepPartitionMetadataFile: Boolean,
             numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
             remoteStorageSystemEnable: Boolean = false,
-            remoteLogManager: Option[RemoteLogManager] = None): UnifiedLog = {
+            remoteLogManager: Option[RemoteLogManager] = None,
+            logOffsetsListener: LogOffsetsListener = NoOpLogOffsetsListener): UnifiedLog = {
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
     val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
@@ -1918,7 +1944,8 @@ object UnifiedLog extends Logging {
       topicId,
       keepPartitionMetadataFile,
       remoteStorageSystemEnable,
-      remoteLogManager)
+      remoteLogManager,
+      logOffsetsListener)
   }
 
   def logFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.logFile(dir, offset, suffix)

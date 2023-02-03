@@ -96,7 +96,8 @@ object LogTestUtils {
                 keepPartitionMetadataFile: Boolean = true,
                 numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
                 remoteStorageSystemEnable: Boolean = false,
-                remoteLogManager: Option[RemoteLogManager] = None): UnifiedLog = {
+                remoteLogManager: Option[RemoteLogManager] = None,
+                logOffsetsListener: LogOffsetsListener = NoOpLogOffsetsListener): UnifiedLog = {
     UnifiedLog(
       dir = dir,
       config = config,
@@ -114,7 +115,8 @@ object LogTestUtils {
       keepPartitionMetadataFile = keepPartitionMetadataFile,
       numRemainingSegments = numRemainingSegments,
       remoteStorageSystemEnable = remoteStorageSystemEnable,
-      remoteLogManager = remoteLogManager
+      remoteLogManager = remoteLogManager,
+      logOffsetsListener = logOffsetsListener
     )
   }
 
