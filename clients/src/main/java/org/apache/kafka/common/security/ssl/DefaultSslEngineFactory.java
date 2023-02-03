@@ -26,6 +26,7 @@ import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.bouncycastle.jce.provider.BouncyCastleProvier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +41,7 @@ import java.security.KeyFactory;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
+import java.security.Security;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.spec.InvalidKeySpecException;
@@ -336,6 +338,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         protected final Password keyPassword;
         private final Long fileLastModifiedMs;
         private final KeyStore keyStore;
+        private static final Object OBJ = new Object();
 
         FileBasedStore(String type, String path, Password password, Password keyPassword, boolean isKeyStore) {
             Objects.requireNonNull(type, "type must not be null");
@@ -366,7 +369,13 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
          */
         protected KeyStore load(boolean isKeyStore) {
             try (InputStream in = Files.newInputStream(Paths.get(path))) {
-                KeyStore ks = KeyStore.getInstance(type);
+                KeyStore ks = null;
+	        if ("PKCS12".equals(type)){
+		    addBouncyCastleProvider();
+	            ks = KeyStore.getInstance(type, BouncyCastleProvider.PROVIDER_NAME);
+	        } else {
+	            ks = KeyStore.getInstance(type);
+                }
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
                 ks.load(in, passwordChars);
@@ -396,6 +405,19 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                     "path=" + path +
                     ", modificationTime=" + (fileLastModifiedMs == null ? null : new Date(fileLastModifiedMs)) + ")";
         }
+    }
+
+    /**
+     * add BouncyCastleProvider
+     */
+    private static void addBouncyCastleProvider() {
+        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME == null)) {
+	    synchronized (OBJ) {
+	        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+                    Security.addProvider(new BouncyCastleProvider());
+                }
+            }
+	}
     }
 
     static class FileBasedPemStore extends FileBasedStore {

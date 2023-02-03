@@ -20,8 +20,17 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 
+import java.security.Security;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nui.file.Paths;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +43,7 @@ public class SSLUtils {
 
     private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
 
+    private static final Object OBJ = new Object();
 
     /**
      * Configures SSL/TLS for HTTPS Jetty Server using configs with the given prefix
@@ -78,7 +88,7 @@ public class SSLUtils {
      * Configures KeyStore related settings in SslContextFactory
      */
     protected static void configureSslContextFactoryKeyStore(SslContextFactory ssl, Map<String, Object> sslConfigValues) {
-        ssl.setKeyStoreType((String) getOrDefault(sslConfigValues, SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE));
+        String type = (String)ssl.setKeyStoreType((String) getOrDefault(sslConfigValues, SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE));
 
         String sslKeystoreLocation = (String) sslConfigValues.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
         if (sslKeystoreLocation != null)
@@ -91,6 +101,23 @@ public class SSLUtils {
         Password sslKeyPassword = (Password) sslConfigValues.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
         if (sslKeyPassword != null)
             ssl.setKeyManagerPassword(sslKeyPassword.value());
+
+	if (sslKeystoreLocation != null && type.equals("PKCS12")) {
+            addBouncyCastleProvider();
+	    final KeyStore keystore;
+
+	    try (InputStream in = Files.newInputStream(Paths.get(sslKeystoreLocation))) {
+                keystore = KeyStore.getInstance("PKCS12", BouncyCastleProvider.PROVIDER_NAME);
+		// If a password is not set access to the trueststore is still available,
+		// but integrity checking is disabled.
+		char[] passwordChars = sslKeystorePassword != null ? sslKeystorePassword.value().toCharArray() : null;
+		keystore.load(in, passwordChars);
+            } catch (GeneralSecurityException | IOException e) {
+                throw new ConnectionException("Failed to load SSL keystore " + sslKeystoreLocation, e);
+            }
+
+	    ssl.setKeyStore(keystore);
+	}
     }
 
     protected static Object getOrDefault(Map<String, Object> configMap, String key, Object defaultValue) {
@@ -98,6 +125,16 @@ public class SSLUtils {
             return configMap.get(key);
 
         return defaultValue;
+    }
+
+    private static void addBouncyCastleProvider() {
+        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME == null) {
+	    synchronized (OBJ) {
+	        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+		    Security.addProvider(new BouncyCastleProvider());
+                }
+            }
+	}
     }
 
     /**

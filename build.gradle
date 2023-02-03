@@ -1312,6 +1312,7 @@ project(':clients') {
     implementation libs.snappy
     implementation libs.slf4jApi
 
+    compileOnly libs.bcpkix
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
@@ -2646,6 +2647,7 @@ project(':connect:runtime') {
     implementation libs.reflections
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
+    implementation libs.bcpkix
 
     // We use this library to generate OpenAPI docs for the REST API, but we don't want or need it at compile
     // or run time. So, we add it to a separate configuration, which we use later on during docs generation

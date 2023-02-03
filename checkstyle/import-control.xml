@@ -134,6 +134,7 @@
       </subpackage>
       <subpackage name="ssl">
         <allow pkg="javax.crypto" />
+        <allow pkg="org.bouncycastle" />
       </subpackage>
       <subpackage name="scram">
         <allow pkg="javax.crypto" />
@@ -594,6 +595,7 @@
       <allow pkg="org.reflections.util"/>
       <allow pkg="javax.crypto"/>
       <allow pkg="org.eclipse.jetty.util" />
+      <allow pkg="org.bouncycastle" />
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
