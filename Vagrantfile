@@ -161,6 +161,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     node.vm.provider :aws do |aws|
       aws.tags = {
         'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name,
+        'role' => 'ce-kafka',
+        'Owner' => 'ce-kafka',
         'JenkinsBuildUrl' => ENV['BUILD_URL']
       }
     end
