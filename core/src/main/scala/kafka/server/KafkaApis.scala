@@ -34,7 +34,6 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
-import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
@@ -201,7 +200,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
         case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request, requestLocal)
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
-        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request, requestLocal)
+        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionsToTxnRequest(request, requestLocal)
         case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request, requestLocal)
         case ApiKeys.END_TXN => handleEndTxnRequest(request, requestLocal)
         case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request, requestLocal)
@@ -2385,88 +2384,34 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (config.interBrokerProtocolVersion.isLessThan(version))
       throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion.version} is less than the required version: ${version.version}")
   }
-
-  def handleAddPartitionToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    ensureInterBrokerVersion(IBP_0_11_0_IV0)
-    if (request.context.apiVersion() < 4) {
-      handleAddPartitionToTxnRequestV3AndBelow(request, requestLocal)
-    } else {
-      handleAddPartitionsToTxnRequestV4(request, requestLocal)
-    }
-  }
-
-  def handleAddPartitionToTxnRequestV3AndBelow(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    val addPartitionsToTxnRequest = request.body[AddPartitionsToTxnRequest]
-    val transactionalId = addPartitionsToTxnRequest.data.transactionalId
-    val partitionsToAdd = addPartitionsToTxnRequest.partitions.asScala
-    if (!authHelper.authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId))
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        addPartitionsToTxnRequest.getErrorResponse(requestThrottleMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception))
-    else {
-      val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
-      val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
-      val authorizedPartitions = mutable.Set[TopicPartition]()
-
-      val authorizedTopics = authHelper.filterByAuthorized(request.context, WRITE, TOPIC,
-        partitionsToAdd.filterNot(tp => Topic.isInternal(tp.topic)))(_.topic)
-      for (topicPartition <- partitionsToAdd) {
-        if (!authorizedTopics.contains(topicPartition.topic))
-          unauthorizedTopicErrors += topicPartition -> Errors.TOPIC_AUTHORIZATION_FAILED
-        else if (!metadataCache.contains(topicPartition))
-          nonExistingTopicErrors += topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION
-        else
-          authorizedPartitions.add(topicPartition)
-      }
-
-      if (unauthorizedTopicErrors.nonEmpty || nonExistingTopicErrors.nonEmpty) {
-        // Any failed partition check causes the entire request to fail. We send the appropriate error codes for the
-        // partitions which failed, and an 'OPERATION_NOT_ATTEMPTED' error code for the partitions which succeeded
-        // the authorization check to indicate that they were not added to the transaction.
-        val partitionErrors = unauthorizedTopicErrors ++ nonExistingTopicErrors ++
-          authorizedPartitions.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new AddPartitionsToTxnResponse(requestThrottleMs, partitionErrors.asJava))
-      } else {
-        def sendResponseCallback(error: Errors): Unit = {
-          def createResponse(requestThrottleMs: Int): AbstractResponse = {
-            val finalError =
-              if (addPartitionsToTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
-                // For older clients, they could not understand the new PRODUCER_FENCED error code,
-                // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
-                Errors.INVALID_PRODUCER_EPOCH
-              } else {
-                error
-              }
-
-            val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(requestThrottleMs,
-              partitionsToAdd.map{tp => (tp, finalError)}.toMap.asJava)
-            trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
-            responseBody
-          }
-
-          requestHelper.sendResponseMaybeThrottle(request, createResponse)
-        }
-
-        txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-          addPartitionsToTxnRequest.data.producerId,
-          addPartitionsToTxnRequest.data.producerEpoch,
-          authorizedPartitions,
-          sendResponseCallback,
-          requestLocal)
-      }
-    }
-  }
-  
-  def handleAddPartitionsToTxnRequestV4(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+  def handleAddPartitionsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     val lock = new Object
     val addPartitionsToTxnRequest = request.body[AddPartitionsToTxnRequest]
+    val version = addPartitionsToTxnRequest.version
     val responses = new AddPartitionsToTxnResultCollection()
     val partitionsByTransaction = addPartitionsToTxnRequest.partitionsByTransaction()
-    val validTransactions = new AddPartitionsToTxnTransactionCollection()
+
+    // V4 requests introduced batches of transactions. We need all transactions to be handled before sending the 
+    // response so there are a few differences in handling errors and sending responses.
+    def createResponse(requestThrottleMs: Int): AbstractResponse = {
+      if (version < 4) {
+        val data = new AddPartitionsToTxnResponseData()
+        responses.forEach(result => {
+          data.setResults(result.topicResults())
+          data.setThrottleTimeMs(requestThrottleMs)
+        })
+        new AddPartitionsToTxnResponse(data)
+      } else {
+        new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData().setThrottleTimeMs(requestThrottleMs).setResultsByTransaction(responses))
+      }
+    }
+
+    val txns = if (version < 4) addPartitionsToTxnRequest.singletonTransaction() else addPartitionsToTxnRequest.data.transactions
+    def allResponsesPresent: Boolean = responses.size() == txns.size()
     
-    addPartitionsToTxnRequest.data().transactions().forEach( transaction => {
+    txns.forEach( transaction => {
       val transactionalId = transaction.transactionalId()
-      val partitionsToAdd = partitionsByTransaction.get(transactionalId).asScala
+      val partitionsToAdd = if (version < 4) addPartitionsToTxnRequest.partitions.asScala else partitionsByTransaction.get(transactionalId).asScala
       
       if (!authHelper.authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId))
         responses.add(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
@@ -2494,28 +2439,38 @@ class KafkaApis(val requestChannel: RequestChannel,
             authorizedPartitions.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)
           responses.add(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitionErrors.asJava))
         } else {
-          validTransactions.add(transaction)
+          def sendResponseCallback(error: Errors): Unit = {
+            val finalError = {
+              if (version < 2 && error == Errors.PRODUCER_FENCED) {
+                // For older clients, they could not understand the new PRODUCER_FENCED error code,
+                // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
+                Errors.INVALID_PRODUCER_EPOCH
+              } else {
+                error
+              }
+            }
+            lock synchronized {
+              responses.add(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, finalError))
+            }
+            
+            if (allResponsesPresent) {
+              requestHelper.sendResponseMaybeThrottle(request, createResponse)
+            }
+          }
+
+          txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
+            transaction.producerId,
+            transaction.producerEpoch,
+            authorizedPartitions,
+            sendResponseCallback,
+            requestLocal)
         }
+        
+        // If all transactions are present send response.
+        if (allResponsesPresent)
+          requestHelper.sendResponseMaybeThrottle(request, createResponse)
       }
     })
-    if (responses.size() == addPartitionsToTxnRequest.data().transactions().size()) {
-      requestHelper.sendResponseMaybeThrottle(request, createResponse)
-    }
-
-    def createResponse(requestThrottleMs: Int): AbstractResponse = {
-      new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData().setThrottleTimeMs(requestThrottleMs).setResultsByTransaction(responses))
-    }
-
-    def sendResponseCallback(transactionalId: String, error: Errors): Unit = {
-
-      lock synchronized {
-        responses.add(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, error))
-        if (responses.size() == addPartitionsToTxnRequest.data().transactions().size()) {
-          requestHelper.sendResponseMaybeThrottle(request, createResponse)
-        }
-      }
-    }
-    txnCoordinator.handleBatchedAddPartitionsToTransaction(validTransactions, partitionsByTransaction, sendResponseCallback, requestLocal)
   }
 
   def handleAddOffsetsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {

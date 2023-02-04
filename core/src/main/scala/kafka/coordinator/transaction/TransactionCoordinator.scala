@@ -16,7 +16,6 @@
  */
 package kafka.coordinator.transaction
 
-import java.util
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager, RequestLocal}
@@ -24,14 +23,12 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.{DescribeTransactionsResponseData, ListTransactionsResponseData}
-import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
 import org.apache.kafka.server.util.Scheduler
-import scala.jdk.CollectionConverters._
 
 object TransactionCoordinator {
 
@@ -372,7 +369,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       }
     }
   }
-  
+  /*
   def handleBatchedAddPartitionsToTransaction(transactions: AddPartitionsToTxnTransactionCollection,
                                               partitionsMap: util.Map[String, util.List[TopicPartition]],
                                               responseCallback: BatchedAddPartitionsCallback,
@@ -432,6 +429,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       }
     })
   }
+   */
 
   /**
    * Load state from the given partition and begin handling requests for groups which map to this partition.

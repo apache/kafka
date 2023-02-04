@@ -74,8 +74,6 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
             super(ApiKeys.ADD_PARTITIONS_TO_TXN);
             this.isClientRequest = false;
 
-            List<AddPartitionsToTxnTransaction> transactionsList = new ArrayList<>();
-
             this.data = new AddPartitionsToTxnRequestData()
                     .setTransactions(transactions)
                     .setVerifyOnly(verifyOnly);
@@ -176,6 +174,16 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
             }
         }
         return cachedPartitionsByTransaction;
+    }
+    
+    public AddPartitionsToTxnTransactionCollection singletonTransaction() {
+        AddPartitionsToTxnTransactionCollection singleTxn = new AddPartitionsToTxnTransactionCollection();
+        singleTxn.add(new AddPartitionsToTxnTransaction()
+                .setTransactionalId(data.transactionalId())
+                .setProducerId(data.producerId())
+                .setProducerEpoch(data.producerEpoch())
+                .setTopics(data.topics()));
+        return singleTxn;
     }
 
     @Override
