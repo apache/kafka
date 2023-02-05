@@ -18,7 +18,8 @@ package kafka.server.checkpoints
 
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.CheckpointFile.EntryFormatter
-import org.apache.kafka.server.log.internals.{CheckpointFileWithFailureHandler, EpochEntry, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.{EpochEntry, LogDirFailureChannel}
+import org.apache.kafka.storage.internals.checkpoint.CheckpointFileWithFailureHandler
 
 import java.io._
 import java.util.Optional

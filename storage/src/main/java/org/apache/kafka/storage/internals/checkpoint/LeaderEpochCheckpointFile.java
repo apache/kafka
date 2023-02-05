@@ -17,7 +17,6 @@
 package org.apache.kafka.storage.internals.checkpoint;
 
 import org.apache.kafka.server.common.CheckpointFile.EntryFormatter;
-import org.apache.kafka.server.log.internals.CheckpointFileWithFailureHandler;
 import org.apache.kafka.server.log.internals.EpochEntry;
 import org.apache.kafka.server.log.internals.LogDirFailureChannel;
 

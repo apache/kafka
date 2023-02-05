@@ -29,7 +29,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.{EpochEntry, LeaderEpochFileCache}
+import org.apache.kafka.server.log.internals.EpochEntry
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 

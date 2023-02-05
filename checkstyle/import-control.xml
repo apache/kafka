@@ -380,6 +380,8 @@
 
   <subpackage name="storage.internals">
     <allow pkg="org.apache.kafka.server"/>
+    <allow pkg="org.apache.kafka.storage.internals"/>
+    <allow pkg="org.apache.kafka.common" />
   </subpackage>
 
   <subpackage name="shell">

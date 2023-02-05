@@ -24,9 +24,9 @@ import org.apache.kafka.common._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{RecordBatch, RemoteLogInputStream}
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, Utils}
-import org.apache.kafka.server.log.internals.LeaderEpochFileCache
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager
 import org.apache.kafka.server.log.remote.storage._
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 
 import java.io.{Closeable, InputStream}
 import java.security.{AccessController, PrivilegedAction}

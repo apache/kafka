@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.log.internals;
+package org.apache.kafka.storage.internals.epoch;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.server.log.internals.EpochEntry;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint;
 import org.slf4j.Logger;
 

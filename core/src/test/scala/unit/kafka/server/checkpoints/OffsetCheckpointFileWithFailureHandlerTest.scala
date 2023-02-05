@@ -19,7 +19,8 @@ package kafka.server.checkpoints
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.server.log.internals.{CheckpointFileWithFailureHandler, LogDirFailureChannel}
+import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.storage.internals.checkpoint.CheckpointFileWithFailureHandler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
