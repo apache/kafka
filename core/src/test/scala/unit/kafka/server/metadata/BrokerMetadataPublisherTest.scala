@@ -177,9 +177,9 @@ class BrokerMetadataPublisherTest {
   private def topicsImage(
     topics: Seq[TopicImage]
   ): TopicsImage = {
-    val idsMap = topics.map(t => t.id -> t).toMap
-    val namesMap = topics.map(t => t.name -> t).toMap
-    new TopicsImage(idsMap.asJava, namesMap.asJava)
+    var retval = TopicsImage.EMPTY
+    topics.foreach { t => retval = retval.including(t) }
+    retval
   }
 
   private def newMockDynamicConfigPublisher(

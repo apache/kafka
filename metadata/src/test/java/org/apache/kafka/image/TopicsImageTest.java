@@ -32,6 +32,7 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.organicdesign.fp.collections.ImMap;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.organicdesign.fp.StaticImports.map;
 
 
 @Timeout(value = 40)
@@ -74,18 +76,18 @@ public class TopicsImageTest {
         return new TopicImage(name, id, partitionMap);
     }
 
-    private static Map<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
-        Map<Uuid, TopicImage> map = new HashMap<>();
+    private static ImMap<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
+        ImMap<Uuid, TopicImage> map = map();
         for (TopicImage topic : topics) {
-            map.put(topic.id(), topic);
+            map = map.assoc(topic.id(), topic);
         }
         return map;
     }
 
-    private static Map<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
-        Map<String, TopicImage> map = new HashMap<>();
+    private static ImMap<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
+        ImMap<String, TopicImage> map = map();
         for (TopicImage topic : topics) {
-            map.put(topic.name(), topic);
+            map = map.assoc(topic.name(), topic);
         }
         return map;
     }

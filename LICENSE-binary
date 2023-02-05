@@ -248,6 +248,7 @@ netty-transport-4.1.78.Final
 netty-transport-classes-epoll-4.1.78.Final
 netty-transport-native-epoll-4.1.78.Final
 netty-transport-native-unix-common-4.1.78.Final
+Paguro-3.10.3, All files, except the ones that came from Clojure (Persistent...)
 plexus-utils-3.3.0
 reload4j-1.2.19
 rocksdbjni-7.1.2
@@ -277,6 +278,12 @@ see: licenses/eclipse-distribution-license-1.0
 
 jakarta.activation-api-1.2.2
 jakarta.xml.bind-api-2.3.3
+
+---------------------------------------
+Eclipse Public License - v 1.0
+see: licenses/eclipse-public-license-1.0
+
+Paguro-3.10.3, Specifically the files that came from Clojure (Persistent...)
 
 ---------------------------------------
 Eclipse Public License - v 2.0
