@@ -1884,9 +1884,10 @@ project(':tools:tools-api') {
 
 project(':tools') {
   archivesBaseName = "kafka-tools"
-
   dependencies {
+    api libs.scalaLibrary
     implementation project(':clients')
+    implementation project(':storage')
     implementation project(':server-common')
     implementation project(':connect:api')
     implementation project(':connect:runtime')

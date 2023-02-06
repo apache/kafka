@@ -22,6 +22,8 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.io.PrintStream;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -122,5 +124,22 @@ public class ToolsUtils {
         if (validHostPort.length == 0 || validHostPort.length != hostPorts.length) {
             throw new IllegalArgumentException("Please provide valid host:port like host1:9091,host2:9092\n");
         }
+    }
+
+    public static <T> List<T> duplicates(List<T> s) {
+        Map<T, Integer> countMap = new HashMap<>();
+        List<T> duplicates = new ArrayList<>();
+
+        s.forEach(element -> {
+            countMap.put(element, countMap.getOrDefault(element, 0) + 1);
+        });
+
+        countMap.entrySet().forEach(entry -> {
+            if (entry.getValue() > 1) {
+                duplicates.add(entry.getKey());
+            }
+        });
+
+        return duplicates;
     }
 }
