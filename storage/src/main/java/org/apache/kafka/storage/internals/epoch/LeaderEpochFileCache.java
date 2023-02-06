@@ -78,7 +78,7 @@ public class LeaderEpochFileCache {
                 log.debug("Appended new epoch entry {}. Cache now contains {} entries.", entry, epochs.size());
             }
         });
-        if (entries.size() > 0) flush();
+        if (!entries.isEmpty()) flush();
     }
 
     private boolean isUpdateNeeded(EpochEntry entry) {
@@ -339,7 +339,7 @@ public class LeaderEpochFileCache {
     public OptionalInt epochForOffset(long offset) {
         lock.readLock().lock();
         try {
-            Integer previousEpoch = null;
+            OptionalInt previousEpoch = OptionalInt.empty();
             for (EpochEntry epochEntry : epochs.values()) {
                 int epoch = epochEntry.epoch;
                 long startOffset = epochEntry.startOffset;
@@ -347,13 +347,13 @@ public class LeaderEpochFileCache {
                 // Found the exact offset, return the respective epoch.
                 if (startOffset == offset) return OptionalInt.of(epoch);
 
-                // exit from the loop as it is more than the target offset
-                if (startOffset > offset) break;
+                // Return the previous found epoch as this epoch's start-offset is more than the target offset.
+                if (startOffset > offset) return previousEpoch;
 
-                previousEpoch = epoch;
+                previousEpoch = OptionalInt.of(epoch);
             }
 
-            return previousEpoch != null ? OptionalInt.of(previousEpoch) : OptionalInt.empty();
+            return previousEpoch;
         } finally {
             lock.readLock().unlock();
         }
@@ -391,7 +391,7 @@ public class LeaderEpochFileCache {
         }
     }
 
-    public void flush() {
+    private void flush() {
         lock.writeLock().lock();
         try {
             checkpoint.write(epochs.values());
