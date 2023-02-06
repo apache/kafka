@@ -544,7 +544,7 @@ public class InternalTopicManager {
                 } else if (cause instanceof TimeoutException) {
                     tempUnknownTopics.add(topicName);
                     log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
-                            "Error message was: {}", topicName, retriableException.toString());
+                            "Error message was: {}", topicName, cause.toString());
                 } else {
                     log.error("Unexpected error during topic description for {}.\n" +
                         "Error message was: {}", topicName, cause.toString());

@@ -305,6 +305,26 @@ public class InternalTopicManagerTest {
     }
 
     @Test
+    public void shouldThrowTimeoutExceptionIfGetNumPartitionsHasTopicDescriptionTimeout() {
+        final MockTime time = new MockTime(
+                (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 15
+        );
+        final InternalTopicManager internalTopicManager =
+                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+
+        final TimeoutException exception = assertThrows(
+                TimeoutException.class,
+                () -> internalTopicManager.getNumPartitions(Collections.singleton("test_topic"), Collections.singleton("test_topic_2"))
+        );
+
+        assertThat(
+                exception.getMessage(),
+                is("Describing topic test_topic (to get number of partitions) timed out.\n" +
+                        "Error message was: " + TimeoutException.class
+        ));
+    }
+
+    @Test
     public void shouldThrowWhenCreateTopicsThrowsUnexpectedException() {
         final AdminClient admin = mock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
