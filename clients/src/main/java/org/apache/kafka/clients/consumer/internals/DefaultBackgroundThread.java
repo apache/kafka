@@ -78,7 +78,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final NetworkClientDelegate networkClient,
                             final GroupState groupState,
                             final CoordinatorRequestManager coordinatorManager,
-                            CommitRequestManager commitRequestManager) {
+                            final CommitRequestManager commitRequestManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.running = true;
