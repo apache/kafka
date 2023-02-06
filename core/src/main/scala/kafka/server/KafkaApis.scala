@@ -2385,8 +2385,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion.version} is less than the required version: ${version.version}")
   }
   def handleAddPartitionsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+    ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val lock = new Object
-    val addPartitionsToTxnRequest = request.body[AddPartitionsToTxnRequest]
+    val addPartitionsToTxnRequest = if (request.context.apiVersion() < 4) request.body[AddPartitionsToTxnRequest].normalizeRequest() else request.body[AddPartitionsToTxnRequest]
     val version = addPartitionsToTxnRequest.version
     val responses = new AddPartitionsToTxnResultCollection()
     val partitionsByTransaction = addPartitionsToTxnRequest.partitionsByTransaction()
@@ -2395,6 +2396,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // response so there are a few differences in handling errors and sending responses.
     def createResponse(requestThrottleMs: Int): AbstractResponse = {
       if (version < 4) {
+        // There will only be one response in data. Add it to the response data object.
         val data = new AddPartitionsToTxnResponseData()
         responses.forEach(result => {
           data.setResults(result.topicResults())
@@ -2406,16 +2408,23 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val txns = if (version < 4) addPartitionsToTxnRequest.singletonTransaction() else addPartitionsToTxnRequest.data.transactions
-    def allResponsesPresent: Boolean = responses.size() == txns.size()
-    
+    val txns = addPartitionsToTxnRequest.data.transactions
+    def maybeSendResponse(): Unit = {
+      lock synchronized {
+        if (responses.size() == txns.size()) {
+          requestHelper.sendResponseMaybeThrottle(request, createResponse)
+        }
+      }
+    }
+
     txns.forEach( transaction => {
       val transactionalId = transaction.transactionalId()
-      val partitionsToAdd = if (version < 4) addPartitionsToTxnRequest.partitions.asScala else partitionsByTransaction.get(transactionalId).asScala
+      val partitionsToAdd = partitionsByTransaction.get(transactionalId).asScala
       
-      if (!authHelper.authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId))
+      if (!authHelper.authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId)) {
         responses.add(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
-      else {
+        maybeSendResponse()
+      } else {
         val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
         val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
         val authorizedPartitions = mutable.Set[TopicPartition]()
@@ -2438,6 +2447,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val partitionErrors = unauthorizedTopicErrors ++ nonExistingTopicErrors ++
             authorizedPartitions.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)
           responses.add(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitionErrors.asJava))
+          maybeSendResponse()
         } else {
           def sendResponseCallback(error: Errors): Unit = {
             val finalError = {
@@ -2452,10 +2462,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             lock synchronized {
               responses.add(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, finalError))
             }
-            
-            if (allResponsesPresent) {
-              requestHelper.sendResponseMaybeThrottle(request, createResponse)
-            }
+            maybeSendResponse()
           }
 
           txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
@@ -2465,10 +2472,6 @@ class KafkaApis(val requestChannel: RequestChannel,
             sendResponseCallback,
             requestLocal)
         }
-        
-        // If all transactions are present send response.
-        if (allResponsesPresent)
-          requestHelper.sendResponseMaybeThrottle(request, createResponse)
       }
     })
   }

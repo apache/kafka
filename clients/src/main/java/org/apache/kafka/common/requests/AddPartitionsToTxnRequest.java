@@ -176,6 +176,10 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         return cachedPartitionsByTransaction;
     }
     
+    public AddPartitionsToTxnRequest normalizeRequest() {
+        return new AddPartitionsToTxnRequest(new AddPartitionsToTxnRequestData().setTransactions(singletonTransaction()), version);
+    }
+    
     public AddPartitionsToTxnTransactionCollection singletonTransaction() {
         AddPartitionsToTxnTransactionCollection singleTxn = new AddPartitionsToTxnTransactionCollection();
         singleTxn.add(new AddPartitionsToTxnTransaction()
