@@ -24,8 +24,8 @@ import org.apache.kafka.connect.header.Header;
 /**
  * SinkRecord is a {@link ConnectRecord} that has been read from Kafka and includes the kafkaOffset of
  * the record in the Kafka topic-partition in addition to the standard fields. This information
- * should be used by the SinkTask to coordinate kafkaOffset commits.
- *
+ * should be used by the {@link SinkTask} to coordinate kafkaOffset commits.
+ * <p>
  * It also includes the {@link TimestampType}, which may be {@link TimestampType#NO_TIMESTAMP_TYPE}, and the relevant
  * timestamp, which may be {@code null}.
  */

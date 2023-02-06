@@ -28,7 +28,7 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 /**
  * Decorator for a {@link Transformation} which applies the delegate only when a
  * {@link Predicate} is true (or false, according to {@code negate}).
- * @param <R>
+ * @param <R> The type of record (must be an implementation of {@link ConnectRecord})
  */
 public class PredicatedTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
 
@@ -66,7 +66,7 @@ public class PredicatedTransformation<R extends ConnectRecord<R>> implements Tra
 
     @Override
     public void close() {
-        Utils.closeQuietly(delegate, "predicated");
+        Utils.closeQuietly(delegate, "predicated transformation");
         Utils.closeQuietly(predicate, "predicate");
     }
 

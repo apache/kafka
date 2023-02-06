@@ -27,6 +27,11 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * An interface to store and retrieve (via {@link #snapshot()}) configuration information that is created during
+ * runtime (i.e. not static configuration like the {@link org.apache.kafka.connect.runtime.WorkerConfig worker config}).
+ * This configuration information includes connector configs, task configs, connector target states etc.
+ */
 public interface ConfigBackingStore {
 
     void start();
@@ -118,8 +123,7 @@ public interface ConfigBackingStore {
     }
 
     /**
-     * Set an update listener to get notifications when there are config/target state
-     * changes.
+     * Set an update listener to get notifications when there are new records written to the backing store.
      * @param listener non-null listener
      */
     void setUpdateListener(UpdateListener listener);

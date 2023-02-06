@@ -26,7 +26,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 
 /**
- * JSON deserializer for Jackson's JsonNode tree model. Using the tree model allows it to work with arbitrarily
+ * JSON deserializer for Jackson's {@link JsonNode} tree model. Using the tree model allows it to work with arbitrarily
  * structured data without having associated Java classes. This deserializer also supports Connect schemas.
  */
 public class JsonDeserializer implements Deserializer<JsonNode> {
@@ -40,7 +40,7 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
     }
 
     /**
-     * A constructor that additionally specifies some {@link DeserializationFeature}
+     * A constructor that additionally specifies some {@link DeserializationFeature}s
      * for the deserializer
      *
      * @param deserializationFeatures the specified deserialization features

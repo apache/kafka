@@ -309,11 +309,11 @@ public class KafkaBasedLog<K, V> {
      * Note that this checks the current offsets, reads to them, and invokes the callback regardless of whether
      * additional records have been written to the log. If the caller needs to ensure they have truly reached the end
      * of the log, they must ensure there are no other writers during this period.
-     *
+     * <p>
      * This waits until the end of all partitions has been reached.
-     *
+     * <p>
      * This method is asynchronous. If you need a synchronous version, pass an instance of
-     * {@link org.apache.kafka.connect.util.FutureCallback} as the {@param callback} parameter and wait on it to block.
+     * {@link org.apache.kafka.connect.util.FutureCallback} as the {@code callback} parameter and wait on it to block.
      *
      * @param callback the callback to invoke once the end of the log has been reached.
      */
