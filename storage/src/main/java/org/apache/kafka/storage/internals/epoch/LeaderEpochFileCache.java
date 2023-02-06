@@ -392,11 +392,11 @@ public class LeaderEpochFileCache {
     }
 
     private void flush() {
-        lock.writeLock().lock();
+        lock.readLock().lock();
         try {
             checkpoint.write(epochs.values());
         } finally {
-            lock.writeLock().unlock();
+            lock.readLock().unlock();
         }
     }
 
