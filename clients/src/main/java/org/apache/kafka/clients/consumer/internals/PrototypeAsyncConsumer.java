@@ -32,6 +32,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.consumer.internals.events.PollApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.subscription.ClientSubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -52,6 +54,8 @@ import org.slf4j.Logger;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -79,7 +83,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Optional<String> groupId;
     private final String clientId;
     private final Logger log;
-    private final SubscriptionState subscriptions;
+    private final ClientSubscriptionState subscriptions;
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
@@ -103,7 +107,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
         this.log = logContext.logger(getClass());
         OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
-        this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
+        this.subscriptions = new ClientSubscriptionState(new LogContext(), offsetResetStrategy);
         this.metrics = buildMetrics(config, time, clientId);
         List<ConsumerInterceptor<K, V>> interceptorList = (List) config.getConfiguredInstances(
                 ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
@@ -128,7 +132,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             Time time,
             LogContext logContext,
             ConsumerConfig config,
-            SubscriptionState subscriptionState,
+            ClientSubscriptionState subscriptionState,
             EventHandler eventHandler,
             Metrics metrics,
             ClusterResourceListeners clusterResourceListeners,
@@ -161,22 +165,18 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     public ConsumerRecords<K, V> poll(final Duration timeout) {
         try {
             do {
-                if (!eventHandler.isEmpty()) {
-                    final Optional<BackgroundEvent> backgroundEvent = eventHandler.poll();
-                    // processEvent() may process 3 types of event:
-                    // 1. Errors
-                    // 2. Callback Invocation
-                    // 3. Fetch responses
-                    // Errors will be handled or rethrown.
-                    // Callback invocation will trigger callback function execution, which is blocking until completion.
-                    // Successful fetch responses will be added to the completedFetches in the fetcher, which will then
-                    // be processed in the collectFetches().
-                    backgroundEvent.ifPresent(event -> processEvent(event, timeout));
+                final long currenttimeMs = System.currentTimeMillis();
+                // send the consumed position to the background thread
+                eventHandler.add(new PollApplicationEvent(currenttimeMs, subscriptions.consumedPosition()));
+                Iterator<Optional<BackgroundEvent>> events = eventHandler.drain().iterator();
+                while (events.hasNext()) {
+                    processEvent(events.next().get());
                 }
                 // The idea here is to have the background thread sending fetches autonomously, and the fetcher
                 // uses the poll loop to retrieve successful fetchResponse and process them on the polling thread.
                 final Fetch<K, V> fetch = collectFetches();
                 if (!fetch.isEmpty()) {
+                    subscriptions.updateConsumedPosition();
                     return processFetchResults(fetch);
                 }
                 // We will wait for retryBackoffMs
@@ -197,7 +197,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         commitSync(Duration.ofMillis(defaultApiTimeoutMs));
     }
 
-    private void processEvent(final BackgroundEvent backgroundEvent, final Duration timeout) {
+    private void processEvent(final BackgroundEvent backgroundEvent) {
         // stubbed class
     }
 
@@ -221,7 +221,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-        commitAsync(subscriptions.allConsumed(), callback);
+        commitAsync(subscriptions.consumedPosition(), callback);
     }
 
     @Override
@@ -398,7 +398,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(final Duration timeout) {
-        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(subscriptions.allConsumed());
+        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(subscriptions.consumedPosition());
         eventHandler.add(commitEvent);
 
         final CompletableFuture<Void> commitFuture = commitEvent.future();
@@ -450,7 +450,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void assign(Collection<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
+        eventHandler.add(new PartitionAssignment(partitions));
+        subscriptions.assignFromUser(new HashSet<>(partitions));
     }
 
     @Override

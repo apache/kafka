@@ -16,11 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
+
+import java.util.Map;
+
 public class PollApplicationEvent extends ApplicationEvent {
     public final long pollTimeMs;
+    public final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-    protected PollApplicationEvent(final long currentTimeMs) {
+    public PollApplicationEvent(final long currentTimeMs,
+                                Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsetAndMetadataMap) {
         super(Type.POLL);
         this.pollTimeMs = currentTimeMs;
+        this.offsets = topicPartitionOffsetAndMetadataMap;
     }
 }

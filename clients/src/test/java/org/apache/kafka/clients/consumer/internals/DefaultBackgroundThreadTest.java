@@ -167,7 +167,8 @@ public class DefaultBackgroundThreadTest {
                 this.networkClient,
                 this.groupState,
                 this.coordinatorManager,
-                this.commitManager);
+                this.commitManager,
+                null);
     }
 
     private NetworkClientDelegate.PollResult mockPollCoordinatorResult() {

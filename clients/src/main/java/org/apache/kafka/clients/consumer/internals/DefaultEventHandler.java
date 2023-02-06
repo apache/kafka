@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.consumer.internals.subscription.ClientSubscriptionState;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -52,7 +53,7 @@ public class DefaultEventHandler implements EventHandler {
     public DefaultEventHandler(final ConsumerConfig config,
                                final GroupRebalanceConfig groupRebalanceConfig,
                                final LogContext logContext,
-                               final SubscriptionState subscriptionState,
+                               final ClientSubscriptionState subscriptionState,
                                final ApiVersions apiVersions,
                                final Metrics metrics,
                                final ClusterResourceListeners clusterResourceListeners,
@@ -76,7 +77,7 @@ public class DefaultEventHandler implements EventHandler {
                                final LogContext logContext,
                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                               final SubscriptionState subscriptionState,
+                               final ClientSubscriptionState subscriptionState,
                                final ApiVersions apiVersions,
                                final Metrics metrics,
                                final ClusterResourceListeners clusterResourceListeners,
@@ -178,14 +179,19 @@ public class DefaultEventHandler implements EventHandler {
         return applicationEventQueue.add(event);
     }
 
+    @Override
+    public List<Optional<BackgroundEvent>> drain() {
+        return null;
+    }
+
     // bootstrap a metadata object with the bootstrap server IP address,
     // which will be used once for the subsequent metadata refresh once the
     // background thread has started up.
     private ConsumerMetadata bootstrapMetadata(
-        final LogContext logContext,
-        final ClusterResourceListeners clusterResourceListeners,
-        final ConsumerConfig config,
-        final SubscriptionState subscriptions) {
+            final LogContext logContext,
+            final ClusterResourceListeners clusterResourceListeners,
+            final ConsumerConfig config,
+            final SubscriptionState subscriptions) {
         final ConsumerMetadata metadata = new ConsumerMetadata(
             config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
             config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),

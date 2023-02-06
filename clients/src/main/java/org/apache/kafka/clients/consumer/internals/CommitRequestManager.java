@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.subscription.BackgroundThreadSubscriptionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.record.RecordBatch;
@@ -44,7 +45,7 @@ import java.util.stream.Collectors;
 public class CommitRequestManager implements RequestManager {
     private final Queue<StagedCommit> stagedCommits;
     // TODO: We will need to refactor the subscriptionState
-    private final SubscriptionState subscriptionState;
+    private final BackgroundThreadSubscriptionState subscriptionState;
     private final Logger log;
     private final Optional<AutoCommitState> autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
@@ -53,7 +54,7 @@ public class CommitRequestManager implements RequestManager {
     public CommitRequestManager(
             final Time time,
             final LogContext logContext,
-            final SubscriptionState subscriptionState,
+            final BackgroundThreadSubscriptionState subscriptionState,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
             final GroupStateManager groupState) {

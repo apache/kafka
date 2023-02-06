@@ -105,13 +105,13 @@ public class SubscriptionState {
 
     @Override
     public synchronized String toString() {
-        return "SubscriptionState{" +
-            "type=" + subscriptionType +
-            ", subscribedPattern=" + subscribedPattern +
-            ", subscription=" + String.join(",", subscription) +
-            ", groupSubscription=" + String.join(",", groupSubscription) +
-            ", defaultResetStrategy=" + defaultResetStrategy +
-            ", assignment=" + assignment.partitionStateValues() + " (id=" + assignmentId + ")}";
+        return "AbstractSubscriptionState{" +
+                "type=" + subscriptionType +
+                ", subscribedPattern=" + subscribedPattern +
+                ", subscription=" + String.join(",", subscription) +
+                ", groupSubscription=" + String.join(",", groupSubscription) +
+                ", defaultResetStrategy=" + defaultResetStrategy +
+                ", assignment=" + assignment.partitionStateValues() + " (id=" + assignmentId + ")}";
     }
 
     public synchronized String prettyString() {

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -38,8 +39,14 @@ public interface EventHandler {
     /**
      * Add an {@link ApplicationEvent} to the handler. The method returns true upon successful add; otherwise returns
      * false.
-     * @param event     An {@link ApplicationEvent} created by the polling thread.
-     * @return          true upon successful add.
+     *
+     * @param event An {@link ApplicationEvent} created by the polling thread.
+     * @return true upon successful add.
      */
     boolean add(ApplicationEvent event);
+
+    /**
+     * Drain the event
+     */
+    List<Optional<BackgroundEvent>> drain();
 }

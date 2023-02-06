@@ -49,8 +49,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
@@ -65,7 +65,6 @@ import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
@@ -78,6 +77,7 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -119,7 +119,7 @@ import java.util.stream.Collectors;
  * <ul>
  *     <li>If a response handler accesses any shared state of the Fetcher (e.g. FetchSessionHandler),
  *     all access to that state must be synchronized on the Fetcher instance.</li>
- *     <li>If a response handler accesses any shared state of the coordinator (e.g. SubscriptionState),
+ *     <li>If a response handler accesses any shared state of the coordinator (e.g. AbstractSubscriptionState),
  *     it is assumed that all access to that state is synchronized on the coordinator instance by
  *     the caller.</li>
  *     <li>Responses that collate partial responses from multiple brokers (e.g. to list offsets) are

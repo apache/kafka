@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.consumer.internals.subscription.ClientSubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
@@ -42,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PrototypeAsyncConsumerTest {
     private Map<String, Object> properties;
-    private SubscriptionState subscriptionState;
+    private ClientSubscriptionState subscriptionState;
     private MockTime time;
     private LogContext logContext;
     private Metrics metrics;
@@ -53,7 +54,7 @@ public class PrototypeAsyncConsumerTest {
 
     @BeforeEach
     public void setup() {
-        this.subscriptionState = Mockito.mock(SubscriptionState.class);
+        this.subscriptionState = Mockito.mock(ClientSubscriptionState.class);
         this.eventHandler = Mockito.mock(DefaultEventHandler.class);
         this.logContext = new LogContext();
         this.time = new MockTime();
@@ -72,7 +73,7 @@ public class PrototypeAsyncConsumerTest {
     @Test
     public void testSubscription() {
         this.subscriptionState =
-                new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+                new ClientSubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         PrototypeAsyncConsumer<String, String> consumer =
                 setupConsumerWithDefault();
         subscriptionState.subscribe(singleton("t1"),

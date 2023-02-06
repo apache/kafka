@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.RequestManager;
+import org.apache.kafka.clients.consumer.internals.subscription.BackgroundThreadSubscriptionState;
 
 import java.util.Map;
 import java.util.Objects;
@@ -28,10 +29,13 @@ import java.util.concurrent.BlockingQueue;
 public class ApplicationEventProcessor {
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final Map<RequestManager.Type, Optional<RequestManager>> registry;
+    private final BackgroundThreadSubscriptionState subscriptions;
 
     public ApplicationEventProcessor(
+            final BackgroundThreadSubscriptionState subscriptionState,
             final BlockingQueue<BackgroundEvent> backgroundEventQueue,
             final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry) {
+        this.subscriptions = subscriptionState;
         this.backgroundEventQueue = backgroundEventQueue;
         this.registry = requestManagerRegistry;
     }
@@ -63,9 +67,10 @@ public class ApplicationEventProcessor {
     private boolean process(final PollApplicationEvent event) {
         Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
         if (!commitRequestManger.isPresent()) {
-            return false;
+            return true;
         }
 
+        this.subscriptions.updateConsumedPosition(event.offsets);
         CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
         manager.clientPoll(event.pollTimeMs);
         return true;
