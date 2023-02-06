@@ -48,7 +48,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * failures, whether in initialization or after startup, are treated as fatal, which means that we will not attempt
  * to restart this connector instance after failure. What this means from a user perspective is that you must
  * use the /restart REST API to restart a failed task. This behavior is consistent with task failures.
- *
+ * <p>
  * Note that this class is NOT thread-safe.
  */
 public class WorkerConnector implements Runnable {

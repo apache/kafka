@@ -70,19 +70,19 @@ import java.util.function.Supplier;
  * of connector and task status information. When a state change is observed,
  * the new state is written to the compacted topic. The new state will not be
  * visible until it has been read back from the topic.
- *
- * In spite of their names, the putSafe() methods cannot guarantee the safety
+ * <p>
+ * In spite of their names, the {@link #putSafe} methods cannot guarantee the safety
  * of the write (since Kafka itself cannot provide such guarantees currently),
- * but it can avoid specific unsafe conditions. In particular, we putSafe()
+ * but it can avoid specific unsafe conditions. In particular, {@link #putSafe}
  * allows writes in the following conditions:
- *
- * 1) It is (probably) safe to overwrite the state if there is no previous
- *    value.
- * 2) It is (probably) safe to overwrite the state if the previous value was
- *    set by a worker with the same workerId.
- * 3) It is (probably) safe to overwrite the previous state if the current
- *    generation is higher than the previous .
- *
+ * <ol>
+ *   <li>It is (probably) safe to overwrite the state if there is no previous
+ *   value.
+ *   <li>It is (probably) safe to overwrite the state if the previous value was
+ *   set by a worker with the same workerId.
+ *   <li>It is (probably) safe to overwrite the previous state if the current
+ *   generation is higher than the previous .
+ * </ol>
  * Basically all these conditions do is reduce the window for conflicts. They
  * obviously cannot take into account in-flight requests.
  *

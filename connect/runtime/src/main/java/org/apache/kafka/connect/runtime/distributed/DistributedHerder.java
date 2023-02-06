@@ -119,12 +119,11 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
  * </p>
  * <p>
  *     Under the hood, this is implemented as a group managed by Kafka's group membership facilities (i.e. the generalized
- *     group/consumer coordinator). Each instance of DistributedHerder joins the group and indicates what it's current
+ *     group/consumer coordinator). Each instance of DistributedHerder joins the group and indicates what its current
  *     configuration state is (where it is in the configuration log). The group coordinator selects one member to take
- *     this information and assign each instance a subset of the active connectors & tasks to execute. This assignment
- *     is currently performed in a simple round-robin fashion, but this is not guaranteed -- the herder may also choose
- *     to, e.g., use a sticky assignment to avoid the usual start/stop costs associated with connectors and tasks. Once
- *     an assignment is received, the DistributedHerder simply runs its assigned connectors and tasks in a Worker.
+ *     this information and assign each instance a subset of the active connectors & tasks to execute. The assignment
+ *     strategy depends on the {@link ConnectAssignor} used. Once an assignment is received, the DistributedHerder simply
+ *     runs its assigned connectors and tasks in a {@link Worker}.
  * </p>
  * <p>
  *     In addition to distributing work, the DistributedHerder uses the leader determined during the work assignment
@@ -1065,7 +1064,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             // Note that we use the updated connector config despite the fact that we don't have an updated
                             // snapshot yet. The existing task info should still be accurate.
                             ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                                // validateConnectorConfig have checked the existence of CONNECTOR_CLASS_CONFIG
                                 connectorType(config));
                             callback.onCompletion(null, new Created<>(!exists, info));
                             return null;
@@ -1618,7 +1616,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     /**
-     * Try to read to the end of the config log within the given timeout
+     * Try to read to the end of the config log within the given timeout and capture a fresh snapshot via
+     * {@link ConfigBackingStore#snapshot()}
+     *
      * @param timeoutMs maximum time to wait to sync to the end of the log
      * @return true if successful; false if timed out
      */
@@ -1716,7 +1716,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         log.info("Finished starting connectors and tasks");
     }
 
-    // arguments should assignment collections (connectors or tasks) and should not be null
+    // arguments should be assignment collections (connectors or tasks) and should not be null
     private static <T> Collection<T> assignmentDifference(Collection<T> update, Collection<T> running) {
         if (running.isEmpty()) {
             return update;
@@ -2577,6 +2577,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    /**
+     * A collection of cluster rebalance related metrics.
+     */
     class HerderMetrics {
         private final MetricGroup metricGroup;
         private final Sensor rebalanceCompletedCounts;

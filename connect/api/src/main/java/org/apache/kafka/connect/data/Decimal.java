@@ -59,7 +59,7 @@ public class Decimal {
     }
 
     /**
-     * Convert a value from its logical format (BigDecimal) to it's encoded format.
+     * Convert a value from its logical format ({@link BigDecimal}) to its encoded format (byte[]).
      * @param value the logical value
      * @return the encoded value
      */
@@ -75,6 +75,11 @@ public class Decimal {
         return value.unscaledValue().toByteArray();
     }
 
+    /**
+     * Convert a value from its encoded format (byte[]) to its logical format ({@link BigDecimal}).
+     * @param value the encoded value
+     * @return the logical value
+     */
     public static BigDecimal toLogical(Schema schema, byte[] value) {
         return new BigDecimal(new BigInteger(value), scale(schema));
     }

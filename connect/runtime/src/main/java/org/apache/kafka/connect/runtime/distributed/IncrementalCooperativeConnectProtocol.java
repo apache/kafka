@@ -75,8 +75,8 @@ public class IncrementalCooperativeConnectProtocol {
      *   Version            => Int16
      * </pre>
      * The V2 protocol is schematically identical to V1, but is used to signify that internal request
-     * verification and distribution of session keys is enabled (for more information, see KIP-507:
-     * https://cwiki.apache.org/confluence/display/KAFKA/KIP-507%3A+Securing+Internal+Connect+REST+Endpoints)
+     * verification and distribution of session keys is enabled (for more information, see
+     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-507%3A+Securing+Internal+Connect+REST+Endpoints">KIP-507</a>)
      */
     private static final Struct CONNECT_PROTOCOL_HEADER_V2 = new Struct(CONNECT_PROTOCOL_HEADER_SCHEMA)
         .set(VERSION_KEY_NAME, CONNECT_PROTOCOL_V2);

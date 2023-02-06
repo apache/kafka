@@ -287,7 +287,7 @@ public class RestServer {
 
         String headerConfig = config.getString(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG);
         if (!Utils.isBlank(headerConfig)) {
-            configureHttpResponsHeaderFilter(context);
+            configureHttpResponseHeaderFilter(context);
         }
 
         handlers.setHandlers(contextHandlers.toArray(new Handler[0]));
@@ -366,7 +366,7 @@ public class RestServer {
     }
 
     /**
-     * @return the admin url for this worker. can be null if admin endpoints are disabled.
+     * @return the admin url for this worker. Can be null if admin endpoints are disabled.
      */
     public URI adminUrl() {
         ServerConnector adminConnector = null;
@@ -470,9 +470,9 @@ public class RestServer {
 
     /**
      * Register header filter to ServletContextHandler.
-     * @param context The serverlet context handler
+     * @param context The servlet context handler
      */
-    protected void configureHttpResponsHeaderFilter(ServletContextHandler context) {
+    protected void configureHttpResponseHeaderFilter(ServletContextHandler context) {
         String headerConfig = config.getString(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG);
         FilterHolder headerFilterHolder = new FilterHolder(HeaderFilter.class);
         headerFilterHolder.setInitParameter("headerConfig", headerConfig);

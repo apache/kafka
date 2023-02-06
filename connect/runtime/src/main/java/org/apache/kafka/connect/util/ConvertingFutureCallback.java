@@ -25,6 +25,14 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * An abstract implementation of {@link Callback} that also implements the {@link Future} interface. This allows for
+ * operations like waiting until the callback is completed via {@link #onCompletion(Throwable, Object)}. The result
+ * from the callback can be converted by concrete implementations of this class before being retrieved via
+ * {@link Future#get}.
+ * @param <U> the callback result type
+ * @param <T> the future result type obtained after converting the callback result
+ */
 public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Future<T> {
 
     private final Callback<T> underlying;
