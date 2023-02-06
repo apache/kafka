@@ -23,17 +23,17 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import java.util.Objects;
 import java.util.Optional;
 
-public class GroupStateManager {
+public class GroupState {
     public final String groupId;
     public final Optional<String> groupInstanceId;
     public Generation generation = Generation.NO_GENERATION;
 
-    public GroupStateManager(String groupId, Optional<String> groupInstanceId) {
+    public GroupState(String groupId, Optional<String> groupInstanceId) {
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;
     }
 
-    public GroupStateManager(final GroupRebalanceConfig config) {
+    public GroupState(final GroupRebalanceConfig config) {
         this.groupId = config.groupId;
         this.groupInstanceId = config.groupInstanceId;
     }

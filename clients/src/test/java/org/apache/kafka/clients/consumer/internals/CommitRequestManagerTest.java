@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -38,7 +39,7 @@ import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
     private SubscriptionState subscriptionState;
-    private GroupStateManager groupStateManager;
+    private GroupState groupState;
     private LogContext logContext;
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
@@ -50,7 +51,7 @@ public class CommitRequestManagerTest {
         this.time = new MockTime(0);
         this.subscriptionState = mock(SubscriptionState.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
-        this.groupStateManager = new GroupStateManager("group-1", Optional.empty());
+        this.groupState = new GroupState("group-1", Optional.empty());
 
         this.props = new Properties();
         this.props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 100);
@@ -90,6 +91,25 @@ public class CommitRequestManagerTest {
     }
 
     @Test
+    public void testAutocommitStateUponFailure() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        time.sleep(100);
+        commitRequestManger.clientPoll(time.milliseconds());
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        time.sleep(100);
+        // We want to make sure we don't resend autocommit if the previous request has not been completed
+        assertEquals(Long.MAX_VALUE, commitRequestManger.poll(time.milliseconds()).timeUntilNextPollMs);
+
+        // complete the autocommit request (exceptionally)
+        res.unsentRequests.get(0).future().completeExceptionally(new KafkaException("test exception"));
+
+        // we can then autocommit again
+        commitRequestManger.clientPoll(time.milliseconds());
+        res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+    }
+
+    @Test
     public void testAutoCommitFuture() {
         CommitRequestManager commitRequestManger = create(true, 100);
         commitRequestManger.sendAutoCommit(new HashMap<>()).complete(null);
@@ -104,6 +124,6 @@ public class CommitRequestManagerTest {
                 this.subscriptionState,
                 new ConsumerConfig(props),
                 this.coordinatorRequestManager,
-                this.groupStateManager);
+                this.groupState);
     }
 }

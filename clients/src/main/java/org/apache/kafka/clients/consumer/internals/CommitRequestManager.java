@@ -48,7 +48,7 @@ public class CommitRequestManager implements RequestManager {
     private final Logger log;
     private final Optional<AutoCommitState> autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
-    private final GroupStateManager groupState;
+    private final GroupState groupState;
 
     public CommitRequestManager(
             final Time time,
@@ -56,7 +56,7 @@ public class CommitRequestManager implements RequestManager {
             final SubscriptionState subscriptionState,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
-            final GroupStateManager groupState) {
+            final GroupState groupState) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.log = logContext.logger(getClass());
         this.stagedCommits = new LinkedList<>();
@@ -88,6 +88,7 @@ public class CommitRequestManager implements RequestManager {
 
         List<NetworkClientDelegate.UnsentRequest> unsentCommitRequests =
                 stagedCommits.stream().map(StagedCommit::toUnsentRequest).collect(Collectors.toList());
+        stagedCommits.clear();
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.unmodifiableList(unsentCommitRequests));
     }
 
@@ -107,32 +108,35 @@ public class CommitRequestManager implements RequestManager {
         }
 
         AutoCommitState autocommit = autoCommitState.get();
-        if (!autocommit.canSendAutocommit(currentTimeMs)) {
+        if (!autocommit.canSendAutocommit()) {
             return;
         }
 
         Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptionState.allConsumed();
         log.debug("Auto-committing offsets {}", allConsumedOffsets);
         sendAutoCommit(allConsumedOffsets);
-        autocommit.reset();
+        autocommit.resetTimer();
+
     }
 
     // Visible for testing
     CompletableFuture<ClientResponse> sendAutoCommit(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
-        CompletableFuture<ClientResponse> future = this.add(allConsumedOffsets);
-        future.whenComplete((response, throwable) -> {
-            if (throwable == null) {
-                log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
-            }
-
-            if (throwable instanceof RetriableCommitFailedException) {
-                log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", allConsumedOffsets,
-                        throwable);
-            } else {
-                log.warn("Asynchronous auto-commit of offsets {} failed: {}", allConsumedOffsets,
-                        throwable.getMessage());
-            }
-        });
+        CompletableFuture<ClientResponse> future = this.add(allConsumedOffsets)
+                .whenComplete((response, throwable) -> {
+                    if (throwable == null) {
+                        log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
+                    }
+                    // setting inflight commit to false upon completion
+                    autoCommitState.get().setInflightCommitStatus(false);
+                })
+                .exceptionally(t -> {
+                    if (t instanceof RetriableCommitFailedException) {
+                        log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", allConsumedOffsets, t);
+                    } else {
+                        log.warn("Asynchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, t.getMessage());
+                    }
+                    return null;
+                });
         return future;
     }
 
@@ -143,14 +147,14 @@ public class CommitRequestManager implements RequestManager {
     private class StagedCommit {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final String groupId;
-        private final GroupStateManager.Generation generation;
+        private final GroupState.Generation generation;
         private final String groupInstanceId;
         private final NetworkClientDelegate.FutureCompletionHandler future;
 
         public StagedCommit(final Map<TopicPartition, OffsetAndMetadata> offsets,
                             final String groupId,
                             final String groupInstanceId,
-                            final GroupStateManager.Generation generation) {
+                            final GroupState.Generation generation) {
             this.offsets = offsets;
             // if no callback is provided, DefaultOffsetCommitCallback will be used.
             this.future = new NetworkClientDelegate.FutureCompletionHandler();
@@ -201,6 +205,7 @@ public class CommitRequestManager implements RequestManager {
     static class AutoCommitState {
         private final Timer timer;
         private final long autoCommitInterval;
+        private boolean hasInflightCommit;
 
         public AutoCommitState(
                 final Time time,
@@ -209,12 +214,16 @@ public class CommitRequestManager implements RequestManager {
             this.timer = time.timer(autoCommitInterval);
         }
 
-        public boolean canSendAutocommit(final long currentTimeMs) {
-            return this.timer.isExpired();
+        public boolean canSendAutocommit() {
+            return !hasInflightCommit && this.timer.isExpired();
         }
 
-        public void reset() {
+        public void resetTimer() {
             this.timer.reset(autoCommitInterval);
+        }
+
+        public void setInflightCommitStatus(final boolean hasInflightCommit) {
+            this.hasInflightCommit = hasInflightCommit;
         }
 
         public void ack(final long currentTimeMs) {

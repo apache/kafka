@@ -62,7 +62,7 @@ public class DefaultBackgroundThreadTest {
     private CoordinatorRequestManager coordinatorManager;
     private ErrorEventHandler errorEventHandler;
     private int requestTimeoutMs = 500;
-    private GroupStateManager groupState;
+    private GroupState groupState;
     private CommitRequestManager commitManager;
 
     @BeforeEach
@@ -84,7 +84,7 @@ public class DefaultBackgroundThreadTest {
                 Optional.empty(),
                 100,
                 true);
-        this.groupState = new GroupStateManager(rebalanceConfig);
+        this.groupState = new GroupState(rebalanceConfig);
         this.commitManager = mock(CommitRequestManager.class);
     }
 

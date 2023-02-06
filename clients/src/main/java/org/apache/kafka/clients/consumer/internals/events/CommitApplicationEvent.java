@@ -58,6 +58,7 @@ public class CommitApplicationEvent extends ApplicationEvent {
 
     @Override
     public String toString() {
-        return getClass() + "_" + this.offsets;
+        return "CommitApplicationEvent("
+                + "offsets=" + offsets + ")";
     }
 }

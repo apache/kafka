@@ -61,7 +61,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final ApplicationEventProcessor applicationEventProcessor;
     private final NetworkClientDelegate networkClientDelegate;
     private final ErrorEventHandler errorEventHandler;
-    private final GroupStateManager groupState;
+    private final GroupState groupState;
     private boolean running;
 
     private final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry;
@@ -76,7 +76,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final ApplicationEventProcessor processor,
                             final ConsumerMetadata metadata,
                             final NetworkClientDelegate networkClient,
-                            final GroupStateManager groupState,
+                            final GroupState groupState,
                             final CoordinatorRequestManager coordinatorManager,
                             CommitRequestManager commitRequestManager) {
         super(BACKGROUND_THREAD_NAME, true);
@@ -120,7 +120,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                     networkClient);
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
-            this.groupState = new GroupStateManager(rebalanceConfig);
+            this.groupState = new GroupState(rebalanceConfig);
             this.requestManagerRegistry = Collections.unmodifiableMap(buildRequestManagerRegistry(logContext));
             this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, requestManagerRegistry);
         } catch (final Exception e) {

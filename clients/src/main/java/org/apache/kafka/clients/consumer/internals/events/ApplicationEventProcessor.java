@@ -63,7 +63,7 @@ public class ApplicationEventProcessor {
     private boolean process(final PollApplicationEvent event) {
         Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
         if (!commitRequestManger.isPresent()) {
-            return false;
+            return true;
         }
 
         CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
