@@ -296,11 +296,16 @@ class ControllerServer(
        * metadata log. See @link{QuorumController#maybeCompleteAuthorizerInitialLoad}
        * and KIP-801 for details.
        */
-      socketServer.enableRequestProcessing(authorizerFutures)
+      val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
 
       // Block here until all the authorizer futures are complete
       FutureUtils.waitWithLogging(logger.underlying, "all of the authorizer futures to be completed",
         CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
+
+      // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
+      FutureUtils.waitWithLogging(logger.underlying, "all of the SocketServer Acceptors to be started",
+        socketServerFuture, startupDeadline, time)
+
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)

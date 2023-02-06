@@ -33,6 +33,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+/**
+ * An implementation of StatusBackingStore that stores statuses in-memory.
+ */
 public class MemoryStatusBackingStore implements StatusBackingStore {
     private final Table<String, Integer, TaskStatus> tasks;
     private final Map<String, ConnectorStatus> connectors;

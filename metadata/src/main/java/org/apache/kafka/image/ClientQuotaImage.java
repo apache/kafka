@@ -52,6 +52,10 @@ public final class ClientQuotaImage {
         return quotas;
     }
 
+    public Map<String, Double> quotaMap() {
+        return Collections.unmodifiableMap(quotas);
+    }
+
     public void write(
         ClientQuotaEntity entity,
         ImageWriter writer,

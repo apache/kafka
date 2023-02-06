@@ -315,12 +315,12 @@ class BrokerToControllerRequestThread(
   private def maybeResetNetworkClient(controllerInformation: ControllerInformation): Unit = {
     if (isNetworkClientForZkController != controllerInformation.isZkController) {
       debug("Controller changed to " + (if (isNetworkClientForZkController) "kraft" else "zk") + " mode. " +
-        "Resetting network client")
+        s"Resetting network client with new controller information : ${controllerInformation}")
       // Close existing network client.
-      if (networkClient != null) {
-        networkClient.initiateClose()
-        networkClient.close()
-      }
+      val oldClient = networkClient
+      oldClient.initiateClose()
+      oldClient.close()
+
       isNetworkClientForZkController = controllerInformation.isZkController
       updateControllerAddress(controllerInformation.node.orNull)
       controllerInformation.node.foreach(n => metadataUpdater.setNodes(Seq(n).asJava))
@@ -382,6 +382,7 @@ class BrokerToControllerRequestThread(
   }
 
   private[server] def handleResponse(queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
+    debug(s"Request ${queueItem.request} received $response")
     if (response.authenticationException != null) {
       error(s"Request ${queueItem.request} failed due to authentication error with controller",
         response.authenticationException)
@@ -394,9 +395,16 @@ class BrokerToControllerRequestThread(
       updateControllerAddress(null)
       requestQueue.putFirst(queueItem)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
+      debug(s"Request ${queueItem.request} received NOT_CONTROLLER exception. Disconnecting the " +
+        s"connection to the stale controller ${activeControllerAddress().map(_.idString).getOrElse("null")}")
       // just close the controller connection and wait for metadata cache update in doWork
       activeControllerAddress().foreach { controllerAddress =>
-        networkClient.disconnect(controllerAddress.idString)
+        try {
+          // We don't care if disconnect has an error, just log it and get a new network client
+          networkClient.disconnect(controllerAddress.idString)
+        } catch {
+          case t: Throwable => error("Had an error while disconnecting from NetworkClient.", t)
+        }
         updateControllerAddress(null)
       }
 

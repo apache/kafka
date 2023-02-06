@@ -28,6 +28,9 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.ExceptionMapper;
 
+/**
+ * Maps uncaught exceptions thrown while handling REST requests to appropriate {@link javax.ws.rs.core.Response}s
+ */
 public class ConnectExceptionMapper implements ExceptionMapper<Exception> {
     private static final Logger log = LoggerFactory.getLogger(ConnectExceptionMapper.class);
 

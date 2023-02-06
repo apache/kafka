@@ -49,6 +49,9 @@ import static org.apache.kafka.common.utils.Utils.enumOptions;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_VALIDATOR;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_VALIDATOR;
 
+/**
+ * Provides configuration for Kafka Connect workers running in distributed mode.
+ */
 public class DistributedConfig extends WorkerConfig {
 
     private static final Logger log = LoggerFactory.getLogger(DistributedConfig.class);
