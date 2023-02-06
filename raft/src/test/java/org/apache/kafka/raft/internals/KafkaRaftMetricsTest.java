@@ -190,25 +190,48 @@ public class KafkaRaftMetricsTest {
     }
 
     @Test
-    public void shouldRecordPollIdleRatio() throws IOException {
+    public void shouldRecordPollIdleRatio() {
         QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
+        // First recording is discarded (in order to align the interval of measurement)
+        raftMetrics.updatePollStart(time.milliseconds());
+        raftMetrics.updatePollEnd(time.milliseconds());
+
+        // Idle for 100ms
         raftMetrics.updatePollStart(time.milliseconds());
         time.sleep(100L);
         raftMetrics.updatePollEnd(time.milliseconds());
-        time.sleep(900L);
-        raftMetrics.updatePollStart(time.milliseconds());
 
-        assertEquals(0.1, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
-
+        // Busy for 100ms
         time.sleep(100L);
+
+        // Idle for 200ms
+        raftMetrics.updatePollStart(time.milliseconds());
+        time.sleep(200L);
         raftMetrics.updatePollEnd(time.milliseconds());
-        time.sleep(100L);
-        raftMetrics.updatePollStart(time.milliseconds());
 
-        assertEquals(0.3, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
+        assertEquals(0.75, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
+
+        // Busy for 100ms
+        time.sleep(100L);
+
+        // Idle for 75ms
+        raftMetrics.updatePollStart(time.milliseconds());
+        time.sleep(75L);
+        raftMetrics.updatePollEnd(time.milliseconds());
+
+        // Idle for 25ms
+        raftMetrics.updatePollStart(time.milliseconds());
+        time.sleep(25L);
+        raftMetrics.updatePollEnd(time.milliseconds());
+
+        // Idle for 0ms
+        raftMetrics.updatePollStart(time.milliseconds());
+        raftMetrics.updatePollEnd(time.milliseconds());
+
+        assertEquals(0.5, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
     }
 
     @Test

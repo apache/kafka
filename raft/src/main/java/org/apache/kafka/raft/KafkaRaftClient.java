@@ -2224,27 +2224,28 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      * requests and send any needed outbound requests.
      */
     public void poll() {
-        pollListeners();
-
-        long currentTimeMs = time.milliseconds();
-        if (maybeCompleteShutdown(currentTimeMs)) {
+        long startPollTimeMs = time.milliseconds();
+        if (maybeCompleteShutdown(startPollTimeMs)) {
             return;
         }
 
-        long pollStateTimeoutMs = pollCurrentState(currentTimeMs);
-        long cleaningTimeoutMs = snapshotCleaner.maybeClean(currentTimeMs);
+        long pollStateTimeoutMs = pollCurrentState(startPollTimeMs);
+        long cleaningTimeoutMs = snapshotCleaner.maybeClean(startPollTimeMs);
         long pollTimeoutMs = Math.min(pollStateTimeoutMs, cleaningTimeoutMs);
 
-        kafkaRaftMetrics.updatePollStart(currentTimeMs);
+        long startWaitTimeMs = time.milliseconds();
+        kafkaRaftMetrics.updatePollStart(startWaitTimeMs);
 
         RaftMessage message = messageQueue.poll(pollTimeoutMs);
 
-        currentTimeMs = time.milliseconds();
-        kafkaRaftMetrics.updatePollEnd(currentTimeMs);
+        long endWaitTimeMs = time.milliseconds();
+        kafkaRaftMetrics.updatePollEnd(endWaitTimeMs);
 
         if (message != null) {
-            handleInboundMessage(message, currentTimeMs);
+            handleInboundMessage(message, endWaitTimeMs);
         }
+
+        pollListeners();
     }
 
     @Override
