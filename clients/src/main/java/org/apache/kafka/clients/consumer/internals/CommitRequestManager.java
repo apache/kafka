@@ -144,6 +144,11 @@ public class CommitRequestManager implements RequestManager {
         this.autoCommitState.ifPresent(t -> t.ack(currentTimeMs));
     }
 
+    // Visible for testing
+    Queue<StagedCommit> stagedCommits() {
+        return this.stagedCommits;
+    }
+
     private class StagedCommit {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final String groupId;

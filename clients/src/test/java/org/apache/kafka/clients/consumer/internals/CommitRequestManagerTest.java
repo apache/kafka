@@ -34,6 +34,7 @@ import java.util.Properties;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -107,6 +108,15 @@ public class CommitRequestManagerTest {
         commitRequestManger.clientPoll(time.milliseconds());
         res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
+    }
+
+    @Test
+    public void testEnsureStagedCommitsPurgedAfterPoll() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        commitRequestManger.add(new HashMap<>());
+        assertEquals(1, commitRequestManger.stagedCommits().size());
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertTrue(commitRequestManger.stagedCommits().isEmpty());
     }
 
     @Test
