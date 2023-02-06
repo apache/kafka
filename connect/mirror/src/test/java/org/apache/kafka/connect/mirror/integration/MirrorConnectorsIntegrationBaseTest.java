@@ -783,6 +783,8 @@ public class MirrorConnectorsIntegrationBaseTest {
         mm2Props.put("replication.factor", "1");
         // Sync offsets as soon as possible to ensure the final record in a finite test has its offset translated.
         mm2Props.put("offset.lag.max", "0");
+        mm2Props.put(PRIMARY_CLUSTER_ALIAS + "offset.flush.interval.ms", "5000");
+        mm2Props.put(BACKUP_CLUSTER_ALIAS + "offset.flush.interval.ms", "5000");
         return mm2Props;
     }
     
