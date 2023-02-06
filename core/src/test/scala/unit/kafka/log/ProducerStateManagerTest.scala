@@ -192,7 +192,7 @@ class ProducerStateManagerTest {
 
     // should be able to append with the new epoch if we start at sequence 0
     append(stateManager, producerId, bumpedProducerEpoch, 0, 2L)
-    assertEquals(Optional.of(0), stateManager.lastEntry(producerId).map(_.firstSeq))
+    assertEquals(Optional.of(0L), stateManager.lastEntry(producerId).map[Long](_.firstSeq))
   }
 
   @Test

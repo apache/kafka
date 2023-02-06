@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import java.io.File;
+import java.text.NumberFormat;
+
 public final class LogFileUtils {
     public static final String PRODUCER_SNAPSHOT_FILE_SUFFIX = ".snapshot";
     public static final String DELETED_FILE_SUFFIX = ".deleted";
@@ -32,6 +35,33 @@ public final class LogFileUtils {
      */
     public static long offsetFromFileName(String fileName) {
         return Long.parseLong(fileName.substring(0, fileName.indexOf('.')));
+    }
+
+    /**
+     * Returns a File instance with parent directory as logDir and the file name as producer snapshot file for the
+     * given offset.
+     *
+     * @param logDir parent directory for the snapshot file
+     * @param offset offset number for the snapshot file
+     * @return a File instance for producer snapshot.
+     */
+    public static File producerSnapshotFile(File logDir, long offset) {
+        return new File(logDir, filenamePrefixFromOffset(offset) + LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
+    }
+
+    /**
+     * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
+     * so that ls sorts the files numerically.
+     *
+     * @param offset The offset to use in the file name
+     * @return The filename
+     */
+    private static String filenamePrefixFromOffset(long offset) {
+        NumberFormat nf = NumberFormat.getInstance();
+        nf.setMinimumIntegerDigits(20);
+        nf.setMaximumFractionDigits(0);
+        nf.setGroupingUsed(false);
+        return nf.format(offset);
     }
 
 }

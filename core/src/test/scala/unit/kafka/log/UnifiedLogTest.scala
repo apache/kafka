@@ -47,9 +47,8 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util.concurrent.{Callable, ConcurrentHashMap, Executors}
-import java.util.{Optional, Properties}
+import java.util.{Optional, OptionalLong, Properties}
 import scala.annotation.nowarn
-import scala.collection.Map
 import scala.collection.mutable.ListBuffer
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._

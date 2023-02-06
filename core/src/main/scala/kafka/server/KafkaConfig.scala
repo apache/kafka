@@ -51,7 +51,6 @@ import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerCo
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
-import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn

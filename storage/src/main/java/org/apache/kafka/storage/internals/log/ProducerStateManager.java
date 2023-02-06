@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,7 +38,6 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -50,7 +48,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
@@ -110,27 +107,28 @@ public class ProducerStateManager {
     private final Logger log;
 
     private final TopicPartition topicPartition;
-    private volatile File logDir;
     private final int maxTransactionTimeoutMs;
     private final ProducerStateManagerConfig producerStateManagerConfig;
     private final Time time;
 
-    private ConcurrentSkipListMap<Long, SnapshotFile> snapshots;
-
     private final Map<Long, ProducerStateEntry> producers = new HashMap<>();
-    private long lastMapOffset = 0L;
-    private long lastSnapOffset = 0L;
-
-    // Keep track of the last timestamp from the oldest transaction. This is used
-    // to detect (approximately) when a transaction has been left hanging on a partition.
-    // We make the field volatile so that it can be safely accessed without a lock.
-    private volatile long oldestTxnLastTimestamp = -1L;
 
     // ongoing transactions sorted by the first offset of the transaction
     private final TreeMap<Long, TxnMetadata> ongoingTxns = new TreeMap<>();
 
     // completed transactions whose markers are at offsets above the high watermark
     private final TreeMap<Long, TxnMetadata> unreplicatedTxns = new TreeMap<>();
+
+    private volatile File logDir;
+
+    // Keep track of the last timestamp from the oldest transaction. This is used
+    // to detect (approximately) when a transaction has been left hanging on a partition.
+    // We make the field volatile so that it can be safely accessed without a lock.
+    private volatile long oldestTxnLastTimestamp = -1L;
+
+    private ConcurrentSkipListMap<Long, SnapshotFile> snapshots;
+    private long lastMapOffset = 0L;
+    private long lastSnapOffset = 0L;
 
     public ProducerStateManager(TopicPartition topicPartition, File logDir, int maxTransactionTimeoutMs, ProducerStateManagerConfig producerStateManagerConfig, Time time) throws IOException {
         this.topicPartition = topicPartition;
@@ -150,6 +148,9 @@ public class ProducerStateManager {
         return producerStateManagerConfig;
     }
 
+    /**
+     * This method checks whether there is a late transaction in a thread safe manner.
+     */
     public boolean hasLateTransaction(long currentTimeMs) {
         long lastTimestamp = oldestTxnLastTimestamp;
         return lastTimestamp > 0 && (currentTimeMs - lastTimestamp) > maxTransactionTimeoutMs + ProducerStateManager.LATE_TRANSACTION_BUFFER_MS;
@@ -230,14 +231,15 @@ public class ProducerStateManager {
     public Optional<LogOffsetMetadata> firstUnstableOffset() {
         Optional<LogOffsetMetadata> unreplicatedFirstOffset = Optional.ofNullable(unreplicatedTxns.firstEntry()).map(e -> e.getValue().firstOffset);
         Optional<LogOffsetMetadata> undecidedFirstOffset = Optional.ofNullable(ongoingTxns.firstEntry()).map(e -> e.getValue().firstOffset);
-        Optional<LogOffsetMetadata> result;
-        if (!unreplicatedFirstOffset.isPresent()) result = undecidedFirstOffset;
-        else if (!undecidedFirstOffset.isPresent()) result = unreplicatedFirstOffset;
-        else if (undecidedFirstOffset.get().messageOffset < unreplicatedFirstOffset.get().messageOffset)
-            result = undecidedFirstOffset;
-        else result = unreplicatedFirstOffset;
 
-        return result;
+        if (!unreplicatedFirstOffset.isPresent())
+            return undecidedFirstOffset;
+        else if (!undecidedFirstOffset.isPresent())
+            return unreplicatedFirstOffset;
+        else if (undecidedFirstOffset.get().messageOffset < unreplicatedFirstOffset.get().messageOffset)
+            return undecidedFirstOffset;
+        else
+            return unreplicatedFirstOffset;
     }
 
     /**
@@ -283,7 +285,7 @@ public class ProducerStateManager {
             if (latestSnapshotFileOptional.isPresent()) {
                 SnapshotFile snapshot = latestSnapshotFileOptional.get();
                 try {
-                    log.info("Loading producer state from snapshot file '{}'", snapshot.file());
+                    log.info("Loading producer state from snapshot file '{}'", snapshot);
                     Stream<ProducerStateEntry> loadedProducers = readSnapshot(snapshot.file()).stream().filter(producerEntry -> !isProducerExpired(currentTime, producerEntry));
                     loadedProducers.forEach(this::loadProducerEntry);
                     lastSnapOffset = snapshot.offset;
@@ -303,6 +305,7 @@ public class ProducerStateManager {
         }
     }
 
+    // Visible for testing
     public void loadProducerEntry(ProducerStateEntry entry) {
         long producerId = entry.producerId();
         producers.put(producerId, entry);
@@ -317,10 +320,11 @@ public class ProducerStateManager {
      * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
      */
     public void removeExpiredProducers(long currentTimeMs) {
-        Set<Long> keys = producers.entrySet().stream().filter(entry -> isProducerExpired(currentTimeMs, entry.getValue())).map(Map.Entry::getKey).collect(Collectors.toSet());
-        for (Long key : keys) {
-            producers.remove(key);
-        }
+        List<Long> keys = producers.entrySet().stream()
+                .filter(entry -> isProducerExpired(currentTimeMs, entry.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+        producers.keySet().removeAll(keys);
     }
 
     /**
@@ -368,9 +372,9 @@ public class ProducerStateManager {
 
         log.trace("Updated producer {} state to {}", appendInfo.producerId(), appendInfo);
         ProducerStateEntry updatedEntry = appendInfo.toEntry();
-        ProducerStateEntry producerStateEntry = producers.get(appendInfo.producerId());
-        if (producerStateEntry != null) {
-            producerStateEntry.update(updatedEntry);
+        ProducerStateEntry currentEntry = producers.get(appendInfo.producerId());
+        if (currentEntry != null) {
+            currentEntry.update(updatedEntry);
         } else {
             producers.put(appendInfo.producerId(), updatedEntry);
         }
@@ -409,7 +413,7 @@ public class ProducerStateManager {
     public void takeSnapshot() throws IOException {
         // If not a new offset, then it is not worth taking another snapshot
         if (lastMapOffset > lastSnapOffset) {
-            SnapshotFile snapshotFile = new SnapshotFile(producerSnapshotFile(logDir, lastMapOffset));
+            SnapshotFile snapshotFile = new SnapshotFile(LogFileUtils.producerSnapshotFile(logDir, lastMapOffset));
             long start = time.hiResClockMs();
             writeSnapshot(snapshotFile.file(), producers);
             log.info("Wrote producer snapshot at offset {} with {} producer ids in {} ms.", lastMapOffset,
@@ -420,25 +424,6 @@ public class ProducerStateManager {
             // Update the last snap offset according to the serialized map
             lastSnapOffset = lastMapOffset;
         }
-    }
-
-    private File producerSnapshotFile(File logDir, long offset) {
-        return new File(logDir, filenamePrefixFromOffset(offset) + LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
-    }
-
-    /**
-     * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
-     * so that ls sorts the files numerically.
-     *
-     * @param offset The offset to use in the file name
-     * @return The filename
-     */
-    private String filenamePrefixFromOffset(long offset) {
-        NumberFormat nf = NumberFormat.getInstance();
-        nf.setMinimumIntegerDigits(20);
-        nf.setMaximumFractionDigits(0);
-        nf.setGroupingUsed(false);
-        return nf.format(offset);
     }
 
     /**
@@ -541,6 +526,12 @@ public class ProducerStateManager {
         updateOldestTxnTimestamp();
     }
 
+    /**
+     * Deletes the producer snapshot files until the given offset(exclusive) in a thread safe manner.
+     *
+     * @param offset offset number
+     * @throws IOException if any IOException while deleting the files.
+     */
     public void deleteSnapshotsBefore(long offset) throws IOException {
         for (SnapshotFile snapshot : snapshots.subMap(0L, offset).values()) {
             removeAndDeleteSnapshot(snapshot.offset);
@@ -570,7 +561,7 @@ public class ProducerStateManager {
      * <p>
      * Note: This method is safe to use with async deletes. If a race occurs and the snapshot file
      * is deleted without this ProducerStateManager instance knowing, the resulting exception on
-     * SnapshotFile rename will be ignored and None will be returned.
+     * SnapshotFile rename will be ignored and {@link Optional#empty()} will be returned.
      */
     public Optional<SnapshotFile> removeAndMarkSnapshotForDeletion(long snapshotOffset) throws IOException {
         SnapshotFile snapshotFile = snapshots.remove(snapshotOffset);
@@ -619,10 +610,11 @@ public class ProducerStateManager {
                 int offsetDelta = producerEntryStruct.getInt(OFFSET_DELTA_FIELD);
                 int coordinatorEpoch = producerEntryStruct.getInt(COORDINATOR_EPOCH_FIELD);
                 long currentTxnFirstOffset = producerEntryStruct.getLong(CURRENT_TXN_FIRST_OFFSET_FIELD);
+
+                OptionalLong currentTxnFirstOffsetVal = currentTxnFirstOffset >= 0 ? OptionalLong.of(currentTxnFirstOffset) : OptionalLong.empty();
                 Optional<BatchMetadata> batchMetadata =
                         (offset >= 0) ? Optional.of(new BatchMetadata(seq, offset, offsetDelta, timestamp)) : Optional.empty();
-
-                entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, (currentTxnFirstOffset >= 0) ? OptionalLong.of(currentTxnFirstOffset) : OptionalLong.empty(), batchMetadata));
+                entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata));
             }
 
             return entries;
@@ -635,7 +627,8 @@ public class ProducerStateManager {
         Struct struct = new Struct(PID_SNAPSHOT_MAP_SCHEMA);
         struct.set(VERSION_FIELD, PRODUCER_SNAPSHOT_VERSION);
         struct.set(CRC_FIELD, 0L); // we'll fill this after writing the entries
-        List<Struct> structEntries = new ArrayList<>(entries.size());
+        Struct[] structEntries = new Struct[entries.size()];
+        int i = 0;
         for (Map.Entry<Long, ProducerStateEntry> producerIdEntry : entries.entrySet()) {
             Long producerId = producerIdEntry.getKey();
             ProducerStateEntry entry = producerIdEntry.getValue();
@@ -648,9 +641,9 @@ public class ProducerStateManager {
                     .set(TIMESTAMP_FIELD, entry.lastTimestamp())
                     .set(COORDINATOR_EPOCH_FIELD, entry.coordinatorEpoch())
                     .set(CURRENT_TXN_FIRST_OFFSET_FIELD, entry.currentTxnFirstOffset().orElse(-1L));
-            structEntries.add(producerEntryStruct);
+            structEntries[i++] = producerEntryStruct;
         }
-        struct.set(PRODUCER_ENTRIES_FIELD, structEntries.toArray());
+        struct.set(PRODUCER_ENTRIES_FIELD, structEntries);
 
         ByteBuffer buffer = ByteBuffer.allocate(struct.sizeOf());
         struct.writeTo(buffer);
@@ -666,18 +659,17 @@ public class ProducerStateManager {
         }
     }
 
-    private static boolean isSnapshotFile(File file) {
-        return file.getName().endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
+    private static boolean isSnapshotFile(Path path) {
+        File file = path.toFile();
+        return file.isFile() && file.getName().endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
     }
 
     // visible for testing
     public static List<SnapshotFile> listSnapshotFiles(File dir) throws IOException {
         if (dir.exists() && dir.isDirectory()) {
             try (Stream<Path> paths = Files.list(dir.toPath())) {
-                return paths.filter(path -> {
-                    File file = path.toFile();
-                    return file.isFile() && isSnapshotFile(file);
-                }).map(path -> new SnapshotFile(path.toFile())).collect(Collectors.toList());
+                return paths.filter(ProducerStateManager::isSnapshotFile)
+                        .map(path -> new SnapshotFile(path.toFile())).collect(Collectors.toList());
             }
         } else {
             return Collections.emptyList();
