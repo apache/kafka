@@ -25,48 +25,57 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 public class LogDirsCommand {
 
-    public static void main(String[] args) {
+    public static void main(String... args) {
+        Exit.exit(mainNoExit(args));
+    }
+
+    static int mainNoExit(String... args) {
         try {
             LogDirsCommandOptions logDirsCommandOptions = new LogDirsCommandOptions(args);
             try (Admin adminClient = createAdminClient(logDirsCommandOptions)) {
-                Set<String> topicList = Arrays.stream(logDirsCommandOptions.options.valueOf(logDirsCommandOptions.topicListOpt).split(",")).filter(x -> !x.isEmpty()).collect(Collectors.toSet());
-                Set<Integer> clusterBrokers = adminClient.describeCluster().nodes().get().stream().map(Node::id).collect(Collectors.toSet());
-                String brokers = logDirsCommandOptions.options.valueOf(logDirsCommandOptions.brokerListOpt);
-                Set<Integer> inputBrokers = Arrays.stream(brokers.split(",")).filter(x -> !x.isEmpty()).map(Integer::valueOf).collect(Collectors.toSet());
-                Set<Integer> existingBrokers = new HashSet<>(inputBrokers);
-                existingBrokers.retainAll(clusterBrokers);
-                Set<Integer> nonExistingBrokers = new HashSet<>(inputBrokers);
-                nonExistingBrokers.removeAll(clusterBrokers);
-
-                if (!nonExistingBrokers.isEmpty()) {
-                    System.out.printf(
-                            "ERROR: The given brokers do not exist from --broker-list: {}. Current existent brokers: {}",
-                            nonExistingBrokers.stream().map(String::valueOf).collect(Collectors.joining(",")),
-                            clusterBrokers.stream().map(String::valueOf).collect(Collectors.joining(",")));
-                } else {
-                    System.out.println("Querying brokers for log directories information");
-                    DescribeLogDirsResult describeLogDirsResult = adminClient.describeLogDirs(existingBrokers);
-                    Map<Integer, Map<String, LogDirDescription>> logDirInfosByBroker = describeLogDirsResult.allDescriptions().get();
-
-                    System.out.printf(
-                            "Received log directory information from brokers {}",
-                            existingBrokers.stream().map(String::valueOf).collect(Collectors.joining(",")));
-                    System.out.println(formatAsJson(logDirInfosByBroker, topicList));
-                }
+                execute(logDirsCommandOptions, adminClient);
             }
-
-            Exit.exit(0);
-//        } catch (TerseException e) {
-//            System.err.println(e.getMessage());
-//            Exit.exit(1);
+            return 0;
+        } catch (TerseException e) {
+            System.err.println(e.getMessage());
+            return 1;
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
-            Exit.exit(1);
+            return 1;
+        }
+    }
+
+    static void execute(LogDirsCommandOptions logDirsCommandOptions, Admin adminClient) throws TerseException, JsonProcessingException, ExecutionException, InterruptedException {
+        Set<String> topicList = Arrays.stream(logDirsCommandOptions.options.valueOf(logDirsCommandOptions.topicListOpt).split(",")).filter(x -> !x.isEmpty()).collect(Collectors.toSet());
+        Set<Integer> clusterBrokers = adminClient.describeCluster().nodes().get().stream().map(Node::id).collect(Collectors.toSet());
+        Optional<String> brokers = Optional.ofNullable(logDirsCommandOptions.options.valueOf(logDirsCommandOptions.brokerListOpt));
+        Set<Integer> inputBrokers = Arrays.stream(brokers.orElse("").split(",")).filter(x -> !x.isEmpty()).map(Integer::valueOf).collect(Collectors.toSet());
+        Set<Integer> existingBrokers = inputBrokers.isEmpty() ? new HashSet<>(clusterBrokers): new HashSet<>(inputBrokers);
+        existingBrokers.retainAll(clusterBrokers);
+        Set<Integer> nonExistingBrokers = new HashSet<>(inputBrokers);
+        nonExistingBrokers.removeAll(clusterBrokers);
+
+        if (!nonExistingBrokers.isEmpty()) {
+            throw new TerseException(
+                    String.format(
+                            "ERROR: The given brokers do not exist from --broker-list: %s. Current existent brokers: %s\n",
+                            nonExistingBrokers.stream().map(String::valueOf).collect(Collectors.joining(",")),
+                            clusterBrokers.stream().map(String::valueOf).collect(Collectors.joining(","))));
+        } else {
+            System.out.println("Querying brokers for log directories information");
+            DescribeLogDirsResult describeLogDirsResult = adminClient.describeLogDirs(existingBrokers);
+            Map<Integer, Map<String, LogDirDescription>> logDirInfosByBroker = describeLogDirsResult.allDescriptions().get();
+
+            System.out.printf(
+                    "Received log directory information from brokers %s\n",
+                    existingBrokers.stream().map(String::valueOf).collect(Collectors.joining(",")));
+            System.out.println(formatAsJson(logDirInfosByBroker, topicList));
         }
     }
 
@@ -89,7 +98,7 @@ public class LogDirsCommand {
             LogDirDescription logDirInfo = entry.getValue();
             return new HashMap<String, Object>() {{
                 put("logDir", logDir);
-                put("error", Optional.of(logDirInfo.error()).map(ex -> ex.getClass().getName()));
+                put("error", Optional.ofNullable(logDirInfo.error()).map(ex -> ex.getClass().getName()));
                 put("partitions", fromReplicasInfoToPrintableRepresentation(
                         logDirInfo.replicaInfos().entrySet().stream().filter(entry -> {
                             TopicPartition topicPartition = entry.getKey();
@@ -124,14 +133,15 @@ public class LogDirsCommand {
         return Admin.create(props);
     }
 
-    private static class LogDirsCommandOptions extends CommandDefaultOptions {
+    // Visible for testing
+    static class LogDirsCommandOptions extends CommandDefaultOptions {
         private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpec<String> commandConfigOpt;
         private final OptionSpecBuilder describeOpt;
         private final OptionSpec<String> topicListOpt;
         private final OptionSpec<String> brokerListOpt;
 
-        public LogDirsCommandOptions(String[] args) {
+        public LogDirsCommandOptions(String... args) {
             super(args);
 
             bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: the server(s) to use for bootstrapping")
