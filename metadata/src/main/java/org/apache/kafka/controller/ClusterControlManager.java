@@ -420,6 +420,7 @@ public class ClusterControlManager {
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
 
+
         // Update broker registrations.
         BrokerRegistration prevRegistration = brokerRegistrations.put(brokerId,
                 new BrokerRegistration(brokerId, record.brokerEpoch(),

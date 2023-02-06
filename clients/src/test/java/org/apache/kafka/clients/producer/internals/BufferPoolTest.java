@@ -294,7 +294,7 @@ public class BufferPoolTest {
         final int poolableSize = 1024;
         final long totalMemory = numThreads / 2 * poolableSize;
         final BufferPool pool = new BufferPool(totalMemory, poolableSize, metrics, time, metricGroup);
-        List<StressTestThread> threads = new ArrayList<StressTestThread>();
+        List<StressTestThread> threads = new ArrayList<>();
         for (int i = 0; i < numThreads; i++)
             threads.add(new StressTestThread(pool, iterations));
         for (StressTestThread thread : threads)
@@ -409,12 +409,10 @@ public class BufferPoolTest {
         ByteBuffer buffer = pool.allocate(1, Long.MAX_VALUE);
 
         ExecutorService executor = Executors.newFixedThreadPool(numWorkers);
-        Callable<Void> work = new Callable<Void>() {
-                public Void call() throws Exception {
-                    assertThrows(KafkaException.class, () -> pool.allocate(1, Long.MAX_VALUE));
-                    return null;
-                }
-            };
+        Callable<Void> work = () -> {
+            assertThrows(KafkaException.class, () -> pool.allocate(1, Long.MAX_VALUE));
+            return null;
+        };
         for (int i = 0; i < numWorkers; ++i) {
             executor.submit(work);
         }

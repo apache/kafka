@@ -59,7 +59,7 @@ class BrokerLifecycleManagerTest {
 
     def listenerName: ListenerName = new ListenerName("PLAINTEXT")
 
-    def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT;
+    def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
 
     def saslMechanism: String = SaslConfigs.DEFAULT_SASL_MECHANISM
 
@@ -98,14 +98,14 @@ class BrokerLifecycleManagerTest {
   @Test
   def testCreateAndClose(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    val manager = new BrokerLifecycleManager(context.config, context.time, None, isZkBroker = false)
     manager.close()
   }
 
   @Test
   def testCreateStartAndClose(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    val manager = new BrokerLifecycleManager(context.config, context.time, None, isZkBroker = false)
     assertEquals(BrokerState.NOT_RUNNING, manager.state)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
@@ -120,7 +120,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testSuccessfulRegistration(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    val manager = new BrokerLifecycleManager(context.config, context.time, None, isZkBroker = false)
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
@@ -140,7 +140,7 @@ class BrokerLifecycleManagerTest {
   def testRegistrationTimeout(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
     val controllerNode = new Node(3000, "localhost", 8021)
-    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    val manager = new BrokerLifecycleManager(context.config, context.time, None, isZkBroker = false)
     context.controllerNodeProvider.node.set(controllerNode)
     def newDuplicateRegistrationResponse(): Unit = {
       context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
@@ -181,7 +181,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testControlledShutdown(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    val manager = new BrokerLifecycleManager(context.config, context.time, None, isZkBroker = false)
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(

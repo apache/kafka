@@ -23,16 +23,17 @@ import java.text.NumberFormat
 import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.FetchDataInfo
-import kafka.utils.{Logging, Scheduler}
+import kafka.utils.Logging
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.log.internals.LogFileUtils.offsetFromFileName
-import org.apache.kafka.server.log.internals.{AbortedTxn, LogConfig, LogDirFailureChannel, LogOffsetMetadata, OffsetPosition}
+import org.apache.kafka.server.log.internals.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, OffsetPosition}
+import org.apache.kafka.server.util.Scheduler
 
+import java.util.{Collections, Optional}
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, immutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -427,7 +428,7 @@ class LocalLog(@volatile private var _dir: File,
           // okay we are beyond the end of the last segment with no data fetched although the start offset is in range,
           // this can happen when all messages with offset larger than start offsets have been deleted.
           // In this case, we will return the empty set with log end offset metadata
-          FetchDataInfo(nextOffsetMetadata, MemoryRecords.EMPTY)
+          new FetchDataInfo(nextOffsetMetadata, MemoryRecords.EMPTY)
         }
       }
     }
@@ -452,10 +453,10 @@ class LocalLog(@volatile private var _dir: File,
     def accumulator(abortedTxns: Seq[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)
     collectAbortedTransactions(startOffset, upperBoundOffset, segment, accumulator)
 
-    FetchDataInfo(fetchOffsetMetadata = fetchInfo.fetchOffsetMetadata,
-      records = fetchInfo.records,
-      firstEntryIncomplete = fetchInfo.firstEntryIncomplete,
-      abortedTransactions = Some(abortedTransactions.toList))
+    new FetchDataInfo(fetchInfo.fetchOffsetMetadata,
+      fetchInfo.records,
+      fetchInfo.firstEntryIncomplete,
+      Optional.of(abortedTransactions.toList.asJava))
   }
 
   private def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long,
@@ -998,19 +999,20 @@ object LocalLog extends Logging {
     }
 
     if (asyncDelete)
-      scheduler.schedule("delete-file", () => deleteSegments(), delay = config.fileDeleteDelayMs)
+      scheduler.scheduleOnce("delete-file", () => deleteSegments(), config.fileDeleteDelayMs)
     else
       deleteSegments()
   }
 
   private[log] def emptyFetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
                                       includeAbortedTxns: Boolean): FetchDataInfo = {
-    val abortedTransactions =
-      if (includeAbortedTxns) Some(List.empty[FetchResponseData.AbortedTransaction])
-      else None
-    FetchDataInfo(fetchOffsetMetadata,
+    val abortedTransactions: Optional[java.util.List[FetchResponseData.AbortedTransaction]] =
+      if (includeAbortedTxns) Optional.of(Collections.emptyList())
+      else Optional.empty()
+    new FetchDataInfo(fetchOffsetMetadata,
       MemoryRecords.EMPTY,
-      abortedTransactions = abortedTransactions)
+      false,
+      abortedTransactions)
   }
 
   private[log] def createNewCleanedSegment(dir: File, logConfig: LogConfig, baseOffset: Long): LogSegment = {

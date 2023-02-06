@@ -115,7 +115,7 @@ public class RetryTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testUseMaxTimeout() throws IOException {
+    public void testUseMaxTimeout() {
         Exception[] attempts = new Exception[] {
             new IOException("pretend connect error"),
             new IOException("pretend timeout error"),

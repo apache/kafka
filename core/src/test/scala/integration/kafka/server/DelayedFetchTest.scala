@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.util.Optional
-
 import scala.collection.Seq
 import kafka.cluster.Partition
 import kafka.log.LogOffsetSnapshot
@@ -27,7 +26,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.server.log.internals.LogOffsetMetadata
+import org.apache.kafka.server.log.internals.{FetchDataInfo, FetchIsolation, FetchParams, FetchPartitionData, LogOffsetMetadata}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 import org.mockito.ArgumentMatchers.{any, anyInt}
@@ -172,14 +171,14 @@ class DelayedFetchTest {
     replicaId: Int,
     maxWaitMs: Int
   ): FetchParams = {
-    FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = replicaId,
-      maxWaitMs = maxWaitMs,
-      minBytes = 1,
-      maxBytes = maxBytes,
-      isolation = FetchLogEnd,
-      clientMetadata = None
+    new FetchParams(
+      ApiKeys.FETCH.latestVersion,
+      replicaId,
+      maxWaitMs,
+      1,
+      maxBytes,
+      FetchIsolation.LOG_END,
+      Optional.empty()
     )
   }
 
@@ -200,7 +199,7 @@ class DelayedFetchTest {
   private def buildReadResult(error: Errors): LogReadResult = {
     LogReadResult(
       exception = if (error != Errors.NONE) Some(error.exception) else None,
-      info = FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
+      info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
       divergingEpoch = None,
       highWatermark = -1L,
       leaderLogStartOffset = -1L,

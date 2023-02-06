@@ -109,7 +109,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
     }
 
     TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DefaultOffsetsTopicNumPartitions,
-      replicationFactor = 2, servers, servers.head.groupCoordinator.offsetsTopicConfigs)
+      replicationFactor = 2, servers, servers.head.groupCoordinator.groupMetadataTopicConfigs)
 
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
 

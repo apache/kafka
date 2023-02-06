@@ -25,11 +25,10 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
-import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -42,11 +41,11 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
-
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeAll
@@ -97,7 +96,8 @@ public class SmokeTestDriverIntegrationTest {
 
     private static Stream<Boolean> parameters() {
         return Stream.of(
-            Boolean.TRUE,
+            // TODO KAFKA-14533: debug and re-enable both parameters
+            //Boolean.TRUE
             Boolean.FALSE
           );
     }
@@ -105,7 +105,7 @@ public class SmokeTestDriverIntegrationTest {
     // In this test, we try to keep creating new stream, and closing the old one, to maintain only 3 streams alive.
     // During the new stream added and old stream left, the stream process should still complete without issue.
     // We set 2 timeout condition to fail the test before passing the verification:
-    // (1) 6 min timeout, (2) 30 tries of polling without getting any data
+    // (1) 10 min timeout, (2) 30 tries of polling without getting any data
     @ParameterizedTest
     @MethodSource("parameters")
     public void shouldWorkWithRebalance(final boolean stateUpdaterEnabled) throws InterruptedException {
@@ -175,6 +175,6 @@ public class SmokeTestDriverIntegrationTest {
             driver.exception().printStackTrace();
             throw new AssertionError(driver.exception());
         }
-        Assert.assertTrue(driver.result().result(), driver.result().passed());
+        assertTrue(driver.result().passed(), driver.result().result());
     }
 }

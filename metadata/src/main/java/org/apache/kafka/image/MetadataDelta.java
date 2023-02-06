@@ -206,6 +206,9 @@ public final class MetadataDelta {
                  * updating the highest offset and epoch.
                  */
                 break;
+            case ZK_MIGRATION_STATE_RECORD:
+                // TODO handle this
+                break;
             default:
                 throw new RuntimeException("Unknown metadata record type " + type);
         }

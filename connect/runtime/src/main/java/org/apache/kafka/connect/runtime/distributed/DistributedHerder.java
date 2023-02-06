@@ -100,6 +100,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -160,7 +161,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private final String workerGroupId;
     private final int workerSyncTimeoutMs;
-    private final long workerTasksShutdownTimeoutMs;
     private final int workerUnsyncBackoffMs;
     private final int keyRotationIntervalMs;
     private final String requestSignatureAlgorithm;
@@ -171,7 +171,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // Visible for testing
     ExecutorService forwardRequestExecutor;
     private final ExecutorService herderExecutor;
-    private final ExecutorService startAndStopExecutor;
+    // Visible for testing
+    ExecutorService startAndStopExecutor;
     private final WorkerGroupMember member;
     private final AtomicBoolean stopping;
     private final boolean isTopicTrackingEnabled;
@@ -270,7 +271,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.herderMetrics = new HerderMetrics(metrics);
         this.workerGroupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
         this.workerSyncTimeoutMs = config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
-        this.workerTasksShutdownTimeoutMs = config.getLong(DistributedConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
         this.workerUnsyncBackoffMs = config.getInt(DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
         this.requestSignatureAlgorithm = config.getString(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG);
         this.keyRotationIntervalMs = config.getInt(DistributedConfig.INTER_WORKER_KEY_TTL_MS_CONFIG);
@@ -748,14 +748,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         synchronized (this) {
             // Clean up any connectors and tasks that are still running.
             log.info("Stopping connectors and tasks that are still assigned to this worker.");
-            List<Callable<Void>> callables = new ArrayList<>();
-            for (String connectorName : new ArrayList<>(worker.connectorNames())) {
-                callables.add(getConnectorStoppingCallable(connectorName));
-            }
-            for (ConnectorTaskId taskId : new ArrayList<>(worker.taskIds())) {
-                callables.add(getTaskStoppingCallable(taskId));
-            }
-            startAndStop(callables);
+            worker.stopAndAwaitConnectors();
+            worker.stopAndAwaitTasks();
 
             member.stop();
 
@@ -780,6 +774,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    // Timeout for herderExecutor to gracefully terminate is set to a value to accommodate
+    // reading to the end of the config topic + successfully attempting to stop all connectors and tasks and a buffer of 10s
+    private long herderExecutorTimeoutMs() {
+        return this.workerSyncTimeoutMs +
+                config.getLong(DistributedConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG) +
+                Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS + 10000;
+    }
+
     @Override
     public void stop() {
         log.info("Herder stopping");
@@ -788,7 +790,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         member.wakeup();
         herderExecutor.shutdown();
         try {
-            if (!herderExecutor.awaitTermination(workerTasksShutdownTimeoutMs, TimeUnit.MILLISECONDS))
+            if (!herderExecutor.awaitTermination(herderExecutorTimeoutMs(), TimeUnit.MILLISECONDS))
                 herderExecutor.shutdownNow();
 
             forwardRequestExecutor.shutdown();
@@ -942,18 +944,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         if (exactlyOnceSupport == null) {
                             validationErrorMessage = "The connector does not implement the API required for preflight validation of exactly-once "
                                     + "source support. Please consult the documentation for the connector to determine whether it supports exactly-once "
-                                    + "guarantees, and then consider reconfiguring the connector to use the value \""
+                                    + "semantics, and then consider reconfiguring the connector to use the value \""
                                     + SourceConnectorConfig.ExactlyOnceSupportLevel.REQUESTED
                                     + "\" for this property (which will disable this preflight check and allow the connector to be created).";
                         } else if (ExactlyOnceSupport.UNSUPPORTED.equals(exactlyOnceSupport)) {
-                            validationErrorMessage = "The connector does not support exactly-once delivery guarantees with the provided configuration.";
+                            validationErrorMessage = "The connector does not support exactly-once semantics with the provided configuration.";
                         } else {
                             throw new ConnectException("Unexpected value returned from SourceConnector::exactlyOnceSupport: " + exactlyOnceSupport);
                         }
                         validatedExactlyOnceSupport.addErrorMessage(validationErrorMessage);
                     }
                 } catch (Exception e) {
-                    log.error("Failed while validating connector support for exactly-once guarantees", e);
+                    log.error("Failed while validating connector support for exactly-once semantics", e);
                     String validationErrorMessage = "An unexpected error occurred during validation";
                     String failureMessage = e.getMessage();
                     if (failureMessage != null && !failureMessage.trim().isEmpty()) {
@@ -1063,7 +1065,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             // Note that we use the updated connector config despite the fact that we don't have an updated
                             // snapshot yet. The existing task info should still be accurate.
                             ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                                // validateConnectorConfig have checked the existence of CONNECTOR_CLASS_CONFIG
                                 connectorType(config));
                             callback.onCompletion(null, new Created<>(!exists, info));
                             return null;
@@ -1658,11 +1659,20 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         backoffRetries = BACKOFF_RETRIES;
     }
 
-    private void startAndStop(Collection<Callable<Void>> callables) {
+    // Visible for testing
+    void startAndStop(Collection<Callable<Void>> callables) {
         try {
             startAndStopExecutor.invokeAll(callables);
         } catch (InterruptedException e) {
             // ignore
+        } catch (RejectedExecutionException e) {
+            // Shutting down. Just log the exception
+            if (stopping.get()) {
+                log.debug("Ignoring RejectedExecutionException thrown while starting/stopping connectors/tasks en masse " +
+                        "as the herder is already in the process of shutting down. This is not indicative of a problem and is normal behavior");
+            } else {
+                throw e;
+            }
         }
     }
 

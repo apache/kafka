@@ -18,10 +18,10 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.{KafkaScheduler, Logging, Scheduler}
+import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicIdPartition
@@ -36,6 +36,7 @@ import org.apache.kafka.common.requests.{AlterPartitionRequest, AlterPartitionRe
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.util.Scheduler
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -77,7 +78,7 @@ object AlterPartitionManager {
   def apply(
     config: KafkaConfig,
     metadataCache: MetadataCache,
-    scheduler: KafkaScheduler,
+    scheduler: Scheduler,
     controllerNodeProvider: ControllerNodeProvider,
     time: Time,
     metrics: Metrics,
@@ -226,7 +227,7 @@ class DefaultAlterPartitionManager(
                 maybePropagateIsrChanges()
               case _ =>
                 // If we received a top-level error from the controller, retry the request in the near future
-                scheduler.schedule("send-alter-partition", () => maybePropagateIsrChanges(), 50, -1, TimeUnit.MILLISECONDS)
+                scheduler.scheduleOnce("send-alter-partition", () => maybePropagateIsrChanges(), 50)
             }
         }
 

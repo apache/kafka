@@ -229,7 +229,7 @@ public class StandbyTaskEOSIntegrationTest {
         streamInstanceTwo = buildWithDeduplicationTopology(base + "-2");
 
         // start first instance and wait for processing
-        startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceOne), Duration.ofSeconds(30));
+        startApplicationAndWaitUntilRunning(streamInstanceOne);
         IntegrationTestUtils.waitUntilMinRecordsReceived(
             TestUtils.consumerConfig(
                 CLUSTER.bootstrapServers(),
@@ -241,7 +241,7 @@ public class StandbyTaskEOSIntegrationTest {
         );
 
         // start second instance and wait for standby replication
-        startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceTwo), Duration.ofSeconds(30));
+        startApplicationAndWaitUntilRunning(streamInstanceTwo);
         waitForCondition(
             () -> streamInstanceTwo.store(
                 StoreQueryParameters.fromNameAndType(
@@ -297,10 +297,7 @@ public class StandbyTaskEOSIntegrationTest {
 
         // "restart" first client and wait for standby recovery
         // (could actually also be active, but it does not matter as long as we enable "state stores"
-        startApplicationAndWaitUntilRunning(
-            Collections.singletonList(streamInstanceOneRecovery),
-            Duration.ofSeconds(30)
-        );
+        startApplicationAndWaitUntilRunning(streamInstanceOneRecovery);
         waitForCondition(
             () -> streamInstanceOneRecovery.store(
                 StoreQueryParameters.fromNameAndType(

@@ -147,7 +147,7 @@ public class KafkaFutureTest {
     }
 
     @Test
-    public void testCompleteFuturesExceptionally() throws Exception {
+    public void testCompleteFuturesExceptionally() {
         KafkaFutureImpl<Integer> futureFail = new KafkaFutureImpl<>();
         assertTrue(futureFail.completeExceptionally(new RuntimeException("We require more vespene gas")));
         assertIsFailed(futureFail);

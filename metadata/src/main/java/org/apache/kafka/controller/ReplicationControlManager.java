@@ -536,25 +536,33 @@ public class ReplicationControlManager {
                     "Topic '" + t.name() + "' already exists.")));
 
         // Verify that the configurations for the new topics are OK, and figure out what
-        // ConfigRecords should be created.
+        // configurations should be created.
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges =
             computeConfigChanges(topicErrors, request.topics());
-        ControllerResult<Map<ConfigResource, ApiError>> configResult =
-            configurationControl.incrementalAlterConfigs(configChanges, true);
-        for (Entry<ConfigResource, ApiError> entry : configResult.response().entrySet()) {
-            if (entry.getValue().isFailure()) {
-                topicErrors.put(entry.getKey().name(), entry.getValue());
-            }
-        }
-        records.addAll(configResult.records());
 
         // Try to create whatever topics are needed.
         Map<String, CreatableTopicResult> successes = new HashMap<>();
         for (CreatableTopic topic : request.topics()) {
             if (topicErrors.containsKey(topic.name())) continue;
+            // Figure out what ConfigRecords should be created, if any.
+            ConfigResource configResource = new ConfigResource(TOPIC, topic.name());
+            Map<String, Entry<OpType, String>> keyToOps = configChanges.get(configResource);
+            List<ApiMessageAndVersion> configRecords;
+            if (keyToOps != null) {
+                ControllerResult<ApiError> configResult =
+                    configurationControl.incrementalAlterConfig(configResource, keyToOps, true);
+                if (configResult.response().isFailure()) {
+                    topicErrors.put(topic.name(), configResult.response());
+                    continue;
+                } else {
+                    configRecords = configResult.records();
+                }
+            } else {
+                configRecords = Collections.emptyList();
+            }
             ApiError error;
             try {
-                error = createTopic(topic, records, successes, describable.contains(topic.name()));
+                error = createTopic(topic, records, successes, configRecords, describable.contains(topic.name()));
             } catch (ApiException e) {
                 error = ApiError.fromThrowable(e);
             }
@@ -597,6 +605,7 @@ public class ReplicationControlManager {
     private ApiError createTopic(CreatableTopic topic,
                                  List<ApiMessageAndVersion> records,
                                  Map<String, CreatableTopicResult> successes,
+                                 List<ApiMessageAndVersion> configRecords,
                                  boolean authorizedToReturnConfigs) {
         Map<String, String> creationConfigs = translateCreationConfigs(topic.configs());
         Map<Integer, PartitionRegistration> newParts = new HashMap<>();
@@ -725,6 +734,8 @@ public class ReplicationControlManager {
         records.add(new ApiMessageAndVersion(new TopicRecord().
             setName(topic.name()).
             setTopicId(topicId), (short) 0));
+        // ConfigRecords go after TopicRecord but before PartitionRecord(s).
+        records.addAll(configRecords);
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();

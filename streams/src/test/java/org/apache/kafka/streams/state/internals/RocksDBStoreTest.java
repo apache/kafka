@@ -171,6 +171,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         return new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
     }
 
+    private RocksDBStore getRocksDBStoreWithCustomManagedIterators() {
+        return new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder, false);
+    }
+
     private InternalMockProcessorContext getProcessorContext(final Properties streamsProps) {
         return new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
@@ -525,6 +529,69 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
             assertThat(numberOfKeysReturned, is(1));
         }
+    }
+
+    @Test
+    public void shouldAllowCustomManagedIterators() {
+        rocksDBStore = getRocksDBStoreWithCustomManagedIterators();
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        final Set<KeyValueIterator<Bytes, byte[]>> openIterators = new HashSet<>();
+
+        final KeyValueIterator<Bytes, byte[]> prefixScanIterator = rocksDBStore.prefixScan("abcd", stringSerializer, openIterators);
+        assertThat(openIterators.size(), is(1));
+        prefixScanIterator.close();
+        assertThat(openIterators.size(), is(0));
+
+        final KeyValueIterator<Bytes, byte[]> rangeIterator = rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators);
+        assertThat(openIterators.size(), is(1));
+        rangeIterator.close();
+        assertThat(openIterators.size(), is(0));
+
+        final KeyValueIterator<Bytes, byte[]> reverseRangeIterator = rocksDBStore.reverseRange(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators);
+        assertThat(openIterators.size(), is(1));
+        reverseRangeIterator.close();
+        assertThat(openIterators.size(), is(0));
+
+        final KeyValueIterator<Bytes, byte[]> allIterator = rocksDBStore.all(openIterators);
+        assertThat(openIterators.size(), is(1));
+        allIterator.close();
+        assertThat(openIterators.size(), is(0));
+
+        final KeyValueIterator<Bytes, byte[]> reverseAllIterator = rocksDBStore.reverseAll(openIterators);
+        assertThat(openIterators.size(), is(1));
+        reverseAllIterator.close();
+        assertThat(openIterators.size(), is(0));
+    }
+
+    @Test
+    public void shouldRequireOpenIteratorsWhenUsingCustomManagedIterators() {
+        rocksDBStore = getRocksDBStoreWithCustomManagedIterators();
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.prefixScan("abcd", stringSerializer));
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "1"))));
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.reverseRange(null, new Bytes(stringSerializer.serialize(null, "1"))));
+        assertThrows(IllegalStateException.class, () -> rocksDBStore.all());
+        assertThrows(IllegalStateException.class, () -> rocksDBStore.reverseAll());
+    }
+
+    @Test
+    public void shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators() {
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        final Set<KeyValueIterator<Bytes, byte[]>> openIterators = new HashSet<>();
+
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.prefixScan("abcd", stringSerializer, openIterators));
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators));
+        assertThrows(IllegalStateException.class,
+            () -> rocksDBStore.reverseRange(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators));
+        assertThrows(IllegalStateException.class, () -> rocksDBStore.all(openIterators));
+        assertThrows(IllegalStateException.class, () -> rocksDBStore.reverseAll(openIterators));
     }
 
     @Test
