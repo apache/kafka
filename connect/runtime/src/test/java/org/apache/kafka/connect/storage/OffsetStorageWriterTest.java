@@ -33,6 +33,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -43,6 +44,7 @@ import static org.mockito.Mockito.when;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 public class OffsetStorageWriterTest {
     private static final String NAMESPACE = "namespace";
@@ -161,6 +163,42 @@ public class OffsetStorageWriterTest {
         assertTrue(writer.beginFlush());
         writer.doFlush(callback);
         assertThrows(ConnectException.class, writer::beginFlush);
+    }
+
+    @Test
+    public void testWaitForBeginFlush() throws InterruptedException, TimeoutException {
+        @SuppressWarnings("unchecked")
+        final Callback<Void> callback = mock(Callback.class);
+        // Trigger the send, but don't invoke the callback so we'll still be mid-flush
+        CountDownLatch allowStoreCompleteCountdown = new CountDownLatch(1);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, allowStoreCompleteCountdown);
+
+        writer.offset(OFFSET_KEY, OFFSET_VALUE);
+        // first call will begin a flush
+        assertTrue(writer.waitForBeginFlush(() -> 0L, TimeUnit.MILLISECONDS));
+        writer.doFlush(callback);
+        // second call will wait for the first one to be completed (supplier will trigger the completion)
+        assertFalse(writer.waitForBeginFlush(() -> {
+            allowStoreCompleteCountdown.countDown();
+            return 10000L;
+        }, TimeUnit.MILLISECONDS));
+        assertEquals(0, allowStoreCompleteCountdown.getCount());
+    }
+
+    @Test
+    public void testWaitForBeginFlushTimesOut() throws InterruptedException, TimeoutException {
+        @SuppressWarnings("unchecked")
+        final Callback<Void> callback = mock(Callback.class);
+        // Trigger the send, but don't invoke the callback so we'll still be mid-flush
+        CountDownLatch allowStoreCompleteCountdown = new CountDownLatch(1);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, allowStoreCompleteCountdown);
+
+        writer.offset(OFFSET_KEY, OFFSET_VALUE);
+        // first call will begin a flush
+        assertTrue(writer.waitForBeginFlush(() -> 0L, TimeUnit.MILLISECONDS));
+        writer.doFlush(callback);
+        // second call will wait but will time out
+        assertThrows(TimeoutException.class, () -> writer.waitForBeginFlush(() -> 1000L, TimeUnit.MILLISECONDS));
     }
 
     @Test

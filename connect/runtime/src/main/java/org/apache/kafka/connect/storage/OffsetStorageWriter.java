@@ -25,7 +25,12 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 /**
  * <p>
@@ -73,6 +78,7 @@ public class OffsetStorageWriter {
     private Map<Map<String, Object>, Map<String, Object>> data = new HashMap<>();
 
     private Map<Map<String, Object>, Map<String, Object>> toFlush = null;
+    private CompletableFuture<Void> latestFlush = null;
     // Unique ID for each flush request to handle callbacks after timeouts
     private long currentFlushId = 0;
 
@@ -98,6 +104,24 @@ public class OffsetStorageWriter {
         return toFlush != null;
     }
 
+    public boolean waitForBeginFlush(Supplier<Long> timeout, TimeUnit timeUnit) throws InterruptedException, TimeoutException {
+        while (true) {
+            Future<Void> inProgressFlush;
+            synchronized (this) {
+                if (flushing()) {
+                    inProgressFlush = latestFlush;
+                } else {
+                    return beginFlush();
+                }
+            }
+            try {
+                inProgressFlush.get(timeout.get(), timeUnit);
+            } catch (ExecutionException e) {
+                // someone else is responsible for handling this error, we just want to wait for the flush to be over.
+            }
+        }
+    }
+
     /**
      * Performs the first step of a flush operation, snapshotting the current state. This does not
      * actually initiate the flush with the underlying storage.
@@ -116,6 +140,7 @@ public class OffsetStorageWriter {
 
         toFlush = data;
         data = new HashMap<>();
+        latestFlush = new CompletableFuture<>();
         return true;
     }
 
@@ -193,7 +218,9 @@ public class OffsetStorageWriter {
             toFlush.putAll(data);
             data = toFlush;
             currentFlushId++;
+            latestFlush.cancel(false);
             toFlush = null;
+            latestFlush = null;
         }
     }
 
@@ -211,7 +238,9 @@ public class OffsetStorageWriter {
             cancelFlush();
         } else {
             currentFlushId++;
+            latestFlush.complete(null);
             toFlush = null;
+            latestFlush = null;
         }
         return true;
     }
