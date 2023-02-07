@@ -22,10 +22,8 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -34,10 +32,11 @@ import static java.util.Arrays.stream;
 public class ToolsUtils {
 
     public static void validatePortOrDie(OptionParser parser, String hostPort) {
-        String[] hostPorts = hostPort.contains(",") ? hostPort.split(",") : new String[] { hostPort };
+        String[] hostPorts = hostPort.contains(",") ? hostPort.split(",") : new String[] {hostPort};
         boolean isValid = hostPorts.length > 0 && stream(hostPorts).allMatch(hp -> Utils.getPort(hp) != null);
-        if (!isValid)
+        if (!isValid) {
             CommandLineUtils.printUsageAndExit(parser, "Please provide valid host:port like host1:9091,host2:9092\n ");
+        }
     }
 
     /**

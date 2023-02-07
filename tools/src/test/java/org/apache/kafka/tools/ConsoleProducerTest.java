@@ -1,10 +1,26 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.tools;
 
-import kafka.tools.ConsoleProducer.LineMessageReader;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ConsoleProducer.ConsoleProducerConfig;
+import org.apache.kafka.tools.ConsoleProducer.LineMessageReader;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -13,7 +29,9 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.clients.producer.ProducerConfig.*;
+import static org.apache.kafka.clients.producer.ProducerConfig.BATCH_SIZE_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.CLIENT_ID_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -109,7 +127,7 @@ public class ConsoleProducerTest {
     };
 
     @Test
-    private void testValidConfigsBrokerList() throws IOException {
+    public void testValidConfigsBrokerList() throws IOException {
         ConsoleProducerConfig config = new ConsoleProducerConfig(BROKER_LIST_VALID_ARGS);
         ProducerConfig consoleProducerConfig = new ProducerConfig(config.getProducerProps());
 
@@ -118,7 +136,7 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    private void testValidConfigsBootstrapServer() throws IOException {
+    public void testValidConfigsBootstrapServer() throws IOException {
         ConsoleProducerConfig config = new ConsoleProducerConfig(BOOTSTRAP_SERVER_VALID_ARGS);
         ProducerConfig consoleProducerConfig = new ProducerConfig(config.getProducerProps());
 
@@ -127,8 +145,10 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    private void testInvalidConfigs() {
-        Exit.setExitProcedure((statusCode, message) -> { throw new IllegalArgumentException(message); });
+    public void testInvalidConfigs() {
+        Exit.setExitProcedure((statusCode, message) -> {
+            throw new IllegalArgumentException(message);
+        });
         try {
             assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerConfig(INVALID_ARGS));
         } finally {
@@ -137,7 +157,7 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    private void testParseKeyProp() throws Exception {
+    public void testParseKeyProp() throws Exception {
         ConsoleProducerConfig config = new ConsoleProducerConfig(BROKER_LIST_VALID_ARGS);
         LineMessageReader reader = (LineMessageReader) Class.forName(config.readerClass()).getDeclaredConstructor().newInstance();
         reader.init(System.in, config.getReaderProps());
@@ -147,7 +167,7 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    private void testParseReaderConfigFile() throws Exception {
+    public void testParseReaderConfigFile() throws Exception {
         File propsFile = TestUtils.tempFile();
         OutputStream propsStream = Files.newOutputStream(propsFile.toPath());
         propsStream.write("parse.key=true\n".getBytes());
@@ -172,7 +192,7 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    private void  testBootstrapServerOverride() throws IOException {
+    public void  testBootstrapServerOverride() throws IOException {
         ConsoleProducerConfig config = new ConsoleProducerConfig(BOOTSTRAP_SERVER_OVERRIDE);
         ProducerConfig producerConfig = new ProducerConfig(config.getProducerProps());
 
@@ -180,7 +200,7 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    private void testClientIdOverride() throws IOException {
+    public void testClientIdOverride() throws IOException {
         ConsoleProducerConfig config = new ConsoleProducerConfig(CLIENT_ID_OVERRIDE);
         ProducerConfig producerConfig = new ProducerConfig(config.getProducerProps());
 
@@ -188,7 +208,7 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    private void testDefaultClientId() throws IOException {
+    public void testDefaultClientId() throws IOException {
         ConsoleProducerConfig config = new ConsoleProducerConfig(BROKER_LIST_VALID_ARGS);
         ProducerConfig producerConfig = new ProducerConfig(config.getProducerProps());
 
@@ -196,7 +216,7 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    private void testBatchSizeOverriddenByMaxPartitionMemoryBytesValue() throws IOException {
+    public void testBatchSizeOverriddenByMaxPartitionMemoryBytesValue() throws IOException {
         ConsoleProducerConfig config = new ConsoleProducerConfig(BATCH_SIZE_OVERRIDDEN_BY_MAX_PARTITION_MEMORY_BYTES_VALUE);
         ProducerConfig producerConfig = new ProducerConfig(config.getProducerProps());
 
@@ -204,7 +224,7 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    private void testBatchSizeSetAndMaxPartitionMemoryBytesNotSet() throws IOException {
+    public void testBatchSizeSetAndMaxPartitionMemoryBytesNotSet() throws IOException {
         ConsoleProducerConfig config = new ConsoleProducerConfig(BATCH_SIZE_SET_AND_MAX_PARTITION_MEMORY_BYTES_NOT_SET);
         ProducerConfig producerConfig = new ProducerConfig(config.getProducerProps());
 
@@ -212,15 +232,15 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    private void testDefaultBatchSize() throws IOException {
+    public void testDefaultBatchSize() throws IOException {
         ConsoleProducerConfig config = new ConsoleProducerConfig(BATCH_SIZE_DEFAULT);
         ProducerConfig producerConfig = new ProducerConfig(config.getProducerProps());
 
-        assertEquals(16*1024, producerConfig.getInt(BATCH_SIZE_CONFIG));
+        assertEquals(16 * 1024, producerConfig.getInt(BATCH_SIZE_CONFIG));
     }
 
     @Test
-    private void testBatchSizeNotSetAndMaxPartitionMemoryBytesSet() throws IOException {
+    public void testBatchSizeNotSetAndMaxPartitionMemoryBytesSet() throws IOException {
         ConsoleProducerConfig config = new ConsoleProducerConfig(BATCH_SIZE_NOT_SET_AND_MAX_PARTITION_MEMORY_BYTES_SET);
         ProducerConfig producerConfig = new ProducerConfig(config.getProducerProps());
 

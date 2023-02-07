@@ -22,7 +22,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MessageReader;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.util.CommandDefaultOptions;
@@ -58,7 +57,6 @@ import static org.apache.kafka.server.util.CommandLineUtils.maybeMergeOptions;
 import static org.apache.kafka.server.util.CommandLineUtils.parseKeyValueArgs;
 
 public class ConsoleProducer {
-
     public static void main(String[] args) throws Exception {
         try {
             ConsoleProducerConfig config = new ConsoleProducerConfig(args);
@@ -248,7 +246,12 @@ public class ConsoleProducer {
                     .describedAs("config file")
                     .ofType(String.class);
 
-            options = parser.parse(args);
+            try {
+                options = parser.parse(args);
+
+            } catch (OptionException e) {
+                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+            }
 
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from standard input and publish it to Kafka.");
             CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);
@@ -337,7 +340,7 @@ public class ConsoleProducer {
         }
     }
 
-    private static final class LineMessageReader implements MessageReader {
+    static final class LineMessageReader implements MessageReader {
         private String topic;
         private BufferedReader reader;
         private boolean parseKey;
@@ -465,6 +468,20 @@ public class ConsoleProducer {
                         return new Header(headerKey, headerValue);
 
                     }).toArray(Header[]::new);
+        }
+
+        // VisibleForTesting
+        String keySeparator() {
+            return keySeparator;
+        }
+
+        // VisibleForTesting
+        boolean parseKey() {
+            return parseKey;
+        }
+
+        boolean parseHeaders() {
+            return parseHeaders;
         }
     }
 
