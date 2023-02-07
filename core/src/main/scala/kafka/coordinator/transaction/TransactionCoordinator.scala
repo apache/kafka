@@ -92,7 +92,6 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
   type InitProducerIdCallback = InitProducerIdResult => Unit
   type AddPartitionsCallback = Errors => Unit
-  type BatchedAddPartitionsCallback = (String, Errors) => Unit
   type EndTxnCallback = Errors => Unit
   type ApiResult[T] = Either[Errors, T]
 
@@ -323,6 +322,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                                        producerId: Long,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
+                                       verifyOnly: Boolean,
                                        responseCallback: AddPartitionsCallback,
                                        requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
@@ -353,7 +353,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               // this is an optimization: if the partitions are already in the metadata reply OK immediately
               Left(Errors.NONE)
             } else {
-              Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.milliseconds()))
+              // If verifyOnly, we should have returned in the step above. If we didn't the partitions are not present in the transaction.
+              if (verifyOnly) {
+                Left(Errors.INVALID_TXN_STATE)
+              } else {
+                Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.milliseconds()))
+              }
             }
           }
       }
@@ -369,67 +374,6 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       }
     }
   }
-  /*
-  def handleBatchedAddPartitionsToTransaction(transactions: AddPartitionsToTxnTransactionCollection,
-                                              partitionsMap: util.Map[String, util.List[TopicPartition]],
-                                              responseCallback: BatchedAddPartitionsCallback,
-                                              requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
-    transactions.forEach(transaction => {
-      val transactionalId = transaction.transactionalId()
-      val producerId = transaction.producerId()
-      val producerEpoch = transaction.producerEpoch()
-      val partitions = partitionsMap.get(transactionalId).asScala.toSet
-      
-      if (transactionalId == null || transactionalId.isEmpty) {
-        debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
-        responseCallback(transactionalId, Errors.INVALID_REQUEST)
-      } else {
-        // try to update the transaction metadata and append the updated metadata to txn log;
-        // if there is no such metadata treat it as invalid producerId mapping error.
-        val result: ApiResult[(Int, TxnTransitMetadata)] = txnManager.getTransactionState(transactionalId).flatMap {
-          case None => Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-
-          case Some(epochAndMetadata) =>
-            val coordinatorEpoch = epochAndMetadata.coordinatorEpoch
-            val txnMetadata = epochAndMetadata.transactionMetadata
-
-            // generate the new transaction metadata with added partitions
-            txnMetadata.inLock {
-              if (txnMetadata.producerId != producerId) {
-                Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-              } else if (txnMetadata.producerEpoch != producerEpoch) {
-                Left(Errors.PRODUCER_FENCED)
-              } else if (txnMetadata.pendingTransitionInProgress) {
-                // return a retriable exception to let the client backoff and retry
-                Left(Errors.CONCURRENT_TRANSACTIONS)
-              } else if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort) {
-                Left(Errors.CONCURRENT_TRANSACTIONS)
-              } else if (txnMetadata.state == Ongoing && partitions.subsetOf(txnMetadata.topicPartitions)) {
-                // this is an optimization: if the partitions are already in the metadata reply OK immediately
-                Left(Errors.NONE)
-              } else {
-                Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions, time.milliseconds()))
-              }
-            }
-        }
-        
-        def perTransactionResponseCallback(error: Errors): Unit = {
-          responseCallback(transactionalId, error)
-        }
-
-        result match {
-          case Left(err) =>
-            debug(s"Returning $err error code to client for $transactionalId's AddPartitions request")
-            responseCallback(transactionalId, err)
-
-          case Right((coordinatorEpoch, newMetadata)) =>
-            txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
-              perTransactionResponseCallback, requestLocal = requestLocal)
-        }
-      }
-    })
-  }
-   */
 
   /**
    * Load state from the given partition and begin handling requests for groups which map to this partition.

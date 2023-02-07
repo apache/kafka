@@ -2391,6 +2391,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val version = addPartitionsToTxnRequest.version
     val responses = new AddPartitionsToTxnResultCollection()
     val partitionsByTransaction = addPartitionsToTxnRequest.partitionsByTransaction()
+    
+    // Newer versions of the request should only come from other brokers.
+    if (version >= 4) authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
     // V4 requests introduced batches of transactions. We need all transactions to be handled before sending the 
     // response so there are a few differences in handling errors and sending responses.
@@ -2421,7 +2424,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val transactionalId = transaction.transactionalId()
       val partitionsToAdd = partitionsByTransaction.get(transactionalId).asScala
       
-      if (!authHelper.authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId)) {
+      if (version < 4 && !authHelper.authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId)) {
         responses.add(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
         maybeSendResponse()
       } else {
@@ -2469,6 +2472,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             transaction.producerId,
             transaction.producerEpoch,
             authorizedPartitions,
+            addPartitionsToTxnRequest.data.verifyOnly,
             sendResponseCallback,
             requestLocal)
         }
@@ -2521,6 +2525,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         addOffsetsToTxnRequest.data.producerId,
         addOffsetsToTxnRequest.data.producerEpoch,
         Set(offsetTopicPartition),
+        false,
         sendResponseCallback,
         requestLocal)
     }

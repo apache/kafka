@@ -520,7 +520,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
         transactionCoordinator.handleAddPartitionsToTransaction(txn.transactionalId,
             txnMetadata.producerId,
             txnMetadata.producerEpoch,
-            partitions,
+            partitions, 
+            false,
             resultCallback,
             RequestLocal.withThreadConfinedCaching)
         replicaManager.tryCompleteActions()
