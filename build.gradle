@@ -1237,6 +1237,10 @@ project(':metadata') {
 project(':group-coordinator') {
   archivesBaseName = "kafka-group-coordinator"
 
+  configurations {
+    generator
+  }
+
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
@@ -1248,6 +1252,8 @@ project(':group-coordinator') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jlog4j
+
+    generator project(':generator')
   }
 
   sourceSets {
@@ -1266,6 +1272,23 @@ project(':group-coordinator') {
   javadoc {
     enabled = false
   }
+
+  task processMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "org.apache.kafka.coordinator.group.generated",
+             "-o", "src/generated/java/org/apache/kafka/coordinator/group/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator"
+    ]
+    inputs.dir("src/main/resources/common/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("src/generated/java/org/apache/kafka/coordinator/group/generated")
+  }
+
+  compileJava.dependsOn 'processMessages'
 }
 
 project(':examples') {
