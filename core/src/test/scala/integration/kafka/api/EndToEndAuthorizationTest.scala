@@ -502,6 +502,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.deleteAcls(List(AclTopicWrite().toFilter).asJava).values
 
     brokers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
     }
   }

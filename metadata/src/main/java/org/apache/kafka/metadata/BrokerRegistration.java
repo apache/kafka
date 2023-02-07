@@ -49,6 +49,14 @@ public class BrokerRegistration {
         return listenersMap;
     }
 
+    public static Optional<Long> zkBrokerEpoch(long value) {
+        if (value == -1) {
+            return Optional.empty();
+        } else {
+            return Optional.of(value);
+        }
+    }
+
     private final int id;
     private final long epoch;
     private final Uuid incarnationId;

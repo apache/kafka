@@ -258,7 +258,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     /**
      * Return the current generation. The generation refers to this worker's knowledge with
-     * respect to which  generation is the latest one and, therefore, this information is local.
+     * respect to which generation is the latest one and, therefore, this information is local.
      *
      * @return the generation ID or -1 if no generation is defined
      */

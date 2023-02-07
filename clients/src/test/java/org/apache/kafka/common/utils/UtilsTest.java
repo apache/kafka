@@ -71,6 +71,7 @@ import static org.apache.kafka.common.utils.Utils.validHostPattern;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -895,7 +896,7 @@ public class UtilsTest {
         if (a == null) {
             assertNotNull(b);
         } else {
-            assertFalse(a.equals(b));
+            assertNotEquals(a, b);
         }
         assertFalse(Utils.isEqualConstantTime(first, second));
         assertFalse(Utils.isEqualConstantTime(second, first));
@@ -907,7 +908,7 @@ public class UtilsTest {
         if (a == null) {
             assertNull(b);
         } else {
-            assertTrue(a.equals(b));
+            assertEquals(a, b);
         }
         assertTrue(Utils.isEqualConstantTime(first, second));
         assertTrue(Utils.isEqualConstantTime(second, first));

@@ -576,7 +576,7 @@ public class ImplicitLinkedHashCollectionTest {
         assertFalse(coll.add(new TestElement(1, 2)));
         TestElement element2 = new TestElement(1, 2);
         TestElement element1 = coll.find(element2);
-        assertFalse(element2.equals(element1));
+        assertNotEquals(element2, element1);
         assertTrue(element2.elementKeysAreEqual(element1));
     }
 

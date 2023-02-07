@@ -24,6 +24,11 @@ import org.apache.kafka.connect.header.Header;
 
 import java.io.Closeable;
 
+/**
+ * The HeaderConverter interface provides support for translating between Kafka Connect's runtime data format
+ * and byte[]. This is similar to the {@link Converter} interface, but specifically for
+ * {@link org.apache.kafka.connect.header.Headers Headers}.
+ */
 public interface HeaderConverter extends Configurable, Closeable {
 
     /**

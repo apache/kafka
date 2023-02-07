@@ -18,6 +18,9 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.connect.errors.ConnectException;
 
+/**
+ * Indicates that a request cannot be completed because a rebalance is expected to begin.
+ */
 public class RebalanceNeededException extends ConnectException {
 
     public RebalanceNeededException(String s) {

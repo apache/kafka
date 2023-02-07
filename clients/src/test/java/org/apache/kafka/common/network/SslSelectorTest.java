@@ -257,7 +257,7 @@ public abstract class SslSelectorTest extends SelectorTest {
         channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false, new LogContext());
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-                new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
+                new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));
@@ -346,7 +346,7 @@ public abstract class SslSelectorTest extends SelectorTest {
 
         @Override
         protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key,
-                                                        ChannelMetadataRegistry metadataRegistry) throws IOException {
+                                                        ChannelMetadataRegistry metadataRegistry) {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLEngine sslEngine = sslFactory.createSslEngine(socketChannel.socket());
             TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine, metadataRegistry);
@@ -380,7 +380,7 @@ public abstract class SslSelectorTest extends SelectorTest {
 
             // Leave one byte in network read buffer so that some buffered bytes are present,
             // but not enough to make progress on a read.
-            void truncateReadBuffer() throws Exception {
+            void truncateReadBuffer() {
                 netReadBuffer().position(1);
                 appReadBuffer().position(0);
                 muteSocket = true;

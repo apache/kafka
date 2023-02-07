@@ -29,7 +29,7 @@ import java.util.concurrent.Future;
 
 /**
  * <p>
- * OffsetStorageWriter is a buffered writer that wraps the simple OffsetBackingStore interface.
+ * OffsetStorageWriter is a buffered writer that wraps the simple {@link OffsetBackingStore} interface.
  * It maintains a copy of the key-value data in memory and buffers writes. It allows you to take
  * a snapshot, which can then be asynchronously flushed to the backing store while new writes
  * continue to be processed. This allows Kafka Connect to process offset commits in the background
@@ -37,8 +37,8 @@ import java.util.concurrent.Future;
  * </p>
  * <p>
  * Connect uses an OffsetStorage implementation to save state about the current progress of
- * source (import to Kafka) jobs, which may have many input partitions and "offsets" may not be as
- * simple as they are for Kafka partitions or files. Offset storage is not required for sink jobs
+ * source (import to Kafka) connectors, which may have many input partitions and "offsets" may not be as
+ * simple as they are for Kafka partitions or files. Offset storage is not required for sink connectors
  * because they can use Kafka's native offset storage (or the sink data store can handle offset
  * storage to achieve exactly once semantics).
  * </p>
@@ -132,7 +132,7 @@ public class OffsetStorageWriter {
      * writes the data to the backing store. If no offsets need to be written, the callback is
      * still invoked, but no Future is returned.
      *
-     * @return a Future, or null if there are no offsets to commitOffsets
+     * @return a Future, or null if there are no offsets to commit
      */
     public Future<Void> doFlush(final Callback<Void> callback) {
 

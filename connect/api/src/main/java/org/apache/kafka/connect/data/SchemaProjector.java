@@ -30,7 +30,7 @@ import java.util.Set;
 
 /**
  * <p>
- *     SchemaProjector is utility to project a value between compatible schemas and throw exceptions
+ *     SchemaProjector is a utility to project a value between compatible schemas and throw exceptions
  *     when non compatible schemas are provided.
  * </p>
  */
@@ -49,7 +49,7 @@ public class SchemaProjector {
     }
 
     /**
-     * This method project a value between compatible schemas and throw exceptions when non compatible schemas are provided
+     * This method projects a value between compatible schemas and throws exceptions when non-compatible schemas are provided
      * @param source the schema used to construct the record
      * @param record the value to project from source schema to target schema
      * @param target the schema to project the record to

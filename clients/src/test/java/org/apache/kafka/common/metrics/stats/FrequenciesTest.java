@@ -149,7 +149,7 @@ public class FrequenciesTest {
     }
 
     protected MetricName name(String metricName) {
-        return new MetricName(metricName, "group-id", "desc", Collections.<String, String>emptyMap());
+        return new MetricName(metricName, "group-id", "desc", Collections.emptyMap());
     }
 
     protected Frequency freq(String name, double value) {

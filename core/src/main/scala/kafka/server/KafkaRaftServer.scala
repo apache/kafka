@@ -124,8 +124,12 @@ object KafkaRaftServer {
   val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 
   sealed trait ProcessRole
-  case object BrokerRole extends ProcessRole
-  case object ControllerRole extends ProcessRole
+  case object BrokerRole extends ProcessRole {
+    override def toString(): String = "broker"
+  }
+  case object ControllerRole extends ProcessRole {
+    override def toString(): String = "controller"
+  }
 
   /**
    * Initialize the configured log directories, including both [[KafkaConfig.MetadataLogDirProp]]
@@ -139,7 +143,7 @@ object KafkaRaftServer {
   def initializeLogDirs(config: KafkaConfig): (MetaProperties, BootstrapMetadata, Seq[String]) = {
     val logDirs = (config.logDirs.toSet + config.metadataLogDir).toSeq
     val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
-      getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
+      getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false, kraftMode = true)
 
     if (offlineDirs.contains(config.metadataLogDir)) {
       throw new KafkaException("Cannot start server since `meta.properties` could not be " +

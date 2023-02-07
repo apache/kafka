@@ -22,12 +22,13 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions._
-import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
+import kafka.utils.{MockTime, TestUtils}
 import kafka.cluster.Partition
 import kafka.server.metadata.MockConfigRepository
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.server.log.internals.{CleanerConfig, LogDirFailureChannel}
+import org.apache.kafka.server.util.KafkaScheduler
 
 class HighwatermarkPersistenceTest {
 

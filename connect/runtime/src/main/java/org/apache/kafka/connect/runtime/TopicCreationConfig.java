@@ -25,6 +25,11 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+/**
+ * Configuration options for source connector automatic topic creation.
+ *
+ * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-158%3A+Kafka+Connect+should+allow+source+connectors+to+set+topic-specific+settings+for+new+topics">KIP-158</a>
+ */
 public class TopicCreationConfig {
 
     public static final String DEFAULT_TOPIC_CREATION_PREFIX = "topic.creation.default.";

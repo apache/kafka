@@ -18,6 +18,9 @@ package org.apache.kafka.connect.data;
 
 import java.util.Objects;
 
+/**
+ * A composite containing a {@link Schema} and associated value
+ */
 public class SchemaAndValue {
     private final Schema schema;
     private final Object value;

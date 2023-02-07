@@ -411,7 +411,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFalse(maxMessageBytes2.isSensitive)
     assertFalse(maxMessageBytes2.isReadOnly)
 
-    assertEquals(brokers(1).config.nonInternalValues.size, configs.get(brokerResource1).entries.size)
+    // Find the number of internal configs that we have explicitly set in the broker config.
+    // These will appear when we describe the broker configuration. Other internal configs,
+    // that we have not set, will not appear there.
+    val numInternalConfigsSet = brokers.head.config.originals.keySet().asScala.count(k => {
+      Option(KafkaConfig.configDef.configKeys().get(k)) match {
+        case None => false
+        case Some(configDef) => configDef.internalConfig
+      }
+    })
+    assertEquals(brokers(1).config.nonInternalValues.size + numInternalConfigsSet,
+      configs.get(brokerResource1).entries.size)
     assertEquals(brokers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BrokerIdProp).value)
     val listenerSecurityProtocolMap = configs.get(brokerResource1).get(KafkaConfig.ListenerSecurityProtocolMapProp)
     assertEquals(brokers(1).config.getString(KafkaConfig.ListenerSecurityProtocolMapProp), listenerSecurityProtocolMap.value)
@@ -432,7 +442,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFalse(compressionType.isSensitive)
     assertFalse(compressionType.isReadOnly)
 
-    assertEquals(brokers(2).config.nonInternalValues.size, configs.get(brokerResource2).entries.size)
+    assertEquals(brokers(2).config.nonInternalValues.size + numInternalConfigsSet,
+      configs.get(brokerResource2).entries.size)
     assertEquals(brokers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
     assertEquals(brokers(2).config.logCleanerThreads.toString,
       configs.get(brokerResource2).get(KafkaConfig.LogCleanerThreadsProp).value)

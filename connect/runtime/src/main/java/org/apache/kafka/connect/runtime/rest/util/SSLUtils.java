@@ -20,6 +20,8 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 
 import java.util.Arrays;
@@ -28,7 +30,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Helper class for setting up SSL for RestServer and RestClient
+ * Helper class for setting up SSL for {@link RestServer} and {@link RestClient}
  */
 public class SSLUtils {
 
@@ -143,7 +145,7 @@ public class SSLUtils {
     }
 
     /**
-     * Configures Protocol, Algorithm and Provider related settings in SslContextFactory
+     * Configures hostname verification related settings in SslContextFactory
      */
     protected static void configureSslContextFactoryEndpointIdentification(SslContextFactory ssl, Map<String, Object> sslConfigValues) {
         String sslEndpointIdentificationAlg = (String) sslConfigValues.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);

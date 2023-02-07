@@ -47,18 +47,16 @@ import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -81,14 +79,13 @@ import static org.hamcrest.Matchers.greaterThan;
  * End-to-end integration test based on using regex and named topics for creating sources, using
  * an embedded Kafka cluster.
  */
+@Timeout(600)
 @Category({IntegrationTest.class})
 public class RegexSourceIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
         CLUSTER.createTopics(
@@ -104,7 +101,7 @@ public class RegexSourceIntegrationTest {
         CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -129,8 +126,8 @@ public class RegexSourceIntegrationTest {
     private static volatile AtomicInteger topicSuffixGenerator = new AtomicInteger(0);
     private String outputTopic;
 
-    @Before
-    public void setUp() throws InterruptedException {
+    @BeforeEach
+    public void setUp(final TestInfo testInfo) throws InterruptedException {
         outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
         final Properties properties = new Properties();
         properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
@@ -141,7 +138,7 @@ public class RegexSourceIntegrationTest {
         properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-            IntegrationTestUtils.safeUniqueTestName(RegexSourceIntegrationTest.class, new TestName()),
+            IntegrationTestUtils.safeUniqueTestName(RegexSourceIntegrationTest.class, testInfo),
             CLUSTER.bootstrapServers(),
             STRING_SERDE_CLASSNAME,
             STRING_SERDE_CLASSNAME,
@@ -149,7 +146,7 @@ public class RegexSourceIntegrationTest {
         );
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws IOException {
         if (streams != null) {
             streams.close();
@@ -225,7 +222,7 @@ public class RegexSourceIntegrationTest {
             assertThat(topology.describe().subtopologies().size(), greaterThan(1));
             streams = new KafkaStreams(topology, streamsConfiguration);
 
-            startApplicationAndWaitUntilRunning(Collections.singletonList(streams), Duration.ofSeconds(30));
+            startApplicationAndWaitUntilRunning(streams);
 
             CLUSTER.createTopic(topic2);
 

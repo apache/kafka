@@ -410,14 +410,11 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/ConnectorPluginsResourceTest.*",
-      "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
+      "**/DistributedHerderTest.*",
       "**/KafkaConfigBackingStoreTest.*",
-      "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
-      "**/SourceTaskOffsetCommitterTest.*",
+      "**/KafkaBasedLogTest.*", "**/StandaloneHerderTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*"
+      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*"
     ])
   }
 
@@ -1240,6 +1237,10 @@ project(':metadata') {
 project(':group-coordinator') {
   archivesBaseName = "kafka-group-coordinator"
 
+  configurations {
+    generator
+  }
+
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
@@ -1251,6 +1252,8 @@ project(':group-coordinator') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jlog4j
+
+    generator project(':generator')
   }
 
   sourceSets {
@@ -1269,6 +1272,23 @@ project(':group-coordinator') {
   javadoc {
     enabled = false
   }
+
+  task processMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "org.apache.kafka.coordinator.group.generated",
+             "-o", "src/generated/java/org/apache/kafka/coordinator/group/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator"
+    ]
+    inputs.dir("src/main/resources/common/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("src/generated/java/org/apache/kafka/coordinator/group/generated")
+  }
+
+  compileJava.dependsOn 'processMessages'
 }
 
 project(':examples') {
@@ -1539,6 +1559,7 @@ project(':server-common') {
     api project(':clients')
     implementation libs.slf4jApi
     implementation libs.metrics
+    implementation libs.joptSimple
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
@@ -1765,6 +1786,7 @@ project(':tools') {
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.log4j
+    implementation libs.joptSimple
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
@@ -1921,6 +1943,7 @@ project(':streams') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j
     testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
@@ -2040,6 +2063,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-30:test',
             ':streams:upgrade-system-tests-31:test',
             ':streams:upgrade-system-tests-32:test',
+            ':streams:upgrade-system-tests-33:test',
             ':streams:examples:test'
     ]
   )
@@ -2056,6 +2080,7 @@ project(':streams:streams-scala') {
 
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':streams').sourceSets.test.output
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
@@ -2068,6 +2093,10 @@ project(':streams:streams-scala') {
 
   javadoc {
     include "**/org/apache/kafka/streams/scala/**"
+  }
+
+  scaladoc {
+    scalaDocOptions.additionalParameters = ["-no-link-warnings"]
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -2397,6 +2426,19 @@ project(':streams:upgrade-system-tests-32') {
   }
 }
 
+project(':streams:upgrade-system-tests-33') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-33"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_33
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.github.johnrengelman.shadow'
@@ -2412,6 +2454,7 @@ project(':jmh-benchmarks') {
     }
     implementation project(':server-common')
     implementation project(':clients')
+    implementation project(':group-coordinator')
     implementation project(':metadata')
     implementation project(':storage')
     implementation project(':streams')
@@ -2721,7 +2764,7 @@ project(':connect:runtime') {
   task genConnectOpenAPIDocs(type: io.swagger.v3.plugins.gradle.tasks.ResolveTask, dependsOn: setVersionInOpenAPISpec) {
     classpath = sourceSets.main.runtimeClasspath
 
-    buildClasspath = classpath + configurations.swagger.asCollection()
+    buildClasspath = classpath + configurations.swagger
     outputFileName = 'connect_rest'
     outputFormat = 'YAML'
     prettyPrint = 'TRUE'

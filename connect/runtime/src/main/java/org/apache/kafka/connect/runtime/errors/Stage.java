@@ -16,18 +16,24 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.source.SourceTask;
+
+import java.util.Collection;
+
 /**
  * A logical stage in a Connect pipeline.
  */
 public enum Stage {
 
     /**
-     * When calling the poll() method on a SourceConnector
+     * When calling {@link SourceTask#poll()}
      */
     TASK_POLL,
 
     /**
-     * When calling the put() method on a SinkConnector
+     * When calling {@link SinkTask#put(Collection)}
      */
     TASK_PUT,
 
@@ -37,22 +43,22 @@ public enum Stage {
     TRANSFORMATION,
 
     /**
-     * When using the key converter to serialize/deserialize keys in ConnectRecords
+     * When using the key converter to serialize/deserialize keys in {@link ConnectRecord}s
      */
     KEY_CONVERTER,
 
     /**
-     * When using the value converter to serialize/deserialize values in ConnectRecords
+     * When using the value converter to serialize/deserialize values in {@link ConnectRecord}s
      */
     VALUE_CONVERTER,
 
     /**
-     * When using the header converter to serialize/deserialize headers in ConnectRecords
+     * When using the header converter to serialize/deserialize headers in {@link ConnectRecord}s
      */
     HEADER_CONVERTER,
 
     /**
-     * When producing to Kafka topic
+     * When producing to a Kafka topic
      */
     KAFKA_PRODUCE,
 

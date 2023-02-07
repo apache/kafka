@@ -32,10 +32,10 @@ import scala.jdk.CollectionConverters._
 
 class MigrationPropagator(
   nodeId: Int,
-  config: KafkaConfig,
-  metadataVersionProvider: () => MetadataVersion,
+  config: KafkaConfig
 ) extends LegacyPropagator {
   @volatile private var _image = MetadataImage.EMPTY
+  @volatile private var metadataVersion = MetadataVersion.IBP_3_4_IV0
   val stateChangeLogger = new StateChangeLogger(nodeId, inControllerContext = true, None)
   val channelManager = new ControllerChannelManager(
     () => _image.highestOffsetAndEpoch().epoch(),
@@ -48,7 +48,7 @@ class MigrationPropagator(
   val requestBatch = new MigrationPropagatorBatch(
     config,
     metadataProvider,
-    metadataVersionProvider,
+    () => metadataVersion,
     channelManager,
     stateChangeLogger
   )
@@ -92,14 +92,20 @@ class MigrationPropagator(
     val oldZkBrokers = zkBrokers -- changedZkBrokers
     val brokersChanged = !delta.clusterDelta().changedBrokers().isEmpty
 
+    // First send metadata about the live/dead brokers to all the zk brokers.
     if (changedZkBrokers.nonEmpty) {
       // Update new Zk brokers about all the metadata.
       requestBatch.addUpdateMetadataRequestForBrokers(changedZkBrokers.toSeq, image.topics().partitions().keySet().asScala)
-      // Send these requests first to make sure, we don't add all the partition metadata to the
-      // old brokers as well.
-      requestBatch.sendRequestsToBrokers(zkControllerEpoch)
-      requestBatch.newBatch()
+    }
+    if (brokersChanged) {
+      requestBatch.addUpdateMetadataRequestForBrokers(oldZkBrokers.toSeq)
+    }
+    requestBatch.sendRequestsToBrokers(zkControllerEpoch)
+    requestBatch.newBatch()
 
+    // Now send LISR, UMR and StopReplica requests for both new zk brokers and existing zk
+    // brokers based on the topic changes.
+    if (changedZkBrokers.nonEmpty) {
       // For new the brokers, check if there are partition assignments and add LISR appropriately.
       image.topics().partitions().asScala.foreach { case (tp, partitionRegistration) =>
         val replicas = partitionRegistration.replicas.toSet
@@ -118,9 +124,8 @@ class MigrationPropagator(
       }
     }
 
-    // If there are new brokers (including KRaft brokers) or if there are changes in topic
-    // metadata, let's send UMR about the changes to the old Zk brokers.
-    if (brokersChanged || !delta.topicsDelta().deletedTopicIds().isEmpty || !delta.topicsDelta().changedTopics().isEmpty) {
+    // If there are changes in topic metadata, let's send UMR about the changes to the old Zk brokers.
+    if (!delta.topicsDelta().deletedTopicIds().isEmpty || !delta.topicsDelta().changedTopics().isEmpty) {
       requestBatch.addUpdateMetadataRequestForBrokers(oldZkBrokers.toSeq)
     }
 
@@ -175,14 +180,20 @@ class MigrationPropagator(
 
   override def sendRPCsToBrokersFromMetadataImage(image: MetadataImage, zkControllerEpoch: Int): Unit = {
     publishMetadata(image)
-    requestBatch.newBatch()
 
+    val zkBrokers = image.cluster().zkBrokers().keySet().asScala.map(_.toInt).toSeq
+    val partitions = image.topics().partitions()
+    // First send all the metadata before sending any other requests to make sure subsequent
+    // requests are handled correctly.
+    requestBatch.newBatch()
+    requestBatch.addUpdateMetadataRequestForBrokers(zkBrokers, partitions.keySet().asScala)
+    requestBatch.sendRequestsToBrokers(zkControllerEpoch)
+
+    requestBatch.newBatch()
     // When we need to send RPCs from the image, we're sending 'full' requests meaning we let
     // every broker know about all the metadata and all the LISR requests it needs to handle.
     // Note that we cannot send StopReplica requests from the image. We don't have any state
     // about brokers that host a replica but are not part of the replica set known by the Controller.
-    val zkBrokers = image.cluster().zkBrokers().keySet().asScala.map(_.toInt).toSeq
-    val partitions = image.topics().partitions()
     partitions.asScala.foreach{ case (tp, partitionRegistration) =>
       val leaderIsrAndControllerEpochOpt = MigrationControllerChannelContext.partitionLeadershipInfo(image, tp)
       leaderIsrAndControllerEpochOpt match {
@@ -194,11 +205,14 @@ class MigrationPropagator(
         case None => None
       }
     }
-    requestBatch.addUpdateMetadataRequestForBrokers(zkBrokers, partitions.keySet().asScala)
     requestBatch.sendRequestsToBrokers(zkControllerEpoch)
   }
 
   override def clear(): Unit = {
     requestBatch.clear()
+  }
+
+  override def setMetadataVersion(newMetadataVersion: MetadataVersion): Unit = {
+    metadataVersion = newMetadataVersion
   }
 }

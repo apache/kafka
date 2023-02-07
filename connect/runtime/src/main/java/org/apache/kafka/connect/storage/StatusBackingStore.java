@@ -25,6 +25,9 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import java.util.Collection;
 import java.util.Set;
 
+/**
+ * An interface to store and retrieve connector / task statuses.
+ */
 public interface StatusBackingStore {
 
     /**

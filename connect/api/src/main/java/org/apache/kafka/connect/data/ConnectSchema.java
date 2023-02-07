@@ -30,7 +30,7 @@ import java.util.Objects;
 
 public class ConnectSchema implements Schema {
     /**
-     * Maps Schema.Types to a list of Java classes that can be used to represent them.
+     * Maps {@link Schema.Type}s to a list of Java classes that can be used to represent them.
      */
     private static final Map<Type, List<Class<?>>> SCHEMA_TYPE_CLASSES = new EnumMap<>(Type.class);
     /**
@@ -39,7 +39,7 @@ public class ConnectSchema implements Schema {
     private static final Map<String, List<Class<?>>> LOGICAL_TYPE_CLASSES = new HashMap<>();
 
     /**
-     * Maps the Java classes to the corresponding Schema.Type.
+     * Maps the Java classes to the corresponding {@link Schema.Type}.
      */
     private static final Map<Class<?>, Type> JAVA_CLASS_SCHEMA_TYPES = new HashMap<>();
 
@@ -205,7 +205,7 @@ public class ConnectSchema implements Schema {
 
     /**
      * Validate that the value can be used with the schema, i.e. that its type matches the schema type and nullability
-     * requirements. Throws a DataException if the value is invalid.
+     * requirements. Throws a {@link DataException} if the value is invalid.
      * @param schema Schema to test
      * @param value value to test
      */
@@ -273,7 +273,7 @@ public class ConnectSchema implements Schema {
 
     /**
      * Validate that the value can be used for this schema, i.e. that its type matches the schema type and optional
-     * requirements. Throws a DataException if the value is invalid.
+     * requirements. Throws a {@link DataException} if the value is invalid.
      * @param value the value to validate
      */
     public void validateValue(Object value) {
@@ -324,7 +324,7 @@ public class ConnectSchema implements Schema {
     /**
      * Get the {@link Schema.Type} associated with the given class.
      *
-     * @param klass the Class to
+     * @param klass the Class whose associated schema type is to be returned
      * @return the corresponding type, or null if there is no matching type
      */
     public static Type schemaType(Class<?> klass) {

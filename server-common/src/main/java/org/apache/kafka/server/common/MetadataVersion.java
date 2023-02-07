@@ -168,7 +168,7 @@ public enum MetadataVersion {
     IBP_3_4_IV0(8, "3.4", "IV0", true),
 
     // Support for tiered storage (KIP-405)
-    IBP_3_4_IV1(9, "3.4", "IV1", true);
+    IBP_3_5_IV0(9, "3.5", "IV0", false);
 
     // NOTE: update the default version in @ClusterTest annotation to point to the latest version
     public static final String FEATURE_NAME = "metadata.version";
@@ -288,7 +288,7 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_4_IV1)) {
+        if (this.isAtLeast(IBP_3_5_IV0)) {
             return 14;
         } else if (this.isAtLeast(IBP_3_1_IV0)) {
             return 13;
@@ -332,7 +332,7 @@ public enum MetadataVersion {
     }
 
     public short listOffsetRequestVersion() {
-        if (this.isAtLeast(IBP_3_4_IV1)) {
+        if (this.isAtLeast(IBP_3_5_IV0)) {
             return 8;
         } else if (this.isAtLeast(IBP_3_0_IV1)) {
             return 7;
