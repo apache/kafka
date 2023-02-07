@@ -160,7 +160,7 @@ public class QuorumControllerTest {
                 setControllerBuilderInitializer(controllerBuilder -> {
                     controllerBuilder.setConfigSchema(SCHEMA);
                 }).
-                build();
+                build()
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
@@ -201,7 +201,7 @@ public class QuorumControllerTest {
                 setControllerBuilderInitializer(controllerBuilder -> {
                     controllerBuilder.setConfigSchema(SCHEMA);
                 }).
-                build();
+                build()
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
@@ -247,7 +247,7 @@ public class QuorumControllerTest {
                 }).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
-                build();
+                build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -346,7 +346,7 @@ public class QuorumControllerTest {
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setLeaderImbalanceCheckIntervalNs(OptionalLong.of(leaderImbalanceCheckIntervalNs)).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
-                build();
+                build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -479,7 +479,7 @@ public class QuorumControllerTest {
                     controllerBuilder.setConfigSchema(SCHEMA);
                     controllerBuilder.setMaxIdleIntervalNs(OptionalLong.of(maxIdleIntervalNs));
                 }).
-                build();
+                build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
@@ -524,7 +524,7 @@ public class QuorumControllerTest {
                 setControllerBuilderInitializer(controllerBuilder -> {
                     controllerBuilder.setConfigSchema(SCHEMA);
                 }).
-                build();
+                build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").
@@ -621,7 +621,7 @@ public class QuorumControllerTest {
                     controllerBuilder.setConfigSchema(SCHEMA);
                 }).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
-                build();
+                build()
         ) {
             QuorumController active = controlEnv.activeController();
             for (int i = 0; i < numBrokers; i++) {
@@ -748,7 +748,7 @@ public class QuorumControllerTest {
                 setControllerBuilderInitializer(controllerBuilder -> {
                     controllerBuilder.setConfigSchema(SCHEMA);
                 }).
-                build();
+                build()
         ) {
             QuorumController controller = controlEnv.activeController();
             CountDownLatch countDownLatch = controller.pause();
@@ -812,7 +812,7 @@ public class QuorumControllerTest {
                 setControllerBuilderInitializer(controllerBuilder -> {
                     controllerBuilder.setConfigSchema(SCHEMA);
                 }).
-                build();
+                build()
         ) {
             QuorumController controller = controlEnv.activeController();
             CountDownLatch countDownLatch = controller.pause();
@@ -857,7 +857,7 @@ public class QuorumControllerTest {
                 setControllerBuilderInitializer(controllerBuilder -> {
                     controllerBuilder.setConfigSchema(SCHEMA);
                 }).
-                build();
+                build()
         ) {
             QuorumController controller = controlEnv.activeController();
 
@@ -1014,7 +1014,7 @@ public class QuorumControllerTest {
                 setControllerBuilderInitializer(controllerBuilder -> {
                     controllerBuilder.setConfigSchema(SCHEMA);
                 }).
-                build();
+                build()
         ) {
             QuorumController active = controlEnv.activeController();
             registerBrokers(active, 5);
@@ -1095,7 +1095,7 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                build();
+                build()
         ) {
             QuorumController active = controlEnv.activeController();
             CompletableFuture<Void> future = active.appendWriteEvent("errorEvent",
@@ -1227,7 +1227,7 @@ public class QuorumControllerTest {
                     controllerBuilder.setConfigSchema(SCHEMA);
                 }).
                 setBootstrapMetadata(COMPLEX_BOOTSTRAP).
-                build();
+                build()
         ) {
             QuorumController active = controlEnv.activeController();
             TestUtils.waitForCondition(() ->
@@ -1250,7 +1250,7 @@ public class QuorumControllerTest {
                     controllerBuilder.setConfigSchema(SCHEMA);
                 }).
                 setBootstrapMetadata(COMPLEX_BOOTSTRAP).
-                build();
+                build()
         ) {
             QuorumController active = controlEnv.activeController();
 
