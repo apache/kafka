@@ -397,9 +397,9 @@ public class RocksDBVersionedStoreTest {
         return deserializedRecord(versionedRecord);
     }
 
-    private VersionedRecord<String> getFromStore(final String key, final long timestampTo) {
+    private VersionedRecord<String> getFromStore(final String key, final long asOfTimestamp) {
         final VersionedRecord<byte[]> versionedRecord
-            = store.get(new Bytes(STRING_SERIALIZER.serialize(null, key)), timestampTo);
+            = store.get(new Bytes(STRING_SERIALIZER.serialize(null, key)), asOfTimestamp);
         return deserializedRecord(versionedRecord);
     }
 
