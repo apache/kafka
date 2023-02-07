@@ -53,7 +53,6 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
-import org.apache.kafka.connect.util.TopicAdmin.TopicCreationResponse;
 import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.junit.After;
 import org.junit.Before;
@@ -96,6 +95,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.junit.Assert.assertThrows;
 
@@ -183,6 +183,7 @@ public class AbstractWorkerSourceTaskTest {
     @After
     public void tearDown() {
         if (metrics != null) metrics.stop();
+        verifyNoMoreInteractions(statusListener);
     }
 
     @Test
@@ -240,47 +241,18 @@ public class AbstractWorkerSourceTaskTest {
             new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
         );
 
-        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
-        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
-        when(transformationChain.apply(any(SourceRecord.class)))
-                .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(statusBackingStore.getTopic(anyString(), anyString())).thenAnswer((Answer<TopicStatus>) invocation -> {
-            String connector = invocation.getArgument(0, String.class);
-            String topic = invocation.getArgument(1, String.class);
-            return new TopicStatus(topic, new ConnectorTaskId(connector, 0), Time.SYSTEM.milliseconds());
-        });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-                .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA), eq(RECORD)))
-                .thenReturn(SERIALIZED_RECORD);
+        expectSendRecord(emptyHeaders());
+        expectTopicCreation(TOPIC);
+
         workerTask.toSend = records;
         workerTask.sendRecords();
 
-        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(ProducerRecord.class);
-        ArgumentCaptor<Callback> producerCallbacks = ArgumentCaptor.forClass(Callback.class);
-        verify(producer).send(sent.capture(), producerCallbacks.capture());
-
-        for (Callback cb : producerCallbacks.getAllValues()) {
-            cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0, 0L, 0, 0),
-                    null);
-        }
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = verifySendRecord();
 
         assertEquals(SERIALIZED_KEY, sent.getValue().key());
         assertEquals(SERIALIZED_RECORD, sent.getValue().value());
 
-        ArgumentCaptor<SourceRecord> recordCapture = ArgumentCaptor.forClass(SourceRecord.class);
-        ArgumentCaptor<String> connectorCapture = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> topicCapture = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<NewTopic> newTopicCapture = ArgumentCaptor.forClass(NewTopic.class);
-
-        verify(transformationChain).apply(recordCapture.capture());
-        verify(statusBackingStore).getTopic(connectorCapture.capture(), topicCapture.capture());
-
-        assertEquals("job", connectorCapture.getValue());
-        assertEquals(TOPIC, topicCapture.getValue());
-
-        verify(admin).createOrFindTopics(newTopicCapture.capture());
-        assertEquals(TOPIC, newTopicCapture.getValue().name());
+        verifyTaskGetTopic();
     }
 
     @Test
@@ -288,23 +260,18 @@ public class AbstractWorkerSourceTaskTest {
         final Long timestamp = System.currentTimeMillis();
         createWorkerTask();
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-                .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-                .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA), eq(RECORD)))
-                .thenReturn(SERIALIZED_RECORD);
-        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
+        expectSendRecord(emptyHeaders());
+        expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
         workerTask.sendRecords();
 
-        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(ProducerRecord.class);
-        verify(producer).send(sent.capture(), any());
-
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = verifySendRecord();
         assertEquals(timestamp, sent.getValue().timestamp());
+
+        verifyTaskGetTopic();
     }
 
     @Test
@@ -312,12 +279,8 @@ public class AbstractWorkerSourceTaskTest {
         final Long timestamp = -3L;
         createWorkerTask();
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-                .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-                .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA), eq(RECORD)))
-                .thenReturn(SERIALIZED_RECORD);
+        expectSendRecord(emptyHeaders());
+        expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
@@ -331,49 +294,30 @@ public class AbstractWorkerSourceTaskTest {
         final Long timestamp = -1L;
         createWorkerTask();
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-                .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-                .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA), eq(RECORD)))
-                .thenReturn(SERIALIZED_RECORD);
-        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
+        expectSendRecord(emptyHeaders());
+        expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
         workerTask.sendRecords();
 
-        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(ProducerRecord.class);
-        verify(producer).send(sent.capture(), any());
-
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = verifySendRecord();
         assertNull(sent.getValue().timestamp());
     }
 
     @Test
     public void testHeaders() {
-        Headers headers = new RecordHeaders();
-        headers.add("header_key", "header_value".getBytes());
+        Headers headers = new RecordHeaders()
+                .add("header_key", "header_value".getBytes());
 
-        org.apache.kafka.connect.header.Headers connectHeaders = new ConnectHeaders();
-        connectHeaders.add("header_key", new SchemaAndValue(Schema.STRING_SCHEMA, "header_value"));
+        org.apache.kafka.connect.header.Headers connectHeaders = new ConnectHeaders()
+                .add("header_key", new SchemaAndValue(Schema.STRING_SCHEMA, "header_value"));
 
         createWorkerTask();
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
-        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
+        expectSendRecord(headers);
+        expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
             new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD,
@@ -381,9 +325,7 @@ public class AbstractWorkerSourceTaskTest {
         );
         workerTask.sendRecords();
 
-        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(
-            ProducerRecord.class);
-        verify(producer).send(sent.capture(), any());
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = verifySendRecord();
 
         assertEquals(SERIALIZED_KEY, sent.getValue().key());
         assertEquals(SERIALIZED_RECORD, sent.getValue().value());
@@ -397,20 +339,8 @@ public class AbstractWorkerSourceTaskTest {
 
         createWorkerTask(stringConverter, testConverter, stringConverter);
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
-        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
+        expectSendRecord(null);
+        expectTopicCreation(TOPIC);
 
         String stringA = "Árvíztűrő tükörfúrógép";
         String encodingA = "latin2";
@@ -430,9 +360,7 @@ public class AbstractWorkerSourceTaskTest {
         );
         workerTask.sendRecords();
 
-        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(
-            ProducerRecord.class);
-        verify(producer, times(2)).send(sent.capture(), any());
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = verifySendRecord(2);
 
         List<ProducerRecord<byte[], byte[]>> capturedValues = sent.getAllValues();
         assertEquals(2, capturedValues.size());
@@ -462,30 +390,18 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
+        expectPreliminaryCalls();
+
         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
         TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
-
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.singletonMap(TOPIC, topicDesc));
+
+        expectSendRecord(emptyHeaders());
 
         workerTask.toSend = Arrays.asList(record1, record2);
         workerTask.sendRecords();
 
-        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(
-            ProducerRecord.class);
-        verify(producer, times(2)).send(sent.capture(), any());
+        verifySendRecord(2);
     }
 
     @Test
@@ -495,20 +411,9 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
-        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
+        expectPreliminaryCalls();
+        expectTopicCreation(TOPIC);
+
         when(admin.describeTopics(TOPIC))
             .thenAnswer(new Answer<Map<String, TopicDescription>>() {
                 boolean firstCall = true;
@@ -539,19 +444,8 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
+        expectPreliminaryCalls();
+
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class)))
             .thenAnswer(new Answer<TopicAdmin.TopicCreationResponse>() {
@@ -585,19 +479,8 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, OTHER_TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
+        expectPreliminaryCalls();
+
         when(admin.describeTopics(anyString())).thenAnswer(new Answer<Map<String, TopicDescription>>() {
             int counter = 0;
 
@@ -612,7 +495,7 @@ public class AbstractWorkerSourceTaskTest {
             }
         });
         when(admin.createOrFindTopics(any(NewTopic.class))).thenAnswer(
-            (Answer<TopicCreationResponse>) invocation -> {
+            (Answer<TopicAdmin.TopicCreationResponse>) invocation -> {
                 NewTopic newTopic = invocation.getArgument(0);
                 return createdTopic(newTopic.name());
             });
@@ -646,19 +529,8 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, OTHER_TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
+        expectPreliminaryCalls();
+
         when(admin.describeTopics(anyString())).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenAnswer(new Answer<TopicAdmin.TopicCreationResponse>() {
             int counter = 0;
@@ -700,19 +572,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
+        expectPreliminaryCalls();
         when(admin.describeTopics(TOPIC)).thenThrow(
             new ConnectException(new TopicAuthorizationException("unauthorized"))
         );
@@ -728,19 +588,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
+        expectPreliminaryCalls();
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenThrow(
             new ConnectException(new TopicAuthorizationException("unauthorized"))
@@ -758,19 +606,8 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
+        expectPreliminaryCalls();
+
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(TopicAdmin.EMPTY_CREATION);
 
@@ -786,25 +623,18 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
+        expectSendRecord(emptyHeaders());
+
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(foundTopic(TOPIC));
 
         workerTask.toSend = Arrays.asList(record1, record2);
         workerTask.sendRecords();
-        verify(producer, times(2)).send(any(ProducerRecord.class), any(Callback.class));
+
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = verifySendRecord(2);
+
+        List<ProducerRecord<byte[], byte[]>> capturedValues = sent.getAllValues();
+        assertEquals(2, capturedValues.size());
     }
 
     @Test
@@ -814,37 +644,116 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        when(transformationChain.apply(any(SourceRecord.class)))
-            .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
-        when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
-            anyString()))
-            .thenAnswer((Answer<byte[]>) invocation -> {
-                String headerValue = invocation.getArgument(3, String.class);
-                return headerValue.getBytes(StandardCharsets.UTF_8);
-            });
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
-            .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
-            eq(RECORD)))
-            .thenReturn(SERIALIZED_RECORD);
+        expectSendRecord(emptyHeaders());
+
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
 
         workerTask.toSend = Arrays.asList(record1, record2);
         workerTask.sendRecords();
-        verify(producer, times(2)).send(any(ProducerRecord.class), any(Callback.class));
+
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = verifySendRecord(2);
+
+        List<ProducerRecord<byte[], byte[]>> capturedValues = sent.getAllValues();
+        assertEquals(2, capturedValues.size());
     }
 
+    private void expectSendRecord(Headers headers) {
+        if (headers != null)
+            expectConvertHeadersAndKeyValue(headers);
+
+        expectApplyTransformationChain();
+
+        expectTaskGetTopic();
+    }
+
+    private ArgumentCaptor<ProducerRecord<byte[], byte[]>> verifySendRecord() {
+        return verifySendRecord(1);
+    }
+
+    private ArgumentCaptor<ProducerRecord<byte[], byte[]>> verifySendRecord(int times) {
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = ArgumentCaptor.forClass(ProducerRecord.class);
+        ArgumentCaptor<Callback> producerCallbacks = ArgumentCaptor.forClass(Callback.class);
+        verify(producer, times(times)).send(sent.capture(), producerCallbacks.capture());
+
+        for (Callback cb : producerCallbacks.getAllValues()) {
+            cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0, 0L, 0, 0),
+                    null);
+        }
+
+        return sent;
+    }
+
+    private void expectTaskGetTopic() {
+        when(statusBackingStore.getTopic(anyString(), anyString())).thenAnswer((Answer<TopicStatus>) invocation -> {
+            String connector = invocation.getArgument(0, String.class);
+            String topic = invocation.getArgument(1, String.class);
+            return new TopicStatus(topic, new ConnectorTaskId(connector, 0), Time.SYSTEM.milliseconds());
+        });
+    }
+
+    private void verifyTaskGetTopic() {
+        ArgumentCaptor<String> connectorCapture = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> topicCapture = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<NewTopic> newTopicCapture = ArgumentCaptor.forClass(NewTopic.class);
+        verify(statusBackingStore).getTopic(connectorCapture.capture(), topicCapture.capture());
+
+        assertEquals("job", connectorCapture.getValue());
+        assertEquals(TOPIC, topicCapture.getValue());
+
+        verify(admin).createOrFindTopics(newTopicCapture.capture());
+        assertEquals(TOPIC, newTopicCapture.getValue().name());
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    private void expectTopicCreation(String topic) {
+        when(admin.describeTopics(topic)).thenReturn(Collections.emptyMap());
+        when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(topic));
+    }
+
+    @SuppressWarnings("SameParameterValue")
     private TopicAdmin.TopicCreationResponse createdTopic(String topic) {
         Set<String> created = Collections.singleton(topic);
         Set<String> existing = Collections.emptySet();
         return new TopicAdmin.TopicCreationResponse(created, existing);
     }
 
+    @SuppressWarnings("SameParameterValue")
     private TopicAdmin.TopicCreationResponse foundTopic(String topic) {
         Set<String> created = Collections.emptySet();
         Set<String> existing = Collections.singleton(topic);
         return new TopicAdmin.TopicCreationResponse(created, existing);
+    }
+
+    private void expectPreliminaryCalls() {
+        expectConvertHeadersAndKeyValue(emptyHeaders());
+        expectApplyTransformationChain();
+    }
+
+    private void expectConvertHeadersAndKeyValue(Headers headers) {
+        if (headers.iterator().hasNext()) {
+            when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
+                    anyString()))
+                    .thenAnswer((Answer<byte[]>) invocation -> {
+                        String headerValue = invocation.getArgument(3, String.class);
+                        return headerValue.getBytes(StandardCharsets.UTF_8);
+                    });
+        }
+
+        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+                .thenReturn(SERIALIZED_KEY);
+        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+                eq(RECORD)))
+                .thenReturn(SERIALIZED_RECORD);
+    }
+
+    private void expectApplyTransformationChain() {
+        when(transformationChain.apply(any(SourceRecord.class)))
+                .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+    }
+
+    private RecordHeaders emptyHeaders() {
+        return new RecordHeaders();
     }
 
     private void createWorkerTask() {
