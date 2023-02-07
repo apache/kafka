@@ -44,7 +44,7 @@ import org.apache.kafka.common.utils.Utils;
 public class LazyIndex<T extends AbstractIndex> {
 
     private enum IndexType {
-      OFFSET, TIME;
+      OFFSET, TIME
     }
 
     private interface IndexWrapper extends Closeable {

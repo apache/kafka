@@ -64,7 +64,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class KTableEfficientRangeQueryTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
-    private enum StoreType { InMemory, RocksDB, Timed };
+    private enum StoreType { InMemory, RocksDB, Timed }
     private static final String TABLE_NAME = "mytable";
     private static final int DATA_SIZE = 5;
 

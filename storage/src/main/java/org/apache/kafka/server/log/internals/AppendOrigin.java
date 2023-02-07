@@ -41,5 +41,5 @@ public enum AppendOrigin {
     /**
      * The log append come from the raft leader, which implies the offsets has been assigned
      */
-    RAFT_LEADER;
+    RAFT_LEADER
 }

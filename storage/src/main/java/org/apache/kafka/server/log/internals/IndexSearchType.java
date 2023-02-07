@@ -17,5 +17,5 @@
 package org.apache.kafka.server.log.internals;
 
 public enum IndexSearchType {
-    KEY, VALUE;
+    KEY, VALUE
 }

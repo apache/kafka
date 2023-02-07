@@ -251,7 +251,7 @@ public class SnapshottableHashTableTest {
      * Assert that the given iterator contains the given elements, in any order.
      * We compare using reference equality here, rather than object equality.
      */
-    private static void assertIteratorYields(Iterator<? extends Object> iter,
+    private static void assertIteratorYields(Iterator<?> iter,
                                              Object... expected) {
         IdentityHashMap<Object, Boolean> remaining = new IdentityHashMap<>();
         for (Object object : expected) {
