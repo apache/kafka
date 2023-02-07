@@ -362,9 +362,9 @@ public class ConsoleProducer {
         private String topic;
         private BufferedReader reader;
         private boolean parseKey;
-        private String keySeparator = "\\t";
+        private String keySeparator = "\t";
         private boolean parseHeaders;
-        private String headersDelimiter = "\\t";
+        private String headersDelimiter = "\t";
         private String headersSeparator = ",";
         private String headersKeySeparator = ":";
         private boolean ignoreError;
@@ -460,7 +460,7 @@ public class ConsoleProducer {
                 if (ignoreError) {
                     return null;
                 }
-                throw new KafkaException("No " + demarcationName + " found on line number " + lineNumber + ": " + line);
+                throw new KafkaException("No " + demarcationName + " found on line number " + lineNumber + ": '" + line + "'");
             }
             return line.substring(startIndex, index);
         }
@@ -471,14 +471,14 @@ public class ConsoleProducer {
                         int i = pair.indexOf(headersKeySeparator);
                         if (i == -1) {
                             if (ignoreError) {
-                                return null;
+                                return new Header(pair, null);
                             }
                             throw new KafkaException("No header key separator found in pair '" + pair + "' on line number " + lineNumber);
                         }
 
                         String headerKey = pair.substring(0, i);
                         if (headerKey.equals(nullMarker)) {
-                            throw new KafkaException("Header keys should not be equal to the null marker " + nullMarker + "' as they can't be null");
+                            throw new KafkaException("Header keys should not be equal to the null marker '" + nullMarker + "' as they can't be null");
                         }
 
                         String value = pair.substring(i + headersKeySeparator.length());
@@ -504,13 +504,22 @@ public class ConsoleProducer {
         }
     }
 
-    private static class Header {
+    // VisibleForTesting
+    static class Header {
         private final String key;
         private final byte[] value;
 
         Header(String key, byte[] value) {
             this.key = key;
             this.value = value;
+        }
+
+        String key() {
+            return key;
+        }
+
+        byte[] value() {
+            return value;
         }
     }
 }
