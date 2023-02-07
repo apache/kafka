@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.tools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -58,7 +74,7 @@ public class LogDirsCommand {
         Set<String> topics = options.topics();
         Set<Integer> clusterBrokers = adminClient.describeCluster().nodes().get().stream().map(Node::id).collect(Collectors.toSet());
         Set<Integer> inputBrokers = options.brokers();
-        Set<Integer> existingBrokers = inputBrokers.isEmpty() ? new HashSet<>(clusterBrokers): new HashSet<>(inputBrokers);
+        Set<Integer> existingBrokers = inputBrokers.isEmpty() ? new HashSet<>(clusterBrokers) : new HashSet<>(inputBrokers);
         existingBrokers.retainAll(clusterBrokers);
         Set<Integer> nonExistingBrokers = new HashSet<>(inputBrokers);
         nonExistingBrokers.removeAll(clusterBrokers);
@@ -66,7 +82,7 @@ public class LogDirsCommand {
         if (!nonExistingBrokers.isEmpty()) {
             throw new TerseException(
                     String.format(
-                            "ERROR: The given brokers do not exist from --broker-list: %s. Current existent brokers: %s\n",
+                            "ERROR: The given brokers do not exist from --broker-list: %s. Current existent brokers: %s%n",
                             commaDelimitedStringFromIntegerSet(nonExistingBrokers),
                             commaDelimitedStringFromIntegerSet(clusterBrokers)));
         } else {
@@ -75,7 +91,7 @@ public class LogDirsCommand {
             Map<Integer, Map<String, LogDirDescription>> logDirInfosByBroker = describeLogDirsResult.allDescriptions().get();
 
             System.out.printf(
-                    "Received log directory information from brokers %s\n",
+                    "Received log directory information from brokers %s%n",
                     commaDelimitedStringFromIntegerSet(existingBrokers));
             System.out.println(formatAsJson(logDirInfosByBroker, topics));
         }
@@ -88,45 +104,43 @@ public class LogDirsCommand {
     private static List<Map<String, Object>> fromReplicasInfoToPrintableRepresentation(Map<TopicPartition, ReplicaInfo> replicasInfo) {
         return replicasInfo.entrySet().stream().map(entry -> {
             TopicPartition topicPartition = entry.getKey();
-            ReplicaInfo replicaInfo = entry.getValue();
             return new HashMap<String, Object>() {{
-                put("partition", topicPartition.toString());
-                put("size", replicaInfo.size());
-                put("offsetLag", replicaInfo.offsetLag());
-                put("isFuture", replicaInfo.isFuture());
-            }};
+                    put("partition", topicPartition.toString());
+                    put("size", entry.getValue().size());
+                    put("offsetLag", entry.getValue().offsetLag());
+                    put("isFuture", entry.getValue().isFuture());
+                }};
         }).collect(Collectors.toList());
     }
 
     private static List<Map<String, Object>> fromLogDirInfosToPrintableRepresentation(Map<String, LogDirDescription> logDirInfos, Set<String> topicSet) {
         return logDirInfos.entrySet().stream().map(entry -> {
             String logDir = entry.getKey();
-            LogDirDescription logDirInfo = entry.getValue();
             return new HashMap<String, Object>() {{
-                put("logDir", logDir);
-                put("error", logDirInfo.error() != null ? logDirInfo.error().getClass().getName() : null);
-                put("partitions", fromReplicasInfoToPrintableRepresentation(
-                        logDirInfo.replicaInfos().entrySet().stream().filter(entry -> {
-                            TopicPartition topicPartition = entry.getKey();
-                            return topicSet.isEmpty() || topicSet.contains(topicPartition.topic());
-                        }).collect(Collectors.toMap(Entry::getKey, Entry::getValue))
-                ));
-            }};
+                    put("logDir", logDir);
+                    put("error", entry.getValue().error() != null ? entry.getValue().error().getClass().getName() : null);
+                    put("partitions", fromReplicasInfoToPrintableRepresentation(
+                            entry.getValue().replicaInfos().entrySet().stream().filter(entry -> {
+                                TopicPartition topicPartition = entry.getKey();
+                                return topicSet.isEmpty() || topicSet.contains(topicPartition.topic());
+                            }).collect(Collectors.toMap(Entry::getKey, Entry::getValue))
+                    ));
+                }};
         }).collect(Collectors.toList());
     }
 
     private static String formatAsJson(Map<Integer, Map<String, LogDirDescription>> logDirInfosByBroker, Set<String> topicSet) throws JsonProcessingException {
         return new ObjectMapper().writeValueAsString(new HashMap<String, Object>() {{
-            put("version", 1);
-            put("brokers", logDirInfosByBroker.entrySet().stream().map(entry -> {
-                int broker = entry.getKey();
-                Map<String, LogDirDescription> logDirInfos = entry.getValue();
-                return new HashMap<String, Object>() {{
-                    put("broker", broker);
-                    put("logDirs", fromLogDirInfosToPrintableRepresentation(logDirInfos, topicSet));
-                }};
-            }).collect(Collectors.toList()));
-        }});
+                put("version", 1);
+                put("brokers", logDirInfosByBroker.entrySet().stream().map(entry -> {
+                    int broker = entry.getKey();
+                    Map<String, LogDirDescription> logDirInfos = entry.getValue();
+                    return new HashMap<String, Object>() {{
+                            put("broker", broker);
+                            put("logDirs", fromLogDirInfosToPrintableRepresentation(logDirInfos, topicSet));
+                        }};
+                }).collect(Collectors.toList()));
+            }});
     }
 
     private static Admin createAdminClient(LogDirsCommandOptions options) throws IOException {
