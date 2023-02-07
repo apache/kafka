@@ -946,16 +946,9 @@ public class UtilsTest {
     }
 
     @Test
-    public void testSaturatedAdd() {
-        assertEquals(2, Utils.saturatedAdd(1, 1));
-        assertEquals(0, Utils.saturatedAdd(0, 0));
-        assertEquals(Long.MAX_VALUE, Utils.saturatedAdd(Long.MAX_VALUE, 1));
-    }
-
-    @Test
-    public void testSaturatedMultiply() {
-        assertEquals(4, Utils.saturatedMultiply(2, 2));
-        assertEquals(0, Utils.saturatedMultiply(0, 0));
-        assertEquals(Long.MAX_VALUE, Utils.saturatedMultiply(Long.MAX_VALUE, Long.MAX_VALUE));
+    public void testMsToNs() {
+        assertEquals(1000000, Utils.msToNs(1));
+        assertEquals(0, Utils.msToNs(0));
+        assertThrows(IllegalArgumentException.class, () -> Utils.msToNs(Long.MAX_VALUE));
     }
 }

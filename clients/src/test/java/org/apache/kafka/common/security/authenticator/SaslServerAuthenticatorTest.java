@@ -244,7 +244,7 @@ public class SaslServerAuthenticatorTest {
     }
 
     @Test
-    public void testSessionWontExpiresWithLargeExpirationTime() throws IOException {
+    public void testSessionWontExpireWithLargeExpirationTime() throws IOException {
         String mechanism = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
         SaslServer saslServer = mock(SaslServer.class);
         MockTime time = new MockTime(0, 1, 1000);
@@ -264,16 +264,11 @@ public class SaslServerAuthenticatorTest {
 
             when(saslServer.isComplete()).thenReturn(false).thenReturn(true);
             mockRequest(saslAuthenticateRequest(), transportLayer);
-            authenticator.authenticate();
 
-            // expected to get Long.MAX_VALUE as expiration time
-            assertEquals(Long.MAX_VALUE, authenticator.serverSessionExpirationTimeNanos());
-
-            ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
-            consumeSizeAndHeader(secondResponseSent);
-            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(secondResponseSent, (short) 2);
-            // expected to respond with Long.MAX_VALUE session lifetime
-            assertEquals(Long.MAX_VALUE, response.sessionLifetimeMs());
+            Throwable t = assertThrows(IllegalArgumentException.class, () -> authenticator.authenticate());
+            assertEquals(ArithmeticException.class, t.getCause().getClass());
+            assertEquals("Cannot convert " + Long.MAX_VALUE + " millisecond to nanosecond due to arithmetic overflow",
+                t.getMessage());
         }
     }
 

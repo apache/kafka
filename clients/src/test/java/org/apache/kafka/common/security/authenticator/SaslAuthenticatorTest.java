@@ -164,7 +164,6 @@ public class SaslAuthenticatorTest {
     private Map<String, Object> saslServerConfigs;
     private CredentialCache credentialCache;
     private int nextCorrelationId;
-    private SaslClientAuthenticator saslClientAuthenticator;
 
     @BeforeEach
     public void setup() throws Exception {
@@ -183,9 +182,6 @@ public class SaslAuthenticatorTest {
         needLargeExpiration = false;
         if (server != null)
             this.server.close();
-        if (saslClientAuthenticator != null) {
-            saslClientAuthenticator.close();
-        }
         if (selector != null)
             this.selector.close();
     }
@@ -1634,13 +1630,19 @@ public class SaslAuthenticatorTest {
         saslClientConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, AlternateLoginCallbackHandler.class);
 
         createCustomClientConnection(securityProtocol, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, node, true);
-        checkClientConnection(node);
-        // ensure metrics are as expected
-        server.verifyAuthenticationMetrics(1, 0);
-        server.verifyReauthenticationMetrics(0, 0);
 
-        // ensure the sasl client session expiration timestamp is not overflowed (a negative value)
-        assertEquals(Long.MAX_VALUE, saslClientAuthenticator.clientSessionReauthenticationTimeNanos());
+        // channel should be not null before sasl handshake
+        assertNotNull(selector.channel(node));
+
+        TestUtils.waitForCondition(() -> {
+            selector.poll(1000);
+            // this channel should be closed due to session timeout calculation overflow
+            return selector.channel(node) == null;
+        }, "channel didn't close with large re-authentication value");
+
+        // ensure metrics are as expected
+        server.verifyAuthenticationMetrics(0, 0);
+        server.verifyReauthenticationMetrics(0, 0);
     }
 
     @Test
@@ -2078,7 +2080,7 @@ public class SaslAuthenticatorTest {
                                                                        TransportLayer transportLayer,
                                                                        Subject subject) {
 
-                saslClientAuthenticator = new SaslClientAuthenticator(configs, callbackHandler, id, subject,
+                return new SaslClientAuthenticator(configs, callbackHandler, id, subject,
                     servicePrincipal, serverHost, saslMechanism, true,
                     transportLayer, time, new LogContext()) {
                     @Override
@@ -2090,8 +2092,6 @@ public class SaslAuthenticatorTest {
                         // Don't set version so that headers are disabled
                     }
                 };
-
-                return saslClientAuthenticator;
             }
         };
     }
@@ -2121,11 +2121,9 @@ public class SaslAuthenticatorTest {
                                                                            TransportLayer transportLayer,
                                                                            Subject subject) {
 
-                    saslClientAuthenticator = new SaslClientAuthenticator(configs, callbackHandler, id, subject,
+                    return new SaslClientAuthenticator(configs, callbackHandler, id, subject,
                         servicePrincipal, serverHost, saslMechanism, true,
                         transportLayer, time, new LogContext());
-
-                    return saslClientAuthenticator;
                 }
             };
         }

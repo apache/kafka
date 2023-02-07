@@ -1497,31 +1497,25 @@ public final class Utils {
         return str.substring(0, str.length() - oldSuffix.length()) + newSuffix;
     }
 
+    /**
+     * Return the provided value or 0 if it's a negative value
+     * @param value the value to be calculated
+     * @return the provided value or 0 if it's a negative value
+     */
     public static long zeroIfNegative(long value) {
         return Math.max(0L, value);
     }
 
-    // returns the sum of a and b unless it would overflow, which will return Long.MAX_VALUE
-    public static long saturatedAdd(long a, long b) {
-        long result = Long.MAX_VALUE;
+    /**
+     * convert millisecond to nanosecond, or throw exception if overflow
+     * @param timeMs the time in millisecond
+     * @return the converted nanosecond
+     */
+    public static long msToNs(long timeMs) {
         try {
-            result = Math.addExact(a, b);
+            return Math.multiplyExact(1000 * 1000, timeMs);
         } catch (ArithmeticException e) {
-            log.info("The sum of {} and {} is overflowed, set to Long.MAX_VALUE", a, b);
+            throw new IllegalArgumentException("Cannot convert " + timeMs + " millisecond to nanosecond due to arithmetic overflow", e);
         }
-
-        return result;
-    }
-
-    // returns the product of a and b unless it would overflow, which will return Long.MAX_VALUE
-    public static long saturatedMultiply(long a, long b) {
-        long result = Long.MAX_VALUE;
-        try {
-            result = Math.multiplyExact(a, b);
-        } catch (ArithmeticException e) {
-            log.info("The product of {} and {} is overflowed, set to Long.MAX_VALUE", a, b);
-        }
-
-        return result;
     }
 }
