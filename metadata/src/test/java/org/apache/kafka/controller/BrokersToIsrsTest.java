@@ -24,6 +24,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -39,9 +40,7 @@ public class BrokersToIsrsTest {
 
     private static Set<TopicIdPartition> toSet(TopicIdPartition... partitions) {
         HashSet<TopicIdPartition> set = new HashSet<>();
-        for (TopicIdPartition partition : partitions) {
-            set.add(partition);
-        }
+        set.addAll(Arrays.asList(partitions));
         return set;
     }
 
