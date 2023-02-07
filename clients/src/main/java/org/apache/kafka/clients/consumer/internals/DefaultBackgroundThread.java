@@ -257,7 +257,7 @@ public class DefaultBackgroundThread extends KafkaThread {
 
         @Override
         public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-            List<NetworkClientDelegate.UnsentRequest> request = fetchRequests();
+            List<NetworkClientDelegate.UnsentRequest> request = getFetchRequest();
             return new NetworkClientDelegate.PollResult(0, request);
         }
 
@@ -282,9 +282,11 @@ public class DefaultBackgroundThread extends KafkaThread {
                         .replaced(data.toReplace())
                         .rackId(clientRackId);
                 NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(request, Optional.of(fetchTarget));
-                req.future().whenComplete(
+                req.future().whenComplete((r, t) -> {
+                    if (t == null ) {
                         subscriptionState.updateFetchPosition();
-                );
+                    }
+                });
                 // TODO: add callback to update fetch position upon success
             }
             return reqs;
