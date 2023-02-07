@@ -372,12 +372,18 @@
       <allow pkg="org.apache.kafka.server.log" />
       <allow pkg="org.apache.kafka.server.record" />
       <allow pkg="org.apache.kafka.test" />
-
+      <allow pkg="org.apache.kafka.storage"/>
       <subpackage name="remote">
         <allow pkg="scala.collection" />
       </subpackage>
 
     </subpackage>
+  </subpackage>
+
+  <subpackage name="storage.internals">
+    <allow pkg="org.apache.kafka.server"/>
+    <allow pkg="org.apache.kafka.storage.internals"/>
+    <allow pkg="org.apache.kafka.common" />
   </subpackage>
 
   <subpackage name="shell">

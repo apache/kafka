@@ -16,10 +16,10 @@
   */
 package kafka.server.checkpoints
 
-import kafka.server.epoch.EpochEntry
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.CheckpointFile.EntryFormatter
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.server.log.internals.{EpochEntry, LogDirFailureChannel}
+import org.apache.kafka.storage.internals.checkpoint.CheckpointFileWithFailureHandler
 
 import java.io._
 import java.util.Optional
@@ -65,9 +65,19 @@ class OffsetCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureCh
   val checkpoint = new CheckpointFileWithFailureHandler[(TopicPartition, Long)](file, OffsetCheckpointFile.CurrentVersion,
     OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
 
-  def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets)
+  def write(offsets: Map[TopicPartition, Long]): Unit = {
+    val list: java.util.List[(TopicPartition, Long)] = new java.util.ArrayList[(TopicPartition, Long)](offsets.size)
+    offsets.foreach(x => list.add(x))
+    checkpoint.write(list)
+  }
 
-  def read(): Map[TopicPartition, Long] = checkpoint.read().toMap
+  def read(): Map[TopicPartition, Long] = {
+    val list = checkpoint.read()
+    val result = mutable.Map.empty[TopicPartition, Long]
+    result.sizeHint(list.size())
+    list.forEach { case (tp, offset) => result(tp) = offset }
+    result
+  }
 
 }
 

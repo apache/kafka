@@ -19,8 +19,6 @@ package kafka.server
 
 import kafka.log.remote.RemoteLogManager
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo, UnifiedLog}
-import kafka.server.checkpoints.LeaderEpochCheckpointFile
-import kafka.server.epoch.EpochEntry
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
@@ -29,13 +27,14 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.common.CheckpointFile.CheckpointReadBuffer
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.internals.EpochEntry
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 
 import java.io.{BufferedReader, File, InputStreamReader}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, StandardCopyOption}
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
 
 class ReplicaFetcherThread(name: String,
                            leader: LeaderEndPoint,
@@ -329,12 +328,12 @@ class ReplicaFetcherThread(name: String,
     nextOffset
   }
 
-  private def readLeaderEpochCheckpoint(rlm: RemoteLogManager, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): collection.Seq[EpochEntry] = {
+  private def readLeaderEpochCheckpoint(rlm: RemoteLogManager, remoteLogSegmentMetadata: RemoteLogSegmentMetadata): java.util.List[EpochEntry] = {
     val inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.LEADER_EPOCH)
     val bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     try {
-      val readBuffer = new CheckpointReadBuffer[EpochEntry]("", bufferedReader,  0, LeaderEpochCheckpointFile.Formatter)
-      readBuffer.read().asScala.toSeq
+      val readBuffer = new CheckpointReadBuffer[EpochEntry]("", bufferedReader,  0, LeaderEpochCheckpointFile.FORMATTER)
+      readBuffer.read()
     } finally {
       bufferedReader.close()
     }

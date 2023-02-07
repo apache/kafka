@@ -19,16 +19,16 @@ package kafka.log.remote
 import kafka.cluster.Partition
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
-import kafka.server.checkpoints.LeaderEpochCheckpoint
-import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.utils.MockTime
 import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.log.internals.{OffsetIndex, TimeIndex}
+import org.apache.kafka.server.log.internals._
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage._
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -63,8 +63,8 @@ class RemoteLogManagerTest {
 
   val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
     var epochs: Seq[EpochEntry] = Seq()
-    override def write(epochs: Iterable[EpochEntry]): Unit = this.epochs = epochs.toSeq
-    override def read(): Seq[EpochEntry] = this.epochs
+    override def write(epochs: util.Collection[EpochEntry]): Unit = this.epochs = epochs.asScala.toSeq
+    override def read(): util.List[EpochEntry] = this.epochs.asJava
   }
 
   @BeforeEach
@@ -227,9 +227,9 @@ class RemoteLogManagerTest {
       .thenAnswer(_ => new ByteArrayInputStream(records(ts, startOffset, targetLeaderEpoch).buffer().array()))
 
     val leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint)
-    leaderEpochFileCache.assign(epoch = 5, startOffset = 99L)
-    leaderEpochFileCache.assign(epoch = targetLeaderEpoch, startOffset = startOffset)
-    leaderEpochFileCache.assign(epoch = 12, startOffset = 500L)
+    leaderEpochFileCache.assign(5, 99L)
+    leaderEpochFileCache.assign(targetLeaderEpoch, startOffset)
+    leaderEpochFileCache.assign(12, 500L)
 
     remoteLogManager.onLeadershipChange(Set(mockPartition(leaderTopicIdPartition)), Set(), topicIds)
     // Fetching message for timestamp `ts` will return the message with startOffset+1, and `ts+1` as there are no

@@ -18,13 +18,8 @@ package kafka.log
 
 import com.yammer.metrics.core.Timer
 
-import java.io.{File, IOException}
-import java.nio.file.{Files, NoSuchFileException}
-import java.nio.file.attribute.FileTime
-import java.util.concurrent.TimeUnit
 import kafka.common.LogSegmentOffsetOverflowException
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils._
 import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.errors.CorruptRecordException
@@ -32,8 +27,13 @@ import org.apache.kafka.common.record.FileRecords.{LogOffsetPosition, TimestampA
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, CompletedTxn, LazyIndex, LogConfig, LogOffsetMetadata, OffsetIndex, OffsetPosition, TimeIndex, TimestampOffset, TransactionIndex, TxnIndexSearchResult, FetchDataInfo}
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 
+import java.io.{File, IOException}
+import java.nio.file.attribute.FileTime
+import java.nio.file.{Files, NoSuchFileException}
 import java.util.Optional
+import java.util.concurrent.TimeUnit
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 import scala.math._
@@ -249,13 +249,13 @@ class LogSegment private[log] (val log: FileRecords,
     if (batch.hasProducerId) {
       val producerId = batch.producerId
       val appendInfo = producerStateManager.prepareUpdate(producerId, origin = AppendOrigin.REPLICATION)
-      val maybeCompletedTxn = appendInfo.append(batch, Optional.empty()).asScala
+      val maybeCompletedTxn = appendInfo.append(batch, Optional.empty())
       producerStateManager.update(appendInfo)
-      maybeCompletedTxn.foreach { completedTxn =>
+      maybeCompletedTxn.ifPresent(completedTxn => {
         val lastStableOffset = producerStateManager.lastStableOffset(completedTxn)
         updateTxnIndex(completedTxn, lastStableOffset)
         producerStateManager.completeTxn(completedTxn)
-      }
+      })
     }
     producerStateManager.updateMapEndOffset(batch.lastOffset + 1)
   }
@@ -363,7 +363,7 @@ class LogSegment private[log] (val log: FileRecords,
 
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
           leaderEpochCache.foreach { cache =>
-            if (batch.partitionLeaderEpoch >= 0 && cache.latestEpoch.forall(batch.partitionLeaderEpoch > _))
+            if (batch.partitionLeaderEpoch >= 0 && cache.latestEpoch.asScala.forall(batch.partitionLeaderEpoch > _))
               cache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
           }
           updateProducerState(producerStateManager, batch)
