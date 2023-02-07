@@ -190,7 +190,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
 
         if (segment == null) {
-            expiredRecordSensor.record(1.0d, ProcessorContextUtils.currentSystemTime(context));
+            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
             StoreQueryUtils.updatePosition(position, stateStoreContext);
