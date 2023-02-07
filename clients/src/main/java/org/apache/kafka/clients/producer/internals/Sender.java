@@ -550,7 +550,7 @@ public class Sender implements Runnable {
         RequestHeader requestHeader = response.requestHeader();
         int correlationId = requestHeader.correlationId();
         if (response.wasTimedOut()) {
-            log.trace("Cancelled request with header {} due to node {} being disconnected due to timeout",
+            log.trace("Cancelled request with header {} due to the last request to node {} timed out",
                 requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
                 completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.REQUEST_TIMED_OUT, String.format("Disconnected from node %s due to timeout", response.destination())),
