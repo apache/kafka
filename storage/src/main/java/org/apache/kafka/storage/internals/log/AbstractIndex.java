@@ -32,7 +32,6 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.util.Objects;
 import java.util.OptionalInt;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -65,7 +64,8 @@ public abstract class AbstractIndex implements Closeable {
      */
     private volatile int maxEntries;
     /** The number of entries in this index */
-    private final AtomicInteger entries;
+    private volatile int entries;
+
 
     /**
      * @param file The index file
@@ -81,7 +81,7 @@ public abstract class AbstractIndex implements Closeable {
 
         createAndAssignMmap();
         this.maxEntries = mmap.limit() / entrySize();
-        this.entries = new AtomicInteger(mmap.position() / entrySize());
+        this.entries = mmap.position() / entrySize();
     }
 
     private void createAndAssignMmap() throws IOException {
@@ -144,7 +144,7 @@ public abstract class AbstractIndex implements Closeable {
      * True iff there are no more slots available in this index
      */
     public boolean isFull() {
-        return entries.get() >= maxEntries;
+        return entries >= maxEntries;
     }
 
     public File file() {
@@ -156,7 +156,7 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     public int entries() {
-        return this.entries.get();
+        return this.entries;
     }
 
     public long length() {
@@ -261,7 +261,7 @@ public abstract class AbstractIndex implements Closeable {
     public void trimToValidSize() throws IOException {
         lock.lock();
         try {
-            resize(entrySize() * entries.get());
+            resize(entrySize() * entries);
         } finally {
             lock.unlock();
         }
@@ -271,7 +271,7 @@ public abstract class AbstractIndex implements Closeable {
      * The number of bytes actually used by this index
      */
     public int sizeInBytes() {
-        return entrySize() * entries.get();
+        return entrySize() * entries;
     }
 
     public void close() throws IOException {
@@ -408,12 +408,12 @@ public abstract class AbstractIndex implements Closeable {
 
     // The caller is expected to hold `lock` when calling this method
     protected void incrementEntries() {
-        entries.incrementAndGet();
+        ++entries;
     }
 
-    protected void truncateToEntries0(int entriesNum) {
-        this.entries.set(entriesNum);
-        mmap.position(entriesNum * entrySize());
+    protected void truncateToEntries0(int entries) {
+        this.entries = entries;
+        mmap.position(entries * entrySize());
     }
 
     /**
@@ -483,14 +483,14 @@ public abstract class AbstractIndex implements Closeable {
     private int indexSlotRangeFor(ByteBuffer idx, long target, IndexSearchType searchEntity,
                                   SearchResultType searchResultType) {
         // check if the index is empty
-        if (entries.get() == 0)
+        if (entries == 0)
             return -1;
 
-        int firstHotEntry = Math.max(0, entries.get() - 1 - warmEntries());
+        int firstHotEntry = Math.max(0, entries - 1 - warmEntries());
         // check if the target offset is in the warm section of the index
         if (compareIndexEntry(parseEntry(idx, firstHotEntry), target, searchEntity) < 0) {
             return binarySearch(idx, target, searchEntity,
-                searchResultType, firstHotEntry, entries.get() - 1);
+                searchResultType, firstHotEntry, entries - 1);
         }
 
         // check if the target offset is smaller than the least offset
@@ -526,7 +526,7 @@ public abstract class AbstractIndex implements Closeable {
             case LARGEST_LOWER_BOUND:
                 return lo;
             case SMALLEST_UPPER_BOUND:
-                if (lo == entries.get() - 1)
+                if (lo == entries - 1)
                     return -1;
                 else
                     return lo + 1;
