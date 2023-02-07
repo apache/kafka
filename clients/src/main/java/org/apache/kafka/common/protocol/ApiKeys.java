@@ -216,32 +216,26 @@ public enum ApiKeys {
     }
 
     public boolean isVersionEnabled(short apiVersion, boolean enableUnstableLastVersion) {
-        // ApiVersions API is a particular case that we always accept any, even
-        // unsupported, versions.
+        // ApiVersions API is a particular case. The client always send the highest version
+        // that it supports and the server fails back to version 0 if it does not know it.
+        // Hence, we have to accept any versions here, even unsupported ones.
         if (this == ApiKeys.API_VERSIONS) return true;
 
-        if (!messageType.latestVersionUnstable() || enableUnstableLastVersion) {
-            return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
-        } else {
-            return apiVersion >= oldestVersion() && apiVersion <= latestVersion() - 1;
-        }
+        return apiVersion >= oldestVersion() && apiVersion <= messageType.highestStableVersion(enableUnstableLastVersion);
     }
 
     public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion) {
-        if (!messageType.latestVersionUnstable() || enableUnstableLastVersion) {
+        short oldestVersion = oldestVersion();
+        short latestStableVersion = messageType.highestStableVersion(enableUnstableLastVersion);
+
+        // API is entirely disabled if latestStableVersion is smaller than oldestVersion.
+        if (latestStableVersion >= oldestVersion) {
             return Optional.of(new ApiVersionsResponseData.ApiVersion()
-                .setApiKey(messageType.apiKey())
-                .setMinVersion(oldestVersion())
-                .setMaxVersion(latestVersion()));
+               .setApiKey(messageType.apiKey())
+               .setMinVersion(oldestVersion)
+               .setMaxVersion(latestStableVersion));
         } else {
-            if (latestVersion() - 1 >= oldestVersion()) {
-                return Optional.of(new ApiVersionsResponseData.ApiVersion()
-                    .setApiKey(messageType.apiKey())
-                    .setMinVersion(oldestVersion())
-                    .setMaxVersion((short) (latestVersion() - 1)));
-            } else {
-                return Optional.empty();
-            }
+            return Optional.empty();
         }
     }
 

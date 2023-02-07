@@ -26,10 +26,13 @@ import org.apache.kafka.common.requests.ApiVersionsResponse
 import scala.jdk.CollectionConverters._
 
 trait ApiVersionManager {
+  def enableUnstableLastVersion: Boolean
   def listenerType: ListenerType
   def enabledApis: collection.Set[ApiKeys]
   def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse
-  def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean
+  def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
+    apiKey != null && apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
+  }
   def newRequestMetrics: RequestChannel.Metrics = new network.RequestChannel.Metrics(enabledApis)
 }
 
@@ -55,7 +58,7 @@ class SimpleApiVersionManager(
   val listenerType: ListenerType,
   val enabledApis: collection.Set[ApiKeys],
   brokerFeatures: Features[SupportedVersionRange],
-  enableUnstableLastVersion: Boolean
+  val enableUnstableLastVersion: Boolean
 ) extends ApiVersionManager {
 
   def this(
@@ -75,10 +78,6 @@ class SimpleApiVersionManager(
   override def apiVersionResponse(requestThrottleMs: Int): ApiVersionsResponse = {
     ApiVersionsResponse.createApiVersionsResponse(requestThrottleMs, apiVersions, brokerFeatures)
   }
-
-  override def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
-    apiKey != null && apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
-  }
 }
 
 class DefaultApiVersionManager(
@@ -86,7 +85,7 @@ class DefaultApiVersionManager(
   forwardingManager: Option[ForwardingManager],
   features: BrokerFeatures,
   metadataCache: MetadataCache,
-  enableUnstableLastVersion: Boolean
+  val enableUnstableLastVersion: Boolean
 ) extends ApiVersionManager {
 
   val enabledApis = ApiKeys.apisForListener(listenerType).asScala
@@ -106,9 +105,5 @@ class DefaultApiVersionManager(
       listenerType,
       enableUnstableLastVersion
     )
-  }
-
-  override def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
-    apiKey != null && apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
   }
 }

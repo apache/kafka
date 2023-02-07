@@ -156,6 +156,8 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("%n");
         generateAccessor("highestSupportedVersion", "short");
         buffer.printf("%n");
+        generateHighestStableVersion();
+        buffer.printf("%n");
         generateAccessor("listeners", "EnumSet<ListenerType>");
         buffer.printf("%n");
         generateAccessor("latestVersionUnstable", "boolean");
@@ -404,6 +406,23 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             RequestListenerType scope = listenerIter.next();
             buffer.printf("%s%s%n", scope.name(), listenerIter.hasNext() ? "," : ";");
         }
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateHighestStableVersion() {
+        buffer.printf("public short highestStableVersion(boolean enableUnstableLastVersion) {%n");
+        buffer.incrementIndent();
+        buffer.printf("if (!this.latestVersionUnstable || enableUnstableLastVersion) {%n");
+        buffer.incrementIndent();
+        buffer.printf("return this.highestSupportedVersion;%n");
+        buffer.decrementIndent();
+        buffer.printf("} else {%n");
+        buffer.incrementIndent();
+        buffer.printf("// A negative value means that the API has no enabled versions.%n");
+        buffer.printf("return (short) (this.highestSupportedVersion - 1);%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }

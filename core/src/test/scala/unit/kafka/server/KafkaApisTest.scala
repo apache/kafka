@@ -4790,4 +4790,20 @@ class KafkaApisTest {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleListPartitionReassignmentsRequest)
   }
+
+  @Test
+  def testConsumerGroupHeartbeatReturnsUnsupportedVersion(): Unit = {
+    val requestChannelRequest = buildRequest(
+      new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData()
+        .setGroupId("group")
+      ).build()
+    )
+
+    createKafkaApis().handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val expectedHeartbeatResponse = new ConsumerGroupHeartbeatResponseData()
+      .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+    val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(expectedHeartbeatResponse, response.data)
+  }
 }

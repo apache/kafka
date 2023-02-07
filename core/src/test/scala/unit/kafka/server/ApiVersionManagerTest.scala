@@ -51,6 +51,25 @@ class ApiVersionManagerTest {
     })
   }
 
+  @ParameterizedTest
+  @EnumSource(classOf[ListenerType])
+  def testDisabledApis(apiScope: ListenerType): Unit = {
+    val versionManager = new DefaultApiVersionManager(
+      listenerType = apiScope,
+      forwardingManager = None,
+      features = brokerFeatures,
+      metadataCache = metadataCache,
+      enableUnstableLastVersion = false
+    )
+
+    ApiKeys.apisForListener(apiScope).forEach { apiKey =>
+      if (apiKey.messageType.latestVersionUnstable()) {
+        assertFalse(versionManager.isApiEnabled(apiKey, apiKey.latestVersion),
+          s"$apiKey version ${apiKey.latestVersion} should be disabled.")
+      }
+    }
+  }
+
   @Test
   def testControllerApiIntersection(): Unit = {
     val controllerMinVersion: Short = 1
@@ -139,5 +158,4 @@ class ApiVersionManagerTest {
     val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
     assertNotNull(apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id))
   }
-
 }
