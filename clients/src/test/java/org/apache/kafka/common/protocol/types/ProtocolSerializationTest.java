@@ -154,7 +154,7 @@ public class ProtocolSerializationTest {
                 if (!f.def.type.isNullable())
                     fail("Should not allow serialization of null value.");
             } catch (SchemaException e) {
-                assertFalse(f.def.type.isNullable(), f.toString() + " should not be nullable");
+                assertFalse(f.def.type.isNullable(), f + " should not be nullable");
             } finally {
                 this.struct.set(f, o);
             }

@@ -1153,7 +1153,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 List<String> path = new ArrayList<>(Collections.singleton(pair.srcMemberId));
                 if (isLinked(pair.dstMemberId, pair.srcMemberId, reducedPairs, path) && !in(path, cycles)) {
                     cycles.add(new ArrayList<>(path));
-                    log.error("A cycle of length {} was found: {}", path.size() - 1, path.toString());
+                    log.error("A cycle of length {} was found: {}", path.size() - 1, path);
                 }
             }
 
