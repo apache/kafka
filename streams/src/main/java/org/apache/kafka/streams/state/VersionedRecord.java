@@ -16,12 +16,10 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.streams.KeyValue;
-
 import java.util.Objects;
 
 /**
- * Combines a value from a {@link KeyValue} with a timestamp, for use as the return type
+ * Combines a value (from a key-value record) with a timestamp, for use as the return type
  * from {@link VersionedKeyValueStore#get(Object, long)} and related methods.
  *
  * @param <V> The value type
