@@ -154,8 +154,6 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("%n");
         generateAccessor("lowestSupportedVersion", "short");
         buffer.printf("%n");
-        generateAccessor("highestSupportedVersion", "short");
-        buffer.printf("%n");
         generateHighestStableVersion();
         buffer.printf("%n");
         generateAccessor("listeners", "EnumSet<ListenerType>");
@@ -411,7 +409,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
     }
 
     private void generateHighestStableVersion() {
-        buffer.printf("public short highestStableVersion(boolean enableUnstableLastVersion) {%n");
+        buffer.printf("public short highestSupportedVersion(boolean enableUnstableLastVersion) {%n");
         buffer.incrementIndent();
         buffer.printf("if (!this.latestVersionUnstable || enableUnstableLastVersion) {%n");
         buffer.incrementIndent();

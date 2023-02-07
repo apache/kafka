@@ -111,7 +111,7 @@ public class ApiMessageTypeTest {
             for (Schema schema : type.responseSchemas())
                 assertNotNull(schema);
 
-            assertEquals(type.highestSupportedVersion() + 1, type.requestSchemas().length);
+            assertEquals(type.highestSupportedVersion(true) + 1, type.requestSchemas().length);
         }
     }
 

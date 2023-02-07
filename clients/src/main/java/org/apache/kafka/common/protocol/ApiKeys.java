@@ -196,7 +196,11 @@ public enum ApiKeys {
     }
 
     public short latestVersion() {
-        return messageType.highestSupportedVersion();
+        return messageType.highestSupportedVersion(true);
+    }
+
+    public short latestVersion(boolean enableUnstableLastVersion) {
+        return messageType.highestSupportedVersion(enableUnstableLastVersion);
     }
 
     public short oldestVersion() {
@@ -221,19 +225,19 @@ public enum ApiKeys {
         // Hence, we have to accept any versions here, even unsupported ones.
         if (this == ApiKeys.API_VERSIONS) return true;
 
-        return apiVersion >= oldestVersion() && apiVersion <= messageType.highestStableVersion(enableUnstableLastVersion);
+        return apiVersion >= oldestVersion() && apiVersion <= latestVersion(enableUnstableLastVersion);
     }
 
     public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion) {
         short oldestVersion = oldestVersion();
-        short latestStableVersion = messageType.highestStableVersion(enableUnstableLastVersion);
+        short latestVersion = latestVersion(enableUnstableLastVersion);
 
         // API is entirely disabled if latestStableVersion is smaller than oldestVersion.
-        if (latestStableVersion >= oldestVersion) {
+        if (latestVersion >= oldestVersion) {
             return Optional.of(new ApiVersionsResponseData.ApiVersion()
                .setApiKey(messageType.apiKey())
                .setMinVersion(oldestVersion)
-               .setMaxVersion(latestStableVersion));
+               .setMaxVersion(latestVersion));
         } else {
             return Optional.empty();
         }
