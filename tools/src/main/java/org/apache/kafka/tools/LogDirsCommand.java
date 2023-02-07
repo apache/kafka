@@ -22,11 +22,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class LogDirsCommand {
 
@@ -36,10 +35,7 @@ public class LogDirsCommand {
 
     static int mainNoExit(String... args) {
         try {
-            LogDirsCommandOptions logDirsCommandOptions = new LogDirsCommandOptions(args);
-            try (Admin adminClient = createAdminClient(logDirsCommandOptions)) {
-                execute(logDirsCommandOptions, adminClient);
-            }
+            execute(args);
             return 0;
         } catch (TerseException e) {
             System.err.println(e.getMessage());
@@ -51,11 +47,17 @@ public class LogDirsCommand {
         }
     }
 
-    static void execute(LogDirsCommandOptions logDirsCommandOptions, Admin adminClient) throws TerseException, JsonProcessingException, ExecutionException, InterruptedException {
-        Set<String> topicList = Arrays.stream(logDirsCommandOptions.options.valueOf(logDirsCommandOptions.topicListOpt).split(",")).filter(x -> !x.isEmpty()).collect(Collectors.toSet());
+    private static void execute(String... args) throws Exception {
+        LogDirsCommandOptions options = new LogDirsCommandOptions(args);
+        try (Admin adminClient = createAdminClient(options)) {
+            execute(options, adminClient);
+        }
+    }
+
+    static void execute(LogDirsCommandOptions options, Admin adminClient) throws Exception {
+        Set<String> topics = options.topics();
         Set<Integer> clusterBrokers = adminClient.describeCluster().nodes().get().stream().map(Node::id).collect(Collectors.toSet());
-        Optional<String> brokers = Optional.ofNullable(logDirsCommandOptions.options.valueOf(logDirsCommandOptions.brokerListOpt));
-        Set<Integer> inputBrokers = Arrays.stream(brokers.orElse("").split(",")).filter(x -> !x.isEmpty()).map(Integer::valueOf).collect(Collectors.toSet());
+        Set<Integer> inputBrokers = options.brokers();
         Set<Integer> existingBrokers = inputBrokers.isEmpty() ? new HashSet<>(clusterBrokers): new HashSet<>(inputBrokers);
         existingBrokers.retainAll(clusterBrokers);
         Set<Integer> nonExistingBrokers = new HashSet<>(inputBrokers);
@@ -65,8 +67,8 @@ public class LogDirsCommand {
             throw new TerseException(
                     String.format(
                             "ERROR: The given brokers do not exist from --broker-list: %s. Current existent brokers: %s\n",
-                            nonExistingBrokers.stream().map(String::valueOf).collect(Collectors.joining(",")),
-                            clusterBrokers.stream().map(String::valueOf).collect(Collectors.joining(","))));
+                            commaDelimitedStringFromIntegerSet(nonExistingBrokers),
+                            commaDelimitedStringFromIntegerSet(clusterBrokers)));
         } else {
             System.out.println("Querying brokers for log directories information");
             DescribeLogDirsResult describeLogDirsResult = adminClient.describeLogDirs(existingBrokers);
@@ -74,9 +76,13 @@ public class LogDirsCommand {
 
             System.out.printf(
                     "Received log directory information from brokers %s\n",
-                    existingBrokers.stream().map(String::valueOf).collect(Collectors.joining(",")));
-            System.out.println(formatAsJson(logDirInfosByBroker, topicList));
+                    commaDelimitedStringFromIntegerSet(existingBrokers));
+            System.out.println(formatAsJson(logDirInfosByBroker, topics));
         }
+    }
+
+    private static String commaDelimitedStringFromIntegerSet(Set<Integer> set) {
+        return set.stream().map(String::valueOf).collect(Collectors.joining(","));
     }
 
     private static List<Map<String, Object>> fromReplicasInfoToPrintableRepresentation(Map<TopicPartition, ReplicaInfo> replicasInfo) {
@@ -98,7 +104,7 @@ public class LogDirsCommand {
             LogDirDescription logDirInfo = entry.getValue();
             return new HashMap<String, Object>() {{
                 put("logDir", logDir);
-                put("error", Optional.ofNullable(logDirInfo.error()).map(ex -> ex.getClass().getName()));
+                put("error", logDirInfo.error() != null ? logDirInfo.error().getClass().getName() : null);
                 put("partitions", fromReplicasInfoToPrintableRepresentation(
                         logDirInfo.replicaInfos().entrySet().stream().filter(entry -> {
                             TopicPartition topicPartition = entry.getKey();
@@ -123,12 +129,12 @@ public class LogDirsCommand {
         }});
     }
 
-    private static Admin createAdminClient(LogDirsCommandOptions logDirsCommandOptions) throws IOException {
+    private static Admin createAdminClient(LogDirsCommandOptions options) throws IOException {
         Properties props = new Properties();
-        if (logDirsCommandOptions.options.has(logDirsCommandOptions.commandConfigOpt)) {
-            Utils.loadProps(logDirsCommandOptions.options.valueOf(logDirsCommandOptions.commandConfigOpt));
+        if (options.hasCommandConfig()) {
+            Utils.loadProps(options.commandConfig());
         }
-        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, logDirsCommandOptions.options.valueOf(logDirsCommandOptions.bootstrapServerOpt));
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, options.bootstrapServers());
         props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "log-dirs-tool");
         return Admin.create(props);
     }
@@ -150,7 +156,8 @@ public class LogDirsCommand {
                     .ofType(String.class);
             commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
                     .withRequiredArg()
-                    .describedAs("Admin client property file");
+                    .describedAs("Admin client property file")
+                    .ofType(String.class);
             describeOpt = parser.accepts("describe", "Describe the specified log directories on the specified brokers.");
             topicListOpt = parser.accepts("topic-list", "The list of topics to be queried in the form \"topic1,topic2,topic3\". " +
                             "All topics will be queried if no topic list is specified")
@@ -162,13 +169,38 @@ public class LogDirsCommand {
                             "All brokers in the cluster will be queried if no broker list is specified")
                     .withRequiredArg()
                     .describedAs("Broker list")
-                    .ofType(String.class);
+                    .ofType(String.class)
+                    .defaultsTo("");
 
             options = parser.parse(args);
 
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to query log directory usage on the specified brokers.");
 
             CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, describeOpt);
+        }
+
+        private Stream<String> splitAtCommasAndFilterOutEmpty(OptionSpec<String> option) {
+            return Arrays.stream(options.valueOf(option).split(",")).filter(x -> !x.isEmpty());
+        }
+
+        private String bootstrapServers() {
+            return options.valueOf(bootstrapServerOpt);
+        }
+
+        private boolean hasCommandConfig() {
+            return options.has(commandConfigOpt);
+        }
+
+        private String commandConfig() {
+            return options.valueOf(commandConfigOpt);
+        }
+
+        private Set<String> topics() {
+            return splitAtCommasAndFilterOutEmpty(topicListOpt).collect(Collectors.toSet());
+        }
+
+        private Set<Integer> brokers() {
+            return splitAtCommasAndFilterOutEmpty(brokerListOpt).map(Integer::valueOf).collect(Collectors.toSet());
         }
     }
 }
