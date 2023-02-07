@@ -22,9 +22,11 @@ import java.io.InputStream;
 import java.util.Properties;
 
 /**
- * Typical implementations of this interface convert data from an `InputStream` received via `init` into a
- * `ProducerRecord` instance on each invocation of `readMessage`.
- * This is used by the `ConsoleProducer`.
+ * Typical implementations of this interface convert data from an {@link InputStream} received via
+ * {@link MessageReader#init(InputStream, Properties)} into a {@link ProducerRecord} instance on each
+ * invocation of `{@link MessageReader#readMessage()}`.
+ *
+ * This is used by the {@link ConsoleProducer}.
  */
 public interface MessageReader {
 

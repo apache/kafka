@@ -56,14 +56,22 @@ import static org.apache.kafka.common.utils.Utils.loadProps;
 import static org.apache.kafka.server.util.CommandLineUtils.maybeMergeOptions;
 import static org.apache.kafka.server.util.CommandLineUtils.parseKeyValueArgs;
 
+/**
+ *
+ */
 public class ConsoleProducer {
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
+        ConsoleProducer consoleProducer = new ConsoleProducer();
+        consoleProducer.start(args);
+    }
+
+    void start(String[] args) {
         try {
             ConsoleProducerConfig config = new ConsoleProducerConfig(args);
-            MessageReader reader = (MessageReader) Class.forName(config.readerClass()).getDeclaredConstructor().newInstance();
+            MessageReader reader = createMessageReader(config);
             reader.init(System.in, config.getReaderProps());
 
-            KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config.getProducerProps());
+            KafkaProducer<byte[], byte[]> producer = createKafkaProducer(config.getProducerProps());
             Exit.addShutdownHook("producer-shutdown-hook", producer::close);
 
             ProducerRecord<byte[], byte[]> record;
@@ -85,7 +93,17 @@ public class ConsoleProducer {
         Exit.exit(0);
     }
 
-    private static void send(KafkaProducer<byte[], byte[]> producer, ProducerRecord<byte[], byte[]> record, boolean sync) throws Exception {
+    // VisibleForTesting
+    KafkaProducer<byte[], byte[]> createKafkaProducer(Properties props) {
+        return new KafkaProducer<>(props);
+    }
+
+    // VisibleForTesting
+    MessageReader createMessageReader(ConsoleProducerConfig config) throws ReflectiveOperationException {
+        return (MessageReader) Class.forName(config.readerClass()).getDeclaredConstructor().newInstance();
+    }
+
+    private void send(KafkaProducer<byte[], byte[]> producer, ProducerRecord<byte[], byte[]> record, boolean sync) throws Exception {
         if (sync) {
             producer.send(record).get();
         } else {
@@ -480,6 +498,7 @@ public class ConsoleProducer {
             return parseKey;
         }
 
+        // VisibleForTesting
         boolean parseHeaders() {
             return parseHeaders;
         }
