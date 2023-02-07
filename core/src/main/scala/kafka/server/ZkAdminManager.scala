@@ -48,7 +48,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
 import scala.jdk.CollectionConverters._

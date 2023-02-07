@@ -47,10 +47,10 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
-import org.apache.kafka.server.log.internals.LogConfig
-import org.apache.kafka.server.log.internals.LogConfig.MessageFormatVersion
+import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn

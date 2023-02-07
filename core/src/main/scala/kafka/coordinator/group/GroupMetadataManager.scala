@@ -46,8 +46,8 @@ import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicPartition
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
-import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation}
 import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer

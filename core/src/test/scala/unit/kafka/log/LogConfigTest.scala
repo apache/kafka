@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test
 
 import java.util.{Collections, Properties}
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
-import org.apache.kafka.server.log.internals.{LogConfig, ThrottledReplicaListValidator}
+import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._

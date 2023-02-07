@@ -15,7 +15,7 @@ package kafka.admin
 import kafka.server.{ConfigType, DynamicConfig, KafkaServer}
 import kafka.utils.TestUtils
 import kafka.zk.AdminZkClient
-import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.Seq
 

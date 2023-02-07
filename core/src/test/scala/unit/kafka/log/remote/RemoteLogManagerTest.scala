@@ -24,11 +24,11 @@ import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.log.internals._
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
+import org.apache.kafka.storage.internals.log.{EpochEntry, OffsetIndex, TimeIndex}
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}

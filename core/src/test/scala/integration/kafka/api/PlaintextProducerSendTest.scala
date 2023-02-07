@@ -25,7 +25,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidTimestampException, RecordTooLargeException, SerializationException, TimeoutException}
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch, Records, TimestampType}
 import org.apache.kafka.common.serialization.ByteArraySerializer
-import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest

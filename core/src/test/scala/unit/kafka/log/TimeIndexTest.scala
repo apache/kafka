@@ -20,7 +20,7 @@ package kafka.log
 import java.io.File
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
-import org.apache.kafka.server.log.internals.{CorruptIndexException, TimeIndex, TimestampOffset}
+import org.apache.kafka.storage.internals.log.{CorruptIndexException, TimeIndex, TimestampOffset}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 
