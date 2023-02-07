@@ -354,8 +354,7 @@ public class ClientState {
     }
 
     public String currentAssignment() {
-        return "[activeTasks: (" + activeTasks +
-                ") standbyTasks: (" + standbyTasks + ")]";
+        return String.format("[%d activeTasks: (%s) %d standbyTasks: (%s)]", activeTasks.size(), activeTasks, standbyTasks.size(), standbyTasks);
     }
 
     @Override
