@@ -128,6 +128,54 @@ class PreferredControllerTest extends ZooKeeperTestHarness {
     ensureControllersInBrokers(Seq(controllerId))
   }
 
+  @Test
+  def testAllPreferredControllerDownWithPreferredControllersAndNoFallback(): Unit = {
+    // create 5 brokers, 3 of the them are preferred controllers.
+    val brokerConfigs = Seq((0, false), (1, false), (2, true), (3, true), (4, true))
+    createBrokersWithPreferredControllers(brokerConfigs, allowFallback = true)
+
+    // the controller would be one of the preferred controllers.
+    ensureControllersInBrokers(Seq(2, 3, 4))
+
+    // shut down all preferred controllers
+    brokers(2).shutdown()
+    brokers(3).shutdown()
+    brokers(4).shutdown()
+
+    // verify the controller is now on non-preferred controller
+    ensureControllersInBrokers(Seq(0, 1))
+
+    // bring back one preferred controller
+    brokers(2).startup()
+
+    // the controller would be moved to the preferred controllers. (PreferredControllerChangeHandler)
+    ensureControllersInBrokers(Seq(2))
+  }
+
+  @Test
+  def testAllPreferredControllerDownWithoutPreferredControllersAndNoFallback(): Unit = {
+    // create 5 brokers, 3 of the them are preferred controllers.
+    val brokerConfigs = Seq((0, false), (1, false), (2, true), (3, true), (4, true))
+    createBrokersWithPreferredControllers(brokerConfigs, allowFallback = false)
+
+    // the controller would be one of the preferred controllers.
+    ensureControllersInBrokers(Seq(2, 3, 4))
+
+    // shut down all preferred controllers
+    brokers(2).shutdown()
+    brokers(3).shutdown()
+    brokers(4).shutdown()
+
+    // verify no controller
+    ensureControllersInBrokers(Seq.empty, 5000L)
+
+    // bring back preferred controllers
+    brokers(3).startup()
+
+    // the controller would be one of the preferred controllers.
+    ensureControllersInBrokers(Seq(3))
+  }
+
   private def ensureControllersInBrokers(brokerIds: Seq[Int], timeout: Long = 15000L): Unit = {
     val (controllerId, _) = TestUtils.computeUntilTrue(zkClient.getControllerId, waitTime = timeout) (
       _.exists(controllerId => brokerIds.isEmpty || brokerIds.contains(controllerId))
