@@ -469,6 +469,9 @@ public class InternalTopicManager {
                                                 topicName)
                                         );
                                     }
+                                } else if (cause instanceof TimeoutException) {
+                                    log.error("Creating topic {} timed out.\n" +
+                                            "Error message was: {}", topicName, cause.toString());
                                 } else {
                                     throw new StreamsException(
                                             String.format("Could not create topic %s.", topicName),
@@ -476,9 +479,6 @@ public class InternalTopicManager {
                                     );
                                 }
                             }
-                        } catch (final TimeoutException retriableException) {
-                            log.error("Creating topic {} timed out.\n" +
-                                    "Error message was: {}", topicName, retriableException.toString());
                         }
                     }
                 }
