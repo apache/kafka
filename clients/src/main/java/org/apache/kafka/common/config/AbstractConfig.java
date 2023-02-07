@@ -246,22 +246,13 @@ public class AbstractConfig {
      */
     public Map<String, String> originalsStrings() {
         Map<String, String> copy = new RecordingMap<>();
-        copyAsStrings(originals, copy);
-        return copy;
-    }
-
-    /**
-     * Ensures that all values of a map are strings, and copies them to another map.
-     * @param originals The map to validate.
-     * @param copy The target to copy to.
-     */
-    protected static void copyAsStrings(Map<String, ?> originals, Map<String, String> copy) {
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (!(entry.getValue() instanceof String))
                 throw new ClassCastException("Non-string value found in original settings for key " + entry.getKey() +
                         ": " + (entry.getValue() == null ? null : entry.getValue().getClass().getName()));
             copy.put(entry.getKey(), (String) entry.getValue());
         }
+        return copy;
     }
 
     /**

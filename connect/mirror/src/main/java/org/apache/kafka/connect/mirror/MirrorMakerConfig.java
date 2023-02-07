@@ -90,13 +90,11 @@ public class MirrorMakerConfig extends AbstractConfig {
 
     private final Map<String, String> rawProperties;
 
-    @SuppressWarnings("unchecked")
-    public MirrorMakerConfig(Map<?, ?> props) {
+    public MirrorMakerConfig(Map<String, String> props) {
         super(config(), props, true);
         plugins = new Plugins(originalsStrings());
 
-        rawProperties = new HashMap<>();
-        copyAsStrings((Map<String, ?>) props, rawProperties);
+        rawProperties = new HashMap<>(props);
     }
 
     public Set<String> clusters() {
@@ -145,7 +143,7 @@ public class MirrorMakerConfig extends AbstractConfig {
       */
     public MirrorClientConfig clientConfig(String cluster) {
         Map<String, String> props = new HashMap<>();
-        props.putAll(rawProperties);
+        props.putAll(originalsStrings());
         props.putAll(clusterProps(cluster));
         return new MirrorClientConfig(transform(props));
     }
