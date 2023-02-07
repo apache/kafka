@@ -16,23 +16,32 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.subscription.AbstractSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.subscription.BackgroundThreadSubscriptionState;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -243,7 +252,7 @@ public class DefaultBackgroundThread extends KafkaThread {
         Utils.closeQuietly(metadata, "consumer metadata client");
     }
 
-    static class FetchRequestManager implements RequestManager {
+    class FetchRequestManager implements RequestManager {
         private BackgroundThreadSubscriptionState subscriptionState;
 
         @Override
@@ -252,14 +261,65 @@ public class DefaultBackgroundThread extends KafkaThread {
             return new NetworkClientDelegate.PollResult(0, request);
         }
 
-        private List<NetworkClientDelegate.UnsentRequest> fetchRequests() {
-            // For all topic partition, get the fetch position
-            return List.of(new NetworkClientDelegate.UnsentRequest(data, preferredReplica).future().whenComplete((r, t) -> {
-                if (t != null) {
-                    // update fetch position when succeed
-                    subscriptionState.setFetchPosition();
+        public List<NetworkClientDelegate.UnsentRequest> getFetchRequest() {
+            List<NetworkClientDelegate.UnsentRequest> reqs = new ArrayList<>();
+            Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareFetchRequests();
+            for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
+                final Node fetchTarget = entry.getKey();
+                final FetchSessionHandler.FetchRequestData data = entry.getValue();
+                final short maxVersion;
+                if (!data.canUseTopicIds()) {
+                    maxVersion = (short) 12;
+                } else {
+                    maxVersion = ApiKeys.FETCH.latestVersion();
                 }
-            }));
+                final FetchRequest.Builder request = FetchRequest.Builder
+                        .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend())
+                        .isolationLevel(isolationLevel)
+                        .setMaxBytes(this.maxBytes)
+                        .metadata(data.metadata())
+                        .removed(data.toForget())
+                        .replaced(data.toReplace())
+                        .rackId(clientRackId);
+                NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(request, Optional.of(fetchTarget));
+                req.future().whenComplete(
+                        subscriptionState.updateFetchPosition();
+                );
+                // TODO: add callback to update fetch position upon success
+            }
+            return reqs;
+        }
+
+        private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
+            Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
+            for (TopicPartition partition : fetchablePartitions()) {
+                AbstractSubscriptionState.FetchPosition position = subscriptionState.getFetchPosition(partition);
+                Optional<Node> leaderOpt = position.currentLeader.leader;
+                Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
+                FetchSessionHandler.Builder builder = fetchable.get(node);
+                if (builder == null) {
+                    int id = node.id();
+                    FetchSessionHandler handler = sessionHandler(id);
+                    if (handler == null) {
+                        handler = new FetchSessionHandler(logContext, id);
+                        sessionHandlers.put(id, handler);
+                    }
+                    builder = handler.newBuilder();
+                    fetchable.put(node, builder);
+                }
+                builder.add(partition, new FetchRequest.PartitionData(
+                        topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID),
+                        position.offset, FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
+                        position.currentLeader.epoch, Optional.empty()));
+            }
+
+            Map<Node, FetchSessionHandler.FetchRequestData> reqs = new LinkedHashMap<>();
+            for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet()) {
+                reqs.put(entry.getKey(), entry.getValue().build());
+            }
+            return reqs;
         }
     }
+
+    class FetchRequestCallback extends
 }

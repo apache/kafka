@@ -10,7 +10,6 @@ public class BackgroundThreadSubscriptionState extends AbstractSubscriptionState
     }
 
     public void updateConsumedPosition(Map<TopicPartition, OffsetAndMetadata> offsets) {
-
     }
 
     public void allConsumed() {
@@ -19,7 +18,8 @@ public class BackgroundThreadSubscriptionState extends AbstractSubscriptionState
     public void fetchablePartitions() {
     }
 
-    public void getFetchPosition() {
+    public FetchPosition getFetchPosition(TopicPartition partition) {
+        return null;
     }
 
     public void setFetchPosition() {

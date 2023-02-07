@@ -2,9 +2,13 @@ package org.apache.kafka.clients.consumer.internals.subscription;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -35,6 +39,38 @@ abstract public class AbstractSubscriptionState {
     protected final PartitionStates<TopicPartitionState> assignment;
 
     private int assignmentId = 0;
+
+    public boolean assignFromUser(Set<TopicPartition> partitions) {
+        //setSubscriptionType(SubscriptionState.SubscriptionType.USER_ASSIGNED);
+
+        if (this.assignment.partitionSet().equals(partitions))
+            return false;
+
+        incAssignment();
+
+        // update the subscribed topics
+        Set<String> manualSubscribedTopics = new HashSet<>();
+        Map<TopicPartition, TopicPartitionState> partitionToState = new HashMap<>();
+        for (TopicPartition partition : partitions) {
+            TopicPartitionState state = assignment.stateValue(partition);
+            if (state == null)
+                state = new TopicPartitionState();
+            partitionToState.put(partition, state);
+
+            manualSubscribedTopics.add(partition.topic());
+        }
+
+        this.assignment.set(partitionToState);
+        return changeSubscription(manualSubscribedTopics);
+    }
+
+    boolean changeSubscription(Set<String> topicsToSubscribe) {
+        if (subscription.equals(topicsToSubscribe))
+            return false;
+
+        subscription = topicsToSubscribe;
+        return true;
+    }
 
 
     public AbstractSubscriptionState() {
@@ -86,7 +122,7 @@ abstract public class AbstractSubscriptionState {
         public Optional<Integer> offsetEpoch;
     }
 
-    public static class FetchPosition extends Position {
+    public class FetchPosition extends Position {
         Optional<Integer> offsetEpoch;
         Metadata.LeaderAndEpoch currentLeader;
 

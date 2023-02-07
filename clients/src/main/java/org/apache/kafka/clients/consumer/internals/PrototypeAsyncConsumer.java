@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
@@ -450,7 +451,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void assign(Collection<TopicPartition> partitions) {
-        eventHandler.add(new PartitionAssignment(partitions));
+        eventHandler.add(new PartitionAssignmentApplicationEvent(partitions));
         subscriptions.assignFromUser(new HashSet<>(partitions));
     }
 
@@ -510,6 +511,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
             if (exception != null)
                 log.error("Offset commit with offsets {} failed", offsets, exception);
+        }
+    }
+
+    private class PartitionAssignmentApplicationEvent extends ApplicationEvent {
+
+        protected PartitionAssignmentApplicationEvent(Collection<TopicPartition> type) {
+            super(Type.ASSIGN);
         }
     }
 }

@@ -26,6 +26,6 @@ public interface RequestManager {
     PollResult poll(long currentTimeMs);
 
     enum Type {
-        COORDINATOR, METADATA, COMMIT
+        COORDINATOR, METADATA, FETCH, COMMIT
     }
 }
