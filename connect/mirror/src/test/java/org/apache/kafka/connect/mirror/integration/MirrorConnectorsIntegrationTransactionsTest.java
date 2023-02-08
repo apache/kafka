@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.util.HashMap;
@@ -48,10 +49,13 @@ public class MirrorConnectorsIntegrationTransactionsTest extends MirrorConnector
         super.startClusters();
     }
 
+    /**
+     * Produce records with a short-lived transactional producer to interleave transaction markers in the topic.
+     */
     @Override
-    protected void produce(EmbeddedConnectCluster cluster, String topic, Integer partition, String key, String value) {
+    protected void produce(EmbeddedKafkaCluster cluster, String topic, Integer partition, String key, String value) {
         ProducerRecord<byte[], byte[]> msg = new ProducerRecord<>(topic, partition, key == null ? null : key.getBytes(), value == null ? null : value.getBytes());
-        try (Producer<byte[], byte[]> producer = cluster.kafka().createProducer(producerProps)) {
+        try (Producer<byte[], byte[]> producer = cluster.createProducer(producerProps)) {
             producer.initTransactions();
             producer.beginTransaction();
             producer.send(msg).get(120000, TimeUnit.MILLISECONDS);

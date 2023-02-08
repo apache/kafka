@@ -662,7 +662,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     protected void produceMessages(EmbeddedConnectCluster cluster, String topicName) {
         Map<String, String> recordSent = generateRecords(NUM_RECORDS_PRODUCED);
         for (Map.Entry<String, String> entry : recordSent.entrySet()) {
-            produce(cluster, topicName, null, entry.getKey(), entry.getValue());
+            produce(cluster.kafka(), topicName, null, entry.getKey(), entry.getValue());
         }
     }
 
@@ -673,11 +673,20 @@ public class MirrorConnectorsIntegrationBaseTest {
         int cnt = 0;
         for (int r = 0; r < NUM_RECORDS_PER_PARTITION; r++)
             for (int p = 0; p < numPartitions; p++)
-                produce(cluster, topicName, p, "key", "value-" + cnt++);
+                produce(cluster.kafka(), topicName, p, "key", "value-" + cnt++);
     }
 
-    protected void produce(EmbeddedConnectCluster cluster, String topic, Integer partition, String key, String value) {
-        cluster.kafka().produce(topic, partition, key, value);
+    /**
+     * Produce a test record to a Kafka cluster.
+     * This method allows subclasses to configure and use their own Kafka Producer instead of using the built-in default.
+     * @param cluster   Kafka cluster that should receive the record
+     * @param topic     Topic to send the record to, non-null
+     * @param partition Partition to send the record to, maybe null.
+     * @param key       Kafka key for the record
+     * @param value     Kafka value for the record
+     */
+    protected void produce(EmbeddedKafkaCluster cluster, String topic, Integer partition, String key, String value) {
+        cluster.produce(topic, partition, key, value);
     }
 
     protected static Map<TopicPartition, OffsetAndMetadata> waitForCheckpointOnAllPartitions(
