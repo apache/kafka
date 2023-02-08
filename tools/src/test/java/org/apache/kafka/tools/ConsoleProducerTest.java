@@ -283,49 +283,51 @@ public class ConsoleProducerTest {
             }
         });
 
-        String topic = "p1nKFl0yD";
-        byte[] one = "1".getBytes(UTF_8), two = "2".getBytes(UTF_8), three = "3".getBytes(UTF_8);
-        ProducerRecord<byte[], byte[]>
-                r1 = new ProducerRecord<>(topic, one, one),
-                r2 = new ProducerRecord<>(topic, two, two),
-                r3 = new ProducerRecord<>(topic, three, three);
+        try {
+            String topic = "p1nKFl0yD";
+            byte[] one = "1".getBytes(UTF_8), two = "2".getBytes(UTF_8), three = "3".getBytes(UTF_8);
+            ProducerRecord<byte[], byte[]>
+                    r1 = new ProducerRecord<>(topic, one, one),
+                    r2 = new ProducerRecord<>(topic, two, two),
+                    r3 = new ProducerRecord<>(topic, three, three);
 
-        Future<RecordMetadata> producerResponse = completedFuture(null);
+            Future<RecordMetadata> producerResponse = completedFuture(null);
 
-        if (sync) {
-            doReturn(producerResponse).when(producerMock).send(any());
+            if (sync) {
+                doReturn(producerResponse).when(producerMock).send(any());
 
-        } else {
-            doReturn(producerResponse).when(producerMock).send(any(), any());
+            } else {
+                doReturn(producerResponse).when(producerMock).send(any(), any());
+            }
+
+            doReturn(readerMock).when(consoleProducerSpy).createMessageReader(any(ConsoleProducerConfig.class));
+            doReturn(producerMock).when(consoleProducerSpy).createKafkaProducer(any(Properties.class));
+            when(readerMock.readMessage())
+                    .thenReturn(r1)
+                    .thenReturn(r2)
+                    .thenReturn(r3)
+                    .thenReturn(null);
+
+            String[] args = new String[] {
+                "--bootstrap-server", "localhost:9092",
+                "--topic", topic,
+                sync ? "--sync" : ""
+            };
+
+            consoleProducerSpy.start(args);
+
+            if (sync) {
+                verify(producerMock).send(eq(r1));
+                verify(producerMock).send(eq(r2));
+                verify(producerMock).send(eq(r3));
+
+            } else {
+                verify(producerMock).send(eq(r1), any(Callback.class));
+                verify(producerMock).send(eq(r2), any(Callback.class));
+                verify(producerMock).send(eq(r3), any(Callback.class));
+            }
+        } finally {
+            Exit.resetExitProcedure();
         }
-
-        doReturn(readerMock).when(consoleProducerSpy).createMessageReader(any(ConsoleProducerConfig.class));
-        doReturn(producerMock).when(consoleProducerSpy).createKafkaProducer(any(Properties.class));
-        when(readerMock.readMessage())
-                .thenReturn(r1)
-                .thenReturn(r2)
-                .thenReturn(r3)
-                .thenReturn(null);
-
-        String[] args = new String[] {
-            "--bootstrap-server", "localhost:9092",
-            "--topic", topic,
-            sync ? "--sync" : ""
-        };
-
-        consoleProducerSpy.start(args);
-
-        if (sync) {
-            verify(producerMock).send(eq(r1));
-            verify(producerMock).send(eq(r2));
-            verify(producerMock).send(eq(r3));
-
-        } else {
-            verify(producerMock).send(eq(r1), any(Callback.class));
-            verify(producerMock).send(eq(r2), any(Callback.class));
-            verify(producerMock).send(eq(r3), any(Callback.class));
-        }
-
-        Exit.resetExitProcedure();
     }
 }

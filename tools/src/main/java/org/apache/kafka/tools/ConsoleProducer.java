@@ -57,7 +57,7 @@ import static org.apache.kafka.server.util.CommandLineUtils.maybeMergeOptions;
 import static org.apache.kafka.server.util.CommandLineUtils.parseKeyValueArgs;
 
 /**
- *
+ * Sends {@link ProducerRecord} generated from lines read on the standard input.
  */
 public class ConsoleProducer {
     public static void main(String[] args) {
@@ -277,33 +277,17 @@ public class ConsoleProducer {
             ToolsUtils.validatePortOrDie(parser, brokerHostsAndPorts());
         }
 
-        String topic() {
-            return options.valueOf(topicOpt);
-        }
-
-        String bootstrapServer() {
-            return options.valueOf(bootstrapServerOpt);
-        }
-
-        String brokerList() {
-            return options.valueOf(brokerListOpt);
-        }
-
         String brokerHostsAndPorts() {
-            return options.has(bootstrapServerOpt) ? bootstrapServer() : brokerList();
+            return options.has(bootstrapServerOpt) ? options.valueOf(bootstrapServerOpt) : options.valueOf(brokerListOpt);
         }
 
         boolean sync() {
             return options.has(syncOpt);
         }
 
-        String compressionCodecOptionValue() {
-            return options.valueOf(compressionCodecOpt);
-        }
-
         String compressionCodec() {
             if (options.has(compressionCodecOpt)) {
-                String codecOptValue = compressionCodecOptionValue();
+                String codecOptValue = options.valueOf(compressionCodecOpt);
                 // Defaults to gzip if no value is provided.
                 return codecOptValue == null || codecOptValue.isEmpty() ? CompressionType.GZIP.name : codecOptValue;
             }
@@ -322,7 +306,7 @@ public class ConsoleProducer {
                 properties.putAll(loadProps(options.valueOf(readerConfigOpt)));
             }
 
-            properties.put("topic", topic());
+            properties.put("topic", options.valueOf(topicOpt));
             properties.putAll(parseKeyValueArgs(options.valuesOf(propertyOpt)));
             return properties;
         }
@@ -335,7 +319,7 @@ public class ConsoleProducer {
             }
 
             properties.putAll(parseKeyValueArgs(options.valuesOf(producerPropertyOpt)));
-            properties.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServer() != null ? bootstrapServer() : brokerList());
+            properties.put(BOOTSTRAP_SERVERS_CONFIG, brokerHostsAndPorts());
             properties.put(COMPRESSION_TYPE_CONFIG, compressionCodec());
             properties.putIfAbsent(CLIENT_ID_CONFIG, "console-producer");
             properties.put(KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");

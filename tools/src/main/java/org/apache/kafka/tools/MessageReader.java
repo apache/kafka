@@ -30,9 +30,19 @@ import java.util.Properties;
  */
 public interface MessageReader {
 
+    /**
+     * Sets the {@link InputStream} consumed by this reader, and provides configuration properties.
+     */
     default void init(InputStream inputStream, Properties props) {}
+
+    /**
+     * Reads the next message in the underlying input stream.
+     */
     ProducerRecord<byte[], byte[]> readMessage();
 
+    /**
+     * Closes this reader. There is no guarantee the underlying stream is closed.
+     */
     default void close() {}
 
 }
