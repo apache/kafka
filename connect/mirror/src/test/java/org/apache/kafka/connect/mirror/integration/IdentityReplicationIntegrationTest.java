@@ -217,19 +217,19 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         topicShouldNotBeCreated(primary, "backup.test-topic-1");
         waitForTopicCreated(backup, "test-topic-1");
         // create a consumer at backup cluster with same consumer group Id to consume 1 topic
-        Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(
-                consumerProps, "test-topic-1");
+        try (Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(
+                consumerProps, "test-topic-1")) {
 
-        waitForConsumerGroupFullSync(backup, Collections.singletonList("test-topic-1"),
-                consumerGroupName, NUM_RECORDS_PRODUCED);
+            waitForConsumerGroupFullSync(backup, Collections.singletonList("test-topic-1"),
+                    consumerGroupName, NUM_RECORDS_PRODUCED);
 
-        ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
+            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
 
-        // the size of consumer record should be zero, because the offsets of the same consumer group
-        // have been automatically synchronized from primary to backup by the background job, so no
-        // more records to consume from the replicated topic by the same consumer group at backup cluster
-        assertEquals(0, records.count(), "consumer record size is not zero");
-        backupConsumer.close();
+            // the size of consumer record should be zero, because the offsets of the same consumer group
+            // have been automatically synchronized from primary to backup by the background job, so no
+            // more records to consume from the replicated topic by the same consumer group at backup cluster
+            assertEquals(0, records.count(), "consumer record size is not zero");
+        }
 
         // now create a new topic in primary cluster
         primary.kafka().createTopic("test-topic-2", NUM_PARTITIONS);
@@ -247,16 +247,16 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         }
 
         // create a consumer at backup cluster with same consumer group Id to consume old and new topic
-        backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
-                "group.id", consumerGroupName), "test-topic-1", "test-topic-2");
+        try (Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
+                "group.id", consumerGroupName), "test-topic-1", "test-topic-2")) {
 
-        waitForConsumerGroupFullSync(backup, Arrays.asList("test-topic-1", "test-topic-2"),
-                consumerGroupName, NUM_RECORDS_PRODUCED);
+            waitForConsumerGroupFullSync(backup, Arrays.asList("test-topic-1", "test-topic-2"),
+                    consumerGroupName, NUM_RECORDS_PRODUCED);
 
-        records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
-        // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
-        assertEquals(0, records.count(), "consumer record size is not zero");
-        backupConsumer.close();
+            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
+            // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
+            assertEquals(0, records.count(), "consumer record size is not zero");
+        }
     }
 
     /*
