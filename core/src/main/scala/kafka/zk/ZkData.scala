@@ -1068,7 +1068,8 @@ object MigrationZNode {
         metadataEpoch,
         modifyTimeMs,
         zkVersion,
-        ZkVersion.UnknownVersion))
+        ZkMigrationLeadershipState.EMPTY.zkControllerEpoch(),
+        ZkMigrationLeadershipState.EMPTY.zkControllerEpochZkVersion()))
     }.getOrElse(throw new KafkaException(s"Failed to parse the migration json $jsonDataAsString"))
   }
 }
@@ -1087,7 +1088,8 @@ object ZkData {
     LogDirEventNotificationZNode.path,
     DelegationTokenAuthZNode.path,
     ExtendedAclZNode.path,
-    MigrationZNode.path) ++ ZkAclStore.securePaths
+    MigrationZNode.path,
+    FeatureZNode.path) ++ ZkAclStore.securePaths
 
   // These are persistent ZK paths that should exist on kafka broker startup.
   val PersistentZkPaths = Seq(

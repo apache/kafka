@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.{MigrationClient, ZkMigrationLeadershipState}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
@@ -40,7 +41,10 @@ import java.util.function.Consumer
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
-
+/**
+ * Migration client in KRaft controller responsible for handling communication to Zookeeper and
+ * the ZkBrokers present in the cluster.
+ */
 class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Logging {
 
   override def getOrCreateMigrationRecoveryState(initialState: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
@@ -54,19 +58,20 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
 
   override def claimControllerLeadership(state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     zkClient.tryRegisterKRaftControllerAsActiveController(state.kraftControllerId(), state.kraftControllerEpoch()) match {
-      case SuccessfulRegistrationResult(_, controllerEpochZkVersion) => state.withControllerZkVersion(controllerEpochZkVersion)
-      case FailedRegistrationResult() => state.withControllerZkVersion(-1)
+      case SuccessfulRegistrationResult(controllerEpoch, controllerEpochZkVersion) =>
+        state.withZkController(controllerEpoch, controllerEpochZkVersion)
+      case FailedRegistrationResult() => state.withUnknownZkController()
     }
   }
 
   override def releaseControllerLeadership(state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     try {
-      zkClient.deleteController(state.controllerZkVersion())
-      state.withControllerZkVersion(-1)
+      zkClient.deleteController(state.zkControllerEpochZkVersion())
+      state.withUnknownZkController()
     } catch {
       case _: ControllerMovedException =>
         // If the controller moved, no need to release
-        state.withControllerZkVersion(-1)
+        state.withUnknownZkController()
       case t: Throwable =>
         throw new RuntimeException("Could not release controller leadership due to underlying error", t)
     }
@@ -203,7 +208,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
         recordConsumer.accept(List(new ApiMessageAndVersion(new ProducerIdsRecord()
           .setBrokerEpoch(-1)
           .setBrokerId(producerIdBlock.assignedBrokerId)
-          .setNextProducerId(producerIdBlock.firstProducerId), ProducerIdsRecord.HIGHEST_SUPPORTED_VERSION)).asJava)
+          .setNextProducerId(producerIdBlock.firstProducerId()), ProducerIdsRecord.HIGHEST_SUPPORTED_VERSION)).asJava)
       case None => // Nothing to migrate
     }
   }
@@ -267,8 +272,18 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
 
     val requests = Seq(createTopicZNode, createPartitionsZNode) ++ createPartitionZNodeReqs
-    val (migrationZkVersion, _) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
-    state.withMigrationZkVersion(migrationZkVersion)
+    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
+    val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
+    if (resultCodes(TopicZNode.path(topicName)).equals(Code.NODEEXISTS)) {
+      // topic already created, just return
+      state
+    } else if (resultCodes.forall { case (_, code) => code.equals(Code.OK) } ) {
+      // ok
+      state.withMigrationZkVersion(migrationZkVersion)
+    } else {
+      // not ok
+      throw new RuntimeException(s"Failed to create or update topic $topicName. ZK operation had results $resultCodes")
+    }
   }
 
   private def createTopicPartition(topicPartition: TopicPartition): CreateRequest = {
@@ -314,8 +329,13 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     if (requests.isEmpty) {
       state
     } else {
-      val (migrationZkVersion, _) = zkClient.retryMigrationRequestsUntilConnected(requests.toSeq, state)
-      state.withMigrationZkVersion(migrationZkVersion)
+      val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests.toSeq, state)
+      val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
+      if (resultCodes.forall { case (_, code) => code.equals(Code.OK) } ) {
+        state.withMigrationZkVersion(migrationZkVersion)
+      } else {
+        throw new RuntimeException(s"Failed to update partition states: $topicPartitions. ZK transaction had results $resultCodes")
+      }
     }
   }
 
@@ -344,24 +364,27 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
-  def writeClientQuotas(entity: ClientQuotaEntity,
-                        quotas: util.Map[String, Double],
-                        state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
-    val entityMap = entity.entries().asScala
-    val hasUser = entityMap.contains(ConfigType.User)
-    val hasClient = entityMap.contains(ConfigType.Client)
-    val hasIp = entityMap.contains(ConfigType.Ip)
+  override def writeClientQuotas(
+    entity: util.Map[String, String],
+    quotas: util.Map[String, java.lang.Double],
+    state: ZkMigrationLeadershipState
+  ): ZkMigrationLeadershipState = {
+
+    val entityMap = entity.asScala
+    val hasUser = entityMap.contains(ClientQuotaEntity.USER)
+    val hasClient = entityMap.contains(ClientQuotaEntity.CLIENT_ID)
+    val hasIp = entityMap.contains(ClientQuotaEntity.IP)
     val props = new Properties()
     // We store client quota values as strings in the ZK JSON
     quotas.forEach { case (key, value) => props.put(key, value.toString) }
     val (configType, path) = if (hasUser && !hasClient) {
-      (Some(ConfigType.User), Some(entityMap(ConfigType.User)))
+      (Some(ConfigType.User), Some(entityMap(ClientQuotaEntity.USER)))
     } else if (hasUser && hasClient) {
-      (Some(ConfigType.User), Some(s"${entityMap(ConfigType.User)}/clients/${entityMap(ConfigType.Client)}"))
+      (Some(ConfigType.User), Some(s"${entityMap(ClientQuotaEntity.USER)}/clients/${entityMap(ClientQuotaEntity.CLIENT_ID)}"))
     } else if (hasClient) {
-      (Some(ConfigType.Client), Some(entityMap(ConfigType.Client)))
+      (Some(ConfigType.Client), Some(entityMap(ClientQuotaEntity.CLIENT_ID)))
     } else if (hasIp) {
-      (Some(ConfigType.Ip), Some(entityMap(ConfigType.Ip)))
+      (Some(ConfigType.Ip), Some(entityMap(ClientQuotaEntity.IP)))
     } else {
       (None, None)
     }
@@ -379,7 +402,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
         // If we didn't update the migration state, we failed to write the client quota. Try again
         // after recursively create its parent znodes
         val createPath = if (hasUser && hasClient) {
-          s"${ConfigEntityTypeZNode.path(configType.get)}/${entityMap(ConfigType.User)}/clients"
+          s"${ConfigEntityTypeZNode.path(configType.get)}/${entityMap(ClientQuotaEntity.USER)}/clients"
         } else {
           ConfigEntityTypeZNode.path(configType.get)
         }
@@ -394,7 +417,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
-  def writeProducerId(nextProducerId: Long, state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+  override def writeProducerId(nextProducerId: Long, state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     val newProducerIdBlockData = ProducerIdBlockZNode.generateProducerIdBlockJson(
       new ProducerIdsBlock(-1, nextProducerId, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE))
 
@@ -403,9 +426,9 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     state.withMigrationZkVersion(migrationZkVersion)
   }
 
-  def writeConfigs(resource: ConfigResource,
-                   configs: util.Map[String, String],
-                   state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+  override def writeConfigs(resource: ConfigResource,
+                            configs: util.Map[String, String],
+                            state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
     val configType = resource.`type`() match {
       case ConfigResource.Type.BROKER => Some(ConfigType.Broker)
       case ConfigResource.Type.TOPIC => Some(ConfigType.Topic)
@@ -434,5 +457,11 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
       debug(s"Not updating ZK for $resource since it is not a Broker or Topic entity.")
       state
     }
+  }
+
+  override def writeMetadataDeltaToZookeeper(delta: MetadataDelta,
+                                             image: MetadataImage,
+                                             state: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
+    state
   }
 }

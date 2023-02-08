@@ -26,6 +26,7 @@ import joptsimple._
 import kafka.server.{DelayedOperation, DelayedOperationPurgatory}
 import kafka.utils._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.util.CommandLineUtils
 
 import scala.math._
 import scala.jdk.CollectionConverters._

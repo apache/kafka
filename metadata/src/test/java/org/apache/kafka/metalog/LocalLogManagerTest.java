@@ -45,7 +45,7 @@ public class LocalLogManagerTest {
     public void testCreateAndClose() throws Exception {
         try (
             LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(1).
-                buildWithMockListeners();
+                buildWithMockListeners()
         ) {
             env.close();
             assertEquals(null, env.firstError.get());
@@ -59,7 +59,7 @@ public class LocalLogManagerTest {
     public void testClaimsLeadership() throws Exception {
         try (
             LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(1).
-                    buildWithMockListeners();
+                    buildWithMockListeners()
         ) {
             assertEquals(new LeaderAndEpoch(OptionalInt.of(0), 1), env.waitForLeader());
             env.close();
@@ -74,7 +74,7 @@ public class LocalLogManagerTest {
     public void testPassLeadership() throws Exception {
         try (
             LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(3).
-                    buildWithMockListeners();
+                    buildWithMockListeners()
         ) {
             LeaderAndEpoch first = env.waitForLeader();
             LeaderAndEpoch cur = first;
@@ -130,7 +130,7 @@ public class LocalLogManagerTest {
     public void testCommits() throws Exception {
         try (
             LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(3).
-                    buildWithMockListeners();
+                    buildWithMockListeners()
         ) {
             LeaderAndEpoch leaderInfo = env.waitForLeader();
             int leaderId = leaderInfo.leaderId().orElseThrow(() ->

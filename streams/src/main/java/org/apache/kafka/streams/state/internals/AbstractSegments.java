@@ -210,7 +210,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
             try {
                 segmentId = Long.parseLong(segmentIdString) / segmentInterval;
             } catch (final NumberFormatException e) {
-                throw new ProcessorStateException("Unable to parse segment id as long from segmentName: " + segmentName);
+                throw new ProcessorStateException("Unable to parse segment id as long from segmentName: " + segmentName, e);
             }
 
             // intermediate segment name with : breaks KafkaStreams on Windows OS -> rename segment file to new name with .

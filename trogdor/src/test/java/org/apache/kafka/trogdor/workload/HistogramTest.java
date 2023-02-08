@@ -82,5 +82,5 @@ public class HistogramTest {
         assertEquals(100, summary.percentiles().get(1).value());
         assertEquals(200, summary.percentiles().get(2).value());
     }
-};
+}
 

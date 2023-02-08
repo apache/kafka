@@ -22,9 +22,9 @@ import kafka.utils.{CoreUtils, Logging, ShutdownableThread}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.{LazyIndex, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.storage.internals.log.{LazyIndex, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
 
 import java.io.{Closeable, File, InputStream}
 import java.nio.file.{Files, Path}
@@ -62,8 +62,8 @@ class Entry(val offsetIndex: LazyIndex[OffsetIndex], val timeIndex: LazyIndex[Ti
       if (!markedForCleanup) {
         markedForCleanup = true
         Array(offsetIndex, timeIndex).foreach(index =>
-          index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, "", UnifiedLog.DeletedFileSuffix))))
-        txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, "",
+          index.renameTo(new File(Utils.replaceSuffix(index.file.getPath, "", UnifiedLog.DeletedFileSuffix))))
+        txnIndex.renameTo(new File(Utils.replaceSuffix(txnIndex.file.getPath, "",
           UnifiedLog.DeletedFileSuffix)))
       }
     }

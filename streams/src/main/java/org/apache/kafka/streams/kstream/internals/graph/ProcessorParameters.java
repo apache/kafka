@@ -17,9 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
-import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
-import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -105,21 +102,6 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
                 topologyBuilder.addStateStore(storeBuilder, processorName);
             }
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    KTableSource<KIn, VIn> kTableSourceSupplier() {
-        return processorSupplier instanceof KTableSource ? (KTableSource<KIn, VIn>) processorSupplier : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    <KR, VR> KTableProcessorSupplier<KIn, VIn, KR, VR> kTableProcessorSupplier() {
-        return processorSupplier instanceof KTableProcessorSupplier ? (KTableProcessorSupplier<KIn, VIn, KR, VR>) processorSupplier : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    KTableKTableJoinMerger<KIn, VIn> kTableKTableJoinMergerProcessorSupplier() {
-        return processorSupplier instanceof KTableKTableJoinMerger ? (KTableKTableJoinMerger<KIn, VIn>) processorSupplier : null;
     }
 
     public String processorName() {

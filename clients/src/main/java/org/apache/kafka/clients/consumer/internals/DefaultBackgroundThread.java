@@ -115,10 +115,12 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.coordinatorManager = groupId == null ?
                     Optional.empty() :
                     Optional.of(new CoordinatorRequestManager(
-                            logContext,
-                            config,
-                            errorEventHandler,
-                            groupId));
+                        time,
+                        logContext,
+                        config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
+                        errorEventHandler,
+                        groupId
+                    ));
             this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue);
         } catch (final Exception e) {
             close();

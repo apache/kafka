@@ -32,6 +32,10 @@ case class FinalizedFeaturesAndEpoch(features: Map[String, Short], epoch: Long) 
   }
 }
 
+/**
+ * Used to represent the controller id cached in the metadata cache of the broker. This trait is
+ * extended to represent if the controller is KRaft controller or Zk controller.
+ */
 sealed trait CachedControllerId {
   val id: Int
 }
@@ -118,10 +122,9 @@ object MetadataCache {
   def zkMetadataCache(brokerId: Int,
                       metadataVersion: MetadataVersion,
                       brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty(),
-                      kraftControllerNodes: collection.Seq[Node] = null)
+                      kraftControllerNodes: collection.Seq[Node] = collection.Seq.empty[Node])
   : ZkMetadataCache = {
-    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures,
-      Option(kraftControllerNodes).getOrElse(collection.Seq.empty[Node]))
+    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures, kraftControllerNodes)
   }
 
   def kRaftMetadataCache(brokerId: Int): KRaftMetadataCache = {

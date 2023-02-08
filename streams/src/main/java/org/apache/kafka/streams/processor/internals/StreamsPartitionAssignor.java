@@ -422,7 +422,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             if (minReceivedMetadataVersion >= 2) {
                 populatePartitionsByHostMaps(partitionsByHost, standbyPartitionsByHost, partitionsForTask, clientMetadataMap);
             }
-            streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fullMetadata);
 
             // ---------------- Step Four ---------------- //
 

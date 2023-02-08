@@ -71,6 +71,7 @@ import static org.apache.kafka.common.utils.Utils.validHostPattern;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -895,7 +896,7 @@ public class UtilsTest {
         if (a == null) {
             assertNotNull(b);
         } else {
-            assertFalse(a.equals(b));
+            assertNotEquals(a, b);
         }
         assertFalse(Utils.isEqualConstantTime(first, second));
         assertFalse(Utils.isEqualConstantTime(second, first));
@@ -907,7 +908,7 @@ public class UtilsTest {
         if (a == null) {
             assertNull(b);
         } else {
-            assertTrue(a.equals(b));
+            assertEquals(a, b);
         }
         assertTrue(Utils.isEqualConstantTime(first, second));
         assertTrue(Utils.isEqualConstantTime(second, first));
@@ -926,4 +927,13 @@ public class UtilsTest {
         assertEquals(String.format("2020-11-09 12:34:05,123 %s", requiredOffsetFormat), Utils.toLogDateTimeFormat(timestampWithMilliSeconds.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()));
         assertEquals(String.format("2020-11-09 12:34:05,000 %s", requiredOffsetFormat), Utils.toLogDateTimeFormat(timestampWithSeconds.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()));
     }
+
+    @Test
+    public void testReplaceSuffix() {
+        assertEquals("blah.foo.text", Utils.replaceSuffix("blah.foo.txt", ".txt", ".text"));
+        assertEquals("blah.foo", Utils.replaceSuffix("blah.foo.txt", ".txt", ""));
+        assertEquals("txt.txt", Utils.replaceSuffix("txt.txt.txt", ".txt", ""));
+        assertEquals("foo.txt", Utils.replaceSuffix("foo", "", ".txt"));
+    }
+
 }

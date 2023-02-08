@@ -273,10 +273,10 @@ class ControllerApis(val requestChannel: RequestChannel,
           idToName.put(id, nameOrError.result())
         }
       }
-      // Get the list of deletable topics (those we can delete) and the list of describeable
+      // Get the list of deletable topics (those we can delete) and the list of describable
       // topics.
       val topicsToAuthenticate = toAuthenticate.asScala
-      val (describeable, deletable) = if (hasClusterAuth) {
+      val (describable, deletable) = if (hasClusterAuth) {
         (topicsToAuthenticate.toSet, topicsToAuthenticate.toSet)
       } else {
         (getDescribableTopics(topicsToAuthenticate), getDeletableTopics(topicsToAuthenticate))
@@ -289,7 +289,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         val id = entry.getKey
         val name = entry.getValue
         if (!deletable.contains(name)) {
-          if (describeable.contains(name)) {
+          if (describable.contains(name)) {
             appendResponse(name, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
           } else {
             appendResponse(null, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
@@ -301,7 +301,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       // If so, create an error response for it. Otherwise, add it to the idToName map.
       controller.findTopicIds(context, providedNames).thenCompose { topicIds =>
         topicIds.forEach { (name, idOrError) =>
-          if (!describeable.contains(name)) {
+          if (!describable.contains(name)) {
             appendResponse(name, ZERO_UUID, new ApiError(TOPIC_AUTHORIZATION_FAILED))
           } else if (idOrError.isError) {
             appendResponse(name, ZERO_UUID, idOrError.error)
@@ -376,7 +376,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
     }
 
-    /* The cluster metatdata topic is an internal topic with a different implementation. The user should not be
+    /* The cluster metadata topic is an internal topic with a different implementation. The user should not be
      * allowed to create it as a regular topic.
      */
     if (topicNames.contains(Topic.CLUSTER_METADATA_TOPIC_NAME)) {

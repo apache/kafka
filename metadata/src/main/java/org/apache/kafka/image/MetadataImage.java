@@ -91,11 +91,11 @@ public final class MetadataImage {
     }
 
     public OffsetAndEpoch highestOffsetAndEpoch() {
-        return new OffsetAndEpoch(provenance.offset(), provenance.epoch());
+        return new OffsetAndEpoch(provenance.lastContainedOffset(), provenance.lastContainedEpoch());
     }
 
     public long offset() {
-        return provenance.offset();
+        return provenance.lastContainedOffset();
     }
 
     public FeaturesImage features() {

@@ -65,7 +65,7 @@ public class JaasContextTest {
 
     @Test
     public void testConfigNoOptions() throws Exception {
-        checkConfiguration("test.testConfigNoOptions", LoginModuleControlFlag.REQUIRED, new HashMap<String, Object>());
+        checkConfiguration("test.testConfigNoOptions", LoginModuleControlFlag.REQUIRED, new HashMap<>());
     }
 
     @Test

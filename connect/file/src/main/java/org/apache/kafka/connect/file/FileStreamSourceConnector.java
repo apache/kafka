@@ -92,9 +92,9 @@ public class FileStreamSourceConnector extends SourceConnector {
     public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> props) {
         AbstractConfig parsedConfig = new AbstractConfig(CONFIG_DEF, props);
         String filename = parsedConfig.getString(FILE_CONFIG);
-        // We can provide exactly-once guarantees if reading from a "real" file
+        // We can provide exactly-once semantics if reading from a "real" file
         // (as long as the file is only appended to over the lifetime of the connector)
-        // If we're reading from stdin, we can't provide exactly-once guarantees
+        // If we're reading from stdin, we can't provide exactly-once semantics
         // since we don't even track offsets
         return filename != null && !filename.isEmpty()
                 ? ExactlyOnceSupport.SUPPORTED

@@ -69,7 +69,8 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
- * WorkerTask that contains shared logic for running source tasks with either standard or exactly-once delivery guarantees.
+ * WorkerTask that contains shared logic for running source tasks with either standard semantics
+ * (i.e., either at-least-once or at-most-once) or exactly-once semantics.
  */
 public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(AbstractWorkerSourceTask.class);

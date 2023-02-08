@@ -44,11 +44,12 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /** Top-level config describing replication flows between multiple Kafka clusters.
- *
+ *  <p>
  *  Supports cluster-level properties of the form cluster.x.y.z, and replication-level
  *  properties of the form source->target.x.y.z.
  *  e.g.
  *
+ * <pre>
  *      clusters = A, B, C
  *      A.bootstrap.servers = aaa:9092
  *      A.security.protocol = SSL
@@ -56,7 +57,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  *      A->B.enabled = true
  *      A->B.producer.client.id = "A-B-producer"
  *      --->%---
- *
+ * </pre>
  */
 public class MirrorMakerConfig extends AbstractConfig {
 

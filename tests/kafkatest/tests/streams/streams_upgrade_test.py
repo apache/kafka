@@ -26,7 +26,7 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.streams.utils import extract_generation_from_logs, extract_generation_id
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
     LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
-    LATEST_3_0, LATEST_3_1, LATEST_3_2, DEV_BRANCH, DEV_VERSION, KafkaVersion
+    LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
 # broker 0.10.1 and 0.10.2 do not support headers, as required by suppress() (since v2.2.1)
@@ -34,12 +34,13 @@ broker_upgrade_versions = [str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1),
                            str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3),
                            str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7),
                            str(LATEST_2_8), str(LATEST_3_0), str(LATEST_3_1), str(LATEST_3_2),
+                           str(LATEST_3_3),
                            str(DEV_BRANCH)]
 
 metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 fk_join_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7), str(LATEST_2_8), 
-                    str(LATEST_3_0), str(LATEST_3_1), str(LATEST_3_2)]
+                    str(LATEST_3_0), str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3)]
 
 """
 After each release one should first check that the released version has been uploaded to 
@@ -511,6 +512,8 @@ class StreamsUpgradeTest(Test):
         first_other_node = first_other_processor.node
         second_other_node = second_other_processor.node
 
+        kafka_version_str = self.get_version_string(str(DEV_VERSION))
+
         with first_other_node.account.monitor_log(first_other_processor.LOG_FILE) as first_other_monitor:
             with second_other_node.account.monitor_log(second_other_processor.LOG_FILE) as second_other_monitor:
                 # stop processor
@@ -528,7 +531,7 @@ class StreamsUpgradeTest(Test):
                     self.upgraded_processors.append(processor)
 
                     # checking for the dev version which should be the only SNAPSHOT
-                    log_monitor.wait_until("Kafka version.*" + self.base_version_number + ".*SNAPSHOT",
+                    log_monitor.wait_until(kafka_version_str,
                                            timeout_sec=60,
                                            err_msg="Could not detect Kafka Streams version " + str(DEV_VERSION) + " in " + str(node.account))
                     log_monitor.offset = 5

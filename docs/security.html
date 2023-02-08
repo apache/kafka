@@ -677,7 +677,13 @@ listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.p
                     <p>To configure SASL authentication on the clients, select a SASL
                         <a href="#security_sasl_mechanism">mechanism</a> that is enabled in
                         the broker for client authentication and follow the steps to configure SASL
-                        for the selected mechanism.</p></li>
+                        for the selected mechanism.</p>
+
+                    <p>Note: When establishing connections to brokers via SASL, clients may perform a reverse 
+                        DNS lookup of the broker address. Due to how the JRE implements reverse 
+                        DNS lookups, clients may observe slow SASL handshakes if fully qualified domain 
+                        names are not used, for both the client's <code>bootstrap.servers</code> and a broker's
+                        <code><a href="#brokerconfigs_advertised.listeners">advertised.listeners</a></code>.</p></li>
             </ol>
         </li>
         <li><h4><a id="security_sasl_kerberos" href="#security_sasl_kerberos">Authentication using SASL/Kerberos</a></h4>

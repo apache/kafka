@@ -16,38 +16,43 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 
 class RequestState {
-    final static int RECONNECT_BACKOFF_EXP_BASE = 2;
-    final static double RECONNECT_BACKOFF_JITTER = 0.2;
+    final static int RETRY_BACKOFF_EXP_BASE = 2;
+    final static double RETRY_BACKOFF_JITTER = 0.2;
     private final ExponentialBackoff exponentialBackoff;
     private long lastSentMs = -1;
     private long lastReceivedMs = -1;
     private int numAttempts = 0;
     private long backoffMs = 0;
 
-    public RequestState(ConsumerConfig config) {
+    public RequestState(long retryBackoffMs) {
         this.exponentialBackoff = new ExponentialBackoff(
-                config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                RECONNECT_BACKOFF_EXP_BASE,
-                config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                RECONNECT_BACKOFF_JITTER);
+            retryBackoffMs,
+            RETRY_BACKOFF_EXP_BASE,
+            retryBackoffMs,
+            RETRY_BACKOFF_JITTER
+        );
     }
 
     // Visible for testing
-    RequestState(final int reconnectBackoffMs,
-                 final int reconnectBackoffExpBase,
-                 final int reconnectBackoffMaxMs,
-                 final int jitter) {
+    RequestState(final long retryBackoffMs,
+                 final int retryBackoffExpBase,
+                 final long retryBackoffMaxMs,
+                 final double jitter) {
         this.exponentialBackoff = new ExponentialBackoff(
-                reconnectBackoffMs,
-                reconnectBackoffExpBase,
-                reconnectBackoffMaxMs,
-                jitter);
+            retryBackoffMs,
+            retryBackoffExpBase,
+            retryBackoffMaxMs,
+            jitter
+        );
     }
 
+    /**
+     * Reset request state so that new requests can be sent immediately
+     * and the backoff is restored to its minimal configuration.
+     */
     public void reset() {
         this.lastSentMs = -1;
         this.lastReceivedMs = -1;
@@ -70,12 +75,32 @@ class RequestState {
         return requestBackoffExpired(currentTimeMs);
     }
 
-    public void updateLastSend(final long currentTimeMs) {
+    public void onSendAttempt(final long currentTimeMs) {
         // Here we update the timer everytime we try to send a request. Also increment number of attempts.
         this.lastSentMs = currentTimeMs;
     }
 
-    public void updateLastFailedAttempt(final long currentTimeMs) {
+    /**
+     * Callback invoked after a successful send. This resets the number of attempts
+     * to 0, but the minimal backoff will still be enforced prior to allowing a new
+     * send. To send immediately, use {@link #reset()}.
+     *
+     * @param currentTimeMs Current time in milliseconds
+     */
+    public void onSuccessfulAttempt(final long currentTimeMs) {
+        this.lastReceivedMs = currentTimeMs;
+        this.backoffMs = exponentialBackoff.backoff(0);
+        this.numAttempts = 0;
+    }
+
+    /**
+     * Callback invoked after a failed send. The number of attempts
+     * will be incremented, which may increase the backoff before allowing
+     * the next send attempt.
+     *
+     * @param currentTimeMs Current time in milliseconds
+     */
+    public void onFailedAttempt(final long currentTimeMs) {
         this.lastReceivedMs = currentTimeMs;
         this.backoffMs = exponentialBackoff.backoff(numAttempts);
         this.numAttempts++;
@@ -86,6 +111,7 @@ class RequestState {
     }
 
     long remainingBackoffMs(final long currentTimeMs) {
-        return Math.max(0, this.backoffMs - (currentTimeMs - this.lastReceivedMs));
+        long timeSinceLastReceiveMs = currentTimeMs - this.lastReceivedMs;
+        return Math.max(0, backoffMs - timeSinceLastReceiveMs);
     }
 }

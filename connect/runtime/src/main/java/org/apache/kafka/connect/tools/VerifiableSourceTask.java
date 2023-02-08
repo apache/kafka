@@ -41,7 +41,7 @@ import java.util.stream.Stream;
  * messages have been sent. Each message is also assigned a unique, increasing seqno that is passed to Kafka Connect; when
  * tasks are started on new nodes, this seqno is used to resume where the task previously left off, allowing for
  * testing of distributed Kafka Connect.
- *
+ * <p>
  * If logging is left enabled, log output on stdout can be easily ignored by checking whether a given line is valid JSON.
  */
 public class VerifiableSourceTask extends SourceTask {

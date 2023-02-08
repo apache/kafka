@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -308,11 +309,11 @@ public class KafkaBasedLog<K, V> {
      * Note that this checks the current offsets, reads to them, and invokes the callback regardless of whether
      * additional records have been written to the log. If the caller needs to ensure they have truly reached the end
      * of the log, they must ensure there are no other writers during this period.
-     *
+     * <p>
      * This waits until the end of all partitions has been reached.
-     *
+     * <p>
      * This method is asynchronous. If you need a synchronous version, pass an instance of
-     * {@link org.apache.kafka.connect.util.FutureCallback} as the {@param callback} parameter and wait on it to block.
+     * {@link org.apache.kafka.connect.util.FutureCallback} as the {@code callback} parameter and wait on it to block.
      *
      * @param callback the callback to invoke once the end of the log has been reached.
      */
@@ -342,12 +343,29 @@ public class KafkaBasedLog<K, V> {
         return future;
     }
 
-    public void send(K key, V value) {
-        send(key, value, null);
+    /**
+     * Send a record asynchronously to the configured {@link #topic} without using a producer callback.
+     * @param key the key for the {@link ProducerRecord}
+     * @param value the value for the {@link ProducerRecord}
+     *
+     * @return the future from the call to {@link Producer#send}. {@link Future#get} can be called on this returned
+     *         future if synchronous behavior is desired.
+     */
+    public Future<RecordMetadata> send(K key, V value) {
+        return send(key, value, null);
     }
 
-    public void send(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
-        producer.orElseThrow(() ->
+    /**
+     * Send a record asynchronously to the configured {@link #topic}
+     * @param key the key for the {@link ProducerRecord}
+     * @param value the value for the {@link ProducerRecord}
+     * @param callback the callback to invoke after completion; can be null if no callback is desired
+     *
+     * @return the future from the call to {@link Producer#send}. {@link Future#get} can be called on this returned
+     *         future if synchronous behavior is desired.
+     */
+    public Future<RecordMetadata> send(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
+        return producer.orElseThrow(() ->
                 new IllegalStateException("This KafkaBasedLog was created in read-only mode and does not support write operations")
         ).send(new ProducerRecord<>(topic, key, value), callback);
     }

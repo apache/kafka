@@ -595,7 +595,7 @@ class MetadataCacheTest {
     val brokers = Seq(
       new UpdateMetadataBroker()
         .setId(0)
-        .setRack("")
+        .setRack("r")
         .setEndpoints(Seq(new UpdateMetadataEndpoint()
           .setHost("foo")
           .setPort(9092)
@@ -626,7 +626,7 @@ class MetadataCacheTest {
       brokers.asJava, Collections.emptyMap()).build()
     MetadataCacheTest.updateCache(cache, updateMetadataRequest)
 
-    val expectedNode0 = new Node(0, "foo", 9092)
+    val expectedNode0 = new Node(0, "foo", 9092, "r")
     val expectedNode1 = new Node(1, "", -1)
 
     val cluster = cache.getClusterMetadata("clusterId", listenerName)

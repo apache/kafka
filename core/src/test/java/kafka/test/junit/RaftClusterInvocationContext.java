@@ -25,6 +25,7 @@ import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.testkit.KafkaClusterTestKit;
 import kafka.testkit.TestKitNodes;
+import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
@@ -66,11 +67,13 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
     private final ClusterConfig clusterConfig;
     private final AtomicReference<KafkaClusterTestKit> clusterReference;
+    private final AtomicReference<EmbeddedZookeeper> zkReference;
     private final boolean isCoResident;
 
     public RaftClusterInvocationContext(ClusterConfig clusterConfig, boolean isCoResident) {
         this.clusterConfig = clusterConfig;
         this.clusterReference = new AtomicReference<>();
+        this.zkReference = new AtomicReference<>();
         this.isCoResident = isCoResident;
     }
 
@@ -84,7 +87,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
     @Override
     public List<Extension> getAdditionalExtensions() {
-        RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterReference, clusterConfig);
+        RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterReference, zkReference, clusterConfig);
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
                 TestKitNodes nodes = new TestKitNodes.Builder().
@@ -97,6 +100,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                             (key, value) -> brokerNode.propertyOverrides().put(key.toString(), value.toString()));
                 });
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
+
+                if (Boolean.parseBoolean(clusterConfig.serverProperties().getProperty("zookeeper.metadata.migration.enable", "false"))) {
+                    zkReference.set(new EmbeddedZookeeper());
+                    builder.setConfigProp("zookeeper.connect", String.format("localhost:%d", zkReference.get().port()));
+                }
 
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach((key, value) -> builder.setConfigProp(key.toString(), value.toString()));
@@ -120,13 +128,15 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     public static class RaftClusterInstance implements ClusterInstance {
 
         private final AtomicReference<KafkaClusterTestKit> clusterReference;
+        private final AtomicReference<EmbeddedZookeeper> zkReference;
         private final ClusterConfig clusterConfig;
         final AtomicBoolean started = new AtomicBoolean(false);
         final AtomicBoolean stopped = new AtomicBoolean(false);
         private final ConcurrentLinkedQueue<Admin> admins = new ConcurrentLinkedQueue<>();
 
-        RaftClusterInstance(AtomicReference<KafkaClusterTestKit> clusterReference, ClusterConfig clusterConfig) {
+        RaftClusterInstance(AtomicReference<KafkaClusterTestKit> clusterReference, AtomicReference<EmbeddedZookeeper> zkReference, ClusterConfig clusterConfig) {
             this.clusterReference = clusterReference;
+            this.zkReference = zkReference;
             this.clusterConfig = clusterConfig;
         }
 
@@ -247,6 +257,9 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             if (stopped.compareAndSet(false, true)) {
                 admins.forEach(admin -> Utils.closeQuietly(admin, "admin"));
                 Utils.closeQuietly(clusterReference.get(), "cluster");
+                if (zkReference.get() != null) {
+                    Utils.closeQuietly(zkReference.get(), "zk");
+                }
             }
         }
 
