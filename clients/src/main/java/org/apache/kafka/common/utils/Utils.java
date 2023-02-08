@@ -28,6 +28,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 import java.io.Closeable;
 import java.io.DataOutput;
@@ -997,16 +998,32 @@ public final class Utils {
         if (exception != null)
             throw exception;
     }
+    public static void swallow(final Logger log, final Level level, final String what, final Runnable code) {
+        swallow(log, level, what, code, null);
+    }
 
     /**
      * Run the supplied code. If an exception is thrown, it is swallowed and registered to the firstException parameter.
      */
-    public static void swallow(Logger log, String what, final Runnable code, final AtomicReference<Throwable> firstException) {
+    public static void swallow(final Logger log, final Level level, final String what, final Runnable code,
+                               final AtomicReference<Throwable> firstException) {
         if (code != null) {
             try {
                 code.run();
             } catch (Throwable t) {
-                log.warn("{} error", what, t);
+                switch (level) {
+                    case INFO:
+                        log.error(what, t);
+                        break;
+                    case DEBUG:
+                        log.debug(what, t);
+                        break;
+                    case ERROR:
+                        log.error(what, t);
+                        break;
+                    case TRACE:
+                        log.trace(what, t);
+                }
                 if (firstException != null)
                     firstException.compareAndSet(null, t);
             }

@@ -59,6 +59,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
+import org.slf4j.event.Level;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -2441,7 +2442,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // consumer.
         if (coordinator != null) {
             // This is a blocking call bound by the time remaining in closeTimer
-            Utils.swallow(log, "coordinator close", () -> coordinator.close(closeTimer), firstException);
+            Utils.swallow(log, Level.ERROR, "Failed to close coordinator with a timeout(ms)=" + closeTimer.timeoutMs(), () -> coordinator.close(closeTimer), firstException);
         }
 
         if (fetcher != null) {
@@ -2454,7 +2455,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             closeTimer.reset(remainingDurationInTimeout);
 
             // This is a blocking call bound by the time remaining in closeTimer
-            Utils.swallow(log, " fetcher close", () -> fetcher.close(closeTimer), firstException);
+            Utils.swallow(log, Level.ERROR, "Failed to close fetcher with a timeout(ms)=" + closeTimer.timeoutMs(), () -> fetcher.close(closeTimer), firstException);
         }
 
         Utils.closeQuietly(interceptors, "consumer interceptors", firstException);
