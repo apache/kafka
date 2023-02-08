@@ -20,6 +20,7 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "AssignmentEpoch", "versions": "0+", "type": "int32" }
+    { "name": "AssignmentEpoch", "versions": "0+", "type": "int32",
+      "about": "The assignment epoch." }
   ]
 }

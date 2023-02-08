@@ -20,11 +20,14 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "Epoch", "versions": "0+", "type": "int32" },
-    { "name": "TopicPartitionMetadata", "versions": "0+",
-      "type": "[]TopicPartition", "fields": [
-      { "name": "TopicId", "versions": "0+", "type": "uuid" },
-      { "name": "NumPartitions", "versions": "0+", "type": "int32" }
+    { "name": "Epoch", "versions": "0+", "type": "int32",
+      "about": "The group epoch." },
+    { "name": "Topics", "versions": "0+", "type": "[]TopicMetadata",
+      "about": "The list of topic metadata.", "fields": [
+      { "name": "TopicId", "versions": "0+", "type": "uuid",
+        "about": "The topic id." },
+      { "name": "NumPartitions", "versions": "0+", "type": "int32",
+        "about": "The number of partitions of the topic." }
     ]}
   ]
 }
