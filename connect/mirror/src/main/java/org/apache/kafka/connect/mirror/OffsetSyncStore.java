@@ -16,37 +16,70 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.TopicAdmin;
 
 import java.util.Map;
 import java.util.HashMap;
-import java.util.Collections;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /** Used internally by MirrorMaker. Stores offset syncs and performs offset translation. */
 class OffsetSyncStore implements AutoCloseable {
-    private final KafkaConsumer<byte[], byte[]> consumer;
+    private final KafkaBasedLog<byte[], byte[]> backingStore;
     private final Map<TopicPartition, OffsetSync> offsetSyncs = new HashMap<>();
-    private final TopicPartition offsetSyncTopicPartition;
+    private final TopicAdmin admin;
 
     OffsetSyncStore(MirrorCheckpointConfig config) {
-        consumer = new KafkaConsumer<>(config.offsetSyncsTopicConsumerConfig(),
-            new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        offsetSyncTopicPartition = new TopicPartition(config.offsetSyncsTopic(), 0);
-        consumer.assign(Collections.singleton(offsetSyncTopicPartition));
+        this(
+                config.offsetSyncsTopic(),
+                new KafkaConsumer<>(
+                        config.offsetSyncsTopicConsumerConfig(),
+                        new ByteArrayDeserializer(),
+                        new ByteArrayDeserializer()),
+                new TopicAdmin(
+                        config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
+                        config.forwardingAdmin(config.offsetSyncsTopicAdminConfig()))
+        );
     }
 
     // for testing
-    OffsetSyncStore(KafkaConsumer<byte[], byte[]> consumer, TopicPartition offsetSyncTopicPartition) {
-        this.consumer = consumer;
-        this.offsetSyncTopicPartition = offsetSyncTopicPartition;
+    OffsetSyncStore(String topic, KafkaConsumer<byte[], byte[]> consumer, TopicAdmin admin) {
+        this.admin = admin;
+        KafkaBasedLog<byte[], byte[]> store = null;
+        try {
+            store = KafkaBasedLog.withExistingClients(
+                    topic,
+                    consumer,
+                    null,
+                    admin,
+                    (error, record) -> this.handleRecord(record),
+                    Time.SYSTEM,
+                    ignored -> {
+                    });
+            store.start();
+        } catch (Throwable t) {
+            Utils.closeQuietly(store != null ? store::stop : null, "backing store");
+            Utils.closeQuietly(admin, "admin client");
+            throw t;
+        }
+        this.backingStore = store;
+    }
+
+    public void readToEnd(Runnable callback) {
+        backingStore.readToEnd((error, result) -> callback.run());
     }
 
     OptionalLong translateDownstream(TopicPartition sourceTopicPartition, long upstreamOffset) {
@@ -76,17 +109,17 @@ class OffsetSyncStore implements AutoCloseable {
     }
 
     // poll and handle records
-    synchronized void update(Duration pollTimeout) {
+    synchronized void update(Duration pollTimeout) throws TimeoutException {
         try {
-            consumer.poll(pollTimeout).forEach(this::handleRecord);
-        } catch (WakeupException e) {
+            backingStore.readToEnd().get(pollTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (WakeupException | InterruptedException | ExecutionException e) {
             // swallow
         }
     }
 
     public synchronized void close() {
-        consumer.wakeup();
-        Utils.closeQuietly(consumer, "offset sync store consumer");
+        Utils.closeQuietly(backingStore::stop, "offset sync store kafka based log");
+        Utils.closeQuietly(admin, "offset sync store admin client");
     }
 
     protected void handleRecord(ConsumerRecord<byte[], byte[]> record) {
