@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.config.ConfigResource;
@@ -36,7 +37,9 @@ import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMakerConfig;
 import org.apache.kafka.connect.mirror.MirrorSourceConnector;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
+import org.apache.kafka.connect.mirror.Checkpoint;
 import org.apache.kafka.connect.mirror.MirrorCheckpointConnector;
+import org.apache.kafka.connect.mirror.ReplicationPolicy;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.connect.util.clusters.UngracefulShutdownException;
@@ -493,7 +496,31 @@ public class MirrorConnectorsIntegrationBaseTest {
         // Ensure the offset syncs topic is created in the target cluster
         waitForTopicCreated(backup, "mm2-offset-syncs." + PRIMARY_CLUSTER_ALIAS + ".internal");
 
+        String consumerGroupName = "consumer-group-syncs-on-target";
+        Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
+
         produceMessages(primary, "test-topic-1");
+
+        warmUpConsumer(consumerProps);
+
+        ReplicationPolicy replicationPolicy = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS)).replicationPolicy();
+        String remoteTopic = replicationPolicy.formatRemoteTopic(PRIMARY_CLUSTER_ALIAS, "test-topic-1");
+
+        // Check offsets are pushed to the checkpoint topic
+        Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
+                "auto.offset.reset", "earliest"), PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
+        waitForCondition(() -> {
+            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(Duration.ofSeconds(1L));
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
+                if (remoteTopic.equals(checkpoint.topicPartition().topic())) {
+                    return true;
+                }
+            }
+            return false;
+        }, 30_000,
+            "Unable to find checkpoints for " + PRIMARY_CLUSTER_ALIAS + ".test-topic-1"
+        );
 
         // Ensure no offset-syncs topics have been created on the primary cluster
         Set<String> primaryTopics = primary.kafka().createAdminClient().listTopics().names().get();
