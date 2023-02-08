@@ -528,7 +528,8 @@ class KafkaServer(
           clusterId = clusterId,
           time = time,
           tokenManager = tokenManager,
-          apiVersionManager = apiVersionManager)
+          apiVersionManager = apiVersionManager,
+          produceRequestInterceptorManager = ProduceRequestInterceptorManager(List(new NoOpProduceRequestInterceptor)))
 
         dataPlaneRequestProcessor = createKafkaApis(socketServer.dataPlaneRequestChannel)
 

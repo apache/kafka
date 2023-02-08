@@ -33,6 +33,7 @@ import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.MetadataCache;
+import kafka.server.ProduceRequestInterceptorManager;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
@@ -200,6 +201,7 @@ public class MetadataRequestBenchmark {
             setTime(Time.SYSTEM).
             setTokenManager(null).
             setApiVersionManager(new SimpleApiVersionManager(ApiMessageType.ListenerType.ZK_BROKER, false)).
+            setProduceRequestInterceptorManager(ProduceRequestInterceptorManager.apply()).
             build();
     }
 

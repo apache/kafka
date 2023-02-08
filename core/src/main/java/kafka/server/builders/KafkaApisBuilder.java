@@ -29,6 +29,7 @@ import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.MetadataSupport;
 import kafka.server.QuotaFactory.QuotaManagers;
+import kafka.server.ProduceRequestInterceptorManager;
 import kafka.server.ReplicaManager;
 import kafka.server.metadata.ConfigRepository;
 import org.apache.kafka.common.metrics.Metrics;
@@ -38,6 +39,7 @@ import org.apache.kafka.server.authorizer.Authorizer;
 
 import java.util.Collections;
 import java.util.Optional;
+
 import scala.compat.java8.OptionConverters;
 
 
@@ -61,6 +63,7 @@ public class KafkaApisBuilder {
     private Time time = Time.SYSTEM;
     private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
+    private ProduceRequestInterceptorManager produceRequestInterceptorManager = null;
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -157,6 +160,11 @@ public class KafkaApisBuilder {
         return this;
     }
 
+    public KafkaApisBuilder setProduceRequestInterceptorManager(ProduceRequestInterceptorManager produceRequestInterceptorManager) {
+        this.produceRequestInterceptorManager = produceRequestInterceptorManager;
+        return this;
+    }
+
     public KafkaApis build() {
         if (requestChannel == null) throw new RuntimeException("you must set requestChannel");
         if (metadataSupport == null) throw new RuntimeException("you must set metadataSupport");
@@ -173,6 +181,8 @@ public class KafkaApisBuilder {
         if (fetchManager == null) throw new RuntimeException("You must set fetchManager");
         if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats();
         if (apiVersionManager == null) throw new RuntimeException("You must set apiVersionManager");
+        if (produceRequestInterceptorManager == null)
+            throw new RuntimeException("You must set produceRequestInterceptorManager");
 
         return new KafkaApis(requestChannel,
                              metadataSupport,
@@ -192,6 +202,7 @@ public class KafkaApisBuilder {
                              clusterId,
                              time,
                              tokenManager,
-                             apiVersionManager);
+                             apiVersionManager,
+                             produceRequestInterceptorManager);
     }
 }
