@@ -4,10 +4,22 @@ import org.apache.kafka.common.record.{MemoryRecords, Record, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceRequest
 
 import java.nio.ByteBuffer
+import java.util.concurrent.{ExecutorService, Executors}
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
-class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInterceptor] = Iterable.empty) {
+class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInterceptor] = Iterable.empty,
+                                       recordProcessingTimeoutMs: Int = 10) extends AutoCloseable {
+
+  private val executorService: ExecutorService = Executors.newSingleThreadExecutor()
+  private implicit val executionContext: ExecutionContext =
+    ExecutionContext.fromExecutorService(executorService)
+  private val recordProcessingTimeoutDuration: Duration = recordProcessingTimeoutMs.millis
+
+  override def close(): Unit = executorService.shutdownNow()
+
   def applyInterceptors(produceRequest: ProduceRequest): Unit = {
     if (interceptors.isEmpty) {
 
@@ -35,15 +47,9 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
     val accumulator = List.empty[SimpleRecord]
     Try {
       originalRecords.foldLeft(accumulator) { (acc, record) =>
-        val asSimpleRecord = new SimpleRecord(record)
-        val newRecord = interceptors.foldLeft(Success(asSimpleRecord): Try[SimpleRecord]) { case (rec, inter) =>
-          rec match {
-            case Success(r) => applySingleInterceptor(inter, r)
-            case _ => rec
-          }
-        }
-        newRecord match {
-          case Success(newRec) => acc :+ newRec
+        val newRecordTry = applyInterceptors(record)
+        newRecordTry match {
+          case Success(newRecord) => acc :+ newRecord
           case Failure(throwable) => {
             throwable match {
               case prie: ProduceRequestInterceptorException =>
@@ -57,22 +63,32 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
     }
   }
 
-  private def applySingleInterceptor(producerRequestInterceptor: ProduceRequestInterceptor, record: SimpleRecord): Try[SimpleRecord] = {
-    val originalKey = record.key()
-    val originalValue = record.value()
-    processOriginalRecordField(originalKey, producerRequestInterceptor.processKey)
-      .flatMap { newKey =>
-        processOriginalRecordField(originalValue, producerRequestInterceptor.processValue).map(newValue => (newKey, newValue))
-      }.map { case (newKey, newValue) =>
-      new SimpleRecord(record.timestamp(), newKey, newValue, record.headers())
+  def applyInterceptors(record: Record): Try[SimpleRecord] = {
+    val asSimpleRecord = new SimpleRecord(record)
+    Try {
+      interceptors.foldLeft(asSimpleRecord) { case (rec, inter) =>
+        applySingleInterceptor(inter, rec)
+      }
     }
   }
 
-  private def processOriginalRecordField(field: ByteBuffer, processFn: Array[Byte] => Array[Byte]): Try[ByteBuffer] = {
+  private def applySingleInterceptor(producerRequestInterceptor: ProduceRequestInterceptor, record: SimpleRecord): SimpleRecord = {
+    val originalKey = record.key()
+    val originalValue = record.value()
+    processRecordField(originalKey, producerRequestInterceptor.processKey)
+      .flatMap { newKey =>
+        processRecordField(originalValue, producerRequestInterceptor.processValue).map(newValue => (newKey, newValue))
+      }
+      .map { case (newKey, newValue) =>
+        new SimpleRecord(record.timestamp(), newKey, newValue, record.headers())
+    }.get
+  }
+
+  private def processRecordField(field: ByteBuffer, processFn: Array[Byte] => Array[Byte]): Try[ByteBuffer] = {
     Try {
       val bytes = Array.ofDim[Byte](field.remaining())
       field.get(bytes)
-      val processed = processFn(bytes)
+      val processed: Array[Byte] = Await.result( Future { processFn(bytes) }, recordProcessingTimeoutDuration )
       ByteBuffer.wrap(processed)
     }
   }
@@ -81,8 +97,6 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
     val firstBatch = originalMemoryRecords.firstBatch()
     if (newRecords.isEmpty || Option(firstBatch).isEmpty) MemoryRecords.EMPTY
     else {
-      // All the batches should have the same magic version according to this test:
-      // org.apache.kafka.server.log.internals.LogValidator.validateBatch
       MemoryRecords.withRecords(
         firstBatch.magic(),
         firstBatch.baseOffset(),
@@ -101,5 +115,6 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
 
 object ProduceRequestInterceptorManager {
   def apply() = new ProduceRequestInterceptorManager()
-  def apply(interceptors: List[ProduceRequestInterceptor]) = new ProduceRequestInterceptorManager(interceptors)
+  def apply(interceptors: List[ProduceRequestInterceptor], recordProcessingTimeoutMs: Int) =
+    new ProduceRequestInterceptorManager(interceptors, recordProcessingTimeoutMs)
 }

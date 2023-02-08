@@ -86,6 +86,7 @@ object Defaults {
   val MetadataMaxIdleIntervalMs = 500
   val MetadataMaxRetentionBytes = 100 * 1024 * 1024
   val DeleteTopicEnable = true
+  val ProduceRequestInterceptorTimeoutMs = 10
 
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
@@ -359,6 +360,7 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
   val ProduceRequestInterceptorsProp = "produce.request.interceptors"
+  val ProduceRequestInterceptorTimeoutMsProp = "produce.request.interceptor.timeout.ms"
 
   /** KRaft mode configs */
   val ProcessRolesProp = "process.roles"
@@ -691,6 +693,10 @@ object KafkaConfig {
   val ProduceRequestInterceptorsDoc = "The produce request interceptors that the broker should invoke when receiving messages from a client. " +
     "The config expects a comma-separated list of class names that implement the <code>kafka.server.ProduceRequestInterceptor</code> interface, " +
     "and which are present on the broker's classpath."
+  val ProduceRequestInterceptorTimeoutMsDoc = "The amount of time in milliseconds that a single interceptor is given to finish processing a single record. " +
+    s"If an interceptor takes longer than $ProduceRequestInterceptorTimeoutMsProp to complete, the interceptor suite will be aborted for the given batch. " +
+    "Note that the timeout is applied per interceptor and per record. So if you configure your broker with 5 interceptors, the total processing time per record can " +
+    s"be as high as 5 x $ProduceRequestInterceptorTimeoutMsProp. Defaults to ${Defaults.ProduceRequestInterceptorTimeoutMs}"
 
   /** KRaft mode configs */
   val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
@@ -1141,6 +1147,7 @@ object KafkaConfig {
       .define(ConnectionSetupTimeoutMsProp, LONG, Defaults.ConnectionSetupTimeoutMs, MEDIUM, ConnectionSetupTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
       .define(ProduceRequestInterceptorsProp, LIST, Collections.emptyList(), MEDIUM, ProduceRequestInterceptorsDoc)
+      .define(ProduceRequestInterceptorTimeoutMsProp, INT, Defaults.ProduceRequestInterceptorTimeoutMs, MEDIUM, ProduceRequestInterceptorTimeoutMsDoc)
 
       /*
        * KRaft mode configs.
@@ -1697,7 +1704,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         pri.configure()
         pri
       }.toList
-    ProduceRequestInterceptorManager(interceptors)
+    val timeoutMs = getInt(KafkaConfig.ProduceRequestInterceptorTimeoutMsProp)
+    ProduceRequestInterceptorManager(interceptors, timeoutMs)
   }
 
   /************* Metadata Configuration ***********/
