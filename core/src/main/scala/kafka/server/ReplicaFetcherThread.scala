@@ -17,17 +17,11 @@
 
 package kafka.server
 
-import kafka.log.remote.RemoteLogManager
-import kafka.log.{LeaderOffsetIncremented, LogAppendInfo, UnifiedLog}
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.protocol.Errors
+import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
-import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
-import org.apache.kafka.storage.internals.log.EpochEntry
 
 import scala.collection.mutable
 

@@ -77,7 +77,7 @@ class AbstractFetcherThreadTest {
   def testMetricsRemovedOnShutdown(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint()
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     // add one partition to create the consumer lag metric
@@ -107,7 +107,7 @@ class AbstractFetcherThreadTest {
   def testConsumerLagRemovedWithPartition(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint()
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     // add one partition to create the consumer lag metric
@@ -132,7 +132,7 @@ class AbstractFetcherThreadTest {
   def testSimpleFetch(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint()
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     fetcher.setReplicaState(partition, PartitionState(leaderEpoch = 0))
@@ -161,7 +161,7 @@ class AbstractFetcherThreadTest {
         throw new UnknownTopicIdException("Topic ID was unknown as expected for this test")
       }
     }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, fetchBackOffMs)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchBackOffMs = fetchBackOffMs)
 
     fetcher.setReplicaState(partition, PartitionState(leaderEpoch = 0))
@@ -205,7 +205,7 @@ class AbstractFetcherThreadTest {
           partition3 -> new FetchData().setErrorCode(Errors.NONE.code))
       }
     }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint, fetchBackOffMs)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint)
     val fetcher = new MockFetcherThread(mockLeaderEndPoint, mockTierStateMachine, fetchBackOffMs = fetchBackOffMs)
 
     fetcher.setReplicaState(partition1, PartitionState(leaderEpoch = 0))
@@ -242,7 +242,7 @@ class AbstractFetcherThreadTest {
   def testFencedTruncation(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint()
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     fetcher.setReplicaState(partition, PartitionState(leaderEpoch = 0))
@@ -270,7 +270,7 @@ class AbstractFetcherThreadTest {
   def testFencedFetch(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint()
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     val replicaState = PartitionState(leaderEpoch = 0)
@@ -303,7 +303,7 @@ class AbstractFetcherThreadTest {
   def testUnknownLeaderEpochInTruncation(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint()
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     // The replica's leader epoch is ahead of the leader
@@ -336,7 +336,7 @@ class AbstractFetcherThreadTest {
   def testUnknownLeaderEpochWhileFetching(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint()
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     // This test is contrived because it shouldn't be possible to to see unknown leader epoch
@@ -379,7 +379,7 @@ class AbstractFetcherThreadTest {
   def testTruncation(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint()
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     val replicaLog = Seq(
@@ -420,7 +420,7 @@ class AbstractFetcherThreadTest {
 
       override val isTruncationOnFetchSupported: Boolean = false
     }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint)
     val fetcher = new MockFetcherThread(mockLeaderEndPoint, mockTierStateMachine) {
         override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
           assertEquals(highWatermark, truncationState.offset)
@@ -455,7 +455,7 @@ class AbstractFetcherThreadTest {
       override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] =
         throw new UnsupportedOperationException
     }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint)
     val fetcher = new MockFetcherThread(mockLeaderEndPoint, mockTierStateMachine) {
         override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
           assertEquals(highWatermark, truncationState.offset)
@@ -489,7 +489,7 @@ class AbstractFetcherThreadTest {
     val partition = new TopicPartition("topic", 0)
 
     val mockLeaderEndpoint = new MockLeaderEndPoint()
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
       override def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = {
         removePartitions(Set(partition))
@@ -521,7 +521,7 @@ class AbstractFetcherThreadTest {
 
     var truncations = 0
     val mockLeaderEndpoint = new MockLeaderEndPoint()
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
       override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
         truncations += 1
@@ -566,7 +566,7 @@ class AbstractFetcherThreadTest {
     val partition = new TopicPartition("topic", 0)
     var truncations = 0
     val mockLeaderEndpoint = new MockLeaderEndPoint
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
       override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
         truncations += 1
@@ -608,7 +608,7 @@ class AbstractFetcherThreadTest {
   def testFollowerFetchOutOfRangeHigh(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     val replicaLog = Seq(
@@ -651,7 +651,7 @@ class AbstractFetcherThreadTest {
   def testFollowerFetchMovedToTieredStore(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     val replicaLog = Seq(
@@ -706,7 +706,7 @@ class AbstractFetcherThreadTest {
     val partition = new TopicPartition("topic", 0)
     var isErrorHandled = false
     val mockLeaderEndpoint = new MockLeaderEndPoint
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0) {
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint) {
       override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: FetchRequest.PartitionData): PartitionFetchState = {
         isErrorHandled = true
         throw new FencedLeaderEpochException(s"Epoch ${currentFetchState.currentLeaderEpoch} is fenced")
@@ -754,7 +754,7 @@ class AbstractFetcherThreadTest {
         throw new FencedLeaderEpochException(s"Epoch $leaderEpoch is fenced")
       }
     }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint)
     val fetcher = new MockFetcherThread(mockLeaderEndPoint, mockTierStateMachine)
 
     val replicaLog = Seq()
@@ -781,7 +781,7 @@ class AbstractFetcherThreadTest {
   def testFollowerFetchOutOfRangeLow(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     // The follower begins from an offset which is behind the leader's log start offset
@@ -831,7 +831,7 @@ class AbstractFetcherThreadTest {
         super.fetchLatestOffset(topicPartition, leaderEpoch)
       }
     }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint)
     val fetcher: MockFetcherThread = new MockFetcherThread(mockLeaderEndPoint, mockTierStateMachine)
 
     // The follower begins from an offset which is behind the leader's log start offset
@@ -881,7 +881,7 @@ class AbstractFetcherThreadTest {
         fetchedData
       }
     }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint)
     val fetcher = new MockFetcherThread(mockLeaderEndPoint, mockTierStateMachine)
 
     fetcher.setReplicaState(partition, PartitionState(leaderEpoch = 0))
@@ -935,7 +935,7 @@ class AbstractFetcherThreadTest {
         fetchedEpochs
       }
     }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     def changeLeaderEpochWhileFetchEpoch(): Unit = {
@@ -986,7 +986,7 @@ class AbstractFetcherThreadTest {
         fetchedEpochs
       }
     }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     def changeLeaderEpochDuringFetchEpoch(): Unit = {
@@ -1035,7 +1035,7 @@ class AbstractFetcherThreadTest {
           .setEndOffset(0))
       }
     }
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndPoint)
     val fetcher = new MockFetcherThread(mockLeaderEndPoint, mockTierStateMachine)
 
     fetcher.setReplicaState(partition, PartitionState(leaderEpoch = 0))
@@ -1050,7 +1050,7 @@ class AbstractFetcherThreadTest {
   @Test
   def testFetcherThreadHandlingPartitionFailureDuringAppending(): Unit = {
     val mockLeaderEndpoint = new MockLeaderEndPoint
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcherForAppend = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
       override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
         if (topicPartition == partition1) {
@@ -1066,7 +1066,7 @@ class AbstractFetcherThreadTest {
   @Test
   def testFetcherThreadHandlingPartitionFailureDuringTruncation(): Unit = {
     val mockLeaderEndpoint = new MockLeaderEndPoint
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcherForTruncation = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
       override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
         if(topicPartition == partition1)
@@ -1117,7 +1117,7 @@ class AbstractFetcherThreadTest {
   def testDivergingEpochs(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     val replicaLog = Seq(
@@ -1154,7 +1154,7 @@ class AbstractFetcherThreadTest {
   def testMaybeUpdateTopicIds(): Unit = {
     val partition = new TopicPartition("topic1", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     // Start with no topic IDs
