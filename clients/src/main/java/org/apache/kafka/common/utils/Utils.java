@@ -1013,7 +1013,7 @@ public final class Utils {
             } catch (Throwable t) {
                 switch (level) {
                     case INFO:
-                        log.error(what, t);
+                        log.info(what, t);
                         break;
                     case DEBUG:
                         log.debug(what, t);
@@ -1023,6 +1023,10 @@ public final class Utils {
                         break;
                     case TRACE:
                         log.trace(what, t);
+                        break;
+                    case WARN:
+                    default:
+                        log.warn(what, t);
                 }
                 if (firstException != null)
                     firstException.compareAndSet(null, t);
