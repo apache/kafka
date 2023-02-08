@@ -85,11 +85,16 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
   }
 
   private def processRecordField(field: ByteBuffer, processFn: Array[Byte] => Array[Byte]): Try[ByteBuffer] = {
-    Try {
-      val bytes = Array.ofDim[Byte](field.remaining())
-      field.get(bytes)
-      val processed: Array[Byte] = Await.result( Future { processFn(bytes) }, recordProcessingTimeoutDuration )
-      ByteBuffer.wrap(processed)
+    if (field == null) Success(field)
+    else {
+      Try {
+        val bytes = Array.ofDim[Byte](field.remaining())
+        field.get(bytes)
+        val processed: Array[Byte] = Await.result(Future {
+          processFn(bytes)
+        }, recordProcessingTimeoutDuration)
+        ByteBuffer.wrap(processed)
+      }
     }
   }
 

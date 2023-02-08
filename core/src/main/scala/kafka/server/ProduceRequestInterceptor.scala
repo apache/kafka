@@ -30,17 +30,3 @@ abstract class ProduceRequestInterceptor {
 }
 
 class ProduceRequestInterceptorException(msg: String) extends Exception(msg)
-
-class NoOpProduceRequestInterceptor extends ProduceRequestInterceptor {
-  override def processKey(key: Array[Byte]): Array[Byte] = {
-    if (key == null) null
-    else key
-  }
-
-  override def processValue(value: Array[Byte]): Array[Byte] = {
-    if (value == null) null
-    else value
-  }
-
-  override def configure(): Unit = ()
-}
