@@ -68,7 +68,7 @@ class OffsetSyncStore implements AutoCloseable {
             //          | /
             //          vv
             // target |-sg----r-----|
-            long upstreamStep = offsetSync.get().upstreamOffset() == upstreamOffset ? 0L : 1L;
+            long upstreamStep = upstreamOffset == offsetSync.get().upstreamOffset() ? 0 : 1;
             return OptionalLong.of(offsetSync.get().downstreamOffset() + upstreamStep);
         } else {
             return OptionalLong.empty();
