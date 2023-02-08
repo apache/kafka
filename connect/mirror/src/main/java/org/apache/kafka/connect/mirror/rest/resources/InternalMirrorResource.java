@@ -27,7 +27,6 @@ import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Path;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.UriInfo;
-import java.util.List;
 import java.util.Map;
 
 @Path("/{source}/{target}/connectors")
@@ -51,17 +50,16 @@ public class InternalMirrorResource extends InternalClusterResource {
         String target = pathParam("target");
         Herder result = herders.get(new SourceAndTarget(source, target));
         if (result == null) {
-            log.debug("Failed to find herder for source '{}' and target '{}'", source, target);
             throw new NotFoundException("No replication flow found for source '" + source + "' and target '" + target + "'");
         }
         return result;
     }
 
     private String pathParam(String name) {
-        List<String> result = uriInfo.getPathParameters().get(name);
-        if (result == null || result.isEmpty())
-            throw new NotFoundException();
-        return result.get(0);
+        String result = uriInfo.getPathParameters().getFirst(name);
+        if (result == null)
+            throw new NotFoundException("Could not parse " + name + " cluster from request path");
+        return result;
     }
 
 }

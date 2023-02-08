@@ -207,7 +207,7 @@ public abstract class RestServer {
 
     protected final void initializeResources() {
         log.info("Initializing REST resources");
-        this.resources = new ArrayList<>();
+        resources = new ArrayList<>();
 
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.register(new JacksonJsonProvider());

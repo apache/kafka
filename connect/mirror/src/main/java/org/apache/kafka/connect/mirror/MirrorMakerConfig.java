@@ -84,7 +84,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     static final String TARGET_PREFIX = "target.";
     static final String ENABLE_INTERNAL_REST_CONFIG = "dedicated.mode.enable.internal.rest";
     private static final String ENABLE_INTERNAL_REST_DOC =
-            "Whether to bring up an internal-only REST server that allows multi-node clusters to operate correctly";
+            "Whether to bring up an internal-only REST server that allows multi-node clusters to operate correctly.";
 
     private final Plugins plugins;
    
