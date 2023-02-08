@@ -1399,7 +1399,7 @@ class AbstractFetcherThreadTest {
 
   class MockTierStateMachine(leader: LeaderEndPoint) extends ReplicaFetcherTierStateMachine(leader, null) {
 
-    var startCallback: (TopicPartition, Long) => Unit = (_,_) => {}
+    private var startCallback: (TopicPartition, Long) => Unit = (_,_) => {}
 
     override def start(topicPartition: TopicPartition,
                        currentFetchState: PartitionFetchState,
