@@ -341,7 +341,9 @@
   <subpackage name="coordinator">
     <subpackage name="group">
       <allow pkg="org.apache.kafka.common.message" />
+      <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.requests" />
+      <allow pkg="org.apache.kafka.server.util"/>
     </subpackage>
   </subpackage>
 
@@ -370,12 +372,18 @@
       <allow pkg="org.apache.kafka.server.log" />
       <allow pkg="org.apache.kafka.server.record" />
       <allow pkg="org.apache.kafka.test" />
-
+      <allow pkg="org.apache.kafka.storage"/>
       <subpackage name="remote">
         <allow pkg="scala.collection" />
       </subpackage>
 
     </subpackage>
+  </subpackage>
+
+  <subpackage name="storage.internals">
+    <allow pkg="org.apache.kafka.server"/>
+    <allow pkg="org.apache.kafka.storage.internals"/>
+    <allow pkg="org.apache.kafka.common" />
   </subpackage>
 
   <subpackage name="shell">

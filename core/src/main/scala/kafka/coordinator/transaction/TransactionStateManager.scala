@@ -36,9 +36,9 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.server.log.internals.{AppendOrigin, FetchIsolation}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable

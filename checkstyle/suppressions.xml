@@ -215,6 +215,8 @@
               files="raft[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
               files="storage[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
+              files="group-coordinator[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
     <suppress checks="ImportControl" files="FetchResponseData.java"/>
     <suppress checks="ImportControl" files="RecordsSerdeTest.java"/>
