@@ -301,7 +301,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         assertTrue(backup.kafka().consume(1, CHECKPOINT_DURATION_MS, "primary.checkpoints.internal").count() > 0,
             "Checkpoints were not emitted downstream to backup cluster.");
 
-        Map<TopicPartition, OffsetAndMetadata> backupOffsets = waitForAnyCheckpoint(
+        Map<TopicPartition, OffsetAndMetadata> backupOffsets = waitForCheckpointOnAllPartitions(
                 backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, "primary.test-topic-1");
 
         // Failover consumer group to backup cluster.
@@ -318,7 +318,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 "Checkpoints were not emitted upstream to primary cluster.");
         }
 
-        Map<TopicPartition, OffsetAndMetadata> primaryOffsets = waitForAnyCheckpoint(
+        Map<TopicPartition, OffsetAndMetadata> primaryOffsets = waitForCheckpointOnAllPartitions(
                 primaryClient, consumerGroupName, BACKUP_CLUSTER_ALIAS, "backup.test-topic-1");
  
         primaryClient.close();
@@ -680,7 +680,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         cluster.kafka().produce(topic, partition, key, value);
     }
 
-    protected static Map<TopicPartition, OffsetAndMetadata> waitForAnyCheckpoint(
+    protected static Map<TopicPartition, OffsetAndMetadata> waitForCheckpointOnAllPartitions(
             MirrorClient client, String consumerGroupName, String remoteClusterAlias, String topicName
     ) throws InterruptedException {
         AtomicReference<Map<TopicPartition, OffsetAndMetadata>> ret = new AtomicReference<>();

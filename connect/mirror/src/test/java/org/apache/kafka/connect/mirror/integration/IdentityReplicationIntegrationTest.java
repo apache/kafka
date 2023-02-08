@@ -106,7 +106,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         assertTrue(backup.kafka().consume(1, CHECKPOINT_DURATION_MS, "primary.checkpoints.internal").count() > 0,
                 "Checkpoints were not emitted downstream to backup cluster.");
 
-        Map<TopicPartition, OffsetAndMetadata> backupOffsets = waitForAnyCheckpoint(
+        Map<TopicPartition, OffsetAndMetadata> backupOffsets = waitForCheckpointOnAllPartitions(
                 backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, "test-topic-1");
 
         // Failover consumer group to backup cluster.
