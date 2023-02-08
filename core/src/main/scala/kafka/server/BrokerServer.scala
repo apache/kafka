@@ -434,7 +434,7 @@ class BrokerServer(
         time = time,
         tokenManager = tokenManager,
         apiVersionManager = apiVersionManager,
-        produceRequestInterceptorManager = ProduceRequestInterceptorManager(List(new NoOpProduceRequestInterceptor)))
+        produceRequestInterceptorManager = config.producerRequestInterceptorManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,

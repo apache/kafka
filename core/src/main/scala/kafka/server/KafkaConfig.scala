@@ -358,6 +358,7 @@ object KafkaConfig {
   val RequestTimeoutMsProp = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
+  val ProduceRequestInterceptorsProp = "produce.request.interceptors"
 
   /** KRaft mode configs */
   val ProcessRolesProp = "process.roles"
@@ -687,6 +688,9 @@ object KafkaConfig {
   val RequestTimeoutMsDoc = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC
+  val ProduceRequestInterceptorsDoc = "The produce request interceptors that the broker should invoke when receiving messages from a client. " +
+    "The config expects a comma-separated list of class names that implement the <code>kafka.server.ProduceRequestInterceptor</code> interface, " +
+    "and which are present on the broker's classpath."
 
   /** KRaft mode configs */
   val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
@@ -1136,6 +1140,7 @@ object KafkaConfig {
       .define(RequestTimeoutMsProp, INT, Defaults.RequestTimeoutMs, HIGH, RequestTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMsProp, LONG, Defaults.ConnectionSetupTimeoutMs, MEDIUM, ConnectionSetupTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
+      .define(ProduceRequestInterceptorsProp, LIST, Collections.emptyList(), MEDIUM, ProduceRequestInterceptorsDoc)
 
       /*
        * KRaft mode configs.
@@ -1683,6 +1688,16 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def getNumReplicaAlterLogDirsThreads: Int = {
     val numThreads: Integer = Option(getInt(KafkaConfig.NumReplicaAlterLogDirsThreadsProp)).getOrElse(logDirs.size)
     numThreads
+  }
+  val producerRequestInterceptorManager: ProduceRequestInterceptorManager = {
+    val interceptors: List[ProduceRequestInterceptor] = getList(KafkaConfig.ProduceRequestInterceptorsProp).asScala
+      .map { className =>
+        val i = Class.forName(className).getDeclaredConstructor().newInstance()
+        val pri = i.asInstanceOf[ProduceRequestInterceptor]
+        pri.configure()
+        pri
+      }.toList
+    ProduceRequestInterceptorManager(interceptors)
   }
 
   /************* Metadata Configuration ***********/

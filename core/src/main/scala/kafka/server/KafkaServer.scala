@@ -529,7 +529,7 @@ class KafkaServer(
           time = time,
           tokenManager = tokenManager,
           apiVersionManager = apiVersionManager,
-          produceRequestInterceptorManager = ProduceRequestInterceptorManager(List(new NoOpProduceRequestInterceptor)))
+          produceRequestInterceptorManager = config.producerRequestInterceptorManager)
 
         dataPlaneRequestProcessor = createKafkaApis(socketServer.dataPlaneRequestChannel)
 
