@@ -998,15 +998,18 @@ public final class Utils {
             throw exception;
     }
 
-    public static void swallow(
-        Logger log,
-        String what,
-        Runnable runnable
-    ) {
-        try {
-            runnable.run();
-        } catch (Throwable e) {
-            log.warn("{} error", what, e);
+    /**
+     * Run the supplied code. If an exception is thrown, it is swallowed and registered to the firstException parameter.
+     */
+    public static void swallow(Logger log, String what, final Runnable code, final AtomicReference<Throwable> firstException) {
+        if (code != null) {
+            try {
+                code.run();
+            } catch (Throwable t) {
+                log.warn("{} error", what, t);
+                if (firstException != null)
+                    firstException.compareAndSet(null, t);
+            }
         }
     }
 
@@ -1487,5 +1490,4 @@ public final class Utils {
         final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS XXX");
         return Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).format(dateTimeFormatter);
     }
-
 }

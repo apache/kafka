@@ -438,7 +438,7 @@ public class Fetcher<K, V> implements Closeable {
      * @return A future that indicates result of sent Fetch request
      */
     private RequestFuture<ClientResponse> sendFetchRequestToNode(final FetchSessionHandler.FetchRequestData requestData,
-                                                         final Node fetchTarget) {
+                                                                 final Node fetchTarget) {
         // Version 12 is the maximum version that could be used without topic IDs. See FetchRequest.json for schema
         // changelog.
         final short maxVersion = requestData.canUseTopicIds() ? ApiKeys.FETCH.latestVersion() : (short) 12;

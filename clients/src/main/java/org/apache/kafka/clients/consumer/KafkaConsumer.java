@@ -54,7 +54,6 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.LambdaUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -2442,7 +2441,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // consumer.
         if (coordinator != null) {
             // This is a blocking call bound by the time remaining in closeTimer
-            LambdaUtils.swallow(() -> coordinator.close(closeTimer), firstException);
+            Utils.swallow(log, "coordinator close", () -> coordinator.close(closeTimer), firstException);
         }
 
         if (fetcher != null) {
@@ -2455,7 +2454,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             closeTimer.reset(remainingDurationInTimeout);
 
             // This is a blocking call bound by the time remaining in closeTimer
-            LambdaUtils.swallow(() -> fetcher.close(closeTimer), firstException);
+            Utils.swallow(log, " fetcher close", () -> fetcher.close(closeTimer), firstException);
         }
 
         Utils.closeQuietly(interceptors, "consumer interceptors", firstException);
