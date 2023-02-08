@@ -727,23 +727,23 @@ public class MirrorConnectorsIntegrationBaseTest {
             waitForCondition(() -> {
                 Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets =
                     adminClient.listConsumerGroupOffsets(consumerGroupId).partitionsToOffsetAndMetadata().get();
-                long consumerGroupOffsetTotal = consumerGroupOffsets.values().stream()
+                long totalConsumerGroupOffsets = consumerGroupOffsets.values().stream()
                     .mapToLong(OffsetAndMetadata::offset).sum();
 
-                Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsets =
+                Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> endOffsets =
                         adminClient.listOffsets(tps).all().get();
-                long totalOffsets = offsets.values().stream()
+                long totalEndOffsets = endOffsets.values().stream()
                         .mapToLong(ListOffsetsResult.ListOffsetsResultInfo::offset).sum();
 
-                for (TopicPartition tp : offsets.keySet()) {
+                for (TopicPartition tp : endOffsets.keySet()) {
                     if (consumerGroupOffsets.containsKey(tp)) {
-                        assertTrue(consumerGroupOffsets.get(tp).offset() <= offsets.get(tp).offset(),
+                        assertTrue(consumerGroupOffsets.get(tp).offset() <= endOffsets.get(tp).offset(),
                                 "Consumer group committed downstream offsets beyond the log end, this would lead to negative lag metrics"
                         );
                     }
                 }
                 // make sure the consumer group offsets are synced to expected number
-                return totalOffsets == expectedTotalOffsets && consumerGroupOffsetTotal == expectedTotalOffsets;
+                return totalEndOffsets == expectedTotalOffsets && totalConsumerGroupOffsets == expectedTotalOffsets;
             }, OFFSET_SYNC_DURATION_MS, "Consumer group offset sync is not complete in time");
         }
     }
