@@ -18,7 +18,7 @@ package org.apache.kafka.storage.internals.checkpoint;
 
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.server.common.CheckpointFile;
-import org.apache.kafka.server.log.internals.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 
 import java.io.File;
 import java.io.IOException;

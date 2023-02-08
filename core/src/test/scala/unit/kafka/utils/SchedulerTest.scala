@@ -22,8 +22,8 @@ import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import kafka.log.{LocalLog, LogLoader, LogSegments, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
 import kafka.server.BrokerTopicStats
 import kafka.utils.TestUtils.retry
-import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
 import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.storage.internals.log.{LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 

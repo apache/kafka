@@ -29,9 +29,9 @@ import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeEx
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.server.log.internals.LogFileUtils.offsetFromFileName
-import org.apache.kafka.server.log.internals.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, OffsetPosition}
+import org.apache.kafka.storage.internals.log.LogFileUtils.offsetFromFileName
 import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, OffsetPosition}
 
 import java.util.{Collections, Optional}
 import scala.jdk.CollectionConverters._

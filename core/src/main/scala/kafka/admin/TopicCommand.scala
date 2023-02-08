@@ -33,8 +33,8 @@ import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, TopicExistsException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._

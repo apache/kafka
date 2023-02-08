@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.storage.internals.checkpoint;
 
-import org.apache.kafka.server.log.internals.EpochEntry;
+import org.apache.kafka.storage.internals.log.EpochEntry;
 
 import java.util.Collection;
 import java.util.List;
