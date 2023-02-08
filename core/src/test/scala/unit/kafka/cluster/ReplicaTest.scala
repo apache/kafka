@@ -19,7 +19,7 @@ package kafka.cluster
 import kafka.log.UnifiedLog
 import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.server.log.internals.LogOffsetMetadata
+import org.apache.kafka.storage.internals.log.LogOffsetMetadata
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 

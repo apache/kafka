@@ -317,7 +317,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- False positive - the volatile read is guarded by a lock. -->
-        <Class name="org.apache.kafka.server.log.internals.AbstractIndex"/>
+        <Class name="org.apache.kafka.storage.internals.log.AbstractIndex"/>
         <Method name="incrementEntries"/>
         <Bug pattern="VO_VOLATILE_INCREMENT"/>
     </Match>

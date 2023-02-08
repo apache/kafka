@@ -29,7 +29,7 @@ import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
 import scala.collection.{Iterable, Seq, mutable}
 

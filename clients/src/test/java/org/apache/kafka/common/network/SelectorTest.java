@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +58,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -129,15 +129,12 @@ public class SelectorTest {
 
         // disconnect
         this.server.closeConnections();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                try {
-                    selector.poll(1000L);
-                    return selector.disconnected().containsKey(node);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+        waitForCondition(() -> {
+            try {
+                selector.poll(1000L);
+                return selector.disconnected().containsKey(node);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }, 5000, "Failed to observe disconnected node in disconnected set");
 
@@ -259,7 +256,7 @@ public class SelectorTest {
         if (channelBuilder instanceof PlaintextChannelBuilder) {
             assertEquals(0, cipherMetrics(metrics).size());
         } else {
-            TestUtils.waitForCondition(() -> cipherMetrics(metrics).size() == 1,
+            waitForCondition(() -> cipherMetrics(metrics).size() == 1,
                 "Waiting for cipher metrics to be created.");
             assertEquals(Integer.valueOf(5), cipherMetrics(metrics).get(0).metricValue());
         }
@@ -300,7 +297,7 @@ public class SelectorTest {
         KafkaMetric outgoingByteTotal = findUntaggedMetricByName("outgoing-byte-total");
         KafkaMetric incomingByteTotal = findUntaggedMetricByName("incoming-byte-total");
 
-        TestUtils.waitForCondition(() -> {
+        waitForCondition(() -> {
             long bytesSent = send.size() - send.remaining();
             assertEquals(bytesSent, ((Double) outgoingByteTotal.metricValue()).longValue());
 
@@ -631,7 +628,7 @@ public class SelectorTest {
             int receiveCount = 0;
             KafkaChannel channel = createConnectionWithPendingReceives(i);
             // Poll until one or more receives complete and then close the server-side connection
-            TestUtils.waitForCondition(() -> {
+            waitForCondition(() -> {
                 selector.poll(1000);
                 return selector.completedReceives().size() > 0;
             }, 5000, "Receive not completed");
@@ -662,7 +659,7 @@ public class SelectorTest {
         selector.poll(1000); // Wait until some data arrives, but not a completed receive
         assertEquals(0, selector.completedReceives().size());
         server.closeConnections();
-        TestUtils.waitForCondition(() -> {
+        waitForCondition(() -> {
             try {
                 selector.poll(100);
                 return !selector.disconnected().isEmpty();
@@ -681,7 +678,7 @@ public class SelectorTest {
         selector.close();
         MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
         selector = new Selector(NetworkReceive.UNLIMITED, CONNECTION_MAX_IDLE_MS, metrics, time, "MetricGroup",
-            new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
+            new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));

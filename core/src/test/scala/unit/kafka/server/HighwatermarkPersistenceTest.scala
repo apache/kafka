@@ -27,8 +27,8 @@ import kafka.cluster.Partition
 import kafka.server.metadata.MockConfigRepository
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.SimpleRecord
-import org.apache.kafka.server.log.internals.{CleanerConfig, LogDirFailureChannel}
 import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogDirFailureChannel}
 
 class HighwatermarkPersistenceTest {
 

@@ -80,6 +80,13 @@
             However, it is possible to downgrade to production versions such as 3.3-IV0, 3.3-IV1, etc.</li>
     </ol>
 
+<h5><a id="upgrade_340_notable" href="#upgrade_340_notable">Notable changes in 3.4.0</a></h5>
+<ul>
+    <li>Since Apache Kafka 3.4.0, we have added a system property ("org.apache.kafka.disallowed.login.modules") to disable the problematic
+        login modules usage in SASL JAAS configuration. Also by default "com.sun.security.auth.module.JndiLoginModule" is disabled from Apache Kafka 3.4.0.
+    </li>
+</ul>
+
 <h4><a id="upgrade_3_3_1" href="#upgrade_3_3_1">Upgrading to 3.3.1 from any version 0.8.x through 3.2.x</a></h4>
 
 <p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.

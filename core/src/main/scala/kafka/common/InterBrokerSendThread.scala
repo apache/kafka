@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
  */
 abstract class InterBrokerSendThread(
   name: String,
-  var networkClient: KafkaClient,
+  @volatile var networkClient: KafkaClient,
   requestTimeoutMs: Int,
   time: Time,
   isInterruptible: Boolean = true

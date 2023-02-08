@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C, Time}
-import org.apache.kafka.server.log.internals._
+import org.apache.kafka.storage.internals.log.{AppendOrigin, BatchMetadata, CompletedTxn, CorruptSnapshotException, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, SnapshotFile, TxnMetadata}
 
 import java.io.File
 import java.nio.ByteBuffer

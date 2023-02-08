@@ -29,9 +29,9 @@ import javax.ws.rs.core.Configurable;
 public interface ConnectRestExtensionContext {
 
     /**
-     * Provides an implementation of {@link javax.ws.rs.core.Configurable} that be used to register JAX-RS resources.
+     * Provides an implementation of {@link javax.ws.rs.core.Configurable} that can be used to register JAX-RS resources.
      *
-     * @return @return the JAX-RS {@link javax.ws.rs.core.Configurable}; never {@code null}
+     * @return the JAX-RS {@link javax.ws.rs.core.Configurable}; never {@code null}
      */
     Configurable<? extends Configurable<?>> configurable();
 

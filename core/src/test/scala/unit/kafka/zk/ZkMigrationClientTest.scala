@@ -164,11 +164,11 @@ class ZkMigrationClientTest extends QuorumTestHarness {
                                         adminZkClient: AdminZkClient,
                                         migrationState: ZkMigrationLeadershipState,
                                         entity: Map[String, String],
-                                        quotas: Map[String, Double],
+                                        quotas: Map[String, java.lang.Double],
                                         zkEntityType: String,
                                         zkEntityName: String): ZkMigrationLeadershipState = {
     val nextMigrationState = migrationClient.writeClientQuotas(
-      new ClientQuotaEntity(entity.asJava),
+      entity.asJava,
       quotas.asJava,
       migrationState)
     val newProps = ZkAdminManager.clientQuotaPropsToDoubleMap(
@@ -187,25 +187,25 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
     assertEquals(0, migrationState.migrationZkVersion())
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
-      Map(ConfigType.User -> "user1"),
+      Map(ClientQuotaEntity.USER -> "user1"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
       ConfigType.User, "user1")
     assertEquals(1, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
-      Map(ConfigType.User -> "user1"),
+      Map(ClientQuotaEntity.USER -> "user1"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 10000.0),
       ConfigType.User, "user1")
     assertEquals(2, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
-      Map(ConfigType.User -> "user1"),
+      Map(ClientQuotaEntity.USER -> "user1"),
       Map.empty,
       ConfigType.User, "user1")
     assertEquals(3, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
-      Map(ConfigType.User -> "user1"),
+      Map(ClientQuotaEntity.USER -> "user1"),
       Map(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 100.0),
       ConfigType.User, "user1")
     assertEquals(4, migrationState.migrationZkVersion())
@@ -215,14 +215,14 @@ class ZkMigrationClientTest extends QuorumTestHarness {
   def testWriteNewClientQuotas(): Unit = {
     assertEquals(0, migrationState.migrationZkVersion())
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
-      Map(ConfigType.User -> "user2"),
+      Map(ClientQuotaEntity.USER -> "user2"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0, QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 100.0),
       ConfigType.User, "user2")
 
     assertEquals(1, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
-      Map(ConfigType.User -> "user2", ConfigType.Client -> "clientA"),
+      Map(ClientQuotaEntity.USER -> "user2", ClientQuotaEntity.CLIENT_ID -> "clientA"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 10000.0, QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 200.0),
       ConfigType.User, "user2/clients/clientA")
 

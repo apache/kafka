@@ -52,7 +52,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
 
 /**
- * WorkerTask that uses a SourceTask to ingest data into Kafka.
+ * {@link WorkerTask} that uses a {@link SourceTask} to ingest data into Kafka.
  */
 class WorkerSourceTask extends AbstractWorkerSourceTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSourceTask.class);

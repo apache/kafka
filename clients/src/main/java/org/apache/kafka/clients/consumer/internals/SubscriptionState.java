@@ -55,18 +55,17 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * A class for tracking the topics, partitions, and offsets for the consumer. A partition
  * is "assigned" either directly with {@link #assignFromUser(Set)} (manual assignment)
  * or with {@link #assignFromSubscribed(Collection)} (automatic assignment from subscription).
- *
+ * <p>
  * Once assigned, the partition is not considered "fetchable" until its initial position has
- * been set with {@link #seekValidated(TopicPartition, FetchPosition)}. Fetchable partitions track a fetch
- * position which is used to set the offset of the next fetch, and a consumed position
- * which is the last offset that has been returned to the user. You can suspend fetching
- * from a partition through {@link #pause(TopicPartition)} without affecting the fetched/consumed
- * offsets. The partition will remain unfetchable until the {@link #resume(TopicPartition)} is
+ * been set with {@link #seekValidated(TopicPartition, FetchPosition)}. Fetchable partitions
+ * track a position which is the last offset that has been returned to the user. You can
+ * suspend fetching from a partition through {@link #pause(TopicPartition)} without affecting the consumed
+ * position. The partition will remain unfetchable until the {@link #resume(TopicPartition)} is
  * used. You can also query the pause state independently with {@link #isPaused(TopicPartition)}.
- *
- * Note that pause state as well as fetch/consumed positions are not preserved when partition
+ * <p>
+ * Note that pause state as well as the consumed positions are not preserved when partition
  * assignment is changed whether directly by the user or through a group rebalance.
- *
+ * <p>
  * Thread Safety: this class is thread-safe.
  */
 public class SubscriptionState {

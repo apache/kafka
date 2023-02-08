@@ -53,10 +53,11 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager.ValidationResult;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -83,7 +84,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class InternalTopicManagerTest {
     private final Node broker1 = new Node(0, "dummyHost-1", 1234);
     private final Node broker2 = new Node(1, "dummyHost-2", 1234);
@@ -161,7 +165,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldOnlyRetryNotSuccessfulFuturesDuringSetup() {
-        final AdminClient admin = EasyMock.createMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture = new KafkaFutureImpl<>();
@@ -174,23 +178,20 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
         final NewTopic newTopic1 = newTopic(topic1, internalTopicConfig1, streamsConfig);
         final NewTopic newTopic2 = newTopic(topic2, internalTopicConfig2, streamsConfig);
-        EasyMock.expect(admin.createTopics(mkSet(newTopic1, newTopic2)))
-            .andAnswer(() -> new MockCreateTopicsResult(mkMap(
+        when(admin.createTopics(mkSet(newTopic1, newTopic2)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
                 mkEntry(topic1, createTopicSuccessfulFuture),
                 mkEntry(topic2, createTopicFailFuture)
             )));
-        EasyMock.expect(admin.createTopics(mkSet(newTopic2)))
-            .andAnswer(() -> new MockCreateTopicsResult(mkMap(
+        when(admin.createTopics(mkSet(newTopic2)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
                 mkEntry(topic2, createTopicSuccessfulFuture)
             )));
-        EasyMock.replay(admin);
 
         topicManager.setup(mkMap(
             mkEntry(topic1, internalTopicConfig1),
             mkEntry(topic2, internalTopicConfig2)
         ));
-
-        EasyMock.verify(admin);
     }
 
     @Test
@@ -204,7 +205,7 @@ public class InternalTopicManagerTest {
     }
 
     private void shouldRetryCreateTopicWhenRetriableExceptionIsThrown(final Exception retriableException) {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture = new KafkaFutureImpl<>();
@@ -215,15 +216,13 @@ public class InternalTopicManagerTest {
         );
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
         final NewTopic newTopic = newTopic(topic1, internalTopicConfig, streamsConfig);
-        EasyMock.expect(admin.createTopics(mkSet(newTopic)))
-            .andAnswer(() -> new MockCreateTopicsResult(mkMap(
+        when(admin.createTopics(mkSet(newTopic)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
                 mkEntry(topic1, createTopicSuccessfulFuture)
+            )))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
+                    mkEntry(topic2, createTopicSuccessfulFuture)
             )));
-        EasyMock.expect(admin.createTopics(mkSet(newTopic)))
-            .andAnswer(() -> new MockCreateTopicsResult(mkMap(
-                mkEntry(topic2, createTopicSuccessfulFuture)
-            )));
-        EasyMock.replay(admin);
 
         topicManager.setup(mkMap(
             mkEntry(topic1, internalTopicConfig)
@@ -307,18 +306,17 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowWhenCreateTopicsThrowsUnexpectedException() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture = new KafkaFutureImpl<>();
         createTopicFailFuture.completeExceptionally(new IllegalStateException("Nobody expects the Spanish inquisition"));
         final NewTopic newTopic = newTopic(topic1, internalTopicConfig, streamsConfig);
-        EasyMock.expect(admin.createTopics(mkSet(newTopic)))
-            .andStubAnswer(() -> new MockCreateTopicsResult(mkMap(
+        when(admin.createTopics(mkSet(newTopic)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
                 mkEntry(topic1, createTopicFailFuture)
             )));
-        EasyMock.replay(admin);
 
         assertThrows(StreamsException.class, () -> topicManager.setup(mkMap(
             mkEntry(topic1, internalTopicConfig)
@@ -327,14 +325,13 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowWhenCreateTopicsResultsDoNotContainTopic() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
         final NewTopic newTopic = newTopic(topic1, internalTopicConfig, streamsConfig);
-        EasyMock.expect(admin.createTopics(mkSet(newTopic)))
-            .andStubAnswer(() -> new MockCreateTopicsResult(Collections.singletonMap(topic2, new KafkaFutureImpl<>())));
-        EasyMock.replay(admin);
+        when(admin.createTopics(mkSet(newTopic)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(Collections.singletonMap(topic2, new KafkaFutureImpl<>())));
 
         assertThrows(
             IllegalStateException.class,
@@ -344,7 +341,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowTimeoutExceptionWhenCreateTopicExceedsTimeout() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
         );
@@ -354,9 +351,8 @@ public class InternalTopicManagerTest {
         createTopicFailFuture.completeExceptionally(new TimeoutException());
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
         final NewTopic newTopic = newTopic(topic1, internalTopicConfig, streamsConfig);
-        EasyMock.expect(admin.createTopics(mkSet(newTopic)))
-            .andStubAnswer(() -> new MockCreateTopicsResult(mkMap(mkEntry(topic1, createTopicFailFuture))));
-        EasyMock.replay(admin);
+        when(admin.createTopics(mkSet(newTopic)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(mkEntry(topic1, createTopicFailFuture))));
 
         assertThrows(
             TimeoutException.class,
@@ -366,7 +362,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowTimeoutExceptionWhenFuturesNeverCompleteDuringSetup() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
         );
@@ -375,9 +371,8 @@ public class InternalTopicManagerTest {
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFutureThatNeverCompletes = new KafkaFutureImpl<>();
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
         final NewTopic newTopic = newTopic(topic1, internalTopicConfig, streamsConfig);
-        EasyMock.expect(admin.createTopics(mkSet(newTopic)))
-            .andStubAnswer(() -> new MockCreateTopicsResult(mkMap(mkEntry(topic1, createTopicFutureThatNeverCompletes))));
-        EasyMock.replay(admin);
+        when(admin.createTopics(mkSet(newTopic)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(mkEntry(topic1, createTopicFutureThatNeverCompletes))));
 
         assertThrows(
             TimeoutException.class,
@@ -387,7 +382,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldCleanUpWhenUnexpectedExceptionIsThrownDuringSetup() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
@@ -398,9 +393,8 @@ public class InternalTopicManagerTest {
         setupCleanUpScenario(admin, streamsConfig, internalTopicConfig1, internalTopicConfig2);
         final KafkaFutureImpl<Void> deleteTopicSuccessfulFuture = new KafkaFutureImpl<>();
         deleteTopicSuccessfulFuture.complete(null);
-        EasyMock.expect(admin.deleteTopics(mkSet(topic1)))
-            .andAnswer(() -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
-        EasyMock.replay(admin);
+        when(admin.deleteTopics(mkSet(topic1)))
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
 
         assertThrows(
             StreamsException.class,
@@ -409,13 +403,11 @@ public class InternalTopicManagerTest {
                 mkEntry(topic2, internalTopicConfig2)
             ))
         );
-
-        EasyMock.verify(admin);
     }
 
     @Test
     public void shouldCleanUpWhenCreateTopicsResultsDoNotContainTopic() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
@@ -428,20 +420,19 @@ public class InternalTopicManagerTest {
         );
         final NewTopic newTopic1 = newTopic(topic1, internalTopicConfig1, streamsConfig);
         final NewTopic newTopic2 = newTopic(topic2, internalTopicConfig2, streamsConfig);
-        EasyMock.expect(admin.createTopics(mkSet(newTopic1, newTopic2)))
-            .andAnswer(() -> new MockCreateTopicsResult(mkMap(
+        when(admin.createTopics(mkSet(newTopic1, newTopic2)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
                 mkEntry(topic1, createTopicSuccessfulFuture),
                 mkEntry(topic2, createTopicFailFuture1)
             )));
-        EasyMock.expect(admin.createTopics(mkSet(newTopic2)))
-            .andAnswer(() -> new MockCreateTopicsResult(mkMap(
+        when(admin.createTopics(mkSet(newTopic2)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
                 mkEntry(topic3, createTopicSuccessfulFuture)
             )));
         final KafkaFutureImpl<Void> deleteTopicSuccessfulFuture = new KafkaFutureImpl<>();
         deleteTopicSuccessfulFuture.complete(null);
-        EasyMock.expect(admin.deleteTopics(mkSet(topic1)))
-            .andAnswer(() -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
-        EasyMock.replay(admin);
+        when(admin.deleteTopics(mkSet(topic1)))
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
 
         assertThrows(
             IllegalStateException.class,
@@ -450,13 +441,11 @@ public class InternalTopicManagerTest {
                 mkEntry(topic2, internalTopicConfig2)
             ))
         );
-
-        EasyMock.verify(admin);
     }
 
     @Test
     public void shouldCleanUpWhenCreateTopicsTimesOut() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
@@ -472,19 +461,18 @@ public class InternalTopicManagerTest {
         );
         final NewTopic newTopic1 = newTopic(topic1, internalTopicConfig1, streamsConfig);
         final NewTopic newTopic2 = newTopic(topic2, internalTopicConfig2, streamsConfig);
-        EasyMock.expect(admin.createTopics(mkSet(newTopic1, newTopic2)))
-            .andAnswer(() -> new MockCreateTopicsResult(mkMap(
+        when(admin.createTopics(mkSet(newTopic1, newTopic2)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
                 mkEntry(topic1, createTopicSuccessfulFuture),
                 mkEntry(topic2, createTopicFailFuture1)
             )));
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFutureThatNeverCompletes = new KafkaFutureImpl<>();
-        EasyMock.expect(admin.createTopics(mkSet(newTopic2)))
-            .andStubAnswer(() -> new MockCreateTopicsResult(mkMap(mkEntry(topic2, createTopicFutureThatNeverCompletes))));
+        when(admin.createTopics(mkSet(newTopic2)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(mkEntry(topic2, createTopicFutureThatNeverCompletes))));
         final KafkaFutureImpl<Void> deleteTopicSuccessfulFuture = new KafkaFutureImpl<>();
         deleteTopicSuccessfulFuture.complete(null);
-        EasyMock.expect(admin.deleteTopics(mkSet(topic1)))
-            .andAnswer(() -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
-        EasyMock.replay(admin);
+        when(admin.deleteTopics(mkSet(topic1)))
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
 
         assertThrows(
             TimeoutException.class,
@@ -493,8 +481,6 @@ public class InternalTopicManagerTest {
                 mkEntry(topic2, internalTopicConfig2)
             ))
         );
-
-        EasyMock.verify(admin);
     }
 
     @Test
@@ -513,7 +499,7 @@ public class InternalTopicManagerTest {
     }
 
     private void shouldRetryDeleteTopicWhenRetriableException(final Exception retriableException) {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
@@ -523,10 +509,9 @@ public class InternalTopicManagerTest {
         deleteTopicFailFuture.completeExceptionally(retriableException);
         final KafkaFutureImpl<Void> deleteTopicSuccessfulFuture = new KafkaFutureImpl<>();
         deleteTopicSuccessfulFuture.complete(null);
-        EasyMock.expect(admin.deleteTopics(mkSet(topic1)))
-            .andAnswer(() -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicFailFuture))))
-            .andAnswer(() -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
-        EasyMock.replay(admin);
+        when(admin.deleteTopics(mkSet(topic1)))
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicFailFuture))))
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
 
         assertThrows(
             StreamsException.class,
@@ -535,12 +520,11 @@ public class InternalTopicManagerTest {
                 mkEntry(topic2, internalTopicConfig2)
             ))
         );
-        EasyMock.verify();
     }
 
     @Test
     public void shouldThrowTimeoutExceptionWhenFuturesNeverCompleteDuringCleanUp() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
@@ -550,9 +534,8 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
         setupCleanUpScenario(admin, streamsConfig, internalTopicConfig1, internalTopicConfig2);
         final KafkaFutureImpl<Void> deleteTopicFutureThatNeverCompletes = new KafkaFutureImpl<>();
-        EasyMock.expect(admin.deleteTopics(mkSet(topic1)))
-            .andStubAnswer(() -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicFutureThatNeverCompletes))));
-        EasyMock.replay(admin);
+        when(admin.deleteTopics(mkSet(topic1)))
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicFutureThatNeverCompletes))));
 
         assertThrows(
             TimeoutException.class,
@@ -565,7 +548,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowWhenDeleteTopicsThrowsUnexpectedException() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
@@ -573,9 +556,8 @@ public class InternalTopicManagerTest {
         setupCleanUpScenario(admin, streamsConfig, internalTopicConfig1, internalTopicConfig2);
         final KafkaFutureImpl<Void> deleteTopicFailFuture = new KafkaFutureImpl<>();
         deleteTopicFailFuture.completeExceptionally(new IllegalStateException("Nobody expects the Spanish inquisition"));
-        EasyMock.expect(admin.deleteTopics(mkSet(topic1)))
-            .andStubAnswer(() -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicFailFuture))));
-        EasyMock.replay(admin);
+        when(admin.deleteTopics(mkSet(topic1)))
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicFailFuture))));
 
         assertThrows(
             StreamsException.class,
@@ -597,13 +579,13 @@ public class InternalTopicManagerTest {
         );
         final NewTopic newTopic1 = newTopic(topic1, internalTopicConfig1, streamsConfig);
         final NewTopic newTopic2 = newTopic(topic2, internalTopicConfig2, streamsConfig);
-        EasyMock.expect(admin.createTopics(mkSet(newTopic1, newTopic2)))
-            .andAnswer(() -> new MockCreateTopicsResult(mkMap(
+        when(admin.createTopics(mkSet(newTopic1, newTopic2)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
                 mkEntry(topic1, createTopicSuccessfulFuture),
                 mkEntry(topic2, createTopicFailFuture1)
             )));
-        EasyMock.expect(admin.createTopics(mkSet(newTopic2)))
-            .andAnswer(() -> new MockCreateTopicsResult(mkMap(
+        when(admin.createTopics(mkSet(newTopic2)))
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
                 mkEntry(topic2, createTopicFailFuture2)
             )));
     }
@@ -669,7 +651,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldCompleteTopicValidationOnRetry() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
@@ -690,19 +672,17 @@ public class InternalTopicManagerTest {
 
         // let the first describe succeed on topic, and fail on topic2, and then let creation throws topics-existed;
         // it should retry with just topic2 and then let it succeed
-        EasyMock.expect(admin.describeTopics(mkSet(topic1, topic2)))
-            .andReturn(new MockDescribeTopicsResult(mkMap(
+        when(admin.describeTopics(mkSet(topic1, topic2)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(
                 mkEntry(topic1, topicDescriptionSuccessFuture),
                 mkEntry(topic2, topicDescriptionFailFuture)
-            ))).once();
-        EasyMock.expect(admin.createTopics(Collections.singleton(new NewTopic(topic2, Optional.of(1), Optional.of((short) 1))
+            )));
+        when(admin.createTopics(Collections.singleton(new NewTopic(topic2, Optional.of(1), Optional.of((short) 1))
             .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
                                  mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"))))))
-            .andReturn(new MockCreateTopicsResult(Collections.singletonMap(topic2, topicCreationFuture))).once();
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic2)))
-            .andReturn(new MockDescribeTopicsResult(Collections.singletonMap(topic2, topicDescriptionSuccessFuture)));
-
-        EasyMock.replay(admin);
+            .thenAnswer(answer -> new MockCreateTopicsResult(Collections.singletonMap(topic2, topicCreationFuture)));
+        when(admin.describeTopics(Collections.singleton(topic2)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(Collections.singletonMap(topic2, topicDescriptionSuccessFuture)));
 
         final InternalTopicConfig topicConfig = new UnwindowedChangelogTopicConfig(topic1, Collections.emptyMap());
         topicConfig.setNumberOfPartitions(1);
@@ -712,8 +692,6 @@ public class InternalTopicManagerTest {
             mkEntry(topic1, topicConfig),
             mkEntry(topic2, topic2Config)
         ));
-
-        EasyMock.verify(admin);
     }
 
     @Test
@@ -809,7 +787,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldCreateTopicWhenTopicLeaderNotAvailableAndThenTopicNotFound() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
@@ -821,37 +799,31 @@ public class InternalTopicManagerTest {
         final KafkaFutureImpl<TopicDescription> topicDescriptionUnknownTopicFuture = new KafkaFutureImpl<>();
         topicDescriptionUnknownTopicFuture.completeExceptionally(new UnknownTopicOrPartitionException("Unknown Topic!"));
         final KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> topicCreationFuture = new KafkaFutureImpl<>();
-        topicCreationFuture.complete(EasyMock.createNiceMock(CreateTopicsResult.TopicMetadataAndConfig.class));
+        topicCreationFuture.complete(mock(CreateTopicsResult.TopicMetadataAndConfig.class));
 
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andReturn(new MockDescribeTopicsResult(
-                Collections.singletonMap(topic1, topicDescriptionLeaderNotAvailableFuture)))
-            .once();
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(
+                Collections.singletonMap(topic1, topicDescriptionLeaderNotAvailableFuture)));
         // we would not need to call create-topics for the first time
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andReturn(new MockDescribeTopicsResult(
-                Collections.singletonMap(topic1, topicDescriptionUnknownTopicFuture)))
-            .once();
-        EasyMock.expect(admin.createTopics(Collections.singleton(
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(
+                Collections.singletonMap(topic1, topicDescriptionUnknownTopicFuture)));
+        when(admin.createTopics(Collections.singleton(
                 new NewTopic(topic1, Optional.of(1), Optional.of((short) 1))
             .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
                 mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"),
                 mkEntry(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800"),
                 mkEntry(TopicConfig.RETENTION_MS_CONFIG, "-1"))))))
-            .andReturn(new MockCreateTopicsResult(Collections.singletonMap(topic1, topicCreationFuture))).once();
-
-        EasyMock.replay(admin);
+            .thenAnswer(answer -> new MockCreateTopicsResult(Collections.singletonMap(topic1, topicCreationFuture)));
 
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
         topicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig));
-
-        EasyMock.verify(admin);
     }
 
     @Test
     public void shouldCompleteValidateWhenTopicLeaderNotAvailableAndThenDescribeSuccess() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
@@ -867,27 +839,21 @@ public class InternalTopicManagerTest {
             new TopicDescription(topic1, false, Collections.singletonList(partitionInfo), Collections.emptySet())
         );
 
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andReturn(new MockDescribeTopicsResult(
-                Collections.singletonMap(topic1, topicDescriptionFailFuture)))
-            .once();
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andReturn(new MockDescribeTopicsResult(
-                Collections.singletonMap(topic1, topicDescriptionSuccessFuture)))
-            .once();
-
-        EasyMock.replay(admin);
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(
+                Collections.singletonMap(topic1, topicDescriptionFailFuture)));
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(
+                Collections.singletonMap(topic1, topicDescriptionSuccessFuture)));
 
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
         topicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig));
-
-        EasyMock.verify(admin);
     }
 
     @Test
     public void shouldThrowExceptionWhenKeepsTopicLeaderNotAvailable() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 15
         );
@@ -901,12 +867,9 @@ public class InternalTopicManagerTest {
         topicDescriptionFailFuture.completeExceptionally(new LeaderNotAvailableException("Leader Not Available!"));
 
         // simulate describeTopics got LeaderNotAvailableException
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andReturn(new MockDescribeTopicsResult(
-                Collections.singletonMap(topic1, topicDescriptionFailFuture)))
-            .anyTimes();
-
-        EasyMock.replay(admin);
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(
+                Collections.singletonMap(topic1, topicDescriptionFailFuture)));
 
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
@@ -921,8 +884,6 @@ public class InternalTopicManagerTest {
             equalTo("Could not create topics within 50 milliseconds." +
                 " This can happen if the Kafka cluster is temporarily not available.")
         );
-
-        EasyMock.verify(admin);
     }
 
     @Test
@@ -1276,7 +1237,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldOnlyRetryDescribeTopicsWhenDescribeTopicsThrowsLeaderNotAvailableExceptionDuringValidation() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
@@ -1290,30 +1251,28 @@ public class InternalTopicManagerTest {
             false,
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andReturn(new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFailFuture))))
-            .andReturn(new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFailFuture))))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(
             new Config(repartitionTopicConfig().entrySet().stream()
                 .map(entry -> new ConfigEntry(entry.getKey(), entry.getValue())).collect(Collectors.toSet()))
         );
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
-        EasyMock.expect(admin.describeConfigs(Collections.singleton(topicResource)))
-            .andReturn(new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
-        EasyMock.replay(admin);
+        when(admin.describeConfigs(Collections.singleton(topicResource)))
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         final ValidationResult validationResult = topicManager.validate(Collections.singletonMap(topic1, internalTopicConfig));
 
         assertThat(validationResult.missingTopics(), empty());
         assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
-        EasyMock.verify(admin);
     }
 
     @Test
     public void shouldOnlyRetryDescribeConfigsWhenDescribeConfigsThrowsLeaderNotAvailableExceptionDuringValidation() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
@@ -1325,8 +1284,8 @@ public class InternalTopicManagerTest {
             false,
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andReturn(new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
         final KafkaFutureImpl<Config> topicConfigsFailFuture = new KafkaFutureImpl<>();
         topicConfigsFailFuture.completeExceptionally(new LeaderNotAvailableException("Leader Not Available!"));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
@@ -1335,22 +1294,20 @@ public class InternalTopicManagerTest {
                 .map(entry -> new ConfigEntry(entry.getKey(), entry.getValue())).collect(Collectors.toSet()))
         );
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
-        EasyMock.expect(admin.describeConfigs(Collections.singleton(topicResource)))
-            .andReturn(new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigsFailFuture))))
-            .andReturn(new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
-        EasyMock.replay(admin);
+        when(admin.describeConfigs(Collections.singleton(topicResource)))
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigsFailFuture))))
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         final ValidationResult validationResult = topicManager.validate(Collections.singletonMap(topic1, internalTopicConfig));
 
         assertThat(validationResult.missingTopics(), empty());
         assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
-        EasyMock.verify(admin);
     }
 
     @Test
     public void shouldOnlyRetryNotSuccessfulFuturesDuringValidation() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
@@ -1370,13 +1327,13 @@ public class InternalTopicManagerTest {
             false,
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
-        EasyMock.expect(admin.describeTopics(mkSet(topic1, topic2)))
-            .andAnswer(() -> new MockDescribeTopicsResult(mkMap(
+        when(admin.describeTopics(mkSet(topic1, topic2)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(
                 mkEntry(topic1, topicDescriptionSuccessfulFuture1),
                 mkEntry(topic2, topicDescriptionFailFuture)
             )));
-        EasyMock.expect(admin.describeTopics(mkSet(topic2)))
-            .andAnswer(() -> new MockDescribeTopicsResult(mkMap(
+        when(admin.describeTopics(mkSet(topic2)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(
                 mkEntry(topic2, topicDescriptionSuccessfulFuture2)
             )));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
@@ -1386,12 +1343,11 @@ public class InternalTopicManagerTest {
         );
         final ConfigResource topicResource1 = new ConfigResource(Type.TOPIC, topic1);
         final ConfigResource topicResource2 = new ConfigResource(Type.TOPIC, topic2);
-        EasyMock.expect(admin.describeConfigs(mkSet(topicResource1, topicResource2)))
-            .andAnswer(() -> new MockDescribeConfigsResult(mkMap(
+        when(admin.describeConfigs(mkSet(topicResource1, topicResource2)))
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(
                 mkEntry(topicResource1, topicConfigSuccessfulFuture),
                 mkEntry(topicResource2, topicConfigSuccessfulFuture)
             )));
-        EasyMock.replay(admin);
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
 
@@ -1402,12 +1358,11 @@ public class InternalTopicManagerTest {
 
         assertThat(validationResult.missingTopics(), empty());
         assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
-        EasyMock.verify(admin);
     }
 
     @Test
     public void shouldThrowWhenDescribeTopicsThrowsUnexpectedExceptionDuringValidation() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
@@ -1415,9 +1370,8 @@ public class InternalTopicManagerTest {
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
         topicDescriptionFailFuture.completeExceptionally(new IllegalStateException("Nobody expects the Spanish inquisition"));
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andStubAnswer(() -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFailFuture))));
-        EasyMock.replay(admin);
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFailFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(Throwable.class, () -> topicManager.validate(Collections.singletonMap(topic1, internalTopicConfig)));
@@ -1425,18 +1379,19 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowWhenDescribeConfigsThrowsUnexpectedExceptionDuringValidation() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
             new StreamsConfig(config)
         );
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap()));
         final KafkaFutureImpl<Config> configDescriptionFailFuture = new KafkaFutureImpl<>();
         configDescriptionFailFuture.completeExceptionally(new IllegalStateException("Nobody expects the Spanish inquisition"));
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
-        EasyMock.expect(admin.describeConfigs(Collections.singleton(topicResource)))
-            .andStubAnswer(() -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, configDescriptionFailFuture))));
-        EasyMock.replay(admin);
+        when(admin.describeConfigs(Collections.singleton(topicResource)))
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, configDescriptionFailFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(Throwable.class, () -> topicManager.validate(Collections.singletonMap(topic1, internalTopicConfig)));
@@ -1444,7 +1399,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowWhenTopicDescriptionsDoNotContainTopicDuringValidation() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
@@ -1456,14 +1411,13 @@ public class InternalTopicManagerTest {
             false,
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andStubAnswer(() -> new MockDescribeTopicsResult(mkMap(mkEntry(topic2, topicDescriptionSuccessfulFuture))));
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic2, topicDescriptionSuccessfulFuture))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(new Config(Collections.emptySet()));
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
-        EasyMock.expect(admin.describeConfigs(Collections.singleton(topicResource)))
-            .andStubAnswer(() -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
-        EasyMock.replay(admin);
+        when(admin.describeConfigs(Collections.singleton(topicResource)))
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(
@@ -1474,7 +1428,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowWhenConfigDescriptionsDoNotContainTopicDuringValidation() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
@@ -1486,15 +1440,14 @@ public class InternalTopicManagerTest {
             false,
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andStubAnswer(() -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(new Config(Collections.emptySet()));
         final ConfigResource topicResource1 = new ConfigResource(Type.TOPIC, topic1);
         final ConfigResource topicResource2 = new ConfigResource(Type.TOPIC, topic2);
-        EasyMock.expect(admin.describeConfigs(Collections.singleton(topicResource1)))
-            .andStubAnswer(() -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource2, topicConfigSuccessfulFuture))));
-        EasyMock.replay(admin);
+        when(admin.describeConfigs(Collections.singleton(topicResource1)))
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource2, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(
@@ -1571,7 +1524,7 @@ public class InternalTopicManagerTest {
 
     private void shouldThrowWhenConfigDescriptionsDoNotContainConfigDuringValidation(final InternalTopicConfig streamsSideTopicConfig,
                                                                                      final Config brokerSideTopicConfig) {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
@@ -1583,14 +1536,13 @@ public class InternalTopicManagerTest {
             false,
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andStubAnswer(() -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(brokerSideTopicConfig);
         final ConfigResource topicResource1 = new ConfigResource(Type.TOPIC, topic1);
-        EasyMock.expect(admin.describeConfigs(Collections.singleton(topicResource1)))
-            .andStubAnswer(() -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource1, topicConfigSuccessfulFuture))));
-        EasyMock.replay(admin);
+        when(admin.describeConfigs(Collections.singleton(topicResource1)))
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource1, topicConfigSuccessfulFuture))));
 
         assertThrows(
             IllegalStateException.class,
@@ -1600,7 +1552,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowTimeoutExceptionWhenTimeoutIsExceededDuringValidation() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
         );
@@ -1611,17 +1563,16 @@ public class InternalTopicManagerTest {
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
         topicDescriptionFailFuture.completeExceptionally(new TimeoutException());
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andStubAnswer(() -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFailFuture))));
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFailFuture))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(
             new Config(repartitionTopicConfig().entrySet().stream()
                 .map(entry -> new ConfigEntry(entry.getKey(), entry.getValue())).collect(Collectors.toSet()))
         );
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
-        EasyMock.expect(admin.describeConfigs(Collections.singleton(topicResource)))
-            .andStubAnswer(() -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
-        EasyMock.replay(admin);
+        when(admin.describeConfigs(Collections.singleton(topicResource)))
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(
@@ -1632,7 +1583,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowTimeoutExceptionWhenFuturesNeverCompleteDuringValidation() {
-        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final AdminClient admin = mock(AdminClient.class);
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
         );
@@ -1642,17 +1593,16 @@ public class InternalTopicManagerTest {
             new StreamsConfig(config)
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionFutureThatNeverCompletes = new KafkaFutureImpl<>();
-        EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
-            .andStubAnswer(() -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFutureThatNeverCompletes))));
+        when(admin.describeTopics(Collections.singleton(topic1)))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFutureThatNeverCompletes))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(
             new Config(repartitionTopicConfig().entrySet().stream()
                 .map(entry -> new ConfigEntry(entry.getKey(), entry.getValue())).collect(Collectors.toSet()))
         );
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
-        EasyMock.expect(admin.describeConfigs(Collections.singleton(topicResource)))
-            .andStubAnswer(() -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
-        EasyMock.replay(admin);
+        when(admin.describeConfigs(Collections.singleton(topicResource)))
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(

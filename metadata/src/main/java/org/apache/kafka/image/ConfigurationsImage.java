@@ -61,6 +61,19 @@ public final class ConfigurationsImage {
         }
     }
 
+    /**
+     * Return the underlying config data for a given resource as an immutable map. This does not apply
+     * configuration overrides or include entity defaults for the resource type.
+     */
+    public Map<String, String> configMapForResource(ConfigResource configResource) {
+        ConfigurationImage configurationImage = data.get(configResource);
+        if (configurationImage != null) {
+            return configurationImage.toMap();
+        } else {
+            return Collections.emptyMap();
+        }
+    }
+
     public void write(ImageWriter writer, ImageWriterOptions options) {
         for (Entry<ConfigResource, ConfigurationImage> entry : data.entrySet()) {
             ConfigResource configResource = entry.getKey();
