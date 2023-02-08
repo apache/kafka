@@ -68,7 +68,7 @@ import static java.util.Collections.singleton;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
- * WorkerTask that uses a SinkTask to export data from Kafka.
+ * {@link WorkerTask} that uses a {@link SinkTask} to export data from Kafka.
  */
 class WorkerSinkTask extends WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSinkTask.class);

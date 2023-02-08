@@ -561,7 +561,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 if (foundMinTs < observedStreamTime - historyRetention) {
                     // the record being inserted does not affect version history. discard and return
                     if (expiredRecordSensor.isPresent()) {
-                        expiredRecordSensor.get().record(1.0d, ProcessorContextUtils.currentSystemTime(context));
+                        expiredRecordSensor.get().record(1.0d, context.currentSystemTimeMs());
                         LOG.warn("Skipping record for expired put.");
                     }
                     return new PutStatus(true, foundTs);
@@ -679,7 +679,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     versionedStoreClient.segmentIdForTimestamp(timestamp), context, observedStreamTime);
                 if (segment == null) {
                     if (expiredRecordSensor.isPresent()) {
-                        expiredRecordSensor.get().record(1.0d, ProcessorContextUtils.currentSystemTime(context));
+                        expiredRecordSensor.get().record(1.0d, context.currentSystemTimeMs());
                         LOG.warn("Skipping record for expired put.");
                     }
                     return;
@@ -726,7 +726,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 versionedStoreClient.segmentIdForTimestamp(foundTs), context, observedStreamTime);
             if (segment == null) {
                 if (expiredRecordSensor.isPresent()) {
-                    expiredRecordSensor.get().record(1.0d, ProcessorContextUtils.currentSystemTime(context));
+                    expiredRecordSensor.get().record(1.0d, context.currentSystemTimeMs());
                     LOG.warn("Skipping record for expired put.");
                 }
                 return;

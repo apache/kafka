@@ -283,7 +283,11 @@ public class MirrorSourceTaskTest {
         });
 
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
+        // We should have dispatched this sync to the producer
+        verify(producer, times(1)).send(any(), any());
 
+        mirrorSourceTask.commit();
+        // No more syncs should take place; we've been able to publish all of them so far
         verify(producer, times(1)).send(any(), any());
 
         recordOffset = 2;
@@ -297,7 +301,11 @@ public class MirrorSourceTaskTest {
         doReturn(null).when(producer).send(any(), producerCallback.capture());
 
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
+        // We should have dispatched this sync to the producer
+        verify(producer, times(2)).send(any(), any());
 
+        mirrorSourceTask.commit();
+        // No more syncs should take place; we've been able to publish all of them so far
         verify(producer, times(2)).send(any(), any());
 
         // Do not send sync event
@@ -309,22 +317,35 @@ public class MirrorSourceTaskTest {
                 recordValue.length, recordKey, recordValue, headers, Optional.empty()));
 
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
+        mirrorSourceTask.commit();
 
+        // We should not have dispatched any more syncs to the producer; there were too many already in flight
         verify(producer, times(2)).send(any(), any());
 
+        // Now the in-flight sync has been ack'd
+        producerCallback.getValue().onCompletion(null, null);
+        mirrorSourceTask.commit();
+        // We should dispatch the offset sync that was queued but previously not sent to the producer now
+        verify(producer, times(3)).send(any(), any());
+
+        // Ack the latest sync immediately
+        producerCallback.getValue().onCompletion(null, null);
+
         // Should send sync event
-        recordOffset = 5;
-        metadataOffset = 150;
+        recordOffset = 6;
+        metadataOffset = 106;
         recordMetadata = new RecordMetadata(sourceTopicPartition, metadataOffset, 0, 0, 0, recordPartition);
         sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, recordPartition,
                 recordOffset, System.currentTimeMillis(), TimestampType.CREATE_TIME, recordKey.length,
                 recordValue.length, recordKey, recordValue, headers, Optional.empty()));
 
-        producerCallback.getValue().onCompletion(null, null);
-
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
+        // We should have dispatched this sync to the producer
+        verify(producer, times(4)).send(any(), any());
 
-        verify(producer, times(3)).send(any(), any());
+        mirrorSourceTask.commit();
+        // No more syncs should take place; we've been able to publish all of them so far
+        verify(producer, times(4)).send(any(), any());
     }
 
     private void compareHeaders(List<Header> expectedHeaders, List<org.apache.kafka.connect.header.Header> taskHeaders) {
