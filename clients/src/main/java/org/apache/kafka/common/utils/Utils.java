@@ -780,7 +780,8 @@ public final class Utils {
     @SafeVarargs
     public static <T> Set<T> mkSet(T... elems) {
         Set<T> result = new HashSet<>((int) (elems.length / 0.75) + 1);
-        result.addAll(Arrays.asList(elems));
+        for (T elem : elems)
+            result.add(elem);
         return result;
     }
 
@@ -793,7 +794,8 @@ public final class Utils {
     @SafeVarargs
     public static <T extends Comparable<T>> SortedSet<T> mkSortedSet(T... elems) {
         SortedSet<T> result = new TreeSet<>();
-        result.addAll(Arrays.asList(elems));
+        for (T elem : elems)
+            result.add(elem);
         return result;
     }
 
@@ -849,7 +851,9 @@ public final class Utils {
      */
     public static Properties mkObjectProperties(final Map<String, Object> properties) {
         final Properties result = new Properties();
-        result.putAll(properties);
+        for (final Map.Entry<String, Object> entry : properties.entrySet()) {
+            result.put(entry.getKey(), entry.getValue());
+        }
         return result;
     }
 

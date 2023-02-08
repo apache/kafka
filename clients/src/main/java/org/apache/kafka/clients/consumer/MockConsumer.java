@@ -253,7 +253,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         ensureNotClosed();
-        committed.putAll(offsets);
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet())
+            committed.put(entry.getKey(), entry.getValue());
         if (callback != null) {
             callback.onComplete(offsets, null);
         }

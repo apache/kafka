@@ -70,7 +70,9 @@ public class NetworkPartitionFaultWorker implements TaskWorker {
         TreeSet<String> toBlock = new TreeSet<>();
         for (Set<String> partitionSet : partitionSets) {
             if (!partitionSet.contains(curNode.name())) {
-                toBlock.addAll(partitionSet);
+                for (String nodeName : partitionSet) {
+                    toBlock.add(nodeName);
+                }
             }
         }
         for (String nodeName : toBlock) {

@@ -21,7 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -42,7 +41,9 @@ public class SnapshotRegistryTest {
     private static void assertIteratorContains(Iterator<Snapshot> iter,
                                                Snapshot... snapshots) {
         List<Snapshot> expected = new ArrayList<>();
-        expected.addAll(Arrays.asList(snapshots));
+        for (Snapshot snapshot : snapshots) {
+            expected.add(snapshot);
+        }
         List<Snapshot> actual = new ArrayList<>();
         while (iter.hasNext()) {
             Snapshot snapshot = iter.next();

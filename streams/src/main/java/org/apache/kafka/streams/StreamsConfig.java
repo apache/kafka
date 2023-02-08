@@ -1529,7 +1529,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get main consumer override configs
         final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
-        consumerProps.putAll(mainConsumerProps);
+        for (final Map.Entry<String, Object> entry: mainConsumerProps.entrySet()) {
+            consumerProps.put(entry.getKey(), entry.getValue());
+        }
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
@@ -1600,7 +1602,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get restore consumer override configs
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
-        baseConsumerProps.putAll(restoreConsumerProps);
+        for (final Map.Entry<String, Object> entry: restoreConsumerProps.entrySet()) {
+            baseConsumerProps.put(entry.getKey(), entry.getValue());
+        }
 
         // no need to set group id for a restore consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -1633,7 +1637,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get global consumer override configs
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
-        baseConsumerProps.putAll(globalConsumerProps);
+        for (final Map.Entry<String, Object> entry: globalConsumerProps.entrySet()) {
+            baseConsumerProps.put(entry.getKey(), entry.getValue());
+        }
 
         // no need to set group id for a global consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
