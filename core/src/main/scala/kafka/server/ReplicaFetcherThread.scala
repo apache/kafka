@@ -43,7 +43,7 @@ class ReplicaFetcherThread(name: String,
                                 clientId = name,
                                 leader = leader,
                                 failedPartitions,
-                                fetchTierStateMachine = new ReplicaFetcherTierStateMachine(leader, replicaMgr, brokerConfig.replicaFetchBackoffMs),
+                                fetchTierStateMachine = new ReplicaFetcherTierStateMachine(leader, replicaMgr),
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
                                 replicaMgr.brokerTopicStats) {

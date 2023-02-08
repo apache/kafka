@@ -22,13 +22,16 @@ import org.apache.kafka.common.requests.FetchRequest;
 
 import java.util.Optional;
 
+/**
+ The replica alter log dirs tier state machine is unsupported but is provided to the ReplicaAlterLogDirsThread.
+ */
 public class ReplicaAlterLogDirsTierStateMachine implements TierStateMachine {
 
     public PartitionFetchState start(TopicPartition topicPartition,
                                      PartitionFetchState currentFetchState,
                                      FetchRequest.PartitionData fetchPartitionData) throws Exception {
         // JBOD is not supported with tiered storage.
-        throw new UnsupportedOperationException("Building remote log aux state not supported in ReplicaAlterLogDirsThread.");
+        throw new UnsupportedOperationException("Building remote log aux state is not supported in ReplicaAlterLogDirsThread.");
     }
 
     public Optional<PartitionFetchState> maybeAdvanceState(TopicPartition topicPartition,

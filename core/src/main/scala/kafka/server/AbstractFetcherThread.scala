@@ -732,17 +732,16 @@ abstract class AbstractFetcherThread(name: String,
    *
    * @param topicPartition topic partition
    * @param fetchState current partition fetch state.
-   * @param fetchPartitonData the fetch request data for this topic partition
+   * @param fetchPartitionData the fetch request data for this topic partition
    */
   private def handleOffsetsMovedToTieredStorage(topicPartition: TopicPartition,
                                                 fetchState: PartitionFetchState,
-                                                fetchPartitonData: PartitionData): Boolean = {
-    val leaderEpochInRequest = fetchPartitonData.currentLeaderEpoch
+                                                fetchPartitionData: PartitionData): Boolean = {
+    val leaderEpochInRequest = fetchPartitionData.currentLeaderEpoch
     try {
-      val newFetchState = fetchTierStateMachine.start(topicPartition, fetchState, fetchPartitonData);
+      val newFetchState = fetchTierStateMachine.start(topicPartition, fetchState, fetchPartitionData);
 
-      // No-op for now
-      // newFetchState = fetchTierStateMachine.maybeAdvanceState(topicPartition, newFetchState).get()
+      // TODO: use fetchTierStateMachine.maybeAdvanceState when implementing async tiering logic in KAFKA-13560
 
       fetcherLagStats.getAndMaybePut(topicPartition).lag = newFetchState.lag.getOrElse(0)
       partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)

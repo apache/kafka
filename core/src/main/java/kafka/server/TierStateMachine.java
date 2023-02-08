@@ -34,6 +34,7 @@ public interface TierStateMachine {
      * @param topicPartition the topic partition
      * @param currentFetchState the current PartitionFetchState which will
      *                          be used to derive the return value
+     * @param fetchPartitionData the data from the fetch response that returned the offset moved to tiered storage error
      *
      * @return the new PartitionFetchState after the successful start of the
      *         tier state machine

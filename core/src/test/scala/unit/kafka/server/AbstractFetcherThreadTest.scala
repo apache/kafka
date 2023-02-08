@@ -709,7 +709,7 @@ class AbstractFetcherThreadTest {
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, 0) {
       override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: FetchRequest.PartitionData): PartitionFetchState = {
         isErrorHandled = true
-        throw new FencedLeaderEpochException(s"Epoch ${currentFetchState.currentLeaderEpoch} if fenced")
+        throw new FencedLeaderEpochException(s"Epoch ${currentFetchState.currentLeaderEpoch} is fenced")
       }
     }
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
@@ -825,7 +825,6 @@ class AbstractFetcherThreadTest {
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndPoint = new MockLeaderEndPoint {
       val tries = new AtomicInteger(0)
-
       override def fetchLatestOffset(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
         if (tries.getAndIncrement() == 0)
           throw new UnknownLeaderEpochException("Unexpected leader epoch")
@@ -870,7 +869,6 @@ class AbstractFetcherThreadTest {
 
     val mockLeaderEndPoint = new MockLeaderEndPoint {
       var fetchedOnce = false
-
       override def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
         val fetchedData = super.fetch(fetchRequest)
         if (!fetchedOnce) {
@@ -1399,9 +1397,7 @@ class AbstractFetcherThreadTest {
     }
   }
 
-  class MockTierStateMachine(leader: LeaderEndPoint,
-                             fetchBackOffMs: Integer) extends
-    ReplicaFetcherTierStateMachine(leader, null, fetchBackOffMs) {
+  class MockTierStateMachine(leader: LeaderEndPoint) extends ReplicaFetcherTierStateMachine(leader, null) {
 
     var startCallback: (TopicPartition, Long) => Unit = (_,_) => {}
 
