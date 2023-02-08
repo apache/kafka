@@ -123,7 +123,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("kraft", "zk"))
   def testAlterEmptyUser(quorum: String): Unit = {
-      println("Starting test")
     val deletionEmpty = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("").setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
     val upsertionEmpty = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("").setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
       .setIterations(4096).setSalt(saltBytes).setSaltedPassword(saltedPasswordBytes)

@@ -1414,10 +1414,10 @@ public final class QuorumController implements Controller {
                 aclControlManager.replay((RemoveAccessControlEntryRecord) message, snapshotId);
                 break;
             case USER_SCRAM_CREDENTIAL_RECORD:
-                scramControl.replay((UserScramCredentialRecord) message);
+                scramControlManager.replay((UserScramCredentialRecord) message);
                 break;
             case REMOVE_USER_SCRAM_CREDENTIAL_RECORD:
-                scramControl.replay((RemoveUserScramCredentialRecord) message);
+                scramControlManager.replay((RemoveUserScramCredentialRecord) message);
                 break;
             case NO_OP_RECORD:
                 // NoOpRecord is an empty record and doesn't need to be replayed
@@ -1542,7 +1542,7 @@ public final class QuorumController implements Controller {
     /**
      * Manages SCRAM credentials, if there are any.
      */
-    private final ScramControlManager scramControl;
+    private final ScramControlManager scramControlManager;
 
     /**
      * The ClusterMetadataAuthorizer, if one is configured. Note that this will still be
@@ -1743,7 +1743,7 @@ public final class QuorumController implements Controller {
             setCreateTopicPolicy(createTopicPolicy).
             setFeatureControl(featureControl).
             build();
-        this.scramControl = new ScramControlManager.Builder().
+        this.scramControlManager = new ScramControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
@@ -1790,7 +1790,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new AlterUserScramCredentialsResponseData());
         }
         return appendWriteEvent("alterUserScramCredentials", context.deadlineNs(),
-            () -> scramControl.alterCredentials(request));
+            () -> scramControlManager.alterCredentials(request));
     }
 
     @Override
