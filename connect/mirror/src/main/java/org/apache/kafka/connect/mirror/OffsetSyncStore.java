@@ -56,7 +56,20 @@ class OffsetSyncStore implements AutoCloseable {
                 // Offset is too far in the past to translate accurately
                 return OptionalLong.of(-1L);
             }
-            return OptionalLong.of(offsetSync.get().downstreamOffset() + (offsetSync.get().upstreamOffset() == upstreamOffset ? 0 : 1));
+            // If the consumer group is ahead of the offset sync, we can translate the upstream offset only 1
+            // downstream offset past the offset sync itself. This is because we know that future records must appear
+            // ahead of the offset sync, but we cannot estimate how many offsets from the upstream topic
+            // will be written vs dropped. If we overestimate, then we may skip the correct offset and have data loss.
+            // This also handles consumer groups at the end of a topic whose offsets point past the last valid record.
+            // This may cause re-reading of records depending on the age of the offset sync.
+            // s=offset sync pair, ?=record may or may not be replicated, g=consumer group offset, r=re-read record
+            // source |-s?????r???g-|
+            //          |  ______/
+            //          | /
+            //          vv
+            // target |-sg----r-----|
+            long upstreamStep = offsetSync.get().upstreamOffset() == upstreamOffset ? 0L : 1L;
+            return OptionalLong.of(offsetSync.get().downstreamOffset() + upstreamStep);
         } else {
             return OptionalLong.empty();
         }
