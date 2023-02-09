@@ -86,7 +86,8 @@ object Defaults {
   val MetadataMaxIdleIntervalMs = 500
   val MetadataMaxRetentionBytes = 100 * 1024 * 1024
   val DeleteTopicEnable = true
-  val ProduceRequestInterceptorTimeoutMs = 10
+  val ProduceRequestInterceptorTimeoutMs = 5000
+  val ProduceRequestInterceptorMaxRetriesOnTimeout = 0
 
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
@@ -361,6 +362,7 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
   val ProduceRequestInterceptorsProp = "produce.request.interceptors"
   val ProduceRequestInterceptorTimeoutMsProp = "produce.request.interceptor.timeout.ms"
+  val ProduceRequestInterceptorMaxRetriesOnTimeoutProp = "produce.request.max.timeout.retries"
 
   /** KRaft mode configs */
   val ProcessRolesProp = "process.roles"
@@ -693,10 +695,12 @@ object KafkaConfig {
   val ProduceRequestInterceptorsDoc = "The produce request interceptors that the broker should invoke when receiving messages from a client. " +
     "The config expects a comma-separated list of class names that implement the <code>kafka.server.ProduceRequestInterceptor</code> interface, " +
     "and which are present on the broker's classpath."
-  val ProduceRequestInterceptorTimeoutMsDoc = "The amount of time in milliseconds that a single interceptor is given to finish processing a single record. " +
-    s"If an interceptor takes longer than $ProduceRequestInterceptorTimeoutMsProp to complete, the interceptor suite will be aborted for the given batch. " +
-    "Note that the timeout is applied per interceptor and per record. So if you configure your broker with 5 interceptors, the total processing time per record can " +
-    s"be as high as 5 x $ProduceRequestInterceptorTimeoutMsProp. Defaults to ${Defaults.ProduceRequestInterceptorTimeoutMs}"
+  val ProduceRequestInterceptorTimeoutMsDoc = "The total amount of time in milliseconds that produce interceptors have to finish processing a request. " +
+    s"The timeout is applied per processing attempt. The total number of processing attempts is controlled by $ProduceRequestInterceptorMaxRetriesOnTimeoutProp. " +
+    s"If the batch cannot be processed by the interceptors within $ProduceRequestInterceptorTimeoutMsProp, and the retries defined in $ProduceRequestInterceptorMaxRetriesOnTimeoutProp " +
+    s"have been exhausted, the produce request will fail. Defaults to ${Defaults.ProduceRequestInterceptorTimeoutMs}"
+  val ProduceRequestInterceptorMaxRetriesOnTimeoutDoc = "The total number of times produce interceptors will retry batches that fails due to a timeout. " +
+    s"Timeouts are controlled by $ProduceRequestInterceptorTimeoutMsProp. Defaults to ${Defaults.ProduceRequestInterceptorMaxRetriesOnTimeout}"
 
   /** KRaft mode configs */
   val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
@@ -1148,6 +1152,7 @@ object KafkaConfig {
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
       .define(ProduceRequestInterceptorsProp, LIST, Collections.emptyList(), MEDIUM, ProduceRequestInterceptorsDoc)
       .define(ProduceRequestInterceptorTimeoutMsProp, INT, Defaults.ProduceRequestInterceptorTimeoutMs, MEDIUM, ProduceRequestInterceptorTimeoutMsDoc)
+      .define(ProduceRequestInterceptorMaxRetriesOnTimeoutProp, INT, Defaults.ProduceRequestInterceptorMaxRetriesOnTimeout, MEDIUM, ProduceRequestInterceptorMaxRetriesOnTimeoutDoc)
 
       /*
        * KRaft mode configs.
@@ -1705,7 +1710,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         pri
       }.toList
     val timeoutMs = getInt(KafkaConfig.ProduceRequestInterceptorTimeoutMsProp)
-    ProduceRequestInterceptorManager(interceptors, timeoutMs)
+    val timeoutRetries = getInt(KafkaConfig.ProduceRequestInterceptorMaxRetriesOnTimeoutProp)
+    ProduceRequestInterceptorManager(interceptors, timeoutMs, timeoutRetries)
   }
 
   /************* Metadata Configuration ***********/

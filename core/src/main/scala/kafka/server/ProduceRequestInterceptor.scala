@@ -1,5 +1,7 @@
 package kafka.server
 
+import org.apache.kafka.common.header.Header
+
 /**
  * ProduceRequestInterceptors can be defined to perform custom, light-weight processing on every record received by a
  * broker.
@@ -14,19 +16,17 @@ package kafka.server
  *   - Privacy enforcement
  *   - Decoupling server-side and client-side serialization
  */
+// TODO: Rewrite in Java and move it to a public package
 abstract class ProduceRequestInterceptor {
-  // Custom function for mutating the original message key. If the method returns a ProduceRequestInterceptorException,
+  // Custom function for mutating the original message. If the method returns a ProduceRequestInterceptorSkipRecordException,
   // the record will be removed from the batch and won't be persisted in the target log. All other exceptions are
-  // considered "fatal". If a fatal exception is encountered, the broker will use the original batch of messages, and
-  // ignore the interceptor.
-  def processKey(key: Array[Byte]): Array[Byte]
-  // Custom function for mutating the original message value. If the method returns a ProduceRequestInterceptorException,
-  // the record will be removed from the batch and won't be persisted in the target log. All other exceptions are
-  // considered "fatal". If a fatal exception is encountered, the broker will use the original batch of messages, and
-  // ignore the interceptor.
-  def processValue(value: Array[Byte]): Array[Byte]
+  // considered "fatal" and will result in a request error
+  def processRecord(key: Array[Byte], value: Array[Byte], topic: String, partition: Int, headers: Array[Header]): ProduceRequestInterceptorResult
+
   // Method that gets called during the interceptor's initialization to configure itself
   def configure(): Unit
 }
 
-class ProduceRequestInterceptorException(msg: String) extends Exception(msg)
+case class ProduceRequestInterceptorResult(key: Array[Byte], value: Array[Byte])
+
+case class ProduceRequestInterceptorSkipRecordException(msg: String) extends Exception(msg)

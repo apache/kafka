@@ -158,14 +158,6 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionProduceResponse.errorCode))
   }
 
-  /* returns a pair of partition id and leader id */
-  private def createTopicAndFindPartitionWithLeader(topic: String): (Int, Int) = {
-    val partitionToLeader = TestUtils.createTopic(zkClient, topic, 3, 2, servers)
-    partitionToLeader.collectFirst {
-      case (partition, leader) if leader != -1 => (partition, leader)
-    }.getOrElse(throw new AssertionError(s"No leader elected for topic $topic"))
-  }
-
   @Test
   def testCorruptLz4ProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")

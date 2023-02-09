@@ -1,8 +1,9 @@
 package integration.kafka.api
 
-import kafka.server.{KafkaConfig, ProduceRequestInterceptor, ProduceRequestInterceptorException}
+import kafka.server.{KafkaConfig, ProduceRequestInterceptor, ProduceRequestInterceptorResult, ProduceRequestInterceptorSkipRecordException}
 import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.header.Header
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -11,19 +12,19 @@ import java.nio.charset.StandardCharsets
 import java.util.Properties
 
 class EvenNumberFilterProduceRequestInterceptor extends ProduceRequestInterceptor {
-  override def processKey(key: Array[Byte]): Array[Byte] = {
-    if (key == null) null
-    else key
-  }
 
-  override def processValue(value: Array[Byte]): Array[Byte] = {
-    if (value == null) null
-    else {
-      // Only keep even numbered records, and discard odds
-      val s = new String(value, StandardCharsets.UTF_8)
-      if (s.drop("value".length).toInt % 2 == 0) value
-      else throw new ProduceRequestInterceptorException("Filtering out odd numbered values")
+
+  override def processRecord(key: Array[Byte], value: Array[Byte], topic: String, partition: Int, headers: Array[Header]): ProduceRequestInterceptorResult = {
+    val newValue = {
+      if (value == null) null
+      else {
+        // Only keep even numbered records, and discard odds
+        val s = new String(value, StandardCharsets.UTF_8)
+        if (s.drop("value".length).toInt % 2 == 0) value
+        else throw new ProduceRequestInterceptorSkipRecordException("Filtering out odd numbered values")
+      }
     }
+    ProduceRequestInterceptorResult(key, newValue)
   }
 
   override def configure(): Unit = ()
@@ -39,7 +40,7 @@ class ProduceRequestFilterInterceptorTest extends ProducerSendTestHelpers {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testSendToPartition(quorum: String): Unit = {
+  def testInterceptorFiltersMessages(quorum: String): Unit = {
     val recordAssertion: (ConsumerRecord[Array[Byte], Array[Byte]], Int, Long, String, Int) => Unit = (record, i, now, topic, partition) => {
       assertEquals(topic, record.topic)
       assertEquals(partition, record.partition)

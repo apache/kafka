@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
-import kafka.utils.NotNothing
+import kafka.utils.{NotNothing, TestUtils}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
@@ -170,6 +170,14 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
       this.correlationId
     }
     new RequestHeader(apiKey, apiVersion, clientId, correlationId)
+  }
+
+  /* returns a pair of partition id and leader id */
+  protected def createTopicAndFindPartitionWithLeader(topic: String): (Int, Int) = {
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, 3, 2, servers)
+    partitionToLeader.collectFirst {
+      case (partition, leader) if leader != -1 => (partition, leader)
+    }.getOrElse(throw new AssertionError(s"No leader elected for topic $topic"))
   }
 
 }
