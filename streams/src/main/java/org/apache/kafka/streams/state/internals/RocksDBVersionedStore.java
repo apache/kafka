@@ -103,9 +103,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         doPut(
             versionedStoreClient,
             Optional.of(expiredRecordSensor),
-            context,
-            observedStreamTime,
-            historyRetention,
             key,
             value,
             timestamp
@@ -365,12 +362,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         }
     }
 
-    private static <T extends VersionedStoreSegment> void doPut(
+    private <T extends VersionedStoreSegment> void doPut(
         final VersionedStoreClient<T> versionedStoreClient,
         final Optional<Sensor> expiredRecordSensor,
-        final ProcessorContext context,
-        final long observedStreamTime,
-        final long historyRetention,
         final Bytes key,
         final byte[] value,
         final long timestamp
@@ -383,8 +377,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // check latest value store
         PutStatus status = maybePutToLatestValueStore(
             versionedStoreClient,
-            context,
-            observedStreamTime,
             key,
             value,
             timestamp
@@ -399,9 +391,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         status = maybePutToSegments(
             versionedStoreClient,
             expiredRecordSensor,
-            context,
-            observedStreamTime,
-            historyRetention,
             key,
             value,
             timestamp,
@@ -418,8 +407,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         finishPut(
             versionedStoreClient,
             expiredRecordSensor,
-            context,
-            observedStreamTime,
             key,
             value,
             timestamp,
@@ -450,10 +437,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         }
     }
 
-    private static <T extends VersionedStoreSegment> PutStatus maybePutToLatestValueStore(
+    private <T extends VersionedStoreSegment> PutStatus maybePutToLatestValueStore(
         final VersionedStoreClient<T> versionedStoreClient,
-        final ProcessorContext context,
-        final long observedStreamTime,
         final Bytes key,
         final byte[] value,
         final long timestamp
@@ -515,12 +500,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         return new PutStatus(false, foundTs);
     }
 
-    private static <T extends VersionedStoreSegment> PutStatus maybePutToSegments(
+    private <T extends VersionedStoreSegment> PutStatus maybePutToSegments(
         final VersionedStoreClient<T> versionedStoreClient,
         final Optional<Sensor> expiredRecordSensor,
-        final ProcessorContext context,
-        final long observedStreamTime,
-        final long historyRetention,
         final Bytes key,
         final byte[] value,
         final long timestamp,
@@ -547,8 +529,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     // insert and conclude the procedure.
                     putToSegment(
                         versionedStoreClient,
-                        context,
-                        observedStreamTime,
                         segment,
                         rawSegmentValue,
                         key,
@@ -576,10 +556,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         return new PutStatus(false, foundTs);
     }
 
-    private static <T extends VersionedStoreSegment> void putToSegment(
+    private <T extends VersionedStoreSegment> void putToSegment(
         final VersionedStoreClient<T> versionedStoreClient,
-        final ProcessorContext context,
-        final long observedStreamTime,
         final T segment,
         final byte[] rawSegmentValue,
         final Bytes key,
@@ -658,11 +636,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         segment.put(key, segmentValue.serialize());
     }
 
-    private static <T extends VersionedStoreSegment> void finishPut(
+    private <T extends VersionedStoreSegment> void finishPut(
         final VersionedStoreClient<T> versionedStoreClient,
         final Optional<Sensor> expiredRecordSensor,
-        final ProcessorContext context,
-        final long observedStreamTime,
         final Bytes key,
         final byte[] value,
         final long timestamp,
@@ -743,7 +719,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             } else {
                 final long foundNextTs = RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(rawSegmentValue);
                 if (foundNextTs <= timestamp) {
-                    // insert as latest
+                    // insert as latest. this case is possible if the found segment is "degenerate"
+                    // (cf RocksDBVersionedStoreSegmentValueFormatter.java for details) as older
+                    // degenerate segments may result in "gaps" between one record version's validTo
+                    // timestamp and the next record version's validFrom timestamp
                     final SegmentValue segmentValue = RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawSegmentValue);
                     segmentValue.insertAsLatest(timestamp, foundTs, value);
                     segment.put(key, segmentValue.serialize());
