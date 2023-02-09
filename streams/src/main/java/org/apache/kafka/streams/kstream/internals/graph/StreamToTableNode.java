@@ -53,7 +53,7 @@ public class StreamToTableNode<K, V> extends GraphNode {
     @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder =
+        final StoreBuilder<?> storeBuilder =
             new TimestampedKeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 
         final String processorName = processorParameters.processorName();

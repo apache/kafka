@@ -94,9 +94,7 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
             throw new IllegalStateException("A table source node must have a single topic as input");
         }
 
-        // TODO: we assume source KTables can only be timestamped-key-value stores for now.
-        // should be expanded for other types of stores as well.
-        final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder =
+        final StoreBuilder<?> storeBuilder =
             new TimestampedKeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 
         if (isGlobalKTable) {
