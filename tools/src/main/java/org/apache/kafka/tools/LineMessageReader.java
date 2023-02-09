@@ -34,8 +34,7 @@ import static java.util.Arrays.stream;
 /**
  * The default implementation of {@link MessageReader} for the {@link ConsoleProducer}. This reader comes with
  * the ability to parse a record's headers, key and value based on configurable separators. The reader configuration
- * is already provided in the specification of the optional argument of the console producer, but added here for
- * convenience:
+ * is defined as follows:
  * <p></p>
  * <pre>
  *    parse.key             : indicates if a record's key is included in a line input and needs to be parsed. (default: false).
