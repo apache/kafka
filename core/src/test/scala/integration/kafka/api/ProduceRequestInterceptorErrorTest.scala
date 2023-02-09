@@ -56,7 +56,7 @@ class ProduceRequestInterceptorErrorTest extends BaseRequestTest {
       .setTransactionalId(null)).build()
 
     val response = connectAndReceive[ProduceResponse](produceRequest, destination = brokerSocketServer(leader))
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data().responses().asScala.head.partitionResponses().asScala.head.errorCode()))
+    assertEquals(Errors.PRODUCE_REQUEST_INTERCEPTOR_FAILED, Errors.forCode(response.data().responses().asScala.head.partitionResponses().asScala.head.errorCode()))
   }
 
 }

@@ -52,7 +52,7 @@ class ProduceRequestInterceptorTimeoutTest extends BaseRequestTest {
       .setTransactionalId(null)).build()
 
     val response = connectAndReceive[ProduceResponse](produceRequest, destination = brokerSocketServer(leader))
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data().responses().asScala.head.partitionResponses().asScala.head.errorCode()))
+    assertEquals(Errors.REQUEST_TIMED_OUT, Errors.forCode(response.data().responses().asScala.head.partitionResponses().asScala.head.errorCode()))
   }
 
 }

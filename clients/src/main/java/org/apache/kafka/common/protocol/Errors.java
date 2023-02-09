@@ -96,6 +96,7 @@ import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.PositionOutOfRangeException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.PrincipalDeserializationException;
+import org.apache.kafka.common.errors.ProduceRequestInterceptorUnhandledException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.ReassignmentInProgressException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
@@ -378,7 +379,8 @@ public enum Errors {
     OFFSET_MOVED_TO_TIERED_STORAGE(109, "The requested offset is moved to tiered storage.", OffsetMovedToTieredStorageException::new),
     FENCED_MEMBER_EPOCH(110, "The member epoch is fenced by the group coordinator. The member must abandon all its partitions and rejoin.", FencedMemberEpochException::new),
     UNRELEASED_INSTANCE_ID(111, "The instance ID is still used by another member in the consumer group. That member must leave first.", UnreleasedInstanceIdException::new),
-    UNSUPPORTED_ASSIGNOR(112, "The assignor or its version range is not supported by the consumer group.", UnsupportedAssignorException::new);
+    UNSUPPORTED_ASSIGNOR(112, "The assignor or its version range is not supported by the consumer group.", UnsupportedAssignorException::new),
+    PRODUCE_REQUEST_INTERCEPTOR_FAILED(113, "The registered produce request interceptors were unable to successfully process the request", ProduceRequestInterceptorUnhandledException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

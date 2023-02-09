@@ -1,11 +1,16 @@
 package kafka.server
 
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.{ProduceRequestInterceptorUnhandledException, TimeoutException => KafkaTimeoutException}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, Record, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceRequest
+import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 
 import java.nio.ByteBuffer
 import java.util.concurrent.{ExecutorService, Executors, TimeoutException}
 import scala.annotation.tailrec
+import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
@@ -21,7 +26,9 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
 
   override def close(): Unit = executorService.shutdownNow()
 
-  def applyInterceptors(produceRequest: ProduceRequest): Unit = {
+  def applyInterceptors(produceRequest: ProduceRequest): mutable.Map[TopicPartition, PartitionResponse] = {
+    val interceptorTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
+
     if (interceptors.isEmpty) {
 
     } else {
@@ -36,15 +43,22 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
               }
               parsedInput match {
                 case Success((memoryRecords, originalRecords)) =>
-                  val processedRecords = processRecordsWithTimeout(originalRecords, topic.name(), partitionData.index())
-                  val newMemoryRecords = rebuildMemoryRecords(memoryRecords, processedRecords)
-                  partitionData.setRecords(newMemoryRecords)
+                  Try(processRecordsWithTimeout(originalRecords, topic.name(), partitionData.index())) match {
+                    case Success(processedRecords) =>
+                      val newMemoryRecords = rebuildMemoryRecords(memoryRecords, processedRecords)
+                      // We mutate the original partitionData so the changes will be visible for all subsequent processes
+                      partitionData.setRecords(newMemoryRecords)
+                    case Failure(throwable) =>
+                      val tp = new TopicPartition(topic.name(), partitionData.index())
+                      interceptorTopicResponses += tp -> new PartitionResponse(Errors.forException(throwable))
+                  }
                 case _ => // There is something wrong with the input that will be handled by donwstream validators
               }
             }
           }
       }
     }
+    interceptorTopicResponses
   }
 
   @tailrec
@@ -62,8 +76,7 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
          case _: TimeoutException =>
            if (attempt < maxRetriesOnTimeout) processRecordsWithTimeout(originalRecords, topic, partition, attempt + 1)
            else {
-             // TODO: Replace with an error that corresponds to a meaningful Kafka error code
-             throw throwable
+             throw new KafkaTimeoutException(throwable)
            }
          case _ => throw throwable
        }
@@ -74,7 +87,7 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
   private def processRecords(originalRecords: Seq[Record], topic: String, partition: Int): Seq[SimpleRecord] = {
     val accumulator = List.empty[SimpleRecord]
     originalRecords.foldLeft(accumulator) { (acc, record) =>
-      val newRecordTry = applyInterceptors(record, topic, partition)
+      val newRecordTry = processRecord(record, topic, partition)
       newRecordTry match {
         case Success(newRecord) => acc :+ newRecord
         case Failure(throwable) => {
@@ -83,9 +96,7 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
               // TODO: Log error
               // Skip adding the record to the accumulator, and move onto the next record
               acc
-            case _ =>
-              // TODO: Replace this error with one that corresponds to a meaningful failed response status
-              throw throwable
+            case _ => throw new ProduceRequestInterceptorUnhandledException(throwable)
           }
         }
       }
@@ -93,7 +104,7 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
 
   }
 
-  private def applyInterceptors(record: Record, topic: String, partition: Int): Try[SimpleRecord] = {
+  private def processRecord(record: Record, topic: String, partition: Int): Try[SimpleRecord] = {
     val asSimpleRecord = new SimpleRecord(record)
     // The interceptor might throw, so we wrap this method in a try
     Try {
