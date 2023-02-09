@@ -413,21 +413,33 @@ public class MirrorSourceConnectorTest {
         props.put(CONSUMER_CLIENT_PREFIX + ISOLATION_LEVEL_CONFIG, "read_committed");
         configValue = validateProperty(exactlyOnceSupport, props);
         assertEquals(Optional.empty(), configValue);
-    }
 
-    @Test
-    public void testOffsetLaxMaxValidation() {
-        // Make sure that an invalid property doesn't cause an exception to be thrown and is instead handled and reported gracefully
-        Map<String, String> props = makeProps();
+        // Make sure that an unrelated invalid property doesn't cause an exception to be thrown and is instead handled and reported gracefully
         props.put(OFFSET_LAG_MAX, "bad");
-        Optional<ConfigValue> configValue = validateProperty(OFFSET_LAG_MAX, props);
+        // Ensure that the issue with the invalid property is reported...
+        configValue = validateProperty(OFFSET_LAG_MAX, props);
         assertTrue(configValue.isPresent());
-        List<String> errorMessages = configValue.get().errorMessages();
+        errorMessages = configValue.get().errorMessages();
         assertEquals(1, errorMessages.size());
-        String errorMessage = errorMessages.get(0);
+        errorMessage = errorMessages.get(0);
         assertTrue(
                 errorMessages.get(0).contains(OFFSET_LAG_MAX),
                 "Error message \"" + errorMessage + "\" should have mentioned the 'offset.lag.max' property"
+        );
+        // ... and that it does not cause any issues with validation for exactly-once support...
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertEquals(Optional.empty(), configValue);
+
+        // ... regardless of whether validation for exactly-once support does or does not find an error
+        props.remove(CONSUMER_CLIENT_PREFIX + ISOLATION_LEVEL_CONFIG);
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertTrue(configValue.isPresent());
+        errorMessages = configValue.get().errorMessages();
+        assertEquals(1, errorMessages.size());
+        errorMessage = errorMessages.get(0);
+        assertTrue(
+                errorMessages.get(0).contains(ISOLATION_LEVEL_CONFIG),
+                "Error message \"" + errorMessage + "\" should have mentioned the 'isolation.level' consumer property"
         );
     }
 
