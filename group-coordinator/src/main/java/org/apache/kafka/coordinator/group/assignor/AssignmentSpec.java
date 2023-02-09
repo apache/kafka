@@ -41,7 +41,6 @@ public class AssignmentSpec {
     ) {
         Objects.requireNonNull(members);
         Objects.requireNonNull(topics);
-
         this.members = members;
         this.topics = topics;
     }
