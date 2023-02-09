@@ -21,22 +21,15 @@ import joptsimple.OptionSpec;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.ToolsUtils;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.Properties;
-import java.util.regex.Pattern;
 
-import static java.util.Arrays.stream;
 import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.BATCH_SIZE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG;
@@ -255,7 +248,7 @@ public class ConsoleProducer {
                     .withRequiredArg()
                     .describedAs("config file")
                     .ofType(String.class);
-            producerPropertyOpt = parser.accepts("producer-property", "A mechanism to pass user-defined properties in the form key=value to the producer. ")
+            producerPropertyOpt = parser.accepts("producer-property", "A mechanism to pass user-defined properties in the form key=value to the producer.")
                     .withRequiredArg()
                     .describedAs("producer_prop")
                     .ofType(String.class);
@@ -274,7 +267,7 @@ public class ConsoleProducer {
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from standard input and publish it to Kafka.");
             CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);
 
-            ToolsUtils.validatePortOrDie(parser, brokerHostsAndPorts());
+            ToolsUtils.validatePortOrExit(parser, brokerHostsAndPorts());
         }
 
         String brokerHostsAndPorts() {
@@ -339,171 +332,6 @@ public class ConsoleProducer {
             maybeMergeOptions(properties, MAX_BLOCK_MS_CONFIG, options, maxBlockMsOpt);
 
             return properties;
-        }
-    }
-
-    static final class LineMessageReader implements MessageReader {
-        private String topic;
-        private BufferedReader reader;
-        private boolean parseKey;
-        private String keySeparator = "\t";
-        private boolean parseHeaders;
-        private String headersDelimiter = "\t";
-        private String headersSeparator = ",";
-        private String headersKeySeparator = ":";
-        private boolean ignoreError;
-        private int lineNumber;
-        private boolean printPrompt = System.console() != null;
-        private Pattern headersSeparatorPattern;
-        private String nullMarker;
-
-        @Override
-        public void init(InputStream inputStream, Properties props) {
-            topic = props.getProperty("topic");
-            if (props.containsKey("parse.key"))
-                parseKey = props.getProperty("parse.key").trim().equalsIgnoreCase("true");
-            if (props.containsKey("key.separator"))
-                keySeparator = props.getProperty("key.separator");
-            if (props.containsKey("parse.headers"))
-                parseHeaders = props.getProperty("parse.headers").trim().equalsIgnoreCase("true");
-            if (props.containsKey("headers.delimiter"))
-                headersDelimiter = props.getProperty("headers.delimiter");
-            if (props.containsKey("headers.separator"))
-                headersSeparator = props.getProperty("headers.separator");
-            headersSeparatorPattern = Pattern.compile(headersSeparator);
-            if (props.containsKey("headers.key.separator"))
-                headersKeySeparator = props.getProperty("headers.key.separator");
-            if (props.containsKey("ignore.error"))
-                ignoreError = props.getProperty("ignore.error").trim().equalsIgnoreCase("true");
-            if (headersDelimiter.equals(headersSeparator))
-                throw new KafkaException("headers.delimiter and headers.separator may not be equal");
-            if (headersDelimiter.equals(headersKeySeparator))
-                throw new KafkaException("headers.delimiter and headers.key.separator may not be equal");
-            if (headersSeparator.equals(headersKeySeparator))
-                throw new KafkaException("headers.separator and headers.key.separator may not be equal");
-            if (props.containsKey("null.marker"))
-                nullMarker = props.getProperty("null.marker");
-            if (keySeparator.equals(nullMarker))
-                throw new KafkaException("null.marker and key.separator may not be equal");
-            if (headersSeparator.equals(nullMarker))
-                throw new KafkaException("null.marker and headers.separator may not be equal");
-            if (headersDelimiter.equals(nullMarker))
-                throw new KafkaException("null.marker and headers.delimiter may not be equal");
-            if (headersKeySeparator.equals(nullMarker))
-                throw new KafkaException("null.marker and headers.key.separator may not be equal");
-
-            reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
-        }
-
-        @Override
-        public ProducerRecord<byte[], byte[]> readMessage() {
-            ++lineNumber;
-            if (printPrompt) {
-                System.out.print(">");
-            }
-
-            String line;
-            try {
-                line = reader.readLine();
-
-            } catch (IOException e) {
-                throw new KafkaException(e);
-            }
-
-            if (line == null) {
-                return null;
-            }
-
-            String headers = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter");
-            int headerOffset = headers == null ? 0 : headers.length() + headersDelimiter.length();
-
-            String key = parse(parseKey, line, headerOffset, keySeparator, "key separator");
-            int keyOffset = key == null ? 0 : key.length() + keySeparator.length();
-
-            String value = line.substring(headerOffset + keyOffset);
-
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
-                    topic,
-                    key != null && !key.equals(nullMarker) ? key.getBytes(StandardCharsets.UTF_8) : null,
-                    value != null && !value.equals(nullMarker) ? value.getBytes(StandardCharsets.UTF_8) : null
-            );
-
-            if (headers != null && !headers.equals(nullMarker)) {
-                stream(splitHeaders(headers)).forEach(header -> record.headers().add(header.key, header.value));
-            }
-
-            return record;
-        }
-
-        private String parse(boolean enabled, String line, int startIndex, String demarcation, String demarcationName) {
-            if (!enabled) {
-                return null;
-            }
-            int index = line.indexOf(demarcation, startIndex);
-            if (index == -1) {
-                if (ignoreError) {
-                    return null;
-                }
-                throw new KafkaException("No " + demarcationName + " found on line number " + lineNumber + ": '" + line + "'");
-            }
-            return line.substring(startIndex, index);
-        }
-
-        private Header[] splitHeaders(String headers) {
-            return stream(headersSeparatorPattern.split(headers))
-                    .map(pair -> {
-                        int i = pair.indexOf(headersKeySeparator);
-                        if (i == -1) {
-                            if (ignoreError) {
-                                return new Header(pair, null);
-                            }
-                            throw new KafkaException("No header key separator found in pair '" + pair + "' on line number " + lineNumber);
-                        }
-
-                        String headerKey = pair.substring(0, i);
-                        if (headerKey.equals(nullMarker)) {
-                            throw new KafkaException("Header keys should not be equal to the null marker '" + nullMarker + "' as they can't be null");
-                        }
-
-                        String value = pair.substring(i + headersKeySeparator.length());
-                        byte[] headerValue = value.equals(nullMarker) ? null : value.getBytes(StandardCharsets.UTF_8);
-                        return new Header(headerKey, headerValue);
-
-                    }).toArray(Header[]::new);
-        }
-
-        // VisibleForTesting
-        String keySeparator() {
-            return keySeparator;
-        }
-
-        // VisibleForTesting
-        boolean parseKey() {
-            return parseKey;
-        }
-
-        // VisibleForTesting
-        boolean parseHeaders() {
-            return parseHeaders;
-        }
-    }
-
-    // VisibleForTesting
-    static class Header {
-        private final String key;
-        private final byte[] value;
-
-        Header(String key, byte[] value) {
-            this.key = key;
-            this.value = value;
-        }
-
-        String key() {
-            return key;
-        }
-
-        byte[] value() {
-            return value;
         }
     }
 }

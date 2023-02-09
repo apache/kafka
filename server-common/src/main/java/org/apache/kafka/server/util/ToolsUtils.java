@@ -31,7 +31,7 @@ import static java.util.Arrays.stream;
 
 public class ToolsUtils {
 
-    public static void validatePortOrDie(OptionParser parser, String hostPort) {
+    public static void validatePortOrExit(OptionParser parser, String hostPort) {
         String[] hostPorts = hostPort.contains(",") ? hostPort.split(",") : new String[] {hostPort};
         boolean isValid = hostPorts.length > 0 && stream(hostPorts).allMatch(hp -> Utils.getPort(hp) != null);
         if (!isValid) {
