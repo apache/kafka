@@ -257,6 +257,8 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
             // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
             assertEquals(0, records.count(), "consumer record size is not zero");
         }
+
+        assertMonotonicCheckpoints(backup, "primary.checkpoints.internal");
     }
 
     /*
