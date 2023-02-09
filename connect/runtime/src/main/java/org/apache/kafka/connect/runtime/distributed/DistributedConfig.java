@@ -509,7 +509,7 @@ public class DistributedConfig extends WorkerConfig {
     private final ExactlyOnceSourceSupport exactlyOnceSourceSupport;
 
     @Override
-    public Integer getRebalanceTimeout() {
+    public Integer rebalanceTimeout() {
         return getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
     }
 

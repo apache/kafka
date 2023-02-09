@@ -594,6 +594,9 @@
       <allow pkg="org.apache.kafka.connect.integration" />
       <allow pkg="org.apache.kafka.connect.mirror" />
       <allow pkg="kafka.server" />
+      <subpackage name="rest">
+        <allow pkg="javax.ws.rs" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="runtime">

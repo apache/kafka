@@ -37,6 +37,7 @@ import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -97,7 +98,8 @@ public class ConnectDistributed extends AbstractConnectCli<DistributedConfig> {
         // herder is stopped. This is easier than having to track and own the lifecycle ourselves.
         return new DistributedHerder(config, Time.SYSTEM, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                restServer.advertisedUrl().toString(), restClient, connectorClientConfigOverridePolicy, sharedAdmin);
+                restServer.advertisedUrl().toString(), restClient, connectorClientConfigOverridePolicy,
+                Collections.emptyList(), sharedAdmin);
     }
 
     @Override
