@@ -636,7 +636,7 @@ public class AbstractConfigTest {
         static {
             CONFIG = new ConfigDef().define(INTERCEPTOR_CLASSES_CONFIG,
                     Type.LIST,
-                    "",
+                    Collections.emptyList(),
                     Importance.LOW,
                     INTERCEPTOR_CLASSES_CONFIG_DOC);
         }
