@@ -198,7 +198,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     @Override
     public org.apache.kafka.common.config.Config validate(Map<String, String> props) {
-        List<ConfigValue> configValues = MirrorSourceConfig.CONNECTOR_CONFIG_DEF.validate(props);
+        List<ConfigValue> configValues = super.validate(props).configValues();
         if ("required".equals(props.get(EXACTLY_ONCE_SUPPORT_CONFIG))) {
             if (!consumerUsesReadCommitted(props)) {
                 ConfigValue exactlyOnceSupport = configValues.stream()
@@ -237,8 +237,8 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private boolean consumerUsesReadCommitted(Map<String, String> props) {
-        MirrorSourceConfig config = new MirrorSourceConfig(props);
-        Object consumerIsolationLevel = config.sourceConsumerConfig().get(ConsumerConfig.ISOLATION_LEVEL_CONFIG);
+        Object consumerIsolationLevel = MirrorSourceConfig.sourceConsumerConfig(props)
+                .get(ConsumerConfig.ISOLATION_LEVEL_CONFIG);
         return Objects.equals(READ_COMMITTED, consumerIsolationLevel);
     }
 

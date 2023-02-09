@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.SOURCE_PREFIX;
+import static org.apache.kafka.connect.mirror.MirrorSourceConfig.OFFSET_LAG_MAX;
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.TASK_TOPIC_PARTITIONS;
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -412,6 +413,22 @@ public class MirrorSourceConnectorTest {
         props.put(CONSUMER_CLIENT_PREFIX + ISOLATION_LEVEL_CONFIG, "read_committed");
         configValue = validateProperty(exactlyOnceSupport, props);
         assertEquals(Optional.empty(), configValue);
+    }
+
+    @Test
+    public void testOffsetLaxMaxValidation() {
+        // Make sure that an invalid property doesn't cause an exception to be thrown and is instead handled and reported gracefully
+        Map<String, String> props = makeProps();
+        props.put(OFFSET_LAG_MAX, "bad");
+        Optional<ConfigValue> configValue = validateProperty(OFFSET_LAG_MAX, props);
+        assertTrue(configValue.isPresent());
+        List<String> errorMessages = configValue.get().errorMessages();
+        assertEquals(1, errorMessages.size());
+        String errorMessage = errorMessages.get(0);
+        assertTrue(
+                errorMessages.get(0).contains(OFFSET_LAG_MAX),
+                "Error message \"" + errorMessage + "\" should have mentioned the 'offset.lag.max' property"
+        );
     }
 
     private Optional<ConfigValue> validateProperty(String name, Map<String, String> props) {

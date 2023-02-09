@@ -300,15 +300,11 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
  
     private Map<String, String> stringsWithPrefixStripped(String prefix) {
-        return originalsStrings().entrySet().stream()
-            .filter(x -> x.getKey().startsWith(prefix))
-            .collect(Collectors.toMap(x -> x.getKey().substring(prefix.length()), Entry::getValue));
+        return Utils.entriesWithPrefix(originalsStrings(), prefix);
     }
 
     private Map<String, String> stringsWithPrefix(String prefix) {
-        Map<String, String> strings = originalsStrings();
-        strings.keySet().removeIf(x -> !x.startsWith(prefix));
-        return strings;
+        return Utils.entriesWithPrefix(originalsStrings(), prefix, false);
     }
 
     static Map<String, String> clusterConfigsWithPrefix(String prefix, Map<String, String> props) {
