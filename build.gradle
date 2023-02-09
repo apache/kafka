@@ -30,16 +30,16 @@ buildscript {
 }
 
 plugins {
-  id 'com.diffplug.spotless' version '6.10.0'
-  id 'com.github.ben-manes.versions' version '0.42.0'
+  id 'com.diffplug.spotless' version '6.13.0'
+  id 'com.github.ben-manes.versions' version '0.44.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '7.1.1'
-  id 'org.nosphere.apache.rat' version "0.7.1"
+  id 'org.owasp.dependencycheck' version '8.0.2'
+  id 'org.nosphere.apache.rat' version "0.8.0"
 
-  id "com.github.spotbugs" version '5.0.9' apply false
-  id 'org.gradle.test-retry' version '1.4.0' apply false
-  id 'org.scoverage' version '7.0.0' apply false
+  id "com.github.spotbugs" version '5.0.13' apply false
+  id 'org.gradle.test-retry' version '1.5.1' apply false
+  id 'org.scoverage' version '7.0.1' apply false
   id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
   id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.0"
 }
