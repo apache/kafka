@@ -377,7 +377,7 @@ public class AbstractConfig {
     }
 
     /**
-     * Log warnings for any unused configurations
+     * Debug level log for any unused configurations
      */
     public void logUnused() {
         Set<String> unusedkeys = unused();
