@@ -1,8 +1,9 @@
 package integration.kafka.api
 
 import kafka.utils.TestInfoUtils
-import kafka.server.{KafkaConfig, ProduceRequestInterceptor, ProduceRequestInterceptorResult}
+import kafka.server.KafkaConfig
 import org.apache.kafka.common.header.Header
+import org.apache.kafka.server.interceptors.{ProduceRequestInterceptor, ProduceRequestInterceptorResult}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -15,7 +16,7 @@ class NoOpProduceRequestInterceptor extends ProduceRequestInterceptor {
       if (value == null) null
       else value
     }
-    ProduceRequestInterceptorResult(key, newValue)
+    new ProduceRequestInterceptorResult(key, newValue)
   }
 
   override def configure(): Unit = ()

@@ -1,12 +1,13 @@
 package integration.kafka.api
 
-import kafka.server.{BaseRequestTest, KafkaConfig, ProduceRequestInterceptor, ProduceRequestInterceptorResult}
+import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
+import org.apache.kafka.server.interceptors.{ProduceRequestInterceptor, ProduceRequestInterceptorResult}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -22,7 +23,7 @@ class ErrorProduceRequestInterceptor extends ProduceRequestInterceptor {
         throw new RuntimeException("err")
       }
     }
-    ProduceRequestInterceptorResult(key, newValue)
+    new ProduceRequestInterceptorResult(key, newValue)
   }
 
   override def configure(): Unit = ()

@@ -1,11 +1,12 @@
 package kafka.server
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{ProduceRequestInterceptorUnhandledException, TimeoutException => KafkaTimeoutException}
+import org.apache.kafka.common.errors.{ProduceRequestInterceptorSkipRecordException, ProduceRequestInterceptorUnhandledException, TimeoutException => KafkaTimeoutException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, Record, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceRequest
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.server.interceptors.ProduceRequestInterceptor
 
 import java.nio.ByteBuffer
 import java.util.concurrent.{ExecutorService, Executors, TimeoutException}
@@ -112,7 +113,7 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
         val originalKey = getFieldBytes(rec.key())
         val originalValue = getFieldBytes(rec.value())
         val interceptorResult = inter.processRecord(originalKey, originalValue, topic, partition, rec.headers())
-        new SimpleRecord(rec.timestamp(), interceptorResult.key, interceptorResult.value, rec.headers())
+        new SimpleRecord(rec.timestamp(), interceptorResult.getKey, interceptorResult.getValue, rec.headers())
       }
     }
   }

@@ -1,9 +1,11 @@
 package integration.kafka.api
 
-import kafka.server.{KafkaConfig, ProduceRequestInterceptor, ProduceRequestInterceptorResult, ProduceRequestInterceptorSkipRecordException}
+import kafka.server.KafkaConfig
 import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.errors.ProduceRequestInterceptorSkipRecordException
 import org.apache.kafka.common.header.Header
+import org.apache.kafka.server.interceptors.{ProduceRequestInterceptor, ProduceRequestInterceptorResult}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -12,7 +14,6 @@ import java.nio.charset.StandardCharsets
 import java.util.Properties
 
 class EvenNumberFilterProduceRequestInterceptor extends ProduceRequestInterceptor {
-
 
   override def processRecord(key: Array[Byte], value: Array[Byte], topic: String, partition: Int, headers: Array[Header]): ProduceRequestInterceptorResult = {
     val newValue = {
@@ -24,7 +25,7 @@ class EvenNumberFilterProduceRequestInterceptor extends ProduceRequestIntercepto
         else throw new ProduceRequestInterceptorSkipRecordException("Filtering out odd numbered values")
       }
     }
-    ProduceRequestInterceptorResult(key, newValue)
+    new ProduceRequestInterceptorResult(key, newValue)
   }
 
   override def configure(): Unit = ()

@@ -1,9 +1,10 @@
 package integration.kafka.api
 
-import kafka.server.{KafkaConfig, ProduceRequestInterceptor, ProduceRequestInterceptorResult}
+import kafka.server.KafkaConfig
 import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.header.Header
+import org.apache.kafka.server.interceptors.{ProduceRequestInterceptor, ProduceRequestInterceptorResult}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -21,7 +22,7 @@ class MutationProduceRequestInterceptor extends ProduceRequestInterceptor {
         s"mutated-$s".getBytes(StandardCharsets.UTF_8)
       }
     }
-    ProduceRequestInterceptorResult(key, newValue)
+    new ProduceRequestInterceptorResult(key, newValue)
   }
 
   override def configure(): Unit = ()
