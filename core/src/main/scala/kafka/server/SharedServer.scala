@@ -102,7 +102,7 @@ class SharedServer(
   @volatile var brokerMetrics: BrokerServerMetrics = _
   @volatile var controllerMetrics: QuorumControllerMetrics = _
   @volatile var loader: MetadataLoader = _
-  val snapshotsDiabledReason = new AtomicReference[String](null)
+  val snapshotsDisabledReason = new AtomicReference[String](null)
   @volatile var snapshotEmitter: SnapshotEmitter = _
   @volatile var snapshotGenerator: SnapshotGenerator = _
 
@@ -165,7 +165,7 @@ class SharedServer(
     action = () => SharedServer.this.synchronized {
       if (brokerMetrics != null) brokerMetrics.metadataLoadErrorCount.getAndIncrement()
       if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
-      snapshotsDiabledReason.compareAndSet(null, "metadata loading fault")
+      snapshotsDisabledReason.compareAndSet(null, "metadata loading fault")
     })
 
   /**
@@ -177,7 +177,7 @@ class SharedServer(
     action = () => SharedServer.this.synchronized {
       if (brokerMetrics != null) brokerMetrics.metadataApplyErrorCount.getAndIncrement()
       if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
-      snapshotsDiabledReason.compareAndSet(null, "initial broker metadata loading fault")
+      snapshotsDisabledReason.compareAndSet(null, "initial broker metadata loading fault")
     })
 
   /**
@@ -188,7 +188,7 @@ class SharedServer(
     fatal = true,
     action = () => SharedServer.this.synchronized {
       if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
-      snapshotsDiabledReason.compareAndSet(null, "quorum controller fault")
+      snapshotsDisabledReason.compareAndSet(null, "quorum controller fault")
     })
 
   /**
@@ -257,7 +257,7 @@ class SharedServer(
             setFaultHandler(metadataPublishingFaultHandler).
             setMaxBytesSinceLastSnapshot(sharedServerConfig.metadataSnapshotMaxNewRecordBytes).
             setMaxTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(sharedServerConfig.metadataSnapshotMaxIntervalMs)).
-            setDisabledReason(snapshotsDiabledReason).
+            setDisabledReason(snapshotsDisabledReason).
             build()
           raftManager.register(loader)
           try {

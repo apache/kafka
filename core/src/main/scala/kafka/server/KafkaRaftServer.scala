@@ -73,7 +73,7 @@ class KafkaRaftServer(
     metrics,
     threadNamePrefix,
     controllerQuorumVotersFuture,
-    new StandardFaultHandlerFactory(),
+    new StandardFaultHandlerFactory()
   )
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
@@ -89,7 +89,7 @@ class KafkaRaftServer(
     Some(new ControllerServer(
       sharedServer,
       KafkaRaftServer.configSchema,
-      bootstrapMetadata,
+      bootstrapMetadata
     ))
   } else {
     None
