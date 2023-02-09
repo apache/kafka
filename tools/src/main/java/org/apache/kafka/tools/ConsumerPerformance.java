@@ -212,7 +212,6 @@ public class ConsumerPerformance {
         private long joinStartMs, joinTimeMsInSingleRound;
 
         public ConsumerPerfRebListener(AtomicLong joinGroupTimeMs, long joinStartMs, long joinTimeMsInSingleRound) {
-            super();
             this.joinGroupTimeMs = joinGroupTimeMs;
             this.joinStartMs = joinStartMs;
             this.joinTimeMsInSingleRound = joinTimeMsInSingleRound;

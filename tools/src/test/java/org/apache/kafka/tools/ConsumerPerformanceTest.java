@@ -58,7 +58,6 @@ public class ConsumerPerformanceTest {
 
     @Test
     public void testNonDetailedHeaderMatchBody() {
-        String date = dateFormat.format(System.currentTimeMillis());
         testHeaderMatchContent(false, 2,
             () -> ConsumerPerformance.printConsumerProgress(1, 1024 * 1024, 0, 1, 0, 0, 1, dateFormat, 1L));
     }
