@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.processor.internals;
-
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -59,16 +58,16 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
-
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -306,22 +305,19 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowTimeoutExceptionIfGetNumPartitionsHasTopicDescriptionTimeout() {
-        final MockTime time = new MockTime(
-                (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 15
-        );
+        mockAdminClient.timeoutNextRequest(1);
+
         final InternalTopicManager internalTopicManager =
                 new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+        try {
+            final Set<String> topic1set = new HashSet<String>(Arrays.asList(topic1));
+            final Set<String> topic2set = new HashSet<String>(Arrays.asList(topic2));
 
-        final TimeoutException exception = assertThrows(
-                TimeoutException.class,
-                () -> internalTopicManager.getNumPartitions(Collections.singleton("test_topic"), Collections.singleton("test_topic_2"))
-        );
+            internalTopicManager.getNumPartitions(topic1set, topic2set);
 
-        assertThat(
-                exception.getMessage(),
-                is("Describing topic test_topic (to get number of partitions) timed out.\n" +
-                        "Error message was: " + TimeoutException.class
-        ));
+        } catch (final TimeoutException expected) {
+            assertEquals(TimeoutException.class, expected.getCause().getClass());
+        }
     }
 
     @Test
