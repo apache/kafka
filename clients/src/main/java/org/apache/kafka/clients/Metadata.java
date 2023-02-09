@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -222,6 +223,10 @@ public class Metadata implements Closeable {
      */
     public synchronized Map<String, Uuid> topicIds() {
         return cache.topicIds();
+    }
+
+    public TopicResolver topicResolver() {
+        return TopicResolver.fromTopicIds(topicIds());
     }
 
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {

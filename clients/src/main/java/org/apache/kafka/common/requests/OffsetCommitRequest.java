@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
@@ -59,7 +63,36 @@ public class OffsetCommitRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("The broker offset commit protocol version " +
                         version + " does not support usage of config group.instance.id.");
             }
-            return new OffsetCommitRequest(data, version);
+
+            // Copy since we can mutate it.
+            OffsetCommitRequestData requestData = data.duplicate();
+
+            if (version >= 9) {
+                requestData.topics().forEach(topic -> {
+                    // Set the topic name to null if a topic ID for the topic is present. If no topic ID is
+                    // provided (i.e. its value is ZERO_UUID), the client should provide a topic name as a
+                    // fallback. This allows the OffsetCommit API to support both topic IDs and topic names
+                    // inside the same request or response.
+                    if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
+                        topic.setName(null);
+                    } else if (topic.name() == null || "".equals(topic.name())) {
+                        // Fail-fast the entire request. This means that a single invalid topic in a multi-topic
+                        // request will make it fail. We may want to relax the constraint to allow the request
+                        // with valid topics (i.e. for which a valid ID or name was provided) exist in the request.
+                        throw new UnknownTopicOrPartitionException(
+                                "A topic name must be provided when no topic ID is specified.");
+                    }
+                });
+            } else {
+                requestData.topics().forEach(topic -> {
+                    // Topic must be set to default for version < 9.
+                    if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
+                        topic.setTopicId(Uuid.ZERO_UUID);
+                    }
+                    // Topic name must not be null. Validity will be checked at serialization time.
+                });
+            }
+            return new OffsetCommitRequest(requestData, version);
         }
 
         @Override
@@ -78,11 +111,18 @@ public class OffsetCommitRequest extends AbstractRequest {
         return data;
     }
 
-    public Map<TopicPartition, Long> offsets() {
+    public Map<TopicPartition, Long> offsets(TopicResolver topicResolver) {
         Map<TopicPartition, Long> offsets = new HashMap<>();
         for (OffsetCommitRequestTopic topic : data.topics()) {
+            String topicName = topic.name();
+
+            if (version() >= 9 && topicName == null) {
+                topicName = topicResolver.getTopicName(topic.topicId()).orElseThrow(
+                        () -> new UnknownTopicIdException("Topic with ID " + topic.topicId() + " not found."));
+            }
+
             for (OffsetCommitRequestData.OffsetCommitRequestPartition partition : topic.partitions()) {
-                offsets.put(new TopicPartition(topic.name(), partition.partitionIndex()),
+                offsets.put(new TopicPartition(topicName, partition.partitionIndex()),
                         partition.committedOffset());
             }
         }
@@ -103,6 +143,7 @@ public class OffsetCommitRequest extends AbstractRequest {
             }
             responseTopicData.add(new OffsetCommitResponseTopic()
                     .setName(entry.name())
+                    .setTopicId(entry.topicId())
                     .setPartitions(responsePartitions)
             );
         }

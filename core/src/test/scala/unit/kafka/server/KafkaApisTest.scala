@@ -1353,8 +1353,11 @@ class KafkaApisTest {
 
   @Test
   def testHandleOffsetCommitRequestTopicsAndPartitionsValidation(): Unit = {
+    val (bazId, quxId) = (Uuid.randomUuid(), Uuid.randomUuid())
+
     addTopicToMetadataCache("foo", numPartitions = 2)
     addTopicToMetadataCache("bar", numPartitions = 2)
+    addTopicToMetadataCache("baz", numPartitions = 2, topicId = bazId)
 
     val offsetCommitRequest = new OffsetCommitRequestData()
       .setGroupId("group")
@@ -1392,7 +1395,25 @@ class KafkaApisTest {
               .setCommittedOffset(60),
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(1)
-              .setCommittedOffset(70)).asJava)).asJava)
+              .setCommittedOffset(70)).asJava),
+        // baz is defined by its topic id.
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setTopicId(bazId)
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(60),
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(80)).asJava),
+        // the topic id for qux is not defined in the metadata cache.
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setTopicId(quxId)
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(10)).asJava)
+      ).asJava)
 
     val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
 
@@ -1419,7 +1440,18 @@ class KafkaApisTest {
               .setCommittedOffset(40),
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(1)
-              .setCommittedOffset(50)).asJava)).asJava)
+              .setCommittedOffset(50)).asJava),
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setName("baz")
+          .setTopicId(bazId)
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(60),
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(1)
+              .setCommittedOffset(80)).asJava)
+      ).asJava)
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
     when(groupCoordinator.commitOffsets(
@@ -1453,7 +1485,17 @@ class KafkaApisTest {
               .setErrorCode(Errors.NONE.code),
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+              .setErrorCode(Errors.NONE.code)).asJava),
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setTopicId(bazId)
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)).asJava)
+      ).asJava)
 
     val expectedOffsetCommitResponse = new OffsetCommitResponseData()
       .setTopics(List(
@@ -1483,6 +1525,13 @@ class KafkaApisTest {
               .setPartitionIndex(1)
               .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)).asJava),
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName(null)
+          .setTopicId(quxId)
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)).asJava),
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
           .setName("bar")
           .setPartitions(List(
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
@@ -1490,7 +1539,18 @@ class KafkaApisTest {
               .setErrorCode(Errors.NONE.code),
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code)).asJava)).asJava)
+              .setErrorCode(Errors.NONE.code)).asJava),
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName(null)
+          .setTopicId(bazId)
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)).asJava)
+      ).asJava)
 
     future.complete(offsetCommitResponse)
     val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
@@ -124,11 +125,12 @@ public class OffsetCommitResponse extends AbstractResponse {
         HashMap<String, OffsetCommitResponseTopic> byTopicName = new HashMap<>();
 
         private OffsetCommitResponseTopic getOrCreateTopic(
-            String topicName
+            String topicName,
+            Uuid topicId
         ) {
             OffsetCommitResponseTopic topic = byTopicName.get(topicName);
             if (topic == null) {
-                topic = new OffsetCommitResponseTopic().setName(topicName);
+                topic = new OffsetCommitResponseTopic().setName(topicName).setTopicId(topicId);
                 data.topics().add(topic);
                 byTopicName.put(topicName, topic);
             }
@@ -137,10 +139,11 @@ public class OffsetCommitResponse extends AbstractResponse {
 
         public Builder addPartition(
             String topicName,
+            Uuid topicId,
             int partitionIndex,
             Errors error
         ) {
-            final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
+            final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName, topicId);
 
             topicResponse.partitions().add(new OffsetCommitResponsePartition()
                 .setPartitionIndex(partitionIndex)
@@ -151,11 +154,12 @@ public class OffsetCommitResponse extends AbstractResponse {
 
         public <P> Builder addPartitions(
             String topicName,
+            Uuid topicId,
             List<P> partitions,
             Function<P, Integer> partitionIndex,
             Errors error
         ) {
-            final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
+            final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName, topicId);
 
             partitions.forEach(partition -> {
                 topicResponse.partitions().add(new OffsetCommitResponsePartition()
@@ -192,8 +196,27 @@ public class OffsetCommitResponse extends AbstractResponse {
             return this;
         }
 
-        public OffsetCommitResponse build() {
-            return new OffsetCommitResponse(data);
+        public OffsetCommitResponse build(short version) {
+            // Copy since we can mutate it.
+            OffsetCommitResponseData responseData = data.duplicate();
+
+            if (version >= 9) {
+                responseData.topics().forEach(topic -> {
+                    // Set the topic name to null if a topic ID for the topic is present.
+                    if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
+                        topic.setName(null);
+                    }
+                });
+            } else {
+                responseData.topics().forEach(topic -> {
+                    // Topic must be set to default for version < 9.
+                    if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
+                        topic.setTopicId(Uuid.ZERO_UUID);
+                    }
+                    // Topic name must not be null. Validity will be checked at serialization time.
+                });
+            }
+            return new OffsetCommitResponse(responseData);
         }
     }
 }

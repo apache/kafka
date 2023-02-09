@@ -427,35 +427,73 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
+      val topicNames =
+        if (offsetCommitRequest.version() >= 9)
+          metadataCache.topicIdsToNames()
+        else
+          Collections.emptyMap[Uuid, String]()
+
+      // For version < 9, lookup from topicNames fails and the topic name (which cannot be null) is returned.
+      // For version >= 9, if lookup from topicNames fails, there are two possibilities:
+      //
+      // a) The topic ID was left to default and the topic name should have been populated as a fallback instead.
+      //    If none was provided, null is returned.
+      //
+      // b) The topic ID was not default but is not present in the local topic IDs cache. In this case, because
+      //    clients should make exclusive use of topic name or topic ID, the topic name should be null. If however
+      //    the client provided a topic name, we do not want to use it, because any topic with the same name
+      //    present locally would then have a topic ID which does not match the topic ID in the request.
+      def resolveTopicName(topic: OffsetCommitRequestData.OffsetCommitRequestTopic): Option[String] = {
+          val resolvedFromId = topicNames.get(topic.topicId())
+          if (resolvedFromId != null)
+            Some(resolvedFromId)
+          else if (offsetCommitRequest.version() < 9 || Uuid.ZERO_UUID.equals(topic.topicId)) {
+            Option(topic.name())
+          } else {
+            None
+          }
+      }
+
+      offsetCommitRequest.data.topics.forEach { topic => resolveTopicName(topic).foreach(topic.setName _) }
+
       val authorizedTopics = authHelper.filterByAuthorized(
         request.context,
         READ,
         TOPIC,
-        offsetCommitRequest.data.topics.asScala
+        offsetCommitRequest.data.topics.asScala.filter(_.name != null)
       )(_.name)
 
       val responseBuilder = new OffsetCommitResponse.Builder()
       val authorizedTopicsRequest = new mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
       offsetCommitRequest.data.topics.forEach { topic =>
-        if (!authorizedTopics.contains(topic.name)) {
+        if (topic.name == null) {
+          // Topic name cannot be null for version < 9. From version >= 9, topicName is null iff it cannot
+          // be resolved from the local topic IDs cache or topic ID was left to default but no fallback topic
+          // name was provided.
+          responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
+            topic.name, topic.topicId, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_ID)
+        } else if (!authorizedTopics.contains(topic.name)) {
           // If the topic is not authorized, we add the topic and all its partitions
           // to the response with TOPIC_AUTHORIZATION_FAILED.
           responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
-            topic.name, topic.partitions, _.partitionIndex, Errors.TOPIC_AUTHORIZATION_FAILED)
+            topic.name, topic.topicId, topic.partitions, _.partitionIndex, Errors.TOPIC_AUTHORIZATION_FAILED)
         } else if (!metadataCache.contains(topic.name)) {
           // If the topic is unknown, we add the topic and all its partitions
           // to the response with UNKNOWN_TOPIC_OR_PARTITION.
           responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
-            topic.name, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+            topic.name, topic.topicId, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         } else {
           // Otherwise, we check all partitions to ensure that they all exist.
-          val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic().setName(topic.name)
+          val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName(topic.name)
+            .setTopicId(topic.topicId)
 
           topic.partitions.forEach { partition =>
             if (metadataCache.getPartitionInfo(topic.name, partition.partitionIndex).nonEmpty) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
-              responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+              responseBuilder.addPartition(
+                topic.name, topic.topicId, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
             }
           }
 
@@ -466,7 +504,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       if (authorizedTopicsRequest.isEmpty) {
-        requestHelper.sendMaybeThrottle(request, responseBuilder.build())
+        requestHelper.sendMaybeThrottle(request, responseBuilder.build(offsetCommitRequest.version()))
         CompletableFuture.completedFuture(())
       } else if (request.header.apiVersion == 0) {
         // For version 0, always store offsets in ZK.
@@ -516,11 +554,11 @@ class KafkaApis(val requestChannel: RequestChannel,
             Errors.forException(e)
         }
 
-        responseBuilder.addPartition(topic.name, partition.partitionIndex, error)
+        responseBuilder.addPartition(topic.name, topic.topicId, partition.partitionIndex, error)
       }
     }
 
-    requestHelper.sendMaybeThrottle(request, responseBuilder.build())
+    requestHelper.sendMaybeThrottle(request, responseBuilder.build(request.header.apiVersion))
     CompletableFuture.completedFuture[Unit](())
   }
 
@@ -547,7 +585,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
       } else {
-        requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build())
+        requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build(request.header.apiVersion))
       }
     }
   }

@@ -38,6 +38,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -88,6 +89,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ASSIGN_FROM_SUBSCRIBED_ASSIGNORS;
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
+import static org.apache.kafka.common.Uuid.ZERO_UUID;
 
 /**
  * This class manages the coordination process with the consumer coordinator.
@@ -1274,6 +1276,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (coordinator == null)
             return RequestFuture.coordinatorNotAvailable();
 
+        TopicResolver topicResolver = metadata.topicResolver();
+
         // create the offset commit request
         Map<String, OffsetCommitRequestData.OffsetCommitRequestTopic> requestTopicDataMap = new HashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
@@ -1287,6 +1291,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     .getOrDefault(topicPartition.topic(),
                             new OffsetCommitRequestData.OffsetCommitRequestTopic()
                                     .setName(topicPartition.topic())
+                                    .setTopicId(topicResolver.getTopicId(topicPartition.topic()).orElse(ZERO_UUID))
                     );
 
             topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
@@ -1376,7 +1381,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                             unauthorizedTopics.add(tp.topic());
                         } else if (error == Errors.OFFSET_METADATA_TOO_LARGE
-                                || error == Errors.INVALID_COMMIT_OFFSET_SIZE) {
+                                || error == Errors.INVALID_COMMIT_OFFSET_SIZE
+                                || error == Errors.UNKNOWN_TOPIC_ID) {
                             // raise the error to the user
                             future.raise(error);
                             return;

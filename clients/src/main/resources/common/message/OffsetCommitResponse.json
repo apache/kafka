@@ -28,15 +28,19 @@
   // Version 7 offsetCommitRequest supports a new field called groupInstanceId to indicate member identity across restarts.
   //
   // Version 8 is the first flexible version.
-  "validVersions": "0-8",
+  //
+  // Version 9 adds TopicId field (KIP-848).
+  "validVersions": "0-9",
   "flexibleVersions": "8+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "Topics", "type": "[]OffsetCommitResponseTopic", "versions": "0+",
       "about": "The responses for each topic.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Name", "type": "string", "versions": "0+", "nullableVersions": "9+", "entityType": "topicName",
         "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "9+",
+        "about": "The unique topic ID" },
       { "name": "Partitions", "type": "[]OffsetCommitResponsePartition", "versions": "0+",
         "about": "The responses for each partition in the topic.",  "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",

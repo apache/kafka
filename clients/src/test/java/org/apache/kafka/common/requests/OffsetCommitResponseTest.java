@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
@@ -30,16 +31,20 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class OffsetCommitResponseTest {
 
     protected final int throttleTimeMs = 10;
 
     protected final String topicOne = "topic1";
+    protected final Uuid topicIdOne = Uuid.randomUuid();
     protected final int partitionOne = 1;
     protected final Errors errorOne = Errors.COORDINATOR_NOT_AVAILABLE;
     protected final Errors errorTwo = Errors.NOT_COORDINATOR;
@@ -99,5 +104,60 @@ public class OffsetCommitResponseTest {
             assertEquals(version >= 4, response.shouldClientThrottle(version));
         }
     }
+    @Test
+    public void testHandlingOfTopicIdAndTopicNameInAllVersionsViaAddPartition() {
+        OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder()
+            .addPartition(topicOne, topicIdOne, partitionOne, Errors.NONE)
+            .addPartition(topicTwo, Uuid.ZERO_UUID, partitionOne, Errors.NONE);
 
+        validateHandlingOfTopicIdAndTopicNameInAllVersions(builder);
+    }
+
+    @Test
+    public void testHandlingOfTopicIdAndTopicNameInAllVersionsViaAddPartitions() {
+        OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder()
+            .addPartitions(
+                topicOne,
+                topicIdOne,
+                Arrays.asList(partitionOne, partitionTwo),
+                Function.identity(),
+                Errors.NONE)
+            .addPartitions(
+                topicTwo,
+                Uuid.ZERO_UUID,
+                Arrays.asList(partitionOne, partitionTwo),
+                Function.identity(),
+                Errors.NONE
+            );
+
+        validateHandlingOfTopicIdAndTopicNameInAllVersions(builder);
+    }
+
+    private void validateHandlingOfTopicIdAndTopicNameInAllVersions(OffsetCommitResponse.Builder builder) {
+        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
+            OffsetCommitResponse response = builder.build(version);
+            List<OffsetCommitResponseTopic> topics = response.data().topics();
+
+            if (version >= 9) {
+                // Version >= 9:
+                //   Topic ID may be present or not. Both are valid cases. If no topic ID is provided (null or
+                //   set to ZERO_UUID), a topic name must be provided and will be used. If a topic ID is provided,
+                //   the name will be nullified.
+                assertNull(topics.get(0).name());
+                assertEquals(topicIdOne, topics.get(0).topicId());
+
+                assertEquals(topicTwo, topics.get(1).name());
+                assertEquals(Uuid.ZERO_UUID, topics.get(1).topicId());
+            } else {
+                // Version < 9:
+                //   Topic ID may be present or not. They are set to ZERO_UUID in the finalized response. Any other
+                //   value would make serialization of the response fail.
+                assertEquals(topicOne, topics.get(0).name());
+                assertEquals(Uuid.ZERO_UUID, topics.get(0).topicId());
+
+                assertEquals(topicTwo, topics.get(1).name());
+                assertEquals(Uuid.ZERO_UUID, topics.get(1).topicId());
+            }
+        }
+    }
 }
