@@ -16,23 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * This is the abstract definition of the events created by the KafkaConsumer API
- */
-public abstract class ApplicationEvent {
+import java.util.concurrent.CompletableFuture;
 
-    public enum Type {
-        NOOP, COMMIT, SUBSCRIBE, POLL_FETCH, POLL_REQUEST,
+public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
+
+    private final CompletableFuture<T> future;
+
+    protected CompletableApplicationEvent(Type type) {
+        super(type);
+        this.future = new CompletableFuture<T>();
     }
 
-    private final Type type;
-
-    protected ApplicationEvent(Type type) {
-        this.type = type;
-    }
-
-    public Type type() {
-        return type;
+    public CompletableFuture<T> future() {
+        return future;
     }
 
 }

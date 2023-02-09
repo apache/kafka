@@ -16,23 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * This is the abstract definition of the events created by the KafkaConsumer API
- */
-public abstract class ApplicationEvent {
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 
-    public enum Type {
-        NOOP, COMMIT, SUBSCRIBE, POLL_FETCH, POLL_REQUEST,
+public abstract class SubscribeEvent extends ApplicationEvent {
+
+    private final ConsumerRebalanceListener rebalanceListener;
+
+    public SubscribeEvent(ConsumerRebalanceListener rebalanceListener) {
+        super(Type.SUBSCRIBE);
+        this.rebalanceListener = rebalanceListener;
     }
 
-    private final Type type;
-
-    protected ApplicationEvent(Type type) {
-        this.type = type;
-    }
-
-    public Type type() {
-        return type;
+    public ConsumerRebalanceListener rebalanceListener() {
+        return rebalanceListener;
     }
 
 }

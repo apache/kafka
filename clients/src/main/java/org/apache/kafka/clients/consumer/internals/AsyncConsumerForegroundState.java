@@ -14,25 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.clients.consumer.internals;
 
-/**
- * This is the abstract definition of the events created by the KafkaConsumer API
- */
-public abstract class ApplicationEvent {
+import org.apache.kafka.common.TopicPartition;
 
-    public enum Type {
-        NOOP, COMMIT, SUBSCRIBE, POLL_FETCH, POLL_REQUEST,
-    }
+import java.util.Collection;
+import java.util.Set;
+import java.util.regex.Pattern;
 
-    private final Type type;
+public interface AsyncConsumerForegroundState {
 
-    protected ApplicationEvent(Type type) {
-        this.type = type;
-    }
+    void subscribe(Collection<String> topics);
 
-    public Type type() {
-        return type;
-    }
+    void subscribe(Pattern pattern);
+
+    Set<String> subscription();
+
+    // user calls consumer.assign()
+    Set<TopicPartition> manualAssignment();
+
+    boolean isRelevant(TopicPartition tp);
 
 }
