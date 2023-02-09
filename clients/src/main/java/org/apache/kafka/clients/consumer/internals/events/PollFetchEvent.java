@@ -16,23 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * This is the abstract definition of the events created by the KafkaConsumer API
- */
-public abstract class ApplicationEvent {
+import org.apache.kafka.clients.consumer.internals.SerializedRecordWrapper;
 
-    public enum Type {
-        NOOP, COMMIT, SUBSCRIBE, POLL_FETCH, POLL_REQUEST,
-    }
+import java.util.List;
 
-    private final Type type;
+public class PollFetchEvent<K, V> extends CompletableApplicationEvent<List<SerializedRecordWrapper>> {
 
-    protected ApplicationEvent(Type type) {
-        this.type = type;
-    }
-
-    public Type type() {
-        return type;
+    public PollFetchEvent() {
+        super(Type.POLL_FETCH);
     }
 
 }

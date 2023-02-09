@@ -31,6 +31,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -398,7 +399,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         final CommitApplicationEvent commitEvent = new CommitApplicationEvent();
         eventHandler.add(commitEvent);
 
-        final CompletableFuture<Void> commitFuture = commitEvent.commitFuture;
+        final CompletableFuture<Void> commitFuture = commitEvent.future();
         try {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (final TimeoutException e) {
@@ -474,9 +475,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     /**
      * A stubbed ApplicationEvent for demonstration purpose
      */
-    private class CommitApplicationEvent extends ApplicationEvent {
-        // this is the stubbed commitAsyncEvents
-        CompletableFuture<Void> commitFuture = new CompletableFuture<>();
+    private class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
         public CommitApplicationEvent() {
             super(Type.COMMIT);

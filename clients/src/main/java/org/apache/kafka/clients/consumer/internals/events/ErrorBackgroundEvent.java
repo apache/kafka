@@ -20,7 +20,7 @@ public class ErrorBackgroundEvent extends BackgroundEvent {
     private final Throwable exception;
 
     public ErrorBackgroundEvent(Throwable e) {
-        super(EventType.ERROR);
+        super(Type.ERROR);
         exception = e;
     }
 }

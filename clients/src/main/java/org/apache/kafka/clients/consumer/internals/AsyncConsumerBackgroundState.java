@@ -14,25 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.clients.consumer.internals;
 
-/**
- * This is the abstract definition of the events created by the KafkaConsumer API
- */
-public abstract class ApplicationEvent {
-
-    public enum Type {
-        NOOP, COMMIT, SUBSCRIBE, POLL_FETCH, POLL_REQUEST,
-    }
-
-    private final Type type;
-
-    protected ApplicationEvent(Type type) {
-        this.type = type;
-    }
-
-    public Type type() {
-        return type;
-    }
-
+public interface AsyncConsumerBackgroundState {
 }

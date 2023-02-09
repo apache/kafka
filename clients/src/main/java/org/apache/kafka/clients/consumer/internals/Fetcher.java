@@ -1415,11 +1415,12 @@ public class Fetcher<K, V> implements Closeable {
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition,
                                              RecordBatch batch,
                                              Record record) {
+        Optional<Integer> leaderEpoch = maybeLeaderEpoch(batch.partitionLeaderEpoch());
+        TimestampType timestampType = batch.timestampType();
+
         try {
             long offset = record.offset();
             long timestamp = record.timestamp();
-            Optional<Integer> leaderEpoch = maybeLeaderEpoch(batch.partitionLeaderEpoch());
-            TimestampType timestampType = batch.timestampType();
             Headers headers = new RecordHeaders(record.headers());
             ByteBuffer keyBytes = record.key();
             byte[] keyByteArray = keyBytes == null ? null : Utils.toArray(keyBytes);

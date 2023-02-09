@@ -29,7 +29,7 @@ public class ApplicationEventProcessor {
     }
     public boolean process(final ApplicationEvent event) {
         Objects.requireNonNull(event);
-        switch (event.type) {
+        switch (event.type()) {
             case NOOP:
                 return process((NoopApplicationEvent) event);
         }
