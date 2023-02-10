@@ -70,7 +70,6 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
-import org.mockito.stubbing.OngoingStubbing;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -502,10 +501,7 @@ public class ErrorHandlingTaskTest {
 
     private void mockSinkTransform() {
         FaultyPassthrough<SinkRecord> faultyPassthrough = new FaultyPassthrough<>();
-        @SuppressWarnings("unchecked")
-        Class<? extends Transformation<?>> value = (Class<? extends Transformation<?>>) (Class<?>) FaultyPassthrough.class;
-        OngoingStubbing<Class<? extends Transformation<?>>> transformClass = when(transformationStage.transformClass());
-        transformClass.thenReturn(value);
+        doReturn(FaultyPassthrough.class).when(transformationStage).transformClass();
         when(transformationStage.apply(any())).thenAnswer(invocation -> faultyPassthrough.apply(invocation.getArgument(0)));
     }
 
@@ -549,10 +545,7 @@ public class ErrorHandlingTaskTest {
 
     private void mockSourceTransform() {
         FaultyPassthrough<SourceRecord> faultyPassthrough = new FaultyPassthrough<>();
-        @SuppressWarnings("unchecked")
-        Class<? extends Transformation<?>> value = (Class<? extends Transformation<?>>) (Class<?>) FaultyPassthrough.class;
-        OngoingStubbing<Class<? extends Transformation<?>>> transformClass = when(transformationStage.transformClass());
-        transformClass.thenReturn(value);
+        doReturn(FaultyPassthrough.class).when(transformationStage).transformClass();
         when(transformationStage.apply(any())).thenAnswer(invocation -> faultyPassthrough.apply(invocation.getArgument(0)));
     }
 
