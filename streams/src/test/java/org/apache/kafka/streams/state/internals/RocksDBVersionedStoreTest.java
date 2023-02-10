@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -167,40 +166,44 @@ public class RocksDBVersionedStoreTest {
 
         verifyGetValueFromStore("k", "b", BASE_TIMESTAMP);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "b", BASE_TIMESTAMP);
+        verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 1);
 
         putToStore("k", null, BASE_TIMESTAMP);
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP);
+        verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 1);
 
         putToStore("k", null, BASE_TIMESTAMP);
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP);
+        verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 1);
 
         putToStore("k", "b", BASE_TIMESTAMP);
 
         verifyGetValueFromStore("k", "b", BASE_TIMESTAMP);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "b", BASE_TIMESTAMP);
+        verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 1);
     }
 
     @Test
     public void shouldPutRepeatTimestamps() {
         putToStore("k", "to_be_replaced", SEGMENT_INTERVAL + 20);
         putToStore("k", null, SEGMENT_INTERVAL - 10);
-        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL - 10);
-        putToStore("k", null, SEGMENT_INTERVAL - 10);
+        putToStore("k", "to_be_replaced", SEGMENT_INTERVAL - 10); // replace existing null with non-null, with timestamps spanning segments
+        putToStore("k", null, SEGMENT_INTERVAL - 10); // replace existing non-null with null
         putToStore("k", "to_be_replaced", SEGMENT_INTERVAL - 1);
         putToStore("k", "to_be_replaced", SEGMENT_INTERVAL + 1);
-        putToStore("k", null, SEGMENT_INTERVAL - 1);
-        putToStore("k", null, SEGMENT_INTERVAL + 1);
+        putToStore("k", null, SEGMENT_INTERVAL - 1); // replace existing non-null with null
+        putToStore("k", null, SEGMENT_INTERVAL + 1); // replace existing non-null with null, with timestamps spanning segments
         putToStore("k", null, SEGMENT_INTERVAL + 10);
         putToStore("k", null, SEGMENT_INTERVAL + 5);
-        putToStore("k", "vp5", SEGMENT_INTERVAL + 5);
+        putToStore("k", "vp5", SEGMENT_INTERVAL + 5); // replace existing null with non-null
         putToStore("k", "to_be_replaced", SEGMENT_INTERVAL - 5);
-        putToStore("k", "vn5", SEGMENT_INTERVAL - 5);
-        putToStore("k", null, SEGMENT_INTERVAL + 20);
-        putToStore("k", null, SEGMENT_INTERVAL + 20);
+        putToStore("k", "vn5", SEGMENT_INTERVAL - 5); // replace existing non-null with non-null
+        putToStore("k", null, SEGMENT_INTERVAL + 20); // replace existing non-null (latest value) with null
+        putToStore("k", null, SEGMENT_INTERVAL + 20); // replace existing null with null
         putToStore("k", "vn6", SEGMENT_INTERVAL - 6);
 
         verifyGetNullFromStore("k");
@@ -313,6 +316,29 @@ public class RocksDBVersionedStoreTest {
     }
 
     @Test
+    public void shouldDelete() {
+        putToStore("k", "vp20", SEGMENT_INTERVAL + 20);
+        putToStore("k", "vp10", SEGMENT_INTERVAL + 10);
+        putToStore("k", "vn10", SEGMENT_INTERVAL - 10);
+        putToStore("k", "vn2", SEGMENT_INTERVAL - 2);
+
+        VersionedRecord<String> deleted = deleteFromStore("k", SEGMENT_INTERVAL - 5); // delete from segment
+        assertThat(deleted.value(), equalTo("vn10"));
+        assertThat(deleted.timestamp(), equalTo(SEGMENT_INTERVAL - 10));
+
+        deleted = deleteFromStore("k", SEGMENT_INTERVAL + 10); // delete existing timestamp
+        assertThat(deleted.value(), equalTo("vp10"));
+        assertThat(deleted.timestamp(), equalTo(SEGMENT_INTERVAL + 10));
+
+        deleted = deleteFromStore("k", SEGMENT_INTERVAL + 10); // delete the same timestamp again
+        assertThat(deleted, nullValue());
+
+        deleted = deleteFromStore("k", SEGMENT_INTERVAL + 25); // delete from latest value store
+        assertThat(deleted.value(), equalTo("vp20"));
+        assertThat(deleted.timestamp(), equalTo(SEGMENT_INTERVAL + 20));
+    }
+
+    @Test
     public void shouldGetFromOlderSegments() {
         // use a different key to create three different segments
         putToStore("ko", null, SEGMENT_INTERVAL - 10);
@@ -385,10 +411,16 @@ public class RocksDBVersionedStoreTest {
 
     private void putToStore(final String key, final String value, final long timestamp) {
         store.put(
-            new Bytes(key.getBytes(UTF_8)),
-            value == null ? null : value.getBytes(UTF_8),
+            new Bytes(STRING_SERIALIZER.serialize(null, key)),
+            STRING_SERIALIZER.serialize(null, value),
             timestamp
         );
+    }
+
+    private VersionedRecord<String> deleteFromStore(final String key, final long timestamp) {
+        final VersionedRecord<byte[]> versionedRecord
+            = store.delete(new Bytes(STRING_SERIALIZER.serialize(null, key)), timestamp);
+        return deserializedRecord(versionedRecord);
     }
 
     private VersionedRecord<String> getFromStore(final String key) {

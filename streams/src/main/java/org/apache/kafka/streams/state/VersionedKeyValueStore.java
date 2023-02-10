@@ -40,8 +40,7 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
      * Add a new record version associated with the specified key and timestamp.
      *
      * @param key       The key
-     * @param value     The value, it can be {@code null};
-     *                  if the serialized bytes are also {@code null} it is interpreted as a delete
+     * @param value     The value, it can be {@code null}. {@code null} is interpreted as a delete.
      * @param timestamp The timestamp for this record version
      * @throws NullPointerException If {@code null} is used for key.
      */
