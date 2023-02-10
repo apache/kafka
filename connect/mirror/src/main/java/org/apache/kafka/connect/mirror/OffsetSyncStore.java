@@ -85,7 +85,7 @@ class OffsetSyncStore implements AutoCloseable {
         backingStore.readToEnd((error, result) -> callback.run());
     }
 
-    OptionalLong translateDownstream(TopicPartition sourceTopicPartition, long upstreamOffset) {
+    synchronized OptionalLong translateDownstream(TopicPartition sourceTopicPartition, long upstreamOffset) {
         Optional<OffsetSync> offsetSync = latestOffsetSync(sourceTopicPartition);
         if (offsetSync.isPresent()) {
             if (offsetSync.get().upstreamOffset() > upstreamOffset) {
@@ -125,13 +125,13 @@ class OffsetSyncStore implements AutoCloseable {
         Utils.closeQuietly(admin, "offset sync store admin client");
     }
 
-    protected void handleRecord(ConsumerRecord<byte[], byte[]> record) {
+    protected synchronized void handleRecord(ConsumerRecord<byte[], byte[]> record) {
         OffsetSync offsetSync = OffsetSync.deserializeRecord(record);
         TopicPartition sourceTopicPartition = offsetSync.topicPartition();
         offsetSyncs.put(sourceTopicPartition, offsetSync);
     }
 
-    private Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition) {
+    private synchronized Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition) {
         return Optional.ofNullable(offsetSyncs.get(topicPartition));
     }
 }
