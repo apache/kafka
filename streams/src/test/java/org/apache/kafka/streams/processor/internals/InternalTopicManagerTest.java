@@ -759,12 +759,10 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldExhaustRetriesOnTimeoutExceptionForMakeReady() {
         mockAdminClient.timeoutNextRequest(1);
-
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
         try {
             internalTopicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig));
-            fail("Should have thrown StreamsException.");
         } catch (final StreamsException expected) {
             assertEquals(TimeoutException.class, expected.getCause().getClass());
         }
