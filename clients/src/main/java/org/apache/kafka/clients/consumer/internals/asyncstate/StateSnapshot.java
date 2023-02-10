@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.clients.consumer.internals.asyncstate;
 
-public class CommitAsyncEvent extends CompletableApplicationEvent<Void> {
+import java.util.Set;
 
-    public CommitAsyncEvent() {
-        super(Type.COMMIT_ASYNC);
-    }
+public interface StateSnapshot {
+
+    Set<String> subscription();
 
 }
