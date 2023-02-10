@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -51,6 +53,19 @@ import java.util.function.IntSupplier;
  * Group Coordinator's internal API.
  */
 public interface GroupCoordinator {
+
+    /**
+     * Heartbeat to a Consumer Group.
+     *
+     * @param context           The request context.
+     * @param request           The ConsumerGroupHeartbeatResponse data.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
+        RequestContext context,
+        ConsumerGroupHeartbeatRequestData request
+    );
 
     /**
      * Join a Generic Group.

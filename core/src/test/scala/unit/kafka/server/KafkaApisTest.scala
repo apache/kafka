@@ -5817,11 +5817,9 @@ class KafkaApisTest {
 
   @Test
   def testConsumerGroupHeartbeatReturnsUnsupportedVersion(): Unit = {
-    val requestChannelRequest = buildRequest(
-      new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData()
-        .setGroupId("group")
-      ).build()
-    )
+    val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest).build())
 
     createKafkaApis().handle(requestChannelRequest, RequestLocal.NoCaching)
 
@@ -5829,5 +5827,69 @@ class KafkaApisTest {
       .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
     val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(expectedHeartbeatResponse, response.data)
+  }
+
+  @Test
+  def testConsumerGroupHeartbeatRequest(): Unit = {
+    val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest).build())
+
+    val future = new CompletableFuture[ConsumerGroupHeartbeatResponseData]()
+    when(groupCoordinator.consumerGroupHeartbeat(
+      requestChannelRequest.context,
+      consumerGroupHeartbeatRequest
+    )).thenReturn(future)
+
+    createKafkaApis(overrideProperties = Map(
+      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+    )).handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val consumerGroupHeartbeatResponse = new ConsumerGroupHeartbeatResponseData()
+      .setMemberId("member")
+
+    future.complete(consumerGroupHeartbeatResponse)
+    val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(consumerGroupHeartbeatResponse, response.data)
+  }
+
+  @Test
+  def testConsumerGroupHeartbeatRequestFutureFailed(): Unit = {
+    val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest).build())
+
+    val future = new CompletableFuture[ConsumerGroupHeartbeatResponseData]()
+    when(groupCoordinator.consumerGroupHeartbeat(
+      requestChannelRequest.context,
+      consumerGroupHeartbeatRequest
+    )).thenReturn(future)
+
+    createKafkaApis(overrideProperties = Map(
+      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+    )).handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
+    val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(Errors.FENCED_MEMBER_EPOCH.code, response.data.errorCode)
+  }
+
+  @Test
+  def testConsumerGroupHeartbeatRequestAuthorizationFailed(): Unit = {
+    val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+
+    createKafkaApis(
+      authorizer = Some(authorizer),
+      overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
+    ).handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
   }
 }
