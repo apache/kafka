@@ -314,7 +314,7 @@ public class ConsumerPerformance {
                 .withRequiredArg()
                 .describedAs("count")
                 .ofType(Long.class);
-            reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in milliseconds at which to print progress info (default: 5s).")
+            reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in milliseconds at which to print progress info.")
                 .withRequiredArg()
                 .withValuesConvertedBy(regex("^\\d+$"))
                 .describedAs("interval_ms")
