@@ -321,7 +321,7 @@ public class ConnectorConfig extends AbstractConfig {
             protected ConfigDef initialConfigDef() {
                 // All Transformations get these config parameters implicitly
                 return super.initialConfigDef()
-                        .define(TransformationStage.PREDICATE_CONFIG, Type.STRING, "", Importance.MEDIUM,
+                        .define(TransformationStage.PREDICATE_CONFIG, Type.STRING, null, Importance.MEDIUM,
                                 "The alias of a predicate used to determine whether to apply this transformation.")
                         .define(TransformationStage.NEGATE_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM,
                                 "Whether the configured predicate should be negated.");
