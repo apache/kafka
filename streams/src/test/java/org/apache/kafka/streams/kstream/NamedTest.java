@@ -21,13 +21,14 @@ import org.junit.Test;
 
 import java.util.Arrays;
 
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class NamedTest {
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowExceptionGivenNullName() {
-        Named.as(null);
+        assertThrows(NullPointerException.class, () -> Named.as(null));
     }
 
     @Test

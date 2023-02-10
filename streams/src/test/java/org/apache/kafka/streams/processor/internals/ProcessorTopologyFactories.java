@@ -25,8 +25,7 @@ import java.util.Map;
 public final class ProcessorTopologyFactories {
     private ProcessorTopologyFactories() {}
 
-
-    public static ProcessorTopology with(final List<ProcessorNode<?, ?>> processorNodes,
+    public static ProcessorTopology with(final List<ProcessorNode<?, ?, ?, ?>> processorNodes,
                                          final Map<String, SourceNode<?, ?>> sourcesByTopic,
                                          final List<StateStore> stateStoresByName,
                                          final Map<String, String> storeToChangelogTopic) {

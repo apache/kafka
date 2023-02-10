@@ -21,8 +21,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 public abstract class ConnectorTest {
 
@@ -30,7 +30,7 @@ public abstract class ConnectorTest {
     protected Connector connector;
     protected AssertableConnector assertableConnector;
 
-    @Before
+    @BeforeEach
     public void beforeEach() {
         connector = createConnector();
         context = createContext();

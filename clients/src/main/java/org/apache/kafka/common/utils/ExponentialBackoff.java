@@ -47,7 +47,8 @@ public class ExponentialBackoff {
         }
         double exp = Math.min(attempts, this.expMax);
         double term = initialInterval * Math.pow(multiplier, exp);
-        double randomFactor = ThreadLocalRandom.current().nextDouble(1 - jitter, 1 + jitter);
+        double randomFactor = jitter < Double.MIN_NORMAL ? 1.0 :
+            ThreadLocalRandom.current().nextDouble(1 - jitter, 1 + jitter);
         return (long) (randomFactor * term);
     }
 }

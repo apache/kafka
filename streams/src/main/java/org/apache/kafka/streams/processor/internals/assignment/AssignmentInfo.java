@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.HostInfo;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +41,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.streams.processor.internals.assignment.ConsumerProtocolUtils.readTaskIdFrom;
+import static org.apache.kafka.streams.processor.internals.assignment.ConsumerProtocolUtils.writeTaskIdTo;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
 
@@ -179,6 +182,10 @@ public class AssignmentInfo {
                     out.writeInt(errCode);
                     break;
                 case 7:
+                case 8:
+                case 9:
+                case 10:
+                case 11:
                     out.writeInt(usedVersion);
                     out.writeInt(commonlySupportedVersion);
                     encodeActiveAndStandbyTaskAssignment(out);
@@ -204,14 +211,14 @@ public class AssignmentInfo {
         // encode active tasks
         out.writeInt(activeTasks.size());
         for (final TaskId id : activeTasks) {
-            id.writeTo(out);
+            writeTaskIdTo(id, out, usedVersion);
         }
 
         // encode standby tasks
         out.writeInt(standbyTasks.size());
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : standbyTasks.entrySet()) {
             final TaskId id = entry.getKey();
-            id.writeTo(out);
+            writeTaskIdTo(id, out, usedVersion);
 
             final Set<TopicPartition> partitions = entry.getValue();
             writeTopicPartitions(out, partitions);
@@ -352,6 +359,10 @@ public class AssignmentInfo {
                     assignmentInfo.errCode = in.readInt();
                     break;
                 case 7:
+                case 8:
+                case 9:
+                case 10:
+                case 11:
                     commonlySupportedVersion = in.readInt();
                     assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
                     decodeActiveTasks(assignmentInfo, in);
@@ -378,7 +389,7 @@ public class AssignmentInfo {
         final int count = in.readInt();
         assignmentInfo.activeTasks = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            assignmentInfo.activeTasks.add(TaskId.readFrom(in));
+            assignmentInfo.activeTasks.add(readTaskIdFrom(in, assignmentInfo.usedVersion));
         }
     }
 
@@ -387,7 +398,7 @@ public class AssignmentInfo {
         final int count = in.readInt();
         assignmentInfo.standbyTasks = new HashMap<>(count);
         for (int i = 0; i < count; i++) {
-            final TaskId id = TaskId.readFrom(in);
+            final TaskId id = readTaskIdFrom(in, assignmentInfo.usedVersion);
             assignmentInfo.standbyTasks.put(id, readTopicPartitions(in));
         }
     }

@@ -24,16 +24,23 @@ import java.util.Map;
  * MetricsContext encapsulates additional contextLabels about metrics exposed via a
  * {@link org.apache.kafka.common.metrics.MetricsReporter}
  *
- * The contextLabels map provides following information:
- * - a <code>_namespace</node> field indicating the component exposing metrics
- *   e.g. kafka.server, kafka.consumer
- *   {@link JmxReporter} uses this as prefix for mbean names
+ * <p>The {@link #contextLabels()} map provides following information:
+ * <dl>
+ *   <dt>in all components</dt>
+ *   <dd>a {@code _namespace} field indicating the component exposing metrics
+ *   e.g. kafka.server, kafka.consumer.
+ *   The {@link JmxReporter} uses this as prefix for MBean names</dd>
  *
- * - for clients and streams libraries: any freeform fields passed in via
- *   client properties in the form of `metrics.context.<key>=<value>
+ *   <dt>for clients and streams libraries</dt>
+ *   <dd>any freeform fields passed in via
+ *   client properties in the form of {@code metrics.context.<key>=<value>}</dd>
  *
- * - for kafka brokers: kafka.broker.id, kafka.cluster.id
- * - for connect workers: connect.kafka.cluster.id, connect.group.id
+ *   <dt>for kafka brokers</dt>
+ *   <dd>kafka.broker.id, kafka.cluster.id</dd>
+ *
+ *   <dt>for connect workers</dt>
+ *   <dd>connect.kafka.cluster.id, connect.group.id</dd>
+ * </dl>
  */
 @InterfaceStability.Evolving
 public interface MetricsContext {

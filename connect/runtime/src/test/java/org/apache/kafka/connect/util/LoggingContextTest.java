@@ -29,6 +29,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class LoggingContextTest {
@@ -63,19 +64,19 @@ public class LoggingContextTest {
         MDC.setContextMap(mdc);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullConnectorNameForConnectorContext() {
-        LoggingContext.forConnector(null);
+        assertThrows(NullPointerException.class, () -> LoggingContext.forConnector(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullTaskIdForTaskContext() {
-        LoggingContext.forTask(null);
+        assertThrows(NullPointerException.class, () -> LoggingContext.forTask(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullTaskIdForOffsetContext() {
-        LoggingContext.forOffsets(null);
+        assertThrows(NullPointerException.class, () -> LoggingContext.forOffsets(null));
     }
 
     @Test
@@ -202,6 +203,6 @@ public class LoggingContextTest {
     }
 
     protected void assertConnectorMdcUnset() {
-        assertEquals(null, MDC.get(EXTRA_KEY3));
+        assertNull(MDC.get(EXTRA_KEY3));
     }
 }

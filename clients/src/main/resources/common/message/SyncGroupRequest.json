@@ -16,6 +16,7 @@
 {
   "apiKey": 14,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "SyncGroupRequest",
   // Versions 1 and 2 are the same as version 0.
   //

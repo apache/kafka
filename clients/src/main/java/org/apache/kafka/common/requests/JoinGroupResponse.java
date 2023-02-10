@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -28,19 +28,18 @@ public class JoinGroupResponse extends AbstractResponse {
 
     private final JoinGroupResponseData data;
 
-    public JoinGroupResponse(JoinGroupResponseData data) {
+    public JoinGroupResponse(JoinGroupResponseData data, short version) {
+        super(ApiKeys.JOIN_GROUP);
         this.data = data;
+
+        // All versions prior to version 7 do not support nullable
+        // string for the protocol name. Empty string should be used.
+        if (version < 7 && data.protocolName() == null) {
+            data.setProtocolName("");
+        }
     }
 
-    public JoinGroupResponse(Struct struct) {
-        short latestVersion = (short) (JoinGroupResponseData.SCHEMAS.length - 1);
-        this.data = new JoinGroupResponseData(struct, latestVersion);
-    }
-
-    public JoinGroupResponse(Struct struct, short version) {
-        this.data = new JoinGroupResponseData(struct, version);
-    }
-
+    @Override
     public JoinGroupResponseData data() {
         return data;
     }
@@ -54,6 +53,11 @@ public class JoinGroupResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }
@@ -63,13 +67,8 @@ public class JoinGroupResponse extends AbstractResponse {
         return errorCounts(Errors.forCode(data.errorCode()));
     }
 
-    public static JoinGroupResponse parse(ByteBuffer buffer, short versionId) {
-        return new JoinGroupResponse(ApiKeys.JOIN_GROUP.parseResponse(versionId, buffer), versionId);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public static JoinGroupResponse parse(ByteBuffer buffer, short version) {
+        return new JoinGroupResponse(new JoinGroupResponseData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override

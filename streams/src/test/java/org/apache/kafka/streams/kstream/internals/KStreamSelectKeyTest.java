@@ -25,7 +25,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
@@ -57,7 +57,7 @@ public class KStreamSelectKeyTest {
 
         final KStream<String, Integer>  stream =
             builder.stream(topicName, Consumed.with(Serdes.String(), Serdes.Integer()));
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream.selectKey((key, value) -> keyMap.get(value)).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -68,11 +68,10 @@ public class KStreamSelectKeyTest {
             }
         }
 
-        assertEquals(3, supplier.theCapturedProcessor().processed.size());
+        assertEquals(3, supplier.theCapturedProcessor().processed().size());
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
+            assertEquals(expected[i], supplier.theCapturedProcessor().processed().get(i));
         }
-
     }
 
     @Test

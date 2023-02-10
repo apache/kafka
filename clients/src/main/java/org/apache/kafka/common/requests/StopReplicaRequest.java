@@ -25,8 +25,8 @@ import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicSt
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.MappedIterator;
 import org.apache.kafka.common.utils.Utils;
 
@@ -45,7 +45,14 @@ public class StopReplicaRequest extends AbstractControlRequest {
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        boolean deletePartitions, List<StopReplicaTopicState> topicStates) {
-            super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch);
+            this(version, controllerId, controllerEpoch, brokerEpoch, deletePartitions,
+                topicStates, false);
+        }
+
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+                       boolean deletePartitions, List<StopReplicaTopicState> topicStates,
+                       boolean kraftController) {
+            super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch, kraftController);
             this.deletePartitions = deletePartitions;
             this.topicStates = topicStates;
         }
@@ -55,6 +62,10 @@ public class StopReplicaRequest extends AbstractControlRequest {
                 .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch);
+
+            if (version >= 4) {
+                data.setIsKRaftController(kraftController);
+            }
 
             if (version >= 3) {
                 data.setTopicStates(topicStates);
@@ -101,10 +112,6 @@ public class StopReplicaRequest extends AbstractControlRequest {
     private StopReplicaRequest(StopReplicaRequestData data, short version) {
         super(ApiKeys.STOP_REPLICA, version);
         this.data = data;
-    }
-
-    public StopReplicaRequest(Struct struct, short version) {
-        this(new StopReplicaRequestData(struct, version), version);
     }
 
     @Override
@@ -201,6 +208,11 @@ public class StopReplicaRequest extends AbstractControlRequest {
     }
 
     @Override
+    public boolean isKRaftController() {
+        return data.isKRaftController();
+    }
+
+    @Override
     public int controllerEpoch() {
         return data.controllerEpoch();
     }
@@ -211,16 +223,11 @@ public class StopReplicaRequest extends AbstractControlRequest {
     }
 
     public static StopReplicaRequest parse(ByteBuffer buffer, short version) {
-        return new StopReplicaRequest(ApiKeys.STOP_REPLICA.parseRequest(version, buffer), version);
-    }
-
-    // Visible for testing
-    StopReplicaRequestData data() {
-        return data;
+        return new StopReplicaRequest(new StopReplicaRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public StopReplicaRequestData data() {
+        return data;
     }
 }

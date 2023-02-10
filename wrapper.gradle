@@ -49,7 +49,7 @@ task bootstrapWrapper() {
         def bootstrapString = """
       # Loop in case we encounter an error.
       for attempt in 1 2 3; do
-        if [ ! -e $wrapperJarPath ]; then
+        if [ ! -e "$wrapperJarPath" ]; then
           if ! curl -s -S --retry 3 -L -o "$wrapperJarPath" "$wrapperJarUrl"; then
             rm -f "$wrapperJarPath"
             # Pause for a bit before looping in case the server throttled us.

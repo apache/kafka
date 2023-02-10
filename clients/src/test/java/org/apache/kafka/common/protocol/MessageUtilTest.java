@@ -18,22 +18,21 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.RawTaggedField;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(120)
 public final class MessageUtilTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testDeepToString() {
@@ -53,7 +52,7 @@ public final class MessageUtilTest {
 
     @Test
     public void testDuplicate() {
-        assertEquals(null, MessageUtil.duplicate(null));
+        assertNull(MessageUtil.duplicate(null));
         assertArrayEquals(new byte[] {},
             MessageUtil.duplicate(new byte[] {}));
         assertArrayEquals(new byte[] {1, 2, 3},
@@ -77,5 +76,11 @@ public final class MessageUtilTest {
                 new RawTaggedField(2, new byte[] {})),
             Arrays.asList(new RawTaggedField(1, new byte[] {1}),
                 new RawTaggedField(2, new byte[] {}))));
+    }
+
+    @Test
+    public void testConstants() {
+        assertEquals(MessageUtil.UNSIGNED_SHORT_MAX, 0xFFFF);
+        assertEquals(MessageUtil.UNSIGNED_INT_MAX, 0xFFFFFFFFL);
     }
 }

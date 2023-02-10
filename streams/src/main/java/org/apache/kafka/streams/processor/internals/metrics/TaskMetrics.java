@@ -18,19 +18,15 @@ package org.apache.kafka.streams.processor.internals.metrics;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
-import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addMinAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class TaskMetrics {
@@ -88,29 +84,39 @@ public class TaskMetrics {
     private static final String NUM_BUFFERED_RECORDS_DESCRIPTION = "The count of buffered records that are polled " +
         "from consumer and not yet processed for this active task";
 
-    private static final String RECORD_E2E_LATENCY = "record-e2e-latency";
-    private static final String RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX =
-        "end-to-end latency of a record, measuring by comparing the record timestamp with the "
-            + "system time when it has been fully processed by the node";
-    private static final String RECORD_E2E_LATENCY_MIN_DESCRIPTION = "The minimum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
-    private static final String RECORD_E2E_LATENCY_MAX_DESCRIPTION = "The maximum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
+    private static final String CACHE_SIZE_BYTES_TOTAL = "cache-size-bytes-total";
+    private static final String CACHE_SIZE_BYTES_TOTAL_DESCRIPTION = "The total size in bytes of this task's cache.";
 
     public static Sensor processLatencySensor(final String threadId,
                                               final String taskId,
                                               final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.LATEST) {
-            return avgAndMaxSensor(
-                threadId,
-                taskId,
-                PROCESS_LATENCY,
-                PROCESS_AVG_LATENCY_DESCRIPTION,
-                PROCESS_MAX_LATENCY_DESCRIPTION,
-                RecordingLevel.DEBUG,
-                streamsMetrics
-            );
-        }
-        return emptySensor(threadId, taskId, PROCESS_LATENCY, RecordingLevel.DEBUG, streamsMetrics);
+        return avgAndMaxSensor(
+            threadId,
+            taskId,
+            PROCESS_LATENCY,
+            PROCESS_AVG_LATENCY_DESCRIPTION,
+            PROCESS_MAX_LATENCY_DESCRIPTION,
+            RecordingLevel.DEBUG,
+            streamsMetrics
+        );
     }
+
+    public static Sensor totalCacheSizeBytesSensor(final String threadId,
+                                                   final String taskId,
+                                                   final StreamsMetricsImpl streamsMetrics) {
+        final String name = CACHE_SIZE_BYTES_TOTAL;
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, RecordingLevel.DEBUG);
+
+        addValueMetricToSensor(
+                sensor,
+                TASK_LEVEL_GROUP,
+                streamsMetrics.taskLevelTagMap(threadId, taskId),
+                name,
+                CACHE_SIZE_BYTES_TOTAL_DESCRIPTION
+        );
+        return sensor;
+    }
+
 
     public static Sensor activeProcessRatioSensor(final String threadId,
                                                   final String taskId,
@@ -142,42 +148,20 @@ public class TaskMetrics {
         return sensor;
     }
 
-    public static Sensor e2ELatencySensor(final String threadId,
-                                          final String taskId,
-                                          final String processorNodeId,
-                                          final RecordingLevel recordingLevel,
-                                          final StreamsMetricsImpl streamsMetrics) {
-        final String sensorName = processorNodeId + "-" + RECORD_E2E_LATENCY;
-        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, sensorName, recordingLevel);
-        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
-        addMinAndMaxToSensor(
-            sensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            tagMap,
-            RECORD_E2E_LATENCY,
-            RECORD_E2E_LATENCY_MIN_DESCRIPTION,
-            RECORD_E2E_LATENCY_MAX_DESCRIPTION
-        );
-        return sensor;
-    }
-
     public static Sensor punctuateSensor(final String threadId,
                                          final String taskId,
                                          final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.LATEST) {
-            return invocationRateAndCountAndAvgAndMaxLatencySensor(
-                threadId,
-                taskId,
-                PUNCTUATE,
-                PUNCTUATE_RATE_DESCRIPTION,
-                PUNCTUATE_TOTAL_DESCRIPTION,
-                PUNCTUATE_AVG_LATENCY_DESCRIPTION,
-                PUNCTUATE_MAX_LATENCY_DESCRIPTION,
-                Sensor.RecordingLevel.DEBUG,
-                streamsMetrics
-            );
-        }
-        return emptySensor(threadId, taskId, PUNCTUATE, RecordingLevel.DEBUG, streamsMetrics);
+        return invocationRateAndCountAndAvgAndMaxLatencySensor(
+            threadId,
+            taskId,
+            PUNCTUATE,
+            PUNCTUATE_RATE_DESCRIPTION,
+            PUNCTUATE_TOTAL_DESCRIPTION,
+            PUNCTUATE_AVG_LATENCY_DESCRIPTION,
+            PUNCTUATE_MAX_LATENCY_DESCRIPTION,
+            Sensor.RecordingLevel.DEBUG,
+            streamsMetrics
+        );
     }
 
     public static Sensor commitSensor(final String threadId,
@@ -238,36 +222,6 @@ public class TaskMetrics {
             RecordingLevel.INFO,
             streamsMetrics
         );
-    }
-
-    public static Sensor droppedRecordsSensorOrSkippedRecordsSensor(final String threadId,
-                                                                    final String taskId,
-                                                                    final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
-            return ThreadMetrics.skipRecordSensor(threadId, streamsMetrics);
-        }
-        return droppedRecordsSensor(threadId, taskId, streamsMetrics);
-    }
-
-    public static Sensor droppedRecordsSensorOrExpiredWindowRecordDropSensor(final String threadId,
-                                                                             final String taskId,
-                                                                             final String storeType,
-                                                                             final String storeName,
-                                                                             final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
-            return StateStoreMetrics.expiredWindowRecordDropSensor(threadId, taskId, storeType, storeName, streamsMetrics);
-        }
-        return droppedRecordsSensor(threadId, taskId, streamsMetrics);
-    }
-
-    public static Sensor droppedRecordsSensorOrLateRecordDropSensor(final String threadId,
-                                                                    final String taskId,
-                                                                    final String processorNodeId,
-                                                                    final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
-            return ProcessorNodeMetrics.lateRecordDropSensor(threadId, taskId, processorNodeId, streamsMetrics);
-        }
-        return droppedRecordsSensor(threadId, taskId, streamsMetrics);
     }
 
     private static Sensor invocationRateAndCountSensor(final String threadId,
@@ -340,14 +294,5 @@ public class TaskMetrics {
             descriptionOfCount
         );
         return sensor;
-    }
-
-    private static Sensor emptySensor(final String threadId,
-                                      final String taskId,
-                                      final String metricName,
-                                      final RecordingLevel recordingLevel,
-                                      final StreamsMetricsImpl streamsMetrics,
-                                      final Sensor... parentSensors) {
-        return streamsMetrics.taskLevelSensor(threadId, taskId, metricName, recordingLevel, parentSensors);
     }
 }

@@ -17,13 +17,14 @@
 
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
+import org.apache.kafka.common.record.MemoryRecords;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 public interface Readable {
     byte readByte();
@@ -31,13 +32,15 @@ public interface Readable {
     int readInt();
     long readLong();
     double readDouble();
-    void readArray(byte[] arr);
+    byte[] readArray(int length);
     int readUnsignedVarint();
     ByteBuffer readByteBuffer(int length);
+    int readVarint();
+    long readVarlong();
+    int remaining();
 
     default String readString(int length) {
-        byte[] arr = new byte[length];
-        readArray(arr);
+        byte[] arr = readArray(length);
         return new String(arr, StandardCharsets.UTF_8);
     }
 
@@ -45,16 +48,33 @@ public interface Readable {
         if (unknowns == null) {
             unknowns = new ArrayList<>();
         }
-        byte[] data = new byte[size];
-        readArray(data);
+        byte[] data = readArray(size);
         unknowns.add(new RawTaggedField(tag, data));
         return unknowns;
+    }
+
+    default MemoryRecords readRecords(int length) {
+        if (length < 0) {
+            // no records
+            return null;
+        } else {
+            ByteBuffer recordsBuffer = readByteBuffer(length);
+            return MemoryRecords.readableRecords(recordsBuffer);
+        }
     }
 
     /**
      * Read a UUID with the most significant digits first.
      */
-    default UUID readUUID() {
-        return new UUID(readLong(), readLong());
+    default Uuid readUuid() {
+        return new Uuid(readLong(), readLong());
+    }
+
+    default int readUnsignedShort() {
+        return Short.toUnsignedInt(readShort());
+    }
+
+    default long readUnsignedInt() {
+        return Integer.toUnsignedLong(readInt());
     }
 }

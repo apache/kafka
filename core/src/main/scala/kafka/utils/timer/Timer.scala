@@ -16,9 +16,9 @@
  */
 package kafka.utils.timer
 
-import java.util.concurrent.{DelayQueue, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.concurrent.{DelayQueue, Executors, TimeUnit}
 
 import kafka.utils.threadsafe
 import org.apache.kafka.common.utils.{KafkaThread, Time}
@@ -93,8 +93,6 @@ class SystemTimer(executorName: String,
     }
   }
 
-  private[this] val reinsert = (timerTaskEntry: TimerTaskEntry) => addTimerTaskEntry(timerTaskEntry)
-
   /*
    * Advances the clock if there is an expired bucket. If there isn't any expired bucket when called,
    * waits up to timeoutMs before giving up.
@@ -106,7 +104,7 @@ class SystemTimer(executorName: String,
       try {
         while (bucket != null) {
           timingWheel.advanceClock(bucket.getExpiration)
-          bucket.flush(reinsert)
+          bucket.flush(addTimerTaskEntry)
           bucket = delayQueue.poll()
         }
       } finally {
@@ -125,4 +123,3 @@ class SystemTimer(executorName: String,
   }
 
 }
-

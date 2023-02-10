@@ -24,10 +24,10 @@ import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
 
-import org.junit.Assert._
+import org.junit.jupiter.api.Assertions._
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.KafkaException
-import org.junit.Test
+import org.junit.jupiter.api.Test
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
@@ -132,24 +132,6 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testReplaceSuffix(): Unit = {
-    assertEquals("blah.foo.text", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ".text"))
-    assertEquals("blah.foo", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ""))
-    assertEquals("txt.txt", CoreUtils.replaceSuffix("txt.txt.txt", ".txt", ""))
-    assertEquals("foo.txt", CoreUtils.replaceSuffix("foo", "", ".txt"))
-  }
-
-  @Test
-  def testReadInt(): Unit = {
-    val values = Array(0, 1, -1, Byte.MaxValue, Short.MaxValue, 2 * Short.MaxValue, Int.MaxValue/2, Int.MinValue/2, Int.MaxValue, Int.MinValue, Int.MaxValue)
-    val buffer = ByteBuffer.allocate(4 * values.size)
-    for(i <- 0 until values.length) {
-      buffer.putInt(i*4, values(i))
-      assertEquals("Written value should match read value.", values(i), CoreUtils.readInt(buffer.array, i*4))
-    }
-  }
-
-  @Test
   def testCsvList(): Unit = {
     val emptyString:String = ""
     val nullString:String = null
@@ -201,11 +183,11 @@ class CoreUtilsTest extends Logging {
   def testInLock(): Unit = {
     val lock = new ReentrantLock()
     val result = inLock(lock) {
-      assertTrue("Should be in lock", lock.isHeldByCurrentThread)
+      assertTrue(lock.isHeldByCurrentThread, "Should be in lock")
       1 + 1
     }
     assertEquals(2, result)
-    assertFalse("Should be unlocked", lock.isLocked)
+    assertFalse(lock.isLocked, "Should be unlocked")
   }
 
   @Test
@@ -251,7 +233,7 @@ class CoreUtilsTest extends Logging {
       }, Duration(1, TimeUnit.MINUTES))
       assertEquals(count, map(0).get)
       val created = createdCount.get
-      assertTrue(s"Too many creations $created", created > 0 && created <= nThreads)
+      assertTrue(created > 0 && created <= nThreads, s"Too many creations $created")
     } finally {
       executionContext.shutdownNow()
     }

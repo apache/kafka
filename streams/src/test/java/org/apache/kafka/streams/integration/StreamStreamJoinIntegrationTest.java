@@ -16,35 +16,28 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 
-import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofHours;
 import static java.time.Duration.ofSeconds;
-import static org.junit.Assert.assertThrows;
 
 /**
  * Tests all available joins of Kafka Streams DSL.
@@ -52,6 +45,8 @@ import static org.junit.Assert.assertThrows;
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
 public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private KStream<Long, String> leftStream;
     private KStream<Long, String> rightStream;
 
@@ -71,31 +66,42 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @Test
-    public void shouldNotAccessJoinStoresWhenGivingName() throws InterruptedException {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-no-store-access");
-        final StreamsBuilder builder = new StreamsBuilder();
+    public void testSelfJoin() {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-selfJoin");
+        STREAMS_CONFIG.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
-        final KStream<String, Integer> left = builder.stream(INPUT_TOPIC_LEFT, Consumed.with(Serdes.String(), Serdes.Integer()));
-        final KStream<String, Integer> right = builder.stream(INPUT_TOPIC_RIGHT, Consumed.with(Serdes.String(), Serdes.Integer()));
-        final CountDownLatch latch = new CountDownLatch(1);
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-A", null, 2L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-A", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-B", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-B", null, 3L)),
+            null,
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-A", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-B", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-C", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-C", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-C", null, 5L)),
+            null,
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-A", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-B", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-C", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-D", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-D", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-D", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-D", null, 7L))
+        );
 
-        left.join(
-            right,
-            (value1, value2) -> value1 + value2,
-            JoinWindows.of(ofMillis(100)),
-            StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
+        leftStream.join(
+            leftStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).to(OUTPUT_TOPIC);
 
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG)) {
-            kafkaStreams.setStateListener((newState, oldState) -> {
-                if (newState == KafkaStreams.State.RUNNING) {
-                    latch.countDown();
-                }
-            });
-
-            kafkaStreams.start();
-            latch.await();
-            assertThrows(InvalidStateStoreException.class, () -> kafkaStreams.store(StoreQueryParameters.fromNameAndType("join-store", QueryableStoreTypes.keyValueStore())));
-        }
+        runSelfJoinTestWithDriver(expectedResult);
     }
 
     @Test
@@ -134,7 +140,11 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
         );
 
-        leftStream.join(rightStream, valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+        leftStream.join(
+            rightStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -176,9 +186,12 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         );
 
         leftStream.map(MockMapper.noOpKeyValueMapper())
-                .join(rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
-                                 .selectKey(MockMapper.selectKeyKeyValueMapper()),
-                       valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+            .join(
+                rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
+                    .selectKey(MockMapper.selectKeyKeyValueMapper()),
+                valueJoiner,
+                JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+            ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -190,7 +203,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+            null,
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
             Arrays.asList(
@@ -219,7 +232,11 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
         );
 
-        leftStream.leftJoin(rightStream, valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+        leftStream.leftJoin(
+            rightStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -231,7 +248,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+            null,
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
             Arrays.asList(
@@ -261,9 +278,12 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         );
 
         leftStream.map(MockMapper.noOpKeyValueMapper())
-                .leftJoin(rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
-                                     .selectKey(MockMapper.selectKeyKeyValueMapper()),
-                        valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+            .leftJoin(
+                rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
+                     .selectKey(MockMapper.selectKeyKeyValueMapper()),
+                valueJoiner,
+                JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+            ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -275,7 +295,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+            null,
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
             Arrays.asList(
@@ -304,7 +324,11 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
         );
 
-        leftStream.outerJoin(rightStream, valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+        leftStream.outerJoin(
+            rightStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -316,7 +340,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+            null,
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
             Arrays.asList(
@@ -346,9 +370,12 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         );
 
         leftStream.map(MockMapper.noOpKeyValueMapper())
-                .outerJoin(rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
-                                .selectKey(MockMapper.selectKeyKeyValueMapper()),
-                        valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+            .outerJoin(
+                rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
+                    .selectKey(MockMapper.selectKeyKeyValueMapper()),
+                valueJoiner,
+                JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+            ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }
@@ -437,8 +464,15 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L))
         );
 
-        leftStream.join(rightStream, valueJoiner, JoinWindows.of(ofSeconds(10)))
-                .join(rightStream, valueJoiner, JoinWindows.of(ofSeconds(10))).to(OUTPUT_TOPIC);
+        leftStream.join(
+            rightStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).join(
+            rightStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).to(OUTPUT_TOPIC);
 
         runTestWithDriver(expectedResult);
     }

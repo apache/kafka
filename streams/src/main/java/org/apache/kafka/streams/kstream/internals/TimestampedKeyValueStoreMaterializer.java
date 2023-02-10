@@ -36,9 +36,18 @@ public class TimestampedKeyValueStoreMaterializer<K, V> {
     public StoreBuilder<TimestampedKeyValueStore<K, V>> materialize() {
         KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            final String name = materialized.storeName();
-            supplier = Stores.persistentTimestampedKeyValueStore(name);
+            switch (materialized.storeType()) {
+                case IN_MEMORY:
+                    supplier = Stores.inMemoryKeyValueStore(materialized.storeName());
+                    break;
+                case ROCKS_DB:
+                    supplier = Stores.persistentTimestampedKeyValueStore(materialized.storeName());
+                    break;
+                default:
+                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
+            }
         }
+
         final StoreBuilder<TimestampedKeyValueStore<K, V>> builder = Stores.timestampedKeyValueStoreBuilder(
             supplier,
             materialized.keySerde(),

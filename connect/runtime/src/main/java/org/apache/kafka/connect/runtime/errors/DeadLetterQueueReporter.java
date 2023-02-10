@@ -72,7 +72,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private final ErrorHandlingMetrics errorHandlingMetrics;
     private final String dlqTopicName;
 
-    private KafkaProducer<byte[], byte[]> kafkaProducer;
+    private final KafkaProducer<byte[], byte[]> kafkaProducer;
 
     public static DeadLetterQueueReporter createAndSetup(Map<String, Object> adminProps,
                                                          ConnectorTaskId id,
@@ -183,7 +183,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private byte[] stacktrace(Throwable error) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try {
-            PrintStream stream = new PrintStream(bos, true, "UTF-8");
+            PrintStream stream = new PrintStream(bos, true, StandardCharsets.UTF_8.name());
             error.printStackTrace(stream);
             bos.close();
             return bos.toByteArray();

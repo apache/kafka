@@ -30,7 +30,7 @@ import java.util.Map;
  */
 public class MockSourceConnector extends SourceConnector {
 
-    private MockConnector delegate = new MockConnector();
+    private final MockConnector delegate = new MockConnector();
 
     @Override
     public void initialize(ConnectorContext ctx) {

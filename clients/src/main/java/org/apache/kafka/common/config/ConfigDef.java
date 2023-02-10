@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.config;
 
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -33,8 +31,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
@@ -404,11 +404,26 @@ public class ConfigDef {
      * @param name              The name of the config parameter
      * @param type              The type of the config
      * @param defaultValue      The default value to use if this config isn't present
-     * @param importance
+     * @param importance        The importance of this config (i.e. is this something you will likely need to change?)
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Importance importance) {
         return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
+    }
+
+    /**
+     * Define a new internal configuration. Internal configuration won't show up in the docs and aren't
+     * intended for general use.
+     * @param name              The name of the config parameter
+     * @param type              The type of the config
+     * @param defaultValue      The default value to use if this config isn't present
+     * @param validator         The validator to use in checking the correctness of the config
+     * @param importance        The importance of this config (i.e. is this something you will likely need to change?)
+     * @param documentation     The documentation string for the config
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Validator validator, final Importance importance, final String documentation) {
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
     }
 
     /**
@@ -787,7 +802,11 @@ public class ConfigDef {
      * The config types
      */
     public enum Type {
-        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD
+        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD;
+
+        public boolean isSensitive() {
+            return this == PASSWORD;
+        }
     }
 
     /**
@@ -1042,7 +1061,7 @@ public class ConfigDef {
                 if (desc.length() > 0) {
                     desc.append(',').append(' ');
                 }
-                desc.append(String.valueOf(v));
+                desc.append(v);
             }
             return desc.toString();
         }
@@ -1099,6 +1118,32 @@ public class ConfigDef {
 
         public String toString() {
             return "non-empty string without ISO control characters";
+        }
+    }
+
+    public static class ListSize implements Validator {
+        final int maxSize;
+
+        private ListSize(final int maxSize) {
+            this.maxSize = maxSize;
+        }
+
+        public static ListSize atMostOfSize(final int maxSize) {
+            return new ListSize(maxSize);
+        }
+
+        @Override
+        public void ensureValid(final String name, final Object value) {
+            @SuppressWarnings("unchecked")
+            List<String> values = (List<String>) value;
+            if (values.size() > maxSize) {
+                throw new ConfigException(name, value, "exceeds maximum list size of [" + maxSize + "].");
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "List containing maximum of " + maxSize + " elements";
         }
     }
 
@@ -1198,15 +1243,16 @@ public class ConfigDef {
                 break;
             }
         }
+        String resultFormat = " (" + value + " %s" + (value == 1 ? ")" : "s)");
         switch (i) {
             case 1:
-                return " (" + value + " kibibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "kibibyte");
             case 2:
-                return " (" + value + " mebibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "mebibyte");
             case 3:
-                return " (" + value + " gibibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "gibibyte");
             case 4:
-                return " (" + value + " tebibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "tebibyte");
             default:
                 return "";
         }
@@ -1353,11 +1399,15 @@ public class ConfigDef {
      */
     private void getConfigKeyRst(ConfigKey key, StringBuilder b) {
         b.append("``").append(key.name).append("``").append("\n");
-        for (String docLine : key.documentation.split("\n")) {
-            if (docLine.length() == 0) {
-                continue;
+        if (key.documentation != null) {
+            for (String docLine : key.documentation.split("\n")) {
+                if (docLine.length() == 0) {
+                    continue;
+                }
+                b.append("  ").append(docLine).append("\n\n");
             }
-            b.append("  ").append(docLine).append("\n\n");
+        } else {
+            b.append("\n");
         }
         b.append("  * Type: ").append(getConfigValue(key, "Type")).append("\n");
         if (key.hasDefault()) {
@@ -1534,10 +1584,12 @@ public class ConfigDef {
             }
             b.append("<li>\n");
             b.append(String.format("<h%1$d>" +
-                    "<a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
+                    "<a id=\"%3$s\"></a><a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
                     "</h%1$d>%n", headerDepth, idGenerator.apply(key.name), key.name));
             b.append("<p>");
-            b.append(key.documentation.replaceAll("\n", "<br>"));
+            if (key.documentation != null) {
+                b.append(key.documentation.replaceAll("\n", "<br>"));
+            }
             b.append("</p>\n");
 
             b.append("<table>" +

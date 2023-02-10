@@ -16,6 +16,7 @@
 {
   "apiKey": 7,
   "type": "request",
+  "listeners": ["zkBroker", "controller"],
   "name": "ControlledShutdownRequest",
   // Version 0 of ControlledShutdownRequest has a non-standard request header
   // which does not include clientId.  Version 1 and later use the standard

@@ -17,8 +17,9 @@
 
 package kafka.server
 
-import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
+import kafka.server.metadata.ZkMetadataCache
 
+import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import kafka.utils.{Logging, ShutdownableThread}
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, KafkaZkClient, ZkVersion}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler}
@@ -32,9 +33,13 @@ import scala.concurrent.TimeoutException
  * to the latest features read from ZK. The cache updates are serialized through a single
  * notification processor thread.
  *
- * @param zkClient     the Zookeeper client
+ * This updates the features cached in ZkMetadataCache
+ *
+ * @param finalizedFeatureCache   the finalized feature cache
+ * @param zkClient                the Zookeeper client
  */
-class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
+class FinalizedFeatureChangeListener(private val finalizedFeatureCache: ZkMetadataCache,
+                                     private val zkClient: KafkaZkClient) extends Logging {
 
   /**
    * Helper class used to update the FinalizedFeatureCache.
@@ -85,7 +90,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
       //                                           a case.
       if (version == ZkVersion.UnknownVersion) {
         info(s"Feature ZK node at path: $featureZkNodePath does not exist")
-        FinalizedFeatureCache.clear()
+        finalizedFeatureCache.clearFeatures()
       } else {
         var maybeFeatureZNode: Option[FeatureZNode] = Option.empty
         try {
@@ -93,17 +98,17 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
         } catch {
           case e: IllegalArgumentException => {
             error(s"Unable to deserialize feature ZK node at path: $featureZkNodePath", e)
-            FinalizedFeatureCache.clear()
+            finalizedFeatureCache.clearFeatures()
           }
         }
-        maybeFeatureZNode.map(featureZNode => {
+        maybeFeatureZNode.foreach(featureZNode => {
           featureZNode.status match {
             case FeatureZNodeStatus.Disabled => {
               info(s"Feature ZK node at path: $featureZkNodePath is in disabled status.")
-              FinalizedFeatureCache.clear()
+              finalizedFeatureCache.clearFeatures()
             }
             case FeatureZNodeStatus.Enabled => {
-              FinalizedFeatureCache.updateOrThrow(featureZNode.features, version)
+              finalizedFeatureCache.updateFeaturesOrThrow(featureZNode.features.toMap, version)
             }
             case _ => throw new IllegalStateException(s"Unexpected FeatureZNodeStatus found in $featureZNode")
           }
@@ -205,7 +210,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
    * will exit eventually.
    *
    * @param waitOnceForCacheUpdateMs   # of milli seconds to wait for feature cache to be updated once.
-   *                                   If this parameter <= 0, no wait operation happens.
+   *                                   (should be > 0)
    *
    * @throws Exception if feature incompatibility check could not be finished in a timely manner
    */
@@ -240,7 +245,6 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
     zkClient.unregisterZNodeChangeHandler(FeatureZNodeChangeHandler.path)
     queue.clear()
     thread.shutdown()
-    thread.join()
   }
 
   // For testing only.

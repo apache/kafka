@@ -20,7 +20,7 @@ from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
 
@@ -45,16 +45,18 @@ class ConsumerGroupCommandTest(Test):
         self.topics = {
             TOPIC: {'partitions': 1, 'replication-factor': 1}
         }
-        self.zk = ZookeeperService(test_context, self.num_zk)
+        self.zk = ZookeeperService(test_context, self.num_zk) if quorum.for_test(test_context) == quorum.zk else None
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
 
     def start_kafka(self, security_protocol, interbroker_security_protocol):
         self.kafka = KafkaService(
             self.test_context, self.num_brokers,
             self.zk, security_protocol=security_protocol,
-            interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
+            interbroker_security_protocol=interbroker_security_protocol, topics=self.topics,
+            controller_num_nodes_override=self.num_zk)
         self.kafka.start()
 
     def start_consumer(self):
@@ -88,8 +90,8 @@ class ConsumerGroupCommandTest(Test):
         self.consumer.stop()
 
     @cluster(num_nodes=3)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
-    def test_list_consumer_groups(self, security_protocol='PLAINTEXT'):
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=quorum.all_non_upgrade)
+    def test_list_consumer_groups(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
         """
         Tests if ConsumerGroupCommand is listing correct consumer groups
         :return: None
@@ -97,8 +99,8 @@ class ConsumerGroupCommandTest(Test):
         self.setup_and_verify(security_protocol)
 
     @cluster(num_nodes=3)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
-    def test_describe_consumer_group(self, security_protocol='PLAINTEXT'):
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=quorum.all_non_upgrade)
+    def test_describe_consumer_group(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
         """
         Tests if ConsumerGroupCommand is describing a consumer group correctly
         :return: None

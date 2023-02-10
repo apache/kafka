@@ -17,14 +17,14 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Errors;
+
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 /**
  * Possible error codes:
@@ -38,30 +38,24 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
 
     private final AlterReplicaLogDirsResponseData data;
 
-    public AlterReplicaLogDirsResponse(Struct struct) {
-        this(struct, ApiKeys.ALTER_REPLICA_LOG_DIRS.latestVersion());
-    }
-
-    public AlterReplicaLogDirsResponse(Struct struct, short version) {
-        this.data = new AlterReplicaLogDirsResponseData(struct, version);
-    }
-
     public AlterReplicaLogDirsResponse(AlterReplicaLogDirsResponseData data) {
+        super(ApiKeys.ALTER_REPLICA_LOG_DIRS);
         this.data = data;
     }
 
+    @Override
     public AlterReplicaLogDirsResponseData data() {
         return data;
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
     }
 
     @Override
-    public int throttleTimeMs() {
-        return data.throttleTimeMs();
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
     }
 
     @Override
@@ -74,7 +68,7 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
     }
 
     public static AlterReplicaLogDirsResponse parse(ByteBuffer buffer, short version) {
-        return new AlterReplicaLogDirsResponse(ApiKeys.ALTER_REPLICA_LOG_DIRS.responseSchema(version).read(buffer));
+        return new AlterReplicaLogDirsResponse(new AlterReplicaLogDirsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

@@ -22,11 +22,14 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.StreamsUpgradeTest;
 import org.apache.kafka.test.IntegrationTest;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -43,12 +46,20 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category(IntegrationTest.class)
 public class StreamsUpgradeTestIntegrationTest {
-    @ClassRule
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
+
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeClass
-    public static void setup() {
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, 1, "data");
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
     }
 
     @Test

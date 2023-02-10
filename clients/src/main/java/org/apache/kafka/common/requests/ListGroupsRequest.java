@@ -20,8 +20,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -66,15 +66,6 @@ public class ListGroupsRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public ListGroupsRequest(Struct struct, short version) {
-        super(ApiKeys.LIST_GROUPS, version);
-        this.data = new ListGroupsRequestData(struct, version);
-    }
-
-    public ListGroupsRequestData data() {
-        return data;
-    }
-
     @Override
     public ListGroupsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ListGroupsResponseData listGroupsResponseData = new ListGroupsResponseData().
@@ -87,11 +78,11 @@ public class ListGroupsRequest extends AbstractRequest {
     }
 
     public static ListGroupsRequest parse(ByteBuffer buffer, short version) {
-        return new ListGroupsRequest(ApiKeys.LIST_GROUPS.parseRequest(version, buffer), version);
+        return new ListGroupsRequest(new ListGroupsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public ListGroupsRequestData data() {
+        return data;
     }
 }

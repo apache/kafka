@@ -47,9 +47,9 @@ import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
 
+@SuppressWarnings("deprecation")
 public class StreamsOptimizedTest {
 
-    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
             System.err.println("StreamsOptimizedTest requires one argument (properties-file) but no provided: ");
@@ -110,7 +110,7 @@ public class StreamsOptimizedTest {
 
 
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsOptimizedTest");
-        config.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0");
+        config.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
         config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.setProperty(StreamsConfig.adminClientPrefix(AdminClientConfig.RETRIES_CONFIG), "100");

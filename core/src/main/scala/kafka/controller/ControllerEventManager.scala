@@ -17,11 +17,13 @@
 
 package kafka.controller
 
+import com.yammer.metrics.core.Timer
+
+import java.util.ArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantLock
-
-import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
+import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.common.utils.Time
@@ -69,7 +71,7 @@ class QueuedEvent(val event: ControllerEvent,
 class ControllerEventManager(controllerId: Int,
                              processor: ControllerEventProcessor,
                              time: Time,
-                             rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
+                             rateAndTimeMetrics: Map[ControllerState, Timer],
                              eventQueueTimeTimeoutMs: Long = 300000) extends KafkaMetricsGroup {
   import ControllerEventManager._
 
@@ -77,7 +79,7 @@ class ControllerEventManager(controllerId: Int,
   private val putLock = new ReentrantLock()
   private val queue = new LinkedBlockingQueue[QueuedEvent]
   // Visible for test
-  private[controller] val thread = new ControllerEventThread(ControllerEventThreadName)
+  private[controller] var thread = new ControllerEventThread(ControllerEventThreadName)
 
   private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)
 
@@ -104,9 +106,10 @@ class ControllerEventManager(controllerId: Int,
     queuedEvent
   }
 
-  def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock) {
-    queue.forEach(_.preempt(processor))
-    queue.clear()
+  def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock){
+    val preemptedEvents = new ArrayList[QueuedEvent]()
+    queue.drainTo(preemptedEvents)
+    preemptedEvents.forEach(_.preempt(processor))
     put(event)
   }
 
@@ -128,7 +131,7 @@ class ControllerEventManager(controllerId: Int,
             def process(): Unit = dequeued.process(processor)
 
             rateAndTimeMetrics.get(state) match {
-              case Some(timer) => timer.time { process() }
+              case Some(timer) => timer.time(() => process())
               case None => process()
             }
           } catch {

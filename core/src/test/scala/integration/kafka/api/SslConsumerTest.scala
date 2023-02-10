@@ -12,11 +12,11 @@
   */
 package kafka.api
 
-import java.io.File
+import kafka.utils.TestUtils
 
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 class SslConsumerTest extends BaseConsumerTest {
   override protected def securityProtocol = SecurityProtocol.SSL
-  override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
 }

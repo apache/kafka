@@ -29,7 +29,9 @@ import java.util.Set;
  * APIs and services to connect to other instances, the Set of state stores available on
  * the instance and the Set of {@link TopicPartition}s available on the instance.
  * NOTE: This is a point in time view. It may change when rebalances happen.
+ * @deprecated since 3.0.0 use {@link org.apache.kafka.streams.StreamsMetadata}
  */
+@Deprecated
 public class StreamsMetadata {
     /**
      * Sentinel to indicate that the StreamsMetadata is currently unavailable. This can occur during rebalance

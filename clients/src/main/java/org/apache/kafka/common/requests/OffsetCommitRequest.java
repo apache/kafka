@@ -24,8 +24,8 @@ import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -68,21 +68,12 @@ public class OffsetCommitRequest extends AbstractRequest {
         }
     }
 
-    private final short version;
-
     public OffsetCommitRequest(OffsetCommitRequestData data, short version) {
         super(ApiKeys.OFFSET_COMMIT, version);
         this.data = data;
-        this.version = version;
     }
 
-
-    public OffsetCommitRequest(Struct struct, short version) {
-        super(ApiKeys.OFFSET_COMMIT, version);
-        this.data = new OffsetCommitRequestData(struct, version);
-        this.version = version;
-    }
-
+    @Override
     public OffsetCommitRequestData data() {
         return data;
     }
@@ -127,12 +118,12 @@ public class OffsetCommitRequest extends AbstractRequest {
                 .setThrottleTimeMs(throttleTimeMs));
     }
 
-    public static OffsetCommitRequest parse(ByteBuffer buffer, short version) {
-        return new OffsetCommitRequest(ApiKeys.OFFSET_COMMIT.parseRequest(version, buffer), version);
+    @Override
+    public OffsetCommitResponse getErrorResponse(Throwable e) {
+        return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e);
     }
 
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version);
+    public static OffsetCommitRequest parse(ByteBuffer buffer, short version) {
+        return new OffsetCommitRequest(new OffsetCommitRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

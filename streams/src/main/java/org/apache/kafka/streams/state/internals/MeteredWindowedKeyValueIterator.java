@@ -23,26 +23,30 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.StateSerdes;
+
+import java.util.function.Function;
 
 class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed<K>, V> {
 
     private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
     private final Sensor sensor;
     private final StreamsMetrics metrics;
-    private final StateSerdes<K, V> serdes;
+    private final Function<byte[], K> deserializeKey;
+    private final Function<byte[], V> deserializeValue;
     private final long startNs;
     private final Time time;
 
     MeteredWindowedKeyValueIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> iter,
                                     final Sensor sensor,
                                     final StreamsMetrics metrics,
-                                    final StateSerdes<K, V> serdes,
+                                    final Function<byte[], K> deserializeKey,
+                                    final Function<byte[], V> deserializeValue,
                                     final Time time) {
         this.iter = iter;
         this.sensor = sensor;
         this.metrics = metrics;
-        this.serdes = serdes;
+        this.deserializeKey = deserializeKey;
+        this.deserializeValue = deserializeValue;
         this.startNs = time.nanoseconds();
         this.time = time;
     }
@@ -55,11 +59,11 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
     @Override
     public KeyValue<Windowed<K>, V> next() {
         final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
-        return KeyValue.pair(windowedKey(next.key), serdes.valueFrom(next.value));
+        return KeyValue.pair(windowedKey(next.key), deserializeValue.apply(next.value));
     }
 
     private Windowed<K> windowedKey(final Windowed<Bytes> bytesKey) {
-        final K key = serdes.keyFrom(bytesKey.key().get());
+        final K key = deserializeKey.apply(bytesKey.key().get());
         return new Windowed<>(key, bytesKey.window());
     }
 

@@ -73,7 +73,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
         self.num_records = 2000
         self.record_size = 4096 * 100  # 400 KB
         # 1 MB per partition on average.
-        self.partition_size = (self.num_records * self.record_size) / self.num_partitions
+        self.partition_size = (self.num_records * self.record_size) // self.num_partitions
         self.num_producers = 2
         self.num_consumers = 1
         self.throttle = 4 * 1024 * 1024  # 4 MB/s

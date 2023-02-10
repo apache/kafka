@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ExitTest {
     @Test
@@ -34,7 +34,7 @@ public class ExitTest {
         });
         try {
             int statusCode = 0;
-            String message = "mesaage";
+            String message = "message";
             Exit.halt(statusCode);
             Exit.halt(statusCode, message);
             assertEquals(Arrays.asList(statusCode, null, statusCode, message), list);
@@ -52,7 +52,7 @@ public class ExitTest {
         });
         try {
             int statusCode = 0;
-            String message = "mesaage";
+            String message = "message";
             Exit.exit(statusCode);
             Exit.exit(statusCode, message);
             assertEquals(Arrays.asList(statusCode, null, statusCode, message), list);

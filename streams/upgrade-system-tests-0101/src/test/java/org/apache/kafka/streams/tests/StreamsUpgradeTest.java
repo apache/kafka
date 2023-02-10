@@ -56,7 +56,7 @@ public class StreamsUpgradeTest {
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
         config.setProperty(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         config.putAll(streamsProperties);
 
         final KafkaStreams streams = new KafkaStreams(builder, config);

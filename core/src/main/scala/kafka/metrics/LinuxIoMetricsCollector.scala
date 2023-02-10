@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server
+package kafka.metrics
 
 import java.nio.file.{Files, Paths}
 
@@ -87,10 +87,10 @@ class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logg
   }
 
   def usable(): Boolean = {
-    if (path.toFile().exists()) {
+    if (path.toFile.exists()) {
       updateValues(time.milliseconds())
     } else {
-      logger.debug(s"disabling IO metrics collection because ${path} does not exist.")
+      logger.debug(s"disabling IO metrics collection because $path does not exist.")
       false
     }
   }

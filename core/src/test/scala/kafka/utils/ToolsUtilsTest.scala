@@ -22,8 +22,8 @@ import java.util.Collections
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.internals.IntGaugeSuite
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters._

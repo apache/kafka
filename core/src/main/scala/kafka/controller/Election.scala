@@ -28,6 +28,7 @@ object Election {
   private def leaderForOffline(partition: TopicPartition,
                                leaderAndIsrOpt: Option[LeaderAndIsr],
                                uncleanLeaderElectionEnabled: Boolean,
+                               isLeaderRecoverySupported: Boolean,
                                controllerContext: ControllerContext): ElectionResult = {
 
     val assignment = controllerContext.partitionReplicaAssignment(partition)
@@ -40,7 +41,14 @@ object Election {
         val newLeaderAndIsrOpt = leaderOpt.map { leader =>
           val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
           else List(leader)
-          leaderAndIsr.newLeaderAndIsr(leader, newIsr)
+
+          if (!isr.contains(leader) && isLeaderRecoverySupported) {
+            // The new leader is not in the old ISR so mark the partition a RECOVERING
+            leaderAndIsr.newRecoveringLeaderAndIsr(leader, newIsr)
+          } else {
+            // Elect a new leader but keep the previous leader recovery state
+            leaderAndIsr.newLeaderAndIsr(leader, newIsr)
+          }
         }
         ElectionResult(partition, newLeaderAndIsrOpt, liveReplicas)
 
@@ -53,7 +61,8 @@ object Election {
    * Elect leaders for new or offline partitions.
    *
    * @param controllerContext Context with the current state of the cluster
-   * @param partitionsWithUncleanLeaderElectionState A sequence of tuples representing the partitions
+   * @param isLeaderRecoverySupported true leader recovery is support and should be set if election is unclean
+   * @param partitionsWithUncleanLeaderRecoveryState A sequence of tuples representing the partitions
    *                                                 that need election, their leader/ISR state, and whether
    *                                                 or not unclean leader election is enabled
    *
@@ -61,11 +70,12 @@ object Election {
    */
   def leaderForOffline(
     controllerContext: ControllerContext,
-    partitionsWithUncleanLeaderElectionState: Seq[(TopicPartition, Option[LeaderAndIsr], Boolean)]
+    isLeaderRecoverySupported: Boolean,
+    partitionsWithUncleanLeaderRecoveryState: Seq[(TopicPartition, Option[LeaderAndIsr], Boolean)]
   ): Seq[ElectionResult] = {
-    partitionsWithUncleanLeaderElectionState.map {
+    partitionsWithUncleanLeaderRecoveryState.map {
       case (partition, leaderAndIsrOpt, uncleanLeaderElectionEnabled) =>
-        leaderForOffline(partition, leaderAndIsrOpt, uncleanLeaderElectionEnabled, controllerContext)
+        leaderForOffline(partition, leaderAndIsrOpt, uncleanLeaderElectionEnabled, isLeaderRecoverySupported, controllerContext)
     }
   }
 

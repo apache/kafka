@@ -18,6 +18,7 @@
   "type": "response",
   "name": "OffsetDeleteResponse",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top-level error code, or 0 if there was no error." },
@@ -25,7 +26,7 @@
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "Topics", "type": "[]OffsetDeleteResponseTopic", "versions": "0+",
       "about": "The responses for each topic.", "fields": [
-        { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
+        { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
           "about": "The topic name." },
         { "name": "Partitions", "type": "[]OffsetDeleteResponsePartition", "versions": "0+",
           "about": "The responses for each partition in the topic.", "fields": [

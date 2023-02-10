@@ -39,7 +39,7 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     private List<Node> nodes;
 
     public ManualMetadataUpdater() {
-        this(new ArrayList<Node>(0));
+        this(new ArrayList<>(0));
     }
 
     public ManualMetadataUpdater(List<Node> nodes) {

@@ -21,6 +21,7 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 
@@ -32,7 +33,7 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 
 public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V>, StateStore {
-    private NavigableMap<K, List<KeyValue<Windowed<K>, V>>> sessions = new TreeMap<>();
+    private final NavigableMap<K, List<KeyValue<Windowed<K>, V>>> sessions = new TreeMap<>();
     private boolean open = true;
 
     public void put(final Windowed<K> sessionKey, final V value) {
@@ -40,6 +41,31 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
             sessions.put(sessionKey.key(), new ArrayList<>());
         }
         sessions.get(sessionKey.key()).add(KeyValue.pair(sessionKey, value));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> findSessions(K key, long earliestSessionEndTime, long latestSessionStartTime) {
+        throw new UnsupportedOperationException("Moved from Session Store. Implement if needed");
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFindSessions(K key, long earliestSessionEndTime, long latestSessionStartTime) {
+        throw new UnsupportedOperationException("Moved from Session Store. Implement if needed");
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> findSessions(K keyFrom, K keyTo, long earliestSessionEndTime, long latestSessionStartTime) {
+        throw new UnsupportedOperationException("Moved from Session Store. Implement if needed");
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFindSessions(K keyFrom, K keyTo, long earliestSessionEndTime, long latestSessionStartTime) {
+        throw new UnsupportedOperationException("Moved from Session Store. Implement if needed");
+    }
+
+    @Override
+    public V fetchSession(K key, long earliestSessionEndTime, long latestSessionStartTime) {
+        throw new UnsupportedOperationException("Moved from Session Store. Implement if needed");
     }
 
     @Override
@@ -54,14 +80,28 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(K key) {
         if (!open) {
             throw new InvalidStateStoreException("not open");
         }
-        if (sessions.subMap(from, true, to, true).isEmpty()) {
+        if (!sessions.containsKey(key)) {
+            return new KeyValueIteratorStub<>(Collections.emptyIterator());
+        }
+        return new KeyValueIteratorStub<>(sessions.descendingMap().get(key).iterator());
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom, final K keyTo) {
+        if (!open) {
+            throw new InvalidStateStoreException("not open");
+        }
+
+        NavigableMap<K, List<KeyValue<Windowed<K>, V>>> subSessionsMap = getSubSessionsMap(keyFrom, keyTo);
+
+        if (subSessionsMap.isEmpty()) {
             return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());
         }
-        final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = sessions.subMap(from, true,  to, true).values().iterator();
+        final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = subSessionsMap.values().iterator();
         return new KeyValueIteratorStub<>(
             new Iterator<KeyValue<Windowed<K>, V>>() {
 
@@ -87,11 +127,63 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
         );
     }
 
+    private NavigableMap<K, List<KeyValue<Windowed<K>, V>>> getSubSessionsMap(final K keyFrom, final K keyTo) {
+        final NavigableMap<K, List<KeyValue<Windowed<K>, V>>> subSessionsMap;
+        if (keyFrom == null && keyTo == null) { // fetch all
+            subSessionsMap = sessions;
+        } else if (keyFrom == null) {
+            subSessionsMap = sessions.headMap(keyTo, true);
+        } else if (keyTo == null) {
+            subSessionsMap = sessions.tailMap(keyFrom, true);
+        } else {
+            subSessionsMap = sessions.subMap(keyFrom, true, keyTo, true);
+        }
+        return subSessionsMap;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(K keyFrom, K keyTo) {
+        if (!open) {
+            throw new InvalidStateStoreException("not open");
+        }
+
+        NavigableMap<K, List<KeyValue<Windowed<K>, V>>> subSessionsMap = getSubSessionsMap(keyFrom, keyTo);
+
+        if (subSessionsMap.isEmpty()) {
+            return new KeyValueIteratorStub<>(Collections.emptyIterator());
+        }
+
+        final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = subSessionsMap.descendingMap().values().iterator();
+        return new KeyValueIteratorStub<>(
+            new Iterator<KeyValue<Windowed<K>, V>>() {
+
+                Iterator<KeyValue<Windowed<K>, V>> it;
+
+                @Override
+                public boolean hasNext() {
+                    while (it == null || !it.hasNext()) {
+                        if (!keysIterator.hasNext()) {
+                            return false;
+                        }
+                        it = keysIterator.next().iterator();
+                    }
+                    return true;
+                }
+
+                @Override
+                public KeyValue<Windowed<K>, V> next() {
+                    return it.next();
+                }
+            }
+        );
+    }
+
     @Override
     public String name() {
         return "";
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
 
@@ -115,6 +207,11 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     @Override
     public boolean isOpen() {
         return open;
+    }
+
+    @Override
+    public Position getPosition() {
+        throw new UnsupportedOperationException("Position handling not implemented");
     }
 
 

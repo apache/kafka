@@ -29,8 +29,10 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Attempt to recover a failed operation with retries and tolerance limits.
@@ -50,6 +52,9 @@ import java.util.concurrent.ThreadLocalRandom;
  * If it fails, this class does one of these two things: (1) if the failure occurred due to a tolerable exception, then
  * set appropriate error reason in the {@link ProcessingContext} and return null, or (2) if the exception is not tolerated,
  * then it is wrapped into a ConnectException and rethrown to the caller.
+ * <p>
+ *
+ * Instances of this class are thread safe.
  * <p>
  */
 public class RetryWithToleranceOperator implements AutoCloseable {
@@ -72,19 +77,31 @@ public class RetryWithToleranceOperator implements AutoCloseable {
 
     private long totalFailures = 0;
     private final Time time;
-    private ErrorHandlingMetrics errorHandlingMetrics;
+    private final ErrorHandlingMetrics errorHandlingMetrics;
+    private final CountDownLatch stopRequestedLatch;
+    private volatile boolean stopping;   // indicates whether the operator has been asked to stop retrying
 
-    protected ProcessingContext context = new ProcessingContext();
+    protected final ProcessingContext context;
 
     public RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
-                                      ToleranceType toleranceType, Time time) {
+                                      ToleranceType toleranceType, Time time, ErrorHandlingMetrics errorHandlingMetrics) {
+        this(errorRetryTimeout, errorMaxDelayInMillis, toleranceType, time, errorHandlingMetrics, new ProcessingContext(), new CountDownLatch(1));
+    }
+
+    RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
+                               ToleranceType toleranceType, Time time, ErrorHandlingMetrics errorHandlingMetrics,
+                               ProcessingContext context, CountDownLatch stopRequestedLatch) {
         this.errorRetryTimeout = errorRetryTimeout;
         this.errorMaxDelayInMillis = errorMaxDelayInMillis;
         this.errorToleranceType = toleranceType;
         this.time = time;
+        this.errorHandlingMetrics = errorHandlingMetrics;
+        this.context = context;
+        this.stopRequestedLatch = stopRequestedLatch;
+        this.stopping = false;
     }
 
-    public Future<Void> executeFailed(Stage stage, Class<?> executingClass,
+    public synchronized Future<Void> executeFailed(Stage stage, Class<?> executingClass,
                                       ConsumerRecord<byte[], byte[]> consumerRecord,
                                       Throwable error) {
 
@@ -101,6 +118,23 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         return errantRecordFuture;
     }
 
+    public synchronized Future<Void> executeFailed(Stage stage, Class<?> executingClass,
+                                                   SourceRecord sourceRecord,
+                                                   Throwable error) {
+
+        markAsFailed();
+        context.sourceRecord(sourceRecord);
+        context.currentContext(stage, executingClass);
+        context.error(error);
+        errorHandlingMetrics.recordFailure();
+        Future<Void> errantRecordFuture = context.report();
+        if (!withinToleranceLimits()) {
+            errorHandlingMetrics.recordError();
+            throw new ConnectException("Tolerance exceeded in Source Worker error handler", error);
+        }
+        return errantRecordFuture;
+    }
+
     /**
      * Execute the recoverable operation. If the operation is already in a failed state, then simply return
      * with the existing failure.
@@ -109,7 +143,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @param <V> return type of the result of the operation.
      * @return result of the operation
      */
-    public <V> V execute(Operation<V> operation, Stage stage, Class<?> executingClass) {
+    public synchronized <V> V execute(Operation<V> operation, Stage stage, Class<?> executingClass) {
         context.currentContext(stage, executingClass);
 
         if (context.failed()) {
@@ -139,7 +173,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     protected <V> V execAndRetry(Operation<V> operation) throws Exception {
         int attempt = 0;
         long startTime = time.milliseconds();
-        long deadline = startTime + errorRetryTimeout;
+        long deadline = (errorRetryTimeout >= 0) ? startTime + errorRetryTimeout : Long.MAX_VALUE;
         do {
             try {
                 attempt++;
@@ -147,16 +181,16 @@ public class RetryWithToleranceOperator implements AutoCloseable {
             } catch (RetriableException e) {
                 log.trace("Caught a retriable exception while executing {} operation with {}", context.stage(), context.executingClass());
                 errorHandlingMetrics.recordFailure();
-                if (checkRetry(startTime)) {
+                if (time.milliseconds() < deadline) {
                     backoff(attempt, deadline);
-                    if (Thread.currentThread().isInterrupted()) {
-                        log.trace("Thread was interrupted. Marking operation as failed.");
-                        context.error(e);
-                        return null;
-                    }
                     errorHandlingMetrics.recordRetry();
                 } else {
                     log.trace("Can't retry. start={}, attempt={}, deadline={}", startTime, attempt, deadline);
+                    context.error(e);
+                    return null;
+                }
+                if (stopping) {
+                    log.trace("Shutdown has been scheduled. Marking operation as failed.");
                     context.error(e);
                     return null;
                 }
@@ -168,13 +202,13 @@ public class RetryWithToleranceOperator implements AutoCloseable {
 
     /**
      * Execute a given operation multiple times (if needed), and tolerate certain exceptions.
+     * Visible for testing.
      *
      * @param operation the operation to be executed.
      * @param tolerated the class of exceptions which can be tolerated.
      * @param <V> The return type of the result of the operation.
      * @return the result of the operation
      */
-    // Visible for testing
     protected <V> V execAndHandleError(Operation<V> operation, Class<? extends Exception> tolerated) {
         try {
             V result = execAndRetry(operation);
@@ -208,7 +242,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     }
 
     @SuppressWarnings("fallthrough")
-    public boolean withinToleranceLimits() {
+    public synchronized boolean withinToleranceLimits() {
         switch (errorToleranceType) {
             case NONE:
                 if (totalFailures > 0) return false;
@@ -219,27 +253,36 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         }
     }
 
-    // Visible for testing
-    boolean checkRetry(long startTime) {
-        return (time.milliseconds() - startTime) < errorRetryTimeout;
+    // For source connectors that want to skip kafka producer errors.
+    // They cannot use withinToleranceLimits() as no failure may have actually occurred prior to the producer failing
+    // to write to kafka.
+    public ToleranceType getErrorToleranceType() {
+        return errorToleranceType;
     }
 
-    // Visible for testing
+    /**
+     * Do an exponential backoff bounded by {@link #RETRIES_DELAY_MIN_MS} and {@link #errorMaxDelayInMillis}
+     * which can be exited prematurely if {@link #triggerStop()} is called or if the thread is interrupted.
+     * Visible for testing.
+     * @param attempt the number indicating which backoff attempt it is (beginning with 1)
+     * @param deadline the time in milliseconds until when retries can be attempted
+     */
     void backoff(int attempt, long deadline) {
         int numRetry = attempt - 1;
         long delay = RETRIES_DELAY_MIN_MS << numRetry;
         if (delay > errorMaxDelayInMillis) {
             delay = ThreadLocalRandom.current().nextLong(errorMaxDelayInMillis);
         }
-        if (delay + time.milliseconds() > deadline) {
-            delay = deadline - time.milliseconds();
+        long currentTime = time.milliseconds();
+        if (delay + currentTime > deadline) {
+            delay = Math.max(0, deadline - currentTime);
         }
-        log.debug("Sleeping for {} millis", delay);
-        time.sleep(delay);
-    }
-
-    public void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
-        this.errorHandlingMetrics = errorHandlingMetrics;
+        log.debug("Sleeping for up to {} millis", delay);
+        try {
+            stopRequestedLatch.await(delay, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            return;
+        }
     }
 
     @Override
@@ -259,7 +302,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      *
      * @param reporters the error reporters (should not be null).
      */
-    public void reporters(List<ErrorReporter> reporters) {
+    public synchronized void reporters(List<ErrorReporter> reporters) {
         this.context.reporters(reporters);
     }
 
@@ -268,7 +311,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      *
      * @param preTransformRecord the source record
      */
-    public void sourceRecord(SourceRecord preTransformRecord) {
+    public synchronized void sourceRecord(SourceRecord preTransformRecord) {
         this.context.sourceRecord(preTransformRecord);
     }
 
@@ -277,14 +320,14 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      *
      * @param consumedMessage the record
      */
-    public void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
+    public synchronized void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
         this.context.consumerRecord(consumedMessage);
     }
 
     /**
      * @return true, if the last operation encountered an error; false otherwise
      */
-    public boolean failed() {
+    public synchronized boolean failed() {
         return this.context.failed();
     }
 
@@ -293,12 +336,23 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      *
      * @return the error encountered when processing the current stage
      */
-    public Throwable error() {
+    public synchronized Throwable error() {
         return this.context.error();
     }
 
+    /**
+     * This will stop any further retries for operations.
+     * This will also mark any ongoing operations that are currently backing off for retry as failed.
+     * This can be called from a separate thread to break out of retry/backoff loops in
+     * {@link #execAndRetry(Operation)}
+     */
+    public void triggerStop() {
+        stopping = true;
+        stopRequestedLatch.countDown();
+    }
+
     @Override
-    public void close() {
+    public synchronized void close() {
         this.context.close();
     }
 }

@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.junit.Test;
 
@@ -30,22 +30,23 @@ import static org.easymock.EasyMock.verify;
 public class SessionCacheFlushListenerTest {
     @Test
     public void shouldForwardKeyNewValueOldValueAndTimestamp() {
-        final InternalProcessorContext context = mock(InternalProcessorContext.class);
+        final InternalProcessorContext<Windowed<String>, Change<String>> context = mock(InternalProcessorContext.class);
         expect(context.currentNode()).andReturn(null).anyTimes();
         context.setCurrentNode(null);
         context.setCurrentNode(null);
         context.forward(
-            new Windowed<>("key", new SessionWindow(21L, 73L)),
-            new Change<>("newValue", "oldValue"),
-            To.all().withTimestamp(73L));
+            new Record<>(
+                new Windowed<>("key", new SessionWindow(21L, 73L)),
+                new Change<>("newValue", "oldValue"),
+                73L));
         expectLastCall();
         replay(context);
 
         new SessionCacheFlushListener<>(context).apply(
-            new Windowed<>("key", new SessionWindow(21L, 73L)),
-            "newValue",
-            "oldValue",
-            42L);
+            new Record<>(
+                new Windowed<>("key", new SessionWindow(21L, 73L)),
+                new Change<>("newValue", "oldValue"),
+                42L));
 
         verify(context);
     }

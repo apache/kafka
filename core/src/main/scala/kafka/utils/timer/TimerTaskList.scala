@@ -103,7 +103,7 @@ private[timer] class TimerTaskList(taskCounter: AtomicInteger) extends Delayed {
   }
 
   // Remove all task entries and apply the supplied function to each of them
-  def flush(f: (TimerTaskEntry)=>Unit): Unit = {
+  def flush(f: TimerTaskEntry => Unit): Unit = {
     synchronized {
       var head = root.next
       while (head ne root) {
@@ -129,9 +129,9 @@ private[timer] class TimerTaskList(taskCounter: AtomicInteger) extends Delayed {
 private[timer] class TimerTaskEntry(val timerTask: TimerTask, val expirationMs: Long) extends Ordered[TimerTaskEntry] {
 
   @volatile
-  var list: TimerTaskList = null
-  var next: TimerTaskEntry = null
-  var prev: TimerTaskEntry = null
+  var list: TimerTaskList = _
+  var next: TimerTaskEntry = _
+  var prev: TimerTaskEntry = _
 
   // if this timerTask is already held by an existing timer task entry,
   // setTimerTaskEntry will remove it.

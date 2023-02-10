@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkConnectorContext;
 import org.apache.kafka.connect.source.SourceConnectorContext;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
+import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
@@ -46,7 +48,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * failures, whether in initialization or after startup, are treated as fatal, which means that we will not attempt
  * to restart this connector instance after failure. What this means from a user perspective is that you must
  * use the /restart REST API to restart a failed task. This behavior is consistent with task failures.
- *
+ * <p>
  * Note that this class is NOT thread-safe.
  */
 public class WorkerConnector implements Runnable {
@@ -74,7 +76,8 @@ public class WorkerConnector implements Runnable {
     private volatile boolean cancelled; // indicates whether the Worker has cancelled the connector (e.g. because of slow shutdown)
 
     private State state;
-    private final OffsetStorageReader offsetStorageReader;
+    private final CloseableOffsetStorageReader offsetStorageReader;
+    private final ConnectorOffsetBackingStore offsetStore;
 
     public WorkerConnector(String connName,
                            Connector connector,
@@ -82,7 +85,8 @@ public class WorkerConnector implements Runnable {
                            CloseableConnectorContext ctx,
                            ConnectMetrics metrics,
                            ConnectorStatus.Listener statusListener,
-                           OffsetStorageReader offsetStorageReader,
+                           CloseableOffsetStorageReader offsetStorageReader,
+                           ConnectorOffsetBackingStore offsetStore,
                            ClassLoader loader) {
         this.connName = connName;
         this.config = connectorConfig.originalsStrings();
@@ -93,6 +97,7 @@ public class WorkerConnector implements Runnable {
         this.metrics = new ConnectorMetricsGroup(metrics, AbstractStatus.State.UNASSIGNED, statusListener);
         this.statusListener = this.metrics;
         this.offsetStorageReader = offsetStorageReader;
+        this.offsetStore = offsetStore;
         this.pendingTargetStateChange = new AtomicReference<>();
         this.pendingStateChangeCallback = new AtomicReference<>();
         this.shutdownLatch = new CountDownLatch(1);
@@ -110,14 +115,12 @@ public class WorkerConnector implements Runnable {
         LoggingContext.clear();
 
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
-            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
             String savedName = Thread.currentThread().getName();
             try {
                 Thread.currentThread().setName(THREAD_NAME_PREFIX + connName);
                 doRun();
             } finally {
                 Thread.currentThread().setName(savedName);
-                Plugins.compareAndSwapLoaders(savedLoader);
             }
         } finally {
             // In the rare case of an exception being thrown outside the doRun() method, or an
@@ -143,7 +146,6 @@ public class WorkerConnector implements Runnable {
                 if (pendingTargetStateChange.get() != null || stopping) {
                     // An update occurred before we entered the synchronized block; no big deal,
                     // just start the loop again until we've handled everything
-                    continue;
                 } else {
                     try {
                         wait();
@@ -166,6 +168,9 @@ public class WorkerConnector implements Runnable {
                 SinkConnectorConfig.validate(config);
                 connector.initialize(new WorkerSinkConnectorContext());
             } else {
+                Objects.requireNonNull(offsetStore, "Offset store cannot be null for source connectors");
+                Objects.requireNonNull(offsetStorageReader, "Offset reader cannot be null for source connectors");
+                offsetStore.start();
                 connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader));
             }
         } catch (Throwable t) {
@@ -272,8 +277,12 @@ public class WorkerConnector implements Runnable {
             state = State.FAILED;
             statusListener.onFailure(connName, t);
         } finally {
-            ctx.close();
-            metrics.close();
+            Utils.closeQuietly(ctx, "connector context for " + connName);
+            Utils.closeQuietly(metrics, "connector metrics for " + connName);
+            Utils.closeQuietly(offsetStorageReader, "offset reader for " + connName);
+            if (offsetStore != null) {
+                Utils.closeQuietly(offsetStore::stop, "offset backing store for " + connName);
+            }
         }
     }
 
@@ -282,7 +291,9 @@ public class WorkerConnector implements Runnable {
         // instance is being abandoned and we won't update the status on its behalf any more
         // after this since a new instance may be started soon
         statusListener.onShutdown(connName);
-        ctx.close();
+        Utils.closeQuietly(ctx, "connector context for " + connName);
+        // Preemptively close the offset reader in case the connector is blocked on an offset read.
+        Utils.closeQuietly(offsetStorageReader, "offset reader for " + connName);
         cancelled = true;
     }
 
@@ -471,6 +482,12 @@ public class WorkerConnector implements Runnable {
         public void onDeletion(String connector) {
             state = AbstractStatus.State.DESTROYED;
             delegate.onDeletion(connector);
+        }
+
+        @Override
+        public void onRestart(String connector) {
+            state = AbstractStatus.State.RESTARTING;
+            delegate.onRestart(connector);
         }
 
         boolean isUnassigned() {

@@ -45,8 +45,4 @@ object OffsetAndMetadata {
   def apply(offset: Long, metadata: String, commitTimestamp: Long, expireTimestamp: Long): OffsetAndMetadata = {
     OffsetAndMetadata(offset, Optional.empty(), metadata, commitTimestamp, Some(expireTimestamp))
   }
-
-  def apply(offset: Long, leaderEpoch: Optional[Integer], metadata: String, commitTimestamp: Long): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, leaderEpoch, metadata, commitTimestamp, None)
-  }
 }

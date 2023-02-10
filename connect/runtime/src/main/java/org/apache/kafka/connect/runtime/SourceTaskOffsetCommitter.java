@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.common.utils.ThreadUtils;
@@ -34,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * <p>
- * Manages offset commit scheduling and execution for SourceTasks.
+ * Manages offset commit scheduling and execution for {@link SourceTask}s.
  * </p>
  * <p>
  * Unlike sink tasks which directly manage their offset commits in the main poll() thread since
@@ -63,7 +64,7 @@ class SourceTaskOffsetCommitter {
     public SourceTaskOffsetCommitter(WorkerConfig config) {
         this(config, Executors.newSingleThreadScheduledExecutor(ThreadUtils.createThreadFactory(
                 SourceTaskOffsetCommitter.class.getSimpleName() + "-%d", false)),
-                new ConcurrentHashMap<ConnectorTaskId, ScheduledFuture<?>>());
+                new ConcurrentHashMap<>());
     }
 
     public void close(long timeoutMs) {
@@ -79,12 +80,9 @@ class SourceTaskOffsetCommitter {
 
     public void schedule(final ConnectorTaskId id, final WorkerSourceTask workerTask) {
         long commitIntervalMs = config.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
-        ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(new Runnable() {
-            @Override
-            public void run() {
-                try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
-                    commit(workerTask);
-                }
+        ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(() -> {
+            try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
+                commit(workerTask);
             }
         }, commitIntervalMs, commitIntervalMs, TimeUnit.MILLISECONDS);
         committers.put(id, commitFuture);
@@ -107,7 +105,13 @@ class SourceTaskOffsetCommitter {
         }
     }
 
-    private void commit(WorkerSourceTask workerTask) {
+    // Visible for testing
+    static void commit(WorkerSourceTask workerTask) {
+        if (!workerTask.shouldCommitOffsets()) {
+            log.trace("{} Skipping offset commit as there are no offsets that should be committed", workerTask);
+            return;
+        }
+
         log.debug("{} Committing offsets", workerTask);
         try {
             if (workerTask.commitOffsets()) {

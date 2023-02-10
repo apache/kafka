@@ -22,16 +22,18 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
-import org.apache.kafka.streams.processor.ConnectedStoreProvider;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Locale;
@@ -40,7 +42,7 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * Demonstrates, using a {@link Transformer} which combines the low-level Processor APIs with the high-level Kafka Streams DSL,
+ * Demonstrates, using a {@link Processor} implementing the low-level Processor APIs (replaces Transformer),
  * how to implement the WordCount program that computes a simple word occurrence histogram from an input text.
  * <p>
  * <strong>Note: This is simplified code that only works correctly for single partition input topics.
@@ -50,10 +52,9 @@ import java.util.concurrent.CountDownLatch;
  * represent lines of text; and the histogram output is written to topic "streams-wordcount-processor-output" where each record
  * is an updated count of a single word.
  * <p>
- * This example differs from {@link WordCountProcessorDemo} in that it uses a {@link Transformer} to define the word
- * count logic, and the topology is wired up through a {@link StreamsBuilder}, which more closely resembles the high-level DSL.
- * Additionally, the {@link TransformerSupplier} specifies the {@link StoreBuilder} that the {@link Transformer} needs
- * by implementing {@link ConnectedStoreProvider#stores()}.
+ * This example differs from {@link WordCountProcessorDemo} in that it uses a {@link ProcessorSupplier} to attach the Processor with the
+ * count logic to the Stream, and the topology is wired up through a {@link StreamsBuilder},
+ * which more closely resembles the high-level DSL (compared to the Topology builder approach, with Source, Processor, Sink).
  * <p>
  * Before running this example you must create the input topic and the output topic (e.g. via
  * {@code bin/kafka-topics.sh --create ...}), and write some data to the input topic (e.g. via
@@ -61,19 +62,16 @@ import java.util.concurrent.CountDownLatch;
  */
 public final class WordCountTransformerDemo {
 
-    static class MyTransformerSupplier implements TransformerSupplier<String, String, KeyValue<String, String>> {
+    static class MyProcessorSupplier implements ProcessorSupplier<String, String, String, String> {
 
         @Override
-        public Transformer<String, String, KeyValue<String, String>> get() {
-            return new Transformer<String, String, KeyValue<String, String>>() {
-                private ProcessorContext context;
+        public Processor<String, String, String, String> get() {
+            return new Processor<String, String, String, String>() {
                 private KeyValueStore<String, Integer> kvStore;
 
                 @Override
-                @SuppressWarnings("unchecked")
-                public void init(final ProcessorContext context) {
-                    this.context = context;
-                    this.context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
+                public void init(final ProcessorContext<String, String> context) {
+                    context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
                         try (final KeyValueIterator<String, Integer> iter = kvStore.all()) {
                             System.out.println("----------- " + timestamp + " ----------- ");
 
@@ -81,17 +79,16 @@ public final class WordCountTransformerDemo {
                                 final KeyValue<String, Integer> entry = iter.next();
 
                                 System.out.println("[" + entry.key + ", " + entry.value + "]");
-
-                                context.forward(entry.key, entry.value.toString());
+                                context.forward(new Record<>(entry.key, entry.value.toString(), timestamp));
                             }
                         }
                     });
-                    this.kvStore = (KeyValueStore<String, Integer>) context.getStateStore("Counts");
+                    this.kvStore = context.getStateStore("Counts");
                 }
 
                 @Override
-                public KeyValue<String, String> transform(final String dummy, final String line) {
-                    final String[] words = line.toLowerCase(Locale.getDefault()).split(" ");
+                public void process(final Record<String, String> record) {
+                    final String[] words = record.value().toLowerCase(Locale.getDefault()).split("\\W+");
 
                     for (final String word : words) {
                         final Integer oldValue = this.kvStore.get(word);
@@ -102,8 +99,6 @@ public final class WordCountTransformerDemo {
                             this.kvStore.put(word, oldValue + 1);
                         }
                     }
-
-                    return null;
                 }
 
                 @Override
@@ -120,22 +115,30 @@ public final class WordCountTransformerDemo {
         }
     }
 
-    public static void main(final String[] args) {
+    public static void main(final String[] args) throws IOException {
         final Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount-transformer");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        if (args != null && args.length > 0) {
+            try (final FileInputStream fis = new FileInputStream(args[0])) {
+                props.load(fis);
+            }
+            if (args.length > 1) {
+                System.out.println("Warning: Some command line arguments were ignored. This demo only accepts an optional configuration file.");
+            }
+        }
+        props.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount-transformer");
+        props.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.putIfAbsent(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+        props.putIfAbsent(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.putIfAbsent(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.<String, String>stream("streams-plaintext-input")
-            .transform(new MyTransformerSupplier())
-            .to("streams-wordcount-processor-output");
+                .process(new MyProcessorSupplier())
+                .to("streams-wordcount-processor-output");
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);

@@ -38,7 +38,7 @@ object DeleteTopicMetadata {
   */
 class DelayedDeleteTopics(delayMs: Long,
                           deleteMetadata: Seq[DeleteTopicMetadata],
-                          adminManager: AdminManager,
+                          adminManager: ZkAdminManager,
                           responseCallback: Map[String, Errors] => Unit)
   extends DelayedOperation(delayMs) {
 

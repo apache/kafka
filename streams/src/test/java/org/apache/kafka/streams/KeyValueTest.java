@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.streams;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class KeyValueTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     @Test
     public void shouldHaveSameEqualsAndHashCode() {

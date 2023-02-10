@@ -21,8 +21,8 @@ import kafka.consumer.BaseConsumerRecord
 import org.apache.kafka.common.record.{RecordBatch, TimestampType}
 
 import scala.jdk.CollectionConverters._
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.annotation.nowarn
 

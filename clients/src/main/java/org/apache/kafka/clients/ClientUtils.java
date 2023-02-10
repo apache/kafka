@@ -32,8 +32,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
@@ -106,18 +106,12 @@ public final class ClientUtils {
                 clientSaslMechanism, time, true, logContext);
     }
 
-    static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
-        InetAddress[] addresses = InetAddress.getAllByName(host);
-
-        switch (clientDnsLookup) {
-            case DEFAULT:
-                return Collections.singletonList(addresses[0]);
-            case USE_ALL_DNS_IPS:
-            case RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY:
-                return filterPreferredAddresses(addresses);
-        }
-
-        throw new IllegalStateException("Unhandled ClientDnsLookup instance: " + clientDnsLookup);
+    static List<InetAddress> resolve(String host, HostResolver hostResolver) throws UnknownHostException {
+        InetAddress[] addresses = hostResolver.resolve(host);
+        List<InetAddress> result = filterPreferredAddresses(addresses);
+        if (log.isDebugEnabled())
+            log.debug("Resolved host {} as {}", host, result.stream().map(i -> i.getHostAddress()).collect(Collectors.joining(",")));
+        return result;
     }
 
     /**

@@ -29,7 +29,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The interface for the {@link KafkaProducer}
@@ -51,6 +50,7 @@ public interface Producer<K, V> extends Closeable {
     /**
      * See {@link KafkaProducer#sendOffsetsToTransaction(Map, String)}
      */
+    @Deprecated
     void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                   String consumerGroupId) throws ProducerFencedException;
 
@@ -99,11 +99,6 @@ public interface Producer<K, V> extends Closeable {
      * See {@link KafkaProducer#close()}
      */
     void close();
-
-    @Deprecated
-    default void close(long timeout, TimeUnit unit) {
-        close(Duration.ofMillis(unit.toMillis(timeout)));
-    }
 
     /**
      * See {@link KafkaProducer#close(Duration)}

@@ -16,22 +16,22 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import org.apache.kafka.streams.processor.StateStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ProcessorTopology {
     private final Logger log = LoggerFactory.getLogger(ProcessorTopology.class);
 
-    private final List<ProcessorNode<?, ?>> processorNodes;
+    private final List<ProcessorNode<?, ?, ?, ?>> processorNodes;
     private final Map<String, SourceNode<?, ?>> sourceNodesByName;
     private final Map<String, SourceNode<?, ?>> sourceNodesByTopic;
     private final Map<String, SinkNode<?, ?>> sinksByTopic;
@@ -43,7 +43,7 @@ public class ProcessorTopology {
     private final List<StateStore> globalStateStores;
     private final Map<String, String> storeToChangelogTopic;
 
-    public ProcessorTopology(final List<ProcessorNode<?, ?>> processorNodes,
+    public ProcessorTopology(final List<ProcessorNode<?, ?, ?, ?>> processorNodes,
                              final Map<String, SourceNode<?, ?>> sourceNodesByTopic,
                              final Map<String, SinkNode<?, ?>> sinksByTopic,
                              final List<StateStore> stateStores,
@@ -59,7 +59,7 @@ public class ProcessorTopology {
         this.repartitionTopics = Collections.unmodifiableSet(repartitionTopics);
 
         this.terminalNodes = new HashSet<>();
-        for (final ProcessorNode<?, ?> node : processorNodes) {
+        for (final ProcessorNode<?, ?, ?, ?> node : processorNodes) {
             if (node.isTerminalNode()) {
                 terminalNodes.add(node.name());
             }
@@ -95,7 +95,7 @@ public class ProcessorTopology {
         return terminalNodes;
     }
 
-    public List<ProcessorNode<?, ?>> processors() {
+    public List<ProcessorNode<?, ?, ?, ?>> processors() {
         return processorNodes;
     }
 
@@ -142,34 +142,39 @@ public class ProcessorTopology {
         return false;
     }
 
-    public void updateSourceTopics(final Map<String, List<String>> sourceTopicsByName) {
-        if (!sourceTopicsByName.keySet().equals(sourceNodesByName.keySet())) {
-            log.error("Set of source nodes do not match: \n" +
-                "sourceNodesByName = {}\n" +
-                "sourceTopicsByName = {}",
-                sourceNodesByName.keySet(), sourceTopicsByName.keySet());
-            throw new IllegalStateException("Tried to update source topics but source nodes did not match");
-        }
+    public void updateSourceTopics(final Map<String, List<String>> allSourceTopicsByNodeName) {
         sourceNodesByTopic.clear();
-        for (final Map.Entry<String, List<String>> sourceEntry : sourceTopicsByName.entrySet()) {
-            final String nodeName = sourceEntry.getKey();
-            for (final String topic : sourceEntry.getValue()) {
+        for (final Map.Entry<String, SourceNode<?, ?>> sourceNodeEntry : sourceNodesByName.entrySet()) {
+            final String sourceNodeName = sourceNodeEntry.getKey();
+            final SourceNode<?, ?> sourceNode = sourceNodeEntry.getValue();
+
+            final List<String> updatedSourceTopics = allSourceTopicsByNodeName.get(sourceNodeName);
+            if (updatedSourceTopics == null) {
+                log.error("Unable to find source node {} in updated topics map {}",
+                          sourceNodeName, allSourceTopicsByNodeName);
+                throw new IllegalStateException("Node " + sourceNodeName + " not found in full topology");
+            }
+
+            log.trace("Updating source node {} with new topics {}", sourceNodeName, updatedSourceTopics);
+            for (final String topic : updatedSourceTopics) {
                 if (sourceNodesByTopic.containsKey(topic)) {
+                    log.error("Tried to subscribe topic {} to two nodes when updating topics from {}",
+                              topic, allSourceTopicsByNodeName);
                     throw new IllegalStateException("Topic " + topic + " was already registered to source node "
-                        + sourceNodesByTopic.get(topic).name());
+                                                        + sourceNodesByTopic.get(topic).name());
                 }
-                sourceNodesByTopic.put(topic, sourceNodesByName.get(nodeName));
+                sourceNodesByTopic.put(topic, sourceNode);
             }
         }
     }
 
-    private String childrenToString(final String indent, final List<ProcessorNode<?, ?>> children) {
+    private String childrenToString(final String indent, final List<? extends ProcessorNode<?, ?, ?, ?>> children) {
         if (children == null || children.isEmpty()) {
             return "";
         }
 
         final StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
-        for (final ProcessorNode<?, ?> child : children) {
+        for (final ProcessorNode<?, ?, ?, ?> child : children) {
             sb.append(child.name());
             sb.append(", ");
         }
@@ -177,7 +182,7 @@ public class ProcessorTopology {
         sb.append("]\n");
 
         // recursively print children
-        for (final ProcessorNode<?, ?> child : children) {
+        for (final ProcessorNode<?, ?, ?, ?> child : children) {
             sb.append(child.toString(indent)).append(childrenToString(indent, child.children()));
         }
         return sb.toString();
@@ -234,7 +239,7 @@ public class ProcessorTopology {
 
     // for testing only
     public Set<String> processorConnectedStateStores(final String processorName) {
-        for (final ProcessorNode<?, ?> node : processorNodes) {
+        for (final ProcessorNode<?, ?, ?, ?> node : processorNodes) {
             if (node.name().equals(processorName)) {
                 return node.stateStores;
             }

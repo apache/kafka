@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
  * this can be used to simulate connector or task failures. It works by passing a "mock mode"
  * through configuration from the system test. New mock behavior can be implemented either
  * in the connector or in the task by providing a new mode implementation.
- *
+ * <p>
  * At the moment, this connector only supports a single task and shares configuration between
  * the connector and its tasks.
  *
@@ -75,12 +75,9 @@ public class MockConnector extends Connector {
 
             log.debug("Started MockConnector with failure delay of {} ms", delayMs);
             executor = Executors.newSingleThreadScheduledExecutor();
-            executor.schedule(new Runnable() {
-                @Override
-                public void run() {
-                    log.debug("Triggering connector failure");
-                    context.raiseError(new RuntimeException());
-                }
+            executor.schedule(() -> {
+                log.debug("Triggering connector failure");
+                context.raiseError(new RuntimeException());
             }, delayMs, TimeUnit.MILLISECONDS);
         }
     }

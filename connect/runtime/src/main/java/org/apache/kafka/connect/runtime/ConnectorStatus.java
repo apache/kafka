@@ -39,7 +39,7 @@ public class ConnectorStatus extends AbstractStatus<String> {
          * Invoked from the Connector using {@link org.apache.kafka.connect.connector.ConnectorContext#raiseError(Exception)}
          * or if either {@link org.apache.kafka.connect.connector.Connector#start(java.util.Map)} or
          * {@link org.apache.kafka.connect.connector.Connector#stop()} throw an exception.
-         * Note that no shutdown event will follow after the task has been failed.
+         * Note that no shutdown event will follow after the connector has been failed.
          * @param connector The connector name
          * @param cause Error raised from the connector.
          */
@@ -69,5 +69,10 @@ public class ConnectorStatus extends AbstractStatus<String> {
          */
         void onDeletion(String connector);
 
+        /**
+         * Invoked when the connector is restarted asynchronously by the herder on processing a restart request.
+         * @param connector The connector name
+         */
+        void onRestart(String connector);
     }
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 
@@ -34,13 +35,17 @@ public interface StateManager {
      * (e.g., when it conflicts with the names of internal topics, like the checkpoint file name)
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback);
+    void registerStore(final StateStore store,
+                       final StateRestoreCallback stateRestoreCallback,
+                       final CommitCallback checkpoint);
 
     StateStore getStore(final String name);
 
     void flush();
 
-    void checkpoint(final Map<TopicPartition, Long> offsets);
+    void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets);
+
+    void checkpoint();
 
     Map<TopicPartition, Long> changelogOffsets();
 

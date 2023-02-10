@@ -29,7 +29,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -37,9 +36,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
@@ -66,9 +63,6 @@ import static org.hamcrest.core.IsEqual.equalTo;
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
 public abstract class AbstractJoinIntegrationTest {
-    @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
-
     @Rule
     public final TemporaryFolder testFolder = new TemporaryFolder(TestUtils.tempDirectory());
 
@@ -111,6 +105,17 @@ public abstract class AbstractJoinIntegrationTest {
         new Input<>(INPUT_TOPIC_LEFT, "D")
     );
 
+    private final List<Input<String>> leftInput = Arrays.asList(
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_LEFT, "A"),
+        new Input<>(INPUT_TOPIC_LEFT, "B"),
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_LEFT, "C"),
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_LEFT, "D")
+    );
+
+
     final ValueJoiner<String, String, String> valueJoiner = (value1, value2) -> value1 + "-" + value2;
 
     final boolean cacheEnabled;
@@ -121,26 +126,18 @@ public abstract class AbstractJoinIntegrationTest {
 
     @BeforeClass
     public static void setupConfigsAndUtils() {
-
         STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
     }
 
     void prepareEnvironment() throws InterruptedException {
-        CLUSTER.createTopics(INPUT_TOPIC_LEFT, INPUT_TOPIC_RIGHT, OUTPUT_TOPIC);
-
         if (!cacheEnabled) {
-            STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+            STREAMS_CONFIG.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         }
 
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath());
-    }
-    @After
-    public void cleanup() throws InterruptedException {
-        CLUSTER.deleteAllTopicsAndWait(120000);
     }
 
     void runTestWithDriver(final List<List<TestRecord<Long, String>>> expectedResult) {
@@ -202,7 +199,7 @@ public abstract class AbstractJoinIntegrationTest {
             }
 
             final TestRecord<Long, String> updatedExpectedFinalResult =
-                new TestRecord<Long, String>(
+                new TestRecord<>(
                     expectedFinalResult.key(),
                     expectedFinalResult.value(),
                     null,
@@ -214,6 +211,31 @@ public abstract class AbstractJoinIntegrationTest {
 
             if (storeName != null) {
                 checkQueryableStore(storeName, updatedExpectedFinalResult, driver);
+            }
+        }
+    }
+
+    void runSelfJoinTestWithDriver(final List<List<TestRecord<Long, String>>> expectedResult) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(STREAMS_CONFIG), STREAMS_CONFIG)) {
+            final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
+            final TestOutputTopic<Long, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC, new LongDeserializer(), new StringDeserializer());
+
+            final long firstTimestamp = time.milliseconds();
+            long eventTimestamp = firstTimestamp;
+            final Iterator<List<TestRecord<Long, String>>> resultIterator = expectedResult.iterator();
+            for (final Input<String> singleInputRecord : leftInput) {
+                left.pipeInput(singleInputRecord.record.key, singleInputRecord.record.value, ++eventTimestamp);
+
+                final List<TestRecord<Long, String>> expected = resultIterator.next();
+                if (expected != null) {
+                    final List<TestRecord<Long, String>> updatedExpected = new LinkedList<>();
+                    for (final TestRecord<Long, String> record : expected) {
+                        updatedExpected.add(new TestRecord<>(record.key(), record.value(), null, firstTimestamp + record.timestamp()));
+                    }
+
+                    final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
+                    assertThat(output, equalTo(updatedExpected));
+                }
             }
         }
     }

@@ -13,4 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from util import kafkatest_version, is_version, is_int, is_int_with_prefix, node_is_reachable, validate_delivery
+from .util import kafkatest_version, is_version, is_int, is_int_with_prefix, node_is_reachable, validate_delivery

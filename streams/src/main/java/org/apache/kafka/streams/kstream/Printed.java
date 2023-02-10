@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 
 import java.io.IOException;
@@ -63,7 +64,7 @@ public class Printed<K, V> implements NamedOperation<Printed<K, V>> {
      */
     public static <K, V> Printed<K, V> toFile(final String filePath) {
         Objects.requireNonNull(filePath, "filePath can't be null");
-        if (filePath.trim().isEmpty()) {
+        if (Utils.isBlank(filePath)) {
             throw new TopologyException("filePath can't be an empty string");
         }
         try {

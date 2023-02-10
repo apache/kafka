@@ -40,6 +40,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class CompositeReadOnlySessionStoreTest {
@@ -75,8 +76,9 @@ public class CompositeReadOnlySessionStoreTest {
 
     @Test
     public void shouldReturnEmptyIteratorIfNoData() {
-        final KeyValueIterator<Windowed<String>, Long> result = sessionStore.fetch("b");
-        assertFalse(result.hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> result = sessionStore.fetch("b")) {
+            assertFalse(result.hasNext());
+        }
     }
 
     @Test
@@ -103,12 +105,13 @@ public class CompositeReadOnlySessionStoreTest {
         otherUnderlyingStore.put(new Windowed<>("foo", new SessionWindow(10, 10)), 10L);
         underlyingSessionStore.put(expectedKey, 1L);
 
-        final KeyValueIterator<Windowed<String>, Long> result = sessionStore.fetch("foo");
-        assertEquals(KeyValue.pair(expectedKey, 1L), result.next());
-        assertFalse(result.hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> result = sessionStore.fetch("foo")) {
+            assertEquals(KeyValue.pair(expectedKey, 1L), result.next());
+            assertFalse(result.hasNext());
+        }
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
         final QueryableStoreType<ReadOnlySessionStore<Object, Object>> queryableStoreType = QueryableStoreTypes.sessionStore();
         final CompositeReadOnlySessionStore<String, String> store =
@@ -118,7 +121,7 @@ public class CompositeReadOnlySessionStoreTest {
                 "whateva"
             );
 
-        store.fetch("a");
+        assertThrows(InvalidStateStoreException.class, () -> store.fetch("a"));
     }
 
     @Test
@@ -130,9 +133,9 @@ public class CompositeReadOnlySessionStoreTest {
         } catch (final InvalidStateStoreException e) { }
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionIfFetchingNullKey() {
-        sessionStore.fetch(null);
+        assertThrows(NullPointerException.class, () -> sessionStore.fetch(null));
     }
 
     @Test
@@ -143,21 +146,52 @@ public class CompositeReadOnlySessionStoreTest {
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
         secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
         final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toList(sessionStore.fetch("a", "b"));
-        assertThat(results.size(), equalTo(2));
+        assertThat(results, equalTo(Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldFetchKeyRangeAcrossStoresWithNullKeyFrom() {
+        final ReadOnlySessionStoreStub<String, Long> secondUnderlying = new
+            ReadOnlySessionStoreStub<>();
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
+        secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
+        final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toList(sessionStore.fetch(null, "b"));
+        assertThat(results, equalTo(Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
+    }
+
+    @Test
+    public void shouldFetchKeyRangeAcrossStoresWithNullKeyTo() {
+        final ReadOnlySessionStoreStub<String, Long> secondUnderlying = new
+            ReadOnlySessionStoreStub<>();
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
+        secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
+        final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toList(sessionStore.fetch("a", null));
+        assertThat(results, equalTo(Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
+    }
+
+    @Test
+    public void shouldFetchKeyRangeAcrossStoresWithNullKeyFromKeyTo() {
+        final ReadOnlySessionStoreStub<String, Long> secondUnderlying = new
+            ReadOnlySessionStoreStub<>();
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
+        secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
+        final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toList(sessionStore.fetch(null, null));
+        assertThat(results, equalTo(Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
+    }
+
+    @Test
     public void shouldThrowNPEIfKeyIsNull() {
-        underlyingSessionStore.fetch(null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNPEIfFromKeyIsNull() {
-        underlyingSessionStore.fetch(null, "a");
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNPEIfToKeyIsNull() {
-        underlyingSessionStore.fetch("a", null);
+        assertThrows(NullPointerException.class, () -> underlyingSessionStore.fetch(null));
     }
 }

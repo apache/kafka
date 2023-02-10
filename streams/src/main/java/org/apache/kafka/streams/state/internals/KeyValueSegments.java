@@ -32,7 +32,7 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
                      final long retentionPeriod,
                      final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
-        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name);
+        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
     }
 
     @Override
@@ -48,7 +48,7 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
                 throw new IllegalStateException("KeyValueSegment already exists. Possible concurrent access.");
             }
 
-            newSegment.openDB(context);
+            newSegment.openDB(context.appConfigs(), context.stateDir());
             return newSegment;
         }
     }

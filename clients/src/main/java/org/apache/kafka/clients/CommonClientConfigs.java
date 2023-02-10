@@ -17,12 +17,18 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -50,10 +56,7 @@ public class CommonClientConfigs {
                                                        + "(both the JVM and the OS cache DNS name lookups, however). "
                                                        + "If set to <code>resolve_canonical_bootstrap_servers_only</code>, "
                                                        + "resolve each bootstrap address into a list of canonical names. After "
-                                                       + "the bootstrap phase, this behaves the same as <code>use_all_dns_ips</code>. "
-                                                       + "If set to <code>default</code> (deprecated), attempt to connect to the "
-                                                       + "first IP address returned by the lookup, even if the lookup returns multiple "
-                                                       + "IP addresses.";
+                                                       + "the bootstrap phase, this behaves the same as <code>use_all_dns_ips</code>.";
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
@@ -78,9 +81,9 @@ public class CommonClientConfigs {
     public static final String RECONNECT_BACKOFF_MAX_MS_CONFIG = "reconnect.backoff.max.ms";
     public static final String RECONNECT_BACKOFF_MAX_MS_DOC = "The maximum amount of time in milliseconds to wait when reconnecting to a broker that has repeatedly failed to connect. If provided, the backoff per host will increase exponentially for each consecutive connection failure, up to this maximum. After calculating the backoff increase, 20% random jitter is added to avoid connection storms.";
 
-    @Deprecated
     public static final String RETRIES_CONFIG = "retries";
-    public static final String RETRIES_DOC = "(Deprecated) Setting a value greater than zero will cause the client to resend any request that fails with a potentially transient error.";
+    public static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any request that fails with a potentially transient error." +
+        " It is recommended to set the value to either zero or `MAX_VALUE` and use corresponding timeout parameters to control how long a client should retry a request.";
 
     public static final String RETRY_BACKOFF_MS_CONFIG = "retry.backoff.ms";
     public static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed request to a given topic partition. This avoids repeatedly sending requests in a tight loop under some failure scenarios.";
@@ -99,6 +102,10 @@ public class CommonClientConfigs {
 
     public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
 
+    @Deprecated
+    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = "auto.include.jmx.reporter";
+    public static final String AUTO_INCLUDE_JMX_REPORTER_DOC = "Deprecated. Whether to automatically include JmxReporter even if it's not listed in <code>metric.reporters</code>. This configuration will be removed in Kafka 4.0, users should instead include <code>org.apache.kafka.common.metrics.JmxReporter</code> in <code>metric.reporters</code> in order to enable the JmxReporter.";
+
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
     public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Valid values are: " +
         Utils.join(SecurityProtocol.names(), ", ") + ".";
@@ -110,7 +117,7 @@ public class CommonClientConfigs {
 
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG = "socket.connection.setup.timeout.max.ms";
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC = "The maximum amount of time the client will wait for the socket connection to be established. The connection setup timeout will increase exponentially for each consecutive connection failure up to this maximum. To avoid connection storms, a randomization factor of 0.2 will be applied to the timeout resulting in a random range between 20% below and 20% above the computed value.";
-    public static final Long DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS = 127 * 1000L;
+    public static final Long DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS = 30 * 1000L;
 
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = "connections.max.idle.ms";
     public static final String CONNECTIONS_MAX_IDLE_MS_DOC = "Close idle connections after the number of milliseconds specified by this config.";
@@ -120,6 +127,26 @@ public class CommonClientConfigs {
                                                          + "for the response of a request. If the response is not received before the timeout "
                                                          + "elapses the client will resend the request if necessary or fail the request if "
                                                          + "retries are exhausted.";
+
+    public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS = "default.list.key.serde.inner";
+    public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC = "Default inner class of list serde for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
+            + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
+
+    public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS = "default.list.value.serde.inner";
+    public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC = "Default inner class of list serde for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
+            + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
+
+    public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS = "default.list.key.serde.type";
+    public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC = "Default class for key that implements the <code>java.util.List</code> interface. "
+            + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
+            + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
+            + DEFAULT_LIST_KEY_SERDE_INNER_CLASS + "'";
+
+    public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS = "default.list.value.serde.type";
+    public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC = "Default class for value that implements the <code>java.util.List</code> interface. "
+            + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
+            + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
+            + DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + "'";
 
     public static final String GROUP_ID_CONFIG = "group.id";
     public static final String GROUP_ID_DOC = "A unique string that identifies the consumer group this consumer belongs to. This property is required if the consumer uses either the group management functionality by using <code>subscribe(topic)</code> or the Kafka-based offset management strategy.";
@@ -177,8 +204,9 @@ public class CommonClientConfigs {
     public static Map<String, Object> postProcessReconnectBackoffConfigs(AbstractConfig config,
                                                     Map<String, Object> parsedValues) {
         HashMap<String, Object> rval = new HashMap<>();
-        if ((!config.originals().containsKey(RECONNECT_BACKOFF_MAX_MS_CONFIG)) &&
-                config.originals().containsKey(RECONNECT_BACKOFF_MS_CONFIG)) {
+        Map<String, Object> originalConfig = config.originals();
+        if ((!originalConfig.containsKey(RECONNECT_BACKOFF_MAX_MS_CONFIG)) &&
+            originalConfig.containsKey(RECONNECT_BACKOFF_MS_CONFIG)) {
             log.debug("Disabling exponential reconnect backoff because {} is set, but {} is not.",
                     RECONNECT_BACKOFF_MS_CONFIG, RECONNECT_BACKOFF_MAX_MS_CONFIG);
             rval.put(RECONNECT_BACKOFF_MAX_MS_CONFIG, parsedValues.get(RECONNECT_BACKOFF_MS_CONFIG));
@@ -186,18 +214,34 @@ public class CommonClientConfigs {
         return rval;
     }
 
-    public static void warnIfDeprecatedDnsLookupValue(AbstractConfig config) {
-        String clientDnsLookupValue = config.getString(CLIENT_DNS_LOOKUP_CONFIG);
-        if (clientDnsLookupValue.equals(ClientDnsLookup.DEFAULT.toString()))
-            log.warn("Configuration '{}' with value '{}' is deprecated and will be removed in " +
-                "future version. Please use '{}' or another non-deprecated value.",
-                CLIENT_DNS_LOOKUP_CONFIG, ClientDnsLookup.DEFAULT,
-                ClientDnsLookup.USE_ALL_DNS_IPS);
+    public static void postValidateSaslMechanismConfig(AbstractConfig config) {
+        SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+        String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
+        if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
+            if (clientSaslMechanism == null || clientSaslMechanism.isEmpty()) {
+                throw new ConfigException(SaslConfigs.SASL_MECHANISM, null, "When the " + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG +
+                        " configuration enables SASL, mechanism must be non-null and non-empty string.");
+            }
+        }
     }
 
-    public static void warnIfDeprecatedRetriesValue(AbstractConfig config) {
-        if (config.originals().containsKey(RETRIES_CONFIG)) {
-            log.warn("Configuration '{}' is deprecated and will be removed in future version.", RETRIES_CONFIG);
+    public static List<MetricsReporter> metricsReporters(AbstractConfig config) {
+        return metricsReporters(Collections.emptyMap(), config);
+    }
+
+    public static List<MetricsReporter> metricsReporters(String clientId, AbstractConfig config) {
+        return metricsReporters(Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId), config);
+    }
+
+    public static List<MetricsReporter> metricsReporters(Map<String, Object> clientIdOverride, AbstractConfig config) {
+        List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
+                MetricsReporter.class, clientIdOverride);
+        if (config.getBoolean(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG) &&
+                reporters.stream().noneMatch(r -> JmxReporter.class.equals(r.getClass()))) {
+            JmxReporter jmxReporter = new JmxReporter();
+            jmxReporter.configure(config.originals(clientIdOverride));
+            reporters.add(jmxReporter);
         }
+        return reporters;
     }
 }
