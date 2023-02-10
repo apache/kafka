@@ -31,7 +31,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitAsyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -217,7 +217,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync() {
-        final ApplicationEvent commitEvent = new CommitApplicationEvent();
+        final ApplicationEvent commitEvent = new CommitAsyncEvent();
         eventHandler.add(commitEvent);
     }
 
@@ -396,10 +396,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(final Duration timeout) {
-        final CommitApplicationEvent commitEvent = new CommitApplicationEvent();
-        eventHandler.add(commitEvent);
+        final CommitAsyncEvent commitAsyncEvent = new CommitAsyncEvent();
+        eventHandler.add(commitAsyncEvent);
 
-        final CompletableFuture<Void> commitFuture = commitEvent.future();
+        final CompletableFuture<Void> commitFuture = commitAsyncEvent.future();
         try {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (final TimeoutException e) {
@@ -470,16 +470,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     public ConsumerRecords<K, V> poll(long timeout) {
         throw new KafkaException("method not implemented");
-    }
-
-    /**
-     * A stubbed ApplicationEvent for demonstration purpose
-     */
-    private class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
-
-        public CommitApplicationEvent() {
-            super(Type.COMMIT);
-        }
     }
 
     private static <K, V> ClusterResourceListeners configureClusterResourceListeners(

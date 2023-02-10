@@ -20,7 +20,7 @@ import org.apache.kafka.clients.consumer.internals.SerializedRecordWrapper;
 
 import java.util.List;
 
-public class PollFetchEvent<K, V> extends CompletableApplicationEvent<List<SerializedRecordWrapper>> {
+public class PollFetchEvent extends CompletableApplicationEvent<List<SerializedRecordWrapper>> {
 
     public PollFetchEvent() {
         super(Type.POLL_FETCH);

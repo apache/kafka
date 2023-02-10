@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class PollRequestEvent extends ApplicationEvent {
+public class UpdateAssignmentMetadataEvent extends CompletableApplicationEvent<Void> {
 
-    public PollRequestEvent() {
-        super(Type.POLL_REQUEST);
+    public UpdateAssignmentMetadataEvent() {
+        super(Type.UPDATE_ASSIGNMENT_METADATA);
     }
 
 }
