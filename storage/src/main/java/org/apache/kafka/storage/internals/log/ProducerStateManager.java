@@ -136,7 +136,7 @@ public class ProducerStateManager {
         this.maxTransactionTimeoutMs = maxTransactionTimeoutMs;
         this.producerStateManagerConfig = producerStateManagerConfig;
         this.time = time;
-        log = new LogContext("[ProducerStateManager partition=" + topicPartition + ")").logger(ProducerStateManager.class);
+        log = new LogContext("[ProducerStateManager partition=" + topicPartition + "]").logger(ProducerStateManager.class);
         snapshots = loadSnapshots();
     }
 
@@ -267,7 +267,7 @@ public class ProducerStateManager {
     }
 
     /**
-     * Get a copy of the active producers
+     * Get an unmodifiable map of active producers.
      */
     public Map<Long, ProducerStateEntry> activeProducers() {
         return Collections.unmodifiableMap(producers);
@@ -365,7 +365,8 @@ public class ProducerStateManager {
      */
     public void update(ProducerAppendInfo appendInfo) {
         if (appendInfo.producerId() == RecordBatch.NO_PRODUCER_ID)
-            throw new IllegalArgumentException("Invalid producer id " + appendInfo.producerId() + " passed to update " + "for partition" + topicPartition);
+            throw new IllegalArgumentException("Invalid producer id " + appendInfo.producerId() + " passed to update "
+                    + "for partition" + topicPartition);
 
         log.trace("Updated producer {} state to {}", appendInfo.producerId(), appendInfo);
         ProducerStateEntry updatedEntry = appendInfo.toEntry();
@@ -516,7 +517,8 @@ public class ProducerStateManager {
     public void completeTxn(CompletedTxn completedTxn) {
         TxnMetadata txnMetadata = ongoingTxns.remove(completedTxn.firstOffset);
         if (txnMetadata == null)
-            throw new IllegalArgumentException("Attempted to complete transaction " + completedTxn + " on partition " + topicPartition + "which was not started");
+            throw new IllegalArgumentException("Attempted to complete transaction " + completedTxn + " on partition "
+                    + topicPartition + " which was not started");
 
         txnMetadata.lastOffset = OptionalLong.of(completedTxn.lastOffset);
         unreplicatedTxns.put(completedTxn.firstOffset, txnMetadata);
@@ -524,10 +526,10 @@ public class ProducerStateManager {
     }
 
     /**
-     * Deletes the producer snapshot files until the given offset(exclusive) in a thread safe manner.
+     * Deletes the producer snapshot files until the given offset (exclusive) in a thread safe manner.
      *
      * @param offset offset number
-     * @throws IOException if any IOException while deleting the files.
+     * @throws IOException if any IOException occurs while deleting the files.
      */
     public void deleteSnapshotsBefore(long offset) throws IOException {
         for (SnapshotFile snapshot : snapshots.subMap(0L, offset).values()) {
@@ -593,7 +595,8 @@ public class ProducerStateManager {
             long crc = struct.getUnsignedInt(CRC_FIELD);
             long computedCrc = Crc32C.compute(buffer, PRODUCER_ENTRIES_OFFSET, buffer.length - PRODUCER_ENTRIES_OFFSET);
             if (crc != computedCrc)
-                throw new CorruptSnapshotException("Snapshot is corrupt (CRC is no longer valid). " + "Stored crc: " + crc + ". Computed crc: " + computedCrc);
+                throw new CorruptSnapshotException("Snapshot is corrupt (CRC is no longer valid). Stored crc: " + crc
+                        + ". Computed crc: " + computedCrc);
 
             Object[] producerEntryFields = struct.getArray(PRODUCER_ENTRIES_FIELD);
             List<ProducerStateEntry> entries = new ArrayList<>(producerEntryFields.length);

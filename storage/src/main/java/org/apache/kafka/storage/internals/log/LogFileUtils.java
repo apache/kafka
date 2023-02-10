@@ -20,7 +20,15 @@ import java.io.File;
 import java.text.NumberFormat;
 
 public final class LogFileUtils {
+
+    /**
+     * Suffix of a producer snapshot file
+     */
     public static final String PRODUCER_SNAPSHOT_FILE_SUFFIX = ".snapshot";
+
+    /**
+     * Suffix for a file that is scheduled to be deleted
+     */
     public static final String DELETED_FILE_SUFFIX = ".deleted";
 
     private LogFileUtils() {
@@ -41,12 +49,12 @@ public final class LogFileUtils {
      * Returns a File instance with parent directory as logDir and the file name as producer snapshot file for the
      * given offset.
      *
-     * @param logDir parent directory for the snapshot file
-     * @param offset offset number for the snapshot file
+     * @param logDir The directory in which the log will reside
+     * @param offset The last offset (exclusive) included in the snapshot
      * @return a File instance for producer snapshot.
      */
     public static File producerSnapshotFile(File logDir, long offset) {
-        return new File(logDir, filenamePrefixFromOffset(offset) + LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
+        return new File(logDir, filenamePrefixFromOffset(offset) + PRODUCER_SNAPSHOT_FILE_SUFFIX);
     }
 
     /**

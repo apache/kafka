@@ -29,7 +29,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Utils}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CompletedTxn, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, TxnMetadata}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CompletedTxn, LogFileUtils, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, TxnMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{mock, when}
@@ -1021,9 +1021,9 @@ class ProducerStateManagerTest {
     // the broker shutdown cleanly and emitted a snapshot file larger than the base offset of the active segment.
 
     // Create 3 snapshot files at different offsets.
-    Files.createFile(UnifiedLog.producerSnapshotFile(logDir, 5).toPath) // not stray
-    Files.createFile(UnifiedLog.producerSnapshotFile(logDir, 2).toPath) // stray
-    Files.createFile(UnifiedLog.producerSnapshotFile(logDir, 42).toPath) // not stray
+    Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 5).toPath) // not stray
+    Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 2).toPath) // stray
+    Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 42).toPath) // not stray
 
     // claim that we only have one segment with a base offset of 5
     stateManager.removeStraySnapshots(Collections.singletonList(5))
@@ -1041,9 +1041,9 @@ class ProducerStateManagerTest {
     // Snapshots associated with an offset in the list of segment base offsets should remain.
 
     // Create 3 snapshot files at different offsets.
-    Files.createFile(UnifiedLog.producerSnapshotFile(logDir, 5).toPath) // stray
-    Files.createFile(UnifiedLog.producerSnapshotFile(logDir, 2).toPath) // stray
-    Files.createFile(UnifiedLog.producerSnapshotFile(logDir, 42).toPath) // not stray
+    Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 5).toPath) // stray
+    Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 2).toPath) // stray
+    Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 42).toPath) // not stray
 
     stateManager.removeStraySnapshots(Collections.singletonList(42))
     assertEquals(Seq(42L), ProducerStateManager.listSnapshotFiles(logDir).asScala.map(_.offset).sorted)
@@ -1056,11 +1056,11 @@ class ProducerStateManagerTest {
    */
   @Test
   def testRemoveAndMarkSnapshotForDeletion(): Unit = {
-    Files.createFile(UnifiedLog.producerSnapshotFile(logDir, 5).toPath)
+    Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 5).toPath)
     val manager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs, producerStateManagerConfig, time)
     assertTrue(manager.latestSnapshotOffset.isPresent)
     val snapshot = manager.removeAndMarkSnapshotForDeletion(5).get
-    assertTrue(snapshot.file.toPath.toString.endsWith(UnifiedLog.DeletedFileSuffix))
+    assertTrue(snapshot.file.toPath.toString.endsWith(LogFileUtils.DELETED_FILE_SUFFIX))
     assertTrue(!manager.latestSnapshotOffset.isPresent)
   }
 
@@ -1073,7 +1073,7 @@ class ProducerStateManagerTest {
    */
   @Test
   def testRemoveAndMarkSnapshotForDeletionAlreadyDeleted(): Unit = {
-    val file = UnifiedLog.producerSnapshotFile(logDir, 5)
+    val file = LogFileUtils.producerSnapshotFile(logDir, 5)
     Files.createFile(file.toPath)
     val manager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs, producerStateManagerConfig, time)
     assertTrue(manager.latestSnapshotOffset.isPresent)
@@ -1095,7 +1095,7 @@ class ProducerStateManagerTest {
     // Truncate the last snapshot
     val latestSnapshotOffset = stateManager.latestSnapshotOffset
     assertEquals(OptionalLong.of(2L), latestSnapshotOffset)
-    val snapshotToTruncate = UnifiedLog.producerSnapshotFile(logDir, latestSnapshotOffset.getAsLong)
+    val snapshotToTruncate = LogFileUtils.producerSnapshotFile(logDir, latestSnapshotOffset.getAsLong)
     val channel = FileChannel.open(snapshotToTruncate.toPath, StandardOpenOption.WRITE)
     try {
       makeFileCorrupt(channel)

@@ -679,15 +679,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }.toSeq
   }
 
-  private[log] def activeProducersWithLastSequence: Map[Long, Int] = lock synchronized {
+  private[log] def activeProducersWithLastSequence: mutable.Map[Long, Int] = lock synchronized {
     val result = mutable.Map[Long, Int]()
     producerStateManager.activeProducers.forEach { case (producerId, producerIdEntry) =>
       result.put(producerId.toLong, producerIdEntry.lastSeq)
     }
-    result.toMap
+    result
   }
 
-  private[log] def lastRecordsOfActiveProducers: Map[Long, LastRecord] = lock synchronized {
+  private[log] def lastRecordsOfActiveProducers: mutable.Map[Long, LastRecord] = lock synchronized {
     val result = mutable.Map[Long, LastRecord]()
     producerStateManager.activeProducers.forEach { case (producerId, producerIdEntry) =>
       val lastDataOffset = if (producerIdEntry.lastDataOffset >= 0) Some(producerIdEntry.lastDataOffset) else None
@@ -696,7 +696,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         producerIdEntry.producerEpoch)
       result.put(producerId.toLong, lastRecord)
     }
-    result.toMap
+    result
   }
 
   /**
@@ -1861,11 +1861,7 @@ object UnifiedLog extends Logging {
 
   val TimeIndexFileSuffix = LocalLog.TimeIndexFileSuffix
 
-  val ProducerSnapshotFileSuffix = ".snapshot"
-
   val TxnIndexFileSuffix = LocalLog.TxnIndexFileSuffix
-
-  val DeletedFileSuffix = LocalLog.DeletedFileSuffix
 
   val CleanedFileSuffix = LocalLog.CleanedFileSuffix
 
@@ -1952,15 +1948,6 @@ object UnifiedLog extends Logging {
 
   def deleteFileIfExists(file: File, suffix: String = ""): Unit =
     Files.deleteIfExists(new File(file.getPath + suffix).toPath)
-
-  /**
-   * Construct a producer id snapshot file using the given offset.
-   *
-   * @param dir    The directory in which the log will reside
-   * @param offset The last offset (exclusive) included in the snapshot
-   */
-  def producerSnapshotFile(dir: File, offset: Long): File =
-    new File(dir, LocalLog.filenamePrefixFromOffset(offset) + ProducerSnapshotFileSuffix)
 
   def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.transactionIndexFile(dir, offset, suffix)
 

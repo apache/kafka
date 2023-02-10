@@ -24,7 +24,7 @@ import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageManager}
-import org.apache.kafka.storage.internals.log.{LazyIndex, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{LazyIndex, LogFileUtils, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
 
 import java.io.{Closeable, File, InputStream}
 import java.nio.file.{Files, Path}
@@ -62,9 +62,9 @@ class Entry(val offsetIndex: LazyIndex[OffsetIndex], val timeIndex: LazyIndex[Ti
       if (!markedForCleanup) {
         markedForCleanup = true
         Array(offsetIndex, timeIndex).foreach(index =>
-          index.renameTo(new File(Utils.replaceSuffix(index.file.getPath, "", UnifiedLog.DeletedFileSuffix))))
+          index.renameTo(new File(Utils.replaceSuffix(index.file.getPath, "", LogFileUtils.DELETED_FILE_SUFFIX))))
         txnIndex.renameTo(new File(Utils.replaceSuffix(txnIndex.file.getPath, "",
-          UnifiedLog.DeletedFileSuffix)))
+          LogFileUtils.DELETED_FILE_SUFFIX)))
       }
     }
   }
@@ -122,7 +122,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
 
     // Delete any .deleted files remained from the earlier run of the broker.
     Files.list(cacheDir.toPath).forEach((path: Path) => {
-      if (path.endsWith(UnifiedLog.DeletedFileSuffix)) {
+      if (path.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) {
         Files.deleteIfExists(path)
       }
     })
