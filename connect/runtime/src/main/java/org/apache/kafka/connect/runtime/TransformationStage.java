@@ -26,7 +26,7 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
  * Wrapper for a {@link Transformation} and corresponding optional {@link Predicate }
  * which applies the transformation when the {@link Predicate} is true (or false, according to {@code negate}).
  * If no {@link Predicate} is provided, the transformation will be unconditionally applied.
- * @param <R>
+ * @param <R> The type of record (must be an implementation of {@link ConnectRecord})
  */
 public class TransformationStage<R extends ConnectRecord<R>> implements AutoCloseable {
 
@@ -61,7 +61,7 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
 
     @Override
     public void close() {
-        Utils.closeQuietly(delegate, "transformation");
+        Utils.closeQuietly(delegate, "predicated transformation");
         Utils.closeQuietly(predicate, "predicate");
     }
 
