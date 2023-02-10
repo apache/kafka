@@ -44,6 +44,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static joptsimple.util.RegexMatcher.regex;
+
 public class ConsumerPerformance {
     private static final Random RND = new Random();
 
@@ -122,6 +124,11 @@ public class ConsumerPerformance {
                                 long lastMessagesRead,
                                 long joinStartMs,
                                 long joinTimeMsInSingleRound) {
+        long numMessages = options.numMessages();
+        long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
+        long reportingIntervalMs = options.reportingIntervalMs();
+        boolean showDetailedStats = options.showDetailedStats();
+        SimpleDateFormat dateFormat = options.dateFormat();
         consumer.subscribe(options.topic(),
             new ConsumerPerfRebListener(joinGroupTimeMs, joinStartMs, joinTimeMsInSingleRound));
 
@@ -130,7 +137,7 @@ public class ConsumerPerformance {
         long lastReportTimeMs = currentTimeMs;
         long lastConsumedTimeMs = currentTimeMs;
 
-        while (messagesRead < options.numMessages() && currentTimeMs - lastConsumedTimeMs <= options.recordFetchTimeoutMs()) {
+        while (messagesRead < numMessages && currentTimeMs - lastConsumedTimeMs <= recordFetchTimeoutMs) {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
             currentTimeMs = System.currentTimeMillis();
             if (!records.isEmpty())
@@ -141,10 +148,10 @@ public class ConsumerPerformance {
                     bytesRead += record.key().length;
                 if (record.value() != null)
                     bytesRead += record.value().length;
-                if (currentTimeMs - lastReportTimeMs >= options.reportingIntervalMs()) {
-                    if (options.showDetailedStats())
+                if (currentTimeMs - lastReportTimeMs >= reportingIntervalMs) {
+                    if (showDetailedStats)
                         printConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
-                            lastReportTimeMs, currentTimeMs, options.dateFormat(), joinTimeMsInSingleRound);
+                            lastReportTimeMs, currentTimeMs, dateFormat, joinTimeMsInSingleRound);
                     joinTimeMsInSingleRound = 0L;
                     lastReportTimeMs = currentTimeMs;
                     lastMessagesRead = messagesRead;
@@ -153,9 +160,9 @@ public class ConsumerPerformance {
             }
         }
 
-        if (messagesRead < options.numMessages())
+        if (messagesRead < numMessages)
             System.out.printf("WARNING: Exiting before consuming the expected number of messages: timeout (%d ms) exceeded. " +
-                "You can use the --timeout option to increase the timeout.%n", options.recordFetchTimeoutMs());
+                "You can use the --timeout option to increase the timeout.%n", recordFetchTimeoutMs);
         totalMessagesRead.set(messagesRead);
         totalBytesRead.set(bytesRead);
     }
@@ -245,7 +252,7 @@ public class ConsumerPerformance {
         private final OptionSpec<Void> showDetailedStatsOpt;
         private final OptionSpec<Long> recordFetchTimeoutOpt;
         private final OptionSpec<Long> numMessagesOpt;
-        private final OptionSpec<Integer> reportingIntervalOpt;
+        private final OptionSpec<Long> reportingIntervalOpt;
         private final OptionSpec<String> dateFormatOpt;
         private final OptionSpec<Void> hideHeaderOpt;
 
@@ -307,11 +314,12 @@ public class ConsumerPerformance {
                 .withRequiredArg()
                 .describedAs("count")
                 .ofType(Long.class);
-            reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in milliseconds at which to print progress info.")
+            reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in milliseconds at which to print progress info (default: 5s).")
                 .withRequiredArg()
+                .withValuesConvertedBy(regex("^\\d+$"))
                 .describedAs("interval_ms")
-                .ofType(Integer.class)
-                .defaultsTo(5000);
+                .ofType(Long.class)
+                .defaultsTo(5_000L);
             dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
                     "See java.text.SimpleDateFormat for options.")
                 .withRequiredArg()
@@ -367,8 +375,8 @@ public class ConsumerPerformance {
             return options.valueOf(numMessagesOpt);
         }
 
-        public int reportingIntervalMs() {
-            int value = options.valueOf(reportingIntervalOpt);
+        public long reportingIntervalMs() {
+            long value = options.valueOf(reportingIntervalOpt);
             if (value <= 0)
                 throw new IllegalArgumentException("Reporting interval must be greater than 0.");
             return value;
