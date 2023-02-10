@@ -38,14 +38,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class AddPartitionsToTxnResponseTest {
 
     protected final int throttleTimeMs = 10;
+
     protected final String topicOne = "topic1";
     protected final int partitionOne = 1;
     protected final Errors errorOne = Errors.COORDINATOR_NOT_AVAILABLE;
     protected final Errors errorTwo = Errors.NOT_COORDINATOR;
     protected final String topicTwo = "topic2";
     protected final int partitionTwo = 2;
-    protected TopicPartition tp1 = new TopicPartition(topicOne, partitionOne);
-    protected TopicPartition tp2 = new TopicPartition(topicTwo, partitionTwo);
+    protected final TopicPartition tp1 = new TopicPartition(topicOne, partitionOne);
+    protected final TopicPartition tp2 = new TopicPartition(topicTwo, partitionTwo);
+
     protected Map<Errors, Integer> expectedErrorCounts;
     protected Map<TopicPartition, Errors> errorsMap;
 

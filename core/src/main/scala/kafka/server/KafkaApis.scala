@@ -2424,6 +2424,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val transactionalId = transaction.transactionalId()
       val partitionsToAdd = partitionsByTransaction.get(transactionalId).asScala
       
+      // Versions < 4 come from clients and must be authorized to write for the given transaction and for the given topics.
       if (version < 4 && !authHelper.authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId)) {
         responses.add(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
         maybeSendResponse()
@@ -2432,8 +2433,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
         val authorizedPartitions = mutable.Set[TopicPartition]()
 
-        val authorizedTopics = authHelper.filterByAuthorized(request.context, WRITE, TOPIC,
-          partitionsToAdd.filterNot(tp => Topic.isInternal(tp.topic)))(_.topic)
+        val authorizedTopics = if (version < 4) authHelper.filterByAuthorized(request.context, WRITE, TOPIC,
+          partitionsToAdd.filterNot(tp => Topic.isInternal(tp.topic)))(_.topic) else partitionsToAdd.map(_.topic).toSet
         for (topicPartition <- partitionsToAdd) {
           if (!authorizedTopics.contains(topicPartition.topic))
             unauthorizedTopicErrors += topicPartition -> Errors.TOPIC_AUTHORIZATION_FAILED
