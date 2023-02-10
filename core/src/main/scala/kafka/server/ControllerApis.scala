@@ -819,6 +819,7 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   def handleAlterUserScramCredentials(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val alterRequest = request.body[AlterUserScramCredentialsRequest]
+    authHelper.authorizeClusterOperation(request, ALTER)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       OptionalLong.empty())
     controller.alterUserScramCredentials(context, alterRequest.data)

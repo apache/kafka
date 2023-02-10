@@ -21,12 +21,10 @@ import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.clients.admin.ScramMechanism;
 
-// import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-// import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 

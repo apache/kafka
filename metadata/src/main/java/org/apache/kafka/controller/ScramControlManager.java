@@ -34,7 +34,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -141,9 +140,9 @@ public class ScramControlManager {
         @Override
         public String toString() {
             return "ScramCredentialValue" +
-                "(salt=" + Base64.getEncoder().encodeToString(salt) +
-                ", saltedPassword=" + Base64.getEncoder().encodeToString(saltedPassword) +
-                ", iterations=" + iterations +
+                "(salt=" + "[hidden]" +
+                ", saltedPassword=" + "[hidden]" +
+                ", iterations=" + "[hidden]" +
                 ")";
         }
     }

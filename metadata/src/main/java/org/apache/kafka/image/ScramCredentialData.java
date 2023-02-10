@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
-import org.apache.kafka.common.utils.Bytes;
 
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
@@ -111,9 +110,9 @@ public final class ScramCredentialData {
     @Override
     public String toString() {
         return "ScramCredentialData" +
-            "(salt=" + Bytes.wrap(salt).toString() +
-            ", saltedPassword=" + Bytes.wrap(saltedPassword).toString() +
-            ", iterations=" + iterations +
+            "(salt=" + "[hidden]" +
+            ", saltedPassword=" + "[hidden]" +
+            ", iterations=" + "[hidden]" +
             ")";
     }
 }
