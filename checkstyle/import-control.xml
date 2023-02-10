@@ -478,6 +478,7 @@
       <allow pkg="scala" />
       <allow class="kafka.zk.EmbeddedZookeeper"/>
       <allow pkg="com.fasterxml.jackson" />
+      <allow pkg="org.apache.kafka.tools" />
     </subpackage>
 
     <subpackage name="test">
@@ -485,7 +486,7 @@
     </subpackage>
 
     <subpackage name="tools">
-      <allow pkg="kafka.tools" />
+      <allow pkg="org.apache.kafka.tools" />
     </subpackage>
 
     <subpackage name="state">
