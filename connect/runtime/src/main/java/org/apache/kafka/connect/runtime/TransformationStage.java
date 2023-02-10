@@ -23,8 +23,9 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
 /**
- * Decorator for a {@link Transformation} which applies the delegate only when a
- * {@link Predicate} is true (or false, according to {@code negate}).
+ * Wrapper for a {@link Transformation} and corresponding optional {@link Predicate }
+ * which applies the transformation when the {@link Predicate} is true (or false, according to {@code negate}).
+ * If no {@link Predicate} is provided, the transformation will be unconditionally applied.
  * @param <R>
  */
 public class TransformationStage<R extends ConnectRecord<R>> implements AutoCloseable {
