@@ -151,10 +151,10 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<TransformationStage<SinkRecord>> transformations = config.transformations();
-        assertEquals(1, transformations.size());
-        final TransformationStage<SinkRecord> xform = transformations.get(0);
-        assertEquals(42, xform.apply(DUMMY_RECORD).kafkaPartition().intValue());
+        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages();
+        assertEquals(1, transformationStages.size());
+        final TransformationStage<SinkRecord> stage = transformationStages.get(0);
+        assertEquals(42, stage.apply(DUMMY_RECORD).kafkaPartition().intValue());
     }
 
     @Test
@@ -179,10 +179,10 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.b.type", SimpleTransformation.class.getName());
         props.put("transforms.b.magic.number", "84");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<TransformationStage<SinkRecord>> transformations = config.transformations();
-        assertEquals(2, transformations.size());
-        assertEquals(42, transformations.get(0).apply(DUMMY_RECORD).kafkaPartition().intValue());
-        assertEquals(84, transformations.get(1).apply(DUMMY_RECORD).kafkaPartition().intValue());
+        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages();
+        assertEquals(2, transformationStages.size());
+        assertEquals(42, transformationStages.get(0).apply(DUMMY_RECORD).kafkaPartition().intValue());
+        assertEquals(84, transformationStages.get(1).apply(DUMMY_RECORD).kafkaPartition().intValue());
     }
 
     @Test
@@ -250,7 +250,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("predicates", "my-pred");
         props.put("predicates.my-pred.type", TestPredicate.class.getName());
         props.put("predicates.my-pred.int", "84");
-        assertPredicatedTransform(props, true);
+        assertTransformationStageWithPredicate(props, true);
     }
 
     @Test
@@ -265,7 +265,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("predicates", "my-pred");
         props.put("predicates.my-pred.type", TestPredicate.class.getName());
         props.put("predicates.my-pred.int", "84");
-        assertPredicatedTransform(props, false);
+        assertTransformationStageWithPredicate(props, false);
     }
 
     @Test
@@ -284,22 +284,22 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         assertTrue(e.getMessage().contains("Predicate is abstract and cannot be created"));
     }
 
-    private void assertPredicatedTransform(Map<String, String> props, boolean expectedNegated) {
+    private void assertTransformationStageWithPredicate(Map<String, String> props, boolean expectedNegated) {
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<TransformationStage<SinkRecord>> transformations = config.transformations();
-        assertEquals(1, transformations.size());
-        TransformationStage<SinkRecord> predicated = transformations.get(0);
+        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages();
+        assertEquals(1, transformationStages.size());
+        TransformationStage<SinkRecord> stage = transformationStages.get(0);
 
-        assertEquals(expectedNegated, predicated.negate);
+        assertEquals(expectedNegated, stage.negate);
 
-        assertFalse(predicated.predicate.test(DUMMY_RECORD));
-        assertEquals(expectedNegated ? 42 : 0, predicated.apply(DUMMY_RECORD).kafkaPartition().intValue());
+        assertFalse(stage.predicate.test(DUMMY_RECORD));
+        assertEquals(expectedNegated ? 42 : 0, stage.apply(DUMMY_RECORD).kafkaPartition().intValue());
 
         SinkRecord matchingRecord = DUMMY_RECORD.newRecord(null, 84, null, null, null, null, 0L);
-        assertTrue(predicated.predicate.test(matchingRecord));
-        assertEquals(expectedNegated ? 84 : 42, predicated.apply(matchingRecord).kafkaPartition().intValue());
+        assertTrue(stage.predicate.test(matchingRecord));
+        assertEquals(expectedNegated ? 84 : 42, stage.apply(matchingRecord).kafkaPartition().intValue());
 
-        predicated.close();
+        stage.close();
     }
 
     @Test

@@ -48,17 +48,17 @@ public class TransformationStageTest {
         Predicate<SourceRecord> predicate = mock(Predicate.class);
         when(predicate.test(any())).thenReturn(predicateResult);
         @SuppressWarnings("unchecked")
-        Transformation<SourceRecord> predicatedTransform = mock(Transformation.class);
-        when(predicatedTransform.apply(any())).thenReturn(transformed);
-        TransformationStage<SourceRecord> pt = new TransformationStage<>(
+        Transformation<SourceRecord> transformation = mock(Transformation.class);
+        when(transformation.apply(any())).thenReturn(transformed);
+        TransformationStage<SourceRecord> stage = new TransformationStage<>(
                 predicate,
                 negate,
-                predicatedTransform);
+                transformation);
 
-        assertEquals(expectedResult, pt.apply(initial));
+        assertEquals(expectedResult, stage.apply(initial));
 
-        pt.close();
+        stage.close();
         verify(predicate).close();
-        verify(predicatedTransform).close();
+        verify(transformation).close();
     }
 }

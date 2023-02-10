@@ -516,9 +516,9 @@ public class TopicCreationTest {
         topicCreation.addTopic(FOO_TOPIC);
         assertFalse(topicCreation.isTopicCreationRequired(FOO_TOPIC));
 
-        List<TransformationStage<SourceRecord>> transformations = sourceConfig.transformations();
-        assertEquals(1, transformations.size());
-        TransformationStage<SourceRecord> xform = transformations.get(0);
+        List<TransformationStage<SourceRecord>> transformationStages = sourceConfig.transformationStages();
+        assertEquals(1, transformationStages.size());
+        TransformationStage<SourceRecord> xform = transformationStages.get(0);
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
         assertEquals(Schema.Type.INT8, transformed.valueSchema().type());
         assertEquals((byte) 42, transformed.value());
@@ -623,15 +623,15 @@ public class TopicCreationTest {
         assertEquals(barPartitions, barTopicSpec.numPartitions());
         assertThat(barTopicSpec.configs(), is(barTopicProps));
 
-        List<TransformationStage<SourceRecord>> transformations = sourceConfig.transformations();
-        assertEquals(2, transformations.size());
+        List<TransformationStage<SourceRecord>> transformationStages = sourceConfig.transformationStages();
+        assertEquals(2, transformationStages.size());
 
-        TransformationStage<SourceRecord> castXForm = transformations.get(0);
+        TransformationStage<SourceRecord> castXForm = transformationStages.get(0);
         SourceRecord transformed = castXForm.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
         assertEquals(Schema.Type.INT8, transformed.valueSchema().type());
         assertEquals((byte) 42, transformed.value());
 
-        TransformationStage<SourceRecord> regexRouterXForm = transformations.get(1);
+        TransformationStage<SourceRecord> regexRouterXForm = transformationStages.get(1);
         transformed = regexRouterXForm.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
         assertEquals("prefix-topic", transformed.topic());
     }

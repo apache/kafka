@@ -124,7 +124,7 @@ public class ErrorHandlingTaskTest {
     @Mock
     Plugins plugins;
     @Mock
-    TransformationStage<?> transformation;
+    TransformationStage<?> transformationStage;
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
 
@@ -504,9 +504,9 @@ public class ErrorHandlingTaskTest {
         FaultyPassthrough<SinkRecord> faultyPassthrough = new FaultyPassthrough<>();
         @SuppressWarnings("unchecked")
         Class<? extends Transformation<?>> value = (Class<? extends Transformation<?>>) (Class<?>) FaultyPassthrough.class;
-        OngoingStubbing<Class<? extends Transformation<?>>> transformClass = when(transformation.transformClass());
+        OngoingStubbing<Class<? extends Transformation<?>>> transformClass = when(transformationStage.transformClass());
         transformClass.thenReturn(value);
-        when(transformation.apply(any())).thenAnswer(invocation -> faultyPassthrough.apply(invocation.getArgument(0)));
+        when(transformationStage.apply(any())).thenAnswer(invocation -> faultyPassthrough.apply(invocation.getArgument(0)));
     }
 
     private void createSinkTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
@@ -516,7 +516,7 @@ public class ErrorHandlingTaskTest {
         oo.put("schemas.enable", "false");
         converter.configure(oo);
         @SuppressWarnings("unchecked")
-        TransformationStage<SinkRecord> transform = (TransformationStage<SinkRecord>) transformation;
+        TransformationStage<SinkRecord> transform = (TransformationStage<SinkRecord>) transformationStage;
         TransformationChain<SinkRecord> sinkTransforms =
                 new TransformationChain<>(singletonList(transform), retryWithToleranceOperator);
 
@@ -551,14 +551,14 @@ public class ErrorHandlingTaskTest {
         FaultyPassthrough<SourceRecord> faultyPassthrough = new FaultyPassthrough<>();
         @SuppressWarnings("unchecked")
         Class<? extends Transformation<?>> value = (Class<? extends Transformation<?>>) (Class<?>) FaultyPassthrough.class;
-        OngoingStubbing<Class<? extends Transformation<?>>> transformClass = when(transformation.transformClass());
+        OngoingStubbing<Class<? extends Transformation<?>>> transformClass = when(transformationStage.transformClass());
         transformClass.thenReturn(value);
-        when(transformation.apply(any())).thenAnswer(invocation -> faultyPassthrough.apply(invocation.getArgument(0)));
+        when(transformationStage.apply(any())).thenAnswer(invocation -> faultyPassthrough.apply(invocation.getArgument(0)));
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator, Converter converter) {
         @SuppressWarnings("unchecked")
-        TransformationStage<SourceRecord> transform = (TransformationStage<SourceRecord>) transformation;
+        TransformationStage<SourceRecord> transform = (TransformationStage<SourceRecord>) transformationStage;
         TransformationChain<SourceRecord> sourceTransforms =
                 new TransformationChain<>(singletonList(transform), retryWithToleranceOperator);
 
