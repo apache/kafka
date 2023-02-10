@@ -861,14 +861,21 @@ public class MirrorConnectorsIntegrationBaseTest {
         TopicPartition checkpointTopicPartition = new TopicPartition(checkpointTopic, 0);
         try (Consumer<byte[], byte[]> backupConsumer = cluster.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
                 "auto.offset.reset", "earliest"), checkpointTopic)) {
-            Map<TopicPartition, Checkpoint> lastCheckpoints = new HashMap<>();
+            Map<String, Map<TopicPartition, Checkpoint>> checkpointsByGroup = new HashMap<>();
             long deadline = System.currentTimeMillis() + CHECKPOINT_DURATION_MS;
             do {
                 ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(Duration.ofSeconds(1L));
                 for (ConsumerRecord<byte[], byte[]> record : records) {
                     Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
+                    Map<TopicPartition, Checkpoint> lastCheckpoints = checkpointsByGroup.computeIfAbsent(
+                            checkpoint.consumerGroupId(),
+                            ignored -> new HashMap<>());
                     Checkpoint lastCheckpoint = lastCheckpoints.getOrDefault(checkpoint.topicPartition(), checkpoint);
-                    assertTrue(checkpoint.downstreamOffset() >= lastCheckpoint.downstreamOffset(), "Checkpoint was non-monotonic for " + checkpoint.topicPartition());
+                    assertTrue(checkpoint.downstreamOffset() >= lastCheckpoint.downstreamOffset(),
+                            "Checkpoint was non-monotonic for "
+                                    + checkpoint.consumerGroupId()
+                                    + ": "
+                                    + checkpoint.topicPartition());
                     lastCheckpoints.put(checkpoint.topicPartition(), checkpoint);
                 }
             } while (backupConsumer.currentLag(checkpointTopicPartition).orElse(1) > 0 && System.currentTimeMillis() < deadline);
