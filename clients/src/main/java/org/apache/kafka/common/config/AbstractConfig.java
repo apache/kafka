@@ -377,12 +377,12 @@ public class AbstractConfig {
     }
 
     /**
-     * Debug level log for any unused configurations
+     * Info level log for any unused configurations
      */
     public void logUnused() {
         Set<String> unusedkeys = unused();
         if (!unusedkeys.isEmpty()) {
-            log.debug("These configurations '{}' were supplied but are not used yet.", unusedkeys);
+            log.info("These configurations '{}' were supplied but are not used yet.", unusedkeys);
         }
     }
 
