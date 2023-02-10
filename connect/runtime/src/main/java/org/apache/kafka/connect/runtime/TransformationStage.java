@@ -32,9 +32,9 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
 
     static final String PREDICATE_CONFIG = "predicate";
     static final String NEGATE_CONFIG = "negate";
-    final Predicate<R> predicate;
-    final Transformation<R> delegate;
-    final boolean negate;
+    private final Predicate<R> predicate;
+    private final Transformation<R> delegate;
+    private final boolean negate;
 
     TransformationStage(Transformation<R> delegate) {
         this(null, false, delegate);

@@ -290,13 +290,9 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         assertEquals(1, transformationStages.size());
         TransformationStage<SinkRecord> stage = transformationStages.get(0);
 
-        assertEquals(expectedNegated, stage.negate);
-
-        assertFalse(stage.predicate.test(DUMMY_RECORD));
         assertEquals(expectedNegated ? 42 : 0, stage.apply(DUMMY_RECORD).kafkaPartition().intValue());
 
         SinkRecord matchingRecord = DUMMY_RECORD.newRecord(null, 84, null, null, null, null, 0L);
-        assertTrue(stage.predicate.test(matchingRecord));
         assertEquals(expectedNegated ? 84 : 42, stage.apply(matchingRecord).kafkaPartition().intValue());
 
         stage.close();
