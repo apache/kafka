@@ -47,7 +47,10 @@ final public class ProcessTerminatingFaultHandlerTest {
         };
 
         try {
-            ProcessTerminatingFaultHandler.exitingWithAction(action).handleFault("", null);
+            new ProcessTerminatingFaultHandler.Builder()
+                .setAction(action)
+                .build()
+                .handleFault("", null);
         } finally {
             Exit.resetExitProcedure();
         }
@@ -68,7 +71,11 @@ final public class ProcessTerminatingFaultHandlerTest {
         };
 
         try {
-            ProcessTerminatingFaultHandler.haltingWithAction(action).handleFault("", null);
+            new ProcessTerminatingFaultHandler.Builder()
+                .setHalt(true)
+                .setAction(action)
+                .build()
+                .handleFault("", null);
         } finally {
             Exit.resetHaltProcedure();
         }

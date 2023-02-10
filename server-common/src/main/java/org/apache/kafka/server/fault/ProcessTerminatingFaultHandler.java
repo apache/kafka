@@ -17,11 +17,10 @@
 
 package org.apache.kafka.server.fault;
 
+import java.util.Objects;
+import org.apache.kafka.common.utils.Exit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import org.apache.kafka.common.utils.Exit;
-
 
 /**
  * This is a fault handler which terminates the JVM process.
@@ -33,8 +32,8 @@ final public class ProcessTerminatingFaultHandler implements FaultHandler {
     private final boolean shouldHalt;
 
     private ProcessTerminatingFaultHandler(boolean shouldHalt, Runnable action) {
-        this.action = action;
         this.shouldHalt = shouldHalt;
+        this.action = action;
     }
 
     @Override
@@ -61,37 +60,36 @@ final public class ProcessTerminatingFaultHandler implements FaultHandler {
         return null;
     }
 
-    /**
-     * Same as {@code exitingWithAction} with a no-op action.
-     */
-    public static FaultHandler exiting() {
-        return exitingWithAction(() -> { });
-    }
+    public static final class Builder {
+        private boolean shouldHalt = false;
+        private Runnable action = () -> { };
 
-    /**
-     * Handle faults by running an action and calling {@code Exit.exit}.
-     *
-     * The default implementation of {@code Exit.exit} calls {@code Runtime.exit} which
-     * waits on all of the shutdown hooks executing.
-     */
-    public static FaultHandler exitingWithAction(Runnable action) {
-        return new ProcessTerminatingFaultHandler(false, action);
-    }
+        /**
+         * Set if halt or exit should be used.
+         *
+         * When {@code value} is true {@code Exit.exit} is called, otherwise {@code Exit.halt} is called.
+         *
+         * The default implementation of {@code Exit.exit} calls {@code Runtime.exit} which
+         * waits on all of the shutdown hooks executing.
+         *
+         * The default implementation of {@code Exit.halt} calls {@code Runtime.halt} which
+         * forcibly terminates the JVM.
+         */
+        public Builder setHalt(boolean value) {
+            shouldHalt = value;
+            return this;
+        }
 
-    /**
-     * Same as {@code haltingWithAction} with a no-op action.
-     */
-    public static FaultHandler halting() {
-        return haltingWithAction(() -> { });
-    }
+        /**
+         * Set the runnable to call when handling a fault.
+         */
+        public Builder setAction(Runnable action) {
+            this.action = Objects.requireNonNull(action);
+            return this;
+        }
 
-    /**
-     * Handle faults by running an action and calling {@code Exit.halt}.
-     *
-     * The default implementation of {@code Exit.halt} calls {@code Runtime.halt} which
-     * forcibly terminates the JVM.
-     */
-    public static FaultHandler haltingWithAction(Runnable action) {
-        return new ProcessTerminatingFaultHandler(true, action);
+        public ProcessTerminatingFaultHandler build() {
+            return new ProcessTerminatingFaultHandler(shouldHalt, action);
+        }
     }
 }
