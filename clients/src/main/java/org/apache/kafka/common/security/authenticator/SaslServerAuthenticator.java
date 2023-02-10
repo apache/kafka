@@ -685,13 +685,14 @@ public class SaslServerAuthenticator implements Authenticator {
 
             if (credentialExpirationMs != null || maxReauthSet) {
                 if (credentialExpirationMs == null)
-                    retvalSessionLifetimeMs = zeroIfNegative(connectionsMaxReauthMs);
+                    retvalSessionLifetimeMs = Utils.zeroIfNegative(connectionsMaxReauthMs);
                 else if (!maxReauthSet)
-                    retvalSessionLifetimeMs = zeroIfNegative(credentialExpirationMs - authenticationEndMs);
+                    retvalSessionLifetimeMs = Utils.zeroIfNegative(credentialExpirationMs - authenticationEndMs);
                 else
-                    retvalSessionLifetimeMs = zeroIfNegative(Math.min(credentialExpirationMs - authenticationEndMs, connectionsMaxReauthMs));
+                    retvalSessionLifetimeMs = Utils.zeroIfNegative(Math.min(credentialExpirationMs - authenticationEndMs, connectionsMaxReauthMs));
 
-                sessionExpirationTimeNanos = authenticationEndNanos + 1000 * 1000 * retvalSessionLifetimeMs;
+                sessionExpirationTimeNanos = Math.addExact(authenticationEndNanos, Utils.msToNs(retvalSessionLifetimeMs));
+
             }
 
             if (credentialExpirationMs != null) {
@@ -722,9 +723,5 @@ public class SaslServerAuthenticator implements Authenticator {
             long latencyNanos = authenticationEndNanos - reauthenticationBeginNanos;
             return latencyNanos == 0L ? 0L : Math.max(1L, Math.round(latencyNanos / 1000.0 / 1000.0));
         }
-
-        private long zeroIfNegative(long value) {
-            return Math.max(0L, value);
-        }        
     }
 }

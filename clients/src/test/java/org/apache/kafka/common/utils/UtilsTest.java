@@ -936,4 +936,19 @@ public class UtilsTest {
         assertEquals("foo.txt", Utils.replaceSuffix("foo", "", ".txt"));
     }
 
+    @Test
+    public void testZeroIfNegative() {
+        assertEquals(1, Utils.zeroIfNegative(1));
+        assertEquals(Long.MAX_VALUE, Utils.zeroIfNegative(Long.MAX_VALUE));
+        assertEquals(0, Utils.zeroIfNegative(0));
+        assertEquals(0, Utils.zeroIfNegative(-1));
+        assertEquals(0, Utils.zeroIfNegative(Long.MIN_VALUE));
+    }
+
+    @Test
+    public void testMsToNs() {
+        assertEquals(1000000, Utils.msToNs(1));
+        assertEquals(0, Utils.msToNs(0));
+        assertThrows(IllegalArgumentException.class, () -> Utils.msToNs(Long.MAX_VALUE));
+    }
 }

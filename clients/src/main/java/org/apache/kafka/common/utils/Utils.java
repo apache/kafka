@@ -1520,4 +1520,26 @@ public final class Utils {
             throw new IllegalArgumentException("Expected string to end with " + oldSuffix + " but string is " + str);
         return str.substring(0, str.length() - oldSuffix.length()) + newSuffix;
     }
+
+    /**
+     * Return the provided value or 0 if it's a negative value
+     * @param value the value to be calculated
+     * @return the provided value or 0 if it's a negative value
+     */
+    public static long zeroIfNegative(long value) {
+        return Math.max(0L, value);
+    }
+
+    /**
+     * convert millisecond to nanosecond, or throw exception if overflow
+     * @param timeMs the time in millisecond
+     * @return the converted nanosecond
+     */
+    public static long msToNs(long timeMs) {
+        try {
+            return Math.multiplyExact(1000 * 1000, timeMs);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Cannot convert " + timeMs + " millisecond to nanosecond due to arithmetic overflow", e);
+        }
+    }
 }
