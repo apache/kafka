@@ -65,7 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -83,6 +83,7 @@ class DefaultStateUpdaterTest {
     private final static TopicPartition TOPIC_PARTITION_A_0 = new TopicPartition("topicA", 0);
     private final static TopicPartition TOPIC_PARTITION_A_1 = new TopicPartition("topicA", 1);
     private final static TopicPartition TOPIC_PARTITION_B_0 = new TopicPartition("topicB", 0);
+    private final static TopicPartition TOPIC_PARTITION_B_1 = new TopicPartition("topicB", 1);
     private final static TopicPartition TOPIC_PARTITION_C_0 = new TopicPartition("topicC", 0);
     private final static TopicPartition TOPIC_PARTITION_D_0 = new TopicPartition("topicD", 0);
     private final static TaskId TASK_0_0 = new TaskId(0, 0);
@@ -91,7 +92,9 @@ class DefaultStateUpdaterTest {
     private final static TaskId TASK_1_0 = new TaskId(1, 0);
     private final static TaskId TASK_1_1 = new TaskId(1, 1);
     private final static TaskId TASK_A_0_0 = new TaskId(0, 0, "A");
+    private final static TaskId TASK_A_0_1 = new TaskId(0, 1, "A");
     private final static TaskId TASK_B_0_0 = new TaskId(0, 0, "B");
+    private final static TaskId TASK_B_0_1 = new TaskId(0, 1, "B");
 
     // need an auto-tick timer to work for draining with timeout
     private final Time time = new MockTime(1L);
@@ -1193,7 +1196,7 @@ class DefaultStateUpdaterTest {
             mkEntry(task1.id(), task1),
             mkEntry(task2.id(), task2)
         );
-        doNothing().doThrow(streamsException).when(changelogReader).restore(updatingTasks);
+        doReturn(0L).doThrow(streamsException).when(changelogReader).restore(updatingTasks);
         stateUpdater.start();
 
         stateUpdater.add(task1);
@@ -1224,10 +1227,10 @@ class DefaultStateUpdaterTest {
             mkEntry(task2.id(), task2),
             mkEntry(task3.id(), task3)
         );
-        doNothing()
+        doReturn(0L)
             .doThrow(streamsException1)
             .when(changelogReader).restore(updatingTasksBeforeFirstThrow);
-        doNothing()
+        doReturn(0L)
             .doThrow(streamsException2)
             .when(changelogReader).restore(updatingTasksBeforeSecondThrow);
         stateUpdater.start();
@@ -1257,7 +1260,7 @@ class DefaultStateUpdaterTest {
             mkEntry(task2.id(), task2),
             mkEntry(task3.id(), task3)
         );
-        doNothing().doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks);
+        doReturn(0L).doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks);
         stateUpdater.start();
 
         stateUpdater.add(task1);
@@ -1475,11 +1478,11 @@ class DefaultStateUpdaterTest {
             mkEntry(standbyTask1.id(), standbyTask1),
             mkEntry(standbyTask2.id(), standbyTask2)
         );
-        doNothing().doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks1);
+        doReturn(0L).doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks1);
         final Map<TaskId, Task> updatingTasks2 = mkMap(
             mkEntry(activeTask1.id(), activeTask1)
         );
-        doNothing().doThrow(streamsException).doReturn(0L).when(changelogReader).restore(updatingTasks2);
+        doReturn(0L).doThrow(streamsException).doReturn(0L).when(changelogReader).restore(updatingTasks2);
         stateUpdater.start();
         stateUpdater.add(standbyTask1);
         stateUpdater.add(activeTask1);
@@ -1537,18 +1540,13 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldRecordMetrics() throws Exception {
-        final StreamTask activeTask1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
-        final StreamTask activeTask2 = statefulTask(TASK_0_2, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
-        final StandbyTask standbyTask3 = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).inState(State.RUNNING).build();
-        final StandbyTask standbyTask4 = standbyTask(TASK_1_1, mkSet(TOPIC_PARTITION_D_0)).inState(State.RUNNING).build();
+        final StreamTask activeTask1 = statefulTask(TASK_A_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_B_0_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        final StandbyTask standbyTask3 = standbyTask(TASK_A_0_1, mkSet(TOPIC_PARTITION_A_1)).inState(State.RUNNING).build();
+        final StandbyTask standbyTask4 = standbyTask(TASK_B_0_1, mkSet(TOPIC_PARTITION_B_1)).inState(State.RUNNING).build();
         final Map<TaskId, Task> tasks1234 = mkMap(
             mkEntry(activeTask1.id(), activeTask1),
             mkEntry(activeTask2.id(), activeTask2),
-            mkEntry(standbyTask3.id(), standbyTask3),
-            mkEntry(standbyTask4.id(), standbyTask4)
-        );
-        final Map<TaskId, Task> tasks134 = mkMap(
-            mkEntry(activeTask1.id(), activeTask1),
             mkEntry(standbyTask3.id(), standbyTask3),
             mkEntry(standbyTask4.id(), standbyTask4)
         );
@@ -1557,10 +1555,10 @@ class DefaultStateUpdaterTest {
             mkEntry(standbyTask3.id(), standbyTask3)
         );
 
+        when(topologyMetadata.isPaused("B")).thenReturn(true);
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
         when(changelogReader.restore(tasks1234)).thenReturn(1L);
-        when(changelogReader.restore(tasks134)).thenReturn(1L);
         when(changelogReader.restore(tasks13)).thenReturn(1L);
         stateUpdater.start();
         stateUpdater.add(activeTask1);
@@ -1572,7 +1570,7 @@ class DefaultStateUpdaterTest {
         assertThat(metrics.metrics().size(), is(11));
 
         final Map<String, String> tagMap = new LinkedHashMap<>();
-        tagMap.put("thread-id", "state-updater");
+        tagMap.put("thread-id", "test-state-updater");
 
         MetricName metricName = new MetricName("restoring-active-tasks",
             "stream-state-metrics",
@@ -1582,7 +1580,7 @@ class DefaultStateUpdaterTest {
 
         metricName = new MetricName("restoring-standby-tasks",
             "stream-state-metrics",
-            "The number of active tasks currently undergoing restoration",
+            "The number of standby tasks currently undergoing restoration",
             tagMap);
         verifyMetric(metrics, metricName, is(1.0));
 

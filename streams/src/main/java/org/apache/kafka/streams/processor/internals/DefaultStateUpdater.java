@@ -22,9 +22,9 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -254,7 +254,7 @@ public class DefaultStateUpdater implements StateUpdater {
             task.markChangelogAsCorrupted(task.changelogPartitions());
 
             // we need to enforce a checkpoint that removes the corrupted partitions
-            task.maybeCheckpoint(true);
+            measureCheckpointLatency(() -> task.maybeCheckpoint(true));
         }
 
         private void handleStreamsException(final StreamsException streamsException) {
@@ -312,10 +312,10 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void removeUpdatingAndPausedTasks() {
             changelogReader.clear();
-            updatingTasks.forEach((id, task) -> {
+            measureCheckpointLatency(() -> updatingTasks.forEach((id, task) -> {
                 task.maybeCheckpoint(true);
                 removedTasks.add(task);
-            });
+            }));
             updatingTasks.clear();
             pausedTasks.forEach((id, task) -> {
                 removedTasks.add(task);
@@ -374,7 +374,7 @@ public class DefaultStateUpdater implements StateUpdater {
             final Task task;
             if (updatingTasks.containsKey(taskId)) {
                 task = updatingTasks.get(taskId);
-                task.maybeCheckpoint(true);
+                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
                 final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
                 changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
@@ -400,7 +400,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private void pauseTask(final Task task) {
             final TaskId taskId = task.id();
             // do not need to unregister changelog partitions for paused tasks
-            task.maybeCheckpoint(true);
+            measureCheckpointLatency(() -> task.maybeCheckpoint(true));
             pausedTasks.put(taskId, task);
             updatingTasks.remove(taskId);
             if (task.isActive()) {
@@ -434,7 +434,7 @@ public class DefaultStateUpdater implements StateUpdater {
                                               final Set<TopicPartition> restoredChangelogs) {
             final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
             if (restoredChangelogs.containsAll(changelogPartitions)) {
-                task.maybeCheckpoint(true);
+                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
                 changelogReader.unregister(changelogPartitions);
                 addToRestoredTasks(task);
                 updatingTasks.remove(task.id());
@@ -817,7 +817,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
             metricName = metrics.metricName("restoring-standby-tasks",
                 STATE_LEVEL_GROUP,
-                "The number of active tasks currently undergoing restoration",
+                "The number of standby tasks currently undergoing restoration",
                 threadLevelTags);
             metrics.addMetric(metricName, (config, now) -> getUpdatingStandbyTasks().size());
             allMetricNames.push(metricName);
@@ -837,15 +837,15 @@ public class DefaultStateUpdater implements StateUpdater {
             allMetricNames.push(metricName);
 
             this.idleRatioSensor = metrics.sensor("idle-ratio", RecordingLevel.INFO);
-            this.idleRatioSensor.add(new MetricName("idle-ratio", STATE_LEVEL_GROUP, IDLE_RATIO_DESCRIPTION, threadLevelTags), new Value());
+            this.idleRatioSensor.add(new MetricName("idle-ratio", STATE_LEVEL_GROUP, IDLE_RATIO_DESCRIPTION, threadLevelTags), new Avg());
             allSensorNames.add("idle-ratio");
 
             this.restoreRatioSensor = metrics.sensor("restore-ratio", RecordingLevel.INFO);
-            this.restoreRatioSensor.add(new MetricName("restore-ratio", STATE_LEVEL_GROUP, RESTORE_RATIO_DESCRIPTION, threadLevelTags), new Value());
+            this.restoreRatioSensor.add(new MetricName("restore-ratio", STATE_LEVEL_GROUP, RESTORE_RATIO_DESCRIPTION, threadLevelTags), new Avg());
             allSensorNames.add("restore-ratio");
 
             this.checkpointRatioSensor = metrics.sensor("checkpoint-ratio", RecordingLevel.INFO);
-            this.checkpointRatioSensor.add(new MetricName("checkpoint-ratio", STATE_LEVEL_GROUP, CHECKPOINT_RATIO_DESCRIPTION, threadLevelTags), new Value());
+            this.checkpointRatioSensor.add(new MetricName("checkpoint-ratio", STATE_LEVEL_GROUP, CHECKPOINT_RATIO_DESCRIPTION, threadLevelTags), new Avg());
             allSensorNames.add("checkpoint-ratio");
 
             this.restoreSensor = metrics.sensor("restore-records", RecordingLevel.INFO);
