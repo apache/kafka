@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.consumer.internals.AsyncConsumerForegroundState;
+import org.apache.kafka.clients.consumer.internals.asyncstate.ForegroundState;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SerializedRecordWrapper;
 import org.apache.kafka.clients.consumer.internals.events.AssignPartitionsEvent;
@@ -46,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
@@ -58,7 +59,7 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     private EventHandler eventHandler;
 
-    private AsyncConsumerForegroundState foregroundState;
+    private ForegroundState foregroundState;
 
     private Deserializer<K> keyDeserializer;
 
@@ -89,7 +90,7 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
         //          Question 2: Do we want to send the list of topics to the background thread and have it reconcile
         //          the set of topics, or should we let the foreground state resolve the subscriptions and then just
         //          pass that to the background thread to let it update its state?
-        foregroundState.subscribe(topics);
+        foregroundState.subscribe(new HashSet<>(topics));
 
         // The background thread will do the following when it receives this event:
         //
@@ -132,7 +133,7 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void assign(Collection<TopicPartition> partitions) {
         // TODO: Same questions about state as on subscribe methods.
-        foregroundState.assign(partitions);
+        foregroundState.assign(new HashSet<>(partitions));
 
         // The background thread will do the following when it receives this event:
         //
@@ -387,7 +388,7 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void enforceRebalance() {
-
+        enforceRebalance(null);
     }
 
     @Override

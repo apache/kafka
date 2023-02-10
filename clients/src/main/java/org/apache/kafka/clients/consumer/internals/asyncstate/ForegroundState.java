@@ -14,30 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer.internals.asyncstate;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-public interface AsyncConsumerForegroundState {
+public interface ForegroundState {
 
-    void subscribe(Collection<String> topics);
+    void subscribe(Set<String> topics);
 
-    void subscribe(Pattern pattern);
+    void subscribe(Pattern pattern) ;
 
-    void assign(Collection<TopicPartition> partitions);
+    void assign(Set<TopicPartition> partitions);
 
-    void unsubscribe();
+    void unsubscribe() ;
 
     Set<String> subscription();
 
-    // user calls consumer.assign()
-    Set<TopicPartition> manualAssignment();
+    Set<TopicPartition> manualAssignment() ;
 
     boolean isRelevant(TopicPartition tp);
 
@@ -48,7 +46,5 @@ public interface AsyncConsumerForegroundState {
     void seek(TopicPartition partition, long offset);
 
     void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata);
-
-
 
 }
