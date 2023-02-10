@@ -16,30 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * This is the abstract definition of the events created by the KafkaConsumer API
- */
-public abstract class ApplicationEvent {
+public class CommitAsyncEvent extends CompletableApplicationEvent<Void> {
 
-    public enum Type {
-        NOOP,
-        ASSIGN_PARTITIONS,
-        COMMIT_ASYNC,
-        COMMIT_SYNC,
-        SUBSCRIBE,
-        POLL_FETCH,
-        UNSUBSCRIBE,
-        UPDATE_ASSIGNMENT_METADATA,
-    }
-
-    private final Type type;
-
-    protected ApplicationEvent(Type type) {
-        this.type = type;
-    }
-
-    public Type type() {
-        return type;
+    public CommitAsyncEvent() {
+        super(Type.COMMIT);
     }
 
 }

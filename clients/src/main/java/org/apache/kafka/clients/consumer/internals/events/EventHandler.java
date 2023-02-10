@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.utils.Timer;
+
 import java.util.Optional;
 
 /**
@@ -42,4 +44,16 @@ public interface EventHandler {
      * @return          true upon successful add.
      */
     boolean add(ApplicationEvent event);
+
+    /**
+     * Adds a {@link CompletableApplicationEvent} to the handler. This method blocks for up to the amount of time
+     * in the given {@link Timer timer}.
+     *
+     * @param event Event to submit to the background thread
+     * @param timer Amount of time to wait on the foreground thread for the event to be processed
+     * @return Output value of the event as processed by the background thread
+     * @param <T> Type of return value for the event
+     */
+    <T> T addAndGet(CompletableApplicationEvent<T> event, Timer timer);
+
 }

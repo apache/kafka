@@ -17,13 +17,16 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.AsyncConsumerForegroundState;
-import org.apache.kafka.clients.consumer.internals.Fetch;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SerializedRecordWrapper;
+import org.apache.kafka.clients.consumer.internals.events.AssignPartitionsEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitAsyncEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitSyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.PollFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscribePatternEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscribeTopicsEvent;
+import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
@@ -32,8 +35,6 @@ import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -41,14 +42,14 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
@@ -63,9 +64,11 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     private Deserializer<V> valueDeserializer;
 
+    private long defaultApiTimeoutMs;
+
     @Override
     public Set<TopicPartition> assignment() {
-        return null;
+        return Collections.unmodifiableSet(foregroundState.manualAssignment());
     }
 
     @Override
@@ -80,7 +83,18 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback) {
+        // TODO:    Question 1: who "owns" the callback? The rebalance happens on the background thread,
+        //          but on which thread do we want to invoke the callback--background or foreground?
+        //          -
+        //          Question 2: Do we want to send the list of topics to the background thread and have it reconcile
+        //          the set of topics, or should we let the foreground state resolve the subscriptions and then just
+        //          pass that to the background thread to let it update its state?
         foregroundState.subscribe(topics);
+
+        // The background thread will do the following when it receives this event:
+        //
+        // 1. Determine the topics that were removed and clear any previously-fetched data
+        // 2. Request any metadata for the topics that were added
         eventHandler.add(new SubscribeTopicsEvent(topics, callback));
     }
 
@@ -91,18 +105,41 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener callback) {
+        // TODO: Same questions about callbacks and state as on other subscribe method.
         foregroundState.subscribe(pattern);
+
+        // The background thread will do the following when it receives this event:
+        //
+        // 1. Determine the topics that were removed and clear any previously-fetched data
+        //    The existing code doesn't seem to do this?!?
+        // 2. Request any metadata for the topics that were added
         eventHandler.add(new SubscribePatternEvent(pattern, callback));
     }
 
     @Override
     public void unsubscribe() {
+        // The background thread will do the following when it receives this event:
+        //
+        // 1. Remove all topics' previously-fetched data
+        // 2. Run the 'leave group' coordinator logic
+        // 3. Clear out its set of topics/assignments
+        eventHandler.add(new UnsubscribeEvent());
 
+        // TODO: I assume the background state is easier to resolve here as it's just cleared out.
+        foregroundState.unsubscribe();
     }
 
     @Override
     public void assign(Collection<TopicPartition> partitions) {
+        // TODO: Same questions about state as on subscribe methods.
+        foregroundState.assign(partitions);
 
+        // The background thread will do the following when it receives this event:
+        //
+        // 1. Determine the topics that were removed and clear any previously-fetched data
+        // 2. Run the 'maybe auto commit offsets' logic
+        // 3. Request any metadata for the topics that were added
+        eventHandler.add(new AssignPartitionsEvent(partitions));
     }
 
     @Deprecated
@@ -117,24 +154,34 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
-        PollFetchEvent<K, V> pollFetchEvent = new PollFetchEvent<>();
-        eventHandler.add(pollFetchEvent);
+        Map<TopicPartition, List<ConsumerRecord<K, V>>> records = new HashMap<>();
 
-        try {
-            List<SerializedRecordWrapper> wrappers = pollFetchEvent.future().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+        // The background thread will do the following when it receives this event:
+        //
+        // 1. Execute the 'update assignment metadata' logic (which I don't really understand at all, yet...)
+        //    Update the assignments in the consumer coordinator.
+        //    (hand waving) something about position validation
+        //    Fetch committed offsets, if needed
+        //    Reset positions & offsets
+        // 2. Collect and return any previously loaded fetches
+        // 3. Submit fetch requests for any ready partitions, including any we might have collected
+        List<SerializedRecordWrapper> wrappers = eventHandler.addAndGet(new PollFetchEvent(), timer);
 
-            for (SerializedRecordWrapper recordWrapper : wrappers) {
+        // We return the serialized records from the background thread to the foreground thread so that the
+        // potentially expensive task of deserializing the record won't stall out our background thread.
+        for (SerializedRecordWrapper recordWrapper : wrappers) {
+            TopicPartition tp = recordWrapper.topicPartition();
+
+            // Make sure that this topic partition is still on our set of subscribed topics/assigned partitions,
+            // as this might have changed since the fetcher submitted the fetch request.
+            if (foregroundState.isRelevant(tp)) {
                 ConsumerRecord<K, V> record = parseRecord(recordWrapper);
-
+                List<ConsumerRecord<K, V>> list = records.computeIfAbsent(tp, __ -> new ArrayList<>());
+                list.add(record);
             }
-
-            ConsumerRecords consumerRecords = new ConsumerRecords();
-
-
-        } catch (Exception e) {
-
         }
 
+        return !records.isEmpty() ? new ConsumerRecords<>(records) : ConsumerRecords.empty();
     }
 
     /**
@@ -168,27 +215,30 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitSync() {
-
+        commitSync(Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     @Override
     public void commitSync(Duration timeout) {
-
+        commitSync(foregroundState.allConsumed(), timeout);
     }
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
-
+        commitSync(offsets, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
-
+        // The background thread will do the following when it receives this event:
+        //
+        // 1. Commit offsets sync.
+        eventHandler.addAndGet(new CommitSyncEvent(offsets), time.timer(timeout));
     }
 
     @Override
     public void commitAsync() {
-
+        eventHandler.add(new CommitAsyncEvent());
     }
 
     @Override
@@ -203,12 +253,14 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void seek(TopicPartition partition, long offset) {
-
+        // TODO: This needs to be propagated to the background thread, right?
+        foregroundState.seek(partition, offset);
     }
 
     @Override
     public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
-
+        // TODO: This needs to be propagated to the background thread, right?
+        foregroundState.seek(partition, offsetAndMetadata);
     }
 
     @Override
@@ -232,11 +284,13 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    @Deprecated
     public OffsetAndMetadata committed(TopicPartition partition) {
         return null;
     }
 
     @Override
+    @Deprecated
     public OffsetAndMetadata committed(TopicPartition partition, Duration timeout) {
         return null;
     }

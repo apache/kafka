@@ -16,7 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.Timer;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
 
@@ -29,6 +35,23 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
 
     public CompletableFuture<T> future() {
         return future;
+    }
+
+    public T get(Timer timer) {
+        try {
+            return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            Throwable t = e.getCause();
+
+            if (t instanceof KafkaException)
+                throw (KafkaException) t;
+            else
+                throw new KafkaException(t);
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        } catch (java.util.concurrent.TimeoutException e) {
+            throw new TimeoutException(e);
+        }
     }
 
 }

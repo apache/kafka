@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -28,11 +30,25 @@ public interface AsyncConsumerForegroundState {
 
     void subscribe(Pattern pattern);
 
+    void assign(Collection<TopicPartition> partitions);
+
+    void unsubscribe();
+
     Set<String> subscription();
 
     // user calls consumer.assign()
     Set<TopicPartition> manualAssignment();
 
     boolean isRelevant(TopicPartition tp);
+
+    boolean hasAllFetchPositions();
+
+    Map<TopicPartition, OffsetAndMetadata> allConsumed();
+
+    void seek(TopicPartition partition, long offset);
+
+    void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata);
+
+
 
 }
