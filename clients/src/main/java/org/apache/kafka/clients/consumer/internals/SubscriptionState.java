@@ -26,7 +26,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
-import org.apache.kafka.common.requests.EpochEndOffset;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -36,35 +36,36 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.Fetcher.hasUsableOffsetForLeaderEpochVersion;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 
 /**
  * A class for tracking the topics, partitions, and offsets for the consumer. A partition
  * is "assigned" either directly with {@link #assignFromUser(Set)} (manual assignment)
  * or with {@link #assignFromSubscribed(Collection)} (automatic assignment from subscription).
- *
+ * <p>
  * Once assigned, the partition is not considered "fetchable" until its initial position has
- * been set with {@link #seekValidated(TopicPartition, FetchPosition)}. Fetchable partitions track a fetch
- * position which is used to set the offset of the next fetch, and a consumed position
- * which is the last offset that has been returned to the user. You can suspend fetching
- * from a partition through {@link #pause(TopicPartition)} without affecting the fetched/consumed
- * offsets. The partition will remain unfetchable until the {@link #resume(TopicPartition)} is
+ * been set with {@link #seekValidated(TopicPartition, FetchPosition)}. Fetchable partitions
+ * track a position which is the last offset that has been returned to the user. You can
+ * suspend fetching from a partition through {@link #pause(TopicPartition)} without affecting the consumed
+ * position. The partition will remain unfetchable until the {@link #resume(TopicPartition)} is
  * used. You can also query the pause state independently with {@link #isPaused(TopicPartition)}.
- *
- * Note that pause state as well as fetch/consumed positions are not preserved when partition
+ * <p>
+ * Note that pause state as well as the consumed positions are not preserved when partition
  * assignment is changed whether directly by the user or through a group rebalance.
- *
+ * <p>
  * Thread Safety: this class is thread-safe.
  */
 public class SubscriptionState {
@@ -131,7 +132,7 @@ public class SubscriptionState {
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
-        this.subscription = new HashSet<>();
+        this.subscription = new TreeSet<>(); // use a sorted set for better logging
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
@@ -330,7 +331,7 @@ public class SubscriptionState {
     }
 
     public synchronized Set<TopicPartition> pausedPartitions() {
-        return collectPartitions(TopicPartitionState::isPaused, Collectors.toSet());
+        return collectPartitions(TopicPartitionState::isPaused);
     }
 
     /**
@@ -385,7 +386,7 @@ public class SubscriptionState {
         assignedState(tp).seekUnvalidated(position);
     }
 
-    synchronized void maybeSeekUnvalidated(TopicPartition tp, long offset, OffsetResetStrategy requestedResetStrategy) {
+    synchronized void maybeSeekUnvalidated(TopicPartition tp, FetchPosition position, OffsetResetStrategy requestedResetStrategy) {
         TopicPartitionState state = assignedStateOrNull(tp);
         if (state == null) {
             log.debug("Skipping reset of partition {} since it is no longer assigned", tp);
@@ -394,8 +395,8 @@ public class SubscriptionState {
         } else if (requestedResetStrategy != state.resetStrategy) {
             log.debug("Skipping reset of partition {} since an alternative reset has been requested", tp);
         } else {
-            log.info("Resetting offset for partition {} to offset {}.", tp, offset);
-            state.seekUnvalidated(new FetchPosition(offset));
+            log.info("Resetting offset for partition {} to position {}.", tp, position);
+            state.seekUnvalidated(position);
         }
     }
 
@@ -421,11 +422,17 @@ public class SubscriptionState {
         return this.assignment.size();
     }
 
-    synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
-        return assignment.stream()
-                .filter(tpState -> isAvailable.test(tpState.topicPartition()) && tpState.value().isFetchable())
-                .map(PartitionStates.PartitionState::topicPartition)
-                .collect(Collectors.toList());
+    // Visible for testing
+    public synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
+        // Since this is in the hot-path for fetching, we do this instead of using java.util.stream API
+        List<TopicPartition> result = new ArrayList<>();
+        assignment.forEach((topicPartition, topicPartitionState) -> {
+            // Cheap check is first to avoid evaluating the predicate if possible
+            if (topicPartitionState.isFetchable() && isAvailable.test(topicPartition)) {
+                result.add(topicPartition);
+            }
+        });
+        return result;
     }
 
     public synchronized boolean hasAutoAssignedPartitions() {
@@ -478,17 +485,17 @@ public class SubscriptionState {
             SubscriptionState.FetchPosition currentPosition = state.position;
             if (!currentPosition.equals(requestPosition)) {
                 log.debug("Skipping completed validation for partition {} since the current position {} " +
-                                "no longer matches the position {} when the request was sent",
-                        tp, currentPosition, requestPosition);
-            } else if (epochEndOffset.hasUndefinedEpochOrOffset()) {
+                          "no longer matches the position {} when the request was sent",
+                          tp, currentPosition, requestPosition);
+            } else if (epochEndOffset.endOffset() == UNDEFINED_EPOCH_OFFSET ||
+                        epochEndOffset.leaderEpoch() == UNDEFINED_EPOCH) {
                 if (hasDefaultOffsetResetPolicy()) {
                     log.info("Truncation detected for partition {} at offset {}, resetting offset",
-                        tp, currentPosition);
-
+                             tp, currentPosition);
                     requestOffsetReset(tp);
                 } else {
                     log.warn("Truncation detected for partition {} at offset {}, but no reset policy is set",
-                        tp, currentPosition);
+                             tp, currentPosition);
                     return Optional.of(new LogTruncation(tp, requestPosition, Optional.empty()));
                 }
             } else if (epochEndOffset.endOffset() < currentPosition.offset) {
@@ -497,14 +504,13 @@ public class SubscriptionState {
                             epochEndOffset.endOffset(), Optional.of(epochEndOffset.leaderEpoch()),
                             currentPosition.currentLeader);
                     log.info("Truncation detected for partition {} at offset {}, resetting offset to " +
-                            "the first offset known to diverge {}", tp, currentPosition, newPosition);
+                             "the first offset known to diverge {}", tp, currentPosition, newPosition);
                     state.seekValidated(newPosition);
                 } else {
                     OffsetAndMetadata divergentOffset = new OffsetAndMetadata(epochEndOffset.endOffset(),
                         Optional.of(epochEndOffset.leaderEpoch()), null);
                     log.warn("Truncation detected for partition {} at offset {} (the end offset from the " +
-                            "broker is {}), but no reset policy is set",
-                        tp, currentPosition, divergentOffset);
+                             "broker is {}), but no reset policy is set", tp, currentPosition, divergentOffset);
                     return Optional.of(new LogTruncation(tp, requestPosition, Optional.of(divergentOffset)));
                 }
             } else {
@@ -531,12 +537,34 @@ public class SubscriptionState {
         return assignedState(tp).position;
     }
 
-    synchronized Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
+    public synchronized Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
         TopicPartitionState topicPartitionState = assignedState(tp);
-        if (isolationLevel == IsolationLevel.READ_COMMITTED)
+        if (topicPartitionState.position == null) {
+            return null;
+        } else if (isolationLevel == IsolationLevel.READ_COMMITTED) {
             return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position.offset;
-        else
+        } else {
             return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position.offset;
+        }
+    }
+
+    public synchronized Long partitionEndOffset(TopicPartition tp, IsolationLevel isolationLevel) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+            return topicPartitionState.lastStableOffset;
+        } else {
+            return topicPartitionState.highWatermark;
+        }
+    }
+
+    public synchronized void requestPartitionEndOffset(TopicPartition tp) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        topicPartitionState.requestEndOffset();
+    }
+
+    public synchronized boolean partitionEndOffsetRequested(TopicPartition tp) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        return topicPartitionState.endOffsetRequested();
     }
 
     synchronized Long partitionLead(TopicPartition tp) {
@@ -588,18 +616,22 @@ public class SubscriptionState {
      * Unset the preferred read replica. This causes the fetcher to go back to the leader for fetches.
      *
      * @param tp The topic partition
-     * @return true if the preferred read replica was set, false otherwise.
+     * @return the removed preferred read replica if set, None otherwise.
      */
     public synchronized Optional<Integer> clearPreferredReadReplica(TopicPartition tp) {
-        return assignedState(tp).clearPreferredReadReplica();
+        final TopicPartitionState topicPartitionState = assignedStateOrNull(tp);
+        if (topicPartitionState == null) {
+            return Optional.empty();
+        } else {
+            return topicPartitionState.clearPreferredReadReplica();
+        }
     }
 
     public synchronized Map<TopicPartition, OffsetAndMetadata> allConsumed() {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
-        assignment.stream().forEach(state -> {
-            TopicPartitionState partitionState = state.value();
+        assignment.forEach((topicPartition, partitionState) -> {
             if (partitionState.hasValidPosition())
-                allConsumed.put(state.topicPartition(), new OffsetAndMetadata(partitionState.position.offset,
+                allConsumed.put(topicPartition, new OffsetAndMetadata(partitionState.position.offset,
                         partitionState.position.offsetEpoch, ""));
         });
         return allConsumed;
@@ -639,26 +671,34 @@ public class SubscriptionState {
     }
 
     public synchronized boolean hasAllFetchPositions() {
-        return assignment.stream().allMatch(state -> state.value().hasValidPosition());
+        // Since this is in the hot-path for fetching, we do this instead of using java.util.stream API
+        Iterator<TopicPartitionState> it = assignment.stateIterator();
+        while (it.hasNext()) {
+            if (!it.next().hasValidPosition()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public synchronized Set<TopicPartition> initializingPartitions() {
-        return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING), Collectors.toSet());
+        return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING));
     }
 
-    private <T extends Collection<TopicPartition>> T collectPartitions(Predicate<TopicPartitionState> filter, Collector<TopicPartition, ?, T> collector) {
-        return assignment.stream()
-                .filter(state -> filter.test(state.value()))
-                .map(PartitionStates.PartitionState::topicPartition)
-                .collect(collector);
+    private Set<TopicPartition> collectPartitions(Predicate<TopicPartitionState> filter) {
+        Set<TopicPartition> result = new HashSet<>();
+        assignment.forEach((topicPartition, topicPartitionState) -> {
+            if (filter.test(topicPartitionState)) {
+                result.add(topicPartition);
+            }
+        });
+        return result;
     }
 
 
     public synchronized void resetInitializingPositions() {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
-        assignment.stream().forEach(state -> {
-            TopicPartition tp = state.topicPartition();
-            TopicPartitionState partitionState = state.value();
+        assignment.forEach((tp, partitionState) -> {
             if (partitionState.fetchState.equals(FetchStates.INITIALIZING)) {
                 if (defaultResetStrategy == OffsetResetStrategy.NONE)
                     partitionsWithNoOffsets.add(tp);
@@ -672,13 +712,11 @@ public class SubscriptionState {
     }
 
     public synchronized Set<TopicPartition> partitionsNeedingReset(long nowMs) {
-        return collectPartitions(state -> state.awaitingReset() && !state.awaitingRetryBackoff(nowMs),
-                Collectors.toSet());
+        return collectPartitions(state -> state.awaitingReset() && !state.awaitingRetryBackoff(nowMs));
     }
 
     public synchronized Set<TopicPartition> partitionsNeedingValidation(long nowMs) {
-        return collectPartitions(state -> state.awaitingValidation() && !state.awaitingRetryBackoff(nowMs),
-                Collectors.toSet());
+        return collectPartitions(state -> state.awaitingValidation() && !state.awaitingRetryBackoff(nowMs));
     }
 
     public synchronized boolean isAssigned(TopicPartition tp) {
@@ -702,6 +740,10 @@ public class SubscriptionState {
 
     public synchronized void pause(TopicPartition tp) {
         assignedState(tp).pause();
+    }
+
+    public synchronized void markPendingRevocation(Set<TopicPartition> tps) {
+        tps.forEach(tp -> assignedState(tp).markPendingRevocation());
     }
 
     public synchronized void resume(TopicPartition tp) {
@@ -735,13 +777,17 @@ public class SubscriptionState {
         private Long logStartOffset; // the log start offset
         private Long lastStableOffset;
         private boolean paused;  // whether this partition has been paused by the user
+        private boolean pendingRevocation;
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
         private Long preferredReadReplicaExpireTimeMs;
-
+        private boolean endOffsetRequested;
+        
         TopicPartitionState() {
             this.paused = false;
+            this.pendingRevocation = false;
+            this.endOffsetRequested = false;
             this.fetchState = FetchStates.INITIALIZING;
             this.position = null;
             this.highWatermark = null;
@@ -750,6 +796,14 @@ public class SubscriptionState {
             this.resetStrategy = null;
             this.nextRetryTimeMs = null;
             this.preferredReadReplica = null;
+        }
+
+        public boolean endOffsetRequested() {
+            return endOffsetRequested;
+        }
+
+        public void requestEndOffset() {
+            endOffsetRequested = true;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
@@ -922,16 +976,21 @@ public class SubscriptionState {
             this.paused = true;
         }
 
+        private void markPendingRevocation() {
+            this.pendingRevocation = true;
+        }
+
         private void resume() {
             this.paused = false;
         }
 
         private boolean isFetchable() {
-            return !paused && hasValidPosition();
+            return !paused && !pendingRevocation && hasValidPosition();
         }
 
         private void highWatermark(Long highWatermark) {
             this.highWatermark = highWatermark;
+            this.endOffsetRequested = false;
         }
 
         private void logStartOffset(Long logStartOffset) {
@@ -940,6 +999,7 @@ public class SubscriptionState {
 
         private void lastStableOffset(Long lastStableOffset) {
             this.lastStableOffset = lastStableOffset;
+            this.endOffsetRequested = false;
         }
 
         private OffsetResetStrategy resetStrategy() {

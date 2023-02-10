@@ -96,7 +96,7 @@ public class FetcherMetricsRegistry {
                 "The total number of fetch requests.", tags);
 
         this.recordsLagMax = new MetricNameTemplate("records-lag-max", groupName,
-                "The maximum lag in terms of number of records for any partition in this window", tags);
+                "The maximum lag in terms of number of records for any partition in this window. NOTE: This is based on current offset and not committed offset", tags);
         this.recordsLeadMin = new MetricNameTemplate("records-lead-min", groupName,
                 "The minimum lead in terms of number of records for any partition in this window", tags);
 

@@ -20,8 +20,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -32,11 +32,8 @@ public class AlterConfigsResponse extends AbstractResponse {
     private final AlterConfigsResponseData data;
 
     public AlterConfigsResponse(AlterConfigsResponseData data) {
+        super(ApiKeys.ALTER_CONFIGS);
         this.data = data;
-    }
-
-    public AlterConfigsResponse(Struct struct, short version) {
-        this.data = new AlterConfigsResponseData(struct, version);
     }
 
     public Map<ConfigResource, ApiError> errors() {
@@ -59,12 +56,17 @@ public class AlterConfigsResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
+    public AlterConfigsResponseData data() {
+        return data;
     }
 
     public static AlterConfigsResponse parse(ByteBuffer buffer, short version) {
-        return new AlterConfigsResponse(ApiKeys.ALTER_CONFIGS.parseResponse(version, buffer), version);
+        return new AlterConfigsResponse(new AlterConfigsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

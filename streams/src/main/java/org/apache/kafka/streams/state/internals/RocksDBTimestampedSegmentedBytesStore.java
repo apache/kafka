@@ -23,6 +23,6 @@ public class RocksDBTimestampedSegmentedBytesStore extends AbstractRocksDBSegmen
                                           final long retention,
                                           final long segmentInterval,
                                           final KeySchema keySchema) {
-        super(name, metricsScope, keySchema, new TimestampedSegments(name, metricsScope, retention, segmentInterval));
+        super(name, metricsScope, retention, keySchema, new TimestampedSegments(name, metricsScope, retention, segmentInterval));
     }
 }

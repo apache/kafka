@@ -89,7 +89,7 @@ public class ResourcePattern {
 
     @Override
     public String toString() {
-        return "ResourcePattern(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", patternType=" + patternType + ")";
+        return "ResourcePattern(resourceType=" + resourceType + ", name=" + name + ", patternType=" + patternType + ")";
     }
 
     /**

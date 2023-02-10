@@ -39,22 +39,23 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -70,13 +71,23 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(600)
 @Category({IntegrationTest.class})
 public class LagFetchIntegrationTest {
-
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+
+    @BeforeAll
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterAll
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
 
     private static final long WAIT_TIMEOUT_MS = 120000;
     private static final Logger LOG = LoggerFactory.getLogger(LagFetchIntegrationTest.class);
@@ -88,12 +99,9 @@ public class LagFetchIntegrationTest {
     private String outputTopicName;
     private String stateStoreName;
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
-    public void before() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    @BeforeEach
+    public void before(final TestInfo testInfo) {
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         inputTopicName = "input-topic-" + safeTestName;
         outputTopicName = "output-topic-" + safeTestName;
         stateStoreName = "lagfetch-test-store" + safeTestName;
@@ -104,7 +112,7 @@ public class LagFetchIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
 
         consumerConfiguration = new Properties();
         consumerConfiguration.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -114,7 +122,7 @@ public class LagFetchIntegrationTest {
         consumerConfiguration.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class.getName());
     }
 
-    @After
+    @AfterEach
     public void shutdown() throws Exception {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
@@ -276,7 +284,7 @@ public class LagFetchIntegrationTest {
                 "Should see empty lag map before streams is started.");
 
             // Get the instance to fully catch up and reach RUNNING state
-            startApplicationAndWaitUntilRunning(Collections.singletonList(streams), Duration.ofSeconds(60));
+            startApplicationAndWaitUntilRunning(streams);
             IntegrationTestUtils.waitUntilMinValuesRecordsReceived(
                 consumerConfiguration,
                 outputTopicName,
@@ -304,7 +312,7 @@ public class LagFetchIntegrationTest {
             IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
             Files.walk(stateDir.toPath()).sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
-                .forEach(f -> assertTrue("Some state " + f + " could not be deleted", f.delete()));
+                .forEach(f -> assertTrue(f.delete(), "Some state " + f + " could not be deleted"));
 
             // wait till the lag goes down to 0
             final KafkaStreams restartedStreams = new KafkaStreams(builder.build(), props);

@@ -17,15 +17,16 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
@@ -37,11 +38,14 @@ import java.util.Map.Entry;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 import java.time.Duration;
+import java.util.stream.Stream;
 
 /** Emits checkpoints for upstream consumer groups. */
 public class MirrorCheckpointTask extends SourceTask {
@@ -60,7 +64,7 @@ public class MirrorCheckpointTask extends SourceTask {
     private ReplicationPolicy replicationPolicy;
     private OffsetSyncStore offsetSyncStore;
     private boolean stopping;
-    private MirrorMetrics metrics;
+    private MirrorCheckpointMetrics metrics;
     private Scheduler scheduler;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
     private Map<String, List<Checkpoint>> checkpointsPerConsumerGroup;
@@ -81,7 +85,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> props) {
-        MirrorTaskConfig config = new MirrorTaskConfig(props);
+        MirrorCheckpointTaskConfig config = new MirrorCheckpointTaskConfig(props);
         stopping = false;
         sourceClusterAlias = config.sourceClusterAlias();
         targetClusterAlias = config.targetClusterAlias();
@@ -92,8 +96,8 @@ public class MirrorCheckpointTask extends SourceTask {
         interval = config.emitCheckpointsInterval();
         pollTimeout = config.consumerPollTimeout();
         offsetSyncStore = new OffsetSyncStore(config);
-        sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
-        targetAdminClient = AdminClient.create(config.targetAdminConfig());
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
         metrics = config.metrics();
         idleConsumerGroupsOffset = new HashMap<>();
         checkpointsPerConsumerGroup = new HashMap<>();
@@ -105,7 +109,7 @@ public class MirrorCheckpointTask extends SourceTask {
     }
 
     @Override
-    public void commit() throws InterruptedException {
+    public void commit() {
         // nop
     }
 
@@ -113,6 +117,7 @@ public class MirrorCheckpointTask extends SourceTask {
     public void stop() {
         long start = System.currentTimeMillis();
         stopping = true;
+        Utils.closeQuietly(topicFilter, "topic filter");
         Utils.closeQuietly(offsetSyncStore, "offset sync store");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
@@ -123,7 +128,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public String version() {
-        return "1";
+        return new MirrorCheckpointConnector().version();
     }
 
     @Override
@@ -168,7 +173,8 @@ public class MirrorCheckpointTask extends SourceTask {
         return listConsumerGroupOffsets(group).entrySet().stream()
             .filter(x -> shouldCheckpointTopic(x.getKey().topic()))
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
-            .filter(x -> x.downstreamOffset() > 0)  // ignore offsets we cannot translate accurately
+            .flatMap(o -> o.map(Stream::of).orElseGet(Stream::empty)) // do not emit checkpoints for partitions that don't have offset-syncs
+            .filter(x -> x.downstreamOffset() >= 0)  // ignore offsets we cannot translate accurately
             .collect(Collectors.toList());
     }
 
@@ -181,12 +187,18 @@ public class MirrorCheckpointTask extends SourceTask {
         return sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
     }
 
-    Checkpoint checkpoint(String group, TopicPartition topicPartition,
-            OffsetAndMetadata offsetAndMetadata) {
-        long upstreamOffset = offsetAndMetadata.offset();
-        long downstreamOffset = offsetSyncStore.translateDownstream(topicPartition, upstreamOffset);
-        return new Checkpoint(group, renameTopicPartition(topicPartition),
-            upstreamOffset, downstreamOffset, offsetAndMetadata.metadata());
+    Optional<Checkpoint> checkpoint(String group, TopicPartition topicPartition,
+                                    OffsetAndMetadata offsetAndMetadata) {
+        if (offsetAndMetadata != null) {
+            long upstreamOffset = offsetAndMetadata.offset();
+            OptionalLong downstreamOffset =
+                offsetSyncStore.translateDownstream(topicPartition, upstreamOffset);
+            if (downstreamOffset.isPresent()) {
+                return Optional.of(new Checkpoint(group, renameTopicPartition(topicPartition),
+                    upstreamOffset, downstreamOffset.getAsLong(), offsetAndMetadata.metadata()));
+            }
+        }
+        return Optional.empty();
     }
 
     SourceRecord checkpointRecord(Checkpoint checkpoint, long timestamp) {
@@ -231,11 +243,10 @@ public class MirrorCheckpointTask extends SourceTask {
                 ConsumerGroupState consumerGroupState = consumerGroupDesc.state();
                 // sync offset to the target cluster only if the state of current consumer group is:
                 // (1) idle: because the consumer at target is not actively consuming the mirrored topic
-                // (2) dead: the new consumer that is recently created at source and never exist at target
-                if (consumerGroupState.equals(ConsumerGroupState.EMPTY)) {
+                // (2) dead: the new consumer that is recently created at source and never existed at target
+                if (consumerGroupState == ConsumerGroupState.EMPTY) {
                     idleConsumerGroupsOffset.put(group, targetAdminClient.listConsumerGroupOffsets(group)
-                        .partitionsToOffsetAndMetadata().get().entrySet().stream().collect(
-                            Collectors.toMap(e -> e.getKey(), e -> e.getValue())));
+                        .partitionsToOffsetAndMetadata().get());
                 }
                 // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
             } catch (InterruptedException | ExecutionException e) {
@@ -298,9 +309,18 @@ public class MirrorCheckpointTask extends SourceTask {
 
     void syncGroupOffset(String consumerGroupId, Map<TopicPartition, OffsetAndMetadata> offsetToSync) {
         if (targetAdminClient != null) {
-            targetAdminClient.alterConsumerGroupOffsets(consumerGroupId, offsetToSync);
-            log.trace("sync-ed the offset for consumer group: {} with {} number of offset entries",
-                      consumerGroupId, offsetToSync.size());
+            AlterConsumerGroupOffsetsResult result = targetAdminClient.alterConsumerGroupOffsets(consumerGroupId, offsetToSync);
+            result.all().whenComplete((v, throwable) -> {
+                if (throwable != null) {
+                    if (throwable.getCause() instanceof UnknownMemberIdException) {
+                        log.warn("Unable to sync offsets for consumer group {}. This is likely caused by consumers currently using this group in the target cluster.", consumerGroupId);
+                    } else {
+                        log.error("Unable to sync offsets for consumer group {}.", consumerGroupId, throwable);
+                    }
+                } else {
+                    log.trace("Sync-ed {} offsets for consumer group {}.", offsetToSync.size(), consumerGroupId);
+                }
+            });
         }
     }
 

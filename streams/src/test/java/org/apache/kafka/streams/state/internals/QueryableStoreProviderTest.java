@@ -27,7 +27,6 @@ import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -53,19 +52,21 @@ public class QueryableStoreProviderTest {
         globalStateStores = new HashMap<>();
         storeProvider =
             new QueryableStoreProvider(
-                Collections.singletonList(theStoreProvider),
                 new GlobalStateStoreProvider(globalStateStores)
             );
+        storeProvider.addStoreProviderForThread("thread1", theStoreProvider);
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionIfKVStoreDoesntExist() {
-        storeProvider.getStore(StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.keyValueStore()));
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(
+            StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.keyValueStore())).get("1"));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionIfWindowStoreDoesntExist() {
-        storeProvider.getStore(StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.windowStore()));
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(
+            StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.windowStore())).fetch("1", System.currentTimeMillis()));
     }
 
     @Test
@@ -78,14 +79,16 @@ public class QueryableStoreProviderTest {
         assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore, QueryableStoreTypes.windowStore())));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() {
-        storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore, QueryableStoreTypes.keyValueStore()));
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore,
+            QueryableStoreTypes.keyValueStore())).get("1"));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() {
-        storeProvider.getStore(StoreQueryParameters.fromNameAndType(keyValueStore, QueryableStoreTypes.windowStore()));
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(StoreQueryParameters.fromNameAndType(keyValueStore,
+            QueryableStoreTypes.windowStore())).fetch("1", System.currentTimeMillis()));
     }
 
     @Test
@@ -106,7 +109,7 @@ public class QueryableStoreProviderTest {
                 storeProvider.getStore(
                         StoreQueryParameters
                                 .fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())
-                                .withPartition(partition))
+                                .withPartition(partition)).get("1")
         );
         assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, keyValueStore)));
     }
@@ -123,7 +126,7 @@ public class QueryableStoreProviderTest {
                 storeProvider.getStore(
                         StoreQueryParameters
                                 .fromNameAndType(windowStore, QueryableStoreTypes.windowStore())
-                                .withPartition(partition))
+                                .withPartition(partition)).fetch("1", System.currentTimeMillis())
         );
         assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, windowStore)));
     }

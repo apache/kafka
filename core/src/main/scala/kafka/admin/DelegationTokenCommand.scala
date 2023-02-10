@@ -20,17 +20,16 @@ package kafka.admin
 import java.text.SimpleDateFormat
 import java.util
 import java.util.Base64
-
 import joptsimple.ArgumentAcceptingOptionSpec
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging}
+import kafka.utils.{Exit, Logging}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{Admin, CreateDelegationTokenOptions, DescribeDelegationTokenOptions, ExpireDelegationTokenOptions, RenewDelegationTokenOptions}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.Set
 
 /**
  * A command to manage delegation token.
@@ -40,12 +39,12 @@ object DelegationTokenCommand extends Logging {
   def main(args: Array[String]): Unit = {
     val opts = new DelegationTokenCommandOptions(args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to create, renew, expire, or describe delegation tokens.")
+    CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to create, renew, expire, or describe delegation tokens.")
 
     // should have exactly one action
     val actions = Seq(opts.createOpt, opts.renewOpt, opts.expiryOpt, opts.describeOpt).count(opts.options.has _)
     if(actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --create, --renew, --expire or --describe")
+      CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --create, --renew, --expire or --describe")
 
     opts.checkArgs()
 
@@ -78,6 +77,9 @@ object DelegationTokenCommand extends Logging {
 
     println("Calling create token operation with renewers :" + renewerPrincipals +" , max-life-time-period :"+ maxLifeTimeMs)
     val createDelegationTokenOptions = new CreateDelegationTokenOptions().maxlifeTimeMs(maxLifeTimeMs).renewers(renewerPrincipals)
+    val ownerPrincipal = getPrincipals(opts, opts.ownerPrincipalsOpt)
+    if (ownerPrincipal.isDefined)
+      createDelegationTokenOptions.owner(ownerPrincipal.get.asScala.head)
     val createResult = adminClient.createDelegationToken(createDelegationTokenOptions)
     val token = createResult.delegationToken().get()
     println("Created delegation token with tokenId : %s".format(token.tokenInfo.tokenId)); printToken(List(token))
@@ -86,13 +88,14 @@ object DelegationTokenCommand extends Logging {
 
   def printToken(tokens: List[DelegationToken]): Unit = {
     val dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm")
-    print("\n%-15s %-30s %-15s %-25s %-15s %-15s %-15s".format("TOKENID", "HMAC", "OWNER", "RENEWERS", "ISSUEDATE", "EXPIRYDATE", "MAXDATE"))
+    print("\n%-15s %-30s %-15s %-15s %-25s %-15s %-15s %-15s".format("TOKENID", "HMAC", "OWNER", "REQUESTER", "RENEWERS", "ISSUEDATE", "EXPIRYDATE", "MAXDATE"))
     for (token <- tokens) {
       val tokenInfo = token.tokenInfo
-      print("\n%-15s %-30s %-15s %-25s %-15s %-15s %-15s".format(
+      print("\n%-15s %-30s %-15s %-15s %-25s %-15s %-15s %-15s".format(
         tokenInfo.tokenId,
         token.hmacAsBase64String,
         tokenInfo.owner,
+        tokenInfo.tokenRequester(),
         tokenInfo.renewersAsString,
         dateFormat.format(tokenInfo.issueTimestamp),
         dateFormat.format(tokenInfo.expiryTimestamp),
@@ -203,17 +206,19 @@ object DelegationTokenCommand extends Logging {
       if (options.has(createOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, maxLifeTimeOpt)
 
-      if (options.has(renewOpt))
+      if (options.has(renewOpt)) {
         CommandLineUtils.checkRequiredArgs(parser, options, hmacOpt, renewTimePeriodOpt)
+      }
 
-      if (options.has(expiryOpt))
+      if (options.has(expiryOpt)) {
         CommandLineUtils.checkRequiredArgs(parser, options, hmacOpt, expiryTimePeriodOpt)
+      }
 
       // check invalid args
-      CommandLineUtils.checkInvalidArgs(parser, options, createOpt, Set(hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt, ownerPrincipalsOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, renewOpt, Set(renewPrincipalsOpt, maxLifeTimeOpt, expiryTimePeriodOpt, ownerPrincipalsOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, expiryOpt, Set(renewOpt, maxLifeTimeOpt, renewTimePeriodOpt, ownerPrincipalsOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(renewTimePeriodOpt, maxLifeTimeOpt, hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, createOpt, hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt)
+      CommandLineUtils.checkInvalidArgs(parser, options, renewOpt, renewPrincipalsOpt, maxLifeTimeOpt, expiryTimePeriodOpt, ownerPrincipalsOpt)
+      CommandLineUtils.checkInvalidArgs(parser, options, expiryOpt, renewOpt, maxLifeTimeOpt, renewTimePeriodOpt, ownerPrincipalsOpt)
+      CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, renewTimePeriodOpt, maxLifeTimeOpt, hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt)
     }
   }
 }

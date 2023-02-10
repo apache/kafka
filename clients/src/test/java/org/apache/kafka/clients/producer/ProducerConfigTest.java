@@ -16,54 +16,27 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProducerConfigTest {
 
     private final Serializer<byte[]> keySerializer = new ByteArraySerializer();
     private final Serializer<String> valueSerializer = new StringSerializer();
-    private final String keySerializerClassName = keySerializer.getClass().getName();
-    private final String valueSerializerClassName = valueSerializer.getClass().getName();
     private final Object keySerializerClass = keySerializer.getClass();
     private final Object valueSerializerClass = valueSerializer.getClass();
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testSerializerToPropertyConfig() {
-        Properties properties = new Properties();
-        properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClassName);
-        properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClassName);
-        Properties newProperties = ProducerConfig.addSerializerToConfig(properties, null, null);
-        assertEquals(newProperties.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClassName);
-        assertEquals(newProperties.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClassName);
-
-        properties.clear();
-        properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClassName);
-        newProperties = ProducerConfig.addSerializerToConfig(properties, keySerializer, null);
-        assertEquals(newProperties.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClassName);
-        assertEquals(newProperties.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClassName);
-
-        properties.clear();
-        properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClassName);
-        newProperties = ProducerConfig.addSerializerToConfig(properties, null, valueSerializer);
-        assertEquals(newProperties.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClassName);
-        assertEquals(newProperties.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClassName);
-
-        properties.clear();
-        newProperties = ProducerConfig.addSerializerToConfig(properties, keySerializer, valueSerializer);
-        assertEquals(newProperties.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClassName);
-        assertEquals(newProperties.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClassName);
-    }
-    
     @Test
     public void testAppendSerializerToConfig() {
         Map<String, Object> configs = new HashMap<>();
@@ -89,5 +62,37 @@ public class ProducerConfigTest {
         newConfigs = ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer);
         assertEquals(newConfigs.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClass);
         assertEquals(newConfigs.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClass);
+    }
+
+    @Test
+    public void testAppendSerializerToConfigWithException() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, null);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        assertThrows(ConfigException.class, () -> ProducerConfig.appendSerializerToConfig(configs, null, valueSerializer));
+
+        configs.clear();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, null);
+        assertThrows(ConfigException.class, () -> ProducerConfig.appendSerializerToConfig(configs, keySerializer, null));
+    }
+
+    @Test
+    public void testInvalidCompressionType() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "abc");
+        assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+    }
+
+    @Test
+    public void testInvalidSecurityProtocol() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc");
+        ConfigException ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+        assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 }

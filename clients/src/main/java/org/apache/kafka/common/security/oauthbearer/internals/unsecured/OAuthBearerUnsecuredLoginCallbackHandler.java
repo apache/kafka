@@ -45,6 +45,7 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -191,13 +192,9 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             throw new OAuthBearerConfigException("Extensions provided in login context without a token");
         }
         String principalClaimNameValue = optionValue(PRINCIPAL_CLAIM_NAME_OPTION);
-        String principalClaimName = principalClaimNameValue != null && !principalClaimNameValue.trim().isEmpty()
-                ? principalClaimNameValue.trim()
-                : DEFAULT_PRINCIPAL_CLAIM_NAME;
+        String principalClaimName = Utils.isBlank(principalClaimNameValue) ? DEFAULT_PRINCIPAL_CLAIM_NAME : principalClaimNameValue.trim();
         String scopeClaimNameValue = optionValue(SCOPE_CLAIM_NAME_OPTION);
-        String scopeClaimName = scopeClaimNameValue != null && !scopeClaimNameValue.trim().isEmpty()
-                ? scopeClaimNameValue.trim()
-                : DEFAULT_SCOPE_CLAIM_NAME;
+        String scopeClaimName = Utils.isBlank(scopeClaimNameValue) ? DEFAULT_SCOPE_CLAIM_NAME : scopeClaimNameValue.trim();
         String headerJson = "{" + claimOrHeaderJsonText("alg", "none") + "}";
         String lifetimeSecondsValueToUse = optionValue(LIFETIME_SECONDS_OPTION, DEFAULT_LIFETIME_SECONDS_ONE_HOUR);
         String claimsJson;

@@ -17,30 +17,39 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicCollection;
+import org.apache.kafka.common.TopicCollection.TopicIdCollection;
+import org.apache.kafka.common.TopicCollection.TopicNameCollection;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
+import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -51,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
@@ -60,12 +70,17 @@ public class MockAdminClient extends AdminClient {
 
     private final List<Node> brokers;
     private final Map<String, TopicMetadata> allTopics = new HashMap<>();
-    private final Map<TopicPartition, NewPartitionReassignment> reassignments =
-        new HashMap<>();
-    private final Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaMoves =
-        new HashMap<>();
+    private final Map<String, Uuid> topicIds = new HashMap<>();
+    private final Map<Uuid, String> topicNames = new HashMap<>();
+    private final Map<TopicPartition, NewPartitionReassignment> reassignments = new HashMap<>();
+    private final Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaMoves = new HashMap<>();
     private final Map<TopicPartition, Long> beginningOffsets;
     private final Map<TopicPartition, Long> endOffsets;
+    private final Map<TopicPartition, Long> committedOffsets;
+    private final boolean usingRaftController;
+    private final Map<String, Short> featureLevels;
+    private final Map<String, Short> minSupportedFeatureLevels;
+    private final Map<String, Short> maxSupportedFeatureLevels;
     private final String clusterId;
     private final List<List<String>> brokerLogDirs;
     private final List<Map<String, String>> brokerConfigs;
@@ -74,6 +89,8 @@ public class MockAdminClient extends AdminClient {
     private int timeoutNextRequests = 0;
     private final int defaultPartitions;
     private final int defaultReplicationFactor;
+
+    private KafkaException listConsumerGroupOffsetsException;
 
     private Map<MetricName, Metric> mockMetrics = new HashMap<>();
 
@@ -87,7 +104,11 @@ public class MockAdminClient extends AdminClient {
         private Node controller = null;
         private List<List<String>> brokerLogDirs = new ArrayList<>();
         private Short defaultPartitions;
+        private boolean usingRaftController = false;
         private Integer defaultReplicationFactor;
+        private Map<String, Short> featureLevels = Collections.emptyMap();
+        private Map<String, Short> minSupportedFeatureLevels = Collections.emptyMap();
+        private Map<String, Short> maxSupportedFeatureLevels = Collections.emptyMap();
 
         public Builder() {
             numBrokers(1);
@@ -132,8 +153,28 @@ public class MockAdminClient extends AdminClient {
             return this;
         }
 
+        public Builder usingRaftController(boolean usingRaftController) {
+            this.usingRaftController = usingRaftController;
+            return this;
+        }
+
         public Builder defaultPartitions(short numPartitions) {
             this.defaultPartitions = numPartitions;
+            return this;
+        }
+
+        public Builder featureLevels(Map<String, Short> featureLevels) {
+            this.featureLevels = featureLevels;
+            return this;
+        }
+
+        public Builder minSupportedFeatureLevels(Map<String, Short> minSupportedFeatureLevels) {
+            this.minSupportedFeatureLevels = minSupportedFeatureLevels;
+            return this;
+        }
+
+        public Builder maxSupportedFeatureLevels(Map<String, Short> maxSupportedFeatureLevels) {
+            this.maxSupportedFeatureLevels = maxSupportedFeatureLevels;
             return this;
         }
 
@@ -143,7 +184,11 @@ public class MockAdminClient extends AdminClient {
                 clusterId,
                 defaultPartitions != null ? defaultPartitions.shortValue() : 1,
                 defaultReplicationFactor != null ? defaultReplicationFactor.shortValue() : Math.min(brokers.size(), 3),
-                brokerLogDirs);
+                brokerLogDirs,
+                usingRaftController,
+                featureLevels,
+                minSupportedFeatureLevels,
+                maxSupportedFeatureLevels);
         }
     }
 
@@ -152,16 +197,30 @@ public class MockAdminClient extends AdminClient {
     }
 
     public MockAdminClient(List<Node> brokers, Node controller) {
-        this(brokers, controller, DEFAULT_CLUSTER_ID, 1, brokers.size(),
-            Collections.nCopies(brokers.size(), DEFAULT_LOG_DIRS));
+        this(brokers,
+            controller,
+            DEFAULT_CLUSTER_ID,
+            1,
+            brokers.size(),
+            Collections.nCopies(brokers.size(), DEFAULT_LOG_DIRS),
+            false,
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap());
     }
 
-    private MockAdminClient(List<Node> brokers,
-                            Node controller,
-                            String clusterId,
-                            int defaultPartitions,
-                            int defaultReplicationFactor,
-                            List<List<String>> brokerLogDirs) {
+    private MockAdminClient(
+        List<Node> brokers,
+        Node controller,
+        String clusterId,
+        int defaultPartitions,
+        int defaultReplicationFactor,
+        List<List<String>> brokerLogDirs,
+        boolean usingRaftController,
+        Map<String, Short> featureLevels,
+        Map<String, Short> minSupportedFeatureLevels,
+        Map<String, Short> maxSupportedFeatureLevels
+    ) {
         this.brokers = brokers;
         controller(controller);
         this.clusterId = clusterId;
@@ -170,10 +229,17 @@ public class MockAdminClient extends AdminClient {
         this.brokerLogDirs = brokerLogDirs;
         this.brokerConfigs = new ArrayList<>();
         for (int i = 0; i < brokers.size(); i++) {
-            this.brokerConfigs.add(new HashMap<>());
+            final Map<String, String> config = new HashMap<>();
+            config.put("default.replication.factor", String.valueOf(defaultReplicationFactor));
+            this.brokerConfigs.add(config);
         }
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
+        this.committedOffsets = new HashMap<>();
+        this.usingRaftController = usingRaftController;
+        this.featureLevels = new HashMap<>(featureLevels);
+        this.minSupportedFeatureLevels = new HashMap<>(minSupportedFeatureLevels);
+        this.maxSupportedFeatureLevels = new HashMap<>(maxSupportedFeatureLevels);
     }
 
     synchronized public void controller(Node controller) {
@@ -182,10 +248,18 @@ public class MockAdminClient extends AdminClient {
         this.controller = controller;
     }
 
-    synchronized public void addTopic(boolean internal,
+    public void addTopic(boolean internal,
                          String name,
                          List<TopicPartitionInfo> partitions,
                          Map<String, String> configs) {
+        addTopic(internal, name, partitions, configs, true);
+    }
+
+    synchronized public void addTopic(boolean internal,
+                                      String name,
+                                      List<TopicPartitionInfo> partitions,
+                                      Map<String, String> configs,
+                                      boolean usesTopicId) {
         if (allTopics.containsKey(name)) {
             throw new IllegalArgumentException(String.format("Topic %s was already added.", name));
         }
@@ -206,7 +280,15 @@ public class MockAdminClient extends AdminClient {
                 logDirs.add(brokerLogDirs.get(partition.leader().id()).get(0));
             }
         }
-        allTopics.put(name, new TopicMetadata(internal, partitions, logDirs, configs));
+        Uuid topicId;
+        if (usesTopicId) {
+            topicId = Uuid.randomUuid();
+            topicIds.put(name, topicId);
+            topicNames.put(topicId, name);
+        } else {
+            topicId = Uuid.ZERO_UUID;
+        }
+        allTopics.put(name, new TopicMetadata(topicId, internal, partitions, logDirs, configs));
     }
 
     synchronized public void markTopicForDeletion(final String name) {
@@ -297,7 +379,10 @@ public class MockAdminClient extends AdminClient {
                 partitions.add(new TopicPartitionInfo(i, brokers.get(0), replicas, Collections.emptyList()));
                 logDirs.add(brokerLogDirs.get(partitions.get(i).leader().id()).get(0));
             }
-            allTopics.put(topicName, new TopicMetadata(false, partitions, logDirs, newTopic.configs()));
+            Uuid topicId = Uuid.randomUuid();
+            topicIds.put(topicName, topicId);
+            topicNames.put(topicId, topicName);
+            allTopics.put(topicName, new TopicMetadata(topicId, false, partitions, logDirs, newTopic.configs()));
             future.complete(null);
             createTopicResult.put(topicName, future);
         }
@@ -322,7 +407,7 @@ public class MockAdminClient extends AdminClient {
             if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
                 topicDescription.getValue().fetchesRemainingUntilVisible--;
             } else {
-                topicListings.put(topicName, new TopicListing(topicName, topicDescription.getValue().isInternalTopic));
+                topicListings.put(topicName, new TopicListing(topicName, topicDescription.getValue().topicId, topicDescription.getValue().isInternalTopic));
             }
         }
 
@@ -332,7 +417,16 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options) {
+    synchronized public DescribeTopicsResult describeTopics(TopicCollection topics, DescribeTopicsOptions options) {
+        if (topics instanceof TopicIdCollection)
+            return DescribeTopicsResult.ofTopicIds(new HashMap<>(handleDescribeTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options)));
+        else if (topics instanceof TopicNameCollection)
+            return DescribeTopicsResult.ofTopicNames(new HashMap<>(handleDescribeTopicsByNames(((TopicNameCollection) topics).topicNames(), options)));
+        else
+            throw new IllegalArgumentException("The TopicCollection provided did not match any supported classes for describeTopics.");
+    }
+
+    private Map<String, KafkaFuture<TopicDescription>> handleDescribeTopicsByNames(Collection<String> topicNames, DescribeTopicsOptions options) {
         Map<String, KafkaFuture<TopicDescription>> topicDescriptions = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
@@ -343,20 +437,20 @@ public class MockAdminClient extends AdminClient {
             }
 
             --timeoutNextRequests;
-            return new DescribeTopicsResult(topicDescriptions);
+            return topicDescriptions;
         }
 
         for (String requestedTopic : topicNames) {
             for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
                 String topicName = topicDescription.getKey();
+                Uuid topicId = topicIds.getOrDefault(topicName, Uuid.ZERO_UUID);
                 if (topicName.equals(requestedTopic) && !topicDescription.getValue().markedForDeletion) {
                     if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
                         topicDescription.getValue().fetchesRemainingUntilVisible--;
                     } else {
                         TopicMetadata topicMetadata = topicDescription.getValue();
                         KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
-                        future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions,
-                                Collections.emptySet()));
+                        future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions, Collections.emptySet(), topicId));
                         topicDescriptions.put(topicName, future);
                         break;
                     }
@@ -369,36 +463,120 @@ public class MockAdminClient extends AdminClient {
             }
         }
 
-        return new DescribeTopicsResult(topicDescriptions);
+        return topicDescriptions;
+    }
+
+    synchronized public Map<Uuid, KafkaFuture<TopicDescription>>  handleDescribeTopicsUsingIds(Collection<Uuid> topicIds, DescribeTopicsOptions options) {
+
+        Map<Uuid, KafkaFuture<TopicDescription>> topicDescriptions = new HashMap<>();
+
+        if (timeoutNextRequests > 0) {
+            for (Uuid requestedTopicId : topicIds) {
+                KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                topicDescriptions.put(requestedTopicId, future);
+            }
+
+            --timeoutNextRequests;
+            return topicDescriptions;
+        }
+
+        for (Uuid requestedTopicId : topicIds) {
+            for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
+                String topicName = topicDescription.getKey();
+                Uuid topicId = this.topicIds.get(topicName);
+
+                if (topicId != null && topicId.equals(requestedTopicId) && !topicDescription.getValue().markedForDeletion) {
+                    if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
+                        topicDescription.getValue().fetchesRemainingUntilVisible--;
+                    } else {
+                        TopicMetadata topicMetadata = topicDescription.getValue();
+                        KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
+                        future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions, Collections.emptySet(), topicId));
+                        topicDescriptions.put(requestedTopicId, future);
+                        break;
+                    }
+                }
+            }
+            if (!topicDescriptions.containsKey(requestedTopicId)) {
+                KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new UnknownTopicIdException("Topic id" + requestedTopicId + " not found."));
+                topicDescriptions.put(requestedTopicId, future);
+            }
+        }
+
+        return topicDescriptions;
     }
 
     @Override
-    synchronized public DeleteTopicsResult deleteTopics(Collection<String> topicsToDelete, DeleteTopicsOptions options) {
+    synchronized public DeleteTopicsResult deleteTopics(TopicCollection topics, DeleteTopicsOptions options) {
+        DeleteTopicsResult result;
+        if (topics instanceof TopicIdCollection)
+            result = DeleteTopicsResult.ofTopicIds(new HashMap<>(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options)));
+        else if (topics instanceof TopicNameCollection)
+            result = DeleteTopicsResult.ofTopicNames(new HashMap<>(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options)));
+        else
+            throw new IllegalArgumentException("The TopicCollection provided did not match any supported classes for deleteTopics.");
+        return result;
+    }
+
+    private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(Collection<String> topicNameCollection, DeleteTopicsOptions options) {
         Map<String, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
+        Collection<String> topicNames = new ArrayList<>(topicNameCollection);
 
         if (timeoutNextRequests > 0) {
-            for (final String topicName : topicsToDelete) {
+            for (final String topicName : topicNames) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new TimeoutException());
                 deleteTopicsResult.put(topicName, future);
             }
 
             --timeoutNextRequests;
-            return new DeleteTopicsResult(deleteTopicsResult);
+            return deleteTopicsResult;
         }
 
-        for (final String topicName : topicsToDelete) {
+        for (final String topicName : topicNames) {
             KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
 
             if (allTopics.remove(topicName) == null) {
                 future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicName)));
             } else {
+                topicNames.remove(topicIds.remove(topicName));
                 future.complete(null);
             }
             deleteTopicsResult.put(topicName, future);
         }
+        return deleteTopicsResult;
+    }
 
-        return new DeleteTopicsResult(deleteTopicsResult);
+    private Map<Uuid, KafkaFuture<Void>> handleDeleteTopicsUsingIds(Collection<Uuid> topicIdCollection, DeleteTopicsOptions options) {
+        Map<Uuid, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
+        Collection<Uuid> topicIds = new ArrayList<>(topicIdCollection);
+
+        if (timeoutNextRequests > 0) {
+            for (final Uuid topicId : topicIds) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                deleteTopicsResult.put(topicId, future);
+            }
+
+            --timeoutNextRequests;
+            return deleteTopicsResult;
+        }
+
+        for (final Uuid topicId : topicIds) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+
+            String name = topicNames.remove(topicId);
+            if (name == null || allTopics.remove(name) == null) {
+                future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicId)));
+            } else {
+                topicIds.remove(name);
+                future.complete(null);
+            }
+            deleteTopicsResult.put(topicId, future);
+        }
+        return deleteTopicsResult;
     }
 
     @Override
@@ -447,8 +625,29 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+    synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, ListConsumerGroupOffsetsOptions options) {
+        // ignoring the groups and assume one test would only work on one group only
+        if (groupSpecs.size() != 1)
+            throw new UnsupportedOperationException("Not implemented yet");
+
+        String group = groupSpecs.keySet().iterator().next();
+        Collection<TopicPartition> topicPartitions = groupSpecs.get(group).topicPartitions();
+        final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
+
+        if (listConsumerGroupOffsetsException != null) {
+            future.completeExceptionally(listConsumerGroupOffsetsException);
+        } else {
+            if (topicPartitions.isEmpty()) {
+                future.complete(committedOffsets.entrySet().stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
+            } else {
+                future.complete(committedOffsets.entrySet().stream()
+                        .filter(entry -> topicPartitions.contains(entry.getKey()))
+                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
+            }
+        }
+
+        return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
     }
 
     @Override
@@ -458,12 +657,6 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
-
-    @Deprecated
-    @Override
-    synchronized public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
@@ -827,6 +1020,134 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations, AlterUserScramCredentialsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public DescribeMetadataQuorumResult describeMetadataQuorum(DescribeMetadataQuorumOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options) {
+        Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
+        Map<String, SupportedVersionRange> supportedFeatures = new HashMap<>();
+        for (Map.Entry<String, Short> entry : featureLevels.entrySet()) {
+            finalizedFeatures.put(entry.getKey(), new FinalizedVersionRange(
+                    entry.getValue(), entry.getValue()));
+            supportedFeatures.put(entry.getKey(), new SupportedVersionRange(
+                    minSupportedFeatureLevels.get(entry.getKey()),
+                    maxSupportedFeatureLevels.get(entry.getKey())));
+        }
+        return new DescribeFeaturesResult(KafkaFuture.completedFuture(
+                new FeatureMetadata(finalizedFeatures,
+                    Optional.of(123L),
+                    supportedFeatures)));
+    }
+
+    @Override
+    public UpdateFeaturesResult updateFeatures(
+        Map<String, FeatureUpdate> featureUpdates,
+        UpdateFeaturesOptions options
+    ) {
+        Map<String, KafkaFuture<Void>> results = new HashMap<>();
+        for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<Void>();
+            String feature = entry.getKey();
+            try {
+                short cur = featureLevels.getOrDefault(feature, (short) 0);
+                short next = entry.getValue().maxVersionLevel();
+                short min = minSupportedFeatureLevels.getOrDefault(feature, (short) 0);
+                short max = maxSupportedFeatureLevels.getOrDefault(feature, (short) 0);
+                switch (entry.getValue().upgradeType()) {
+                    case UNKNOWN:
+                        throw new InvalidRequestException("Invalid upgrade type.");
+                    case UPGRADE:
+                        if (cur > next) {
+                            throw new InvalidUpdateVersionException("Can't upgrade to lower version.");
+                        }
+                        break;
+                    case SAFE_DOWNGRADE:
+                        if (cur < next) {
+                            throw new InvalidUpdateVersionException("Can't downgrade to newer version.");
+                        }
+                        break;
+                    case UNSAFE_DOWNGRADE:
+                        if (cur < next) {
+                            throw new InvalidUpdateVersionException("Can't downgrade to newer version.");
+                        }
+                        while (next != cur) {
+                            // Simulate a scenario where all the even feature levels unsafe to downgrade from.
+                            if (cur % 2 == 0) {
+                                if (entry.getValue().upgradeType() == FeatureUpdate.UpgradeType.SAFE_DOWNGRADE) {
+                                    throw new InvalidUpdateVersionException("Unable to perform a safe downgrade.");
+                                }
+                            }
+                            cur--;
+                        }
+                        break;
+                }
+                if (next < min) {
+                    throw new InvalidUpdateVersionException("Can't downgrade below " + min);
+                }
+                if (next > max) {
+                    throw new InvalidUpdateVersionException("Can't upgrade above " + max);
+                }
+                if (!options.validateOnly()) {
+                    featureLevels.put(feature, next);
+                }
+                future.complete(null);
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+            }
+            results.put(feature, future);
+        }
+        return new UpdateFeaturesResult(results);
+    }
+
+    @Override
+    public UnregisterBrokerResult unregisterBroker(int brokerId, UnregisterBrokerOptions options) {
+        if (usingRaftController) {
+            return new UnregisterBrokerResult(KafkaFuture.completedFuture(null));
+        } else {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            future.completeExceptionally(new UnsupportedVersionException(""));
+            return new UnregisterBrokerResult(future);
+        }
+    }
+
+    @Override
+    public DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds, DescribeTransactionsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public ListTransactionsResult listTransactions(ListTransactionsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public FenceProducersResult fenceProducers(Collection<String> transactionalIds, FenceProducersOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     synchronized public void close(Duration timeout) {}
 
     public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
@@ -837,7 +1158,16 @@ public class MockAdminClient extends AdminClient {
         endOffsets.putAll(newOffsets);
     }
 
+    public synchronized void updateConsumerGroupOffsets(final Map<TopicPartition, Long> newOffsets) {
+        committedOffsets.putAll(newOffsets);
+    }
+
+    public synchronized void throwOnListConsumerGroupOffsets(final KafkaException exception) {
+        listConsumerGroupOffsetsException = exception;
+    }
+
     private final static class TopicMetadata {
+        final Uuid topicId;
         final boolean isInternalTopic;
         final List<TopicPartitionInfo> partitions;
         final List<String> partitionLogDirs;
@@ -846,10 +1176,12 @@ public class MockAdminClient extends AdminClient {
 
         public boolean markedForDeletion;
 
-        TopicMetadata(boolean isInternalTopic,
+        TopicMetadata(Uuid topicId,
+                      boolean isInternalTopic,
                       List<TopicPartitionInfo> partitions,
                       List<String> partitionLogDirs,
                       Map<String, String> configs) {
+            this.topicId = topicId;
             this.isInternalTopic = isInternalTopic;
             this.partitions = partitions;
             this.partitionLogDirs = partitionLogDirs;

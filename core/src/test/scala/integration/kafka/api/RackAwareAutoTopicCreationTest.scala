@@ -23,8 +23,8 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import scala.collection.Map
 
 class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {
@@ -44,11 +44,11 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
 
   @Test
   def testAutoCreateTopic(): Unit = {
-    val producer = TestUtils.createProducer(brokerList)
+    val producer = TestUtils.createProducer(bootstrapServers())
     try {
       // Send a message to auto-create the topic
       val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
-      assertEquals("Should have offset 0", 0L, producer.send(record).get.offset)
+      assertEquals(0L, producer.send(record).get.offset, "Should have offset 0")
 
       // double check that the topic is created with leader elected
       TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)

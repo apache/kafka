@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
 
 import java.time.Duration;
 
@@ -74,15 +75,16 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedWindowStore}) will be backed by
+     * an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${internalStoreName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
-     * Note that the internal store name may not be queriable through Interactive Queries.
+     * Note that the internal store name may not be queryable through Interactive Queries.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -113,15 +115,16 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * the same window and key.
      * The rate of propagated updates depends on your input data rate, the number of distinct
      * keys, the number of parallel running Kafka Streams instances, and the {@link StreamsConfig configuration}
-     * parameters for {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parameters for {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedWindowStore}) will be backed by
+     * an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${internalStoreName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
-     * Note that the internal store name may not be queriable through Interactive Queries.
+     * Note that the internal store name may not be queryable through Interactive Queries.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -153,8 +156,8 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * the same window and key if caching is enabled on the {@link Materialized} instance.
      * When caching is enabled the rate of propagated updates depends on your input data rate, the number of distinct
      * keys, the number of parallel running Kafka Streams instances, and the {@link StreamsConfig configuration}
-     * parameters for {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parameters for {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link ReadOnlyWindowStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
@@ -168,10 +171,11 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * long toTime = ...;
      * WindowStoreIterator<ValueAndTimestamp<V>> aggregateStore = localWindowStore.fetch(key, timeFrom, timeTo); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedWindowStore} -- regardless of what
+     * is specified in the parameter {@code materialized}) will be backed by an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the {@link Materialized} instance must be a valid Kafka topic name and
      * cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
@@ -209,8 +213,8 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * to the same window and key if caching is enabled on the {@link Materialized} instance.
      * When caching is enabled the rate of propagated updates depends on your input data rate, the number of distinct
      * keys, the number of parallel running Kafka Streams instances, and the {@link StreamsConfig configuration}
-     * parameters for {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * parameters for {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link ReadOnlyWindowStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
@@ -224,10 +228,11 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * long toTime = ...;
      * WindowStoreIterator<ValueAndTimestamp<V>> aggregateStore = localWindowStore.fetch(key, timeFrom, timeTo); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedWindowStore} -- regardless of what
+     * is specified in the parameter {@code materialized}) will be backed by an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the {@link Materialized} instance must be a valid Kafka topic name and
      * cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is

@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -46,25 +46,23 @@ public class CreateTopicsResponse extends AbstractResponse {
     private final CreateTopicsResponseData data;
 
     public CreateTopicsResponse(CreateTopicsResponseData data) {
+        super(ApiKeys.CREATE_TOPICS);
         this.data = data;
     }
 
-    public CreateTopicsResponse(Struct struct, short version) {
-        this.data = new CreateTopicsResponseData(struct, version);
-    }
-
+    @Override
     public CreateTopicsResponseData data() {
         return data;
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
     }
 
     @Override
-    public int throttleTimeMs() {
-        return data.throttleTimeMs();
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
     }
 
     @Override
@@ -77,8 +75,7 @@ public class CreateTopicsResponse extends AbstractResponse {
     }
 
     public static CreateTopicsResponse parse(ByteBuffer buffer, short version) {
-        return new CreateTopicsResponse(
-            ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer), version);
+        return new CreateTopicsResponse(new CreateTopicsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

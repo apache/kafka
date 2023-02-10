@@ -17,40 +17,38 @@
 
 package kafka.api.test
 
-import java.util.{Collection, Collections, Properties}
-
-import scala.jdk.CollectionConverters._
-import org.junit.runners.Parameterized
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized.Parameters
-import org.junit.{After, Before, Test}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.junit.Assert._
-import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 
-@RunWith(value = classOf[Parameterized])
-class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness {
+import java.util.{Collections, Properties}
+
+class ProducerCompressionTest extends QuorumTestHarness {
 
   private val brokerId = 0
   private val topic = "topic"
   private val numRecords = 2000
 
-  private var server: KafkaServer = null
+  private var broker: KafkaBroker = _
 
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
-    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
-    server = TestUtils.createServer(KafkaConfig.fromProps(props))
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnectOrNull)
+    broker = createBroker(new KafkaConfig(props))
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
-    TestUtils.shutdownServers(Seq(server))
+    TestUtils.shutdownServers(Seq(broker))
     super.tearDown()
   }
 
@@ -59,11 +57,19 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
    *
    * Compressed messages should be able to sent and consumed correctly
    */
-  @Test
-  def testCompression(): Unit = {
+  @ParameterizedTest
+  @CsvSource(value = Array(
+    "kraft,none",
+    "kraft,gzip",
+    "kraft,snappy",
+    "kraft,lz4",
+    "kraft,zstd",
+    "zk,gzip"
+  ))
+  def testCompression(quorum: String, compression: String): Unit = {
 
     val producerProps = new Properties()
-    val bootstrapServers = TestUtils.getBrokerListStrFromServers(Seq(server))
+    val bootstrapServers = TestUtils.plaintextBootstrapServers(Seq(broker))
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression)
     producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000")
@@ -73,7 +79,13 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
 
     try {
       // create topic
-      TestUtils.createTopic(zkClient, topic, 1, 1, List(server))
+      val admin = TestUtils.createAdminClient(Seq(broker),
+        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+      try {
+        TestUtils.createTopicWithAdmin(admin, topic, Seq(broker))
+      } finally {
+        admin.close()
+      }
       val partition = 0
 
       // prepare the messages
@@ -102,19 +114,5 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
       producer.close()
       consumer.close()
     }
-  }
-}
-
-object ProducerCompressionTest {
-
-  @Parameters(name = "{index} compressionType = {0}")
-  def parameters: Collection[Array[String]] = {
-    Seq(
-      Array("none"),
-      Array("gzip"),
-      Array("snappy"),
-      Array("lz4"),
-      Array("zstd")
-    ).asJava
   }
 }

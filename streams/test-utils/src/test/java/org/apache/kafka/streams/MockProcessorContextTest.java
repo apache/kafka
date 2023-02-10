@@ -16,11 +16,10 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -30,23 +29,24 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.Properties;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@SuppressWarnings("deprecation") // this is a test of a deprecated API
 public class MockProcessorContextTest {
     @Test
     public void shouldCaptureOutputRecords() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
                 context().forward(key + value, key.length() + value);
@@ -71,7 +71,7 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCaptureOutputRecordsUsingTo() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
                 context().forward(key + value, key.length() + value, To.all());
@@ -97,7 +97,7 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCaptureRecordsOutputToChildByName() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
             private int count = 0;
 
             @Override
@@ -158,52 +158,8 @@ public class MockProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIfForwardedWithDeprecatedChildIndex() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
-            @SuppressWarnings("deprecation")
-            @Override
-            public void process(final String key, final Long value) {
-                context().forward(key, value, 0);
-            }
-        };
-
-        final MockProcessorContext context = new MockProcessorContext();
-
-        processor.init(context);
-
-        try {
-            processor.process("foo", 5L);
-            fail("Should have thrown an UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) {
-            // expected
-        }
-    }
-
-    @Test
-    public void shouldThrowIfForwardedWithDeprecatedChildName() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
-            @SuppressWarnings("deprecation")
-            @Override
-            public void process(final String key, final Long value) {
-                context().forward(key, value, "child1");
-            }
-        };
-
-        final MockProcessorContext context = new MockProcessorContext();
-
-        processor.init(context);
-
-        try {
-            processor.process("foo", 5L);
-            fail("Should have thrown an UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) {
-            // expected
-        }
-    }
-
-    @Test
     public void shouldCaptureCommitsAndAllowReset() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
             private int count = 0;
 
             @Override
@@ -232,14 +188,12 @@ public class MockProcessorContextTest {
         assertFalse(context.committed());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldStoreAndReturnStateStores() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
-                @SuppressWarnings("unchecked")
-                final KeyValueStore<String, Long> stateStore = (KeyValueStore<String, Long>) context().getStateStore("my-state");
+                final KeyValueStore<String, Long> stateStore = context().getStateStore("my-state");
                 stateStore.put(key, (stateStore.get(key) == null ? 0 : stateStore.get(key)) + value);
                 stateStore.put("all", (stateStore.get("all") == null ? 0 : stateStore.get("all")) + value);
             }
@@ -270,9 +224,8 @@ public class MockProcessorContextTest {
     public void shouldCaptureApplicationAndRecordMetadata() {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testMetadata");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
 
-        final AbstractProcessor<String, Object> processor = new AbstractProcessor<String, Object>() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Object> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Object>() {
             @Override
             public void process(final String key, final Object value) {
                 context().forward("appId", context().applicationId());
@@ -299,7 +252,7 @@ public class MockProcessorContextTest {
         }
 
         context.resetForwards();
-        context.setRecordMetadata("t1", 0, 0L, null, 0L);
+        context.setRecordMetadata("t1", 0, 0L, new RecordHeaders(), 0L);
 
         {
             processor.process("foo", 5L);
@@ -318,7 +271,9 @@ public class MockProcessorContextTest {
 
         // record metadata should be "sticky"
         context.setOffset(1L);
-        context.setTimestamp(10L);
+        context.setRecordTimestamp(10L);
+        context.setCurrentSystemTimeMs(20L);
+        context.setCurrentStreamTimeMs(30L);
 
         {
             processor.process("bar", 50L);
@@ -331,6 +286,8 @@ public class MockProcessorContextTest {
             assertEquals(new KeyValue<>("timestamp", 10L), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("key", "bar"), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("value", 50L), forwarded.next().keyValue());
+            assertEquals(20L, context.currentSystemTimeMs());
+            assertEquals(30L, context.currentStreamTimeMs());
         }
 
         context.resetForwards();
@@ -354,7 +311,7 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCapturePunctuator() {
-        final Processor<String, Long> processor = new Processor<String, Long>() {
+        final org.apache.kafka.streams.processor.Processor<String, Long> processor = new org.apache.kafka.streams.processor.Processor<String, Long>() {
             @Override
             public void init(final ProcessorContext context) {
                 context.schedule(
@@ -392,7 +349,6 @@ public class MockProcessorContextTest {
     public void fullConstructorShouldSetAllExpectedAttributes() {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testFullConstructor");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
 

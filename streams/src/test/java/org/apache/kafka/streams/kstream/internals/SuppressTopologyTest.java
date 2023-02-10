@@ -39,6 +39,7 @@ import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
+@SuppressWarnings("deprecation")
 public class SuppressTopologyTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
 

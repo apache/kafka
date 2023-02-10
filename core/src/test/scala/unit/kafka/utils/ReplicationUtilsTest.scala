@@ -17,17 +17,16 @@
 
 package kafka.utils
 
-import kafka.server.{KafkaConfig, ReplicaFetcherManager, ReplicaManager}
 import kafka.api.LeaderAndIsr
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.log.{Log, LogManager}
+import kafka.server.QuorumTestHarness
 import kafka.zk._
 import org.apache.kafka.common.TopicPartition
-import org.junit.Assert._
-import org.junit.{Before, Test}
-import org.easymock.EasyMock
+import org.apache.kafka.metadata.LeaderRecoveryState
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
-class ReplicationUtilsTest extends ZooKeeperTestHarness {
+class ReplicationUtilsTest extends QuorumTestHarness {
   private val zkVersion = 1
   private val topic = "my-topic-test"
   private val partition = 0
@@ -36,48 +35,31 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
   private val controllerEpoch = 1
   private val isr = List(1, 2)
 
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     zkClient.makeSurePersistentPathExists(TopicZNode.path(topic))
     val topicPartition = new TopicPartition(topic, partition)
-    val leaderAndIsr = LeaderAndIsr(leader, leaderEpoch, isr, 1)
+    val leaderAndIsr = LeaderAndIsr(leader, leaderEpoch, isr, LeaderRecoveryState.RECOVERED, 1)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     zkClient.createTopicPartitionStatesRaw(Map(topicPartition -> leaderIsrAndControllerEpoch), ZkVersion.MatchAnyVersion)
   }
 
   @Test
   def testUpdateLeaderAndIsr(): Unit = {
-    val configs = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
-    val log: Log = EasyMock.createMock(classOf[Log])
-    EasyMock.expect(log.logEndOffset).andReturn(20).anyTimes()
-    EasyMock.expect(log)
-    EasyMock.replay(log)
-
-    val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
-    EasyMock.expect(logManager.getLog(new TopicPartition(topic, partition), false)).andReturn(Some(log)).anyTimes()
-    EasyMock.replay(logManager)
-
-    val replicaManager: ReplicaManager = EasyMock.createMock(classOf[ReplicaManager])
-    EasyMock.expect(replicaManager.config).andReturn(configs.head)
-    EasyMock.expect(replicaManager.logManager).andReturn(logManager)
-    EasyMock.expect(replicaManager.replicaFetcherManager).andReturn(EasyMock.createMock(classOf[ReplicaFetcherManager]))
-    EasyMock.expect(replicaManager.zkClient).andReturn(zkClient)
-    EasyMock.replay(replicaManager)
-
     zkClient.makeSurePersistentPathExists(IsrChangeNotificationZNode.path)
 
     val replicas = List(0, 1)
 
     // regular update
-    val newLeaderAndIsr1 = new LeaderAndIsr(leader, leaderEpoch, replicas, 0)
+    val newLeaderAndIsr1 = LeaderAndIsr(leader, leaderEpoch, replicas, LeaderRecoveryState.RECOVERED, 0)
     val (updateSucceeded1, newZkVersion1) = ReplicationUtils.updateLeaderAndIsr(zkClient,
       new TopicPartition(topic, partition), newLeaderAndIsr1, controllerEpoch)
     assertTrue(updateSucceeded1)
     assertEquals(newZkVersion1, 1)
 
     // mismatched zkVersion with the same data
-    val newLeaderAndIsr2 = new LeaderAndIsr(leader, leaderEpoch, replicas, zkVersion + 1)
+    val newLeaderAndIsr2 = LeaderAndIsr(leader, leaderEpoch, replicas, LeaderRecoveryState.RECOVERED, zkVersion + 1)
     val (updateSucceeded2, newZkVersion2) = ReplicationUtils.updateLeaderAndIsr(zkClient,
       new TopicPartition(topic, partition), newLeaderAndIsr2, controllerEpoch)
     assertTrue(updateSucceeded2)
@@ -85,7 +67,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     assertEquals(newZkVersion2, 1)
 
     // mismatched zkVersion and leaderEpoch
-    val newLeaderAndIsr3 = new LeaderAndIsr(leader, leaderEpoch + 1, replicas, zkVersion + 1)
+    val newLeaderAndIsr3 = LeaderAndIsr(leader, leaderEpoch + 1, replicas, LeaderRecoveryState.RECOVERED, zkVersion + 1)
     val (updateSucceeded3, newZkVersion3) = ReplicationUtils.updateLeaderAndIsr(zkClient,
       new TopicPartition(topic, partition), newLeaderAndIsr3, controllerEpoch)
     assertFalse(updateSucceeded3)

@@ -19,22 +19,25 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 
-public class SourceNode<K, V> extends ProcessorNode<K, V> {
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeyDeserializer;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueDeserializer;
 
-    private InternalProcessorContext context;
-    private Deserializer<K> keyDeserializer;
-    private Deserializer<V> valDeserializer;
+public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
+
+    private InternalProcessorContext<KIn, VIn> context;
+    private Deserializer<KIn> keyDeserializer;
+    private Deserializer<VIn> valDeserializer;
     private final TimestampExtractor timestampExtractor;
     private Sensor processAtSourceSensor;
 
     public SourceNode(final String name,
                       final TimestampExtractor timestampExtractor,
-                      final Deserializer<K> keyDeserializer,
-                      final Deserializer<V> valDeserializer) {
+                      final Deserializer<KIn> keyDeserializer,
+                      final Deserializer<VIn> valDeserializer) {
         super(name);
         this.timestampExtractor = timestampExtractor;
         this.keyDeserializer = keyDeserializer;
@@ -42,28 +45,27 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     }
 
     public SourceNode(final String name,
-                      final Deserializer<K> keyDeserializer,
-                      final Deserializer<V> valDeserializer) {
+                      final Deserializer<KIn> keyDeserializer,
+                      final Deserializer<VIn> valDeserializer) {
         this(name, null, keyDeserializer, valDeserializer);
     }
 
-    K deserializeKey(final String topic, final Headers headers, final byte[] data) {
+    KIn deserializeKey(final String topic, final Headers headers, final byte[] data) {
         return keyDeserializer.deserialize(topic, headers, data);
     }
 
-    V deserializeValue(final String topic, final Headers headers, final byte[] data) {
+    VIn deserializeValue(final String topic, final Headers headers, final byte[] data) {
         return valDeserializer.deserialize(topic, headers, data);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<KIn, VIn> context) {
         // It is important to first create the sensor before calling init on the
         // parent object. Otherwise due to backwards compatibility an empty sensor
         // without parent is created with the same name.
         // Once the backwards compatibility is not needed anymore it might be possible to
         // change this.
-        processAtSourceSensor = ProcessorNodeMetrics.processorAtSourceSensorOrForwardSensor(
+        processAtSourceSensor = ProcessorNodeMetrics.processAtSourceSensor(
             Thread.currentThread().getName(),
             context.taskId().toString(),
             context.currentNode().name(),
@@ -72,28 +74,14 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         super.init(context);
         this.context = context;
 
-        // if deserializers are null, get the default ones from the context
-        if (this.keyDeserializer == null) {
-            this.keyDeserializer = (Deserializer<K>) context.keySerde().deserializer();
-        }
-        if (this.valDeserializer == null) {
-            this.valDeserializer = (Deserializer<V>) context.valueSerde().deserializer();
-        }
-
-        // if deserializers are internal wrapping deserializers that may need to be given the default
-        // then pass it the default one from the context
-        if (valDeserializer instanceof WrappingNullableDeserializer) {
-            ((WrappingNullableDeserializer) valDeserializer).setIfUnset(
-                    context.keySerde().deserializer(),
-                    context.valueSerde().deserializer()
-            );
-        }
+        keyDeserializer = prepareKeyDeserializer(keyDeserializer, context, name());
+        valDeserializer = prepareValueDeserializer(valDeserializer, context, name());
     }
 
 
     @Override
-    public void process(final K key, final V value) {
-        context.forward(key, value);
+    public void process(final Record<KIn, VIn> record) {
+        context.forward(record);
         processAtSourceSensor.record(1.0d, context.currentSystemTimeMs());
     }
 

@@ -236,7 +236,7 @@ public class VerifiableLog4jAppender {
         PropertyConfigurator.configure(props);
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
 
         final VerifiableLog4jAppender appender = createFromArgs(args);
         boolean infinite = appender.maxMessages < 0;

@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -34,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 
 /**
  * Used to describe how a {@link StateStore} should be materialized.
@@ -64,6 +64,13 @@ public class Materialized<K, V, S extends StateStore> {
     protected boolean cachingEnabled = true;
     protected Map<String, String> topicConfig = new HashMap<>();
     protected Duration retention;
+    public StoreType storeType;
+
+    // the built-in state store types
+    public enum StoreType {
+        ROCKS_DB,
+        IN_MEMORY
+    }
 
     private Materialized(final StoreSupplier<S> storeSupplier) {
         this.storeSupplier = storeSupplier;
@@ -71,6 +78,10 @@ public class Materialized<K, V, S extends StateStore> {
 
     private Materialized(final String storeName) {
         this.storeName = storeName;
+    }
+
+    private Materialized(final StoreType storeType) {
+        this.storeType = storeType;
     }
 
     /**
@@ -86,6 +97,21 @@ public class Materialized<K, V, S extends StateStore> {
         this.cachingEnabled = materialized.cachingEnabled;
         this.topicConfig = materialized.topicConfig;
         this.retention = materialized.retention;
+        this.storeType = materialized.storeType;
+    }
+
+    /**
+     * Materialize a {@link StateStore} with the given {@link StoreType}.
+     *
+     * @param storeType  the type of the state store
+     * @param <K>       key type of the store
+     * @param <V>       value type of the store
+     * @param <S>       type of the {@link StateStore}
+     * @return a new {@link Materialized} instance with the given storeName
+     */
+    public static <K, V, S extends StateStore> Materialized<K, V, S> as(final StoreType storeType) {
+        Objects.requireNonNull(storeType, "store type can't be null");
+        return new Materialized<>(storeType);
     }
 
     /**
@@ -242,7 +268,8 @@ public class Materialized<K, V, S extends StateStore> {
      * ({@link Materialized#as(SessionBytesStoreSupplier)} or {@link Materialized#as(WindowBytesStoreSupplier)}).
      *
      * Note that the retention period must be at least long enough to contain the windowed data's entire life cycle,
-     * from window-start through window-end, and for the entire grace period.
+     * from window-start through window-end, and for the entire grace period. If not specified, the retention
+     * period would be set as the window length (from window-start through window-end) plus the grace period.
      *
      * @param retention the retention time
      * @return itself
@@ -250,12 +277,28 @@ public class Materialized<K, V, S extends StateStore> {
      */
     public Materialized<K, V, S> withRetention(final Duration retention) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retention, "retention");
-        final long retenationMs = ApiUtils.validateMillisecondDuration(retention, msgPrefix);
+        final long retentionMs = validateMillisecondDuration(retention, msgPrefix);
 
-        if (retenationMs < 0) {
+        if (retentionMs < 0) {
             throw new IllegalArgumentException("Retention must not be negative.");
         }
         this.retention = retention;
+        return this;
+    }
+
+    /**
+     * Set the type of the materialized {@link StateStore}.
+     *
+     * @param storeType  the store type {@link StoreType} to use.
+     * @return itself
+     * @throws IllegalArgumentException if store supplier is also pre-configured
+     */
+    public Materialized<K, V, S> withStoreType(final StoreType storeType) throws IllegalArgumentException {
+        Objects.requireNonNull(storeType, "store type can't be null");
+        if (storeSupplier != null) {
+            throw new IllegalArgumentException("Cannot set store type when store supplier is pre-configured.");
+        }
+        this.storeType = storeType;
         return this;
     }
 }

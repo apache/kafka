@@ -22,13 +22,14 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.AtomicLong
 import java.util.{Properties, Random}
-
 import com.typesafe.scalalogging.LazyLogging
-import kafka.utils.{CommandLineUtils, ToolsUtils}
+import joptsimple.OptionException
+import kafka.utils.ToolsUtils
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
+import org.apache.kafka.server.util.CommandLineUtils
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -105,7 +106,7 @@ object ConsumerPerformance extends LazyLogging {
     var messagesRead = 0L
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
-    var joinStart = 0L
+    var joinStart = System.currentTimeMillis
     var joinTimeMsInSingleRound = 0L
 
     consumer.subscribe(topics.asJava, new ConsumerRebalanceListener {
@@ -255,12 +256,17 @@ object ConsumerPerformance extends LazyLogging {
       .ofType(classOf[Long])
       .defaultsTo(10000)
 
-    options = parser.parse(args: _*)
+    try
+      options = parser.parse(args: _*)
+    catch {
+      case e: OptionException =>
+        CommandLineUtils.printUsageAndExit(parser, e.getMessage)
+    }
 
     if(options.has(numThreadsOpt) || options.has(numFetchersOpt))
       println("WARNING: option [threads] and [num-fetch-threads] have been deprecated and will be ignored by the test")
 
-    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps in performance test for the full zookeeper consumer")
+    CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps in performance test for the full zookeeper consumer")
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)
 
@@ -282,6 +288,8 @@ object ConsumerPerformance extends LazyLogging {
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer])
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer])
     props.put(ConsumerConfig.CHECK_CRCS_CONFIG, "false")
+    if (props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) == null)
+      props.put(ConsumerConfig.CLIENT_ID_CONFIG, "perf-consumer-client")
 
     val numThreads = options.valueOf(numThreadsOpt).intValue
     val topic = options.valueOf(topicOpt)

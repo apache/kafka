@@ -18,8 +18,12 @@
   "type": "response",
   "name": "AddOffsetsToTxnResponse",
   // Starting in version 1, on quota violation brokers send out responses before throttling.
-  "validVersions": "0-1",
-  "flexibleVersions": "none",
+  //
+  // Version 2 adds the support for new error code PRODUCER_FENCED.
+  //
+  // Version 3 enables flexible versions.
+  "validVersions": "0-3",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

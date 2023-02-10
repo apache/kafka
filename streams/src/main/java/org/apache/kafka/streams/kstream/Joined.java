@@ -140,24 +140,6 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * @param <VO> other value type
      * @return new {@code Joined} instance configured with the name
      *
-     * @deprecated use {@link #as(String)} instead
-     */
-    @Deprecated
-    public static <K, V, VO> Joined<K, V, VO> named(final String name) {
-        return new Joined<>(null, null, null, name);
-    }
-
-    /**
-     * Create an instance of {@code Joined} with base name for all components of the join, this may
-     * include any repartition topics created to complete the join.
-     *
-     * @param name the name used as the base for naming components of the join including any
-     * repartition topics
-     * @param <K> key type
-     * @param <V> value type
-     * @param <VO> other value type
-     * @return new {@code Joined} instance configured with the name
-     *
      */
     public static <K, V, VO> Joined<K, V, VO> as(final String name) {
         return new Joined<>(null, null, null, name);
@@ -221,13 +203,4 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
     public Serde<VO> otherValueSerde() {
         return otherValueSerde;
     }
-
-    /**
-     * @deprecated this method will be removed in a in a future release
-     */
-    @Deprecated
-    public String name() {
-        return name;
-    }
-
 }

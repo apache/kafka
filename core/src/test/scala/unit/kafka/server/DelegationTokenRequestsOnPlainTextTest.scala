@@ -21,24 +21,24 @@ import java.util
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException
-import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.intercept
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.Assertions.assertThrows
 
 import scala.concurrent.ExecutionException
 
 class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
-  var adminClient: Admin = null
+  var adminClient: Admin = _
 
   override def brokerCount = 1
 
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
   }
 
   def createAdminConfig: util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val securityProps: util.Map[Object, Object] =
       TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
     securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
@@ -50,20 +50,20 @@ class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
     adminClient = Admin.create(createAdminConfig)
 
     val createResult = adminClient.createDelegationToken()
-    intercept[ExecutionException](createResult.delegationToken().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
+    assertThrows(classOf[ExecutionException], () => createResult.delegationToken().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
 
     val describeResult = adminClient.describeDelegationToken()
-    intercept[ExecutionException](describeResult.delegationTokens().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
+    assertThrows(classOf[ExecutionException], () => describeResult.delegationTokens().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
 
     val renewResult = adminClient.renewDelegationToken("".getBytes())
-    intercept[ExecutionException](renewResult.expiryTimestamp().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
+    assertThrows(classOf[ExecutionException], () => renewResult.expiryTimestamp().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
 
     val expireResult = adminClient.expireDelegationToken("".getBytes())
-    intercept[ExecutionException](expireResult.expiryTimestamp().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
+    assertThrows(classOf[ExecutionException], () => expireResult.expiryTimestamp().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
   }
 
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (adminClient != null)
       adminClient.close()

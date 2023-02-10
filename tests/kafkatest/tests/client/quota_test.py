@@ -77,9 +77,10 @@ class QuotaConfig(object):
                 self.configure_quota(kafka, QuotaConfig.LARGE_QUOTA, QuotaConfig.LARGE_QUOTA, ['clients', None])
 
     def configure_quota(self, kafka, producer_byte_rate, consumer_byte_rate, entity_args):
+        force_use_zk_conection = not kafka.all_nodes_configs_command_uses_bootstrap_server()
         node = kafka.nodes[0]
-        cmd = "%s --zookeeper %s --alter --add-config producer_byte_rate=%d,consumer_byte_rate=%d" % \
-              (kafka.path.script("kafka-configs.sh", node), kafka.zk_connect_setting(), producer_byte_rate, consumer_byte_rate)
+        cmd = "%s --alter --add-config producer_byte_rate=%d,consumer_byte_rate=%d" % \
+              (kafka.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_conection), producer_byte_rate, consumer_byte_rate)
         cmd += " --entity-type " + entity_args[0] + self.entity_name_opt(entity_args[1])
         if len(entity_args) > 2:
             cmd += " --entity-type " + entity_args[2] + self.entity_name_opt(entity_args[3])
@@ -162,7 +163,7 @@ class QuotaTest(Test):
             jmx_attributes=['bytes-consumed-rate'], version=client_version)
         consumer.run()
 
-        for idx, messages in consumer.messages_consumed.iteritems():
+        for idx, messages in consumer.messages_consumed.items():
             assert len(messages) > 0, "consumer %d didn't consume any message before timeout" % idx
 
         success, msg = self.validate(self.kafka, producer, consumer)

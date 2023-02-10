@@ -17,16 +17,14 @@
 
 package kafka.tools
 
-import java.io.ByteArrayOutputStream
+import java.io.{ByteArrayOutputStream, PrintWriter}
 import java.text.SimpleDateFormat
-
-import joptsimple.OptionException
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kafka.utils.{Exit, TestUtils}
+import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
 
 class ConsumerPerformanceTest {
-
-  private val outContent = new ByteArrayOutputStream()
   private val dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
 
   @Test
@@ -97,8 +95,9 @@ class ConsumerPerformanceTest {
     assertEquals(10, config.numMessages)
   }
 
-  @Test(expected = classOf[OptionException])
+  @Test
   def testConfigWithUnrecognizedOption(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     //Given
     val args: Array[String] = Array(
       "--broker-list", "localhost:9092",
@@ -106,22 +105,62 @@ class ConsumerPerformanceTest {
       "--messages", "10",
       "--new-consumer"
     )
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsumerPerformance.ConsumerPerfConfig(args))
+    finally Exit.resetExitProcedure()
+  }
+
+  @Test
+  def testClientIdOverride(): Unit = {
+    val consumerConfigFile = TestUtils.tempFile("test_consumer_config",".conf")
+    new PrintWriter(consumerConfigFile.getPath) { write("client.id=consumer-1"); close() }
+
+    //Given
+    val args: Array[String] = Array(
+      "--broker-list", "localhost:9092",
+      "--topic", "test",
+      "--messages", "10",
+      "--consumer.config", consumerConfigFile.getPath
+    )
 
     //When
-    new ConsumerPerformance.ConsumerPerfConfig(args)
+    val config = new ConsumerPerformance.ConsumerPerfConfig(args)
+
+    //Then
+    assertEquals("consumer-1", config.props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG))
+  }
+
+  @Test
+  def testDefaultClientId(): Unit = {
+    //Given
+    val args: Array[String] = Array(
+      "--broker-list", "localhost:9092",
+      "--topic", "test",
+      "--messages", "10"
+    )
+
+    //When
+    val config = new ConsumerPerformance.ConsumerPerfConfig(args)
+
+    //Then
+    assertEquals("perf-consumer-client", config.props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG))
   }
 
   private def testHeaderMatchContent(detailed: Boolean, expectedOutputLineCount: Int, fun: () => Unit): Unit = {
-    Console.withOut(outContent) {
-      ConsumerPerformance.printHeader(detailed)
-      fun()
+    val outContent = new ByteArrayOutputStream
+    try {
+      Console.withOut(outContent) {
+        ConsumerPerformance.printHeader(detailed)
+        fun()
 
-      val contents = outContent.toString.split("\n")
-      assertEquals(expectedOutputLineCount, contents.length)
-      val header = contents(0)
-      val body = contents(1)
+        val contents = outContent.toString.split("\n")
+        assertEquals(expectedOutputLineCount, contents.length)
+        val header = contents(0)
+        val body = contents(1)
 
-      assertEquals(header.split(",").length, body.split(",").length)
+        assertEquals(header.split(",\\s").length, body.split(",\\s").length)
+      }
+    } finally {
+      outContent.close()
     }
   }
 }

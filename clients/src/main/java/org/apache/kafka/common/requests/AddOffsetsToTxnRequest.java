@@ -19,14 +19,14 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
 public class AddOffsetsToTxnRequest extends AbstractRequest {
 
-    public AddOffsetsToTxnRequestData data;
+    private final AddOffsetsToTxnRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<AddOffsetsToTxnRequest> {
         public AddOffsetsToTxnRequestData data;
@@ -52,14 +52,9 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public AddOffsetsToTxnRequest(Struct struct, short version) {
-        super(ApiKeys.ADD_OFFSETS_TO_TXN, version);
-        this.data = new AddOffsetsToTxnRequestData(struct, version);
-    }
-
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public AddOffsetsToTxnRequestData data() {
+        return data;
     }
 
     @Override
@@ -70,6 +65,6 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     }
 
     public static AddOffsetsToTxnRequest parse(ByteBuffer buffer, short version) {
-        return new AddOffsetsToTxnRequest(ApiKeys.ADD_OFFSETS_TO_TXN.parseRequest(version, buffer), version);
+        return new AddOffsetsToTxnRequest(new AddOffsetsToTxnRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

@@ -21,13 +21,15 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Possible error codes:
@@ -47,17 +49,93 @@ import java.util.Map;
  */
 public class TxnOffsetCommitResponse extends AbstractResponse {
 
-    public final TxnOffsetCommitResponseData data;
+    public static class Builder {
+        TxnOffsetCommitResponseData data = new TxnOffsetCommitResponseData();
+        HashMap<String, TxnOffsetCommitResponseTopic> byTopicName = new HashMap<>();
+
+        private TxnOffsetCommitResponseTopic getOrCreateTopic(
+            String topicName
+        ) {
+            TxnOffsetCommitResponseTopic topic = byTopicName.get(topicName);
+            if (topic == null) {
+                topic = new TxnOffsetCommitResponseTopic().setName(topicName);
+                data.topics().add(topic);
+                byTopicName.put(topicName, topic);
+            }
+            return topic;
+        }
+
+        public Builder addPartition(
+            String topicName,
+            int partitionIndex,
+            Errors error
+        ) {
+            final TxnOffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
+
+            topicResponse.partitions().add(new TxnOffsetCommitResponsePartition()
+                .setPartitionIndex(partitionIndex)
+                .setErrorCode(error.code()));
+
+            return this;
+        }
+
+        public <P> Builder addPartitions(
+            String topicName,
+            List<P> partitions,
+            Function<P, Integer> partitionIndex,
+            Errors error
+        ) {
+            final TxnOffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
+
+            partitions.forEach(partition -> {
+                topicResponse.partitions().add(new TxnOffsetCommitResponsePartition()
+                    .setPartitionIndex(partitionIndex.apply(partition))
+                    .setErrorCode(error.code()));
+            });
+
+            return this;
+        }
+
+        public Builder merge(
+            TxnOffsetCommitResponseData newData
+        ) {
+            if (data.topics().isEmpty()) {
+                // If the current data is empty, we can discard it and use the new data.
+                data = newData;
+            } else {
+                // Otherwise, we have to merge them together.
+                newData.topics().forEach(newTopic -> {
+                    TxnOffsetCommitResponseTopic existingTopic = byTopicName.get(newTopic.name());
+                    if (existingTopic == null) {
+                        // If no topic exists, we can directly copy the new topic data.
+                        data.topics().add(newTopic);
+                        byTopicName.put(newTopic.name(), newTopic);
+                    } else {
+                        // Otherwise, we add the partitions to the existing one. Note we
+                        // expect non-overlapping partitions here as we don't verify
+                        // if the partition is already in the list before adding it.
+                        existingTopic.partitions().addAll(newTopic.partitions());
+                    }
+                });
+            }
+
+            return this;
+        }
+
+        public TxnOffsetCommitResponse build() {
+            return new TxnOffsetCommitResponse(data);
+        }
+    }
+
+    private final TxnOffsetCommitResponseData data;
 
     public TxnOffsetCommitResponse(TxnOffsetCommitResponseData data) {
+        super(ApiKeys.TXN_OFFSET_COMMIT);
         this.data = data;
     }
 
-    public TxnOffsetCommitResponse(Struct struct, short version) {
-        this.data = new TxnOffsetCommitResponseData(struct, version);
-    }
-
     public TxnOffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData) {
+        super(ApiKeys.TXN_OFFSET_COMMIT);
         Map<String, TxnOffsetCommitResponseTopic> responseTopicDataMap = new HashMap<>();
 
         for (Map.Entry<TopicPartition, Errors> entry : responseData.entrySet()) {
@@ -80,13 +158,18 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public TxnOffsetCommitResponseData data() {
+        return data;
     }
 
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
+    }
+
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
     }
 
     @Override
@@ -108,7 +191,7 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     }
 
     public static TxnOffsetCommitResponse parse(ByteBuffer buffer, short version) {
-        return new TxnOffsetCommitResponse(ApiKeys.TXN_OFFSET_COMMIT.parseResponse(version, buffer), version);
+        return new TxnOffsetCommitResponse(new TxnOffsetCommitResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

@@ -27,6 +27,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
 
+/**
+ * Represents a chain of {@link Transformation}s to be applied to a {@link ConnectRecord} serially.
+ * @param <R> The type of record (must be an implementation of {@link ConnectRecord})
+ */
 public class TransformationChain<R extends ConnectRecord<R>> implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(TransformationChain.class);
 
@@ -66,7 +70,7 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        TransformationChain that = (TransformationChain) o;
+        TransformationChain<?> that = (TransformationChain<?>) o;
         return Objects.equals(transformations, that.transformations);
     }
 

@@ -17,29 +17,33 @@
 package kafka.log
 
 import java.io.File
-
+import java.util.OptionalLong
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
+import org.apache.kafka.storage.internals.log.{BatchMetadata, EpochEntry, LogConfig, ProducerStateEntry}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
-import scala.jdk.CollectionConverters._
+import java.util
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 class LogSegmentTest {
-
-  val topicPartition = new TopicPartition("topic", 0)
-  val segments = mutable.ArrayBuffer[LogSegment]()
-  var logDir: File = _
+  private val topicPartition = new TopicPartition("topic", 0)
+  private val segments = mutable.ArrayBuffer[LogSegment]()
+  private var logDir: File = _
 
   /* create a segment with the given base offset */
   def createSegment(offset: Long,
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val seg = LogUtils.createSegment(offset, logDir, indexIntervalBytes, time)
+    val seg = LogTestUtils.createSegment(offset, logDir, indexIntervalBytes, time)
     segments += seg
     seg
   }
@@ -50,12 +54,12 @@ class LogSegmentTest {
       records.map { s => new SimpleRecord(offset * 10, s.getBytes) }: _*)
   }
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     logDir = TestUtils.tempDir()
   }
 
-  @After
+  @AfterEach
   def teardown(): Unit = {
     segments.foreach(_.close())
     Utils.delete(logDir)
@@ -68,7 +72,7 @@ class LogSegmentTest {
   def testReadOnEmptySegment(): Unit = {
     val seg = createSegment(40)
     val read = seg.read(startOffset = 40, maxSize = 300)
-    assertNull("Read beyond the last offset in the segment should be null", read)
+    assertNull(read, "Read beyond the last offset in the segment should be null")
   }
 
   /**
@@ -93,7 +97,7 @@ class LogSegmentTest {
     val ms = records(50, "hello", "there")
     seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
     val read = seg.read(startOffset = 52, maxSize = 200)
-    assertNull("Read beyond the last offset in the segment should give null", read)
+    assertNull(read, "Read beyond the last offset in the segment should give null")
   }
 
   /**
@@ -189,11 +193,11 @@ class LogSegmentTest {
     assertEquals(offset, seg.readNextOffset)
 
     val expectedNumEntries = numMessages / 2 - 1
-    assertEquals(s"Should have $expectedNumEntries time indexes", expectedNumEntries, seg.timeIndex.entries)
+    assertEquals(expectedNumEntries, seg.timeIndex.entries, s"Should have $expectedNumEntries time indexes")
 
     seg.truncateTo(41)
-    assertEquals(s"Should have 0 time indexes", 0, seg.timeIndex.entries)
-    assertEquals(s"Largest timestamp should be 400", 400L, seg.largestTimestamp)
+    assertEquals(0, seg.timeIndex.entries, s"Should have 0 time indexes")
+    assertEquals(400L, seg.largestTimestamp, s"Largest timestamp should be 400")
     assertEquals(41, seg.readNextOffset)
   }
 
@@ -215,7 +219,7 @@ class LogSegmentTest {
     assertEquals(0, seg.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
     assertFalse(seg.timeIndex.isFull)
     assertFalse(seg.offsetIndex.isFull)
-    assertNull("Segment should be empty.", seg.read(0, 1024))
+    assertNull(seg.read(0, 1024), "Segment should be empty.")
 
     seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, records(40, "hello", "there"))
   }
@@ -297,7 +301,7 @@ class LogSegmentTest {
       seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
     val indexFile = seg.lazyOffsetIndex.file
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
-    seg.recover(new ProducerStateManager(topicPartition, logDir))
+    seg.recover(newProducerStateManager())
     for(i <- 0 until 100) {
       val records = seg.read(i, 1, minOneMessage = true).records.records
       assertEquals(i, records.iterator.next().offset)
@@ -316,55 +320,95 @@ class LogSegmentTest {
 
     // append transactional records from pid1
     segment.append(largestOffset = 101L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 100L, MemoryRecords.withTransactionalRecords(100L, CompressionType.NONE,
+      shallowOffsetOfMaxTimestamp = 100L, records = MemoryRecords.withTransactionalRecords(100L, CompressionType.NONE,
         pid1, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // append transactional records from pid2
     segment.append(largestOffset = 103L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 102L, MemoryRecords.withTransactionalRecords(102L, CompressionType.NONE,
+      shallowOffsetOfMaxTimestamp = 102L, records = MemoryRecords.withTransactionalRecords(102L, CompressionType.NONE,
         pid2, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // append non-transactional records
     segment.append(largestOffset = 105L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 104L, MemoryRecords.withRecords(104L, CompressionType.NONE,
+      shallowOffsetOfMaxTimestamp = 104L, records = MemoryRecords.withRecords(104L, CompressionType.NONE,
         partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // abort the transaction from pid2 (note LSO should be 100L since the txn from pid1 has not completed)
     segment.append(largestOffset = 106L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 106L, endTxnRecords(ControlRecordType.ABORT, pid2, producerEpoch, offset = 106L))
+      shallowOffsetOfMaxTimestamp = 106L, records = endTxnRecords(ControlRecordType.ABORT, pid2, producerEpoch, offset = 106L))
 
     // commit the transaction from pid1
     segment.append(largestOffset = 107L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 107L, endTxnRecords(ControlRecordType.COMMIT, pid1, producerEpoch, offset = 107L))
+      shallowOffsetOfMaxTimestamp = 107L, records = endTxnRecords(ControlRecordType.COMMIT, pid1, producerEpoch, offset = 107L))
 
-    var stateManager = new ProducerStateManager(topicPartition, logDir)
+    var stateManager = newProducerStateManager()
     segment.recover(stateManager)
     assertEquals(108L, stateManager.mapEndOffset)
 
 
     var abortedTxns = segment.txnIndex.allAbortedTxns
     assertEquals(1, abortedTxns.size)
-    var abortedTxn = abortedTxns.head
+    var abortedTxn = abortedTxns.get(0)
     assertEquals(pid2, abortedTxn.producerId)
     assertEquals(102L, abortedTxn.firstOffset)
     assertEquals(106L, abortedTxn.lastOffset)
     assertEquals(100L, abortedTxn.lastStableOffset)
 
     // recover again, but this time assuming the transaction from pid2 began on a previous segment
-    stateManager = new ProducerStateManager(topicPartition, logDir)
-    stateManager.loadProducerEntry(new ProducerStateEntry(pid2,
-      mutable.Queue[BatchMetadata](BatchMetadata(10, 10L, 5, RecordBatch.NO_TIMESTAMP)), producerEpoch,
-      0, RecordBatch.NO_TIMESTAMP, Some(75L)))
+    stateManager = newProducerStateManager()
+    stateManager.loadProducerEntry(new ProducerStateEntry(pid2, producerEpoch, 0, RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L), java.util.Optional.of(new BatchMetadata(10, 10L, 5, RecordBatch.NO_TIMESTAMP))))
     segment.recover(stateManager)
     assertEquals(108L, stateManager.mapEndOffset)
 
     abortedTxns = segment.txnIndex.allAbortedTxns
     assertEquals(1, abortedTxns.size)
-    abortedTxn = abortedTxns.head
+    abortedTxn = abortedTxns.get(0)
     assertEquals(pid2, abortedTxn.producerId)
     assertEquals(75L, abortedTxn.firstOffset)
     assertEquals(106L, abortedTxn.lastOffset)
     assertEquals(100L, abortedTxn.lastStableOffset)
+  }
+
+  /**
+   * Create a segment with some data, then recover the segment.
+   * The epoch cache entries should reflect the segment.
+   */
+  @Test
+  def testRecoveryRebuildsEpochCache(): Unit = {
+    val seg = createSegment(0)
+
+    val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
+      private var epochs = Seq.empty[EpochEntry]
+
+      override def write(epochs: util.Collection[EpochEntry]): Unit = {
+        this.epochs = epochs.asScala.toSeq
+      }
+
+      override def read(): java.util.List[EpochEntry] = this.epochs.asJava
+    }
+
+    val cache = new LeaderEpochFileCache(topicPartition, checkpoint)
+    seg.append(largestOffset = 105L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 104L, records = MemoryRecords.withRecords(104L, CompressionType.NONE, 0,
+        new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    seg.append(largestOffset = 107L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 106L, records = MemoryRecords.withRecords(106L, CompressionType.NONE, 1,
+        new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    seg.append(largestOffset = 109L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 108L, records = MemoryRecords.withRecords(108L, CompressionType.NONE, 1,
+        new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    seg.append(largestOffset = 111L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 110, records = MemoryRecords.withRecords(110L, CompressionType.NONE, 2,
+        new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    seg.recover(newProducerStateManager(), Some(cache))
+    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 104L),
+                             new EpochEntry(1, 106),
+                             new EpochEntry(2, 110)),
+      cache.epochEntries)
   }
 
   private def endTxnRecords(controlRecordType: ControlRecordType,
@@ -389,7 +433,7 @@ class LogSegmentTest {
       seg.append(i, i * 10, i, records(i, i.toString))
     val timeIndexFile = seg.lazyTimeIndex.file
     TestUtils.writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
-    seg.recover(new ProducerStateManager(topicPartition, logDir))
+    seg.recover(newProducerStateManager())
     for(i <- 0 until 100) {
       assertEquals(i, seg.findOffsetByTimestamp(i * 10).get.offset)
       if (i < 99)
@@ -413,19 +457,19 @@ class LogSegmentTest {
       val recordPosition = seg.log.searchForOffsetWithSize(offsetToBeginCorruption, 0)
       val position = recordPosition.position + TestUtils.random.nextInt(15)
       TestUtils.writeNonsenseToFile(seg.log.file, position, (seg.log.file.length - position).toInt)
-      seg.recover(new ProducerStateManager(topicPartition, logDir))
-      assertEquals("Should have truncated off bad messages.", (0 until offsetToBeginCorruption).toList,
-        seg.log.batches.asScala.map(_.lastOffset).toList)
+      seg.recover(newProducerStateManager())
+      assertEquals((0 until offsetToBeginCorruption).toList, seg.log.batches.asScala.map(_.lastOffset).toList,
+        "Should have truncated off bad messages.")
       seg.deleteIfExists()
     }
   }
 
   private def createSegment(baseOffset: Long, fileAlreadyExists: Boolean, initFileSize: Int, preallocate: Boolean): LogSegment = {
     val tempDir = TestUtils.tempDir()
-    val logConfig = LogConfig(Map(
-      LogConfig.IndexIntervalBytesProp -> 10,
-      LogConfig.SegmentIndexBytesProp -> 1000,
-      LogConfig.SegmentJitterMsProp -> 0
+    val logConfig = new LogConfig(Map(
+      TopicConfig.INDEX_INTERVAL_BYTES_CONFIG -> 10,
+      TopicConfig.SEGMENT_INDEX_BYTES_CONFIG -> 1000,
+      TopicConfig.SEGMENT_JITTER_MS_CONFIG -> 0
     ).asJava)
     val seg = LogSegment.open(tempDir, baseOffset, logConfig, Time.SYSTEM, fileAlreadyExists = fileAlreadyExists,
       initFileSize = initFileSize, preallocate = preallocate)
@@ -449,13 +493,13 @@ class LogSegmentTest {
   @Test
   def testCreateWithInitFileSizeClearShutdown(): Unit = {
     val tempDir = TestUtils.tempDir()
-    val logConfig = LogConfig(Map(
-      LogConfig.IndexIntervalBytesProp -> 10,
-      LogConfig.SegmentIndexBytesProp -> 1000,
-      LogConfig.SegmentJitterMsProp -> 0
+    val logConfig = new LogConfig(Map(
+      TopicConfig.INDEX_INTERVAL_BYTES_CONFIG -> 10,
+      TopicConfig.SEGMENT_INDEX_BYTES_CONFIG -> 1000,
+      TopicConfig.SEGMENT_JITTER_MS_CONFIG -> 0
     ).asJava)
 
-    val seg = LogSegment.open(tempDir, baseOffset = 40, logConfig, Time.SYSTEM, fileAlreadyExists = false,
+    val seg = LogSegment.open(tempDir, baseOffset = 40, logConfig, Time.SYSTEM,
       initFileSize = 512 * 1024 * 1024, preallocate = true)
 
     val ms = records(50, "hello", "there")
@@ -518,7 +562,7 @@ class LogSegmentTest {
 
     // create a log file in a separate directory to avoid conflicting with created segments
     val tempDir = TestUtils.tempDir()
-    val fileRecords = FileRecords.open(Log.logFile(tempDir, 0))
+    val fileRecords = FileRecords.open(UnifiedLog.logFile(tempDir, 0))
 
     // Simulate a scenario where we have a single log with an offset range exceeding Int.MaxValue
     fileRecords.append(records(0, 1024))
@@ -538,6 +582,16 @@ class LogSegmentTest {
     assertEquals(overflowBytesAppended, overflowSegment.size)
 
     Utils.delete(tempDir)
+  }
+
+  private def newProducerStateManager(): ProducerStateManager = {
+    new ProducerStateManager(
+      topicPartition,
+      logDir,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
+      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
+      time = new MockTime()
+    )
   }
 
 }

@@ -23,10 +23,9 @@ import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
 import java.util.{Base64, Properties, UUID}
-
 import com.typesafe.scalalogging.Logger
-import javax.management._
 
+import javax.management._
 import scala.collection._
 import scala.collection.{Seq, mutable}
 import kafka.cluster.EndPoint
@@ -205,25 +204,6 @@ object CoreUtils {
     for (_ <- Iterator.continually(1); t <- coll) yield t
 
   /**
-   * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
-   */
-  def replaceSuffix(s: String, oldSuffix: String, newSuffix: String): String = {
-    if(!s.endsWith(oldSuffix))
-      throw new IllegalArgumentException("Expected string to end with '%s' but string is '%s'".format(oldSuffix, s))
-    s.substring(0, s.length - oldSuffix.length) + newSuffix
-  }
-
-  /**
-   * Read a big-endian integer from a byte array
-   */
-  def readInt(bytes: Array[Byte], offset: Int): Int = {
-    ((bytes(offset) & 0xFF) << 24) |
-    ((bytes(offset + 1) & 0xFF) << 16) |
-    ((bytes(offset + 2) & 0xFF) << 8) |
-    (bytes(offset + 3) & 0xFF)
-  }
-
-  /**
    * Execute the given function inside the lock
    */
   def inLock[T](lock: Lock)(fun: => T): T = {
@@ -250,14 +230,20 @@ object CoreUtils {
   }
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
+    listenerListToEndPoints(listeners, securityProtocolMap, true)
+  }
+
+  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[EndPoint] = {
     def validate(endPoints: Seq[EndPoint]): Unit = {
       // filter port 0 for unit tests
       val portsExcludingZero = endPoints.map(_.port).filter(_ != 0)
-      val distinctPorts = portsExcludingZero.distinct
       val distinctListenerNames = endPoints.map(_.listenerName).distinct
 
-      require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
       require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
+      if (requireDistinctPorts) {
+        val distinctPorts = portsExcludingZero.distinct
+        require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
+      }
     }
 
     val endPoints = try {
@@ -314,7 +300,7 @@ object CoreUtils {
 
   @nowarn("cat=unused") // see below for explanation
   def groupMapReduce[T, K, B](elements: Iterable[T])(key: T => K)(f: T => B)(reduce: (B, B) => B): Map[K, B] = {
-    // required for Scala 2.12 compatibility, unused in Scala 2.13 and hence we need to suppres the unused warning
+    // required for Scala 2.12 compatibility, unused in Scala 2.13 and hence we need to suppress the unused warning
     import scala.collection.compat._
     elements.groupMapReduce(key)(f)(reduce)
   }

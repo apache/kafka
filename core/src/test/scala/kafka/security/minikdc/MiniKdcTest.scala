@@ -20,8 +20,8 @@ package kafka.security.minikdc
 import java.util.Properties
 
 import kafka.utils.TestUtils
-import org.junit.Test
-import org.junit.Assert._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 
 class MiniKdcTest {
   @Test
@@ -38,7 +38,7 @@ class MiniKdcTest {
     val minikdc = MiniKdc.start(TestUtils.tempDir(), config, TestUtils.tempFile(), List("foo"))
     val running = System.getProperty(MiniKdc.JavaSecurityKrb5Conf) != null
     try {
-      assertTrue("MiniKdc stopped immediately; it should not have", running)
+      assertTrue(running, "MiniKdc stopped immediately; it should not have")
     } finally {
       if (running) minikdc.stop()
     }

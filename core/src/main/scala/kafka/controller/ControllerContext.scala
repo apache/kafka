@@ -17,8 +17,10 @@
 
 package kafka.controller
 
+import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import org.apache.kafka.common.TopicPartition
+import kafka.utils.Implicits._
+import org.apache.kafka.common.{TopicPartition, Uuid}
 
 import scala.collection.{Map, Seq, Set, mutable}
 
@@ -71,7 +73,7 @@ case class ReplicaAssignment private (replicas: Seq[Int],
     s"removingReplicas=${removingReplicas.mkString(",")})"
 }
 
-class ControllerContext {
+class ControllerContext extends ControllerChannelContext {
   val stats = new ControllerStats
   var offlinePartitionCount = 0
   var preferredReplicaImbalanceCount = 0
@@ -82,6 +84,8 @@ class ControllerContext {
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 
   val allTopics = mutable.Set.empty[String]
+  var topicIds = mutable.Map.empty[String, Uuid]
+  var topicNames = mutable.Map.empty[Uuid, String]
   val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, ReplicaAssignment]]
   private val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
   val partitionsBeingReassigned = mutable.Set.empty[TopicPartition]
@@ -115,6 +119,8 @@ class ControllerContext {
 
   private def clearTopicsState(): Unit = {
     allTopics.clear()
+    topicIds.clear()
+    topicNames.clear()
     partitionAssignments.clear()
     partitionLeadershipInfo.clear()
     partitionsBeingReassigned.clear()
@@ -123,6 +129,24 @@ class ControllerContext {
     offlinePartitionCount = 0
     preferredReplicaImbalanceCount = 0
     replicaStates.clear()
+  }
+
+  def addTopicId(topic: String, id: Uuid): Unit = {
+    if (!allTopics.contains(topic))
+      throw new IllegalStateException(s"topic $topic is not contained in all topics.")
+
+    topicIds.get(topic).foreach { existingId =>
+      if (!existingId.equals(id))
+        throw new IllegalStateException(s"topic ID map already contained ID for topic " +
+          s"$topic and new ID $id did not match existing ID $existingId")
+    }
+    topicNames.get(id).foreach { existingName =>
+      if (!existingName.equals(topic))
+        throw new IllegalStateException(s"topic name map already contained ID " +
+          s"$id and new name $topic did not match existing name $existingName")
+    }
+    topicIds.put(topic, id)
+    topicNames.put(id, topic)
   }
 
   def partitionReplicaAssignment(topicPartition: TopicPartition): Seq[Int] = {
@@ -207,7 +231,11 @@ class ControllerContext {
     }.toSet
   }
 
-  def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition, includeShuttingDownBrokers: Boolean = false): Boolean = {
+  def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition): Boolean = {
+    isReplicaOnline(brokerId, topicPartition, includeShuttingDownBrokers = false)
+  }
+
+  def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition, includeShuttingDownBrokers: Boolean): Boolean = {
     val brokerOnline = {
       if (includeShuttingDownBrokers) liveOrShuttingDownBrokerIds.contains(brokerId)
       else liveBrokerIds.contains(brokerId)
@@ -294,6 +322,9 @@ class ControllerContext {
     topicsToBeDeleted -= topic
     topicsWithDeletionStarted -= topic
     allTopics -= topic
+    topicIds.remove(topic).foreach { topicId =>
+      topicNames.remove(topicId)
+    }
     partitionAssignments.remove(topic).foreach { assignments =>
       assignments.keys.foreach { partition =>
         partitionLeadershipInfo.remove(new TopicPartition(topic, partition))
@@ -301,9 +332,16 @@ class ControllerContext {
     }
   }
 
-  def queueTopicDeletion(topics: Set[String]): Unit = {
-    topicsToBeDeleted ++= topics
-    topics.foreach(cleanPreferredReplicaImbalanceMetric)
+  def queueTopicDeletion(topicToBeAddedIntoDeletionList: Set[String]): Unit = {
+    // queueTopicDeletion could be called multiple times for same topic.
+    // e.g. 1) delete topic-A => 2) delete topic-B before A's deletion completes.
+    // In this case, at 2), queueTopicDeletion will be called with Set(topic-A, topic-B).
+    // However we should call cleanPreferredReplicaImbalanceMetric only once for same topic
+    // because otherwise, preferredReplicaImbalanceCount could be decremented wrongly at 2nd call.
+    // So we need to take a diff with already queued topics here.
+    val newlyDeletedTopics = topicToBeAddedIntoDeletionList.diff(topicsToBeDeleted)
+    topicsToBeDeleted ++= newlyDeletedTopics
+    newlyDeletedTopics.foreach(cleanPreferredReplicaImbalanceMetric)
   }
 
   def beginTopicDeletion(topics: Set[String]): Unit = {
@@ -412,6 +450,22 @@ class ControllerContext {
       Some(replicaAssignment), Some(leaderIsrAndControllerEpoch))
   }
 
+  def partitionLeaderAndIsr(partition: TopicPartition): Option[LeaderAndIsr] = {
+    partitionLeadershipInfo.get(partition).map(_.leaderAndIsr)
+  }
+
+  def leaderEpoch(partition: TopicPartition): Int = {
+    // A sentinel (-2) is used as an epoch if the topic is queued for deletion. It overrides
+    // any existing epoch.
+    if (isTopicQueuedUpForDeletion(partition.topic)) {
+      LeaderAndIsr.EpochDuringDelete
+    } else {
+      partitionLeadershipInfo.get(partition)
+        .map(_.leaderAndIsr.leaderEpoch)
+        .getOrElse(LeaderAndIsr.NoEpoch)
+    }
+  }
+
   def partitionLeadershipInfo(partition: TopicPartition): Option[LeaderIsrAndControllerEpoch] = {
     partitionLeadershipInfo.get(partition)
   }
@@ -435,6 +489,10 @@ class ControllerContext {
         leaderIsrAndControllerEpoch.leaderAndIsr.leader == brokerId &&
         partitionReplicaAssignment(topicPartition).size > 1
     }.keySet
+  }
+
+  def topicName(topicId: Uuid): Option[String] = {
+    topicNames.get(topicId)
   }
 
   def clearPartitionLeadershipInfo(): Unit = partitionLeadershipInfo.clear()
@@ -464,7 +522,7 @@ class ControllerContext {
   }
 
   private def cleanPreferredReplicaImbalanceMetric(topic: String): Unit = {
-    partitionAssignments.getOrElse(topic, mutable.Map.empty).foreach { case (partition, replicaAssignment) =>
+    partitionAssignments.getOrElse(topic, mutable.Map.empty).forKeyValue { (partition, replicaAssignment) =>
       partitionLeadershipInfo.get(new TopicPartition(topic, partition)).foreach { leadershipInfo =>
         if (!hasPreferredLeader(replicaAssignment, leadershipInfo))
           preferredReplicaImbalanceCount -= 1
@@ -487,5 +545,4 @@ class ControllerContext {
 
   private def isValidPartitionStateTransition(partition: TopicPartition, targetState: PartitionState): Boolean =
     targetState.validPreviousStates.contains(partitionStates(partition))
-
 }

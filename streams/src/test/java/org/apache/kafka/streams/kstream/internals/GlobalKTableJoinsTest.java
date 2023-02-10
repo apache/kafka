@@ -26,7 +26,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
-
 
 public class GlobalKTableJoinsTest {
 
@@ -58,7 +57,7 @@ public class GlobalKTableJoinsTest {
 
     @Test
     public void shouldLeftJoinWithStream() {
-        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream
             .leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
             .process(supplier);
@@ -73,7 +72,7 @@ public class GlobalKTableJoinsTest {
 
     @Test
     public void shouldInnerJoinWithStream() {
-        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream
             .join(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
             .process(supplier);
@@ -86,7 +85,7 @@ public class GlobalKTableJoinsTest {
     }
 
     private void verifyJoin(final Map<String, ValueAndTimestamp<String>> expected,
-                            final MockProcessorSupplier<String, String> supplier) {
+                            final MockApiProcessorSupplier<String, String, Void, Void> supplier) {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -101,6 +100,6 @@ public class GlobalKTableJoinsTest {
             streamInputTopic.pipeInput("3", "c", 3L);
         }
 
-        assertEquals(expected, supplier.theCapturedProcessor().lastValueAndTimestampPerKey);
+        assertEquals(expected, supplier.theCapturedProcessor().lastValueAndTimestampPerKey());
     }
 }

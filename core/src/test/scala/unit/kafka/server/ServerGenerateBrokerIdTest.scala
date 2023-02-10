@@ -20,33 +20,32 @@ import java.util.Properties
 
 import scala.collection.Seq
 
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import kafka.utils.TestUtils
-import org.junit.{After, Before, Test}
-import org.junit.Assert._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.Assertions._
 import java.io.File
-import org.scalatest.Assertions.intercept
 
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
-class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
-  var props1: Properties = null
-  var config1: KafkaConfig = null
-  var props2: Properties = null
-  var config2: KafkaConfig = null
+class ServerGenerateBrokerIdTest extends QuorumTestHarness {
+  var props1: Properties = _
+  var config1: KafkaConfig = _
+  var props2: Properties = _
+  var config2: KafkaConfig = _
   val brokerMetaPropsFile = "meta.properties"
   var servers: Seq[KafkaServer] = Seq()
 
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     props1 = TestUtils.createBrokerConfig(-1, zkConnect)
     config1 = KafkaConfig.fromProps(props1)
     props2 = TestUtils.createBrokerConfig(0, zkConnect)
     config2 = KafkaConfig.fromProps(props2)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -154,9 +153,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     val propsB = TestUtils.createBrokerConfig(1, zkConnect)
     val configB = KafkaConfig.fromProps(propsB)
     val serverB = new KafkaServer(configB, threadNamePrefix = Option(this.getClass.getName))
-    intercept[NodeExistsException] {
-      serverB.startup()
-    }
+    assertThrows(classOf[NodeExistsException], () => serverB.startup())
     servers = Seq(serverA)
 
     // verify no broker metadata was written
@@ -185,8 +182,9 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
       val brokerMetadataOpt = new BrokerMetadataCheckpoint(
         new File(logDir + File.separator + brokerMetaPropsFile)).read()
       brokerMetadataOpt match {
-        case Some(brokerMetadata) =>
-          if (brokerMetadata.brokerId != brokerId) return false
+        case Some(properties) =>
+          val brokerMetadata = new RawMetaProperties(properties)
+          if (brokerMetadata.brokerId.exists(_ != brokerId)) return false
         case _ => return false
       }
     }

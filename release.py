@@ -51,8 +51,6 @@ release.py release-email
 
 """
 
-from __future__ import print_function
-
 import datetime
 from getpass import getpass
 import json
@@ -71,6 +69,7 @@ REPO_HOME = os.environ.get("%s_HOME" % CAPITALIZED_PROJECT_NAME, SCRIPT_DIR)
 # Remote name, which points to Github by default
 PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache-github")
 PREFS_FILE = os.path.join(SCRIPT_DIR, '.release-settings.json')
+PUBLIC_HTML = "public_html"
 
 delete_gitrefs = False
 work_dir = None
@@ -98,25 +97,25 @@ def print_output(output):
         print(">", line)
 
 def cmd(action, cmd_arg, *args, **kwargs):
-    if isinstance(cmd_arg, basestring) and not kwargs.get("shell", False):
+    if isinstance(cmd_arg, str) and not kwargs.get("shell", False):
         cmd_arg = cmd_arg.split()
     allow_failure = kwargs.pop("allow_failure", False)
     num_retries = kwargs.pop("num_retries", 0)
 
     stdin_log = ""
-    if "stdin" in kwargs and isinstance(kwargs["stdin"], basestring):
+    if "stdin" in kwargs and isinstance(kwargs["stdin"], str):
         stdin_log = "--> " + kwargs["stdin"]
         stdin = tempfile.TemporaryFile()
-        stdin.write(kwargs["stdin"])
+        stdin.write(kwargs["stdin"].encode('utf-8'))
         stdin.seek(0)
         kwargs["stdin"] = stdin
 
     print(action, cmd_arg, stdin_log)
     try:
         output = subprocess.check_output(cmd_arg, *args, stderr=subprocess.STDOUT, **kwargs)
-        print_output(output)
+        print_output(output.decode('utf-8'))
     except subprocess.CalledProcessError as e:
-        print_output(e.output)
+        print_output(e.output.decode('utf-8'))
 
         if num_retries > 0:
             kwargs['num_retries'] = num_retries - 1
@@ -136,9 +135,9 @@ def cmd(action, cmd_arg, *args, **kwargs):
 
 
 def cmd_output(cmd, *args, **kwargs):
-    if isinstance(cmd, basestring):
+    if isinstance(cmd, str):
         cmd = cmd.split()
-    return subprocess.check_output(cmd, *args, stderr=subprocess.STDOUT, **kwargs)
+    return subprocess.check_output(cmd, *args, stderr=subprocess.STDOUT, **kwargs).decode('utf-8')
 
 def replace(path, pattern, replacement):
     updated = []
@@ -161,22 +160,28 @@ def regexReplace(path, pattern, replacement):
             f.write(line)
 
 def user_ok(msg):
-    ok = raw_input(msg)
+    ok = input(msg)
     return ok.strip().lower() == 'y'
 
 def sftp_mkdir(dir):
-    basedir, dirname = os.path.split(dir)
-    if not basedir:
-       basedir = "."
     try:
        cmd_str  = """
-cd %s
--mkdir %s
-""" % (basedir, dirname)
-       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True, num_retries=3)
+mkdir %s
+""" % dir
+       cmd("Creating '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % dir, "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True, num_retries=3)
     except subprocess.CalledProcessError:
         # This is ok. The command fails if the directory already exists
         pass
+
+def sftp_upload(dir):
+    try:
+       cmd_str  = """
+cd %s
+put -r %s
+""" % (PUBLIC_HTML, dir)
+       cmd("Uploading '%s' under %s in your Apache home directory" % (dir, PUBLIC_HTML), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True, num_retries=3)
+    except subprocess.CalledProcessError:
+        fail("Failed uploading %s to your Apache home directory" % dir)
 
 def get_pref(prefs, name, request_fn):
     "Get a preference from existing preference dictionary or invoke a function that can collect it from the user"
@@ -204,11 +209,16 @@ def get_jdk(prefs, version):
     """
     Get settings for the specified JDK version.
     """
-    jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: raw_input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
-    jdk_env = dict(os.environ) if jdk_java_home.strip() else None
-    if jdk_env is not None: jdk_env['JAVA_HOME'] = jdk_java_home
-    if "1.%d.0" % version not in cmd_output("java -version", env=jdk_env):
-        fail("JDK %s is required" % version)
+    jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
+    jdk_env = dict(os.environ)
+    if jdk_java_home.strip(): jdk_env['JAVA_HOME'] = jdk_java_home
+    else: jdk_java_home = jdk_env['JAVA_HOME']
+    java_version = cmd_output("%s/bin/java -version" % jdk_java_home, env=jdk_env)
+    if version == 8:
+      if "1.8.0" not in java_version:
+        fail("JDK 8 is required")
+    elif "%d.0" % version not in java_version and '"%d"' % version not in java_version:
+      fail("JDK %s is required" % version)
     return jdk_env
 
 def get_version(repo=REPO_HOME):
@@ -253,7 +263,7 @@ def command_stage_docs():
         sys.exit("%s doesn't exist or does not appear to be the kafka-site repository" % kafka_site_repo_path)
 
     prefs = load_prefs()
-    jdk8_env = get_jdk(prefs, 8)
+    jdk17_env = get_jdk(prefs, 17)
     save_prefs(prefs)
 
     version = get_version()
@@ -262,13 +272,13 @@ def command_stage_docs():
     # version due to already having bumped the bugfix version number.
     gradle_version_override = docs_release_version(version)
 
-    cmd("Building docs", "./gradlew -Pversion=%s clean aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk8_env)
+    cmd("Building docs", "./gradlew -Pversion=%s clean siteDocsTar aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk17_env)
 
     docs_tar = os.path.join(REPO_HOME, 'core', 'build', 'distributions', 'kafka_2.13-%s-site-docs.tgz' % gradle_version_override)
 
     versioned_docs_path = os.path.join(kafka_site_repo_path, docs_version(version))
     if not os.path.exists(versioned_docs_path):
-        os.mkdir(versioned_docs_path, 0755)
+        os.mkdir(versioned_docs_path, 0o755)
 
     # The contents of the docs jar are site-docs/<docs dir>. We need to get rid of the site-docs prefix and dump everything
     # inside it into the docs version subdirectory in the kafka-site repo
@@ -306,16 +316,16 @@ def command_release_announcement_email():
     release_tags = sorted([t for t in tags if re.match(release_tag_pattern, t)])
     release_version_num = release_tags[-1]
     if not user_ok("""Is the current release %s ? (y/n): """ % release_version_num):
-        release_version_num = raw_input('What is the current release version:')
+        release_version_num = input('What is the current release version:')
         validate_release_num(release_version_num)
     previous_release_version_num = release_tags[-2]
     if not user_ok("""Is the previous release %s ? (y/n): """ % previous_release_version_num):
-        previous_release_version_num = raw_input('What is the previous release version:')
+        previous_release_version_num = input('What is the previous release version:')
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
         fail("Current release version number can't be less than previous release version number")
-    number_of_contributors = int(subprocess.check_output('git shortlog -sn --no-merges %s..%s | wc -l' % (previous_release_version_num, release_version_num) , shell=True))
-    contributors = subprocess.check_output("git shortlog -sn --no-merges %s..%s | cut -f2 | sort --ignore-case" % (previous_release_version_num, release_version_num), shell=True)
+    number_of_contributors = int(subprocess.check_output('git shortlog -sn --no-merges %s..%s | wc -l' % (previous_release_version_num, release_version_num) , shell=True).decode('utf-8'))
+    contributors = subprocess.check_output("git shortlog -sn --no-merges %s..%s | cut -f2 | sort --ignore-case" % (previous_release_version_num, release_version_num), shell=True).decode('utf-8')
     release_announcement_data = {
         'number_of_contributors': number_of_contributors,
         'contributors': ', '.join(str(x) for x in filter(None, contributors.split('\n'))),
@@ -343,7 +353,7 @@ https://kafka.apache.org/downloads#%(release_version)s
 Apache Kafka is a distributed streaming platform with four core APIs:
 
 
-** The Producer API allows an application to publish a stream records to
+** The Producer API allows an application to publish a stream of records to
 one or more Kafka topics.
 
 ** The Consumer API allows an application to subscribe to one or more
@@ -423,7 +433,7 @@ prefs = load_prefs()
 
 if not user_ok("""Requirements:
 1. Updated docs to reference the new release version where appropriate.
-2. JDK8 compilers and libraries
+2. JDK8 and JDK17 compilers and libraries
 3. Your Apache ID, already configured with SSH keys on id.apache.org and SSH keys available in this shell session
 4. All issues in the target release resolved with valid resolutions (if not, this script will report the problematic JIRAs)
 5. A GPG key used for signing the release. This key should have been added to public Apache servers and the KEYS file on the Kafka site
@@ -444,7 +454,7 @@ if not user_ok("""Requirements:
         </server>
         <server>
             <id>your-gpgkeyId</id>
-            <passphrase>your-gpg-passphase</passphrase>
+            <passphrase>your-gpg-passphrase</passphrase>
         </server>
         <profile>
             <id>gpg-signing</id>
@@ -478,10 +488,10 @@ starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
 cmd("Verifying that you have no unstaged git changes", 'git diff --exit-code --quiet')
 cmd("Verifying that you have no staged git changes", 'git diff --cached --exit-code --quiet')
 
-release_version = raw_input("Release version (without any RC info, e.g. 1.0.0): ")
+release_version = input("Release version (without any RC info, e.g. 1.0.0): ")
 release_version_parts = get_release_version_parts(release_version)
 
-rc = raw_input("Release candidate number: ")
+rc = input("Release candidate number: ")
 
 dev_branch = '.'.join(release_version_parts[:2])
 docs_release_version = docs_version(release_version)
@@ -505,16 +515,16 @@ if not rc:
     sys.exit(0)
 
 # Prereq checks
-apache_id = get_pref(prefs, 'apache_id', lambda: raw_input("Enter your apache username: "))
+apache_id = get_pref(prefs, 'apache_id', lambda: input("Enter your apache username: "))
 
 jdk8_env = get_jdk(prefs, 8)
-
+jdk17_env = get_jdk(prefs, 17)
 
 def select_gpg_key():
     print("Here are the available GPG keys:")
     available_keys = cmd_output("gpg --list-secret-keys")
     print(available_keys)
-    key_name = raw_input("Which user name (enter the user name without email address): ")
+    key_name = input("Which user name (enter the user name without email address): ")
     if key_name not in available_keys:
         fail("Couldn't find the requested key.")
     return key_name
@@ -524,7 +534,7 @@ key_name = get_pref(prefs, 'gpg-key', select_gpg_key)
 gpg_passphrase = get_pref(prefs, 'gpg-pass', lambda: getpass("Passphrase for this GPG key: "))
 # Do a quick validation so we can fail fast if the password is incorrect
 with tempfile.NamedTemporaryFile() as gpg_test_tempfile:
-    gpg_test_tempfile.write("abcdefg")
+    gpg_test_tempfile.write("abcdefg".encode('utf-8'))
     cmd("Testing GPG key & passphrase", ["gpg", "--batch", "--pinentry-mode", "loopback", "--passphrase-fd", "0", "-u", key_name, "--armor", "--output", gpg_test_tempfile.name + ".asc", "--detach-sig", gpg_test_tempfile.name], stdin=gpg_passphrase)
 
 save_prefs(prefs)
@@ -567,8 +577,9 @@ print("Temporary build working director:", work_dir)
 kafka_dir = os.path.join(work_dir, 'kafka')
 streams_quickstart_dir = os.path.join(kafka_dir, 'streams/quickstart')
 print("Streams quickstart dir", streams_quickstart_dir)
-cmd("Creating staging area for release artifacts", "mkdir kafka-" + rc_tag, cwd=work_dir)
-artifacts_dir = os.path.join(work_dir, "kafka-" + rc_tag)
+artifact_name = "kafka-" + rc_tag
+cmd("Creating staging area for release artifacts", "mkdir " + artifact_name, cwd=work_dir)
+artifacts_dir = os.path.join(work_dir, artifact_name)
 cmd("Cloning clean copy of repo", "git clone %s kafka" % REPO_HOME, cwd=work_dir)
 cmd("Checking out RC tag", "git checkout -b %s %s" % (release_version, rc_tag), cwd=kafka_dir)
 current_year = datetime.datetime.now().year
@@ -594,9 +605,9 @@ params = { 'release_version': release_version,
            }
 cmd("Creating source archive", "git archive --format tar.gz --prefix kafka-%(release_version)s-src/ -o %(artifacts_dir)s/kafka-%(release_version)s-src.tgz %(rc_tag)s" % params)
 
-cmd("Building artifacts", "./gradlew clean && ./gradlewAll releaseTarGz", cwd=kafka_dir, env=jdk8_env)
+cmd("Building artifacts", "./gradlew clean && ./gradlewAll releaseTarGz", cwd=kafka_dir, env=jdk8_env, shell=True)
 cmd("Copying artifacts", "cp %s/core/build/distributions/* %s" % (kafka_dir, artifacts_dir), shell=True)
-cmd("Building docs", "./gradlew aggregatedJavadoc", cwd=kafka_dir, env=jdk8_env)
+cmd("Building docs", "./gradlew clean aggregatedJavadoc", cwd=kafka_dir, env=jdk17_env)
 cmd("Copying docs", "cp -R %s/build/docs/javadoc %s" % (kafka_dir, artifacts_dir))
 
 for filename in os.listdir(artifacts_dir):
@@ -615,34 +626,19 @@ for filename in os.listdir(artifacts_dir):
     cmd("Generating SHA512 for " + full_path, "gpg --print-md sha512 %s > %s.sha512" % (fname, fname), shell=True, cwd=dir)
 
 cmd("Listing artifacts to be uploaded:", "ls -R %s" % artifacts_dir)
-if not user_ok("Going to upload the artifacts in %s, listed above, to your Apache home directory. Ok (y/n)?): " % artifacts_dir):
-    fail("Quitting")
-sftp_mkdir("public_html")
-kafka_output_dir = "kafka-" + rc_tag
-sftp_mkdir(os.path.join("public_html", kafka_output_dir))
-public_release_dir = os.path.join("public_html", kafka_output_dir)
-# The sftp -r option doesn't seem to work as would be expected, at least with the version shipping on OS X. To work around this we process all the files and directories manually...
-sftp_cmds = ""
-for root, dirs, files in os.walk(artifacts_dir):
-    assert root.startswith(artifacts_dir)
 
-    for dir in dirs:
-        sftp_mkdir(os.path.join("public_html", kafka_output_dir, root[len(artifacts_dir)+1:], dir))
-
-    for file in files:
-        local_path = os.path.join(root, file)
-        remote_path = os.path.join("public_html", kafka_output_dir, root[len(artifacts_dir)+1:], file)
-        sftp_cmds = """
-put %s %s
-""" % (local_path, remote_path)
-        cmd("Uploading artifacts in %s to your Apache home directory" % root, "sftp -b - %s@home.apache.org" % apache_id, stdin=sftp_cmds)
+cmd("Zipping artifacts", "tar -czf %s.tar.gz %s" % (artifact_name, artifact_name), cwd=work_dir)
+sftp_mkdir(PUBLIC_HTML)
+sftp_upload(artifacts_dir)
+if not user_ok("Confirm the artifact is present under %s in your Apache home directory: https://home.apache.org/~%s/ (y/n)?: " % (PUBLIC_HTML, apache_id)):
+    fail("Ok, giving up")
 
 with open(os.path.expanduser("~/.gradle/gradle.properties")) as f:
     contents = f.read()
 if not user_ok("Going to build and upload mvn artifacts based on these settings:\n" + contents + '\nOK (y/n)?: '):
     fail("Retry again later")
-cmd("Building and uploading archives", "./gradlewAll uploadArchives", cwd=kafka_dir, env=jdk8_env)
-cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=streams_quickstart_dir, env=jdk8_env)
+cmd("Building and uploading archives", "./gradlewAll publish", cwd=kafka_dir, env=jdk8_env, shell=True)
+cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=streams_quickstart_dir, env=jdk8_env, shell=True)
 
 release_notification_props = { 'release_version': release_version,
                                'rc': rc,
@@ -738,7 +734,7 @@ https://kafka.apache.org/%(docs_version)s/documentation.html
 https://kafka.apache.org/%(docs_version)s/protocol.html
 
 * Successful Jenkins builds for the %(dev_branch)s branch:
-Unit/integration tests: https://builds.apache.org/job/kafka-%(dev_branch)s-jdk8/<BUILD NUMBER>/
+Unit/integration tests: https://ci-builds.apache.org/job/Kafka/job/kafka/job/%(dev_branch)s/<BUILD NUMBER>/
 System tests: https://jenkins.confluent.io/job/system-test-kafka/job/%(dev_branch)s/<BUILD_NUMBER>/
 
 /**************************************

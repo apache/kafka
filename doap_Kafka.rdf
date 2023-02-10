@@ -33,7 +33,7 @@
     <mailing-list rdf:resource="https://kafka.apache.org/contact.html" />
     <download-page rdf:resource="https://kafka.apache.org/downloads.html" />
     <programming-language>Scala</programming-language>
-    <category rdf:resource="https://projects.apache.org/projects.html?category#big-data" />
+    <category rdf:resource="http://projects.apache.org/category/big-data" />
     <repository>
       <SVNRepository>
         <location rdf:resource="https://gitbox.apache.org/repos/asf/kafka.git"/>

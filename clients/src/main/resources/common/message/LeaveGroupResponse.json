@@ -24,7 +24,9 @@
   // Starting in version 3, we will make leave group request into batch mode and add group.instance.id.
   //
   // Version 4 is the first flexible version.
-  "validVersions": "0-4",
+  //
+  // Version 5 is the same as version 4.
+  "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,

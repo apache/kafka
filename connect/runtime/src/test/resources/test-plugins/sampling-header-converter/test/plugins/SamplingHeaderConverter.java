@@ -27,7 +27,9 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 import org.apache.kafka.connect.storage.HeaderConverter;
 
 /**
- * Samples data about its initialization environment for later analysis
+ * Fake plugin class for testing classloading isolation.
+ * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
+ * <p>Samples data about its initialization environment for later analysis.
  */
 public class SamplingHeaderConverter extends SamplingTestPlugin implements HeaderConverter {
 

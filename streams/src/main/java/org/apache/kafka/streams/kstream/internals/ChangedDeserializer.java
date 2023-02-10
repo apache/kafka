@@ -18,9 +18,9 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
 import java.nio.ByteBuffer;
-import java.util.Objects;
 
 public class ChangedDeserializer<T> implements Deserializer<Change<T>>, WrappingNullableDeserializer<Change<T>, Void, T> {
 
@@ -36,10 +36,11 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
         return inner;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<T> defaultValueDeserializer) {
+    public void setIfUnset(final SerdeGetter getter) {
         if (inner == null) {
-            inner = Objects.requireNonNull(defaultValueDeserializer);
+            inner = (Deserializer<T>) getter.valueSerde().deserializer();
         }
     }
 

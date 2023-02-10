@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
  *   - records: number of records
  * An example argument list would be `6 3 50000`.
  *
- * If you are using Intellij, the above arguments should be put in the configuration's `Program Arguments`.
+ * If you are using IntelliJ IDEA, the above arguments should be put in the configuration's `Program Arguments`.
  * Also recommended to set an output log file by `Edit Configuration -> Logs -> Save console
  * output to file` to record all the log output together.
  *

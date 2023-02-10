@@ -16,8 +16,9 @@
 {
   "apiKey": 3,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "MetadataRequest",
-  "validVersions": "0-9",
+  "validVersions": "0-12",
   "flexibleVersions": "9+",
   "fields": [
     // In version 0, an empty array indicates "request metadata for all topics."  In version 1 and
@@ -31,14 +32,22 @@
     // Starting in version 8, authorized operations can be requested for cluster and topic resource.
     //
     // Version 9 is the first flexible version.
+    //
+    // Version 10 adds topicId and allows name field to be null. However, this functionality was not implemented on the server.
+    // Versions 10 and 11 should not use the topicId field or set topic name to null.
+    //
+    // Version 11 deprecates IncludeClusterAuthorizedOperations field. This is now exposed
+    // by the DescribeCluster API (KIP-700).
+    // Version 12 supports topic Id.
     { "name": "Topics", "type": "[]MetadataRequestTopic", "versions": "0+", "nullableVersions": "1+",
       "about": "The topics to fetch metadata for.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "TopicId", "type": "uuid", "versions": "10+", "ignorable": true, "about": "The topic id." },
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName", "nullableVersions": "10+",
         "about": "The topic name." }
     ]},
     { "name": "AllowAutoTopicCreation", "type": "bool", "versions": "4+", "default": "true", "ignorable": false,
       "about": "If this is true, the broker may auto-create topics that we requested which do not already exist, if it is configured to do so." },
-    { "name": "IncludeClusterAuthorizedOperations", "type": "bool", "versions": "8+",
+    { "name": "IncludeClusterAuthorizedOperations", "type": "bool", "versions": "8-10",
       "about": "Whether to include cluster authorized operations." },
     { "name": "IncludeTopicAuthorizedOperations", "type": "bool", "versions": "8+",
       "about": "Whether to include topic authorized operations." }

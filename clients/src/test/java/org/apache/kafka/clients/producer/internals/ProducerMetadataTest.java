@@ -21,11 +21,11 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,12 +35,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProducerMetadataTest {
     private static final long METADATA_IDLE_MS = 60 * 1000;
@@ -50,9 +50,9 @@ public class ProducerMetadataTest {
             new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
     private AtomicReference<Exception> backgroundError = new AtomicReference<>();
 
-    @After
+    @AfterEach
     public void tearDown() {
-        assertNull("Exception in background thread : " + backgroundError.get(), backgroundError.get());
+        assertNull(backgroundError.get(), "Exception in background thread : " + backgroundError.get());
     }
 
     @Test
@@ -62,15 +62,15 @@ public class ProducerMetadataTest {
         metadata.add(topic, time);
 
         metadata.updateWithCurrentRequestVersion(responseWithTopics(Collections.emptySet()), false, time);
-        assertTrue("No update needed.", metadata.timeToNextUpdate(time) > 0);
+        assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed.");
         metadata.requestUpdate();
-        assertTrue("Still no updated needed due to backoff", metadata.timeToNextUpdate(time) > 0);
+        assertTrue(metadata.timeToNextUpdate(time) > 0, "Still no updated needed due to backoff");
         time += refreshBackoffMs;
-        assertEquals("Update needed now that backoff time expired", 0, metadata.timeToNextUpdate(time));
+        assertEquals(0, metadata.timeToNextUpdate(time), "Update needed now that backoff time expired");
         Thread t1 = asyncFetch(topic, 500);
         Thread t2 = asyncFetch(topic, 500);
-        assertTrue("Awaiting update", t1.isAlive());
-        assertTrue("Awaiting update", t2.isAlive());
+        assertTrue(t1.isAlive(), "Awaiting update");
+        assertTrue(t2.isAlive(), "Awaiting update");
         // Perform metadata update when an update is requested on the async fetch thread
         // This simulates the metadata update sequence in KafkaProducer
         while (t1.isAlive() || t2.isAlive()) {
@@ -82,20 +82,20 @@ public class ProducerMetadataTest {
         }
         t1.join();
         t2.join();
-        assertTrue("No update needed.", metadata.timeToNextUpdate(time) > 0);
+        assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed.");
         time += metadataExpireMs;
-        assertEquals("Update needed due to stale metadata.", 0, metadata.timeToNextUpdate(time));
+        assertEquals(0, metadata.timeToNextUpdate(time), "Update needed due to stale metadata.");
     }
 
     @Test
     public void testMetadataAwaitAfterClose() throws InterruptedException {
         long time = 0;
         metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
-        assertTrue("No update needed.", metadata.timeToNextUpdate(time) > 0);
+        assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed.");
         metadata.requestUpdate();
-        assertTrue("Still no updated needed due to backoff", metadata.timeToNextUpdate(time) > 0);
+        assertTrue(metadata.timeToNextUpdate(time) > 0, "Still no updated needed due to backoff");
         time += refreshBackoffMs;
-        assertEquals("Update needed now that backoff time expired", 0, metadata.timeToNextUpdate(time));
+        assertEquals(0, metadata.timeToNextUpdate(time), "Update needed now that backoff time expired");
         String topic = "my-topic";
         metadata.close();
         Thread t1 = asyncFetch(topic, 500);
@@ -116,7 +116,7 @@ public class ProducerMetadataTest {
     public void testMetadataUpdateWaitTime() throws Exception {
         long time = 0;
         metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
-        assertTrue("No update needed.", metadata.timeToNextUpdate(time) > 0);
+        assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed.");
         // first try with a max wait time of 0 and ensure that this returns back without waiting forever
         try {
             metadata.awaitUpdate(metadata.requestUpdate(), 0);
@@ -165,7 +165,7 @@ public class ProducerMetadataTest {
 
         time += METADATA_IDLE_MS;
         metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
-        assertFalse("Unused topic not expired", metadata.containsTopic(topic1));
+        assertFalse(metadata.containsTopic(topic1), "Unused topic not expired");
 
         // Test that topic is not expired if used within the expiry interval
         final String topic2 = "topic2";
@@ -174,7 +174,7 @@ public class ProducerMetadataTest {
         for (int i = 0; i < 3; i++) {
             time += METADATA_IDLE_MS / 2;
             metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
-            assertTrue("Topic expired even though in use", metadata.containsTopic(topic2));
+            assertTrue(metadata.containsTopic(topic2), "Topic expired even though in use");
             metadata.add(topic2, time);
         }
 
@@ -184,7 +184,7 @@ public class ProducerMetadataTest {
         metadata.add(topic3, time);
         time += METADATA_IDLE_MS * 2;
         metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
-        assertTrue("Topic expired while awaiting metadata", metadata.containsTopic(topic3));
+        assertTrue(metadata.containsTopic(topic3), "Topic expired while awaiting metadata");
     }
 
     @Test
@@ -287,7 +287,7 @@ public class ProducerMetadataTest {
         Map<String, Integer> partitionCounts = new HashMap<>();
         for (String topic : topics)
             partitionCounts.put(topic, 1);
-        return TestUtils.metadataUpdateWith(1, partitionCounts);
+        return RequestTestUtils.metadataUpdateWith(1, partitionCounts);
     }
 
     private void clearBackgroundError() {

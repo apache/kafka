@@ -21,7 +21,11 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -29,6 +33,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Arrays;
 
@@ -36,7 +42,11 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
+@SuppressWarnings("rawtypes")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
 
     private final MockRecordCollector collector = new MockRecordCollector();
@@ -53,19 +63,44 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
 
     @Before
     public void before() {
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext context = mockContext();
+        context.setTime(0);
+        store.init((StateStoreContext) context, store);
+    }
+
+    private InternalMockProcessorContext mockContext() {
+        return new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
             collector,
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
-        context.setTime(0);
-        store.init(context, store);
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+        );
     }
 
     @After
     public void after() {
         store.close();
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        final InternalMockProcessorContext context = mockContext();
+        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
+        final StateStore outer = new ChangeLoggingTimestampedKeyValueBytesStore(inner);
+        outer.init((ProcessorContext) context, outer);
+        verify(inner).init((ProcessorContext) context, outer);
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        final InternalMockProcessorContext context = mockContext();
+        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
+        final StateStore outer = new ChangeLoggingTimestampedKeyValueBytesStore(inner);
+
+        outer.init((StateStoreContext) context, outer);
+        verify(inner).init((StateStoreContext) context, outer);
     }
 
     @Test

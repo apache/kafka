@@ -52,8 +52,8 @@ public class PredicateDoc {
                     throw new RuntimeException("Predicate class " + p.pluginClass().getName() + " lacks either a `public static final String OVERVIEW_DOC` or `public static final ConfigDef CONFIG_DEF`");
                 }
             })
+            .sorted(Comparator.comparing(docInfo -> docInfo.predicateName))
             .collect(Collectors.toList());
-        collect.sort(Comparator.comparing(docInfo -> docInfo.predicateName));
         PREDICATES = collect;
     }
 
@@ -61,7 +61,7 @@ public class PredicateDoc {
         out.println("<div id=\"" + docInfo.predicateName + "\">");
 
         out.print("<h5>");
-        out.print(docInfo.predicateName);
+        out.print("<a href=\"#" + docInfo.predicateName + "\">" + docInfo.predicateName + "</a>");
         out.println("</h5>");
 
         out.println(docInfo.overview);

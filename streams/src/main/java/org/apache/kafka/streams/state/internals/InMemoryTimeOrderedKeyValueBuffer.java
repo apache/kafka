@@ -29,13 +29,17 @@ import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.DeserializationResult;
@@ -88,7 +92,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private Sensor bufferSizeSensor;
     private Sensor bufferCountSensor;
     private StreamsMetricsImpl streamsMetrics;
-    private String threadId;
     private String taskId;
 
     private volatile boolean open;
@@ -187,44 +190,59 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         return false;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void setSerdesIfNull(final Serde<K> keySerde, final Serde<V> valueSerde) {
-        this.keySerde = this.keySerde == null ? keySerde : this.keySerde;
-        this.valueSerde = this.valueSerde == null ? FullChangeSerde.wrap(valueSerde) : this.valueSerde;
+    public void setSerdesIfNull(final SerdeGetter getter) {
+        keySerde = keySerde == null ? (Serde<K>) getter.keySerde() : keySerde;
+        valueSerde = valueSerde == null ? FullChangeSerde.wrap((Serde<V>) getter.valueSerde()) : valueSerde;
+    }
+
+    @Deprecated
+    @Override
+    public void init(final ProcessorContext context, final StateStore root) {
+        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
+        init(root);
     }
 
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        taskId = context.taskId().toString();
-        this.context = (InternalProcessorContext) context;
-        streamsMetrics = this.context.metrics();
+    public void init(final StateStoreContext context, final StateStore root) {
+        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
+        init(root);
+    }
 
-        threadId = Thread.currentThread().getName();
+    private void init(final StateStore root) {
+        taskId = context.taskId().toString();
+        streamsMetrics = context.metrics();
+
         bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
-            threadId,
             taskId,
             METRIC_SCOPE,
             storeName,
             streamsMetrics
         );
         bufferCountSensor = StateStoreMetrics.suppressionBufferCountSensor(
-            threadId,
             taskId,
             METRIC_SCOPE,
             storeName,
             streamsMetrics
         );
 
-        context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
-        changelogTopic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
+        this.context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
         updateBufferMetrics();
         open = true;
-        partition = context.taskId().partition;
+        partition = context.taskId().partition();
     }
 
     @Override
     public boolean isOpen() {
         return open;
+    }
+
+    @Override
+    public Position getPosition() {
+        throw new UnsupportedOperationException("This store does not keep track of the position.");
     }
 
     @Override
@@ -236,7 +254,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         memBufferSize = 0;
         minTimestamp = Long.MAX_VALUE;
         updateBufferMetrics();
-        streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, storeName);
+        streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId, storeName);
     }
 
     @Override
@@ -274,8 +292,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             partition,
             null,
             KEY_SERIALIZER,
-            VALUE_SERIALIZER
-        );
+            VALUE_SERIALIZER,
+            null,
+            null);
     }
 
     private void logTombstone(final Bytes key) {
@@ -287,8 +306,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             partition,
             null,
             KEY_SERIALIZER,
-            VALUE_SERIALIZER
-        );
+            VALUE_SERIALIZER,
+            null,
+            null);
     }
 
     private void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> batch) {
@@ -403,7 +423,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                 delegate.remove();
                 index.remove(next.getKey().key());
 
-                dirtyKeys.add(next.getKey().key());
+                if (loggingEnabled) {
+                    dirtyKeys.add(next.getKey().key());
+                }
 
                 memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
 
@@ -456,14 +478,13 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
     @Override
     public void put(final long time,
-                    final K key,
-                    final Change<V> value,
+                    final Record<K, Change<V>> record,
                     final ProcessorRecordContext recordContext) {
-        requireNonNull(value, "value cannot be null");
+        requireNonNull(record.value(), "value cannot be null");
         requireNonNull(recordContext, "recordContext cannot be null");
 
-        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
-        final Change<byte[]> serialChange = valueSerde.serializeParts(changelogTopic, value);
+        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, record.key()));
+        final Change<byte[]> serialChange = valueSerde.serializeParts(changelogTopic, record.value());
 
         final BufferValue buffered = getBuffered(serializedKey);
         final byte[] serializedPriorValue;
@@ -478,7 +499,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             serializedKey,
             new BufferValue(serializedPriorValue, serialChange.oldValue, serialChange.newValue, recordContext)
         );
-        dirtyKeys.add(serializedKey);
+        if (loggingEnabled) {
+            dirtyKeys.add(serializedKey);
+        }
         updateBufferMetrics();
     }
 

@@ -15,30 +15,26 @@
   * limitations under the License.
   */
 
-package unit.kafka.controller
+package kafka.controller
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
-import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.controller.{ControllerContext, ReplicaAssignment}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.{Before, Test}
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 
 class ControllerContextTest {
 
-  var context: ControllerContext = null
+  var context: ControllerContext = _
   val brokers: Seq[Int] = Seq(1, 2, 3)
   val tp1 = new TopicPartition("A", 0)
   val tp2 = new TopicPartition("A", 1)
   val tp3 = new TopicPartition("B", 0)
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     context = new ControllerContext
 
@@ -152,6 +148,20 @@ class ControllerContextTest {
   }
 
   @Test
+  def testReassignToIdempotence(): Unit = {
+    val assignment1 = ReplicaAssignment(Seq(1, 2, 3))
+    assertEquals(assignment1, assignment1.reassignTo(assignment1.targetReplicas))
+
+    val assignment2 = ReplicaAssignment(Seq(4, 5, 6, 1, 2, 3),
+      addingReplicas = Seq(4, 5, 6), removingReplicas = Seq(1, 2, 3))
+    assertEquals(assignment2, assignment2.reassignTo(assignment2.targetReplicas))
+
+    val assignment3 = ReplicaAssignment(Seq(4, 2, 3, 1),
+      addingReplicas = Seq(4), removingReplicas = Seq(1))
+    assertEquals(assignment3, assignment3.reassignTo(assignment3.targetReplicas))
+  }
+
+  @Test
   def testReassignTo(): Unit = {
     val assignment = ReplicaAssignment(Seq(1, 2, 3))
     val firstReassign = assignment.reassignTo(Seq(4, 5, 6))
@@ -191,6 +201,27 @@ class ControllerContextTest {
     context.removeTopic(tp1.topic)
     context.removeTopic(tp2.topic)
     context.removeTopic(tp3.topic)
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+  }
+
+  @Test
+  def testPreferredReplicaImbalanceMetricOnConcurrentTopicDeletion(): Unit = {
+    val topicA = "A"
+    val topicB = "B"
+    val tpA = new TopicPartition(topicA, 0)
+    val tpB = new TopicPartition(topicB, 0)
+    context.updatePartitionFullReplicaAssignment(tpA, ReplicaAssignment(Seq(1, 2, 3)))
+    context.updatePartitionFullReplicaAssignment(tpB, ReplicaAssignment(Seq(1, 2, 3)))
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+
+    context.queueTopicDeletion(Set(topicA))
+    // All partitions in topic will be marked as Offline during deletion procedure
+    context.putPartitionLeadershipInfo(tpA, LeaderIsrAndControllerEpoch(LeaderAndIsr(LeaderAndIsr.NoLeader, List(1, 2, 3)), 0))
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+
+    // Initiate topicB's topic deletion before topicA's deletion completes.
+    // Since topicA's delete-topic ZK node still exists, context.queueTopicDeletion will be called with Set(topicA, topicB)
+    context.queueTopicDeletion(Set(topicA, topicB))
     assertEquals(0, context.preferredReplicaImbalanceCount)
   }
 }

@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -32,12 +33,12 @@ public class SinkNodeTest {
     private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
     private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
     private final RecordCollector recordCollector = new MockRecordCollector();
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(anyStateSerde, recordCollector);
+    private final InternalMockProcessorContext<Void, Void> context = new InternalMockProcessorContext<>(anyStateSerde, recordCollector);
     private final SinkNode<byte[], byte[]> sink = new SinkNode<>("anyNodeName",
             new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
 
     // Used to verify that the correct exceptions are thrown if the compiler checks are bypassed
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private final SinkNode<Object, Object> illTypedSink = (SinkNode) sink;
 
     @Before
@@ -50,7 +51,7 @@ public class SinkNodeTest {
         // When/Then
         context.setTime(-1); // ensures a negative timestamp is set for the record we send next
         try {
-            illTypedSink.process("any key".getBytes(), "any value".getBytes());
+            illTypedSink.process(new Record<>("any key".getBytes(), "any value".getBytes(), -1));
             fail("Should have thrown StreamsException");
         } catch (final StreamsException ignored) {
             // expected

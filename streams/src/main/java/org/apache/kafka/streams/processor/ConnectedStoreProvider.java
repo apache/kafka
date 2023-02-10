@@ -90,9 +90,9 @@ import java.util.Set;
  * }
  * }</pre>
  *
- * @see Topology#addProcessor(String, ProcessorSupplier, String...)
- * @see KStream#process(ProcessorSupplier, String...)
- * @see KStream#process(ProcessorSupplier, Named, String...)
+ * @see Topology#addProcessor(String, org.apache.kafka.streams.processor.api.ProcessorSupplier, String...)
+ * @see KStream#process(org.apache.kafka.streams.processor.api.ProcessorSupplier, String...)
+ * @see KStream#process(org.apache.kafka.streams.processor.api.ProcessorSupplier, Named, String...)
  * @see KStream#transform(TransformerSupplier, String...)
  * @see KStream#transform(TransformerSupplier, Named, String...)
  * @see KStream#transformValues(ValueTransformerSupplier, String...)
