@@ -162,7 +162,6 @@ public class ProducerStateManager {
         snapshots = loadSnapshots();
     }
 
-
     /**
      * Load producer state snapshots by scanning the logDir.
      */
@@ -249,7 +248,6 @@ public class ProducerStateManager {
     public void onHighWatermarkUpdated(long highWatermark) {
         removeUnreplicatedTransactions(highWatermark);
     }
-
 
     /**
      * The first undecided offset is the earliest transactional message which has not yet been committed
@@ -362,7 +360,6 @@ public class ProducerStateManager {
         return new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin);
     }
 
-
     /**
      * Update the mapping with the given append information
      */
@@ -383,7 +380,6 @@ public class ProducerStateManager {
 
         updateOldestTxnTimestamp();
     }
-
 
     private void updateOldestTxnTimestamp() {
         Map.Entry<Long, TxnMetadata> firstEntry = ongoingTxns.firstEntry();
@@ -478,7 +474,6 @@ public class ProducerStateManager {
         }
     }
 
-
     /**
      * Truncate the producer id mapping and remove all snapshots. This resets the state of the mapping.
      */
@@ -500,7 +495,9 @@ public class ProducerStateManager {
      * transaction index, but the completion must be done only after successfully appending to the index.
      */
     public long lastStableOffset(CompletedTxn completedTxn) {
-        return findNextIncompleteTxn(completedTxn.producerId).map(x -> x.firstOffset.messageOffset).orElse(completedTxn.lastOffset + 1);
+        return findNextIncompleteTxn(completedTxn.producerId)
+                .map(x -> x.firstOffset.messageOffset)
+                .orElse(completedTxn.lastOffset + 1);
     }
 
     private Optional<TxnMetadata> findNextIncompleteTxn(long producerId) {
