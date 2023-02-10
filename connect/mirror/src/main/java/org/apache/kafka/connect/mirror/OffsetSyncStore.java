@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -43,28 +44,23 @@ class OffsetSyncStore implements AutoCloseable {
     private final TopicAdmin admin;
 
     OffsetSyncStore(MirrorCheckpointConfig config) {
-        this(
-                config.offsetSyncsTopic(),
-                new KafkaConsumer<>(
-                        config.offsetSyncsTopicConsumerConfig(),
-                        new ByteArrayDeserializer(),
-                        new ByteArrayDeserializer()),
-                new TopicAdmin(
-                        config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
-                        config.forwardingAdmin(config.offsetSyncsTopicAdminConfig()))
-        );
-    }
-
-    // for testing
-    OffsetSyncStore(String topic, KafkaConsumer<byte[], byte[]> consumer, TopicAdmin admin) {
-        this.admin = admin;
+        String topic = config.offsetSyncsTopic();
+        Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(
+                config.offsetSyncsTopicConsumerConfig(),
+                new ByteArrayDeserializer(),
+                new ByteArrayDeserializer());
+        this.admin = new TopicAdmin(
+                config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
+                config.forwardingAdmin(config.offsetSyncsTopicAdminConfig()));
         KafkaBasedLog<byte[], byte[]> store = null;
         try {
             store = KafkaBasedLog.withExistingClients(
                     topic,
                     consumer,
                     null,
-                    admin,
+                    new TopicAdmin(
+                            config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
+                            config.forwardingAdmin(config.offsetSyncsTopicAdminConfig())),
                     (error, record) -> this.handleRecord(record),
                     Time.SYSTEM,
                     ignored -> {
@@ -72,10 +68,17 @@ class OffsetSyncStore implements AutoCloseable {
             store.start();
         } catch (Throwable t) {
             Utils.closeQuietly(store != null ? store::stop : null, "backing store");
-            Utils.closeQuietly(admin, "admin client");
+            Utils.closeQuietly(new TopicAdmin(
+                    config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
+                    config.forwardingAdmin(config.offsetSyncsTopicAdminConfig())), "admin client");
             throw t;
         }
         this.backingStore = store;
+    }
+
+    OffsetSyncStore() {
+        this.admin = null;
+        this.backingStore = null;
     }
 
     public void readToEnd(Runnable callback) {

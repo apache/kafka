@@ -30,7 +30,7 @@ public class OffsetSyncStoreTest {
     static class FakeOffsetSyncStore extends OffsetSyncStore {
 
         FakeOffsetSyncStore() {
-            super(null, null, null);
+            super();
         }
 
         void sync(TopicPartition topicPartition, long upstreamOffset, long downstreamOffset) {
