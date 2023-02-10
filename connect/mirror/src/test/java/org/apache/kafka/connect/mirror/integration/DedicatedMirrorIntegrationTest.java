@@ -199,7 +199,8 @@ public class DedicatedMirrorIntegrationTest {
                     // Enable exactly-once support to both validate that MirrorMaker can run with
                     // that feature turned on, and to force cross-worker communication before
                     // task startup
-                    put(a + ".exactly.once.source.support", "enabled");
+                    put(b + ".exactly.once.source.support", "enabled");
+                    put(a + ".consumer.isolation.level", "read_committed");
                     put(ab + ".enabled", "true");
                     put(ab + ".topics", "^" + testTopicPrefix + ".*");
                     // The name of the offset syncs topic will contain the name of the cluster in
