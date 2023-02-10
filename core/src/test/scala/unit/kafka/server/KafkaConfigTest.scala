@@ -976,6 +976,20 @@ class KafkaConfigTest {
         case RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
 
+        /** New group coordinator configs */
+        case KafkaConfig.NewGroupCoordinatorEnableProp => // ignore string
+        case KafkaConfig.GroupCoordinatorNumThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+
+        /** Consumer groups configs */
+        case KafkaConfig.ConsumerGroupSessionTimeoutMsProp => // ignore string
+        case KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupMinHeartbeatInternalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupMaxHeartbeatInternalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupMaxSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupAssignorsProp => // ignore string
+
         case TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -2)
         case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -2)
 
