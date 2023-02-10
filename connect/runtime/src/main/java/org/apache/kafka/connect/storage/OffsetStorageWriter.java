@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.util.Callback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,12 +24,10 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Supplier;
 
 /**
  * <p>
@@ -78,7 +75,7 @@ public class OffsetStorageWriter {
     private Map<Map<String, Object>, Map<String, Object>> data = new HashMap<>();
 
     private Map<Map<String, Object>, Map<String, Object>> toFlush = null;
-    private CompletableFuture<Void> latestFlush = null;
+    private final Semaphore flushInProgress = new Semaphore(1);
     // Unique ID for each flush request to handle callbacks after timeouts
     private long currentFlushId = 0;
 
@@ -104,44 +101,29 @@ public class OffsetStorageWriter {
         return toFlush != null;
     }
 
-    public boolean waitForBeginFlush(Supplier<Long> timeout, TimeUnit timeUnit) throws InterruptedException, TimeoutException {
-        while (true) {
-            Future<Void> inProgressFlush;
-            synchronized (this) {
-                if (flushing()) {
-                    inProgressFlush = latestFlush;
-                } else {
-                    return beginFlush();
-                }
-            }
-            try {
-                inProgressFlush.get(timeout.get(), timeUnit);
-            } catch (ExecutionException e) {
-                // someone else is responsible for handling this error, we just want to wait for the flush to be over.
-            }
-        }
-    }
-
     /**
      * Performs the first step of a flush operation, snapshotting the current state. This does not
-     * actually initiate the flush with the underlying storage.
+     * actually initiate the flush with the underlying storage. Ensures that any previous flush operations
+     * have finished before beginning a new flush.
      *
+     * @param timeout A maximum duration to wait for previous flushes to finish before giving up on waiting
+     * @param timeUnit Units of the timeout argument
      * @return true if a flush was initiated, false if no data was available
+     * @throws InterruptedException if this thread was interrupted while waiting for the previous flush to complete
+     * @throws TimeoutException if the `timeout` elapses before previous flushes are complete.
      */
-    public synchronized boolean beginFlush() {
-        if (flushing()) {
-            log.error("Invalid call to OffsetStorageWriter flush() while already flushing, the "
-                    + "framework should not allow this");
-            throw new ConnectException("OffsetStorageWriter is already flushing");
+    public boolean beginFlush(long timeout, TimeUnit timeUnit) throws InterruptedException, TimeoutException {
+        if (flushInProgress.tryAcquire(Math.max(0, timeout), timeUnit)) {
+            synchronized (this) {
+                if (data.isEmpty())
+                    return false;
+                toFlush = data;
+                data = new HashMap<>();
+                return true;
+            }
+        } else {
+            throw new TimeoutException("Timed out waiting for previous flush to finish");
         }
-
-        if (data.isEmpty())
-            return false;
-
-        toFlush = data;
-        data = new HashMap<>();
-        latestFlush = new CompletableFuture<>();
-        return true;
     }
 
     /**
@@ -206,7 +188,7 @@ public class OffsetStorageWriter {
     }
 
     /**
-     * Cancel a flush that has been initiated by {@link #beginFlush}. This should not be called if
+     * Cancel a flush that has been initiated by {@link #beginFlush(long, TimeUnit)}. This should not be called if
      * {@link #doFlush} has already been invoked. It should be used if an operation performed
      * between beginFlush and doFlush failed.
      */
@@ -218,9 +200,8 @@ public class OffsetStorageWriter {
             toFlush.putAll(data);
             data = toFlush;
             currentFlushId++;
-            latestFlush.cancel(false);
+            flushInProgress.release();
             toFlush = null;
-            latestFlush = null;
         }
     }
 
@@ -238,9 +219,8 @@ public class OffsetStorageWriter {
             cancelFlush();
         } else {
             currentFlushId++;
-            latestFlush.complete(null);
+            flushInProgress.release();
             toFlush = null;
-            latestFlush = null;
         }
         return true;
     }

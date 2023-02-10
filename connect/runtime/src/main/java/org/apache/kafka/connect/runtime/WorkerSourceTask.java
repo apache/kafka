@@ -251,7 +251,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
 
         boolean shouldFlush;
         try {
-            shouldFlush = offsetWriter.waitForBeginFlush(() -> Math.max(timeout - time.milliseconds(), 0), TimeUnit.MILLISECONDS);
+            shouldFlush = offsetWriter.beginFlush(timeout - time.milliseconds(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             log.warn("{} Interrupted while waiting for previous offset flush to complete, cancelling", this);
             recordCommitFailure(time.milliseconds() - started, e);

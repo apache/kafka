@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 
@@ -256,14 +257,25 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     private void commitTransaction() {
         log.debug("{} Committing offsets", this);
 
+        long commitTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
         long started = time.milliseconds();
+        long deadline = started + commitTimeoutMs;
 
         // We might have just aborted a transaction, in which case we'll have to begin a new one
         // in order to commit offsets
         maybeBeginTransaction();
 
         AtomicReference<Throwable> flushError = new AtomicReference<>();
-        if (offsetWriter.beginFlush()) {
+        boolean shouldFlush = false;
+        try {
+            // Provide a constant timeout value to wait indefinitely, as there should not be any concurrent flushes.
+            // This is because commitTransaction is always called on the same thread, and should always block until
+            // the flush is complete, or cancel the flush if an error occurs.
+            shouldFlush = offsetWriter.beginFlush(deadline - time.milliseconds(), TimeUnit.MILLISECONDS);
+        } catch (Throwable e) {
+            flushError.compareAndSet(null, e);
+        }
+        if (shouldFlush) {
             // Now we can actually write the offsets to the internal topic.
             // No need to track the flush future here since it's guaranteed to complete by the time
             // Producer::commitTransaction completes

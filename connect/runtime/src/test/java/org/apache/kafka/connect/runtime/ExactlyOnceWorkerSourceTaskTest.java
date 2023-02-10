@@ -79,6 +79,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -102,6 +103,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -216,7 +218,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
         verify(offsetWriter, MockitoUtils.anyTimes()).offset(PARTITION, OFFSET);
         verify(offsetWriter, MockitoUtils.anyTimes()).willFlush();
-        verify(offsetWriter, MockitoUtils.anyTimes()).beginFlush();
+        verify(offsetWriter, MockitoUtils.anyTimes()).beginFlush(anyLong(), any());
         verify(offsetWriter, MockitoUtils.anyTimes()).doFlush(any());
 
         if (enableTopicCreation) {
@@ -681,7 +683,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     public void testCommitFlushSyncCallbackFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.willFlush()).thenReturn(true);
-        when(offsetWriter.beginFlush()).thenReturn(true);
+        when(offsetWriter.beginFlush(anyLong(), any())).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             Callback<Void> callback = invocation.getArgument(0);
             callback.onCompletion(failure, null);
@@ -694,7 +696,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     public void testCommitFlushAsyncCallbackFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.willFlush()).thenReturn(true);
-        when(offsetWriter.beginFlush()).thenReturn(true);
+        when(offsetWriter.beginFlush(anyLong(), any())).thenReturn(true);
         // doFlush delegates its callback to the producer,
         // which delays completing the callback until commitTransaction
         AtomicReference<Callback<Void>> callback = new AtomicReference<>();
@@ -713,7 +715,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     public void testCommitTransactionFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.willFlush()).thenReturn(true);
-        when(offsetWriter.beginFlush()).thenReturn(true);
+        when(offsetWriter.beginFlush(anyLong(), any())).thenReturn(true);
         doThrow(failure).when(producer).commitTransaction();
         testCommitFailure(failure, true);
     }
@@ -904,8 +906,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
         workerTaskFuture = executor.submit(workerTask);
     }
 
-    private void expectSuccessfulFlushes() {
-        when(offsetWriter.beginFlush()).thenReturn(true);
+    private void expectSuccessfulFlushes() throws InterruptedException, TimeoutException {
+        when(offsetWriter.beginFlush(anyLong(), any())).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             Callback<Void> cb = invocation.getArgument(0);
             cb.onCompletion(null, null);
@@ -1036,11 +1038,11 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verify(producer, times(count)).send(any(), any());
     }
 
-    private void verifyTransactions(int numBatches) throws InterruptedException {
+    private void verifyTransactions(int numBatches) throws InterruptedException, TimeoutException {
         VerificationMode mode = times(numBatches);
         verify(producer, mode).beginTransaction();
         verify(producer, mode).commitTransaction();
-        verify(offsetWriter, mode).beginFlush();
+        verify(offsetWriter, mode).beginFlush(anyLong(), any());
         verify(offsetWriter, mode).doFlush(any());
         verify(sourceTask, mode).commit();
     }
