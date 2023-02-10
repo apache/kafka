@@ -21,84 +21,134 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitio
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransaction;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.util.ArrayList;
-
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AddPartitionsToTxnRequestTest {
-
-    private static String transactionalId = "transactionalId";
+    private final String transactionalId1 = "transaction1";
+    private final String transactionalId2 = "transaction2";
     private static int producerId = 10;
     private static short producerEpoch = 1;
     private static int throttleTimeMs = 10;
+    private static TopicPartition tp0 = new TopicPartition("topic", 0);
+    private static TopicPartition tp1 = new TopicPartition("topic", 1);
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.ADD_PARTITIONS_TO_TXN)
     public void testConstructor(short version) {
-        TopicPartition tp0 = new TopicPartition("topic", 0);
-        TopicPartition tp1 = new TopicPartition("topic", 1);
+        
+        AddPartitionsToTxnRequest request;
 
         if (version < 4) {
             List<TopicPartition> partitions = new ArrayList<>();
             partitions.add(tp0);
             partitions.add(tp1);
 
-            AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactionalId, producerId, producerEpoch, partitions);
-            AddPartitionsToTxnRequest request = builder.build(version);
+            AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactionalId1, producerId, producerEpoch, partitions);
+            request = builder.build(version);
 
-            assertEquals(transactionalId, request.data().transactionalId());
+            assertEquals(transactionalId1, request.data().transactionalId());
             assertEquals(producerId, request.data().producerId());
             assertEquals(producerEpoch, request.data().producerEpoch());
             assertEquals(partitions, request.partitions());
-
-            AddPartitionsToTxnResponse response = request.getErrorResponse(throttleTimeMs, Errors.UNKNOWN_TOPIC_OR_PARTITION.exception());
-
-            assertEquals(Collections.singletonMap(Errors.UNKNOWN_TOPIC_OR_PARTITION, 2), response.errorCounts());
-            assertEquals(throttleTimeMs, response.throttleTimeMs());
         } else {
-            String transaction1 = "transaction1";
-            String transaction2 = "transaction2";
-
-            AddPartitionsToTxnTopicCollection topics0 = new AddPartitionsToTxnTopicCollection();
-            topics0.add(new AddPartitionsToTxnTopic()
-                    .setName(tp0.topic())
-                    .setPartitions(Collections.singletonList(tp0.partition())));
-            AddPartitionsToTxnTopicCollection topics1 = new AddPartitionsToTxnTopicCollection();
-            topics1.add(new AddPartitionsToTxnTopic()
-                    .setName(tp1.topic())
-                    .setPartitions(Collections.singletonList(tp1.partition())));
-            
-            AddPartitionsToTxnTransactionCollection transactions = new AddPartitionsToTxnTransactionCollection();
-            transactions.add(new AddPartitionsToTxnTransaction()
-                    .setTransactionalId(transaction1)
-                    .setProducerId(producerId)
-                    .setProducerEpoch(producerEpoch)
-                    .setTopics(topics0));
-            transactions.add(new AddPartitionsToTxnTransaction()
-                    .setTransactionalId(transaction2)
-                    .setProducerId(producerId + 1)
-                    .setProducerEpoch((short) (producerEpoch + 1))
-                    .setTopics(topics1));
-
+            AddPartitionsToTxnTransactionCollection transactions = createTwoTransactionCollection();
             boolean verifyOnly = true;
 
             AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactions, verifyOnly);
-            AddPartitionsToTxnRequest request = builder.build(version);
+            request = builder.build(version);
             
-            AddPartitionsToTxnTransaction reqTxn1 = request.data().transactions().find(transaction1);
-            AddPartitionsToTxnTransaction reqTxn2 = request.data().transactions().find(transaction2);
+            AddPartitionsToTxnTransaction reqTxn1 = request.data().transactions().find(transactionalId1);
+            AddPartitionsToTxnTransaction reqTxn2 = request.data().transactions().find(transactionalId2);
 
             assertEquals(verifyOnly, request.data().verifyOnly());
-            assertEquals(transactions.find(transaction1), reqTxn1);
-            assertEquals(transactions.find(transaction2), reqTxn2);
+            assertEquals(transactions.find(transactionalId1), reqTxn1);
+            assertEquals(transactions.find(transactionalId2), reqTxn2);
         }
+        AddPartitionsToTxnResponse response = request.getErrorResponse(throttleTimeMs, Errors.UNKNOWN_TOPIC_OR_PARTITION.exception());
+
+        assertEquals(Collections.singletonMap(Errors.UNKNOWN_TOPIC_OR_PARTITION, 2), response.errorCounts());
+        assertEquals(throttleTimeMs, response.throttleTimeMs());
+    }
+    
+    @Test
+    public void testBatchedRequests() {
+        AddPartitionsToTxnTransactionCollection transactions = createTwoTransactionCollection();
+        boolean verifyOnly = true;
+
+        AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactions, verifyOnly);
+        AddPartitionsToTxnRequest request = builder.build(ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion());
+        
+        Map<String, List<TopicPartition>> expectedMap = new HashMap<>();
+        expectedMap.put(transactionalId1, Collections.singletonList(tp0));
+        expectedMap.put(transactionalId2, Collections.singletonList(tp1));
+        
+        assertEquals(expectedMap, request.partitionsByTransaction());
+
+        AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection();
+        
+        results.add(request.errorResponseForTransaction(transactionalId1, Errors.UNKNOWN_TOPIC_OR_PARTITION));
+        results.add(request.errorResponseForTransaction(transactionalId2, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED));
+        
+        AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData()
+                .setResultsByTransaction(results)
+                .setThrottleTimeMs(throttleTimeMs));
+        
+        assertEquals(Collections.singletonMap(tp0, Errors.UNKNOWN_TOPIC_OR_PARTITION), response.errorsPerTransaction(transactionalId1));
+        assertEquals(Collections.singletonMap(tp1, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED), response.errorsPerTransaction(transactionalId2));
+    }
+    
+    @Test
+    public void testNormalizeRequest() {
+        List<TopicPartition> partitions = new ArrayList<>();
+        partitions.add(tp0);
+        partitions.add(tp1);
+
+        AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactionalId1, producerId, producerEpoch, partitions);
+        AddPartitionsToTxnRequest request = builder.build((short) 3);
+
+        AddPartitionsToTxnRequest singleton = request.normalizeRequest();
+        assertEquals(partitions, singleton.partitionsByTransaction().get(transactionalId1));
+        
+        AddPartitionsToTxnTransaction transaction = singleton.data().transactions().find(transactionalId1);
+        assertEquals(producerId, transaction.producerId());
+        assertEquals(producerEpoch, transaction.producerEpoch());
+    }
+    
+    private AddPartitionsToTxnTransactionCollection createTwoTransactionCollection() {
+        AddPartitionsToTxnTopicCollection topics0 = new AddPartitionsToTxnTopicCollection();
+        topics0.add(new AddPartitionsToTxnTopic()
+                .setName(tp0.topic())
+                .setPartitions(Collections.singletonList(tp0.partition())));
+        AddPartitionsToTxnTopicCollection topics1 = new AddPartitionsToTxnTopicCollection();
+        topics1.add(new AddPartitionsToTxnTopic()
+                .setName(tp1.topic())
+                .setPartitions(Collections.singletonList(tp1.partition())));
+
+        AddPartitionsToTxnTransactionCollection transactions = new AddPartitionsToTxnTransactionCollection();
+        transactions.add(new AddPartitionsToTxnTransaction()
+                .setTransactionalId(transactionalId1)
+                .setProducerId(producerId)
+                .setProducerEpoch(producerEpoch)
+                .setTopics(topics0));
+        transactions.add(new AddPartitionsToTxnTransaction()
+                .setTransactionalId(transactionalId2)
+                .setProducerId(producerId + 1)
+                .setProducerEpoch((short) (producerEpoch + 1))
+                .setTopics(topics1));
+        return transactions;
     }
 }

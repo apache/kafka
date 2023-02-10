@@ -60,6 +60,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         this.data = data;
     }
 
+    // Only used for versions < 4
     public AddPartitionsToTxnResponse(int throttleTimeMs, Map<TopicPartition, Errors> errors) {
         super(ApiKeys.ADD_PARTITIONS_TO_TXN);
 
@@ -111,6 +112,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    // Only used for versions < 4
     public Map<TopicPartition, Errors> errors() {
         if (cachedErrorsMap != null) {
             return cachedErrorsMap;

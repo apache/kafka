@@ -33,18 +33,17 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AddPartitionsToTxnResponseTest {
 
     protected final int throttleTimeMs = 10;
-
     protected final String topicOne = "topic1";
     protected final int partitionOne = 1;
     protected final Errors errorOne = Errors.COORDINATOR_NOT_AVAILABLE;
     protected final Errors errorTwo = Errors.NOT_COORDINATOR;
     protected final String topicTwo = "topic2";
     protected final int partitionTwo = 2;
-
     protected TopicPartition tp1 = new TopicPartition(topicOne, partitionOne);
     protected TopicPartition tp2 = new TopicPartition(topicTwo, partitionTwo);
     protected Map<Errors, Integer> expectedErrorCounts;
@@ -72,7 +71,6 @@ public class AddPartitionsToTxnResponseTest {
 
     @Test
     public void testParse() {
-
         AddPartitionsToTxnTopicResultCollection topicCollection = new AddPartitionsToTxnTopicResultCollection();
 
         AddPartitionsToTxnTopicResult topicResult = new AddPartitionsToTxnTopicResult();
@@ -121,8 +119,26 @@ public class AddPartitionsToTxnResponseTest {
                 assertEquals(txnTwoExpectedErrors, parsedResponse.errorsPerTransaction("txn2"));
                 assertEquals(newExpectedErrorCounts, parsedResponse.errorCounts());
                 assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
-                assertEquals(true, parsedResponse.shouldClientThrottle(version));
+                assertTrue(parsedResponse.shouldClientThrottle(version));
             }
         }
+    }
+    
+    @Test
+    public void testBatchedErrors() {
+        Map<TopicPartition, Errors> txn1Errors = Collections.singletonMap(tp1, errorOne);
+        Map<TopicPartition, Errors> txn2Errors = Collections.singletonMap(tp1, errorOne);
+        
+        AddPartitionsToTxnResult transaction1 = AddPartitionsToTxnResponse.resultForTransaction("txn1", txn1Errors);
+        AddPartitionsToTxnResult transaction2 = AddPartitionsToTxnResponse.resultForTransaction("txn2", txn2Errors);
+        
+        AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResultCollection();
+        results.add(transaction1);
+        results.add(transaction2);
+        
+        AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData().setResultsByTransaction(results));
+        
+        assertEquals(txn1Errors, response.errorsPerTransaction("txn1"));
+        assertEquals(txn2Errors, response.errorsPerTransaction("txn2"));
     }
 }

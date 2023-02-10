@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.utils.TestInfoUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 
 import java.util.{Collections, Properties}
 import java.util.stream.{Stream => JStream}
@@ -26,10 +26,12 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitio
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransaction
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection
+import org.apache.kafka.common.message.{FindCoordinatorRequestData, InitProducerIdRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
+import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, FindCoordinatorRequest, FindCoordinatorResponse, InitProducerIdRequest, InitProducerIdResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
@@ -99,6 +101,66 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
 
     assertTrue(errors.containsKey(nonExistentTopic))
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, errors.get(nonExistentTopic))
+  }
+  
+  @Test
+  def testOneSuccessOneErrorInBatchedRequest(): Unit = {
+    val transactionalId1 = "foobar"
+    
+    val findCoordinatorRequest = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData().setKey(transactionalId1).setKeyType(CoordinatorType.TRANSACTION.id)).build()
+    // First find coordinator request creates the state topic, then wait for transactional topics to be created.
+    connectAndReceive[FindCoordinatorResponse](findCoordinatorRequest, brokerSocketServer(brokers.head.config.brokerId))
+    TestUtils.waitForAllPartitionsMetadata(brokers, "__transaction_state", 50)
+    val findCoordinatorResponse = connectAndReceive[FindCoordinatorResponse](findCoordinatorRequest, brokerSocketServer(brokers.head.config.brokerId))
+    val coordinatorId = findCoordinatorResponse.data().coordinators().get(0).nodeId()
+    
+    val initPidRequest = new InitProducerIdRequest.Builder(new InitProducerIdRequestData().setTransactionalId(transactionalId1).setTransactionTimeoutMs(10000)).build()
+    val initPidResponse = connectAndReceive[InitProducerIdResponse](initPidRequest, brokerSocketServer(coordinatorId))
+    
+    val producerId1 = initPidResponse.data().producerId()
+    val producerEpoch1 = initPidResponse.data().producerEpoch()
+    
+    val transactionalId2 = "barfoo" // "barfoo" maps to the same transaction coordinator
+    val producerId2 = 1000L
+    val producerEpoch2: Short = 0
+    
+    val tp0 = new TopicPartition(topic1, 0)
+    
+    val txn1Topics = new AddPartitionsToTxnTopicCollection()
+    txn1Topics.add(new AddPartitionsToTxnTopic()
+      .setName(tp0.topic())
+      .setPartitions(Collections.singletonList(tp0.partition())))
+    
+    val txn2Topics  = new AddPartitionsToTxnTopicCollection()
+    txn2Topics.add(new AddPartitionsToTxnTopic()
+      .setName(tp0.topic())
+      .setPartitions(Collections.singletonList(tp0.partition())))
+
+    val transactions = new AddPartitionsToTxnTransactionCollection()
+    transactions.add(new AddPartitionsToTxnTransaction()
+      .setTransactionalId(transactionalId1)
+      .setProducerId(producerId1)
+      .setProducerEpoch(producerEpoch1)
+      .setTopics(txn1Topics))
+    transactions.add(new AddPartitionsToTxnTransaction()
+      .setTransactionalId(transactionalId2)
+      .setProducerId(producerId2)
+      .setProducerEpoch(producerEpoch2)
+      .setTopics(txn2Topics))
+    
+    val request = new AddPartitionsToTxnRequest.Builder(transactions, false).build()
+
+    val response = connectAndReceive[AddPartitionsToTxnResponse](request, brokerSocketServer(coordinatorId))
+    
+    val errors = response.allErrors()
+
+    assertTrue(errors.containsKey(transactionalId1))
+    assertTrue(errors.get(transactionalId1).containsKey(tp0))
+    assertEquals(Errors.NONE, errors.get(transactionalId1).get(tp0))
+
+    assertTrue(errors.containsKey(transactionalId2))
+    assertTrue(errors.get(transactionalId1).containsKey(tp0))
+    assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, errors.get(transactionalId2).get(tp0))
   }
 }
 

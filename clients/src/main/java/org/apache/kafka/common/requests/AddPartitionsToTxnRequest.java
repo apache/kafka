@@ -53,6 +53,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         public final AddPartitionsToTxnRequestData data;
         public final boolean isClientRequest;
 
+        // Only used for versions < 4
         public Builder(String transactionalId,
                        long producerId,
                        short producerEpoch,
@@ -108,17 +109,10 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
             return new AddPartitionsToTxnRequest(data, clampedVersion);
         }
 
+        // Only used for versions < 4
         static List<TopicPartition> getPartitions(AddPartitionsToTxnRequestData data) {
             List<TopicPartition> partitions = new ArrayList<>();
-            for (AddPartitionsToTxnTransaction transaction : data.transactions()) {
-                for (AddPartitionsToTxnTopic topicCollection : transaction.topics()) {
-                    for (Integer partition : topicCollection.partitions()) {
-                        partitions.add(new TopicPartition(topicCollection.name(), partition));
-                    }
-                }
-            }
 
-            // Add singleton topics
             for (AddPartitionsToTxnTopic topicCollection : data.topics()) {
                 for (Integer partition : topicCollection.partitions()) {
                     partitions.add(new TopicPartition(topicCollection.name(), partition));
@@ -138,7 +132,8 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         this.data = data;
         this.version = version;
     }
-
+    
+    // Only used for versions < 4
     public List<TopicPartition> partitions() {
         if (cachedPartitions != null) {
             return cachedPartitions;
@@ -147,7 +142,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         return cachedPartitions;
     }
     
-    public List<TopicPartition> partitionsForTransaction(String transaction) {
+    private List<TopicPartition> partitionsForTransaction(String transaction) {
         if (cachedPartitionsByTransaction == null) {
             cachedPartitionsByTransaction = new HashMap<>();
         }
@@ -176,11 +171,12 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         return cachedPartitionsByTransaction;
     }
     
+    // Takes a version 3 or below request and returns a v4+ singleton (one transaction ID) request.
     public AddPartitionsToTxnRequest normalizeRequest() {
         return new AddPartitionsToTxnRequest(new AddPartitionsToTxnRequestData().setTransactions(singletonTransaction()), version);
     }
     
-    public AddPartitionsToTxnTransactionCollection singletonTransaction() {
+    private AddPartitionsToTxnTransactionCollection singletonTransaction() {
         AddPartitionsToTxnTransactionCollection singleTxn = new AddPartitionsToTxnTransactionCollection();
         singleTxn.add(new AddPartitionsToTxnTransaction()
                 .setTransactionalId(data.transactionalId())
