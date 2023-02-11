@@ -47,10 +47,11 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
-import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
+import org.apache.kafka.server.interceptors.ProduceRequestInterceptor
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
@@ -86,6 +87,8 @@ object Defaults {
   val MetadataMaxIdleIntervalMs = 500
   val MetadataMaxRetentionBytes = 100 * 1024 * 1024
   val DeleteTopicEnable = true
+  val ProduceRequestInterceptorTimeoutMs = 5000
+  val ProduceRequestInterceptorMaxRetriesOnTimeout = 0
 
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
@@ -358,6 +361,9 @@ object KafkaConfig {
   val RequestTimeoutMsProp = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
+  val ProduceRequestInterceptorsProp = "produce.request.interceptors"
+  val ProduceRequestInterceptorTimeoutMsProp = "produce.request.interceptors.timeout.ms"
+  val ProduceRequestInterceptorMaxRetriesOnTimeoutProp = "produce.request.interceptors.max.timeout.retries"
 
   /** KRaft mode configs */
   val ProcessRolesProp = "process.roles"
@@ -687,6 +693,15 @@ object KafkaConfig {
   val RequestTimeoutMsDoc = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC
+  val ProduceRequestInterceptorsDoc = "The produce request interceptors that the broker should invoke when receiving messages from a client. " +
+    "The config expects a comma-separated list of class names that implement the <code>org.apache.kafka.server.interceptors.ProduceRequestInterceptor</code> interface, " +
+    "and which are present on the broker's classpath."
+  val ProduceRequestInterceptorTimeoutMsDoc = "The total amount of time in milliseconds that produce interceptors have to finish processing a request. " +
+    s"The timeout is applied per processing attempt. The total number of processing attempts is controlled by $ProduceRequestInterceptorMaxRetriesOnTimeoutProp. " +
+    s"If the batch cannot be processed by the interceptors within $ProduceRequestInterceptorTimeoutMsProp, and the retries defined in $ProduceRequestInterceptorMaxRetriesOnTimeoutProp " +
+    s"have been exhausted, the produce request will fail. Defaults to ${Defaults.ProduceRequestInterceptorTimeoutMs}"
+  val ProduceRequestInterceptorMaxRetriesOnTimeoutDoc = "The total number of times produce interceptors will retry batches that fail due to a timeout. " +
+    s"Timeouts are controlled by $ProduceRequestInterceptorTimeoutMsProp. Defaults to ${Defaults.ProduceRequestInterceptorMaxRetriesOnTimeout}"
 
   /** KRaft mode configs */
   val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
@@ -1136,6 +1151,9 @@ object KafkaConfig {
       .define(RequestTimeoutMsProp, INT, Defaults.RequestTimeoutMs, HIGH, RequestTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMsProp, LONG, Defaults.ConnectionSetupTimeoutMs, MEDIUM, ConnectionSetupTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
+      .define(ProduceRequestInterceptorsProp, LIST, Collections.emptyList(), MEDIUM, ProduceRequestInterceptorsDoc)
+      .define(ProduceRequestInterceptorTimeoutMsProp, INT, Defaults.ProduceRequestInterceptorTimeoutMs, MEDIUM, ProduceRequestInterceptorTimeoutMsDoc)
+      .define(ProduceRequestInterceptorMaxRetriesOnTimeoutProp, INT, Defaults.ProduceRequestInterceptorMaxRetriesOnTimeout, MEDIUM, ProduceRequestInterceptorMaxRetriesOnTimeoutDoc)
 
       /*
        * KRaft mode configs.
@@ -1683,6 +1701,18 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def getNumReplicaAlterLogDirsThreads: Int = {
     val numThreads: Integer = Option(getInt(KafkaConfig.NumReplicaAlterLogDirsThreadsProp)).getOrElse(logDirs.size)
     numThreads
+  }
+  val producerRequestInterceptorManager: ProduceRequestInterceptorManager = {
+    val interceptors: List[ProduceRequestInterceptor] = getList(KafkaConfig.ProduceRequestInterceptorsProp).asScala
+      .map { className =>
+        val i = Class.forName(className).getDeclaredConstructor().newInstance()
+        val pri = i.asInstanceOf[ProduceRequestInterceptor]
+        pri.configure()
+        pri
+      }.toList
+    val timeoutMs = getInt(KafkaConfig.ProduceRequestInterceptorTimeoutMsProp)
+    val timeoutRetries = getInt(KafkaConfig.ProduceRequestInterceptorMaxRetriesOnTimeoutProp)
+    ProduceRequestInterceptorManager(interceptors, timeoutMs, timeoutRetries)
   }
 
   /************* Metadata Configuration ***********/
