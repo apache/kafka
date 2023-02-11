@@ -64,10 +64,11 @@ public final class WordCountDemo {
 
     static void createWordCountStream(final StreamsBuilder builder) {
         final KStream<String, String> source = builder.stream(INPUT_TOPIC);
-
+        
         final KTable<String, Long> counts = source
             .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split(" ")))
-            .groupBy((key, value) -> value)
+            .groupBy((key, value) -> value
+            .groupBy((key, value) -> props)
             .count();
 
         // need to override value serde to Long type
