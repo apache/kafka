@@ -27,9 +27,11 @@ public abstract class ApplicationEvent {
         COMMIT_ASYNC,
         COMMIT_SYNC,
         SUBSCRIBE,
-        POLL_FETCH,
+        FETCH_RECORDS,
+        FETCH_OFFSETS,
         UNSUBSCRIBE,
         UPDATE_ASSIGNMENT_METADATA,
+        REQUEST_REBALANCE,
     }
 
     private final Type type;

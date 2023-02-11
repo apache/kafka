@@ -17,30 +17,24 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
-public class CommitAsyncEvent extends CompletableApplicationEvent<Void> {
+public class FetchCommittedOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
 
-    private final Map<TopicPartition, OffsetAndMetadata> offsets;
+    private final Set<TopicPartition> partitions;
 
-    private final OffsetCommitCallback callback;
-
-    public CommitAsyncEvent(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        super(Type.COMMIT_ASYNC);
-        this.offsets = Collections.unmodifiableMap(offsets);
-        this.callback = callback;
+    public FetchCommittedOffsetsEvent(Set<TopicPartition> partitions) {
+        super(Type.FETCH_OFFSETS);
+        this.partitions = Collections.unmodifiableSet(partitions);
     }
 
-    public Map<TopicPartition, OffsetAndMetadata> offsets() {
-        return offsets;
-    }
-
-    public OffsetCommitCallback callback() {
-        return callback;
+    public Collection<TopicPartition> partitions() {
+        return partitions;
     }
 
 }

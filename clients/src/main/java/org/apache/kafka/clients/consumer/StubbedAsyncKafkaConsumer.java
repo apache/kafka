@@ -23,7 +23,10 @@ import org.apache.kafka.clients.consumer.internals.events.AssignPartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitAsyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitSyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.clients.consumer.internals.events.PollFetchEvent;
+import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
+import org.apache.kafka.clients.consumer.internals.events.FetchOffsetsEvent;
+import org.apache.kafka.clients.consumer.internals.events.FetchRecordsEvent;
+import org.apache.kafka.clients.consumer.internals.events.RequestRebalanceEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscribePatternEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscribeTopicsEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
@@ -35,6 +38,7 @@ import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -166,7 +170,7 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
         //    Reset positions & offsets
         // 2. Collect and return any previously loaded fetches
         // 3. Submit fetch requests for any ready partitions, including any we might have collected
-        List<SerializedRecordWrapper> wrappers = eventHandler.addAndGet(new PollFetchEvent(), timer);
+        List<SerializedRecordWrapper> wrappers = eventHandler.addAndGet(new FetchRecordsEvent(), timer);
 
         // We return the serialized records from the background thread to the foreground thread so that the
         // potentially expensive task of deserializing the record won't stall out our background thread.
@@ -233,23 +237,28 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
         // The background thread will do the following when it receives this event:
         //
-        // 1. Commit offsets sync.
+        // 1. Metadata will update its 'last seen' epoch, if newer
+        // 2. Invoke the coordinator commitOffsetsSync logic
         eventHandler.addAndGet(new CommitSyncEvent(offsets), time.timer(timeout));
     }
 
     @Override
     public void commitAsync() {
-        eventHandler.add(new CommitAsyncEvent());
+        commitAsync(null);
     }
 
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-
+        commitAsync(foregroundState.allConsumed(), callback);
     }
 
     @Override
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-
+        // The background thread will do the following when it receives this event:
+        //
+        // 1. Metadata will update its 'last seen' epoch, if newer
+        // 2. Invoke the coordinator commitOffsetsAsync logic
+        eventHandler.add(new CommitAsyncEvent(offsets, callback));
     }
 
     @Override
@@ -287,23 +296,27 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     @Deprecated
     public OffsetAndMetadata committed(TopicPartition partition) {
-        return null;
+        return committed(partition, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     @Override
     @Deprecated
     public OffsetAndMetadata committed(TopicPartition partition, Duration timeout) {
-        return null;
+        return committed(Collections.singleton(partition), timeout).get(partition);
     }
 
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions) {
-        return null;
+        return committed(partitions, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions, Duration timeout) {
-        return null;
+        // The background thread will do the following when it receives this event:
+        //
+        // 1. Invoke the coordinator's fetchCommittedOffsets logic
+        // 2. Metadata will update its 'last seen' epoch, if newer
+        return eventHandler.addAndGet(new FetchCommittedOffsetsEvent(partitions), time.timer(timeout));
     }
 
     @Override
@@ -358,22 +371,28 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        return null;
+        return beginningOffsets(partitions, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
-        return null;
+        return offsets(partitions, ListOffsetsRequest.EARLIEST_TIMESTAMP, timeout);
     }
 
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
-        return null;
+        return endOffsets(partitions, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout) {
-        return null;
+        return offsets(partitions, ListOffsetsRequest.LATEST_TIMESTAMP, timeout);
+    }
+
+    private Map<TopicPartition, Long> offsets(Collection<TopicPartition> partitions, long timestamp, Duration timeout) {
+        FetchOffsetsEvent event = new FetchOffsetsEvent(partitions, timestamp);
+        Timer timer = time.timer(timeout);
+        return eventHandler.addAndGet(event, timer);
     }
 
     @Override
@@ -393,7 +412,7 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void enforceRebalance(String reason) {
-
+        eventHandler.add(new RequestRebalanceEvent(reason));
     }
 
     @Override

@@ -32,6 +32,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitAsyncEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitSyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -59,9 +60,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
 /**
@@ -217,7 +216,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync() {
-        final ApplicationEvent commitEvent = new CommitAsyncEvent();
+        final ApplicationEvent commitEvent = new CommitAsyncEvent(null, null);
         eventHandler.add(commitEvent);
     }
 
@@ -396,19 +395,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(final Duration timeout) {
-        final CommitAsyncEvent commitAsyncEvent = new CommitAsyncEvent();
-        eventHandler.add(commitAsyncEvent);
-
-        final CompletableFuture<Void> commitFuture = commitAsyncEvent.future();
-        try {
-            commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (final TimeoutException e) {
-            throw new org.apache.kafka.common.errors.TimeoutException(
-                     "timeout");
-        } catch (final Exception e) {
-            // handle exception here
-            throw new RuntimeException(e);
-        }
+        final CommitSyncEvent commitEvent = new CommitSyncEvent(null);
+        eventHandler.addAndGet(commitEvent, time.timer(timeout));
     }
 
     @Override
