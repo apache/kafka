@@ -52,17 +52,15 @@ public class ConsumerPerformance {
     public static void main(String[] args) {
         try {
             ConsumerPerfOptions options = new ConsumerPerfOptions(args);
-            // group counters
             AtomicLong totalMessagesRead = new AtomicLong(0), totalBytesRead = new AtomicLong(0),
                 joinGroupTimeMs = new AtomicLong(0);
-            // consumer counters
-            long bytesRead = 0L, messagesRead = 0L, lastBytesRead = 0L, lastMessagesRead = 0L,
-                joinTimeMsInSingleRound = 0L;
 
             if (!options.hideHeader())
                 printHeader(options.showDetailedStats());
 
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(options.props());
+            long bytesRead = 0L, messagesRead = 0L, lastBytesRead = 0L, lastMessagesRead = 0L,
+                joinTimeMsInSingleRound = 0L;
             long currentTimeMs = System.currentTimeMillis();
             long joinStartMs = currentTimeMs;
             long startMs = currentTimeMs;
