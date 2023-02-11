@@ -660,8 +660,7 @@ public class ProducerStateManager {
     }
 
     private static boolean isSnapshotFile(Path path) {
-        File file = path.toFile();
-        return file.isFile() && file.getName().endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
+        return Files.isRegularFile(path) && path.endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX);
     }
 
     // visible for testing
