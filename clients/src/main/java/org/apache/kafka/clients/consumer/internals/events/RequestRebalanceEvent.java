@@ -16,31 +16,17 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.common.TopicPartition;
+public class RequestRebalanceEvent extends ApplicationEvent {
 
-import java.util.Collections;
-import java.util.Map;
+    private final String reason;
 
-public class CommitAsyncEvent extends CompletableApplicationEvent<Void> {
-
-    private final Map<TopicPartition, OffsetAndMetadata> offsets;
-
-    private final OffsetCommitCallback callback;
-
-    public CommitAsyncEvent(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        super(Type.COMMIT_ASYNC);
-        this.offsets = Collections.unmodifiableMap(offsets);
-        this.callback = callback;
+    public RequestRebalanceEvent(String reason) {
+        super(Type.REQUEST_REBALANCE);
+        this.reason = reason;
     }
 
-    public Map<TopicPartition, OffsetAndMetadata> offsets() {
-        return offsets;
-    }
-
-    public OffsetCommitCallback callback() {
-        return callback;
+    public String reason() {
+        return reason;
     }
 
 }

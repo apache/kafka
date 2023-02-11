@@ -16,14 +16,30 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.SerializedRecordWrapper;
+import org.apache.kafka.common.TopicPartition;
 
-import java.util.List;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 
-public class PollFetchEvent extends CompletableApplicationEvent<List<SerializedRecordWrapper>> {
+public class FetchOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, Long>> {
 
-    public PollFetchEvent() {
-        super(Type.POLL_FETCH);
+    private final Collection<TopicPartition> partitions;
+
+    private final long timestamp;
+
+    public FetchOffsetsEvent(Collection<TopicPartition> partitions, long timestamp) {
+        super(Type.FETCH_OFFSETS);
+        this.partitions = Collections.unmodifiableCollection(partitions);
+        this.timestamp = timestamp;
+    }
+
+    public Collection<TopicPartition> partitions() {
+        return partitions;
+    }
+
+    public long timestamp() {
+        return timestamp;
     }
 
 }
