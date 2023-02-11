@@ -116,7 +116,7 @@ versions += [
   snappy: "1.1.8.4",
   spotbugs: "4.2.2",
   zinc: "1.3.5",
-  zookeeper: "3.6.3",
+  zookeeper: "3.6.3-23",
   zstd: "1.5.0-4"
 ]
 libs += [
@@ -196,7 +196,7 @@ libs += [
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
-  zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
+  zookeeper: "com.linkedin.zookeeper:zookeeper:$versions.zookeeper",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",

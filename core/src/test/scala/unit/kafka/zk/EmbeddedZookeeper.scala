@@ -24,6 +24,14 @@ import java.net.InetSocketAddress
 
 import org.apache.kafka.common.utils.Utils
 
+object EmbeddedZookeeper {
+  // The ZK jute.maxbuffer config defines the maximum response size from the ZK server (anything larger throws an
+  // exception and disconnects the ZK client). The historical value was 4194304 bytes, but several years ago it was
+  // reduced to 1048575 (per https://zookeeper.apache.org/doc/r3.6.2/zookeeperAdmin.html) for performance reasons,
+  // so use that for more realistic tests:
+  final val JUTE_MAXBUFFER_VALUE: String = "1048575"
+}
+
 /**
  * ZooKeeperServer wrapper that starts the server with temporary directories during construction and deletes
  * the directories when `shutdown()` is called.
@@ -41,6 +49,7 @@ class EmbeddedZookeeper() extends Logging {
   val tickTime = 800 // allow a maxSessionTimeout of 20 * 800ms = 16 secs
 
   System.setProperty("zookeeper.forceSync", "no")  //disable fsync to ZK txn log in tests to avoid timeout
+  System.setProperty("jute.maxbuffer", EmbeddedZookeeper.JUTE_MAXBUFFER_VALUE)  // configure realistic response-buffer size
   val zookeeper = new ZooKeeperServer(snapshotDir, logDir, tickTime)
   val factory = new NIOServerCnxnFactory()
   private val addr = new InetSocketAddress("127.0.0.1", TestUtils.RandomPort)

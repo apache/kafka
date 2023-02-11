@@ -1057,6 +1057,60 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(Set(topicPartition10, topicPartition11), zkClient.getAllPartitions)
   }
 
+  /**
+   * Create a large number of topic names, such that their total (aggregate) length is more than 1 MB,
+   * and verify that our ZK client can still read them all despite being configured for 1 MB max response
+   * size.
+   *
+   * NOTE THAT THIS LOOPS INDEFINITELY if paginateTopics = false, so a negative test is currently not
+   * possible. The problem is that only org.apache.zookeeper.ClientCnxn knows that its SessionExpiredException
+   * isn't actually due to session expiry but rather "Packet len 1374978 is out of range!", and it doesn't
+   * bother to pass that information down to our ZooKeeperClient. The fix will probably be to add a counter
+   * for the number of connection attempts and a new max-retry config that we can set to something small in
+   * the negative version of this test. TODO/FIXME
+   */
+  @Test
+  def testGetManyTopicsWithPagination(): Unit = {
+    // replace zkClient with one supporting pagination
+    zkClient.close()  // ...but don't leave the existing one running, test framework doesn't like that
+    zkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "ZooKeeperTestHarness", new ZKClientConfig,
+      paginateTopics = true)
+    adminZkClient = new AdminZkClient(zkClient)
+    zkClient.createControllerEpochRaw(1)
+
+    assertTrue(zkClient.getAllTopicsInCluster().isEmpty)
+
+    val superLongTopicNamePrefix =
+      "topic-name-of-super-excessive-length-so-as-to-minimize-total-number-of-topics-to-be-created--just-how-lengthy-is-it-I-wonder--here-comes-the-indexing-value-woohoo--"
+    val numTopics = 8000
+    // total size of all topics names we're creating, plus their ZK overhead (i.e., what getChildren() on
+    // /brokers/topics should return):
+    var sumOfInputTopicNameLengths = 0
+    (0 until numTopics).foreach { j =>
+      if (((j+1) % 1000) == 0) info(s"creating very long topic-name #${j+1}")
+      val name = s"${superLongTopicNamePrefix}${j}"
+      sumOfInputTopicNameLengths += name.length + 4  // 4 = measured ZK overhead per znode
+      zkClient.createRecursive(TopicZNode.path(name))
+    }
+    debug(s"total /brokers/topics getChildren size should be ${sumOfInputTopicNameLengths}")
+
+    val topicsList = zkClient.getAllTopicsInCluster()
+    debug(s"got back list of ${topicsList.size} topics")
+    assertEquals(numTopics, topicsList.size)
+
+    // the whole point of our 8000 long-named topics is to exceed EmbeddedZookeeper's (and real ZK's) 1 MB
+    // jute.maxbuffer size:
+    assertTrue(sumOfInputTopicNameLengths > Integer.valueOf(EmbeddedZookeeper.JUTE_MAXBUFFER_VALUE))
+    // can't just do topicsList.map here since map of a Set is also a Set, and the _lengths_ of our
+    // topic names are NOT globally unique:
+    val sumOfOutputTopicNameLengths = topicsList.toSeq.map(_.length + 4).sum
+    assertEquals(sumOfInputTopicNameLengths, sumOfOutputTopicNameLengths)
+    // spot-check that the first and last topic names are present:
+    assertTrue(topicsList.contains(s"${superLongTopicNamePrefix}0"))
+    assertTrue(topicsList.contains(s"${superLongTopicNamePrefix}${numTopics - 1}"))
+  }
+
   @Test
   def testCreateAndGetTopicPartitionStatesRaw(): Unit = {
     zkClient.createRecursive(TopicZNode.path(topic1))
@@ -1354,8 +1408,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       finally client.close()
     }
 
-    // default case
-    assertEquals("4194304", zkClient.currentZooKeeper.getClientConfig.getProperty(ZKConfig.JUTE_MAXBUFFER))
+    // "default" (server-side) case
+    assertEquals(EmbeddedZookeeper.JUTE_MAXBUFFER_VALUE,
+                 zkClient.currentZooKeeper.getClientConfig.getProperty(ZKConfig.JUTE_MAXBUFFER))
 
     // Value set directly on ZKClientConfig takes precedence over system property
     System.setProperty(ZKConfig.JUTE_MAXBUFFER, (3000 * 1024).toString)
@@ -1371,7 +1426,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   class ExpiredKafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time)
-    extends KafkaZkClient(zooKeeperClient, isSecure, time) {
+    extends KafkaZkClient(zooKeeperClient, isSecure, time, false) {
     // Overwriting this method from the parent class to force the client to re-register the Broker.
     override def shouldReCreateEphemeralZNode(ephemeralOwnerId: Long): Boolean = {
       true

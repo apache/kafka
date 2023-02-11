@@ -20,6 +20,7 @@ package kafka.zookeeper
 import java.util.Locale
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent._
+import java.util.function.{Consumer, Supplier}
 import java.util.{List => JList}
 
 import com.yammer.metrics.core.MetricName
@@ -47,12 +48,15 @@ object ZooKeeperClient {
 /**
  * A ZooKeeper client that encourages pipelined requests.
  *
- * @param connectString comma separated host:port pairs, each corresponding to a zk server
+ * @param connectString comma-separated host:port pairs, each corresponding to a zk server
  * @param sessionTimeoutMs session timeout in milliseconds
  * @param connectionTimeoutMs connection timeout in milliseconds
- * @param maxInFlightRequests maximum number of unacknowledged requests the client will send before blocking.
- * @param name name of the client instance
+ * @param maxInFlightRequests maximum number of unacknowledged requests the client will send before blocking
+ * @param time clock for timing; can be overridden or mocked in tests
+ * @param metricGroup name of the group of ZK-related metrics
+ * @param metricType type of the ZK-related metrics
  * @param zkClientConfig ZooKeeper client configuration, for TLS configs if desired
+ * @param name name of the client instance
  */
 class ZooKeeperClient(connectString: String,
                       sessionTimeoutMs: Int,
@@ -61,7 +65,7 @@ class ZooKeeperClient(connectString: String,
                       time: Time,
                       metricGroup: String,
                       metricType: String,
-                      private[zookeeper] val clientConfig: ZKClientConfig,
+                      private[zookeeper] val zkClientConfig: ZKClientConfig,
                       name: String) extends Logging with KafkaMetricsGroup {
 
   this.logIdent = s"[ZooKeeperClient $name] "
@@ -74,6 +78,11 @@ class ZooKeeperClient(connectString: String,
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
   private[zookeeper] val reinitializeScheduler = new KafkaScheduler(threads = 1, s"zk-client-${threadPrefix}reinit-")
   private var isFirstConnectionEstablished = false
+
+  // There should never be more than one controller-failover call at a time, but there are no guarantees
+  // for end-user listTopics() calls, and zookeeper.max.in.flight.requests defaults to 10 (and apparently
+  // is not overridden), so go with 10 threads as a safe bet:
+  private val zkPaginationExecutor = Executors.newFixedThreadPool(10)
 
   private val metricNames = Set[String]()
 
@@ -98,7 +107,7 @@ class ZooKeeperClient(connectString: String,
   info(s"Initializing a new session to $connectString.")
   // Fail-fast if there's an error during construction (so don't call initialize, which retries forever)
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher,
-    clientConfig)
+    zkClientConfig)
 
   newGauge("SessionState", () => connectionState.toString)
 
@@ -198,6 +207,23 @@ class ZooKeeperClient(connectString: String,
             callback(GetChildrenResponse(Code.get(rc), path, Option(ctx), Option(children).map(_.asScala).getOrElse(Seq.empty),
               stat, responseMetadata(sendTimeMs)))
         }, ctx.orNull)
+      case GetChildrenPaginatedRequest(path, _, ctx) =>
+        CompletableFuture.supplyAsync(new Supplier[GetChildrenPaginatedResponse]() {
+          def get(): GetChildrenPaginatedResponse = {
+            var topicsList: JList[String] = null 
+            var resultCode: Code = Code.OK
+            try {
+              topicsList = zooKeeper.getAllChildrenPaginated(path, shouldWatch(request))
+            } catch {
+              case e: KeeperException =>
+                resultCode = e.code
+            }
+            GetChildrenPaginatedResponse(resultCode, path, Option(ctx), Option(topicsList).map(_.asScala).getOrElse(Seq.empty),
+              responseMetadata(sendTimeMs))
+          }
+        }, zkPaginationExecutor).thenAccept(new Consumer[GetChildrenPaginatedResponse] {
+          override def accept(response: GetChildrenPaginatedResponse) = callback(response)
+        })
       case CreateRequest(path, data, acl, createMode, ctx) =>
         zooKeeper.create(path, data, acl.asJava, createMode,
           (rc, path, ctx, name) =>
@@ -270,6 +296,7 @@ class ZooKeeperClient(connectString: String,
   // may need to be updated.
   private def shouldWatch(request: AsyncRequest): Boolean = request match {
     case GetChildrenRequest(_, registerWatch, _) => registerWatch && zNodeChildChangeHandlers.contains(request.path)
+    case GetChildrenPaginatedRequest(_, registerWatch, _) => registerWatch && zNodeChildChangeHandlers.contains(request.path)
     case _: ExistsRequest | _: GetDataRequest => zNodeChangeHandlers.contains(request.path)
     case _ => throw new IllegalArgumentException(s"Request $request is not watchable")
   }
@@ -371,7 +398,7 @@ class ZooKeeperClient(connectString: String,
         var connected = false
         while (!connected) {
           try {
-            zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher, clientConfig)
+            zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher, zkClientConfig)
             connected = true
           } catch {
             case e: Exception =>
@@ -542,6 +569,11 @@ case class GetChildrenRequest(path: String, registerWatch: Boolean, ctx: Option[
   type Response = GetChildrenResponse
 }
 
+// GetChildrenPaginatedResponse is identical to GetChildrenResponse except no Stat argument
+case class GetChildrenPaginatedRequest(path: String, registerWatch: Boolean, ctx: Option[Any] = None) extends AsyncRequest {
+  type Response = GetChildrenPaginatedResponse
+}
+
 case class MultiRequest(zkOps: Seq[ZkOp], ctx: Option[Any] = None) extends AsyncRequest {
   type Response = MultiResponse
 
@@ -569,6 +601,11 @@ sealed abstract class AsyncResponse {
   def metadata: ResponseMetadata
 }
 
+sealed trait GetChildrenResponseNoStat extends AsyncResponse {
+  def children: Seq[String]
+  def metadata: ResponseMetadata
+}
+
 case class ResponseMetadata(sendTimeMs: Long, receivedTimeMs: Long) {
   def responseTimeMs: Long = receivedTimeMs - sendTimeMs
 }
@@ -588,7 +625,9 @@ case class GetAclResponse(resultCode: Code, path: String, ctx: Option[Any], acl:
 case class SetAclResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
                           metadata: ResponseMetadata) extends AsyncResponse
 case class GetChildrenResponse(resultCode: Code, path: String, ctx: Option[Any], children: Seq[String], stat: Stat,
-                               metadata: ResponseMetadata) extends AsyncResponse
+                               metadata: ResponseMetadata) extends GetChildrenResponseNoStat
+case class GetChildrenPaginatedResponse(resultCode: Code, path: String, ctx: Option[Any], children: Seq[String],
+                                        metadata: ResponseMetadata) extends GetChildrenResponseNoStat
 case class MultiResponse(resultCode: Code, path: String, ctx: Option[Any], zkOpResults: Seq[ZkOpResult],
                          metadata: ResponseMetadata) extends AsyncResponse
 

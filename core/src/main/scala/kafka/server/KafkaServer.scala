@@ -563,7 +563,8 @@ class KafkaServer(
       // for tests with multiple brokers running and probably useful for multi-host log-grepping in prod)
       _zkClients += KafkaZkClient(config.zkConnect, secureAclsEnabled, config.zkSessionTimeoutMs,
         config.zkConnectionTimeoutMs, config.zkMaxInFlightRequests, time, name = s"zk${i} Kafka server",
-        zkClientConfig = zkClientConfig, createChrootIfNecessary = true)
+        zkClientConfig = zkClientConfig, createChrootIfNecessary = true,
+        paginateTopics = config.liZookeeperPaginationEnable)
     }
 
     zkClient.createTopLevelPaths()

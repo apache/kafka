@@ -151,7 +151,7 @@ public class PartitionCreationBench {
                         this.metrics,
                         this.time, "");
 
-        KafkaZkClient zkClient = new KafkaZkClient(null, false, Time.SYSTEM) {
+        KafkaZkClient zkClient = new KafkaZkClient(null, false, Time.SYSTEM, false) {
             @Override
             public Properties getEntityConfigs(String rootEntityType, String sanitizedEntityName) {
                 return new Properties();

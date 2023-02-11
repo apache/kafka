@@ -58,6 +58,9 @@ allprojects {
 
   repositories {
     mavenCentral()
+    maven {
+      url  "https://linkedin.jfrog.io/artifactory/zookeeper"
+    }
   }
 
   dependencyUpdates {

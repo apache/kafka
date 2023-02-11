@@ -51,8 +51,10 @@ import scala.collection.{Map, Seq, mutable}
  * easier to migrate away from `ZkUtils` (since removed). We should revisit this. We should also consider whether a
  * monolithic [[kafka.zk.ZkData]] is the way to go.
  */
-class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends AutoCloseable with
-  Logging with KafkaMetricsGroup {
+class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
+                                 isSecure: Boolean,
+                                 time: Time,
+                                 paginateTopics: Boolean) extends AutoCloseable with Logging with KafkaMetricsGroup {
 
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
@@ -546,7 +548,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    */
   def getAllTopicsInCluster(registerWatch: Boolean = false): Set[String] = {
     val getChildrenResponse = retryRequestUntilConnected(
-      GetChildrenRequest(TopicsZNode.path, registerWatch))
+      if (paginateTopics) GetChildrenPaginatedRequest(TopicsZNode.path, registerWatch)
+        else GetChildrenRequest(TopicsZNode.path, registerWatch))
     getChildrenResponse.resultCode match {
       case Code.OK => getChildrenResponse.children.toSet
       case Code.NONODE => Set.empty
@@ -2096,7 +2099,8 @@ object KafkaZkClient {
             zkClientConfig: ZKClientConfig,
             metricGroup: String = "kafka.server",
             metricType: String = "SessionExpireListener",
-            createChrootIfNecessary: Boolean = false
+            createChrootIfNecessary: Boolean = false,
+            paginateTopics: Boolean = false
   ): KafkaZkClient = {
 
     /* ZooKeeper 3.6.0 changed the default configuration for JUTE_MAXBUFFER from 4 MB to 1 MB.
@@ -2131,7 +2135,7 @@ object KafkaZkClient {
     }
     val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
       time, metricGroup, metricType, zkClientConfig, name)
-    new KafkaZkClient(zooKeeperClient, isSecure, time)
+    new KafkaZkClient(zooKeeperClient, isSecure, time, paginateTopics)
   }
 
   // A helper function to transform a regular request into a MultiRequest
