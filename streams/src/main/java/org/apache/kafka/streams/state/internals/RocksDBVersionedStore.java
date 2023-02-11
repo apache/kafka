@@ -132,11 +132,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     @Override
     public VersionedRecord<byte[]> get(final Bytes key) {
         // latest value (if present) is guaranteed to be in the latest value store
-        final byte[] latestValue = latestValueStore.get(key);
-        if (latestValue != null) {
+        final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
+        if (rawLatestValueAndTimestamp != null) {
             return new VersionedRecord<>(
-                LatestValueFormatter.getValue(latestValue),
-                LatestValueFormatter.getTimestamp(latestValue)
+                LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
+                LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp)
             );
         } else {
             return null;
@@ -290,7 +290,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         final VersionedStoreClient<?> restoreClient = restoreWriteBuffer.getClient();
 
-        // TODO: handle potential out of memory in this process
+        // note: there is increased risk for hitting an out-of-memory during this restore loop,
+        // compared to for non-versioned key-value stores, because this versioned store
+        // implementation stores multiple records (for the same key) together in a single RocksDB
+        // "segment" entry -- restoring a single changelog entry could require loading multiple
+        // records into memory. how high this memory amplification will be is very much dependent
+        // on the specific workload and the value of the "segment interval" parameter.
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                 record,

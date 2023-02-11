@@ -583,18 +583,18 @@ public class RocksDBVersionedStoreTest {
         final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
 
         for (final DataRecord d : data) {
-            final byte[] key = STRING_SERIALIZER.serialize(null, d.key);
-            final byte[] value = STRING_SERIALIZER.serialize(null, d.value);
+            final byte[] rawKey = STRING_SERIALIZER.serialize(null, d.key);
+            final byte[] rawValue = STRING_SERIALIZER.serialize(null, d.value);
             records.add(new ConsumerRecord<>(
                 "",
                 0,
                 0L,
                 d.timestamp,
                 TimestampType.CREATE_TIME,
-                key.length,
-                value == null ? 0 : value.length,
-                key,
-                value,
+                rawKey.length,
+                rawValue == null ? 0 : rawValue.length,
+                rawKey,
+                rawValue,
                 new RecordHeaders(),
                 Optional.empty()
             ));
