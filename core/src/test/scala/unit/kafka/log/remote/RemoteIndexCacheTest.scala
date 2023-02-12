@@ -22,7 +22,7 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{TestUtils => JTestUtils}
@@ -62,9 +62,9 @@ class RemoteIndexCacheTest {
 
     val remoteLogSegmentId = RemoteLogSegmentId.generateNew(idPartition)
     rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
-      time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
+  val rsm: RemoteStorageManager = mock(classOf[RemoteStorageManager])
 
-    cache = new RemoteIndexCache(remoteStorageManager = rsm, logDir = tpDir.toString)
+    cache = new RemoteIndexCache(rsm, tpDir.toString)
 
     when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
       .thenAnswer(ans => {
@@ -72,7 +72,7 @@ class RemoteIndexCacheTest {
         val indexType = ans.getArgument[IndexType](1)
         val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
         val timeIdx = createTimeIndexForSegmentMetadata(metadata)
-        val txIdx = createTxIndexForSegmentMetadata(metadata)
+        val trxIdx = createTxIndexForSegmentMetadata(metadata)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
@@ -156,7 +156,7 @@ class RemoteIndexCacheTest {
   def testCacheEntryExpiry(): Unit = {
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
-    cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = tpDir.toString)
+    cache = new RemoteIndexCache(2, rsm, tpDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
@@ -201,7 +201,7 @@ class RemoteIndexCacheTest {
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
 
-    cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = tpDir.toString)
+    cache = new RemoteIndexCache(2, rsm, tpDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
@@ -403,7 +403,7 @@ class RemoteIndexCacheTest {
   def testReloadCacheAfterClose(): Unit = {
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
-    cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = tpDir.toString)
+    cache = new RemoteIndexCache(2, rsm, tpDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
@@ -437,7 +437,7 @@ class RemoteIndexCacheTest {
     cache.close()
 
     // Reload the cache from the disk and check the cache size is same as earlier
-    val reloadedCache = new RemoteIndexCache(maxSize = 2, rsm, logDir = tpDir.toString)
+    val reloadedCache = new RemoteIndexCache(2, rsm, tpDir.toString)
     assertEquals(2, reloadedCache.internalCache.asMap().size())
     reloadedCache.close()
 
