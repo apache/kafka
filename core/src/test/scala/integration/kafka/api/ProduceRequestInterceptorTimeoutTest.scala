@@ -28,6 +28,7 @@ import org.apache.kafka.server.interceptors.{ProduceRequestInterceptor, ProduceR
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
+import java.util.regex.Pattern
 import java.util.{Collections, Properties}
 import scala.jdk.CollectionConverters._
 
@@ -37,6 +38,8 @@ class TimeoutProduceRequestInterceptor extends ProduceRequestInterceptor {
     Thread.sleep(200)
     new ProduceRequestInterceptorResult(key, value)
   }
+
+  override def interceptorTopicPattern(): Pattern = Pattern.compile(".*")
 
   override def configure(): Unit = ()
 }

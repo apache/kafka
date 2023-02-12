@@ -19,6 +19,8 @@ package org.apache.kafka.server.interceptors;
 
 import org.apache.kafka.common.header.Header;
 
+import java.util.regex.Pattern;
+
 /**
  * ProduceRequestInterceptors can be defined to perform custom, light-weight processing on every record received by a
  * broker.
@@ -38,6 +40,9 @@ public abstract class ProduceRequestInterceptor {
     // the record will be removed from the batch and won't be persisted in the target log. All other exceptions are
     // considered "fatal" and will result in a request error
     public abstract ProduceRequestInterceptorResult processRecord(byte[] key, byte[] value, String topic, int partition, Header[] headers) throws Exception;
+
+    // Define the topic name pattern that will determine whether this interceptor runs on a given batch of records
+    public abstract Pattern interceptorTopicPattern();
 
     // Method that gets called during the interceptor's initialization to configure itself
     public abstract void configure();

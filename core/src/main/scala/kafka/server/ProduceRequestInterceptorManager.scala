@@ -50,8 +50,9 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
     if (interceptors.isEmpty) {
 
     } else {
-      produceRequest.data().topicData().forEach {
-        topic =>
+      produceRequest.data().topicData().forEach { topic => {
+        val interceptorsForTopic = interceptors.filter(shouldInterceptTopic(topic.name(), _)).toSeq
+        if (interceptorsForTopic.nonEmpty) {
           topic.partitionData().forEach {
             partitionData => {
               val parsedInput = Try {
@@ -61,7 +62,7 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
               }
               parsedInput match {
                 case Success((memoryRecords, originalRecords)) =>
-                  Try(processRecordsWithTimeout(originalRecords, topic.name(), partitionData.index())) match {
+                  Try(processRecordsWithTimeout(originalRecords, topic.name(), partitionData.index(), interceptorsForTopic)) match {
                     case Success(processedRecords) =>
                       val newMemoryRecords = rebuildMemoryRecords(memoryRecords, processedRecords)
                       // We mutate the original partitionData so the changes will be visible for all subsequent processes
@@ -74,16 +75,22 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
               }
             }
           }
-      }
+        }
+      }}
     }
     interceptorTopicResponses
   }
 
+  private def shouldInterceptTopic(topic: String, interceptor: ProduceRequestInterceptor): Boolean = {
+    val pattern = interceptor.interceptorTopicPattern().pattern().r
+    pattern.findFirstMatchIn(topic).nonEmpty
+  }
+
   @tailrec
-  private def processRecordsWithTimeout(originalRecords: Seq[Record], topic: String, partition: Int, attempt: Int = 0): Seq[SimpleRecord] = {
+  private def processRecordsWithTimeout(originalRecords: Seq[Record], topic: String, partition: Int, interceptors: Seq[ProduceRequestInterceptor], attempt: Int = 0): Seq[SimpleRecord] = {
     val res = Try {
       Await.result(
-        Future { processRecords(originalRecords, topic, partition) },
+        Future { processRecords(originalRecords, topic, partition, interceptors) },
         interceptorTimeoutDuration
       )
     }
@@ -92,7 +99,7 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
       case Failure(throwable) => {
        throwable match {
          case _: TimeoutException =>
-           if (attempt < maxRetriesOnTimeout) processRecordsWithTimeout(originalRecords, topic, partition, attempt + 1)
+           if (attempt < maxRetriesOnTimeout) processRecordsWithTimeout(originalRecords, topic, partition, interceptors, attempt + 1)
            else {
              throw new KafkaTimeoutException(throwable)
            }
@@ -102,10 +109,10 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
     }
   }
 
-  private def processRecords(originalRecords: Seq[Record], topic: String, partition: Int): Seq[SimpleRecord] = {
+  private def processRecords(originalRecords: Seq[Record], topic: String, partition: Int, interceptors: Seq[ProduceRequestInterceptor]): Seq[SimpleRecord] = {
     val accumulator = List.empty[SimpleRecord]
     originalRecords.foldLeft(accumulator) { (acc, record) =>
-      val newRecordTry = processRecord(record, topic, partition)
+      val newRecordTry = processRecord(record, topic, partition, interceptors)
       newRecordTry match {
         case Success(newRecord) => acc :+ newRecord
         case Failure(throwable) => {
@@ -122,7 +129,7 @@ class ProduceRequestInterceptorManager(interceptors: Iterable[ProduceRequestInte
 
   }
 
-  private def processRecord(record: Record, topic: String, partition: Int): Try[SimpleRecord] = {
+  private def processRecord(record: Record, topic: String, partition: Int, interceptors: Seq[ProduceRequestInterceptor]): Try[SimpleRecord] = {
     val asSimpleRecord = new SimpleRecord(record)
     // The interceptor might throw, so we wrap this method in a try
     Try {

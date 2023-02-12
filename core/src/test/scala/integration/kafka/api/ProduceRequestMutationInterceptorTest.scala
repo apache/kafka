@@ -28,6 +28,7 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import java.nio.charset.StandardCharsets
 import java.util.Properties
+import java.util.regex.Pattern
 
 class MutationProduceRequestInterceptor extends ProduceRequestInterceptor {
 
@@ -41,6 +42,8 @@ class MutationProduceRequestInterceptor extends ProduceRequestInterceptor {
     }
     new ProduceRequestInterceptorResult(key, newValue)
   }
+
+  override def interceptorTopicPattern(): Pattern = Pattern.compile(".*")
 
   override def configure(): Unit = ()
 }

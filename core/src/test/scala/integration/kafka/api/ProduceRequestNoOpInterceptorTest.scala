@@ -25,6 +25,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Properties
+import java.util.regex.Pattern
 
 class NoOpProduceRequestInterceptor extends ProduceRequestInterceptor {
 
@@ -35,6 +36,8 @@ class NoOpProduceRequestInterceptor extends ProduceRequestInterceptor {
     }
     new ProduceRequestInterceptorResult(key, newValue)
   }
+
+  override def interceptorTopicPattern(): Pattern = Pattern.compile(".*")
 
   override def configure(): Unit = ()
 }

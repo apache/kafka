@@ -29,6 +29,7 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import java.nio.charset.StandardCharsets
 import java.util.Properties
+import java.util.regex.Pattern
 
 class EvenNumberFilterProduceRequestInterceptor extends ProduceRequestInterceptor {
 
@@ -44,6 +45,8 @@ class EvenNumberFilterProduceRequestInterceptor extends ProduceRequestIntercepto
     }
     new ProduceRequestInterceptorResult(key, newValue)
   }
+
+  override def interceptorTopicPattern(): Pattern = Pattern.compile(".*")
 
   override def configure(): Unit = ()
 }
