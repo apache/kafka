@@ -31,7 +31,7 @@ import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.storage.internals.log.LogFileUtils.offsetFromFileName
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, OffsetPosition}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, OffsetPosition}
 
 import java.util.{Collections, Optional}
 import scala.jdk.CollectionConverters._
@@ -338,7 +338,7 @@ class LocalLog(@volatile private var _dir: File,
                                           asyncDelete: Boolean,
                                           reason: SegmentDeletionReason): LogSegment = {
     if (newOffset == segmentToDelete.baseOffset)
-      segmentToDelete.changeFileSuffixes("", DeletedFileSuffix)
+      segmentToDelete.changeFileSuffixes("", LogFileUtils.DELETED_FILE_SUFFIX)
 
     val newSegment = LogSegment.open(dir,
       baseOffset = newOffset,
@@ -984,8 +984,8 @@ object LocalLog extends Logging {
                                       logDirFailureChannel: LogDirFailureChannel,
                                       logPrefix: String): Unit = {
     segmentsToDelete.foreach { segment =>
-      if (!segment.hasSuffix(DeletedFileSuffix))
-        segment.changeFileSuffixes("", DeletedFileSuffix)
+      if (!segment.hasSuffix(LogFileUtils.DELETED_FILE_SUFFIX))
+        segment.changeFileSuffixes("", LogFileUtils.DELETED_FILE_SUFFIX)
     }
 
     def deleteSegments(): Unit = {

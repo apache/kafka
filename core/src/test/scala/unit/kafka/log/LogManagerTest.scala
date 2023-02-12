@@ -39,7 +39,7 @@ import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 
 import scala.collection.{Map, mutable}
 import scala.collection.mutable.ArrayBuffer

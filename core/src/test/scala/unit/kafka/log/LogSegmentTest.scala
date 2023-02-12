@@ -26,7 +26,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{BatchMetadata, EpochEntry, LogConfig, ProducerStateEntry}
+import org.apache.kafka.storage.internals.log.{BatchMetadata, EpochEntry, LogConfig, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -588,9 +588,9 @@ class LogSegmentTest {
     new ProducerStateManager(
       topicPartition,
       logDir,
-      maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
-      time = new MockTime()
+      5 * 60 * 1000,
+      new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
+      new MockTime()
     )
   }
 
