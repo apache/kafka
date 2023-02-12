@@ -70,8 +70,8 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig, LogDirFailureChannel}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
@@ -306,6 +306,7 @@ object TestUtils extends Logging {
 
     val props = new Properties
     if (zkConnect == null) {
+      props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
       props.put(KafkaConfig.NodeIdProp, nodeId.toString)
       props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
       props.put(KafkaConfig.AdvertisedListenersProp, listeners)
@@ -505,7 +506,7 @@ object TestUtils extends Logging {
       numPartitions = broker.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
       replicationFactor = broker.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       brokers = brokers,
-      topicConfig = broker.groupCoordinator.offsetsTopicConfigs,
+      topicConfig = broker.groupCoordinator.groupMetadataTopicConfigs,
     )
   }
 
@@ -611,7 +612,7 @@ object TestUtils extends Logging {
       server.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
       server.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,
-      server.groupCoordinator.offsetsTopicConfigs)
+      server.groupCoordinator.groupMetadataTopicConfigs)
   }
 
   /**
@@ -1971,16 +1972,23 @@ object TestUtils extends Logging {
     )
   }
 
+  def currentIsr(admin: Admin, partition: TopicPartition): Set[Int] = {
+    val description = admin.describeTopics(Set(partition.topic).asJava)
+      .allTopicNames
+      .get
+      .asScala
+
+    description
+      .values
+      .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
+      .map(_.id)
+      .toSet
+  }
+
   def waitForBrokersInIsr(client: Admin, partition: TopicPartition, brokerIds: Set[Int]): Unit = {
     waitUntilTrue(
       () => {
-        val description = client.describeTopics(Set(partition.topic).asJava).allTopicNames.get.asScala
-        val isr = description
-          .values
-          .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
-          .map(_.id)
-          .toSet
-
+        val isr = currentIsr(client, partition)
         brokerIds.subsetOf(isr)
       },
       s"Expected brokers $brokerIds to be in the ISR for $partition"

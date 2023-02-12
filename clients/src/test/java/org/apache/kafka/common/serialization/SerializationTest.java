@@ -360,12 +360,12 @@ public class SerializationTest {
     }
 
     private Serde<String> getStringSerde(String encoder) {
-        Map<String, Object> serializerConfigs = new HashMap<String, Object>();
+        Map<String, Object> serializerConfigs = new HashMap<>();
         serializerConfigs.put("key.serializer.encoding", encoder);
         Serializer<String> serializer = Serdes.String().serializer();
         serializer.configure(serializerConfigs, true);
 
-        Map<String, Object> deserializerConfigs = new HashMap<String, Object>();
+        Map<String, Object> deserializerConfigs = new HashMap<>();
         deserializerConfigs.put("key.deserializer.encoding", encoder);
         Deserializer<String> deserializer = Serdes.String().deserializer();
         deserializer.configure(deserializerConfigs, true);

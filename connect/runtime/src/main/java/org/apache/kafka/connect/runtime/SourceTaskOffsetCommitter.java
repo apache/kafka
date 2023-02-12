@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.common.utils.ThreadUtils;
@@ -34,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * <p>
- * Manages offset commit scheduling and execution for SourceTasks.
+ * Manages offset commit scheduling and execution for {@link SourceTask}s.
  * </p>
  * <p>
  * Unlike sink tasks which directly manage their offset commits in the main poll() thread since

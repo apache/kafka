@@ -60,8 +60,9 @@
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="kafka.admin" />
-    <allow pkg="joptsimple" />
     <allow pkg="org.apache.kafka.clients.consumer" />
+    <allow pkg="org.apache.kafka.server.util" />
+    <allow pkg="joptsimple" />
   </subpackage>
 
   <subpackage name="coordinator">

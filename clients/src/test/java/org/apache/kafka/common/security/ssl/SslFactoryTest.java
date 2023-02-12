@@ -77,7 +77,7 @@ public abstract class SslFactoryTest {
         SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
         assertNotNull(engine);
         assertEquals(Utils.mkSet(tlsProtocol), Utils.mkSet(engine.getEnabledProtocols()));
-        assertEquals(false, engine.getUseClientMode());
+        assertFalse(engine.getUseClientMode());
     }
 
     @Test

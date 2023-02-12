@@ -45,6 +45,7 @@ import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 import scala.Option;
 import scala.collection.JavaConverters;
 
@@ -155,6 +156,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
             ControllerNode controllerNode = nodes.controllerNodes().get(node.id());
 
             Map<String, String> props = new HashMap<>(configProps);
+            props.put(KafkaConfig$.MODULE$.ServerMaxStartupTimeMsProp(),
+                    Long.toString(TimeUnit.MINUTES.toMillis(10)));
             props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), roles(node.id()));
             props.put(KafkaConfig$.MODULE$.NodeIdProp(),
                     Integer.toString(node.id()));
@@ -238,7 +241,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 bootstrapMetadata);
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
-                        Utils.swallow(log, "sharedServer.stopForController", () -> sharedServer.stopForController());
+                        Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", () -> sharedServer.stopForController());
                         if (controller != null) controller.shutdown();
                         throw e;
                     }
@@ -268,7 +271,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq());
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
-                        Utils.swallow(log, "sharedServer.stopForBroker", () -> sharedServer.stopForBroker());
+                        Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", () -> sharedServer.stopForBroker());
                         if (broker != null) broker.shutdown();
                         throw e;
                     }

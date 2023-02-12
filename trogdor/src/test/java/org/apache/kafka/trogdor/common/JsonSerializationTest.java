@@ -79,4 +79,4 @@ public class JsonSerializationTest {
             field.setAccessible(wasAccessible);
         }
     }
-};
+}

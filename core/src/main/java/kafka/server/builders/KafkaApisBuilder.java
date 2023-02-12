@@ -17,8 +17,6 @@
 
 package kafka.server.builders;
 
-import kafka.coordinator.group.GroupCoordinator;
-import kafka.coordinator.group.GroupCoordinatorAdapter;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.ApiVersionManager;
@@ -35,6 +33,7 @@ import kafka.server.ReplicaManager;
 import kafka.server.metadata.ConfigRepository;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.server.authorizer.Authorizer;
 
 import java.util.Collections;
@@ -179,7 +178,6 @@ public class KafkaApisBuilder {
                              metadataSupport,
                              replicaManager,
                              groupCoordinator,
-                             new GroupCoordinatorAdapter(groupCoordinator, time),
                              txnCoordinator,
                              autoTopicCreationManager,
                              brokerId,

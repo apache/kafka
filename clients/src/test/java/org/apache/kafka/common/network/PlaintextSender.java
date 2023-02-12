@@ -26,16 +26,13 @@ import java.net.Socket;
 public class PlaintextSender extends Thread {
 
     public PlaintextSender(final InetSocketAddress serverAddress, final byte[] payload) {
-        super(new Runnable() {
-            @Override
-            public void run() {
-                try (Socket connection = new Socket(serverAddress.getAddress(), serverAddress.getPort());
-                     OutputStream os = connection.getOutputStream()) {
-                    os.write(payload);
-                    os.flush();
-                } catch (Exception e) {
-                    e.printStackTrace(System.err);
-                }
+        super(() -> {
+            try (Socket connection = new Socket(serverAddress.getAddress(), serverAddress.getPort());
+                 OutputStream os = connection.getOutputStream()) {
+                os.write(payload);
+                os.flush();
+            } catch (Exception e) {
+                e.printStackTrace(System.err);
             }
         });
         setDaemon(true);

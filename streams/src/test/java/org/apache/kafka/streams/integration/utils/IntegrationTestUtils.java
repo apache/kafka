@@ -72,7 +72,6 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -103,6 +102,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.fail;
+import static java.util.Collections.singletonList;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -960,6 +960,14 @@ public class IntegrationTestUtils {
         });
     }
 
+    public static void startApplicationAndWaitUntilRunning(final KafkaStreams streams) throws Exception {
+        startApplicationAndWaitUntilRunning(singletonList(streams));
+    }
+
+    public static void startApplicationAndWaitUntilRunning(final List<KafkaStreams> streamsList) throws Exception {
+        startApplicationAndWaitUntilRunning(streamsList, Duration.ofSeconds(DEFAULT_TIMEOUT));
+    }
+
     /**
      * Starts the given {@link KafkaStreams} instances and waits for all of them to reach the
      * {@link State#RUNNING} state at the same time. Note that states may change between the time
@@ -1099,7 +1107,7 @@ public class IntegrationTestUtils {
                                                final String applicationId) {
         try {
             final ConsumerGroupDescription groupDescription =
-                    adminClient.describeConsumerGroups(Collections.singletonList(applicationId))
+                    adminClient.describeConsumerGroups(singletonList(applicationId))
                             .describedGroups()
                             .get(applicationId)
                             .get();
@@ -1282,7 +1290,7 @@ public class IntegrationTestUtils {
                                                                  final long waitTime,
                                                                  final int maxMessages) {
         final List<ConsumerRecord<K, V>> consumerRecords;
-        consumer.subscribe(Collections.singletonList(topic));
+        consumer.subscribe(singletonList(topic));
         System.out.println("Got assignment:" + consumer.assignment());
         final int pollIntervalMs = 100;
         consumerRecords = new ArrayList<>();

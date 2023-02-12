@@ -47,8 +47,8 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
-import org.apache.kafka.server.log.internals.LogConfig
-import org.apache.kafka.server.log.internals.LogConfig.MessageFormatVersion
+import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.zookeeper.client.ZKClientConfig
@@ -89,6 +89,7 @@ object Defaults {
 
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
+  val ServerMaxStartupTimeMs = Long.MaxValue
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassName = ""
@@ -376,6 +377,7 @@ object KafkaConfig {
   val MetadataMaxRetentionMillisProp = "metadata.max.retention.ms"
   val QuorumVotersProp = RaftConfig.QUORUM_VOTERS_CONFIG
   val MetadataMaxIdleIntervalMsProp = "metadata.max.idle.interval.ms"
+  val ServerMaxStartupTimeMsProp = "server.max.startup.time.ms"
 
   /** ZK to KRaft Migration configs */
   val MigrationEnabledProp = "zookeeper.metadata.migration.enable"
@@ -508,7 +510,7 @@ object KafkaConfig {
   val TransactionsAbortTimedOutTransactionCleanupIntervalMsProp = "transaction.abort.timed.out.transaction.cleanup.interval.ms"
   val TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp = "transaction.remove.expired.transaction.cleanup.interval.ms"
 
-  val ProducerIdExpirationMsProp = "producer.id.expiration.ms"
+  val ProducerIdExpirationMsProp = ProducerStateManagerConfig.PRODUCER_ID_EXPIRATION_MS
   val ProducerIdExpirationCheckIntervalMsProp = "producer.id.expiration.check.interval.ms"
 
   /** ********* Fetch Configuration **************/
@@ -619,6 +621,9 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthProp =  "password.encoder.key.length"
   val PasswordEncoderIterationsProp =  "password.encoder.iterations"
 
+  /** Internal Configurations **/
+  val UnstableApiVersionsEnableProp = "unstable.api.versions.enable"
+
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
   val ZkConnectDoc = "Specifies the ZooKeeper connection string in the form <code>hostname:port</code> where host and port are the " +
@@ -713,6 +718,8 @@ object KafkaConfig {
   val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
   val MetadataLogSegmentBytesDoc = "The maximum size of a single metadata log file."
   val MetadataLogSegmentMinBytesDoc = "Override the minimum size for a single metadata log file. This should be used for testing only."
+  val ServerMaxStartupTimeMsDoc = "The maximum number of milliseconds we will wait for the server to come up. " +
+  "By default there is no limit. This should be used for testing only."
 
   val MetadataLogSegmentMillisDoc = "The maximum time before a new metadata log file is rolled out (in milliseconds)."
   val MetadataMaxRetentionBytesDoc = "The maximum combined size of the metadata log and snapshots before deleting old " +
@@ -1086,7 +1093,7 @@ object KafkaConfig {
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
   @nowarn("cat=deprecation")
-  private[server] val configDef = {
+  val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
     import ConfigDef.Type._
@@ -1135,10 +1142,6 @@ object KafkaConfig {
        */
       .define(MetadataSnapshotMaxNewRecordBytesProp, LONG, Defaults.MetadataSnapshotMaxNewRecordBytes, atLeast(1), HIGH, MetadataSnapshotMaxNewRecordBytesDoc)
       .define(MetadataSnapshotMaxIntervalMsProp, LONG, Defaults.MetadataSnapshotMaxIntervalMs, atLeast(0), HIGH, MetadataSnapshotMaxIntervalMsDoc)
-
-      /*
-       * KRaft mode private configs. Note that these configs are defined as internal. We will make them public in the 3.0.0 release.
-       */
       .define(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
       .define(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
       .define(InitialBrokerRegistrationTimeoutMsProp, INT, Defaults.InitialBrokerRegistrationTimeoutMs, null, MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
@@ -1153,6 +1156,7 @@ object KafkaConfig {
       .define(MetadataMaxRetentionBytesProp, LONG, Defaults.MetadataMaxRetentionBytes, null, HIGH, MetadataMaxRetentionBytesDoc)
       .define(MetadataMaxRetentionMillisProp, LONG, LogConfig.DEFAULT_RETENTION_MS, null, HIGH, MetadataMaxRetentionMillisDoc)
       .define(MetadataMaxIdleIntervalMsProp, INT, Defaults.MetadataMaxIdleIntervalMs, atLeast(0), LOW, MetadataMaxIdleIntervalMsDoc)
+      .defineInternal(ServerMaxStartupTimeMsProp, LONG, Defaults.ServerMaxStartupTimeMs, atLeast(0), MEDIUM, ServerMaxStartupTimeMsDoc)
       .define(MigrationEnabledProp, BOOLEAN, false, HIGH, "Enable ZK to KRaft migration")
 
       /************* Authorizer Configuration ***********/
@@ -1403,6 +1407,10 @@ object KafkaConfig {
       .define(RaftConfig.QUORUM_LINGER_MS_CONFIG, INT, Defaults.QuorumLingerMs, null, MEDIUM, RaftConfig.QUORUM_LINGER_MS_DOC)
       .define(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumRequestTimeoutMs, null, MEDIUM, RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_DOC)
       .define(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
+
+      /** Internal Configurations **/
+      // This indicates whether unreleased APIs should be advertised by this broker.
+      .defineInternal(UnstableApiVersionsEnableProp, BOOLEAN, false, LOW)
   }
 
   /** ********* Remote Log Management Configuration *********/
@@ -1516,7 +1524,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   override def values: util.Map[String, _] =
     if (this eq currentConfig) super.values else currentConfig.values
   override def nonInternalValues: util.Map[String, _] =
-    if (this eq currentConfig) super.nonInternalValues else currentConfig.values
+    if (this eq currentConfig) super.nonInternalValues else currentConfig.nonInternalValues
   override def originalsStrings: util.Map[String, String] =
     if (this eq currentConfig) super.originalsStrings else currentConfig.originalsStrings
   override def originalsWithPrefix(prefix: String): util.Map[String, AnyRef] =
@@ -1660,6 +1668,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def metadataLogSegmentMillis = getLong(KafkaConfig.MetadataLogSegmentMillisProp)
   def metadataRetentionBytes = getLong(KafkaConfig.MetadataMaxRetentionBytesProp)
   def metadataRetentionMillis = getLong(KafkaConfig.MetadataMaxRetentionMillisProp)
+  val serverMaxStartupTimeMs = getLong(KafkaConfig.ServerMaxStartupTimeMsProp)
 
   def numNetworkThreads = getInt(KafkaConfig.NumNetworkThreadsProp)
   def backgroundThreads = getInt(KafkaConfig.BackgroundThreadsProp)
@@ -1926,6 +1935,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val quorumLingerMs = getInt(RaftConfig.QUORUM_LINGER_MS_CONFIG)
   val quorumRequestTimeoutMs = getInt(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG)
   val quorumRetryBackoffMs = getInt(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
+
+  /** Internal Configurations **/
+  val unstableApiVersionsEnabled = getBoolean(KafkaConfig.UnstableApiVersionsEnableProp)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
@@ -2201,6 +2213,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     } else {
       // ZK-based
       if (migrationEnabled) {
+        require(!originals.containsKey(KafkaConfig.AuthorizerClassNameProp),
+          s"ZooKeeper migration does not yet support authorizers. Remove ${KafkaConfig.AuthorizerClassNameProp} before performing a migration.")
         validateNonEmptyQuorumVotersForMigration()
         require(controllerListenerNames.nonEmpty,
           s"${KafkaConfig.ControllerListenerNamesProp} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")

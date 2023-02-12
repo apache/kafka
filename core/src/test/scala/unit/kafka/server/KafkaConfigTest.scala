@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.cluster.EndPoint
+import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
@@ -37,8 +38,8 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
-import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.function.Executable
 
 import scala.annotation.nowarn
@@ -1650,8 +1651,18 @@ class KafkaConfigTest {
       assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
 
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+
+    // All needed configs are now set
     KafkaConfig.fromProps(props)
 
+    // Don't allow migration startup with an authorizer set
+    props.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getCanonicalName)
+    assertEquals(
+      "requirement failed: ZooKeeper migration does not yet support authorizers. Remove authorizer.class.name before performing a migration.",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+    props.remove(KafkaConfig.AuthorizerClassNameProp)
+
+    // Don't allow migration startup with an older IBP
     props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.IBP_3_3_IV0.version())
     assertEquals(
       "requirement failed: Cannot enable ZooKeeper migration without setting 'inter.broker.protocol.version' to 3.4 or higher",

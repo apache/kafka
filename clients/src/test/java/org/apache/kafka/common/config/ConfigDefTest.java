@@ -131,7 +131,7 @@ public class ConfigDefTest {
 
     private void testBadInputs(Type type, Object... values) {
         for (Object value : values) {
-            Map<String, Object> m = new HashMap<String, Object>();
+            Map<String, Object> m = new HashMap<>();
             m.put("name", value);
             ConfigDef def = new ConfigDef().define("name", type, Importance.HIGH, "docs");
             try {
@@ -158,7 +158,7 @@ public class ConfigDefTest {
     @Test
     public void testNestedClass() {
         // getName(), not getSimpleName() or getCanonicalName(), is the version that should be able to locate the class
-        Map<String, Object> props = Collections.<String, Object>singletonMap("name", NestedClass.class.getName());
+        Map<String, Object> props = Collections.singletonMap("name", NestedClass.class.getName());
         new ConfigDef().define("name", Type.CLASS, Importance.HIGH, "docs").parse(props);
     }
 
@@ -240,10 +240,10 @@ public class ConfigDefTest {
         Map<String, ConfigValue> expected = new HashMap<>();
         String errorMessageB = "Missing required configuration \"b\" which has no default value.";
         String errorMessageC = "Missing required configuration \"c\" which has no default value.";
-        ConfigValue configA = new ConfigValue("a", 1, Collections.<Object>emptyList(), Collections.<String>emptyList());
-        ConfigValue configB = new ConfigValue("b", null, Collections.<Object>emptyList(), Arrays.asList(errorMessageB, errorMessageB));
-        ConfigValue configC = new ConfigValue("c", null, Collections.<Object>emptyList(), Arrays.asList(errorMessageC));
-        ConfigValue configD = new ConfigValue("d", 10, Collections.<Object>emptyList(), Collections.<String>emptyList());
+        ConfigValue configA = new ConfigValue("a", 1, Collections.emptyList(), Collections.emptyList());
+        ConfigValue configB = new ConfigValue("b", null, Collections.emptyList(), Arrays.asList(errorMessageB, errorMessageB));
+        ConfigValue configC = new ConfigValue("c", null, Collections.emptyList(), Arrays.asList(errorMessageC));
+        ConfigValue configD = new ConfigValue("d", 10, Collections.emptyList(), Collections.emptyList());
         expected.put("a", configA);
         expected.put("b", configB);
         expected.put("c", configC);
@@ -277,10 +277,10 @@ public class ConfigDefTest {
         String errorMessageB = "Missing required configuration \"b\" which has no default value.";
         String errorMessageC = "Missing required configuration \"c\" which has no default value.";
 
-        ConfigValue configA = new ConfigValue("a", 1, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
-        ConfigValue configB = new ConfigValue("b", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageB, errorMessageB));
-        ConfigValue configC = new ConfigValue("c", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageC));
-        ConfigValue configD = new ConfigValue("d", 10, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
+        ConfigValue configA = new ConfigValue("a", 1, Arrays.asList(1, 2, 3), Collections.emptyList());
+        ConfigValue configB = new ConfigValue("b", null, Arrays.asList(4, 5), Arrays.asList(errorMessageB, errorMessageB));
+        ConfigValue configC = new ConfigValue("c", null, Arrays.asList(4, 5), Arrays.asList(errorMessageC));
+        ConfigValue configD = new ConfigValue("d", 10, Arrays.asList(1, 2, 3), Collections.emptyList());
 
         expected.put("a", configA);
         expected.put("b", configB);
@@ -312,9 +312,9 @@ public class ConfigDefTest {
         String errorMessageC = "Missing required configuration \"c\" which has no default value.";
         String errorMessageD = "d is referred in the dependents, but not defined.";
 
-        ConfigValue configA = new ConfigValue("a", 1, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
-        ConfigValue configB = new ConfigValue("b", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageB));
-        ConfigValue configC = new ConfigValue("c", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageC));
+        ConfigValue configA = new ConfigValue("a", 1, Arrays.asList(1, 2, 3), Collections.emptyList());
+        ConfigValue configB = new ConfigValue("b", null, Arrays.asList(4, 5), Arrays.asList(errorMessageB));
+        ConfigValue configC = new ConfigValue("c", null, Arrays.asList(4, 5), Arrays.asList(errorMessageC));
         ConfigValue configD = new ConfigValue("d", null, Collections.emptyList(), Arrays.asList(errorMessageD));
         configD.visible(false);
 
@@ -359,7 +359,7 @@ public class ConfigDefTest {
     }
 
     @Test
-    public void testCanAddInternalConfig() throws Exception {
+    public void testCanAddInternalConfig() {
         final String configName = "internal.config";
         final ConfigDef configDef = new ConfigDef().defineInternal(configName, Type.STRING, "", Importance.LOW);
         final HashMap<String, String> properties = new HashMap<>();
@@ -384,7 +384,7 @@ public class ConfigDefTest {
     }
 
     @Test
-    public void testDynamicUpdateModeInDocs() throws Exception {
+    public void testDynamicUpdateModeInDocs() {
         final ConfigDef configDef = new ConfigDef()
                 .define("my.broker.config", Type.LONG, Importance.HIGH, "docs")
                 .define("my.cluster.config", Type.LONG, Importance.HIGH, "docs")
@@ -477,13 +477,13 @@ public class ConfigDefTest {
         ConfigDef def = new ConfigDef().define("name", type, defaultVal, validator, Importance.HIGH, "docs");
 
         for (Object value : okValues) {
-            Map<String, Object> m = new HashMap<String, Object>();
+            Map<String, Object> m = new HashMap<>();
             m.put("name", value);
             def.parse(m);
         }
 
         for (Object value : badValues) {
-            Map<String, Object> m = new HashMap<String, Object>();
+            Map<String, Object> m = new HashMap<>();
             m.put("name", value);
             try {
                 def.parse(m);
@@ -538,11 +538,11 @@ public class ConfigDefTest {
     public void toEnrichedRst() {
         final ConfigDef def = new ConfigDef()
                 .define("opt1.of.group1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "Doc doc.",
-                        "Group One", 0, Width.NONE, "..", Collections.<String>emptyList())
+                        "Group One", 0, Width.NONE, "..", Collections.emptyList())
                 .define("opt2.of.group1", Type.INT, ConfigDef.NO_DEFAULT_VALUE, Importance.MEDIUM, "Doc doc doc.",
                         "Group One", 1, Width.NONE, "..", Arrays.asList("some.option1", "some.option2"))
                 .define("opt2.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc.",
-                        "Group Two", 1, Width.NONE, "..", Collections.<String>emptyList())
+                        "Group Two", 1, Width.NONE, "..", Collections.emptyList())
                 .define("opt1.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc doc.",
                         "Group Two", 0, Width.NONE, "..", singletonList("some.option"))
                 .define("poor.opt", Type.STRING, "foo", Importance.HIGH, "Doc doc doc doc.");

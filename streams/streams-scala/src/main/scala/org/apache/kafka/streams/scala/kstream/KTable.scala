@@ -30,7 +30,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
 import org.apache.kafka.streams.state.KeyValueStore
 
 /**
- * Wraps the Java class [[org.apache.kafka.streams.kstream.KTable]] and delegates method calls to the underlying Java object.
+ * Wraps the Java class `org.apache.kafka.streams.kstream.KTable` and delegates method calls to the underlying Java object.
  *
  * @tparam K Type of keys
  * @tparam V Type of values
@@ -312,7 +312,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     new KStream(inner.toStream[KR](mapper.asKeyValueMapper, named))
 
   /**
-   * Suppress some updates from this changelog stream, determined by the supplied [[org.apache.kafka.streams.kstream.Suppressed]] configuration.
+   * Suppress some updates from this changelog stream, determined by the supplied `org.apache.kafka.streams.kstream.Suppressed` configuration.
    *
    * This controls what updates downstream table and stream operations will receive.
    *
@@ -673,7 +673,8 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @param other        the other [[KTable]] to be joined with this [[KTable]], keyed on the value obtained from keyExtractor
    * @param keyExtractor a function that extracts the foreign key from this table's value
    * @param joiner       a function that computes the join result for a pair of matching records
-   * @param tableJoined  a [[TableJoined]] used to configure partitioners and names of internal topics and stores
+   * @param tableJoined  a `org.apache.kafka.streams.kstream.TableJoined` used to configure
+   *                     partitioners and names of internal topics and stores
    * @param materialized a `Materialized` that describes how the `StateStore` for the resulting [[KTable]]
    *                     should be materialized.
    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
@@ -738,7 +739,8 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @param other        the other [[KTable]] to be joined with this [[KTable]], keyed on the value obtained from keyExtractor
    * @param keyExtractor a function that extracts the foreign key from this table's value
    * @param joiner       a function that computes the join result for a pair of matching records
-   * @param tableJoined  a [[TableJoined]] used to configure partitioners and names of internal topics and stores
+   * @param tableJoined  a `org.apache.kafka.streams.kstream.TableJoined` used to configure
+   *                     partitioners and names of internal topics and stores
    * @param materialized a `Materialized` that describes how the `StateStore` for the resulting [[KTable]]
    *                     should be materialized.
    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,

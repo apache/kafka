@@ -46,6 +46,7 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsumerMetadataTest {
@@ -142,7 +143,7 @@ public class ConsumerMetadataTest {
         metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds(1, topicPartitionCounts, topicIds), false, time.milliseconds());
         assertEquals(singleton("foo"), new HashSet<>(metadata.fetch().topics()));
         assertEquals(topicIds.get("foo"), metadata.topicIds().get("foo"));
-        assertEquals(topicIds.get("bar"), null);
+        assertNull(topicIds.get("bar"));
     }
 
     private void testBasicSubscription(Set<String> expectedTopics, Set<String> expectedInternalTopics) {

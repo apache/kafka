@@ -1537,6 +1537,12 @@ public class TaskManager {
         return tasks.allTasksPerId();
     }
 
+    Set<Task> readOnlyAllTasks() {
+        // need to make sure the returned set is unmodifiable as it could be accessed
+        // by other thread than the StreamThread owning this task manager;
+        return Collections.unmodifiableSet(tasks.allTasks());
+    }
+
     Map<TaskId, Task> notPausedTasks() {
         return Collections.unmodifiableMap(tasks.allTasks()
             .stream()

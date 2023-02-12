@@ -17,26 +17,47 @@
 package kafka.coordinator.group
 
 import kafka.common.OffsetAndMetadata
-import kafka.server.RequestLocal
+import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Implicits.MapExtensionMethods
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext}
+import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 
 import java.util
-import java.util.Optional
+import java.util.{Optional, OptionalInt, Properties}
 import java.util.concurrent.CompletableFuture
+import java.util.function.IntSupplier
 import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
+
+object GroupCoordinatorAdapter {
+  def apply(
+    config: KafkaConfig,
+    replicaManager: ReplicaManager,
+    time: Time,
+    metrics: Metrics
+  ): GroupCoordinatorAdapter = {
+    new GroupCoordinatorAdapter(
+      GroupCoordinator(
+        config,
+        replicaManager,
+        time,
+        metrics
+      ),
+      time
+    )
+  }
+}
 
 /**
  * GroupCoordinatorAdapter is a thin wrapper around kafka.coordinator.group.GroupCoordinator
  * that exposes the new org.apache.kafka.coordinator.group.GroupCoordinator interface.
  */
-class GroupCoordinatorAdapter(
+private[group] class GroupCoordinatorAdapter(
   private val coordinator: GroupCoordinator,
   private val time: Time
 ) extends org.apache.kafka.coordinator.group.GroupCoordinator {
@@ -469,5 +490,95 @@ class GroupCoordinatorAdapter(
       },
       expireTimestamp = expireTimestamp
     )
+  }
+
+  override def deleteOffsets(
+    context: RequestContext,
+    request: OffsetDeleteRequestData,
+    bufferSupplier: BufferSupplier
+  ): CompletableFuture[OffsetDeleteResponseData] = {
+    val future = new CompletableFuture[OffsetDeleteResponseData]()
+
+    val partitions = mutable.ArrayBuffer[TopicPartition]()
+    request.topics.forEach { topic =>
+      topic.partitions.forEach { partition =>
+        partitions += new TopicPartition(topic.name, partition.partitionIndex)
+      }
+    }
+
+    val (groupError, topicPartitionResults) = coordinator.handleDeleteOffsets(
+      request.groupId,
+      partitions,
+      RequestLocal(bufferSupplier)
+    )
+
+    if (groupError != Errors.NONE) {
+      future.completeExceptionally(groupError.exception)
+    } else {
+      val response = new OffsetDeleteResponseData()
+      topicPartitionResults.forKeyValue { (topicPartition, error) =>
+        var topic = response.topics.find(topicPartition.topic)
+        if (topic == null) {
+          topic = new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setName(topicPartition.topic)
+          response.topics.add(topic)
+        }
+        topic.partitions.add(new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+          .setPartitionIndex(topicPartition.partition)
+          .setErrorCode(error.code))
+      }
+
+      future.complete(response)
+    }
+
+    future
+  }
+
+  override def partitionFor(groupId: String): Int = {
+    coordinator.partitionFor(groupId)
+  }
+
+  override def onTransactionCompleted(
+    producerId: Long,
+    partitions: java.lang.Iterable[TopicPartition],
+    transactionResult: TransactionResult
+  ): Unit = {
+    coordinator.scheduleHandleTxnCompletion(
+      producerId,
+      partitions.asScala,
+      transactionResult
+    )
+  }
+
+  override def onPartitionsDeleted(
+    topicPartitions: util.List[TopicPartition],
+    bufferSupplier: BufferSupplier
+  ): Unit = {
+    coordinator.handleDeletedPartitions(topicPartitions.asScala, RequestLocal(bufferSupplier))
+  }
+
+  override def onElection(
+    groupMetadataPartitionIndex: Int,
+    groupMetadataPartitionLeaderEpoch: Int
+  ): Unit = {
+    coordinator.onElection(groupMetadataPartitionIndex, groupMetadataPartitionLeaderEpoch)
+  }
+
+  override def onResignation(
+    groupMetadataPartitionIndex: Int,
+    groupMetadataPartitionLeaderEpoch: OptionalInt
+  ): Unit = {
+    coordinator.onResignation(groupMetadataPartitionIndex, groupMetadataPartitionLeaderEpoch)
+  }
+
+  override def groupMetadataTopicConfigs(): Properties = {
+    coordinator.offsetsTopicConfigs
+  }
+
+  override def startup(groupMetadataTopicPartitionCount: IntSupplier): Unit = {
+    coordinator.startup(() => groupMetadataTopicPartitionCount.getAsInt)
+  }
+
+  override def shutdown(): Unit = {
+    coordinator.shutdown()
   }
 }
