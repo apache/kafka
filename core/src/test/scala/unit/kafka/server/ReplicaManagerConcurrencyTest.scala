@@ -24,7 +24,7 @@ import kafka.api.LeaderAndIsr
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.waitUntilTrue
-import kafka.utils.{MockTime, ShutdownableThread, TestUtils}
+import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.metadata.RegisterBrokerRecord
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
@@ -38,6 +38,7 @@ import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -134,7 +135,7 @@ class ReplicaManagerConcurrencyTest {
 
   private class Clock(
     time: MockTime
-  ) extends ShutdownableThread(name = "clock", isInterruptible = false) {
+  ) extends ShutdownableThread("clock", false) {
     override def doWork(): Unit = {
       time.sleep(1)
     }
@@ -191,7 +192,7 @@ class ReplicaManagerConcurrencyTest {
     replicaId: Int,
     topicIdPartition: TopicIdPartition,
     replicaManager: ReplicaManager
-  ) extends ShutdownableThread(name = clientId, isInterruptible = false) {
+  ) extends ShutdownableThread(clientId, false) {
     private val random = new Random()
 
     private val clientMetadata = new DefaultClientMetadata(
@@ -255,7 +256,7 @@ class ReplicaManagerConcurrencyTest {
     clientId: String,
     topicPartition: TopicPartition,
     replicaManager: ReplicaManager
-  ) extends ShutdownableThread(name = clientId, isInterruptible = false) {
+  ) extends ShutdownableThread(clientId, false) {
     private val random = new Random()
     private var sequence = 0
 
@@ -333,7 +334,7 @@ class ReplicaManagerConcurrencyTest {
     channel: ControllerChannel,
     replicaManager: ReplicaManager,
     metadataCache: KRaftMetadataCache
-  ) extends ShutdownableThread(name = "controller", isInterruptible = false) {
+  ) extends ShutdownableThread("controller", false) {
     private var latestImage = MetadataImage.EMPTY
 
     def initialize(): Unit = {
