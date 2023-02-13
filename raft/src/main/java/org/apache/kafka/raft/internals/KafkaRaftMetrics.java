@@ -132,7 +132,8 @@ public class KafkaRaftMetrics implements AutoCloseable {
                 new Rate(TimeUnit.SECONDS, new WindowedSum()));
 
         this.pollDurationSensor = metrics.sensor("poll-idle-ratio");
-        this.pollDurationSensor.add(metrics.metricName(
+        this.pollDurationSensor.add(
+            metrics.metricName(
                 "poll-idle-ratio-avg",
                 metricGroupName,
                 "The ratio of time the Raft IO thread is idle as opposed to " +

@@ -37,6 +37,10 @@ public class TimeRatio implements MeasurableStat {
     private final double defaultRatio;
 
     public TimeRatio(double defaultRatio) {
+        if (defaultRatio < 0.0 || defaultRatio > 1.0) {
+            throw new IllegalArgumentException("Invalid ratio: value " + defaultRatio + " is not between 0 and 1.");
+        }
+
         this.defaultRatio = defaultRatio;
     }
 
