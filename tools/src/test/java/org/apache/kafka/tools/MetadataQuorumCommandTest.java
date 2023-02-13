@@ -146,7 +146,7 @@ class MetadataQuorumCommandTest {
     }
 
     @ClusterTests({
-            @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1)
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1)
     })
     public void testCommandConfig() throws IOException {
         // specifying a --command-config containing properties that would prevent login must fail
