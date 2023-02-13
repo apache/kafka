@@ -1790,8 +1790,6 @@ project(':tools') {
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
-    implementation libs.joptSimple
-    implementation libs.scalaCollectionCompat
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
