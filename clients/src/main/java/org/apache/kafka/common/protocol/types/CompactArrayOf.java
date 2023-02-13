@@ -77,8 +77,20 @@ public class CompactArrayOf extends DocumentedType {
             }
         }
         int size = n - 1;
-        if (size > buffer.remaining())
-            throw new SchemaException("Error reading array of size " + size + ", only " + buffer.remaining() + " bytes available");
+        int elementSize = 0;
+        if (size > 0 ) {
+            try {
+                int position = buffer.position();
+                Object obj = type.read(buffer);
+                buffer.position(position);
+                elementSize = type.sizeOf(obj);
+            } catch (Exception e) {
+                throw new SchemaException("Error reading first element of array: " +
+                    (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
+            }
+        }
+        if (size * elementSize > buffer.remaining())
+            throw new SchemaException("Error reading array of size " + size * elementSize + ", only " + buffer.remaining() + " bytes available");
         Object[] objs = new Object[size];
         for (int i = 0; i < size; i++)
             objs[i] = type.read(buffer);

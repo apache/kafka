@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import java.nio.Buffer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -433,5 +434,36 @@ public class ProtocolSerializationTest {
         buffer.flip();
         SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
         assertTrue(e.getMessage().contains("Missing value for field 'field2' which has no default value"));
+    }
+
+    @Test
+    public void testReadArrayWithMissingBytes() {
+        Type[] types = new Type[] {
+            new ArrayOf(Type.INT32),
+            new CompactArrayOf(Type.INT32)
+        };
+        for (Type type : types) {
+            Object[] objs = new Object[] {
+                new Object[]{},
+                new Object[]{1},
+                new Object[]{1, 2},
+                new Object[]{1, 2, 3, 4}
+            };
+            for (Object obj: objs) {
+                ByteBuffer buffer = ByteBuffer.allocate(type.sizeOf(obj));
+                type.write(buffer, obj);
+                buffer.rewind();
+                type.read(buffer);
+                if (((Object []) obj).length > 0 ) {
+                    try {
+                        buffer.rewind();
+                        buffer.limit(buffer.limit() - 1);
+                        type.read(buffer);
+                    } catch (SchemaException e) {
+                        // Expected exception
+                    }
+                }
+            }
+        }
     }
 }
