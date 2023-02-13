@@ -1090,7 +1090,7 @@ class AbstractFetcherThreadTest {
   }
 
   @Test
-  def testTruncateOnFetchDoesNotUpdateHighWatermark(): Unit = {
+  def testTruncateOnFetchDoesNotProcessPartitionData(): Unit = {
     assumeTrue(truncateOnFetch)
 
     val partition = new TopicPartition("topic", 0)
@@ -1136,35 +1136,27 @@ class AbstractFetcherThreadTest {
     fetcher.mockLeader.setLeaderState(partition, leaderState)
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
-    fetcher.doWork()
-    fetcher.verifyLastFetchedEpoch(partition, Some(2))
-
-    // The log end offset is truncated.
-    assertEquals(3L, replicaState.logEndOffset)
-
-    // The high watermark is not updated.
-    assertEquals(1L, replicaState.highWatermark)
-
     // The first fetch should result in truncating the follower's log and
-    // it should not process the data hence not update the high/low watermarks.
+    // it should not process the data hence not update the high watermarks.
+    fetcher.doWork()
+
     assertEquals(1, truncateCalls)
     assertEquals(0, processPartitionDataCalls)
+    assertEquals(3L, replicaState.logEndOffset)
+    assertEquals(1L, replicaState.highWatermark)
 
+    // Truncate should have been called only once and process partition data
+    // should have been called at least once. The log end offset and the high
+    // watermark are updated.
     TestUtils.waitUntilTrue(() => {
       fetcher.doWork()
       fetcher.replicaPartitionState(partition).log == fetcher.mockLeader.leaderPartitionState(partition).log
     }, "Failed to reconcile leader and follower logs")
     fetcher.verifyLastFetchedEpoch(partition, Some(5))
 
-    // Truncate should have been called only once and process partition data
-    // should have been called at least once.
     assertEquals(1, truncateCalls)
     assertTrue(processPartitionDataCalls >= 1)
-
-    // The log end offset is truncated.
     assertEquals(5L, replicaState.logEndOffset)
-
-    // The high watermark is updated.
     assertEquals(4L, replicaState.highWatermark)
   }
 
