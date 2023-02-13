@@ -48,6 +48,7 @@ final public class ProcessTerminatingFaultHandlerTest {
 
         try {
             new ProcessTerminatingFaultHandler.Builder()
+                .setShouldHalt(false)
                 .setAction(action)
                 .build()
                 .handleFault("", null);
@@ -72,7 +73,6 @@ final public class ProcessTerminatingFaultHandlerTest {
 
         try {
             new ProcessTerminatingFaultHandler.Builder()
-                .setShouldHalt(true)
                 .setAction(action)
                 .build()
                 .handleFault("", null);
