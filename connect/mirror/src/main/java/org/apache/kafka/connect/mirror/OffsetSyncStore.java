@@ -18,61 +18,50 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
 
 import java.util.Map;
-import java.util.HashMap;
-import java.time.Duration;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Used internally by MirrorMaker. Stores offset syncs and performs offset translation. */
 class OffsetSyncStore implements AutoCloseable {
     private final KafkaBasedLog<byte[], byte[]> backingStore;
-    private final Map<TopicPartition, OffsetSync> offsetSyncs = new HashMap<>();
+    private final Map<TopicPartition, OffsetSync> offsetSyncs = new ConcurrentHashMap<>();
     private final TopicAdmin admin;
+    private volatile boolean readToEnd = false;
 
     OffsetSyncStore(MirrorCheckpointConfig config) {
-        String topic = config.offsetSyncsTopic();
-        Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(
-                config.offsetSyncsTopicConsumerConfig(),
-                new ByteArrayDeserializer(),
-                new ByteArrayDeserializer());
-        this.admin = new TopicAdmin(
-                config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
-                config.forwardingAdmin(config.offsetSyncsTopicAdminConfig()));
-        KafkaBasedLog<byte[], byte[]> store = null;
+        Consumer<byte[], byte[]> consumer = null;
+        TopicAdmin admin = null;
+        KafkaBasedLog<byte[], byte[]> store;
         try {
+            consumer = MirrorUtils.newConsumer(config.offsetSyncsTopicConsumerConfig());
+            admin = new TopicAdmin(
+                    config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
+                    config.forwardingAdmin(config.offsetSyncsTopicAdminConfig()));
             store = KafkaBasedLog.withExistingClients(
-                    topic,
+                    config.offsetSyncsTopic(),
+                    topicPartition -> topicPartition.partition() == 0,
                     consumer,
                     null,
-                    new TopicAdmin(
-                            config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
-                            config.forwardingAdmin(config.offsetSyncsTopicAdminConfig())),
+                    admin,
                     (error, record) -> this.handleRecord(record),
                     Time.SYSTEM,
                     ignored -> {
                     });
-            store.start();
         } catch (Throwable t) {
-            Utils.closeQuietly(store != null ? store::stop : null, "backing store");
-            Utils.closeQuietly(new TopicAdmin(
-                    config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
-                    config.forwardingAdmin(config.offsetSyncsTopicAdminConfig())), "admin client");
+            Utils.closeQuietly(consumer, "consumer for offset syncs");
+            Utils.closeQuietly(admin, "admin client for offset syncs");
             throw t;
         }
+        this.admin = admin;
         this.backingStore = store;
     }
 
@@ -81,11 +70,17 @@ class OffsetSyncStore implements AutoCloseable {
         this.backingStore = null;
     }
 
-    public void readToEnd(Runnable callback) {
-        backingStore.readToEnd((error, result) -> callback.run());
+    public void start() {
+        backingStore.start();
+        readToEnd = true;
     }
 
-    synchronized OptionalLong translateDownstream(TopicPartition sourceTopicPartition, long upstreamOffset) {
+    OptionalLong translateDownstream(TopicPartition sourceTopicPartition, long upstreamOffset) {
+        if (!readToEnd) {
+            // If we have not read to the end of the syncs topic at least once, decline to translate any offsets.
+            // This prevents emitting stale offsets while initially reading the offset syncs topic.
+            return OptionalLong.empty();
+        }
         Optional<OffsetSync> offsetSync = latestOffsetSync(sourceTopicPartition);
         if (offsetSync.isPresent()) {
             if (offsetSync.get().upstreamOffset() > upstreamOffset) {
@@ -111,27 +106,18 @@ class OffsetSyncStore implements AutoCloseable {
         }
     }
 
-    // poll and handle records
-    synchronized void update(Duration pollTimeout) throws TimeoutException {
-        try {
-            backingStore.readToEnd().get(pollTimeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (WakeupException | InterruptedException | ExecutionException e) {
-            // swallow
-        }
+    public void close() {
+        Utils.closeQuietly(backingStore != null ? backingStore::stop : null, "backing store for offset syncs");
+        Utils.closeQuietly(admin, "admin client for offset syncs");
     }
 
-    public synchronized void close() {
-        Utils.closeQuietly(backingStore::stop, "offset sync store kafka based log");
-        Utils.closeQuietly(admin, "offset sync store admin client");
-    }
-
-    protected synchronized void handleRecord(ConsumerRecord<byte[], byte[]> record) {
+    protected void handleRecord(ConsumerRecord<byte[], byte[]> record) {
         OffsetSync offsetSync = OffsetSync.deserializeRecord(record);
         TopicPartition sourceTopicPartition = offsetSync.topicPartition();
         offsetSyncs.put(sourceTopicPartition, offsetSync);
     }
 
-    private synchronized Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition) {
+    private Optional<OffsetSync> latestOffsetSync(TopicPartition topicPartition) {
         return Optional.ofNullable(offsetSyncs.get(topicPartition));
     }
 }

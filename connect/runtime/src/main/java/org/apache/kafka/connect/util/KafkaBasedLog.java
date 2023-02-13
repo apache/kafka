@@ -54,6 +54,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 
@@ -95,6 +96,7 @@ public class KafkaBasedLog<K, V> {
     private final Callback<ConsumerRecord<K, V>> consumedCallback;
     private final Supplier<TopicAdmin> topicAdminSupplier;
     private final boolean requireAdminForOffsets;
+    private final Predicate<TopicPartition> partitionFilter;
     private Consumer<K, V> consumer;
     private Optional<Producer<K, V>> producer;
     private TopicAdmin admin;
@@ -120,7 +122,7 @@ public class KafkaBasedLog<K, V> {
      * @param consumedCallback callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
      * @param time Time interface
      * @param initializer the component that should be run when this log is {@link #start() started}; may be null
-     * @deprecated Replaced by {@link #KafkaBasedLog(String, Map, Map, Supplier, Callback, Time, java.util.function.Consumer)}
+     * @deprecated Replaced by {@link #KafkaBasedLog(String, Predicate, Map, Map, Supplier, Callback, Time, java.util.function.Consumer)}
      */
     @Deprecated
     public KafkaBasedLog(String topic,
@@ -129,7 +131,7 @@ public class KafkaBasedLog<K, V> {
                          Callback<ConsumerRecord<K, V>> consumedCallback,
                          Time time,
                          Runnable initializer) {
-        this(topic, producerConfigs, consumerConfigs, () -> null, consumedCallback, time, initializer != null ? admin -> initializer.run() : null);
+        this(topic, null, producerConfigs, consumerConfigs, () -> null, consumedCallback, time, initializer != null ? admin -> initializer.run() : null);
     }
 
     /**
@@ -150,8 +152,42 @@ public class KafkaBasedLog<K, V> {
      * @param consumedCallback   callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
      * @param time               Time interface
      * @param initializer        the function that should be run when this log is {@link #start() started}; may be null
+     * @deprecated Replaced by {@link #KafkaBasedLog(String, Predicate, Map, Map, Supplier, Callback, Time, java.util.function.Consumer)}
+     */
+    @Deprecated
+    public KafkaBasedLog(String topic,
+                         Map<String, Object> producerConfigs,
+                         Map<String, Object> consumerConfigs,
+                         Supplier<TopicAdmin> topicAdminSupplier,
+                         Callback<ConsumerRecord<K, V>> consumedCallback,
+                         Time time,
+                         java.util.function.Consumer<TopicAdmin> initializer) {
+        this(topic, null, producerConfigs, consumerConfigs, topicAdminSupplier, consumedCallback, time, initializer);
+    }
+
+    /**
+     * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
+     * {@link #start()} is invoked.
+     *
+     * @param topic              the topic to treat as a log
+     * @param partitionFilter    predicate to filter which partitions of a topic should be consumed by this instance,
+     *                           or null if all partitions of the topic should be read.
+     * @param producerConfigs    configuration options to use when creating the internal producer. At a minimum this must
+     *                           contain compatible serializer settings for the generic types used on this class. Some
+     *                           setting, such as the number of acks, will be overridden to ensure correct behavior of this
+     *                           class.
+     * @param consumerConfigs    configuration options to use when creating the internal consumer. At a minimum this must
+     *                           contain compatible serializer settings for the generic types used on this class. Some
+     *                           setting, such as the auto offset reset policy, will be overridden to ensure correct
+     *                           behavior of this class.
+     * @param topicAdminSupplier supplier function for an admin client, the lifecycle of which is expected to be controlled
+     *                           by the calling component; may not be null
+     * @param consumedCallback   callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
+     * @param time               Time interface
+     * @param initializer        the function that should be run when this log is {@link #start() started}; may be null
      */
     public KafkaBasedLog(String topic,
+            Predicate<TopicPartition> partitionFilter,
             Map<String, Object> producerConfigs,
             Map<String, Object> consumerConfigs,
             Supplier<TopicAdmin> topicAdminSupplier,
@@ -159,6 +195,7 @@ public class KafkaBasedLog<K, V> {
             Time time,
             java.util.function.Consumer<TopicAdmin> initializer) {
         this.topic = topic;
+        this.partitionFilter = partitionFilter != null ? partitionFilter : ignored -> true;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
         this.topicAdminSupplier = Objects.requireNonNull(topicAdminSupplier);
@@ -184,6 +221,7 @@ public class KafkaBasedLog<K, V> {
      * will be closed when this log is {@link #stop() stopped}.
      *
      * @param topic the topic to treat as a log
+     * @param partitionFilter    predicate to filter which partitions of a topic should be consumed by this instance.
      * @param consumer the consumer to use for reading from the log; may not be null
      * @param producer the producer to use for writing to the log; may be null, which will create a read-only log
      * @param topicAdmin an admin client, the lifecycle of which is expected to be controlled by the calling component;
@@ -194,6 +232,7 @@ public class KafkaBasedLog<K, V> {
      * @return a {@link KafkaBasedLog} using the given clients
      */
     public static <K, V> KafkaBasedLog<K, V> withExistingClients(String topic,
+                                                                 Predicate<TopicPartition> partitionFilter,
                                                                  Consumer<K, V> consumer,
                                                                  Producer<K, V> producer,
                                                                  TopicAdmin topicAdmin,
@@ -202,6 +241,7 @@ public class KafkaBasedLog<K, V> {
                                                                  java.util.function.Consumer<TopicAdmin> initializer) {
         Objects.requireNonNull(topicAdmin);
         return new KafkaBasedLog<K, V>(topic,
+                partitionFilter,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 () -> topicAdmin,
@@ -257,8 +297,17 @@ public class KafkaBasedLog<K, V> {
                     " allotted period. This could indicate a connectivity issue, unavailable topic partitions, or if" +
                     " this is your first use of the topic it may have taken too long to create.");
 
-        for (PartitionInfo partition : partitionInfos)
-            partitions.add(new TopicPartition(partition.topic(), partition.partition()));
+        for (PartitionInfo partition : partitionInfos) {
+            TopicPartition topicPartition = new TopicPartition(partition.topic(), partition.partition());
+            if (partitionFilter.test(topicPartition)) {
+                partitions.add(topicPartition);
+            }
+        }
+        if (partitions.isEmpty()) {
+            throw new ConnectException("Some partitions for " + topic + " exist, but no partitions matched the " +
+                    "required filter. This could indicate a connectivity issue, unavailable topic partitions, or if" +
+                    " this is your first use of the topic it may have taken too long to create.");
+        }
         partitionCount = partitions.size();
         consumer.assign(partitions);
 

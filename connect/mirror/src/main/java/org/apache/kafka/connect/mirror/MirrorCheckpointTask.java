@@ -42,7 +42,8 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.Collections;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 import java.time.Duration;
@@ -64,7 +65,7 @@ public class MirrorCheckpointTask extends SourceTask {
     private Set<String> consumerGroups;
     private ReplicationPolicy replicationPolicy;
     private OffsetSyncStore offsetSyncStore;
-    private boolean stopping;
+    private CountDownLatch stopping = new CountDownLatch(1);
     private MirrorCheckpointMetrics metrics;
     private Scheduler scheduler;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
@@ -87,7 +88,6 @@ public class MirrorCheckpointTask extends SourceTask {
     @Override
     public void start(Map<String, String> props) {
         MirrorCheckpointTaskConfig config = new MirrorCheckpointTaskConfig(props);
-        stopping = false;
         sourceClusterAlias = config.sourceClusterAlias();
         targetClusterAlias = config.targetClusterAlias();
         consumerGroups = config.taskConsumerGroups();
@@ -103,12 +103,13 @@ public class MirrorCheckpointTask extends SourceTask {
         idleConsumerGroupsOffset = new HashMap<>();
         checkpointsPerConsumerGroup = new HashMap<>();
         scheduler = new Scheduler(MirrorCheckpointTask.class, config.adminTimeout());
-        offsetSyncStore.readToEnd(() -> {
+        scheduler.execute(() -> {
+            offsetSyncStore.start();
             scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
-                                        "refreshing idle consumers group offsets at target cluster");
+                    "refreshing idle consumers group offsets at target cluster");
             scheduler.scheduleRepeatingDelayed(this::syncGroupOffset, config.syncGroupOffsetsInterval(),
-                                              "sync idle consumer group offset from source to target");
-        });
+                    "sync idle consumer group offset from source to target");
+        }, "starting offset sync store");
     }
 
     @Override
@@ -119,7 +120,7 @@ public class MirrorCheckpointTask extends SourceTask {
     @Override
     public void stop() {
         long start = System.currentTimeMillis();
-        stopping = true;
+        stopping.countDown();
         Utils.closeQuietly(topicFilter, "topic filter");
         Utils.closeQuietly(offsetSyncStore, "offset sync store");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
@@ -137,8 +138,8 @@ public class MirrorCheckpointTask extends SourceTask {
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
         try {
-            if (!waitForNextCheckpoint()) {
-                // We waited for the checkpoint, but we're not ready to actually perform it.
+            if (stopping.await(pollTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                // we are stopping, return early.
                 return null;
             }
             List<SourceRecord> records = new ArrayList<>();
@@ -155,26 +156,6 @@ public class MirrorCheckpointTask extends SourceTask {
             log.warn("Failure polling consumer state for checkpoints.", e);
             return null;
         }
-    }
-
-    /**
-     * Wait for the delay to the next checkpoint time to elapse, and use that
-     * time to read the latest offset syncs from the sync topic.
-     * @return true if the offset syncs are up-to-date and a checkpoint can take place, else false.
-     */
-    private boolean waitForNextCheckpoint() {
-        long deadline = System.currentTimeMillis() + interval.toMillis();
-        boolean readToEnd = false;
-        while (!stopping && System.currentTimeMillis() < deadline) {
-            try {
-                offsetSyncStore.update(pollTimeout);
-                // at least one update should complete without failing
-                readToEnd = true;
-                Thread.sleep(pollTimeout.toMillis());
-            } catch (TimeoutException | InterruptedException e) {
-            }
-        }
-        return readToEnd;
     }
 
 
@@ -203,7 +184,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     private Map<TopicPartition, OffsetAndMetadata> listConsumerGroupOffsets(String group)
             throws InterruptedException, ExecutionException {
-        if (stopping) {
+        if (stopping.getCount() == 0) {
             // short circuit if stopping
             return Collections.emptyMap();
         }
