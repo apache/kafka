@@ -22,10 +22,14 @@ import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
@@ -139,6 +143,16 @@ class MetadataQuorumCommandTest {
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
         );
         assertEquals("0", replicationOutput.split("\n")[1].split("\\s+")[2]);
+    }
+
+    @ClusterTests({
+        @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1)
+    })
+    public void testCommandConfig() throws IOException {
+        // specifying a --command-config containing properties that would prevent login must fail
+        File tmpfile = TestUtils.tempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SSL_PLAINTEXT");
+        assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+                        "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
     }
 
     @ClusterTest(clusterType = Type.ZK, brokers = 1)
