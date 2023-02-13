@@ -500,17 +500,22 @@ public abstract class AbstractCoordinator implements Closeable {
                     requestRejoin(shortReason, fullReason);
                 }
 
+                // recheck timer after client.poll(timer) because if poll returns immediately, the retryBackoffMs
+                // will not be respected.
+                if (timer.isExpired()) {
+                    return false;
+                }
+
                 if (exception instanceof UnknownMemberIdException ||
                         exception instanceof IllegalGenerationException ||
                         exception instanceof RebalanceInProgressException ||
                         exception instanceof MemberIdRequiredException)
                     continue;
-                else if (!future.isRetriable())
-                    throw exception;
 
-                if (timer.isExpired()) {
-                    return false;
+                if (!future.isRetriable()) {
+                    throw exception;
                 }
+
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
         }
