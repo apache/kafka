@@ -51,6 +51,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -171,6 +172,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 // send the consumed position to the background thread
                 if (subscriptions.assignmentUpdated) {
                     eventHandler.add(new SubscriptionUpdateEvent(subscriptions.snapshot()));
+                    subscriptions.assignmentUpdated = false; // reset
                 }
                 eventHandler.add(new PollApplicationEvent(currenttimeMs, subscriptions.consumedPosition()));
                 Iterator<Optional<BackgroundEvent>> events = eventHandler.drain().iterator();
@@ -265,7 +267,26 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public long position(TopicPartition partition, Duration timeout) {
-        throw new KafkaException("method not implemented");
+        if (!this.subscriptions.isAssigned(partition))
+            throw new IllegalStateException("You can only check the position for partitions assigned to this consumer.");
+
+        Timer timer = time.timer(timeout);
+        do {
+            SubscriptionState.FetchPosition position = this.subscriptions.validPosition(partition);
+            if (position != null)
+                return position.offset;
+
+            updateFetchPositions(timer);
+        } while (timer.notExpired());
+
+        throw new org.apache.kafka.common.errors.TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +
+                "for partition " + partition + " could be determined");    }
+
+    private void updateFetchPositions(Timer timer) {
+        // do a lot of stuff and then might reset
+        ResetOffsetApplicationEvent event = new ResetOffsetApplicationEvent();
+        eventHandler.add(event);
+        while (event.future.isDone() || !timer.isExpired()) { }
     }
 
     @Override
@@ -528,6 +549,15 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private class SubscriptionUpdateEvent extends ApplicationEvent {
         SubscriptionUpdateEvent(AbstractSubscriptionState.SubscriptionSnapshot snapshot) {
             super(Type.SUBSCRIPTION_UPDATE);
+        }
+    }
+
+    private class ResetOffsetApplicationEvent extends ApplicationEvent {
+        public final CompletableFuture<Object> future;
+
+        protected ResetOffsetApplicationEvent(Type type) {
+            super(type);
+            this.future = new CompletableFuture<>();
         }
     }
 }

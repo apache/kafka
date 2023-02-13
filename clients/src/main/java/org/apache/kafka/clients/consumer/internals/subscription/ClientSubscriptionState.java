@@ -3,6 +3,7 @@ package org.apache.kafka.clients.consumer.internals.subscription;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 
@@ -56,4 +57,9 @@ public class ClientSubscriptionState extends AbstractSubscriptionState {
     }
 
 
+    public boolean isAssigned(TopicPartition partition) {
+    }
+
+    public SubscriptionState.FetchPosition validPosition(TopicPartition partition) {
+    }
 }
