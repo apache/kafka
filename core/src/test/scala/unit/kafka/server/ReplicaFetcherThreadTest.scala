@@ -688,7 +688,7 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
 
     val mockNetwork = new MockBlockingSender(
-      Collections.emptyMap,
+      Collections.emptyMap(),
       brokerEndPoint,
       new SystemTime()
     )
