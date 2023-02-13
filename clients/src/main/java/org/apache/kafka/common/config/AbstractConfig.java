@@ -274,14 +274,7 @@ public class AbstractConfig {
      */
     public Map<String, Object> originalsWithPrefix(String prefix, boolean strip) {
         Map<String, Object> result = new RecordingMap<>(prefix, false);
-        for (Map.Entry<String, ?> entry : originals.entrySet()) {
-            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
-                if (strip)
-                    result.put(entry.getKey().substring(prefix.length()), entry.getValue());
-                else
-                    result.put(entry.getKey(), entry.getValue());
-            }
-        }
+        result.putAll(Utils.entriesWithPrefix(originals, prefix, strip));
         return result;
     }
 

@@ -44,6 +44,7 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
@@ -934,6 +935,23 @@ public class UtilsTest {
         assertEquals("blah.foo", Utils.replaceSuffix("blah.foo.txt", ".txt", ""));
         assertEquals("txt.txt", Utils.replaceSuffix("txt.txt.txt", ".txt", ""));
         assertEquals("foo.txt", Utils.replaceSuffix("foo", "", ".txt"));
+    }
+
+    @Test
+    public void testEntriesWithPrefix() {
+        Map<String, Object> props = new HashMap<>();
+        props.put("foo.bar", "abc");
+        props.put("setting", "def");
+
+        // With stripping
+        Map<String, Object> expected = Collections.singletonMap("bar", "abc");
+        Map<String, Object> actual = Utils.entriesWithPrefix(props, "foo.");
+        assertEquals(expected, actual);
+
+        // Without stripping
+        expected = Collections.singletonMap("foo.bar", "abc");
+        actual = Utils.entriesWithPrefix(props, "foo.", false);
+        assertEquals(expected, actual);
     }
 
 }
