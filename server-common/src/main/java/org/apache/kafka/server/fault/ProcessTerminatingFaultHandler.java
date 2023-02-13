@@ -67,15 +67,14 @@ final public class ProcessTerminatingFaultHandler implements FaultHandler {
         /**
          * Set if halt or exit should be used.
          *
-         * When {@code value} is true {@code Exit.exit} is called, otherwise {@code Exit.halt} is
-         * called. The default value if {@code true}.
+         * When {@code value} is {@code false} {@code Exit.exit} is called, otherwise {@code Exit.halt} is
+         * called. The default value is {@code true}.
          *
          * The default implementation of {@code Exit.exit} calls {@code Runtime.exit} which
-         * waits on all of the shutdown hooks executing.
+         * blocks on all of the shutdown hooks executing.
          *
          * The default implementation of {@code Exit.halt} calls {@code Runtime.halt} which
          * forcibly terminates the JVM.
-         *
          */
         public Builder setShouldHalt(boolean value) {
             shouldHalt = value;
@@ -83,7 +82,7 @@ final public class ProcessTerminatingFaultHandler implements FaultHandler {
         }
 
         /**
-         * Set the runnable to call when handling a fault.
+         * Set the {@code Runnable} to run when handling a fault.
          */
         public Builder setAction(Runnable action) {
             this.action = Objects.requireNonNull(action);
