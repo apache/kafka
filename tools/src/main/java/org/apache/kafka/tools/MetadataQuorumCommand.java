@@ -92,7 +92,7 @@ public class MetadataQuorumCommand {
                 if (!commandConfig.exists())
                     throw new TerseException("Properties file " + commandConfig.getPath() + " does not exists!");
 
-                Utils.loadProps(commandConfig.getPath());
+                props = Utils.loadProps(commandConfig.getPath());
             }
             props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, namespace.getString("bootstrap_server"));
             admin = Admin.create(props);

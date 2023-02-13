@@ -1558,4 +1558,10 @@ public final class Utils {
         return result;
     }
 
+    public static File createTempFile(String contents) throws IOException {
+        File file = File.createTempFile("tmpfile", ".tmp");
+        file.deleteOnExit();
+        Files.write(file.toPath(), contents.getBytes());
+        return file;
+    }
 }
