@@ -24,7 +24,7 @@ import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageManager}
-import org.apache.kafka.storage.internals.log.{LazyIndex, LogFileUtils, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex}
 
 import java.io.{Closeable, File, InputStream}
 import java.nio.file.{Files, Path}
@@ -37,14 +37,14 @@ object RemoteIndexCache {
   val TmpFileSuffix = ".tmp"
 }
 
-class Entry(val offsetIndex: LazyIndex[OffsetIndex], val timeIndex: LazyIndex[TimeIndex], val txnIndex: TransactionIndex) {
+class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex: TransactionIndex) {
   private var markedForCleanup: Boolean = false
   private val lock: ReentrantReadWriteLock = new ReentrantReadWriteLock()
 
   def lookupOffset(targetOffset: Long): OffsetPosition = {
     CoreUtils.inLock(lock.readLock()) {
       if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup")
-      else offsetIndex.get.lookup(targetOffset)
+      else offsetIndex.lookup(targetOffset)
     }
   }
 
@@ -52,8 +52,8 @@ class Entry(val offsetIndex: LazyIndex[OffsetIndex], val timeIndex: LazyIndex[Ti
     CoreUtils.inLock(lock.readLock()) {
       if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup")
 
-      val timestampOffset = timeIndex.get.lookup(timestamp)
-      offsetIndex.get.lookup(math.max(startingOffset, timestampOffset.offset))
+      val timestampOffset = timeIndex.lookup(timestamp)
+      offsetIndex.lookup(math.max(startingOffset, timestampOffset.offset))
     }
   }
 
@@ -143,23 +143,14 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
 
         if (offsetIndexFile.exists() && timestampIndexFile.exists() && txnIndexFile.exists()) {
 
-          val offsetIndex: LazyIndex[OffsetIndex] = {
-            val index = LazyIndex.forOffset(offsetIndexFile, offset, Int.MaxValue, false)
-            index.get.sanityCheck()
-            index
-          }
+          val offsetIndex = new OffsetIndex(offsetIndexFile, offset, Int.MaxValue, false)
+          offsetIndex.sanityCheck()
 
-          val timeIndex: LazyIndex[TimeIndex] = {
-            val index = LazyIndex.forTime(timestampIndexFile, offset, Int.MaxValue, false)
-            index.get.sanityCheck()
-            index
-          }
+          val timeIndex = new TimeIndex(timestampIndexFile, offset, Int.MaxValue, false)
+          timeIndex.sanityCheck()
 
-          val txnIndex: TransactionIndex = {
-            val index = new TransactionIndex(offset, txnIndexFile)
-            index.sanityCheck()
-            index
-          }
+          val txnIndex = new TransactionIndex(offset, txnIndexFile)
+          txnIndex.sanityCheck()
 
           val entry = new Entry(offsetIndex, timeIndex, txnIndex)
           entries.put(uuid, entry)
@@ -238,19 +229,19 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         // uuid.toString uses URL encoding which is safe for filenames and URLs.
         val fileName = startOffset.toString + "_" + uuid.toString + "_"
 
-        val offsetIndex: LazyIndex[OffsetIndex] = loadIndexFile(fileName, UnifiedLog.IndexFileSuffix,
+        val offsetIndex: OffsetIndex = loadIndexFile(fileName, UnifiedLog.IndexFileSuffix,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET),
           file => {
-            val index = LazyIndex.forOffset(file, startOffset, Int.MaxValue, false)
-            index.get.sanityCheck()
+            val index = new OffsetIndex(file, startOffset, Int.MaxValue, false)
+            index.sanityCheck()
             index
           })
 
-        val timeIndex: LazyIndex[TimeIndex] = loadIndexFile(fileName, UnifiedLog.TimeIndexFileSuffix,
+        val timeIndex: TimeIndex = loadIndexFile(fileName, UnifiedLog.TimeIndexFileSuffix,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TIMESTAMP),
           file => {
-            val index = LazyIndex.forTime(file, startOffset, Int.MaxValue, false)
-            index.get.sanityCheck()
+            val index = new TimeIndex(file, startOffset, Int.MaxValue, false)
+            index.sanityCheck()
             index
           })
 
