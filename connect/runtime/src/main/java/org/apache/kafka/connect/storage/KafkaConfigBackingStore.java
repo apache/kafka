@@ -850,7 +850,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         DistributedConfig.CONFIG_TOPIC_CONFIG, "connector configurations");
             }
         };
-        return new KafkaBasedLog<>(topic, null, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
     }
 
     private class ConsumeCallback implements Callback<ConsumerRecord<String, byte[]>> {

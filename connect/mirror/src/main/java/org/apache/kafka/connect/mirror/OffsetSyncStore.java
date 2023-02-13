@@ -19,12 +19,14 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -42,20 +44,35 @@ class OffsetSyncStore implements AutoCloseable {
         TopicAdmin admin = null;
         KafkaBasedLog<byte[], byte[]> store;
         try {
-            consumer = MirrorUtils.newConsumer(config.offsetSyncsTopicConsumerConfig());
-            admin = new TopicAdmin(
+            Consumer<byte[], byte[]> finalConsumer = consumer = MirrorUtils.newConsumer(config.offsetSyncsTopicConsumerConfig());
+            TopicAdmin finalAdmin = admin = new TopicAdmin(
                     config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
                     config.forwardingAdmin(config.offsetSyncsTopicAdminConfig()));
-            store = KafkaBasedLog.withExistingClients(
+            store = new KafkaBasedLog<byte[], byte[]>(
                     config.offsetSyncsTopic(),
-                    topicPartition -> topicPartition.partition() == 0,
-                    consumer,
-                    null,
-                    admin,
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    () -> finalAdmin,
                     (error, record) -> this.handleRecord(record),
                     Time.SYSTEM,
                     ignored -> {
-                    });
+                    }) {
+
+                @Override
+                protected Producer<byte[], byte[]> createProducer() {
+                    return null;
+                }
+
+                @Override
+                protected Consumer<byte[], byte[]> createConsumer() {
+                    return finalConsumer;
+                }
+
+                @Override
+                protected boolean readPartition(TopicPartition topicPartition) {
+                    return topicPartition.partition() == 0;
+                }
+            };
         } catch (Throwable t) {
             Utils.closeQuietly(consumer, "consumer for offset syncs");
             Utils.closeQuietly(admin, "admin client for offset syncs");

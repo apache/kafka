@@ -93,7 +93,6 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
                 this.exactlyOnce = config.exactlyOnceSourceEnabled();
                 this.offsetLog = KafkaBasedLog.withExistingClients(
                         topic,
-                        topicPartition -> true,
                         consumer,
                         producer,
                         topicAdmin,
@@ -124,7 +123,6 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
                 this.exactlyOnce = config.exactlyOnceSourceEnabled();
                 this.offsetLog = KafkaBasedLog.withExistingClients(
                         topic,
-                        topicPartition -> true,
                         consumer,
                         null,
                         topicAdmin,
@@ -239,7 +237,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
                                                               Callback<ConsumerRecord<byte[], byte[]>> consumedCallback,
                                                               final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
         java.util.function.Consumer<TopicAdmin> createTopics = initialize(topic, topicDescription);
-        return new KafkaBasedLog<>(topic, null, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
     }
 
     protected NewTopic newTopicDescription(final String topic, final WorkerConfig config) {
