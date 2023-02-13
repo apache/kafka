@@ -42,6 +42,8 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 
 import java.util.List;
 import java.util.OptionalInt;
@@ -298,6 +300,17 @@ public interface GroupCoordinator {
     void onResignation(
         int groupMetadataPartitionIndex,
         OptionalInt groupMetadataPartitionLeaderEpoch
+    );
+
+    /**
+     * A new metadata image is available.
+     *
+     * @param newImage  The new metadata image.
+     * @param delta     The metadata delta.
+     */
+    void onNewMetadataImage(
+        MetadataImage newImage,
+        MetadataDelta delta
     );
 
     /**
