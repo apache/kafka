@@ -75,7 +75,7 @@ final public class ProcessTerminatingFaultHandler implements FaultHandler {
          * The default implementation of {@code Exit.halt} calls {@code Runtime.halt} which
          * forcibly terminates the JVM.
          */
-        public Builder setHalt(boolean value) {
+        public Builder setShouldHalt(boolean value) {
             shouldHalt = value;
             return this;
         }

@@ -92,7 +92,7 @@ class TestRaftServer(
       metrics,
       Some(threadNamePrefix),
       CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
-      new ProcessTerminatingFaultHandler.Builder().setHalt(true).build()
+      new ProcessTerminatingFaultHandler.Builder().setShouldHalt(true).build()
     )
 
     workloadGenerator = new RaftWorkloadGenerator(

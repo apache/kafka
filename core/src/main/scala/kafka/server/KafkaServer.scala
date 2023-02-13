@@ -396,7 +396,7 @@ class KafkaServer(
             metrics,
             threadNamePrefix,
             controllerQuorumVotersFuture,
-            fatalFaultHandler = new ProcessTerminatingFaultHandler.Builder().setHalt(true).build()
+            fatalFaultHandler = new ProcessTerminatingFaultHandler.Builder().setShouldHalt(true).build()
           )
           val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)

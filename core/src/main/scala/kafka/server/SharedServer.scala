@@ -61,7 +61,7 @@ class StandardFaultHandlerFactory extends FaultHandlerFactory {
   ): FaultHandler = {
     if (fatal) {
       new ProcessTerminatingFaultHandler.Builder()
-        .setHalt(true)
+        .setShouldHalt(true)
         .setAction(action)
         .build()
     } else {
