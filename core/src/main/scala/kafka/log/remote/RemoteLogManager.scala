@@ -19,14 +19,14 @@ package kafka.log.remote
 import kafka.cluster.Partition
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.Logging
 import org.apache.kafka.common._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{RecordBatch, RemoteLogInputStream}
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, Utils}
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager
-import org.apache.kafka.server.log.remote.storage.{ClassLoaderAwareRemoteStorageManager, RemoteLogManagerConfig, RemoteLogMetadataManager, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.server.log.remote.storage._
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 
 import java.io.{Closeable, InputStream}
 import java.security.{AccessController, PrivilegedAction}
@@ -256,8 +256,8 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
 
     // Get the respective epoch in which the starting-offset exists.
     var maybeEpoch = leaderEpochCache.epochForOffset(startingOffset)
-    while (maybeEpoch.nonEmpty) {
-      val epoch = maybeEpoch.get
+    while (maybeEpoch.isPresent) {
+      val epoch = maybeEpoch.getAsInt
       remoteLogMetadataManager.listRemoteLogSegments(new TopicIdPartition(topicId, tp), epoch).asScala
         .foreach(rlsMetadata =>
           if (rlsMetadata.maxTimestampMs() >= timestamp && rlsMetadata.endOffset() >= startingOffset) {

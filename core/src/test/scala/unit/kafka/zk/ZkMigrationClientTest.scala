@@ -29,7 +29,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
@@ -308,7 +308,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
       manager.generateProducerId()
 
       val records = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
-      migrationClient.migrateProducerId(MetadataVersion.latest(), batch => records.add(batch))
+      migrationClient.migrateProducerId(batch => records.add(batch))
       assertEquals(1, records.size())
       assertEquals(1, records.get(0).size())
 
@@ -336,7 +336,7 @@ class ZkMigrationClientTest extends QuorumTestHarness {
 
     val brokers = new java.util.ArrayList[Integer]()
     val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
-    migrationClient.migrateTopics(MetadataVersion.latest(), batch => batches.add(batch), brokerId => brokers.add(brokerId))
+    migrationClient.migrateTopics(batch => batches.add(batch), brokerId => brokers.add(brokerId))
     assertEquals(1, batches.size())
     val configs = batches.get(0)
       .asScala

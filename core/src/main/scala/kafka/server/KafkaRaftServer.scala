@@ -31,8 +31,8 @@ import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
-import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import java.util.Optional
 import scala.collection.Seq

@@ -69,6 +69,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
@@ -101,6 +102,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
@@ -108,6 +110,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.io.DataOutputStream;
 import java.lang.reflect.Field;
@@ -155,6 +158,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class FetcherTest {
     private static final double EPSILON = 0.0001;
@@ -286,6 +293,50 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
         assertNull(fetchedRecords().get(tp0));
+    }
+
+    @Test
+    public void testCloseShouldBeIdempotent() {
+        buildFetcher();
+
+        fetcher.close();
+        fetcher.close();
+        fetcher.close();
+
+        verify(fetcher, times(1)).maybeCloseFetchSessions(any(Timer.class));
+    }
+
+    @Test
+    public void testFetcherCloseClosesFetchSessionsInBroker() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        final FetchResponse fetchResponse = fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0);
+        client.prepareResponse(fetchResponse);
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        assertEquals(0, consumerClient.pendingRequestCount());
+
+        final ArgumentCaptor<FetchRequest.Builder> argument = ArgumentCaptor.forClass(FetchRequest.Builder.class);
+
+        // send request to close the fetcher
+        this.fetcher.close(time.timer(Duration.ofSeconds(10)));
+
+        // validate that Fetcher.close() has sent a request with final epoch. 2 requests are sent, one for the normal
+        // fetch earlier and another for the finish fetch here.
+        verify(consumerClient, times(2)).send(any(Node.class), argument.capture());
+        FetchRequest.Builder builder = argument.getValue();
+        // session Id is the same
+        assertEquals(fetchResponse.sessionId(), builder.metadata().sessionId());
+        // contains final epoch
+        assertEquals(FetchMetadata.FINAL_EPOCH, builder.metadata().epoch());  // final epoch indicates we want to close the session
+        assertTrue(builder.fetchData().isEmpty()); // partition data should be empty
     }
 
     @Test
@@ -5270,7 +5321,7 @@ public class FetcherTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        fetcher = new Fetcher<>(
+        fetcher = spy(new Fetcher<>(
                 new LogContext(),
                 consumerClient,
                 minBytes,
@@ -5290,7 +5341,7 @@ public class FetcherTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 isolationLevel,
-                apiVersions);
+                apiVersions));
     }
 
     private void buildDependencies(MetricConfig metricConfig,
@@ -5303,8 +5354,8 @@ public class FetcherTest {
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         metrics = new Metrics(metricConfig, time);
-        consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
-                100, 1000, Integer.MAX_VALUE);
+        consumerClient = spy(new ConsumerNetworkClient(logContext, client, metadata, time,
+                100, 1000, Integer.MAX_VALUE));
         metricsRegistry = new FetcherMetricsRegistry(metricConfig.tags().keySet(), "consumer" + groupId);
     }
 

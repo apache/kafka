@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.connect.mirror.rest.MirrorRestServer;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.Worker;
@@ -26,6 +27,7 @@ import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
+import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
@@ -46,6 +48,9 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.ArgumentParsers;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -101,11 +106,13 @@ public class MirrorMaker {
     private CountDownLatch stopLatch;
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
     private final ShutdownHook shutdownHook;
-    private final String advertisedBaseUrl;
+    private final String advertisedUrl;
     private final Time time;
     private final MirrorMakerConfig config;
     private final Set<String> clusters;
     private final Set<SourceAndTarget> herderPairs;
+    private final MirrorRestServer internalServer;
+    private final RestClient restClient;
 
     /**
      * @param config    MM2 configuration from mm2.properties file
@@ -117,7 +124,16 @@ public class MirrorMaker {
     public MirrorMaker(MirrorMakerConfig config, List<String> clusters, Time time) {
         log.debug("Kafka MirrorMaker instance created");
         this.time = time;
-        this.advertisedBaseUrl = "NOTUSED";
+        if (config.enableInternalRest()) {
+            this.restClient = new RestClient(config);
+            internalServer = new MirrorRestServer(config.originals(), restClient);
+            internalServer.initializeServer();
+            this.advertisedUrl = internalServer.advertisedUrl().toString();
+        } else {
+            internalServer = null;
+            restClient = null;
+            this.advertisedUrl = "NOTUSED";
+        }
         this.config = config;
         if (clusters != null && !clusters.isEmpty()) {
             this.clusters = new HashSet<>(clusters);
@@ -171,6 +187,10 @@ public class MirrorMaker {
                 startLatch.countDown();
             }
         }
+        if (internalServer != null) {
+            log.info("Initializing internal REST resources");
+            internalServer.initializeInternalResources(herders);
+        }
         log.info("Configuring connectors...");
         herderPairs.forEach(this::configureConnectors);
         log.info("Kafka MirrorMaker started");
@@ -180,6 +200,9 @@ public class MirrorMaker {
         boolean wasShuttingDown = shutdown.getAndSet(true);
         if (!wasShuttingDown) {
             log.info("Kafka MirrorMaker stopping");
+            if (internalServer != null) {
+                Utils.closeQuietly(internalServer::stop, "Internal REST server");
+            }
             for (Herder herder : herders.values()) {
                 try {
                     herder.stop();
@@ -204,11 +227,13 @@ public class MirrorMaker {
         Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
         herders.get(sourceAndTarget)
                 .putConnectorConfig(connectorClass.getSimpleName(), connectorProps, true, (e, x) -> {
-                    if (e instanceof NotLeaderException) {
-                        // No way to determine if the connector is a leader or not beforehand.
-                        log.info("Connector {} is a follower. Using existing configuration.", sourceAndTarget);
+                    if (e == null) {
+                        log.info("{} connector configured for {}.", connectorClass.getSimpleName(), sourceAndTarget);
+                    } else if (e instanceof NotLeaderException) {
+                        // No way to determine if the herder is a leader or not beforehand.
+                        log.info("This node is a follower for {}. Using existing connector configuration.", sourceAndTarget);
                     } else {
-                        log.info("Connector {} configured.", sourceAndTarget, e);
+                        log.error("Failed to configure {} connector for {}", connectorClass.getSimpleName(), sourceAndTarget, e);
                     }
                 });
     }
@@ -226,7 +251,14 @@ public class MirrorMaker {
     private void addHerder(SourceAndTarget sourceAndTarget) {
         log.info("creating herder for " + sourceAndTarget.toString());
         Map<String, String> workerProps = config.workerConfig(sourceAndTarget);
-        String advertisedUrl = advertisedBaseUrl + "/" + sourceAndTarget.source();
+        List<String> restNamespace;
+        try {
+            String encodedSource = encodePath(sourceAndTarget.source());
+            String encodedTarget = encodePath(sourceAndTarget.target());
+            restNamespace = Arrays.asList(encodedSource, encodedTarget);
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException("Unable to create encoded URL paths for source and target using UTF-8", e);
+        }
         String workerId = sourceAndTarget.toString();
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
@@ -255,11 +287,24 @@ public class MirrorMaker {
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
         // tracking the various shared admin objects in this class.
-        // Do not provide a restClient to the DistributedHerder to indicate that request forwarding is disabled
         Herder herder = new DistributedHerder(distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                advertisedUrl, null, clientConfigOverridePolicy, sharedAdmin);
+                advertisedUrl, restClient, clientConfigOverridePolicy,
+                restNamespace, sharedAdmin);
         herders.put(sourceAndTarget, herder);
+    }
+
+    private static String encodePath(String rawPath) throws UnsupportedEncodingException {
+        return URLEncoder.encode(rawPath, StandardCharsets.UTF_8.name())
+                // Java's out-of-the-box URL encoder encodes spaces (' ') as pluses ('+'),
+                // and pluses as '%2B'
+                // But Jetty doesn't decode pluses at all and leaves them as-are in decoded
+                // URLs
+                // So to get around that, we replace pluses in the encoded URL here with '%20',
+                // which is the encoding that Jetty expects for spaces
+                // Jetty will reverse this transformation when evaluating the path parameters
+                // and will return decoded strings with all special characters as they were.
+                .replaceAll("\\+", "%20");
     }
 
     private class ShutdownHook extends Thread {
@@ -300,7 +345,7 @@ public class MirrorMaker {
 
             Properties props = Utils.loadProps(configFile.getPath());
             Map<String, String> config = Utils.propsToStringMap(props);
-            MirrorMaker mirrorMaker = new MirrorMaker(config, clusters, Time.SYSTEM);
+            MirrorMaker mirrorMaker = new MirrorMaker(config, clusters);
             
             try {
                 mirrorMaker.start();

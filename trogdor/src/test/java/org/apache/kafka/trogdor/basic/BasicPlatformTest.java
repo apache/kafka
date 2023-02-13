@@ -63,4 +63,4 @@ public class BasicPlatformTest {
             Files.delete(configFile.toPath());
         }
     }
-};
+}

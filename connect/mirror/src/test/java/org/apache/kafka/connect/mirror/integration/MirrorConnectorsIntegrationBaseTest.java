@@ -125,6 +125,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     protected Properties backupBrokerProps = new Properties();
     protected Map<String, String> primaryWorkerProps = new HashMap<>();
     protected Map<String, String> backupWorkerProps = new HashMap<>();
+    protected boolean exactOffsetTranslation = true;
     
     @BeforeEach
     public void startClusters() throws Exception {
@@ -451,7 +452,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             consumerProps, "primary.test-topic-1")) {
 
             waitForConsumerGroupFullSync(backup, Collections.singletonList("primary.test-topic-1"),
-                    consumerGroupName, NUM_RECORDS_PRODUCED);
+                    consumerGroupName, NUM_RECORDS_PRODUCED, exactOffsetTranslation);
 
             ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
 
@@ -481,7 +482,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             "group.id", consumerGroupName), "primary.test-topic-1", "primary.test-topic-2")) {
 
             waitForConsumerGroupFullSync(backup, Arrays.asList("primary.test-topic-1", "primary.test-topic-2"),
-                    consumerGroupName, NUM_RECORDS_PRODUCED);
+                    consumerGroupName, NUM_RECORDS_PRODUCED, exactOffsetTranslation);
 
             ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
             // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
@@ -608,7 +609,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
             waitForConsumingAllRecords(primaryConsumer, NUM_RECORDS_PRODUCED);
         }
-        waitForConsumerGroupFullSync(backup, Collections.singletonList("primary.test-topic-1"), consumerGroupName, NUM_RECORDS_PRODUCED);
+        waitForConsumerGroupFullSync(backup, Collections.singletonList("primary.test-topic-1"), consumerGroupName, NUM_RECORDS_PRODUCED, exactOffsetTranslation);
         restartMirrorMakerConnectors(backup, CONNECTOR_LIST);
         assertMonotonicCheckpoints(backup, "primary.checkpoints.internal");
         Thread.sleep(5000);
@@ -616,7 +617,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
             waitForConsumingAllRecords(primaryConsumer, NUM_RECORDS_PRODUCED);
         }
-        waitForConsumerGroupFullSync(backup, Collections.singletonList("primary.test-topic-1"), consumerGroupName, 2 * NUM_RECORDS_PRODUCED);
+        waitForConsumerGroupFullSync(backup, Collections.singletonList("primary.test-topic-1"), consumerGroupName, 2 * NUM_RECORDS_PRODUCED, exactOffsetTranslation);
         assertMonotonicCheckpoints(backup, "primary.checkpoints.internal");
     }
 
@@ -794,7 +795,7 @@ public class MirrorConnectorsIntegrationBaseTest {
      * offsets are eventually synced to the expected offset numbers
      */
     protected static <T> void waitForConsumerGroupFullSync(
-            EmbeddedConnectCluster connect, List<String> topics, String consumerGroupId, int numRecords
+            EmbeddedConnectCluster connect, List<String> topics, String consumerGroupId, int numRecords, boolean exactOffsetTranslation
     ) throws InterruptedException {
         try (Admin adminClient = connect.kafka().createAdminClient()) {
             Map<TopicPartition, OffsetSpec> tps = new HashMap<>(NUM_PARTITIONS * topics.size());
@@ -823,8 +824,15 @@ public class MirrorConnectorsIntegrationBaseTest {
                         );
                     }
                 }
+                boolean totalOffsetsMatch = exactOffsetTranslation
+                        ? totalEndOffsets == expectedTotalOffsets
+                        : totalEndOffsets >= expectedTotalOffsets;
+
+                boolean consumerGroupOffsetsMatch = exactOffsetTranslation
+                        ? totalConsumerGroupOffsets == expectedTotalOffsets
+                        : totalConsumerGroupOffsets >= expectedTotalOffsets;
                 // make sure the consumer group offsets are synced to expected number
-                return totalEndOffsets == expectedTotalOffsets && totalConsumerGroupOffsets == expectedTotalOffsets;
+                return totalOffsetsMatch && consumerGroupOffsetsMatch;
             }, OFFSET_SYNC_DURATION_MS, "Consumer group offset sync is not complete in time");
         }
     }

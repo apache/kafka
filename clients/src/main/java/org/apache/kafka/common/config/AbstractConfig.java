@@ -18,11 +18,11 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.kafka.common.config.provider.ConfigProvider;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -274,14 +274,7 @@ public class AbstractConfig {
      */
     public Map<String, Object> originalsWithPrefix(String prefix, boolean strip) {
         Map<String, Object> result = new RecordingMap<>(prefix, false);
-        for (Map.Entry<String, ?> entry : originals.entrySet()) {
-            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
-                if (strip)
-                    result.put(entry.getKey().substring(prefix.length()), entry.getValue());
-                else
-                    result.put(entry.getKey(), entry.getValue());
-            }
-        }
+        result.putAll(Utils.entriesWithPrefix(originals, prefix, strip));
         return result;
     }
 
@@ -377,12 +370,12 @@ public class AbstractConfig {
     }
 
     /**
-     * Log warnings for any unused configurations
+     * Info level log for any unused configurations
      */
     public void logUnused() {
         Set<String> unusedkeys = unused();
         if (!unusedkeys.isEmpty()) {
-            log.warn("These configurations '{}' were supplied but are not used yet.", unusedkeys);
+            log.info("These configurations '{}' were supplied but are not used yet.", unusedkeys);
         }
     }
 

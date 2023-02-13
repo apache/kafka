@@ -716,4 +716,4 @@ public class CoordinatorTest {
                 waitFor(coordinatorClient);
         }
     }
-};
+}
