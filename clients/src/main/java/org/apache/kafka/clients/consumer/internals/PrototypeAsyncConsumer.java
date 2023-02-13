@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.PollApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.subscription.AbstractSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.subscription.ClientSubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -168,6 +169,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             do {
                 final long currenttimeMs = System.currentTimeMillis();
                 // send the consumed position to the background thread
+                if (subscriptions.assignmentUpdated) {
+                    eventHandler.add(new SubscriptionUpdateEvent(subscriptions.snapshot()));
+                }
                 eventHandler.add(new PollApplicationEvent(currenttimeMs, subscriptions.consumedPosition()));
                 Iterator<Optional<BackgroundEvent>> events = eventHandler.drain().iterator();
                 while (events.hasNext()) {
@@ -518,6 +522,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         protected PartitionAssignmentApplicationEvent(Collection<TopicPartition> type) {
             super(Type.ASSIGN);
+        }
+    }
+
+    private class SubscriptionUpdateEvent extends ApplicationEvent {
+        SubscriptionUpdateEvent(AbstractSubscriptionState.SubscriptionSnapshot snapshot) {
+            super(Type.SUBSCRIPTION_UPDATE);
         }
     }
 }

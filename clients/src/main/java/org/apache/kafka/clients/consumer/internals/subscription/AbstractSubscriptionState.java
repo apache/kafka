@@ -39,10 +39,11 @@ abstract public class AbstractSubscriptionState {
     protected final PartitionStates<TopicPartitionState> assignment;
 
     private int assignmentId = 0;
+    public boolean assignmentUpdated = false;
 
     public boolean assignFromUser(Set<TopicPartition> partitions) {
+        assignmentUpdated = true;
         //setSubscriptionType(SubscriptionState.SubscriptionType.USER_ASSIGNED);
-
         if (this.assignment.partitionSet().equals(partitions))
             return false;
 
@@ -65,6 +66,7 @@ abstract public class AbstractSubscriptionState {
     }
 
     boolean changeSubscription(Set<String> topicsToSubscribe) {
+        assignmentUpdated = true;
         if (subscription.equals(topicsToSubscribe))
             return false;
 
@@ -128,4 +130,37 @@ abstract public class AbstractSubscriptionState {
 
     }
 
+    public void updateSubscription(final SubscriptionSnapshot snapshot) {
+        this.subscriptionType = snapshot.subscriptionType;
+        this.subscribedPattern = snapshot.subscribedPattern;
+        this.subscription = snapshot.subscription;
+        this.groupSubscription = snapshot.groupSubscription;
+        // probably wrong here, but just a demo
+        this.assignment.set(snapshot.assignment.partitionStateMap());
+    }
+
+    public SubscriptionSnapshot snapshot() {
+        return new SubscriptionSnapshot(
+                subscriptionType,
+                subscribedPattern,
+                subscription,
+                groupSubscription,
+                assignment);
+    }
+
+    public static class SubscriptionSnapshot {
+        final private SubscriptionType subscriptionType;
+        final private Pattern subscribedPattern;
+        final Set<String> subscription;
+        final private Set<String> groupSubscription;
+        final protected PartitionStates<TopicPartitionState> assignment;
+
+        public SubscriptionSnapshot(SubscriptionType subscriptionType, Pattern subscribedPattern, Set<String> subscription, Set<String> groupSubscription, PartitionStates<TopicPartitionState> assignment) {
+            this.subscriptionType = subscriptionType;
+            this.subscribedPattern = subscribedPattern;
+            this.subscription = subscription;
+            this.groupSubscription = groupSubscription;
+            this.assignment = assignment;
+        }
+    }
 }

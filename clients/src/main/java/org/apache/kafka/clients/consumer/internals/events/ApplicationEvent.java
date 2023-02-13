@@ -36,6 +36,6 @@ abstract public class ApplicationEvent {
         return type + " ApplicationEvent";
     }
     public enum Type {
-        NOOP, COMMIT, POLL, ASSIGN,
+        NOOP, COMMIT, POLL, ASSIGN, SUBSCRIPTION_UPDATE,
     }
 }

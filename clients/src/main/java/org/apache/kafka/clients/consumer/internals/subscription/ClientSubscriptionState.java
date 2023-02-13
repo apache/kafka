@@ -35,6 +35,7 @@ public class ClientSubscriptionState extends AbstractSubscriptionState {
     }
 
     public void updateConsumedPosition() {
+        assignmentUpdated = true;
     }
 
     public boolean hasDefaultOffsetResetPolicy() {
@@ -42,16 +43,17 @@ public class ClientSubscriptionState extends AbstractSubscriptionState {
     }
 
     public void subscribe(final Set<String> t1, ConsumerRebalanceListener listener) {
+        assignmentUpdated = true;
         registerRebalanceListener(listener);
         //setSubscriptionType(SubscriptionState.SubscriptionType.AUTO_TOPICS);
         changeSubscription(t1);
     }
-
-
 
     private void registerRebalanceListener(ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
         this.listener = listener;
     }
+
+
 }

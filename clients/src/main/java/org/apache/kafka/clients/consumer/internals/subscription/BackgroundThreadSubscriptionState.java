@@ -12,7 +12,8 @@ public class BackgroundThreadSubscriptionState extends AbstractSubscriptionState
     public void updateConsumedPosition(Map<TopicPartition, OffsetAndMetadata> offsets) {
     }
 
-    public void allConsumed() {
+    public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
+        return null;
     }
 
     public void fetchablePartitions() {
