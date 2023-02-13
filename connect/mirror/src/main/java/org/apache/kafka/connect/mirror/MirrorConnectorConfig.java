@@ -36,7 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.time.Duration;
 
-/** Shared config properties used by MirrorSourceConnector, MirrorCheckpointConnector, and MirrorHeartbeatConnector.
+/** Shared config properties used by {@link MirrorSourceConnector}, {@link MirrorCheckpointConnector}, and {@link MirrorHeartbeatConnector}.
  *  <p>
  *  Generally, these properties are filled-in automatically by MirrorMaker based on a top-level mm2.properties file.
  *  However, when running MM2 connectors as plugins on a Connect-as-a-Service cluster, these properties must be configured manually,

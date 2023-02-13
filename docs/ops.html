@@ -1890,7 +1890,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   <tr>
     <td>Append Records Rate</td>
     <td>The average number of records appended per sec by the leader of the raft quorum.</td>
-    <td>kafka.server:type=raft-metrics,name=append-records-raft</td>
+    <td>kafka.server:type=raft-metrics,name=append-records-rate</td>
   </tr>
   <tr>
     <td>Average Poll Idle Ratio</td>
@@ -1929,7 +1929,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Active Broker Count</td>
-    <td>The number of fenced brokers as observed by this Controller.</td>
+    <td>The number of active brokers as observed by this Controller.</td>
     <td>kafka.controller:type=KafkaController,name=ActiveBrokerCount</td>
   </tr>
   <tr>

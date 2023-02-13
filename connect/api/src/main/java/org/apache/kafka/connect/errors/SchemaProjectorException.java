@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.connect.errors;
 
+/**
+ * Indicates an error while projecting a schema via {@link org.apache.kafka.connect.data.SchemaProjector}
+ */
 public class SchemaProjectorException extends DataException {
     public SchemaProjectorException(String s) {
         super(s);

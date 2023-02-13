@@ -19,9 +19,9 @@ package kafka.log.remote
 import kafka.log.UnifiedLog
 import kafka.utils.MockTime
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.log.internals.{OffsetIndex, OffsetPosition, TimeIndex}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.storage.internals.log.{OffsetIndex, OffsetPosition, TimeIndex}
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -86,7 +86,7 @@ class RemoteIndexCacheTest {
 
   @Test
   def testFetchIndexFromRemoteStorage(): Unit = {
-    val offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex.get
+    val offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex
     val offsetPosition1 = offsetIndex.entry(1)
     // this call should have invoked fetchOffsetIndex, fetchTimestampIndex once
     val resultPosition = cache.lookupOffset(rlsMetadata, offsetPosition1.offset)
@@ -104,7 +104,7 @@ class RemoteIndexCacheTest {
 
   @Test
   def testPositionForNonExistingIndexFromRemoteStorage(): Unit = {
-    val offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex.get
+    val offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex
     val lastOffsetPosition = cache.lookupOffset(rlsMetadata, offsetIndex.lastOffset)
     val greaterOffsetThanLastOffset = offsetIndex.lastOffset + 1
     assertEquals(lastOffsetPosition, cache.lookupOffset(rlsMetadata, greaterOffsetThanLastOffset))
