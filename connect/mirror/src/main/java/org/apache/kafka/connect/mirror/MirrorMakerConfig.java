@@ -31,6 +31,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -81,16 +82,23 @@ public class MirrorMakerConfig extends AbstractConfig {
     static final String TARGET_CLUSTER_PREFIX = "target.cluster.";
     static final String SOURCE_PREFIX = "source.";
     static final String TARGET_PREFIX = "target.";
+    static final String ENABLE_INTERNAL_REST_CONFIG = "dedicated.mode.enable.internal.rest";
+    private static final String ENABLE_INTERNAL_REST_DOC =
+            "Whether to bring up an internal-only REST server that allows multi-node clusters to operate correctly.";
 
     private final Plugins plugins;
    
     public MirrorMakerConfig(Map<?, ?> props) {
-        super(CONFIG_DEF, props, true);
+        super(config(), props, true);
         plugins = new Plugins(originalsStrings());
     }
 
     public Set<String> clusters() {
         return new HashSet<>(getList(CLUSTERS_CONFIG));
+    }
+
+    public boolean enableInternalRest() {
+        return getBoolean(ENABLE_INTERNAL_REST_CONFIG);
     }
 
     public List<SourceAndTarget> clusterPairs() {
@@ -272,20 +280,25 @@ public class MirrorMakerConfig extends AbstractConfig {
         providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
         return transformed;
     }
- 
-    protected static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(CLUSTERS_CONFIG, Type.LIST, Importance.HIGH, CLUSTERS_DOC)
-            .define(CONFIG_PROVIDERS_CONFIG, Type.LIST, Collections.emptyList(), Importance.LOW, CONFIG_PROVIDERS_DOC)
-            // security support
-            .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-                Type.STRING,
-                CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                in(Utils.enumOptions(SecurityProtocol.class)),
-                Importance.MEDIUM,
-                CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-            .withClientSslSupport()
-            .withClientSaslSupport();
 
+    protected static ConfigDef config() {
+        ConfigDef result = new ConfigDef()
+                .define(CLUSTERS_CONFIG, Type.LIST, Importance.HIGH, CLUSTERS_DOC)
+                .define(ENABLE_INTERNAL_REST_CONFIG, Type.BOOLEAN, false, Importance.HIGH, ENABLE_INTERNAL_REST_DOC)
+                .define(CONFIG_PROVIDERS_CONFIG, Type.LIST, Collections.emptyList(), Importance.LOW, CONFIG_PROVIDERS_DOC)
+                // security support
+                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                        Type.STRING,
+                        CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                        in(Utils.enumOptions(SecurityProtocol.class)),
+                        Importance.MEDIUM,
+                        CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                .withClientSslSupport()
+                .withClientSaslSupport();
+        RestServerConfig.addInternalConfig(result);
+        return result;
+    }
+ 
     private Map<String, String> stringsWithPrefixStripped(String prefix) {
         return originalsStrings().entrySet().stream()
             .filter(x -> x.getKey().startsWith(prefix))

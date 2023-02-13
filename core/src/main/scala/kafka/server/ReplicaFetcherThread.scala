@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.log.remote.RemoteLogManager
-import kafka.log.{LeaderOffsetIncremented, LogAppendInfo, UnifiedLog}
+import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
@@ -29,7 +29,7 @@ import org.apache.kafka.server.common.CheckpointFile.CheckpointReadBuffer
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
-import org.apache.kafka.storage.internals.log.EpochEntry
+import org.apache.kafka.storage.internals.log.{EpochEntry, LogFileUtils}
 
 import java.io.{BufferedReader, File, InputStreamReader}
 import java.nio.charset.StandardCharsets
@@ -299,7 +299,7 @@ class ReplicaFetcherThread(name: String,
             s"with size: ${epochs.size} for $partition")
 
           // Restore producer snapshot
-          val snapshotFile = UnifiedLog.producerSnapshotFile(log.dir, nextOffset)
+          val snapshotFile = LogFileUtils.producerSnapshotFile(log.dir, nextOffset)
           buildProducerSnapshotFile(snapshotFile, remoteLogSegmentMetadata, rlm)
 
           // Reload producer snapshots.

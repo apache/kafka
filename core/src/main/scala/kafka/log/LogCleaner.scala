@@ -656,7 +656,7 @@ private[log] class Cleaner(val id: Int,
                              deleteRetentionMs: Long,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
-                             lastRecordsOfActiveProducers: Map[Long, LastRecord],
+                             lastRecordsOfActiveProducers: mutable.Map[Long, LastRecord],
                              stats: CleanerStats,
                              currentTime: Long): Unit = {
     val logCleanerFilter: RecordFilter = new RecordFilter(currentTime, deleteRetentionMs) {
