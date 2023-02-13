@@ -1758,12 +1758,14 @@ project(':tools') {
     implementation project(':clients')
     implementation project(':server-common')
     implementation project(':log4j-appender')
+    implementation project(':core')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.log4j
     implementation libs.joptSimple
+    implementation libs.scalaLibrary
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
