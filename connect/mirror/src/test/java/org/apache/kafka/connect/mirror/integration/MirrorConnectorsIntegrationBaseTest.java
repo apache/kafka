@@ -42,7 +42,6 @@ import org.apache.kafka.connect.mirror.OffsetSync;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
 import org.apache.kafka.connect.mirror.Checkpoint;
 import org.apache.kafka.connect.mirror.MirrorCheckpointConnector;
-import org.apache.kafka.connect.mirror.ReplicationPolicy;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.connect.util.clusters.UngracefulShutdownException;
@@ -513,8 +512,7 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         warmUpConsumer(consumerProps);
 
-        ReplicationPolicy replicationPolicy = new MirrorClient(mm2Config.clientConfig(BACKUP_CLUSTER_ALIAS)).replicationPolicy();
-        String remoteTopic = replicationPolicy.formatRemoteTopic(PRIMARY_CLUSTER_ALIAS, "test-topic-1");
+        String remoteTopic = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
 
         // Check offsets are pushed to the checkpoint topic
         Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
@@ -598,6 +596,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     public void testRestartReplication() throws InterruptedException {
         String consumerGroupName = "consumer-group-restart";
         Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
+        String remoteTopic = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
         warmUpConsumer(consumerProps);
         mm2Props.put("sync.group.offsets.enabled", "true");
         mm2Props.put("sync.group.offsets.interval.seconds", "1");
@@ -609,7 +608,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
             waitForConsumingAllRecords(primaryConsumer, NUM_RECORDS_PRODUCED);
         }
-        waitForConsumerGroupFullSync(backup, Collections.singletonList("primary.test-topic-1"), consumerGroupName, NUM_RECORDS_PRODUCED, exactOffsetTranslation);
+        waitForConsumerGroupFullSync(backup, Collections.singletonList(remoteTopic), consumerGroupName, NUM_RECORDS_PRODUCED, exactOffsetTranslation);
         restartMirrorMakerConnectors(backup, CONNECTOR_LIST);
         assertMonotonicCheckpoints(backup, "primary.checkpoints.internal");
         Thread.sleep(5000);
@@ -617,7 +616,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
             waitForConsumingAllRecords(primaryConsumer, NUM_RECORDS_PRODUCED);
         }
-        waitForConsumerGroupFullSync(backup, Collections.singletonList("primary.test-topic-1"), consumerGroupName, 2 * NUM_RECORDS_PRODUCED, exactOffsetTranslation);
+        waitForConsumerGroupFullSync(backup, Collections.singletonList(remoteTopic), consumerGroupName, 2 * NUM_RECORDS_PRODUCED, exactOffsetTranslation);
         assertMonotonicCheckpoints(backup, "primary.checkpoints.internal");
     }
 
