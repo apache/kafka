@@ -248,7 +248,8 @@ public class KafkaRaftMetricsTest {
         raftMetrics.updatePollStart(time.milliseconds());
         time.sleep(5);
 
-        // Measurement arrives before poll end
+        // Measurement arrives before poll end, so we have 40ms busy time and 60ms idle.
+        // The subsequent interval time is not counted until the next measurement.
         assertEquals(0.6, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
 
         // More idle time for 5ms
@@ -256,7 +257,7 @@ public class KafkaRaftMetricsTest {
         raftMetrics.updatePollEnd(time.milliseconds());
 
         // The measurement includes the interval beginning at the last recording.
-        // This counts 10ms of busy time and 10ms of idle time.
+        // This counts 10ms of busy time and 5ms + 5ms = 10ms of idle time.
         assertEquals(0.5, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
     }
 
