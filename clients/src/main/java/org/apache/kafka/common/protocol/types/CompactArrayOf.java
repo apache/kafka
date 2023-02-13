@@ -78,7 +78,7 @@ public class CompactArrayOf extends DocumentedType {
         }
         int size = n - 1;
         int elementSize = 0;
-        if (size > 0 ) {
+        if (size > 0) {
             try {
                 int position = buffer.position();
                 Object obj = type.read(buffer);

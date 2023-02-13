@@ -73,7 +73,7 @@ public class ArrayOf extends DocumentedType {
             throw new SchemaException("Array size " + size + " cannot be negative");
 
         int elementSize = 0;
-        if (size > 0 ) {
+        if (size > 0) {
             try {
                 int position = buffer.position();
                 Object obj = type.read(buffer);

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import java.nio.Buffer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -454,7 +453,7 @@ public class ProtocolSerializationTest {
                 type.write(buffer, obj);
                 buffer.rewind();
                 type.read(buffer);
-                if (((Object []) obj).length > 0 ) {
+                if (((Object[]) obj).length > 0) {
                     try {
                         buffer.rewind();
                         buffer.limit(buffer.limit() - 1);
