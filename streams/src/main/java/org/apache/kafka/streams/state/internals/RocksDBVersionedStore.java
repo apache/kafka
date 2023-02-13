@@ -22,7 +22,6 @@ import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -82,6 +81,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private final String name;
     private final long historyRetention;
+    private final long gracePeriod;
     private final RocksDBMetricsRecorder metricsRecorder;
 
     private final RocksDBStore latestValueStore;
@@ -101,6 +101,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     RocksDBVersionedStore(final String name, final String metricsScope, final long historyRetention, final long segmentInterval) {
         this.name = name;
         this.historyRetention = historyRetention;
+        // history retention doubles as grace period for now. could be nice to allow users to
+        // configure the two separately in the future. if/when we do, we should enforce that
+        // history retention >= grace period, for sound semantics.
+        this.gracePeriod = historyRetention;
         this.metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
         this.latestValueStore = new RocksDBStore(latestValueStoreName(name), name, metricsRecorder);
         this.segmentStores = new LogicalKeyValueSegments(segmentsStoreName(name), name, historyRetention, segmentInterval, metricsRecorder);
@@ -111,9 +115,14 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     @Override
     public void put(final Bytes key, final byte[] value, final long timestamp) {
 
+        if (timestamp < observedStreamTime - gracePeriod) {
+            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            LOG.warn("Skipping record for expired put.");
+            return;
+        }
+
         doPut(
             versionedStoreClient,
-            Optional.of(expiredRecordSensor),
             key,
             value,
             timestamp
@@ -283,7 +292,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     // VisibleForTesting
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        // advance stream time to the max timestamp in the batch
+        // copy the observed stream time, for use in deciding whether to drop records during restore,
+        // when records have exceeded the store's grace period.
+        long streamTimeForRestore = observedStreamTime;
+        // advance stream time to the max timestamp in the batch, in order to speed up restore
+        // by not bothering to read from/write to segments which will have expired by the time
+        // the restoration process is complete.
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             observedStreamTime = Math.max(observedStreamTime, record.timestamp());
         }
@@ -297,6 +311,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // records into memory. how high this memory amplification will be is very much dependent
         // on the specific workload and the value of the "segment interval" parameter.
         for (final ConsumerRecord<byte[], byte[]> record : records) {
+            if (record.timestamp() < streamTimeForRestore - gracePeriod) {
+                // record is older than grace period and was therefore never written to the store
+                continue;
+            }
+            streamTimeForRestore = Math.max(streamTimeForRestore, record.timestamp());
+
             ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                 record,
                 consistencyEnabled,
@@ -306,7 +326,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             // put records to write buffer
             doPut(
                 restoreClient,
-                Optional.empty(),
                 new Bytes(record.key()),
                 record.value(),
                 record.timestamp()
@@ -440,7 +459,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private <T extends VersionedStoreSegment> void doPut(
         final VersionedStoreClient<T> versionedStoreClient,
-        final Optional<Sensor> expiredRecordSensor,
         final Bytes key,
         final byte[] value,
         final long timestamp
@@ -466,7 +484,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // continue search in segments
         status = maybePutToSegments(
             versionedStoreClient,
-            expiredRecordSensor,
             key,
             value,
             timestamp,
@@ -482,7 +499,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // or segments store). insert based on foundTs here instead.
         finishPut(
             versionedStoreClient,
-            expiredRecordSensor,
             key,
             value,
             timestamp,
@@ -578,7 +594,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private <T extends VersionedStoreSegment> PutStatus maybePutToSegments(
         final VersionedStoreClient<T> versionedStoreClient,
-        final Optional<Sensor> expiredRecordSensor,
         final Bytes key,
         final byte[] value,
         final long timestamp,
@@ -615,11 +630,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 }
 
                 if (foundMinTs < observedStreamTime - historyRetention) {
-                    // the record being inserted does not affect version history. discard and return
-                    if (expiredRecordSensor.isPresent()) {
-                        expiredRecordSensor.get().record(1.0d, context.currentSystemTimeMs());
-                        LOG.warn("Skipping record for expired put.");
-                    }
+                    // the record being inserted does not affect version history. discard and return.
+                    // this can happen during restore because individual put calls are executed after
+                    // observedStreamTime is fast-forwarded for the entire batch of records being
+                    // restored at once.
                     return new PutStatus(true, foundTs);
                 }
 
@@ -714,7 +728,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private <T extends VersionedStoreSegment> void finishPut(
         final VersionedStoreClient<T> versionedStoreClient,
-        final Optional<Sensor> expiredRecordSensor,
         final Bytes key,
         final byte[] value,
         final long timestamp,
@@ -730,10 +743,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 final T segment = versionedStoreClient.getOrCreateSegmentIfLive(
                     versionedStoreClient.segmentIdForTimestamp(timestamp), context, observedStreamTime);
                 if (segment == null) {
-                    if (expiredRecordSensor.isPresent()) {
-                        expiredRecordSensor.get().record(1.0d, context.currentSystemTimeMs());
-                        LOG.warn("Skipping record for expired put.");
-                    }
+                    // the record being inserted does not affect version history. discard and return.
+                    // this can happen during restore because individual put calls are executed after
+                    // observedStreamTime is fast-forwarded for the entire batch of records being
+                    // restored at once.
                     return;
                 }
 
@@ -777,10 +790,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             final T segment = versionedStoreClient.getOrCreateSegmentIfLive(
                 versionedStoreClient.segmentIdForTimestamp(foundTs), context, observedStreamTime);
             if (segment == null) {
-                if (expiredRecordSensor.isPresent()) {
-                    expiredRecordSensor.get().record(1.0d, context.currentSystemTimeMs());
-                    LOG.warn("Skipping record for expired put.");
-                }
+                // the record being inserted does not affect version history. discard and return.
+                // this can happen during restore because individual put calls are executed after
+                // observedStreamTime is fast-forwarded for the entire batch of records being
+                // restored at once.
                 return;
             }
 

@@ -47,6 +47,7 @@ public class RocksDBVersionedStoreTest {
     private static final String STORE_NAME = "myversionedrocks";
     private static final String METRICS_SCOPE = "versionedrocksdb";
     private static final long HISTORY_RETENTION = 300_000L;
+    private static final long GRACE_PERIOD = HISTORY_RETENTION; // history retention doubles as grace period for now
     private static final long SEGMENT_INTERVAL = HISTORY_RETENTION / 3;
     private static final long BASE_TIMESTAMP = 10L;
     private static final Serializer<String> STRING_SERIALIZER = new StringSerializer();
@@ -345,6 +346,19 @@ public class RocksDBVersionedStoreTest {
     }
 
     @Test
+    public void shouldNotPutExpired() {
+        putToStore("k", "v", HISTORY_RETENTION + 10);
+
+        // grace period has not elapsed
+        putToStore("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
+        verifyGetValueFromStore("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
+
+        // grace period has elapsed, so this put does not take place
+        putToStore("k2", "v2", HISTORY_RETENTION + 9 - GRACE_PERIOD);
+        verifyGetNullFromStore("k2");
+    }
+
+    @Test
     public void shouldGetFromOlderSegments() {
         // use a different key to create three different segments
         putToStore("ko", null, SEGMENT_INTERVAL - 10);
@@ -521,6 +535,63 @@ public class RocksDBVersionedStoreTest {
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn10", SEGMENT_INTERVAL - 10);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 15);
+    }
+
+    @Test
+    public void shouldNotRestoreExpired() {
+        final List<DataRecord> records = new ArrayList<>();
+        records.add(new DataRecord("k", "v", HISTORY_RETENTION + 10));
+        records.add(new DataRecord("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD)); // grace period has not elapsed
+        records.add(new DataRecord("k2", "v2", HISTORY_RETENTION + 9 - GRACE_PERIOD)); // grace period has elapsed, so this record should not be restored
+
+        store.restoreBatch(getChangelogRecords(records));
+
+        verifyGetValueFromStore("k", "v", HISTORY_RETENTION + 10);
+        verifyGetValueFromStore("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
+        verifyGetNullFromStore("k2");
+    }
+
+    @Test
+    public void shouldRestoreEvenIfRecordWouldBeExpiredByEndOfBatch() {
+        final List<DataRecord> records = new ArrayList<>();
+        records.add(new DataRecord("k2", "v2", HISTORY_RETENTION - GRACE_PERIOD)); // this record will be older than grace period by the end of the batch, but should still be restored
+        records.add(new DataRecord("k", "v", HISTORY_RETENTION + 10));
+
+        store.restoreBatch(getChangelogRecords(records));
+
+        verifyGetValueFromStore("k2", "v2", HISTORY_RETENTION - GRACE_PERIOD);
+        verifyGetValueFromStore("k", "v", HISTORY_RETENTION + 10);
+    }
+
+    @Test
+    public void shouldAllowZeroHistoryRetention() {
+        // recreate store with zero history retention
+        store.close();
+        store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, 0L, SEGMENT_INTERVAL);
+        store.init((StateStoreContext) context, store);
+
+        // put, get, and delete
+        putToStore("k", "v", BASE_TIMESTAMP);
+        verifyGetValueFromStore("k", "v", BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 1, "v", BASE_TIMESTAMP); // query in "future" is allowed
+
+        // update existing record at same timestamp
+        putToStore("k", "updated", BASE_TIMESTAMP);
+        verifyGetValueFromStore("k", "updated", BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "updated", BASE_TIMESTAMP);
+
+        // put new record version
+        putToStore("k", "v2", BASE_TIMESTAMP + 2);
+        verifyGetValueFromStore("k", "v2", BASE_TIMESTAMP + 2);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 2, "v2", BASE_TIMESTAMP + 2);
+
+        // query in past (history retention expired) returns null
+        verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP + 1);
+
+        // put in past (grace period expired) does not update the store
+        putToStore("k2", "v", BASE_TIMESTAMP + 1);
+        verifyGetNullFromStore("k2");
     }
 
     private void putToStore(final String key, final String value, final long timestamp) {
