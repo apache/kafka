@@ -61,7 +61,7 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
 
     @Override
     public void close() {
-        Utils.closeQuietly(delegate, "predicated transformation");
+        Utils.closeQuietly(delegate, "transformation");
         Utils.closeQuietly(predicate, "predicate");
     }
 
