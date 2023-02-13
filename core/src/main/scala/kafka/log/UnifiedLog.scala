@@ -42,7 +42,7 @@ import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, FetchIsolation, LastRecord, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator, ProducerAppendInfo}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, FetchIsolation, LastRecord, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetsListener, LogValidator, ProducerAppendInfo}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
@@ -72,22 +72,6 @@ object LogAppendInfo {
       RecordConversionStats.EMPTY, CompressionType.NONE, CompressionType.NONE, -1, -1,
       offsetsMonotonic = false, -1L, recordErrors, errorMessage)
 }
-
-/**
- * Listener receive notification from the Log.
- *
- * Note that the callbacks are executed in the thread that triggers the change
- * AND that locks may be held during their execution. They are meant to be used
- * as notification mechanism only.
- */
-trait LogOffsetsListener {
-  /**
-   * Called when the Log increments its high watermark.
-   */
-  def onHighWatermarkUpdated(offset: Long): Unit = {}
-}
-
-object NoOpLogOffsetsListener extends LogOffsetsListener
 
 sealed trait LeaderHwChange
 object LeaderHwChange {
@@ -264,7 +248,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                  val keepPartitionMetadataFile: Boolean,
                  val remoteStorageSystemEnable: Boolean = false,
                  remoteLogManager: Option[RemoteLogManager] = None,
-                 @volatile private var logOffsetsListener: LogOffsetsListener = NoOpLogOffsetsListener) extends Logging with KafkaMetricsGroup {
+                 @volatile private var logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.UnifiedLog._
 
@@ -732,7 +716,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def close(): Unit = {
     debug("Closing log")
     lock synchronized {
-      logOffsetsListener = NoOpLogOffsetsListener
+      logOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER
       maybeFlushMetadataFile()
       localLog.checkIfMemoryMappedBufferClosed()
       producerExpireCheck.cancel(true)
@@ -1905,7 +1889,7 @@ object UnifiedLog extends Logging {
             numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
             remoteStorageSystemEnable: Boolean = false,
             remoteLogManager: Option[RemoteLogManager] = None,
-            logOffsetsListener: LogOffsetsListener = NoOpLogOffsetsListener): UnifiedLog = {
+            logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
     val topicPartition = UnifiedLog.parseTopicPartitionName(dir)

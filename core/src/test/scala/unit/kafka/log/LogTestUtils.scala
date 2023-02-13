@@ -27,7 +27,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, FetchDataInfo, FetchIsolation, LazyIndex, LogConfig, LogDirFailureChannel, TransactionIndex}
+import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, FetchDataInfo, FetchIsolation, LazyIndex, LogConfig, LogDirFailureChannel, LogOffsetsListener, TransactionIndex}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
 import java.nio.file.Files
@@ -97,7 +97,7 @@ object LogTestUtils {
                 numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
                 remoteStorageSystemEnable: Boolean = false,
                 remoteLogManager: Option[RemoteLogManager] = None,
-                logOffsetsListener: LogOffsetsListener = NoOpLogOffsetsListener): UnifiedLog = {
+                logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
     UnifiedLog(
       dir = dir,
       config = config,
