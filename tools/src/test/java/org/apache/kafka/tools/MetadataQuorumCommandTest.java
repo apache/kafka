@@ -24,7 +24,7 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -150,7 +150,7 @@ class MetadataQuorumCommandTest {
     })
     public void testCommandConfig() throws IOException {
         // specifying a --command-config containing properties that would prevent login must fail
-        File tmpfile = Utils.createTempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SSL_PLAINTEXT");
+        File tmpfile = TestUtils.tempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SSL_PLAINTEXT");
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
     }
