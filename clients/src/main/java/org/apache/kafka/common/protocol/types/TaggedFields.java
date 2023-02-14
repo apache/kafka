@@ -100,9 +100,7 @@ public class TaggedFields extends DocumentedType {
             }
             prevTag = tag;
             int size = ByteUtils.readUnsignedVarint(buffer);
-            if (size < 0 && isNullable())
-                return null;
-            else if (size < 0)
+            if (size < 0)
                 throw new SchemaException("field size " + size + " cannot be negative");
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading field of size " + size + ", only " + buffer.remaining() + " bytes available");

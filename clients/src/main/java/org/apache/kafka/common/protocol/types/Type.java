@@ -39,6 +39,7 @@ public abstract class Type {
 
     /**
      * Read the typed object from the buffer
+     * Please remember to do size validation before creating the container (ex: array) for the following data
      *
      * @throws SchemaException If the object is not valid for its type
      */
