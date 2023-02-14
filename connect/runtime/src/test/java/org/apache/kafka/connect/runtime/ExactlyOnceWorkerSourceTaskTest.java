@@ -103,7 +103,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -218,7 +217,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
         verify(offsetWriter, MockitoUtils.anyTimes()).offset(PARTITION, OFFSET);
         verify(offsetWriter, MockitoUtils.anyTimes()).willFlush();
-        verify(offsetWriter, MockitoUtils.anyTimes()).beginFlush(anyLong(), any());
+        verify(offsetWriter, MockitoUtils.anyTimes()).beginFlush();
         verify(offsetWriter, MockitoUtils.anyTimes()).doFlush(any());
 
         if (enableTopicCreation) {
@@ -683,7 +682,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     public void testCommitFlushSyncCallbackFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.willFlush()).thenReturn(true);
-        when(offsetWriter.beginFlush(anyLong(), any())).thenReturn(true);
+        when(offsetWriter.beginFlush()).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             Callback<Void> callback = invocation.getArgument(0);
             callback.onCompletion(failure, null);
@@ -696,7 +695,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     public void testCommitFlushAsyncCallbackFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.willFlush()).thenReturn(true);
-        when(offsetWriter.beginFlush(anyLong(), any())).thenReturn(true);
+        when(offsetWriter.beginFlush()).thenReturn(true);
         // doFlush delegates its callback to the producer,
         // which delays completing the callback until commitTransaction
         AtomicReference<Callback<Void>> callback = new AtomicReference<>();
@@ -715,7 +714,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     public void testCommitTransactionFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
         when(offsetWriter.willFlush()).thenReturn(true);
-        when(offsetWriter.beginFlush(anyLong(), any())).thenReturn(true);
+        when(offsetWriter.beginFlush()).thenReturn(true);
         doThrow(failure).when(producer).commitTransaction();
         testCommitFailure(failure, true);
     }
@@ -907,7 +906,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     private void expectSuccessfulFlushes() throws InterruptedException, TimeoutException {
-        when(offsetWriter.beginFlush(anyLong(), any())).thenReturn(true);
+        when(offsetWriter.beginFlush()).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             Callback<Void> cb = invocation.getArgument(0);
             cb.onCompletion(null, null);
@@ -1042,7 +1041,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         VerificationMode mode = times(numBatches);
         verify(producer, mode).beginTransaction();
         verify(producer, mode).commitTransaction();
-        verify(offsetWriter, mode).beginFlush(anyLong(), any());
+        verify(offsetWriter, mode).beginFlush();
         verify(offsetWriter, mode).doFlush(any());
         verify(sourceTask, mode).commit();
     }

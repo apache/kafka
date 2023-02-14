@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.util.Callback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,11 +107,29 @@ public class OffsetStorageWriter {
      * actually initiate the flush with the underlying storage. Ensures that any previous flush operations
      * have finished before beginning a new flush.
      *
+     * @return true if a flush was initiated, false if no data was available
+     * @throws ConnectException if the previous flush is not complete before this method is called
+     */
+    public boolean beginFlush() {
+        try {
+            return beginFlush(0, TimeUnit.NANOSECONDS);
+        } catch (InterruptedException | TimeoutException e) {
+            log.error("Invalid call to OffsetStorageWriter beginFlush() while already flushing, the "
+                    + "framework should not allow this");
+            throw new ConnectException("OffsetStorageWriter is already flushing");
+        }
+    }
+
+    /**
+     * Performs the first step of a flush operation, snapshotting the current state. This does not
+     * actually initiate the flush with the underlying storage. Ensures that any previous flush operations
+     * have finished before beginning a new flush.
+     *
      * @param timeout A maximum duration to wait for previous flushes to finish before giving up on waiting
      * @param timeUnit Units of the timeout argument
      * @return true if a flush was initiated, false if no data was available
      * @throws InterruptedException if this thread was interrupted while waiting for the previous flush to complete
-     * @throws TimeoutException if the `timeout` elapses before previous flushes are complete.
+     * @throws TimeoutException if the {@code timeout} elapses before previous flushes are complete.
      */
     public boolean beginFlush(long timeout, TimeUnit timeUnit) throws InterruptedException, TimeoutException {
         if (flushInProgress.tryAcquire(Math.max(0, timeout), timeUnit)) {
@@ -188,7 +207,7 @@ public class OffsetStorageWriter {
     }
 
     /**
-     * Cancel a flush that has been initiated by {@link #beginFlush(long, TimeUnit)}. This should not be called if
+     * Cancel a flush that has been initiated by {@link #beginFlush}. This should not be called if
      * {@link #doFlush} has already been invoked. It should be used if an operation performed
      * between beginFlush and doFlush failed.
      */
