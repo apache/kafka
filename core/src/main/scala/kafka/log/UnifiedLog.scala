@@ -45,7 +45,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetsListener, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetsListener, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig}
 
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
@@ -73,12 +73,8 @@ object LogAppendInfo {
       offsetsMonotonic = false, -1L, recordErrors, errorMessage)
 }
 
-sealed trait LeaderHwChange
-object LeaderHwChange {
-  case object Increased extends LeaderHwChange
-  case object Same extends LeaderHwChange
-  case object None extends LeaderHwChange
-}
+
+
 
 /**
  * Struct to hold various quantities we compute about each message set before appending to the log
@@ -119,7 +115,7 @@ case class LogAppendInfo(var firstOffset: Option[LogOffsetMetadata],
                          lastOffsetOfFirstBatch: Long,
                          recordErrors: Seq[RecordError] = List(),
                          errorMessage: String = null,
-                         leaderHwChange: LeaderHwChange = LeaderHwChange.None) {
+                         leaderHwChange: LeaderHwChange = LeaderHwChange.NONE) {
   /**
    * Get the first offset if it exists, else get the last offset of the first batch
    * For magic versions 2 and newer, this method will return first offset. For magic versions

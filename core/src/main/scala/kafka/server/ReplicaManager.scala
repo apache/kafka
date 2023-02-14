@@ -25,7 +25,7 @@ import com.yammer.metrics.core.Meter
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition, PartitionListener}
 import kafka.controller.{KafkaController, StateChangeLogger}
-import kafka.log.{LeaderHwChange, LogAppendInfo, LogManager, LogReadInfo, UnifiedLog}
+import kafka.log.{LogAppendInfo, LogManager, LogReadInfo, UnifiedLog}
 import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.HostedPartition.Online
@@ -62,7 +62,7 @@ import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, RecordValidationException}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogConfig, LogDirFailureChannel, LogOffsetMetadata, RecordValidationException}
 
 import java.nio.file.{Files, Paths}
 import java.util
@@ -639,15 +639,15 @@ class ReplicaManager(val config: KafkaConfig,
             case (topicPartition, result) =>
               val requestKey = TopicPartitionOperationKey(topicPartition)
               result.info.leaderHwChange match {
-                case LeaderHwChange.Increased =>
+                case LeaderHwChange.INCREASED =>
                   // some delayed operations may be unblocked after HW changed
                   delayedProducePurgatory.checkAndComplete(requestKey)
                   delayedFetchPurgatory.checkAndComplete(requestKey)
                   delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-                case LeaderHwChange.Same =>
+                case LeaderHwChange.SAME =>
                   // probably unblock some follower fetch requests since log end offset has been updated
                   delayedFetchPurgatory.checkAndComplete(requestKey)
-                case LeaderHwChange.None =>
+                case LeaderHwChange.NONE =>
                   // nothing
               }
           }
