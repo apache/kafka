@@ -75,9 +75,10 @@ public class Consumer extends Thread {
         try {
             do {
                 doWork();
-            } while (isRunning && messageRemaining > 0);
+            } while (messageRemaining > 0);
             System.out.println(groupId + " finished reading " + numMessageToConsume + " messages");
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            System.out.println("Unexpected termination, exception thrown:" + e);
         } finally {
             shutdown();
         }
@@ -93,6 +94,5 @@ public class Consumer extends Thread {
 
     public void shutdown() {
         latch.countDown();
-        this.isRunning = false;
     }
 }
