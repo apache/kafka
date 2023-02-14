@@ -20,6 +20,12 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -409,6 +415,114 @@ public class RocksDBVersionedStoreTest {
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 8);
     }
 
+    @Test
+    public void shouldRestore() {
+        final List<DataRecord> records = new ArrayList<>();
+        records.add(new DataRecord("k", "vp20", SEGMENT_INTERVAL + 20));
+        records.add(new DataRecord("k", "vp10", SEGMENT_INTERVAL + 10));
+        records.add(new DataRecord("k", "vn10", SEGMENT_INTERVAL - 10));
+        records.add(new DataRecord("k", "vn2", SEGMENT_INTERVAL - 2));
+        records.add(new DataRecord("k", "vn1", SEGMENT_INTERVAL - 1));
+        records.add(new DataRecord("k", "vp1", SEGMENT_INTERVAL + 1));
+
+        store.restoreBatch(getChangelogRecords(records));
+
+        verifyGetValueFromStore("k", "vp20", SEGMENT_INTERVAL + 20);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 30, "vp20", SEGMENT_INTERVAL + 20);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 15, "vp10", SEGMENT_INTERVAL + 10);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 5, "vp1", SEGMENT_INTERVAL + 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL, "vn1", SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 1, "vn1", SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 2, "vn2", SEGMENT_INTERVAL - 2);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn10", SEGMENT_INTERVAL - 10);
+    }
+
+    @Test
+    public void shouldRestoreWithNulls() {
+        final List<DataRecord> records = new ArrayList<>();
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL + 20));
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL - 1));
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL + 1));
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL - 10));
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL + 10));
+        records.add(new DataRecord("k", "vp5", SEGMENT_INTERVAL + 5));
+        records.add(new DataRecord("k", "vn5", SEGMENT_INTERVAL - 5));
+        records.add(new DataRecord("k", "vn6", SEGMENT_INTERVAL - 6));
+
+        store.restoreBatch(getChangelogRecords(records));
+
+        verifyGetNullFromStore("k");
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 15);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "vp5", SEGMENT_INTERVAL + 5);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 2);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 8);
+    }
+
+    @Test
+    public void shouldRestoreWithNullsAndRepeatTimestamps() {
+        final List<DataRecord> records = new ArrayList<>();
+        records.add(new DataRecord("k", "to_be_replaced", SEGMENT_INTERVAL + 20));
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL - 10));
+        records.add(new DataRecord("k", "to_be_replaced", SEGMENT_INTERVAL - 10)); // replaces existing null with non-null, with timestamps spanning segments
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL - 10)); // replaces existing non-null with null
+        records.add(new DataRecord("k", "to_be_replaced", SEGMENT_INTERVAL - 1));
+        records.add(new DataRecord("k", "to_be_replaced", SEGMENT_INTERVAL + 1));
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL - 1)); // replaces existing non-null with null
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL + 1)); // replaces existing non-null with null, with timestamps spanning segments
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL + 10));
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL + 5));
+        records.add(new DataRecord("k", "vp5", SEGMENT_INTERVAL + 5)); // replaces existing null with non-null
+        records.add(new DataRecord("k", "to_be_replaced", SEGMENT_INTERVAL - 5));
+        records.add(new DataRecord("k", "vn5", SEGMENT_INTERVAL - 5)); // replaces existing non-null with non-null
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL + 20)); // replaces existing non-null (latest value) with null
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL + 20)); // replaces existing null with null
+        records.add(new DataRecord("k", "vn6", SEGMENT_INTERVAL - 6));
+
+        store.restoreBatch(getChangelogRecords(records));
+
+        verifyGetNullFromStore("k");
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 15);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "vp5", SEGMENT_INTERVAL + 5);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 2);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 8);
+    }
+
+    @Test
+    public void shouldRestoreMultipleBatches() {
+        final List<DataRecord> records = new ArrayList<>();
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL - 20));
+        records.add(new DataRecord("k", "vn10", SEGMENT_INTERVAL - 10));
+        records.add(new DataRecord("k", null, SEGMENT_INTERVAL - 1));
+
+        final List<DataRecord> moreRecords = new ArrayList<>();
+        moreRecords.add(new DataRecord("k", null, SEGMENT_INTERVAL + 1));
+        moreRecords.add(new DataRecord("k", "vp10", SEGMENT_INTERVAL + 10));
+        moreRecords.add(new DataRecord("k", null, SEGMENT_INTERVAL + 20));
+
+        store.restoreBatch(getChangelogRecords(records));
+        store.restoreBatch(getChangelogRecords(moreRecords));
+
+        verifyGetNullFromStore("k");
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 15, "vp10", SEGMENT_INTERVAL + 10);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 5);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 2);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn10", SEGMENT_INTERVAL - 10);
+        verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 15);
+    }
+
     private void putToStore(final String key, final String value, final long timestamp) {
         store.put(
             new Bytes(STRING_SERIALIZER.serialize(null, key)),
@@ -463,5 +577,41 @@ public class RocksDBVersionedStoreTest {
             : new VersionedRecord<>(
             STRING_DESERIALIZER.deserialize(null, versionedRecord.value()),
             versionedRecord.timestamp());
+    }
+
+    private static List<ConsumerRecord<byte[], byte[]>> getChangelogRecords(final List<DataRecord> data) {
+        final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+
+        for (final DataRecord d : data) {
+            final byte[] rawKey = STRING_SERIALIZER.serialize(null, d.key);
+            final byte[] rawValue = STRING_SERIALIZER.serialize(null, d.value);
+            records.add(new ConsumerRecord<>(
+                "",
+                0,
+                0L,
+                d.timestamp,
+                TimestampType.CREATE_TIME,
+                rawKey.length,
+                rawValue == null ? 0 : rawValue.length,
+                rawKey,
+                rawValue,
+                new RecordHeaders(),
+                Optional.empty()
+            ));
+        }
+
+        return records;
+    }
+
+    private static class DataRecord {
+        final String key;
+        final String value;
+        final long timestamp;
+
+        DataRecord(final String key, final String value, final long timestamp) {
+            this.key = key;
+            this.value = value;
+            this.timestamp = timestamp;
+        }
     }
 }

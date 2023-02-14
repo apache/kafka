@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -24,9 +26,13 @@ import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
@@ -38,6 +44,8 @@ import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStoreSegmentValueFormatter.SegmentValue;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStoreSegmentValueFormatter.SegmentValue.SegmentSearchResult;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,12 +86,14 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private final RocksDBStore latestValueStore;
     private final LogicalKeyValueSegments segmentStores;
-    private final VersionedStoreClient<LogicalKeyValueSegment> versionedStoreClient;
+    private final RocksDBVersionedStoreClient versionedStoreClient;
+    private final RocksDBVersionedStoreRestoreWriteBuffer restoreWriteBuffer;
 
     private ProcessorContext context;
     private StateStoreContext stateStoreContext;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+    private boolean consistencyEnabled = false;
     private Position position;
     private OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
@@ -95,6 +105,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         this.latestValueStore = new RocksDBStore(latestValueStoreName(name), name, metricsRecorder);
         this.segmentStores = new LogicalKeyValueSegments(segmentsStoreName(name), name, historyRetention, segmentInterval, metricsRecorder);
         this.versionedStoreClient = new RocksDBVersionedStoreClient();
+        this.restoreWriteBuffer = new RocksDBVersionedStoreRestoreWriteBuffer(versionedStoreClient);
     }
 
     @Override
@@ -121,11 +132,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     @Override
     public VersionedRecord<byte[]> get(final Bytes key) {
         // latest value (if present) is guaranteed to be in the latest value store
-        final byte[] latestValue = latestValueStore.get(key);
-        if (latestValue != null) {
+        final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
+        if (rawLatestValueAndTimestamp != null) {
             return new VersionedRecord<>(
-                LatestValueFormatter.getValue(latestValue),
-                LatestValueFormatter.getTimestamp(latestValue)
+                LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
+                LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp)
             );
         } else {
             return null;
@@ -256,6 +267,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         );
 
         open = true;
+
+        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+            context.appConfigs(),
+            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+            false
+        );
     }
 
     @Override
@@ -266,7 +283,41 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     // VisibleForTesting
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        throw new UnsupportedOperationException("not yet implemented");
+        // advance stream time to the max timestamp in the batch
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            observedStreamTime = Math.max(observedStreamTime, record.timestamp());
+        }
+
+        final VersionedStoreClient<?> restoreClient = restoreWriteBuffer.getClient();
+
+        // note: there is increased risk for hitting an out-of-memory during this restore loop,
+        // compared to for non-versioned key-value stores, because this versioned store
+        // implementation stores multiple records (for the same key) together in a single RocksDB
+        // "segment" entry -- restoring a single changelog entry could require loading multiple
+        // records into memory. how high this memory amplification will be is very much dependent
+        // on the specific workload and the value of the "segment interval" parameter.
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                record,
+                consistencyEnabled,
+                position
+            );
+
+            // put records to write buffer
+            doPut(
+                restoreClient,
+                Optional.empty(),
+                new Bytes(record.key()),
+                record.value(),
+                record.timestamp()
+            );
+        }
+
+        try {
+            restoreWriteBuffer.flush();
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error restoring batch to store " + name, e);
+        }
     }
 
     /**
@@ -329,7 +380,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     /**
      * Client for writing into (and reading from) this persistent {@link RocksDBVersionedStore}.
      */
-    private class RocksDBVersionedStoreClient implements VersionedStoreClient<LogicalKeyValueSegment> {
+    class RocksDBVersionedStoreClient implements VersionedStoreClient<LogicalKeyValueSegment> {
 
         @Override
         public byte[] getLatestValue(final Bytes key) {
@@ -359,6 +410,31 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         @Override
         public long segmentIdForTimestamp(final long timestamp) {
             return segmentStores.segmentId(timestamp);
+        }
+
+        /**
+         * Adds the provided record into the provided batch, in preparation for writing into the
+         * latest value store.
+         * <p>
+         * Together with {@link #writeLatestValues(WriteBatch)}, this method supports batch writes
+         * into the latest value store.
+         *
+         * @throws RocksDBException if a failure occurs adding the record to the {@link WriteBatch}
+         */
+        public void addToLatestValueBatch(final KeyValue<byte[], byte[]> record, final WriteBatch batch) throws RocksDBException {
+            latestValueStore.addToBatch(record, batch);
+        }
+
+        /**
+         * Writes the provided batch of records into the latest value store.
+         * <p>
+         * Together with {@link #addToLatestValueBatch(KeyValue, WriteBatch)}, this method supports
+         * batch writes into the latest value store.
+         *
+         * @throws RocksDBException if a failure occurs while writing the {@link WriteBatch} to the store
+         */
+        public void writeLatestValues(final WriteBatch batch) throws RocksDBException {
+            latestValueStore.write(batch);
         }
     }
 
