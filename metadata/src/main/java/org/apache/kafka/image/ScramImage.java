@@ -64,7 +64,6 @@ public final class ScramImage {
         Map<String, Boolean> uniqueUsers = new HashMap<String, Boolean>();
 
         if ((users == null) || (users.size() == 0)) {
-            System.out.println("Describe : get all the users");
             // If there are no users listed then get all the users
             for (Map<String, ScramCredentialData> scramCredentialDataSet : mechanisms.values()) {
                 for (String user : scramCredentialDataSet.keySet()) {
@@ -85,13 +84,11 @@ public final class ScramImage {
         DescribeUserScramCredentialsResponseData retval = new DescribeUserScramCredentialsResponseData();
 
         for (Map.Entry<String, Boolean> user : uniqueUsers.entrySet()) {
-            DescribeUserScramCredentialsResult result = 
-              new DescribeUserScramCredentialsResult().setUser(user.getKey());
+            DescribeUserScramCredentialsResult result = new DescribeUserScramCredentialsResult().setUser(user.getKey());
 
-            if (user.getValue() == false) {
-                List<CredentialInfo> credentialInfos = new ArrayList<CredentialInfo>();
-
+            if (!user.getValue()) {
                 boolean datafound = false;
+                List<CredentialInfo> credentialInfos = new ArrayList<CredentialInfo>();
                 for (Map.Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismsEntry : mechanisms.entrySet()) {
                     Map<String, ScramCredentialData> credentialDataSet = mechanismsEntry.getValue();
                     if (credentialDataSet.containsKey(user.getKey())) {
