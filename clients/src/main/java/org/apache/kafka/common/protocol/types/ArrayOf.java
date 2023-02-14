@@ -72,8 +72,6 @@ public class ArrayOf extends DocumentedType {
         else if (size < 0)
             throw new SchemaException("Array size " + size + " cannot be negative");
 
-        if (size > buffer.remaining())
-            throw new SchemaException("Error reading array of size " + size + ", only " + buffer.remaining() + " bytes available");
         Object[] objs = new Object[size];
         for (int i = 0; i < size; i++)
             objs[i] = type.read(buffer);
