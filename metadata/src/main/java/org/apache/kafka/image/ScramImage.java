@@ -20,10 +20,18 @@ package org.apache.kafka.image;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.clients.admin.ScramMechanism;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult;
+import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
@@ -48,6 +56,63 @@ public final class ScramImage {
                 writer.write(0, userEntry.getValue().toRecord(userEntry.getKey(), mechanismEntry.getKey()));
             }
         }
+    }
+
+    public DescribeUserScramCredentialsResponseData describe(DescribeUserScramCredentialsRequestData request) {
+
+        List<UserName> users = request.users();
+        Map<String, Boolean> uniqueUsers = new HashMap<String, Boolean>();
+
+        if ((users == null) || (users.size() == 0)) {
+            System.out.println("Describe : get all the users");
+            // If there are no users listed then get all the users
+            for (Map<String, ScramCredentialData> scramCredentialDataSet : mechanisms.values()) {
+                for (String user : scramCredentialDataSet.keySet()) {
+                    uniqueUsers.put(user, false);
+                }
+            }
+        } else {
+            // Filter out duplicates
+            for (UserName user : users) {
+                if (uniqueUsers.containsKey(user.name())) {
+                    uniqueUsers.put(user.name(), true);
+                } else {
+                    uniqueUsers.put(user.name(), false);
+                }
+            }
+        }
+
+        DescribeUserScramCredentialsResponseData retval = new DescribeUserScramCredentialsResponseData();
+
+        for (Map.Entry<String, Boolean> user : uniqueUsers.entrySet()) {
+            DescribeUserScramCredentialsResult result = 
+              new DescribeUserScramCredentialsResult().setUser(user.getKey());
+
+            if (user.getValue() == false) {
+                List<CredentialInfo> credentialInfos = new ArrayList<CredentialInfo>();
+
+                boolean datafound = false;
+                for (Map.Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismsEntry : mechanisms.entrySet()) {
+                    Map<String, ScramCredentialData> credentialDataSet = mechanismsEntry.getValue();
+                    if (credentialDataSet.containsKey(user.getKey())) {
+                        credentialInfos.add(new CredentialInfo().setMechanism(mechanismsEntry.getKey().type())
+                                                                .setIterations(credentialDataSet.get(user.getKey()).iterations()));
+                        datafound = true;
+                    }
+                }
+                if (datafound) {
+                    result.setCredentialInfos(credentialInfos);
+                } else {
+                    result.setErrorCode(Errors.RESOURCE_NOT_FOUND.code())
+                          .setErrorMessage("attemptToDescribeUserThatDoesNotExist: " + user.getKey());
+                }
+            } else {
+                result.setErrorCode(Errors.DUPLICATE_RESOURCE.code())
+                      .setErrorMessage("Cannot describe SCRAM credentials for the same user twice in a single request: " + user.getKey());
+            }
+            retval.results().add(result);
+        }
+        return retval;
     }
 
     public Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms() {

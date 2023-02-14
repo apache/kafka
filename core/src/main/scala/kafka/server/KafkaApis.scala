@@ -3305,17 +3305,23 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.notYetSupported(request))
     val describeUserScramCredentialsRequest = request.body[DescribeUserScramCredentialsRequest]
 
-    if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
-      val result = zkSupport.adminManager.describeUserScramCredentials(
-        Option(describeUserScramCredentialsRequest.data.users).map(_.asScala.map(_.name).toList))
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
-    } else {
+    if (!authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         describeUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    } else {
+      metadataSupport match {
+        case ZkSupport(adminManager, controller, zkClient, forwardingManager, metadataCache, _) =>
+          val result = adminManager.describeUserScramCredentials(
+            Option(describeUserScramCredentialsRequest.data.users).map(_.asScala.map(_.name).toList))
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+            new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
+        case RaftSupport(_, metadataCache) =>
+          val result = metadataCache.describeScramCredentials(describeUserScramCredentialsRequest.data())
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => 
+            new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
+      }
     }
   }
 
@@ -3626,13 +3632,5 @@ object KafkaApis {
 
   private def unsupported(text: String): Exception = {
     new UnsupportedVersionException(s"Unsupported when using a Raft-based metadata quorum: $text")
-  }
-
-  private def notYetSupported(request: RequestChannel.Request): Exception = {
-    notYetSupported(request.header.apiKey().toString)
-  }
-
-  private def notYetSupported(text: String): Exception = {
-    new UnsupportedVersionException(s"Not yet supported when using a Raft-based metadata quorum: $text")
   }
 }

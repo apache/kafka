@@ -73,7 +73,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       new AlterUserScramCredentialsRequestData()
         .setDeletions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialDeletion])
         .setUpsertions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion])).build()
-    val response = sendAlterUserScramCredentialsRequest(request, adminSocketServer)
+    val response = sendAlterUserScramCredentialsRequest(request)
 
     val results = response.data.results
     assertEquals(0, results.size)
@@ -97,7 +97,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
           .setUpsertions(util.Arrays.asList(upsertion1, upsertion2))).build(),
     )
     init_requests.foreach(request => {
-      val response = sendAlterUserScramCredentialsRequest(request, adminSocketServer)
+      val response = sendAlterUserScramCredentialsRequest(request)
       val results = response.data.results
       checkNoErrorsAlteringCredentials(results)
     })
@@ -113,7 +113,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
           .setUpsertions(util.Arrays.asList(upsertion1, upsertion2))).build(),
     )
     requests.foreach(request => {
-      val response = sendAlterUserScramCredentialsRequest(request, adminSocketServer)
+      val response = sendAlterUserScramCredentialsRequest(request)
       val results = response.data.results
       assertEquals(2, results.size)
       checkAllErrorsAlteringCredentials(results, Errors.DUPLICATE_RESOURCE, "when altering the same credential twice in a single request")
@@ -141,7 +141,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
           .setUpsertions(util.Arrays.asList(upsertionEmpty))).build(),
     )
     requests.foreach(request => {
-      val response = sendAlterUserScramCredentialsRequest(request, adminSocketServer)
+      val response = sendAlterUserScramCredentialsRequest(request)
       val results = response.data.results
       assertEquals(1, results.size)
       checkAllErrorsAlteringCredentials(results, Errors.UNACCEPTABLE_CREDENTIAL, "when altering an empty user")
@@ -170,7 +170,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
         new AlterUserScramCredentialsRequestData()
           .setDeletions(util.Arrays.asList(deletionUnknown1, deletionValid1, deletionUnknown2))
           .setUpsertions(util.Arrays.asList(upsertionUnknown3, upsertionValid3, upsertionUnknown4, upsertionUnknown5))).build()
-    val response = sendAlterUserScramCredentialsRequest(request, adminSocketServer)
+    val response = sendAlterUserScramCredentialsRequest(request)
     val results = response.data.results
     assertEquals(5, results.size)
     checkAllErrorsAlteringCredentials(results, Errors.UNSUPPORTED_SASL_MECHANISM, "when altering the credentials with unknown SCRAM mechanisms")
@@ -187,7 +187,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       new AlterUserScramCredentialsRequestData()
         .setDeletions(util.Collections.emptyList())
         .setUpsertions(util.Arrays.asList(upsertionTooFewIterations))).build()
-    val response = sendAlterUserScramCredentialsRequest(request, adminSocketServer)
+    val response = sendAlterUserScramCredentialsRequest(request)
     val results = response.data.results
     assertEquals(1, results.size)
     checkAllErrorsAlteringCredentials(results, Errors.UNACCEPTABLE_CREDENTIAL, "when altering the credentials with too few iterations")
@@ -204,7 +204,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       new AlterUserScramCredentialsRequestData()
         .setDeletions(util.Collections.emptyList())
         .setUpsertions(util.Arrays.asList(upsertionTooFewIterations))).build()
-    val response = sendAlterUserScramCredentialsRequest(request, adminSocketServer)
+    val response = sendAlterUserScramCredentialsRequest(request)
     val results = response.data.results
     assertEquals(1, results.size)
     checkAllErrorsAlteringCredentials(results, Errors.UNACCEPTABLE_CREDENTIAL, "when altering the credentials with too many iterations")
@@ -218,7 +218,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       new AlterUserScramCredentialsRequestData()
         .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
         .setUpsertions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion])).build()
-    val response = sendAlterUserScramCredentialsRequest(request, adminSocketServer)
+    val response = sendAlterUserScramCredentialsRequest(request)
 
     val results = response.data.results
     assertEquals(1, results.size)
@@ -238,10 +238,11 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     checkAllErrorsAlteringCredentials(results, Errors.NOT_CONTROLLER, "when routed incorrectly to a non-Controller broker")
   }
 
-  @Test
-  def testAlterAndDescribe(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testAlterAndDescribe(quorum: String): Unit = {
     // create a bunch of credentials
-    val request1 = new AlterUserScramCredentialsRequest.Builder(
+    val request1_0 = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setUpsertions(util.Arrays.asList(
           new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion()
@@ -249,6 +250,16 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
             .setIterations(4096)
             .setSalt(saltBytes)
             .setSaltedPassword(saltedPasswordBytes),
+        ))).build()
+    val results1_0 = sendAlterUserScramCredentialsRequest(request1_0).data.results
+    assertEquals(1, results1_0.size)
+    checkNoErrorsAlteringCredentials(results1_0)
+    checkUserAppearsInAlterResults(results1_0, user1)
+
+    // When creating credentials, do not update the same user more than once per request
+    val request1_1 = new AlterUserScramCredentialsRequest.Builder(
+      new AlterUserScramCredentialsRequestData()
+        .setUpsertions(util.Arrays.asList(
           new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion()
             .setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_512.`type`)
             .setIterations(8192)
@@ -260,11 +271,13 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
             .setSalt(saltBytes)
             .setSaltedPassword(saltedPasswordBytes),
         ))).build()
-    val results1 = sendAlterUserScramCredentialsRequest(request1).data.results
-    assertEquals(2, results1.size)
-    checkNoErrorsAlteringCredentials(results1)
-    checkUserAppearsInAlterResults(results1, user1)
-    checkUserAppearsInAlterResults(results1, user2)
+    val results1_1 = sendAlterUserScramCredentialsRequest(request1_1).data.results
+    assertEquals(2, results1_1.size)
+    checkNoErrorsAlteringCredentials(results1_1)
+    checkUserAppearsInAlterResults(results1_1, user1)
+    checkUserAppearsInAlterResults(results1_1, user2)
+
+    Thread.sleep(10000)
 
     // now describe them all
     val results2 = describeAllWithNoTopLevelErrorConfirmed().data.results
@@ -323,6 +336,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     checkUserAppearsInAlterResults(results4, user1)
     checkUserAppearsInAlterResults(results4, user2)
 
+    Thread.sleep(10000)
+
     // now describe them all, which should just yield 1 credential
     val results5 = describeAllWithNoTopLevelErrorConfirmed().data.results
     assertEquals(1, results5.size)
@@ -340,16 +355,18 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     checkNoErrorsAlteringCredentials(results6)
     checkUserAppearsInAlterResults(results6, user1)
 
+    Thread.sleep(10000)
+
     // now describe them all, which should yield 0 credentials
     val results7 = describeAllWithNoTopLevelErrorConfirmed().data.results
     assertEquals(0, results7.size)
   }
 
-  private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = controllerSocketServer): AlterUserScramCredentialsResponse = {
+  private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = adminSocketServer): AlterUserScramCredentialsResponse = {
     connectAndReceive[AlterUserScramCredentialsResponse](request, destination = socketServer)
   }
 
-  private def sendDescribeUserScramCredentialsRequest(request: DescribeUserScramCredentialsRequest, socketServer: SocketServer = controllerSocketServer): DescribeUserScramCredentialsResponse = {
+  private def sendDescribeUserScramCredentialsRequest(request: DescribeUserScramCredentialsRequest, socketServer: SocketServer = adminSocketServer): DescribeUserScramCredentialsResponse = {
     connectAndReceive[DescribeUserScramCredentialsResponse](request, destination = socketServer)
   }
 
