@@ -354,6 +354,7 @@ class LogManager(logDirs: Seq[File],
       error(s"Error while loading log dir $logDirAbsolutePath", e)
     }
 
+    val uncleanLogDirs = mutable.Buffer.empty[String]
     for (dir <- liveLogDirs) {
       val logDirAbsolutePath = dir.getAbsolutePath
       var hadCleanShutdown: Boolean = false
@@ -364,14 +365,10 @@ class LogManager(logDirs: Seq[File],
 
         val cleanShutdownFile = new File(dir, LogLoader.CleanShutdownFile)
         if (cleanShutdownFile.exists) {
-          info(s"Skipping recovery for all logs in $logDirAbsolutePath since clean shutdown file was found")
           // Cache the clean shutdown status and use that for rest of log loading workflow. Delete the CleanShutdownFile
           // so that if broker crashes while loading the log, it is considered hard shutdown during the next boot up. KAFKA-10471
           Files.deleteIfExists(cleanShutdownFile.toPath)
           hadCleanShutdown = true
-        } else {
-          // log recovery itself is being performed by `Log` class during initialization
-          info(s"Attempting recovery for all logs in $logDirAbsolutePath since no clean shutdown file was found")
         }
 
         var recoveryPoints = Map[TopicPartition, Long]()
@@ -400,6 +397,17 @@ class LogManager(logDirs: Seq[File],
             UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
         numTotalLogs += logsToLoad.length
         numRemainingLogs.put(dir.getAbsolutePath, logsToLoad.length)
+
+        if (logsToLoad.isEmpty) {
+          info(s"No logs found to be loaded in $logDirAbsolutePath")
+        } else if (hadCleanShutdown) {
+          info(s"Skipping recovery of ${logsToLoad.length} logs from $logDirAbsolutePath since " +
+            "clean shutdown file was found")
+        } else {
+          info(s"Recovering ${logsToLoad.length} logs from $logDirAbsolutePath since no " +
+            "clean shutdown file was found")
+          uncleanLogDirs.append(logDirAbsolutePath)
+        }
 
         val jobsForDir = logsToLoad.map { logDir =>
           val runnable: Runnable = () => {
@@ -454,7 +462,9 @@ class LogManager(logDirs: Seq[File],
       threadPools.foreach(_.shutdown())
     }
 
-    info(s"Loaded $numTotalLogs logs in ${time.hiResClockMs() - startMs}ms.")
+    val elapsedMs = time.hiResClockMs() - startMs
+    val printedUncleanLogDirs = if (uncleanLogDirs.isEmpty) "" else s" (unclean log dirs = $uncleanLogDirs)"
+    info(s"Loaded $numTotalLogs logs in ${elapsedMs}ms$printedUncleanLogDirs")
   }
 
   private[log] def addLogRecoveryMetrics(numRemainingLogs: ConcurrentMap[String, Int],
