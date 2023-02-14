@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.kafka.common.protocol.types.Type.DocumentedType;
 
 import java.nio.ByteBuffer;
@@ -72,10 +74,10 @@ public class ArrayOf extends DocumentedType {
         else if (size < 0)
             throw new SchemaException("Array size " + size + " cannot be negative");
 
-        Object[] objs = new Object[size];
+        List<Object> objs = new ArrayList<>();
         for (int i = 0; i < size; i++)
-            objs[i] = type.read(buffer);
-        return objs;
+            objs.add(type.read(buffer));
+        return objs.toArray();
     }
 
     @Override

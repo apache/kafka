@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import java.nio.BufferUnderflowException;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -197,7 +198,7 @@ public class ProtocolSerializationTest {
         try {
             type.read(invalidBuffer);
             fail("Array size not validated");
-        } catch (SchemaException e) {
+        } catch (BufferUnderflowException e) {
             // Expected exception
         }
     }
@@ -215,7 +216,7 @@ public class ProtocolSerializationTest {
         try {
             type.read(invalidBuffer);
             fail("Array size not validated");
-        } catch (SchemaException e) {
+        } catch (BufferUnderflowException e) {
             // Expected exception
         }
     }
