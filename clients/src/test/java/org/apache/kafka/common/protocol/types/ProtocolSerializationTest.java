@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import java.nio.BufferUnderflowException;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -195,12 +194,21 @@ public class ProtocolSerializationTest {
         for (int i = 0; i < size; i++)
             invalidBuffer.put((byte) i);
         invalidBuffer.rewind();
-        try {
-            type.read(invalidBuffer);
-            fail("Array size not validated");
-        } catch (BufferUnderflowException e) {
-            // Expected exception
-        }
+        SchemaException e = assertThrows(SchemaException.class, () -> type.read(invalidBuffer));
+        assertEquals("Requested array size exceeds VM limit, size 2147483647", e.getMessage());
+    }
+
+    @Test
+    public void testReadArrayWithIncorrectSize() {
+        Type type = new ArrayOf(Type.INT32);
+        int size = 10;
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + size * Integer.BYTES);
+        invalidBuffer.putInt(size + 1);
+        for (int i = 0; i < size; i++)
+            invalidBuffer.putInt(i);
+        invalidBuffer.rewind();
+        SchemaException e = assertThrows(SchemaException.class, () -> type.read(invalidBuffer));
+        assertEquals("Error reading array element of type INT32, remaining bytes 0 : java.nio.BufferUnderflowException", e.getMessage());
     }
 
     @Test
@@ -213,12 +221,22 @@ public class ProtocolSerializationTest {
         for (int i = 0; i < size; i++)
             invalidBuffer.put((byte) i);
         invalidBuffer.rewind();
-        try {
-            type.read(invalidBuffer);
-            fail("Array size not validated");
-        } catch (BufferUnderflowException e) {
-            // Expected exception
-        }
+        SchemaException e = assertThrows(SchemaException.class, () -> type.read(invalidBuffer));
+        assertEquals("Requested array size exceeds VM limit, size 2147483646", e.getMessage());
+    }
+
+    @Test
+    public void testReadCompactArrayWithIncorrectSize() {
+        Type type = new CompactArrayOf(Type.INT32);
+        int size = 10;
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(
+            ByteUtils.sizeOfUnsignedVarint(size + 2) + size * Integer.BYTES);
+        ByteUtils.writeUnsignedVarint(size + 2, invalidBuffer);
+        for (int i = 0; i < size; i++)
+            invalidBuffer.putInt(i);
+        invalidBuffer.rewind();
+        SchemaException e = assertThrows(SchemaException.class, () -> type.read(invalidBuffer));
+        assertEquals("Error reading array element of type INT32, remaining bytes 0 : java.nio.BufferUnderflowException", e.getMessage());
     }
 
     @Test
