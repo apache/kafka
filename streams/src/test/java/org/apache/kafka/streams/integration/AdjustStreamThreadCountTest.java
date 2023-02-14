@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.test.TestUtils;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -255,6 +256,23 @@ public class AdjustStreamThreadCountTest {
             }
             latch.countDown();
         });
+    }
+
+    @Test
+    public void testRebalanceHappensBeforeStreamThreadGetDown() throws Exception {
+        final Properties prop = new Properties();
+        prop.putAll(properties);
+        // make rebalance happen quickly
+        prop.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), prop)) {
+            addStreamStateChangeListener(kafkaStreams);
+            startStreamsAndWaitForRunning(kafkaStreams);
+            stateTransitionHistory.clear();
+
+            assertThat(kafkaStreams.removeStreamThread().isPresent(), Matchers.is(true));
+            waitForTransitionFromRebalancingToRunning();
+            stateTransitionHistory.clear();
+        }
     }
 
     @Test
