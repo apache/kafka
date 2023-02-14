@@ -42,8 +42,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.Collections;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 import java.time.Duration;
@@ -65,7 +63,7 @@ public class MirrorCheckpointTask extends SourceTask {
     private Set<String> consumerGroups;
     private ReplicationPolicy replicationPolicy;
     private OffsetSyncStore offsetSyncStore;
-    private CountDownLatch stopping = new CountDownLatch(1);
+    private boolean stopping;
     private MirrorCheckpointMetrics metrics;
     private Scheduler scheduler;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
@@ -88,6 +86,7 @@ public class MirrorCheckpointTask extends SourceTask {
     @Override
     public void start(Map<String, String> props) {
         MirrorCheckpointTaskConfig config = new MirrorCheckpointTaskConfig(props);
+        stopping = false;
         sourceClusterAlias = config.sourceClusterAlias();
         targetClusterAlias = config.targetClusterAlias();
         consumerGroups = config.taskConsumerGroups();
@@ -120,7 +119,7 @@ public class MirrorCheckpointTask extends SourceTask {
     @Override
     public void stop() {
         long start = System.currentTimeMillis();
-        stopping.countDown();
+        stopping = true;
         Utils.closeQuietly(topicFilter, "topic filter");
         Utils.closeQuietly(offsetSyncStore, "offset sync store");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
@@ -138,7 +137,11 @@ public class MirrorCheckpointTask extends SourceTask {
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
         try {
-            if (stopping.await(pollTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
+            long deadline = System.currentTimeMillis() + interval.toMillis();
+            while (!stopping && System.currentTimeMillis() < deadline) {
+                Thread.sleep(pollTimeout.toMillis());
+            }
+            if (stopping) {
                 // we are stopping, return early.
                 return null;
             }
@@ -184,7 +187,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     private Map<TopicPartition, OffsetAndMetadata> listConsumerGroupOffsets(String group)
             throws InterruptedException, ExecutionException {
-        if (stopping.getCount() == 0) {
+        if (stopping) {
             // short circuit if stopping
             return Collections.emptyMap();
         }

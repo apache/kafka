@@ -265,8 +265,7 @@ public class KafkaBasedLog<K, V> {
         }
         if (partitions.isEmpty()) {
             throw new ConnectException("Some partitions for " + topic + " exist, but no partitions matched the " +
-                    "required filter. This could indicate a connectivity issue, unavailable topic partitions, or if" +
-                    " this is your first use of the topic it may have taken too long to create.");
+                    "required filter.");
         }
         partitionCount = partitions.size();
         consumer.assign(partitions);
@@ -401,6 +400,13 @@ public class KafkaBasedLog<K, V> {
         return new KafkaConsumer<>(consumerConfigs);
     }
 
+    /**
+     * Test whether a topic partition should be read by this log.
+     * <p>Overridden by subclasses when only a subset of the assigned partitions should be read into memory.
+     * By default, this will read all partitions.
+     * @param topicPartition A topic partition which could be read by this log.
+     * @return true if the partition should be read by this log, false if its contents should be ignored.
+     */
     protected boolean readPartition(TopicPartition topicPartition) {
         return true;
     }

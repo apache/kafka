@@ -44,35 +44,11 @@ class OffsetSyncStore implements AutoCloseable {
         TopicAdmin admin = null;
         KafkaBasedLog<byte[], byte[]> store;
         try {
-            Consumer<byte[], byte[]> finalConsumer = consumer = MirrorUtils.newConsumer(config.offsetSyncsTopicConsumerConfig());
-            TopicAdmin finalAdmin = admin = new TopicAdmin(
+            consumer = MirrorUtils.newConsumer(config.offsetSyncsTopicConsumerConfig());
+            admin = new TopicAdmin(
                     config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
                     config.forwardingAdmin(config.offsetSyncsTopicAdminConfig()));
-            store = new KafkaBasedLog<byte[], byte[]>(
-                    config.offsetSyncsTopic(),
-                    Collections.emptyMap(),
-                    Collections.emptyMap(),
-                    () -> finalAdmin,
-                    (error, record) -> this.handleRecord(record),
-                    Time.SYSTEM,
-                    ignored -> {
-                    }) {
-
-                @Override
-                protected Producer<byte[], byte[]> createProducer() {
-                    return null;
-                }
-
-                @Override
-                protected Consumer<byte[], byte[]> createConsumer() {
-                    return finalConsumer;
-                }
-
-                @Override
-                protected boolean readPartition(TopicPartition topicPartition) {
-                    return topicPartition.partition() == 0;
-                }
-            };
+            store = createBackingStore(config, consumer, admin);
         } catch (Throwable t) {
             Utils.closeQuietly(consumer, "consumer for offset syncs");
             Utils.closeQuietly(admin, "admin client for offset syncs");
@@ -82,11 +58,42 @@ class OffsetSyncStore implements AutoCloseable {
         this.backingStore = store;
     }
 
+    private KafkaBasedLog<byte[], byte[]> createBackingStore(MirrorCheckpointConfig config, Consumer<byte[], byte[]> consumer, TopicAdmin admin) {
+        return new KafkaBasedLog<byte[], byte[]>(
+                config.offsetSyncsTopic(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                () -> admin,
+                (error, record) -> this.handleRecord(record),
+                Time.SYSTEM,
+                ignored -> {
+                }
+        ) {
+            @Override
+            protected Producer<byte[], byte[]> createProducer() {
+                return null;
+            }
+
+            @Override
+            protected Consumer<byte[], byte[]> createConsumer() {
+                return consumer;
+            }
+
+            @Override
+            protected boolean readPartition(TopicPartition topicPartition) {
+                return topicPartition.partition() == 0;
+            }
+        };
+    }
+
     OffsetSyncStore() {
         this.admin = null;
         this.backingStore = null;
     }
 
+    /**
+     * Start the OffsetSyncStore, blocking until all previous Offset Syncs have been read from backing storage.
+     */
     public void start() {
         backingStore.start();
         readToEnd = true;
@@ -123,6 +130,7 @@ class OffsetSyncStore implements AutoCloseable {
         }
     }
 
+    @Override
     public void close() {
         Utils.closeQuietly(backingStore != null ? backingStore::stop : null, "backing store for offset syncs");
         Utils.closeQuietly(admin, "admin client for offset syncs");
