@@ -29,9 +29,10 @@ import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, 
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ReplicaNotAvailableException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaException, KafkaFuture, TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.tools.reassign.{ActiveMoveState, CancelledMoveState, CompletedMoveState, LogDirMoveState, MissingLogDirMoveState, MissingReplicaMoveState, PartitionMove, PartitionReassignmentState, TerseReassignmentFailureException}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}
@@ -91,104 +92,6 @@ object ReassignPartitionsCommand extends Logging {
    * A map from topic names to partition movements.
    */
   type MoveMap = mutable.Map[String, mutable.Map[Int, PartitionMove]]
-
-  /**
-   * A partition movement.  The source and destination brokers may overlap.
-   *
-   * @param sources         The source brokers.
-   * @param destinations    The destination brokers.
-   */
-  sealed case class PartitionMove(sources: mutable.Set[Int],
-                                  destinations: mutable.Set[Int]) { }
-
-  /**
-   * The state of a partition reassignment.  The current replicas and target replicas
-   * may overlap.
-   *
-   * @param currentReplicas The current replicas.
-   * @param targetReplicas  The target replicas.
-   * @param done            True if the reassignment is done.
-   */
-  sealed case class PartitionReassignmentState(currentReplicas: Seq[Int],
-                                               targetReplicas: Seq[Int],
-                                               done: Boolean) {}
-
-  /**
-   * The state of a replica log directory movement.
-   */
-  sealed trait LogDirMoveState {
-    /**
-     * True if the move is done without errors.
-     */
-    def done: Boolean
-  }
-
-  /**
-   * A replica log directory move state where the source log directory is missing.
-   *
-   * @param targetLogDir        The log directory that we wanted the replica to move to.
-   */
-  sealed case class MissingReplicaMoveState(targetLogDir: String)
-      extends LogDirMoveState {
-    override def done = false
-  }
-
-  /**
-   * A replica log directory move state where the source replica is missing.
-   *
-   * @param targetLogDir        The log directory that we wanted the replica to move to.
-   */
-  sealed case class MissingLogDirMoveState(targetLogDir: String)
-      extends LogDirMoveState {
-    override def done = false
-  }
-
-  /**
-   * A replica log directory move state where the move is in progress.
-   *
-   * @param currentLogDir       The current log directory.
-   * @param futureLogDir        The log directory that the replica is moving to.
-   * @param targetLogDir        The log directory that we wanted the replica to move to.
-   */
-  sealed case class ActiveMoveState(currentLogDir: String,
-                                    targetLogDir: String,
-                                    futureLogDir: String)
-      extends LogDirMoveState {
-    override def done = false
-  }
-
-  /**
-   * A replica log directory move state where there is no move in progress, but we did not
-   * reach the target log directory.
-   *
-   * @param currentLogDir       The current log directory.
-   * @param targetLogDir        The log directory that we wanted the replica to move to.
-   */
-  sealed case class CancelledMoveState(currentLogDir: String,
-                                       targetLogDir: String)
-      extends LogDirMoveState {
-    override def done = true
-  }
-
-  /**
-   * The completed replica log directory move state.
-   *
-   * @param targetLogDir        The log directory that we wanted the replica to move to.
-   */
-  sealed case class CompletedMoveState(targetLogDir: String)
-      extends LogDirMoveState {
-    override def done = true
-  }
-
-  /**
-   * An exception thrown to indicate that the command has failed, but we don't want to
-   * print a stack trace.
-   *
-   * @param message     The message to print out before exiting.  A stack trace will not
-   *                    be printed.
-   */
-  class TerseReassignmentFailureException(message: String) extends KafkaException(message) {
-  }
 
   def main(args: Array[String]): Unit = {
     val opts = validateAndParseArgs(args)
@@ -329,14 +232,14 @@ object ReassignPartitionsCommand extends Logging {
     bld.append("Status of partition reassignment:")
     states.keySet.toBuffer.sortWith(compareTopicPartitions).foreach { topicPartition =>
       val state = states(topicPartition)
-      if (state.done) {
-        if (state.currentReplicas.equals(state.targetReplicas)) {
+      if (state.done()) {
+        if (state.currentReplicas().equals(state.targetReplicas)) {
           bld.append("Reassignment of partition %s is completed.".
             format(topicPartition.toString))
         } else {
           bld.append(s"There is no active reassignment of partition ${topicPartition}, " +
-            s"but replica set is ${state.currentReplicas.mkString(",")} rather than " +
-            s"${state.targetReplicas.mkString(",")}.")
+            s"but replica set is ${state.currentReplicas()} rather than " +
+            s"${state.targetReplicas}.")
         }
       } else {
         bld.append("Reassignment of partition %s is still in progress.".format(topicPartition))
@@ -364,10 +267,9 @@ object ReassignPartitionsCommand extends Logging {
     }
     val foundResults = foundReassignments.map {
       case (part, targetReplicas) => (part,
-        PartitionReassignmentState(
-          currentReassignments(part).replicas.
-            asScala.map(i => i.asInstanceOf[Int]),
-          targetReplicas,
+        new PartitionReassignmentState(
+          currentReassignments(part).replicas,
+          targetReplicas.map(i => i.asInstanceOf[Integer]).asJava,
           false))
     }
     val topicNamesToLookUp = new mutable.HashSet[String]()
@@ -381,9 +283,9 @@ object ReassignPartitionsCommand extends Logging {
       case (part, targetReplicas) =>
         currentReassignments.get(part) match {
           case Some(reassignment) => (part,
-            PartitionReassignmentState(
-              reassignment.replicas.asScala.map(_.asInstanceOf[Int]),
-              targetReplicas,
+            new PartitionReassignmentState(
+              reassignment.replicas,
+              targetReplicas.map(i => i.asInstanceOf[Integer]).asJava,
               false))
           case None =>
             (part, topicDescriptionFutureToState(part.partition,
@@ -402,13 +304,13 @@ object ReassignPartitionsCommand extends Logging {
       if (topicDescription.partitions().size() < partition) {
         throw new ExecutionException("Too few partitions found", new UnknownTopicOrPartitionException())
       }
-      PartitionReassignmentState(
-        topicDescription.partitions.get(partition).replicas.asScala.map(_.id),
-        targetReplicas,
+      new PartitionReassignmentState(
+        topicDescription.partitions.get(partition).replicas.asScala.map(_.id.asInstanceOf[Integer]).asJava,
+        targetReplicas.map(i => i.asInstanceOf[Integer]).asJava,
         true)
     } catch {
       case t: ExecutionException if t.getCause.isInstanceOf[UnknownTopicOrPartitionException] =>
-        PartitionReassignmentState(Seq(), targetReplicas, true)
+        new PartitionReassignmentState(java.util.Collections.emptyList(), targetReplicas.map(i => i.asInstanceOf[Integer]).asJava, true)
     }
   }
 
@@ -451,17 +353,17 @@ object ReassignPartitionsCommand extends Logging {
       targetMoves.keySet.asJava).all().get().asScala
     targetMoves.map { case (replica, targetLogDir) =>
       val moveState = replicaLogDirInfos.get(replica) match {
-        case None => MissingReplicaMoveState(targetLogDir)
+        case None => new MissingReplicaMoveState(targetLogDir)
         case Some(info) => if (info.getCurrentReplicaLogDir == null) {
-            MissingLogDirMoveState(targetLogDir)
+            new MissingLogDirMoveState(targetLogDir)
           } else if (info.getFutureReplicaLogDir == null) {
             if (info.getCurrentReplicaLogDir.equals(targetLogDir)) {
-              CompletedMoveState(targetLogDir)
+              new CompletedMoveState(targetLogDir)
             } else {
-              CancelledMoveState(info.getCurrentReplicaLogDir, targetLogDir)
+              new CancelledMoveState(info.getCurrentReplicaLogDir, targetLogDir)
             }
           } else {
-            ActiveMoveState(info.getCurrentReplicaLogDir(),
+            new ActiveMoveState(info.getCurrentReplicaLogDir(),
               targetLogDir,
               info.getFutureReplicaLogDir)
           }
@@ -483,27 +385,29 @@ object ReassignPartitionsCommand extends Logging {
     states.keySet.toBuffer.sortWith(compareTopicPartitionReplicas).foreach { replica =>
       val state = states(replica)
       state match {
-        case MissingLogDirMoveState(_) =>
+        case _: MissingLogDirMoveState =>
           bld.append(s"Partition ${replica.topic}-${replica.partition} is not found " +
             s"in any live log dir on broker ${replica.brokerId}. There is likely an " +
             s"offline log directory on the broker.")
-        case MissingReplicaMoveState(_) =>
+        case _: MissingReplicaMoveState =>
           bld.append(s"Partition ${replica.topic}-${replica.partition} cannot be found " +
             s"in any live log directory on broker ${replica.brokerId}.")
-        case ActiveMoveState(_, targetLogDir, futureLogDir) =>
-          if (targetLogDir.equals(futureLogDir)) {
+        case s: ActiveMoveState =>
+          if (s.targetLogDir.equals(s.futureLogDir)) {
             bld.append(s"Reassignment of replica $replica is still in progress.")
           } else {
             bld.append(s"Partition ${replica.topic}-${replica.partition} on broker " +
-              s"${replica.brokerId} is being moved to log dir $futureLogDir " +
-              s"instead of $targetLogDir.")
+              s"${replica.brokerId} is being moved to log dir ${s.futureLogDir} " +
+              s"instead of ${s.targetLogDir}.")
           }
-        case CancelledMoveState(currentLogDir, targetLogDir) =>
+        case s: CancelledMoveState =>
           bld.append(s"Partition ${replica.topic}-${replica.partition} on broker " +
-            s"${replica.brokerId} is not being moved from log dir $currentLogDir to " +
-            s"$targetLogDir.")
-        case CompletedMoveState(_) =>
+            s"${replica.brokerId} is not being moved from log dir ${s.currentLogDir} to " +
+            s"${s.targetLogDir}.")
+        case _: CompletedMoveState =>
           bld.append(s"Reassignment of replica $replica completed successfully.")
+        case _ =>
+          throw new IllegalStateException(s"Unknown state $state")
       }
     }
     bld.mkString(System.lineSeparator())
@@ -962,7 +866,7 @@ object ReassignPartitionsCommand extends Logging {
       val destinations = mutable.Set[Int]() ++ addingReplicas
 
       val partMoves = moveMap.getOrElseUpdate(part.topic, new mutable.HashMap[Int, PartitionMove])
-      partMoves.put(part.partition, PartitionMove(sources, destinations))
+      partMoves.put(part.partition, new PartitionMove(sources.map(i => i.asInstanceOf[Integer]).asJava, destinations.map(i => i.asInstanceOf[Integer]).asJava))
     }
     moveMap
   }
@@ -989,14 +893,14 @@ object ReassignPartitionsCommand extends Logging {
       // If there is a reassignment in progress, use the sources from moveMap, otherwise
       // use the sources from currentParts
       val sources = mutable.Set[Int]() ++ (partMoves.get(part.partition) match {
-        case Some(move) => move.sources.toSeq
+        case Some(move) => move.sources.asScala.toSeq
         case None => currentParts.getOrElse(part,
           throw new RuntimeException(s"Trying to reassign a topic partition $part with 0 replicas"))
       })
       val destinations = mutable.Set[Int]() ++ replicas.diff(sources.toSeq)
 
       partMoves.put(part.partition,
-        PartitionMove(sources, destinations))
+        new PartitionMove(sources.map(i => i.asInstanceOf[Integer]).asJava, destinations.map(i => i.asInstanceOf[Integer]).asJava))
     }
     moveMap
   }
@@ -1012,7 +916,7 @@ object ReassignPartitionsCommand extends Logging {
       case (topicName, partMoveMap) => {
         val components = new mutable.TreeSet[String]
         partMoveMap.forKeyValue { (partId, move) =>
-          move.sources.foreach(source => components.add("%d:%d".format(partId, source)))
+          move.sources.forEach(source => components.add("%d:%d".format(partId, source)))
         }
         (topicName, components.mkString(","))
       }
@@ -1030,7 +934,7 @@ object ReassignPartitionsCommand extends Logging {
       case (topicName, partMoveMap) => {
         val components = new mutable.TreeSet[String]
         partMoveMap.forKeyValue { (partId, move) =>
-          move.destinations.foreach(destination =>
+          move.destinations.forEach(destination =>
             if (!move.sources.contains(destination)) {
               components.add("%d:%d".format(partId, destination))
             })
@@ -1051,8 +955,8 @@ object ReassignPartitionsCommand extends Logging {
     moveMap.values.foreach {
       _.values.foreach {
         partMove =>
-          partMove.sources.foreach(reassigningBrokers.add)
-          partMove.destinations.foreach(reassigningBrokers.add)
+          partMove.sources.forEach(i => reassigningBrokers.add(i))
+          partMove.destinations.forEach(i => reassigningBrokers.add(i))
       }
     }
     reassigningBrokers.toSet
