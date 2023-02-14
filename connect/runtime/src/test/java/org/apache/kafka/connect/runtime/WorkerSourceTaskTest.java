@@ -417,7 +417,6 @@ public class WorkerSourceTaskTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
 
         expectClose();
 
