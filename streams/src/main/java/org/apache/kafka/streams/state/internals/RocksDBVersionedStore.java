@@ -156,6 +156,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     public VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp) {
 
         if (asOfTimestamp < observedStreamTime - historyRetention) {
+            LOG.warn("Returning null for expired get.");
             // history retention has elapsed. return null for predictability, even if data
             // is still present in store.
             return null;
