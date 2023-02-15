@@ -758,16 +758,24 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldExhaustRetriesOnTimeoutExceptionForMakeReady() {
-        mockAdminClient.timeoutNextRequest(1);
+        mockAdminClient.timeoutNextRequest(5);
+
+        final InternalTopicManager topicManager = new InternalTopicManager(
+                new AutoAdvanceMockTime(time),
+                mockAdminClient,
+                new StreamsConfig(config)
+        );
+
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
         try {
-            internalTopicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig));
-        } catch (final StreamsException expected) {
-            assertEquals(TimeoutException.class, expected.getCause().getClass());
+            topicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig));
+            fail("Should have thrown TimeoutException.");
+        } catch (final TimeoutException expected) {
+            assertThat(expected.getMessage(), is("Could not create topics within 50 milliseconds. " +
+                    "This can happen if the Kafka cluster is temporarily not available."));
         }
     }
-
     @Test
     public void shouldLogWhenTopicNotFoundAndNotThrowException() {
         mockAdminClient.addTopic(
@@ -1695,6 +1703,21 @@ public class InternalTopicManagerTest {
         return internalTopicConfig;
     }
 
+    private static class AutoAdvanceMockTime extends MockTime {
+        private final MockTime time;
+
+        private AutoAdvanceMockTime(final MockTime time) {
+            this.time = time;
+        }
+
+        @Override
+        public long milliseconds() {
+            final long ms = time.milliseconds();
+            time.sleep(10L);
+            return ms;
+        }
+    }
+
     private static class MockCreateTopicsResult extends CreateTopicsResult {
         MockCreateTopicsResult(final Map<String, KafkaFuture<TopicMetadataAndConfig>> futures) {
             super(futures);
@@ -1718,4 +1741,6 @@ public class InternalTopicManagerTest {
             super(futures);
         }
     }
+
+
 }
