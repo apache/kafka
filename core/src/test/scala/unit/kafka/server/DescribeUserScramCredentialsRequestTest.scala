@@ -118,7 +118,6 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(1, response.data.results.size)
     val result: DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult = response.data.results.get(0)
     assertEquals(Errors.RESOURCE_NOT_FOUND.code, result.errorCode, s"Expected duplicate resource error for $unknownUser")
-    println(result.errorMessage)
     assertEquals(s"Attempt to describe a user credential that does not exist: $unknownUser", result.errorMessage)
   }
 
