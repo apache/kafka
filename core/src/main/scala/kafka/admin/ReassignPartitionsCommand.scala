@@ -30,9 +30,9 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ReplicaNotAvailableException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionReplica}
-import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.server.util.CommandLineUtils
 import org.apache.kafka.storage.internals.log.LogConfig
-import org.apache.kafka.tools.reassign.{ActiveMoveState, CancelledMoveState, CompletedMoveState, LogDirMoveState, MissingLogDirMoveState, MissingReplicaMoveState, PartitionMove, PartitionReassignmentState, TerseReassignmentFailureException}
+import org.apache.kafka.tools.reassign.{ActiveMoveState, CancelledMoveState, CompletedMoveState, LogDirMoveState, MissingLogDirMoveState, MissingReplicaMoveState, PartitionMove, PartitionReassignmentState, ReassignPartitionsCommandOptions, TerseReassignmentFailureException}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}
@@ -1333,72 +1333,5 @@ object ReassignPartitionsCommand extends Logging {
         }
       }
     }.toSet
-  }
-
-  sealed class ReassignPartitionsCommandOptions(args: Array[String]) extends CommandDefaultOptions(args)  {
-    // Actions
-    val verifyOpt = parser.accepts("verify", "Verify if the reassignment completed as specified by the " +
-      "--reassignment-json-file option. If there is a throttle engaged for the replicas specified, and the rebalance has completed, the throttle will be removed")
-    val generateOpt = parser.accepts("generate", "Generate a candidate partition reassignment configuration." +
-      " Note that this only generates a candidate assignment, it does not execute it.")
-    val executeOpt = parser.accepts("execute", "Kick off the reassignment as specified by the --reassignment-json-file option.")
-    val cancelOpt = parser.accepts("cancel", "Cancel an active reassignment.")
-    val listOpt = parser.accepts("list", "List all active partition reassignments.")
-
-    // Arguments
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: the server(s) to use for bootstrapping.")
-                      .withRequiredArg
-                      .describedAs("Server(s) to use for bootstrapping")
-                      .ofType(classOf[String])
-
-    val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
-                      .withRequiredArg
-                      .describedAs("Admin client property file")
-                      .ofType(classOf[String])
-
-    val reassignmentJsonFileOpt = parser.accepts("reassignment-json-file", "The JSON file with the partition reassignment configuration" +
-                      "The format to use is - \n" +
-                      "{\"partitions\":\n\t[{\"topic\": \"foo\",\n\t  \"partition\": 1,\n\t  \"replicas\": [1,2,3],\n\t  \"log_dirs\": [\"dir1\",\"dir2\",\"dir3\"] }],\n\"version\":1\n}\n" +
-                      "Note that \"log_dirs\" is optional. When it is specified, its length must equal the length of the replicas list. The value in this list " +
-                      "can be either \"any\" or the absolution path of the log directory on the broker. If absolute log directory path is specified, the replica will be moved to the specified log directory on the broker.")
-                      .withRequiredArg
-                      .describedAs("manual assignment json file path")
-                      .ofType(classOf[String])
-    val topicsToMoveJsonFileOpt = parser.accepts("topics-to-move-json-file", "Generate a reassignment configuration to move the partitions" +
-                      " of the specified topics to the list of brokers specified by the --broker-list option. The format to use is - \n" +
-                      "{\"topics\":\n\t[{\"topic\": \"foo\"},{\"topic\": \"foo1\"}],\n\"version\":1\n}")
-                      .withRequiredArg
-                      .describedAs("topics to reassign json file path")
-                      .ofType(classOf[String])
-    val brokerListOpt = parser.accepts("broker-list", "The list of brokers to which the partitions need to be reassigned" +
-                      " in the form \"0,1,2\". This is required if --topics-to-move-json-file is used to generate reassignment configuration")
-                      .withRequiredArg
-                      .describedAs("brokerlist")
-                      .ofType(classOf[String])
-    val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
-    val interBrokerThrottleOpt = parser.accepts("throttle", "The movement of partitions between brokers will be throttled to this value (bytes/sec). " +
-      "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
-      "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
-      .withRequiredArg()
-      .describedAs("throttle")
-      .ofType(classOf[Long])
-      .defaultsTo(-1)
-    val replicaAlterLogDirsThrottleOpt = parser.accepts("replica-alter-log-dirs-throttle",
-      "The movement of replicas between log directories on the same broker will be throttled to this value (bytes/sec). " +
-        "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
-        "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
-      .withRequiredArg()
-      .describedAs("replicaAlterLogDirsThrottle")
-      .ofType(classOf[Long])
-      .defaultsTo(-1)
-    val timeoutOpt = parser.accepts("timeout", "The maximum time in ms to wait for log directory replica assignment to begin.")
-                      .withRequiredArg()
-                      .describedAs("timeout")
-                      .ofType(classOf[Long])
-                      .defaultsTo(10000)
-    val additionalOpt = parser.accepts("additional", "Execute this reassignment in addition to any " +
-      "other ongoing ones. This option can also be used to change the throttle of an ongoing reassignment.")
-    val preserveThrottlesOpt = parser.accepts("preserve-throttles", "Do not modify broker or topic throttles.")
-    options = parser.parse(args : _*)
   }
 }
