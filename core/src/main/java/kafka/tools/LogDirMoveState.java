@@ -15,20 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.tools.reassign;
-
-import org.apache.kafka.common.KafkaException;
+package kafka.tools;
 
 /**
- * An exception thrown to indicate that the command has failed, but we don't want to
- * print a stack trace.
+ * The state of a replica log directory movement.
  */
-public class TerseReassignmentFailureException extends KafkaException {
+public interface LogDirMoveState {
     /**
-     * @param message     The message to print out before exiting.  A stack trace will not
-     *                    be printed.
+     * True if the move is done without errors.
      */
-    public TerseReassignmentFailureException(String message) {
-        super(message);
-    }
+    boolean done();
 }

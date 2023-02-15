@@ -19,6 +19,7 @@ package kafka.admin
 
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.server._
+import kafka.tools.{ActiveMoveState, CompletedMoveState, LogDirMoveState, PartitionReassignmentState, VerifyAssignmentResult}
 import kafka.utils.Implicits._
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin._
@@ -27,7 +28,6 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1
-import org.apache.kafka.tools.reassign.{ActiveMoveState, CompletedMoveState, LogDirMoveState, PartitionReassignmentState, VerifyAssignmentResult}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Timeout}
 import org.junit.jupiter.params.ParameterizedTest

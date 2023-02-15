@@ -21,6 +21,7 @@ import java.util.Optional
 import java.util.concurrent.ExecutionException
 import kafka.common.AdminCommandFailedException
 import kafka.server.DynamicConfig
+import kafka.tools.{ActiveMoveState, CancelledMoveState, CompletedMoveState, LogDirMoveState, MissingLogDirMoveState, MissingReplicaMoveState, PartitionMove, PartitionReassignmentState, ReassignPartitionsCommandOptions, TerseReassignmentFailureException, VerifyAssignmentResult}
 import kafka.utils.{CoreUtils, Exit, Json, Logging}
 import kafka.utils.Implicits._
 import kafka.utils.json.JsonValue
@@ -32,7 +33,6 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.server.util.CommandLineUtils
 import org.apache.kafka.storage.internals.log.LogConfig
-import org.apache.kafka.tools.reassign.{ActiveMoveState, CancelledMoveState, CompletedMoveState, LogDirMoveState, MissingLogDirMoveState, MissingReplicaMoveState, PartitionMove, PartitionReassignmentState, ReassignPartitionsCommandOptions, TerseReassignmentFailureException, VerifyAssignmentResult}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}

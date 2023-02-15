@@ -15,49 +15,54 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.tools.reassign;
+package kafka.tools;
 
 import java.util.Objects;
+import java.util.Set;
 
 /**
- * A replica log directory move state where the source log directory is missing.
+ * A partition movement.  The source and destination brokers may overlap.
  */
-public final class MissingReplicaMoveState implements LogDirMoveState {
-    private final String targetLogDir;
+public final class PartitionMove {
+    private final Set<Integer> sources;
+
+    private final Set<Integer> destinations;
 
     /**
-     * @param targetLogDir        The log directory that we wanted the replica to move to.
+     * @param sources         The source brokers.
+     * @param destinations    The destination brokers.
      */
-    public MissingReplicaMoveState(String targetLogDir) {
-        this.targetLogDir = targetLogDir;
+    public PartitionMove(Set<Integer> sources, Set<Integer> destinations) {
+        this.sources = sources;
+        this.destinations = destinations;
     }
 
-    public String targetLogDir() {
-        return targetLogDir;
+    public Set<Integer> sources() {
+        return sources;
     }
 
-    @Override
-    public boolean done() {
-        return false;
+    public Set<Integer> destinations() {
+        return destinations;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        MissingReplicaMoveState that = (MissingReplicaMoveState) o;
-        return Objects.equals(targetLogDir, that.targetLogDir);
+        PartitionMove that = (PartitionMove) o;
+        return Objects.equals(sources, that.sources) && Objects.equals(destinations, that.destinations);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(targetLogDir);
+        return Objects.hash(sources, destinations);
     }
 
     @Override
     public String toString() {
-        return "MissingReplicaMoveState{" +
-            "targetLogDir='" + targetLogDir + '\'' +
+        return "PartitionMove{" +
+            "sources=" + sources +
+            ", destinations=" + destinations +
             '}';
     }
 }

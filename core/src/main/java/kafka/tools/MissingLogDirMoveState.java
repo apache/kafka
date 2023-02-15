@@ -15,30 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.tools.reassign;
+package kafka.tools;
 
 import java.util.Objects;
 
 /**
- * A replica log directory move state where there is no move in progress, but we did not
- * reach the target log directory.
+ * A replica log directory move state where the source replica is missing.
  */
-public final class CancelledMoveState implements LogDirMoveState {
-    private final String currentLogDir;
-
+public final class MissingLogDirMoveState implements LogDirMoveState {
     private final String targetLogDir;
 
     /**
-     * @param currentLogDir       The current log directory.
      * @param targetLogDir        The log directory that we wanted the replica to move to.
      */
-    public CancelledMoveState(String currentLogDir, String targetLogDir) {
-        this.currentLogDir = currentLogDir;
+    public MissingLogDirMoveState(String targetLogDir) {
         this.targetLogDir = targetLogDir;
-    }
-
-    public String currentLogDir() {
-        return currentLogDir;
     }
 
     public String targetLogDir() {
@@ -47,27 +38,26 @@ public final class CancelledMoveState implements LogDirMoveState {
 
     @Override
     public boolean done() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        CancelledMoveState that = (CancelledMoveState) o;
-        return Objects.equals(currentLogDir, that.currentLogDir) && Objects.equals(targetLogDir, that.targetLogDir);
+        MissingLogDirMoveState that = (MissingLogDirMoveState) o;
+        return Objects.equals(targetLogDir, that.targetLogDir);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(currentLogDir, targetLogDir);
+        return Objects.hash(targetLogDir);
     }
 
     @Override
     public String toString() {
-        return "CancelledMoveState{" +
-            "currentLogDir='" + currentLogDir + '\'' +
-            ", targetLogDir='" + targetLogDir + '\'' +
+        return "MissingLogDirMoveState{" +
+            "targetLogDir='" + targetLogDir + '\'' +
             '}';
     }
 }
