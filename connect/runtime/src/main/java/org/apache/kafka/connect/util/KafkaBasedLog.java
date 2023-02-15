@@ -401,9 +401,10 @@ public class KafkaBasedLog<K, V> {
     }
 
     /**
-     * Test whether a topic partition should be read by this log.
-     * <p>Overridden by subclasses when only a subset of the assigned partitions should be read into memory.
-     * By default, this will read all partitions.
+     * Signals whether a topic partition should be read by this log. Invoked on {@link #start() startup} once
+     * for every partition found in the log's backing topic.
+     * <p>This method can be overridden by subclasses when only a subset of the assigned partitions
+     * should be read into memory. By default, all partitions are read.
      * @param topicPartition A topic partition which could be read by this log.
      * @return true if the partition should be read by this log, false if its contents should be ignored.
      */

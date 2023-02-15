@@ -26,8 +26,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Exit;
@@ -38,7 +36,6 @@ import org.apache.kafka.connect.mirror.MirrorClient;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMakerConfig;
 import org.apache.kafka.connect.mirror.MirrorSourceConnector;
-import org.apache.kafka.connect.mirror.OffsetSync;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
 import org.apache.kafka.connect.mirror.Checkpoint;
 import org.apache.kafka.connect.mirror.MirrorCheckpointConnector;
@@ -47,7 +44,6 @@ import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.connect.util.clusters.UngracefulShutdownException;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -602,8 +598,6 @@ public class MirrorConnectorsIntegrationBaseTest {
         mm2Props.put("sync.group.offsets.interval.seconds", "1");
         mm2Config = new MirrorMakerConfig(mm2Props);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
-        insertDummyOffsetSyncs(primary, "mm2-offset-syncs." + BACKUP_CLUSTER_ALIAS + ".internal", "test-topic-1", NUM_PARTITIONS);
-        // Produce 10 seconds of data, that should take at least 1 second to re-read from the syncs topic
         produceMessages(primary, "test-topic-1");
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
             waitForConsumingAllRecords(primaryConsumer, NUM_RECORDS_PRODUCED);
@@ -834,34 +828,6 @@ public class MirrorConnectorsIntegrationBaseTest {
                 return totalOffsetsMatch && consumerGroupOffsetsMatch;
             }, OFFSET_SYNC_DURATION_MS, "Consumer group offset sync is not complete in time");
         }
-    }
-
-    protected static void insertDummyOffsetSyncs(EmbeddedConnectCluster cluster, String offsetSyncsTopic, String topic, int partitions) throws InterruptedException {
-        waitForTopicCreated(cluster, offsetSyncsTopic);
-        // Insert a large number of checkpoint records into the offset syncs topic to simulate
-        // a long-lived MM2 instance that has replicated many offsets in the past.
-        List<ProducerRecord<byte[], byte[]>> records = new ArrayList<>();
-        for (int partition = 0; partition < partitions; partition++) {
-            TopicPartition tp = new TopicPartition(topic, partition);
-            OffsetSync sync = new OffsetSync(tp, 0L, 0L);
-            records.add(new ProducerRecord<>(offsetSyncsTopic, sync.recordKey(), sync.recordValue()));
-        }
-        Map<String, Object> producerProps = new HashMap<>();
-        int sentRecords = 0;
-        try (KafkaProducer<byte[], byte[]> producer = cluster.kafka().createProducer(producerProps)) {
-            // Try to ensure that the contents of the offset syncs topic is too large to read before the checkpoint
-            // interval passes, so that the first checkpoint would take place before reading the whole contents of the
-            // sync topic. Experimentally, this test passes with <2x, and fails with >5x, without a fix for KAFKA-13659.
-            double consumeEfficiency = 10;
-            long deadline = System.currentTimeMillis() + (long) (consumeEfficiency * CHECKPOINT_INTERVAL_DURATION_MS);
-            int nRecords = records.size();
-            while (System.currentTimeMillis() < deadline) {
-                producer.send(records.get(sentRecords % nRecords));
-                sentRecords++;
-            }
-            producer.flush();
-        }
-        log.info("Sent {} dummy records to {}", sentRecords, offsetSyncsTopic);
     }
 
     protected static void assertMonotonicCheckpoints(EmbeddedConnectCluster cluster, String checkpointTopic) {

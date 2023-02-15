@@ -95,7 +95,9 @@ class OffsetSyncStore implements AutoCloseable {
      * Start the OffsetSyncStore, blocking until all previous Offset Syncs have been read from backing storage.
      */
     public void start() {
-        backingStore.start();
+        if (backingStore != null) {
+            backingStore.start();
+        }
         readToEnd = true;
     }
 

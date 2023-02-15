@@ -109,11 +109,11 @@ public class OffsetSync {
         return struct;
     }
 
-    public byte[] recordKey() {
+    byte[] recordKey() {
         return serializeKey().array();
     }
 
-    public byte[] recordValue() {
+    byte[] recordValue() {
         return serializeValue().array();
     }
 }
