@@ -33,7 +33,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV0
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, EpochEntry, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, EpochEntry, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -687,7 +687,7 @@ class LogLoaderTest {
     assertEquals(2, log.activeProducersWithLastSequence.size)
 
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(1L, ClientRecordDeletion)
+    log.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.ClientRecordDeletion)
 
     // Deleting records should not remove producer state
     assertEquals(2, log.activeProducersWithLastSequence.size)
@@ -752,7 +752,7 @@ class LogLoaderTest {
     assertEquals(2, log.activeProducersWithLastSequence.size)
 
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(1L, ClientRecordDeletion)
+    log.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.ClientRecordDeletion)
     log.deleteOldSegments()
 
     // Deleting records should not remove producer state
@@ -1561,7 +1561,7 @@ class LogLoaderTest {
     // Increment the log start offset
     val startOffset = 4
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(startOffset, ClientRecordDeletion)
+    log.maybeIncrementLogStartOffset(startOffset, LogStartOffsetIncrementReason.ClientRecordDeletion)
     assertTrue(log.logEndOffset > log.logStartOffset)
 
     // Append garbage to a segment below the current log start offset
@@ -1618,7 +1618,7 @@ class LogLoaderTest {
     //                                                                 |---> logEndOffset
     val newLogStartOffset = 4
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(newLogStartOffset, ClientRecordDeletion)
+    log.maybeIncrementLogStartOffset(newLogStartOffset, LogStartOffsetIncrementReason.ClientRecordDeletion)
     assertEquals(4, log.logStartOffset)
     assertEquals(9, log.logEndOffset)
 

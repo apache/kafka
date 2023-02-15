@@ -17,12 +17,6 @@
 
 package kafka.log
 
-import java.io.{File, RandomAccessFile}
-import java.nio._
-import java.nio.charset.StandardCharsets
-import java.nio.file.Paths
-import java.util.Properties
-import java.util.concurrent.{CountDownLatch, TimeUnit}
 import kafka.common._
 import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.utils._
@@ -31,10 +25,16 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
+import java.io.{File, RandomAccessFile}
+import java.nio._
+import java.nio.charset.StandardCharsets
+import java.nio.file.Paths
+import java.util.Properties
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
@@ -151,7 +151,7 @@ class LogCleanerTest {
       override def run(): Unit = {
         deleteStartLatch.await(5000, TimeUnit.MILLISECONDS)
         log.updateHighWatermark(log.activeSegment.baseOffset)
-        log.maybeIncrementLogStartOffset(log.activeSegment.baseOffset, LeaderOffsetIncremented)
+        log.maybeIncrementLogStartOffset(log.activeSegment.baseOffset, LogStartOffsetIncrementReason.LeaderOffsetIncremented)
         log.updateHighWatermark(log.activeSegment.baseOffset)
         log.deleteOldSegments()
         deleteCompleteLatch.countDown()
