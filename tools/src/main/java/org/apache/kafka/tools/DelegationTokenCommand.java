@@ -26,8 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
-import joptsimple.AbstractOptionSpec;
-import joptsimple.ArgumentAcceptingOptionSpec;
+import java.util.stream.Stream;
 import joptsimple.OptionSpec;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.CreateDelegationTokenOptions;
@@ -60,33 +59,25 @@ public class DelegationTokenCommand {
             System.err.println(e.getMessage());
             return 1;
         } catch (Throwable e) {
-            System.err.println("Error while executing delegation token command : " + e.getMessage());
+            System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
             return 1;
         }
     }
 
     static void execute(String... args) throws Exception {
-        Admin adminClient = null;
-        try {
-            DelegationTokenCommandOptions opts = new DelegationTokenCommandOptions(args);
-            CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to create, renew, expire, or describe delegation tokens.");
+        DelegationTokenCommandOptions opts = new DelegationTokenCommandOptions(args);
+        CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to create, renew, expire, or describe delegation tokens.");
 
-            // should have exactly one action
-            int numberOfAction = 0;
-            for (Boolean opt : new Boolean[]{opts.hasCreateOpt(), opts.hasRenewOpt(), opts.hasExpireOpt(), opts.hasDescribeOpt()}) {
-                if (opt) {
-                    numberOfAction++;
-                }
-            }
-            if (numberOfAction != 1) {
-                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --create, --renew, --expire or --describe");
-            }
+        // should have exactly one action
+        Long numberOfActions = Stream.of(opts.hasCreateOpt(), opts.hasRenewOpt(), opts.hasExpireOpt(), opts.hasDescribeOpt()).filter(b -> b).count();
+        if (numberOfActions != 1) {
+            CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --create, --renew, --expire or --describe");
+        }
 
-            opts.checkArgs();
+        opts.checkArgs();
 
-            adminClient = createAdminClient(opts);
-
+        try (Admin adminClient = createAdminClient(opts)){
             if (opts.hasCreateOpt()) {
                 createToken(adminClient, opts);
             } else if (opts.hasRenewOpt()) {
@@ -96,10 +87,6 @@ public class DelegationTokenCommand {
             } else if (opts.hasDescribeOpt()) {
                 describeToken(adminClient, opts);
             }
-
-        } finally {
-            if (adminClient != null)
-                adminClient.close();
         }
     }
 
@@ -138,7 +125,6 @@ public class DelegationTokenCommand {
                     dateFormat.format(tokenInfo.issueTimestamp()),
                     dateFormat.format(tokenInfo.expiryTimestamp()),
                     dateFormat.format(tokenInfo.maxTimestamp()));
-            System.out.println();
         }
     }
 
@@ -146,8 +132,8 @@ public class DelegationTokenCommand {
         List<KafkaPrincipal> principals = new ArrayList<>();
 
         if (opts.options.has(principalOptionSpec)) {
-            for (Object e : opts.options.valuesOf(principalOptionSpec))
-                principals.add(SecurityUtils.parseKafkaPrincipal(e.toString().trim()));
+            for (String e : opts.options.valuesOf(principalOptionSpec))
+                principals.add(SecurityUtils.parseKafkaPrincipal(e.trim()));
         }
         return principals;
     }
@@ -181,7 +167,7 @@ public class DelegationTokenCommand {
         if (ownerPrincipals.isEmpty()) {
             System.out.println("Calling describe token operation for current user.");
         } else {
-            System.out.println("Calling describe token operation for owners :" + ownerPrincipals);
+            System.out.printf("Calling describe token operation for owners: %s%n", ownerPrincipals);
         }
 
         DescribeDelegationTokenResult describeResult = adminClient.describeDelegationToken(new DescribeDelegationTokenOptions().owners(ownerPrincipals));
@@ -198,18 +184,18 @@ public class DelegationTokenCommand {
     }
 
     static class DelegationTokenCommandOptions extends CommandDefaultOptions {
-        public final ArgumentAcceptingOptionSpec<String> bootstrapServerOpt;
-        public final ArgumentAcceptingOptionSpec<String> commandConfigOpt;
-        public final AbstractOptionSpec<Void> createOpt;
-        public final AbstractOptionSpec<Void> renewOpt;
-        public final AbstractOptionSpec<Void> expiryOpt;
-        public final AbstractOptionSpec<Void> describeOpt;
-        public final ArgumentAcceptingOptionSpec<String> ownerPrincipalsOpt;
-        public final ArgumentAcceptingOptionSpec<String> renewPrincipalsOpt;
-        public final ArgumentAcceptingOptionSpec<Long> maxLifeTimeOpt;
-        public final ArgumentAcceptingOptionSpec<Long> renewTimePeriodOpt;
-        public final ArgumentAcceptingOptionSpec<Long> expiryTimePeriodOpt;
-        public final ArgumentAcceptingOptionSpec<String> hmacOpt;
+        public final OptionSpec<String> bootstrapServerOpt;
+        public final OptionSpec<String> commandConfigOpt;
+        public final OptionSpec<Void> createOpt;
+        public final OptionSpec<Void> renewOpt;
+        public final OptionSpec<Void> expiryOpt;
+        public final OptionSpec<Void> describeOpt;
+        public final OptionSpec<String> ownerPrincipalsOpt;
+        public final OptionSpec<String> renewPrincipalsOpt;
+        public final OptionSpec<Long> maxLifeTimeOpt;
+        public final OptionSpec<Long> renewTimePeriodOpt;
+        public final OptionSpec<Long> expiryTimePeriodOpt;
+        public final OptionSpec<String> hmacOpt;
 
         public DelegationTokenCommandOptions(String[] args) {
             super(args);
@@ -226,27 +212,27 @@ public class DelegationTokenCommand {
                     .withRequiredArg()
                     .ofType(String.class);
 
-            this.createOpt = parser.accepts("create", "Create a new delegation token. Use --renewer-principal option to pass renewers principals.");
+            this.createOpt = parser.accepts("create", "Create a new delegation token. Use --renewer-principal option to pass renewer principals.");
             this.renewOpt = parser.accepts("renew", "Renew delegation token. Use --renew-time-period option to set renew time period.");
             this.expiryOpt = parser.accepts("expire", "Expire delegation token. Use --expiry-time-period option to expire the token.");
             this.describeOpt = parser.accepts("describe", "Describe delegation tokens for the given principals. Use --owner-principal to pass owner/renewer principals." +
-                    " If --owner-principal option is not supplied, all the user owned tokens and tokens where user have Describe permission will be returned.");
+                    " If --owner-principal option is not supplied, all the user-owned tokens and tokens where the user has Describe permissions will be returned.");
 
-            this.ownerPrincipalsOpt = parser.accepts("owner-principal", "owner is a kafka principal. It is should be in principalType:name format.")
+            this.ownerPrincipalsOpt = parser.accepts("owner-principal", "owner is a Kafka principal. They should be in principalType:name format.")
                     .withOptionalArg()
                     .ofType(String.class);
 
-            this.renewPrincipalsOpt = parser.accepts("renewer-principal", "renewer is a kafka principal. It is should be in principalType:name format.")
+            this.renewPrincipalsOpt = parser.accepts("renewer-principal", "renewer is a Kafka principal. They should be in principalType:name format.")
                     .withOptionalArg()
                     .ofType(String.class);
 
             this.maxLifeTimeOpt = parser.accepts("max-life-time-period", "Max life period for the token in milliseconds. If the value is -1," +
-                            " then token max life time will default to a server side config the value (delegation.token.max.lifetime.ms).")
+                            " then token max life time will default to the server side config value of (delegation.token.max.lifetime.ms).")
                     .withOptionalArg()
                     .ofType(Long.class);
 
             this.renewTimePeriodOpt = parser.accepts("renew-time-period", "Renew time period in milliseconds. If the value is -1, then the" +
-                            " renew time period will default to a server side config the value (delegation.token.expiry.time.ms).")
+                            " renew time period will default to the server side config value of (delegation.token.expiry.time.ms).")
                     .withOptionalArg()
                     .ofType(Long.class);
 

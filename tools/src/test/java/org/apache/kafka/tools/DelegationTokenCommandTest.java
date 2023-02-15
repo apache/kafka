@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -84,13 +85,17 @@ public class DelegationTokenCommandTest {
     }
 
     private DelegationTokenCommand.DelegationTokenCommandOptions getDescribeOpts(String owner) {
-        String[] args;
+        List<String> args = new ArrayList<>();
+        args.add("--bootstrap-server");
+        args.add("localhost:9092");
+        args.add("--command-config");
+        args.add("testfile");
+        args.add("--describe");
         if (!owner.equals("")) {
-            args = new String[] {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe","--owner-principal", owner};
-        } else {
-            args = new String[] {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe"};
+            args.add("--owner-principal");
+            args.add(owner);
         }
-        return new DelegationTokenCommand.DelegationTokenCommandOptions(args);
+        return new DelegationTokenCommand.DelegationTokenCommandOptions(args.toArray(new String[0]));
     }
 
     private DelegationTokenCommand.DelegationTokenCommandOptions getRenewOpts(String hmac) {
