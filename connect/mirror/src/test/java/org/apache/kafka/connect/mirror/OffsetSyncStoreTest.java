@@ -35,6 +35,12 @@ public class OffsetSyncStoreTest {
             super();
         }
 
+        @Override
+        public void start() {
+            // do not call super to avoid NPE without a KafkaBasedLog.
+            readToEnd = true;
+        }
+
         void sync(TopicPartition topicPartition, long upstreamOffset, long downstreamOffset) {
             OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
             byte[] key = offsetSync.recordKey();

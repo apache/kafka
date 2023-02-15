@@ -37,7 +37,7 @@ class OffsetSyncStore implements AutoCloseable {
     private final KafkaBasedLog<byte[], byte[]> backingStore;
     private final Map<TopicPartition, OffsetSync> offsetSyncs = new ConcurrentHashMap<>();
     private final TopicAdmin admin;
-    private volatile boolean readToEnd = false;
+    protected volatile boolean readToEnd = false;
 
     OffsetSyncStore(MirrorCheckpointConfig config) {
         Consumer<byte[], byte[]> consumer = null;
@@ -95,9 +95,7 @@ class OffsetSyncStore implements AutoCloseable {
      * Start the OffsetSyncStore, blocking until all previous Offset Syncs have been read from backing storage.
      */
     public void start() {
-        if (backingStore != null) {
-            backingStore.start();
-        }
+        backingStore.start();
         readToEnd = true;
     }
 
