@@ -17,15 +17,18 @@
 
 package kafka.integration
 
+import com.yammer.metrics.core.Gauge
 import kafka.api.IntegrationTestHarness
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.HostedPartition.Online
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
 import java.util.Properties
+import scala.jdk.CollectionConverters.mapAsScalaMapConverter
 
 class PartitionLoggingTest extends IntegrationTestHarness{
   override protected def brokerCount: Int = 4
@@ -56,6 +59,43 @@ class PartitionLoggingTest extends IntegrationTestHarness{
     waitForPartitionUnderMinISRState(tp, false)
   }
 
+  @Test
+  def loggingOfflinePartitionTest(): Unit = {
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    // create the test topic with three replicas
+    val topicConfig = new Properties()
+    topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    var nonControllerBrokerIds = servers.filter(s => s.config.brokerId != controllerId).map(_.config.brokerId)
+    if (nonControllerBrokerIds.size > 3) {
+      nonControllerBrokerIds = nonControllerBrokerIds.take(3)
+    }
+    assertEquals(3, nonControllerBrokerIds.size)
+    val topicName = "test_3replicas"
+    createTopic(topicName, Map(0 -> nonControllerBrokerIds), topicConfig)
+    val tp = new TopicPartition(topicName, 0)
+    checkPartitionOfflineExists(false, tp)
+
+    // get the brokers that have the replicas
+    val partitionStateOpt = zkClient.getTopicPartitionState(tp)
+    assertTrue(partitionStateOpt.isDefined, "partitionState should exist for partition [test_3replicas,0]")
+    assertEquals(3, partitionStateOpt.get.leaderAndIsr.isr.size, "isr should be 3 for partition [test_3replicas,0]")
+    val brokersWithReplica = partitionStateOpt.get.leaderAndIsr.isr
+
+    // shutdown brokers to put the partition offline
+    val brokersToShutdown = servers.filter{s => brokersWithReplica.contains(s.config.brokerId)}
+    val controller = servers.filter(s => s.config.brokerId == controllerId).head.kafkaController
+    brokersToShutdown.map(broker => controller.skipControlledShutdownSafetyCheck(
+      broker.config.brokerId, controller.controllerContext.liveBrokerIdAndEpochs(broker.config.brokerId), {case _ => {}}));
+    brokersToShutdown(0).shutdown()
+    waitForPartitionUnderMinISRState(tp, false)
+    brokersToShutdown.takeRight(2).foreach(_.shutdown())
+    checkPartitionOfflineExists(true, tp)
+
+    // bring up the brokers and check replicas are alive
+    brokersToShutdown.foreach(_.startup())
+    waitForPartitionUnderMinISRState(tp, false)
+    checkPartitionOfflineExists(false, tp)
+  }
 
   private def waitForPartitionUnderMinISRState(tp: TopicPartition, shouldBeUnderMinISR: Boolean): Unit = {
     TestUtils.waitUntilTrue(() => {
@@ -69,5 +109,21 @@ class PartitionLoggingTest extends IntegrationTestHarness{
         case _ => false
       }
     }, "the partition's UnderMinISR state should be " + shouldBeUnderMinISR)
+  }
+
+  private def checkPartitionOfflineExists(offlinePartitionExist: Boolean, tp: TopicPartition): Unit = {
+    TestUtils.waitUntilTrue(() => {
+      val partitionStateOpt = zkClient.getTopicPartitionState(tp)
+      offlinePartitionExist == (partitionStateOpt.get.leaderAndIsr.leader == -1)
+    }, "the partition should have leader " + {if (offlinePartitionExist)  "equal -1" else "not equal -1"})
+
+    val offlinePartitionsCountGauge = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .find { case (k, _) => k.getName.endsWith("OfflinePartitionsCount") }
+      .getOrElse(throw new AssertionError( "Unable to find metric OfflinePartitionsCount"))
+      ._2.asInstanceOf[Gauge[Int]]
+
+    // there are also other topics, e.g., 5 offset topics, so by shutting down brokers to result in offline partitions,
+    // we do not check the exact number of offlinePartitionsCount, but only check whether it is greater than 0
+    assertEquals(offlinePartitionExist, offlinePartitionsCountGauge.value() > 0)
   }
 }
