@@ -785,7 +785,7 @@ rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cl
                 for the reassigned warmups to restore sufficient state for them to be transitioned to active tasks. Must be at least 1.
               </p>
               <p>
-                Note that one warmup replica corresponds to one Stream Task. Furthermore, note that each warmup task can only be promoted to an active task during
+                Note that one warmup replica corresponds to one <a href="https://kafka.apache.org/34/documentation/streams/architecture#streams_architecture_tasks">Stream Task</a>. Furthermore, note that each warmup task can only be promoted to an active task during
                 a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the
                 <code class="docutils literal"><span class="pre">probing.rebalance.interval.ms</span></code> config). This means that the
                 maximum rate at which active tasks can be migrated from one Kafka Streams instance to another instance can be determined by
