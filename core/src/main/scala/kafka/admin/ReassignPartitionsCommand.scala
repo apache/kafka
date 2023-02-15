@@ -32,7 +32,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.server.util.CommandLineUtils
 import org.apache.kafka.storage.internals.log.LogConfig
-import org.apache.kafka.tools.reassign.{ActiveMoveState, CancelledMoveState, CompletedMoveState, LogDirMoveState, MissingLogDirMoveState, MissingReplicaMoveState, PartitionMove, PartitionReassignmentState, ReassignPartitionsCommandOptions, TerseReassignmentFailureException}
+import org.apache.kafka.tools.reassign.{ActiveMoveState, CancelledMoveState, CompletedMoveState, LogDirMoveState, MissingLogDirMoveState, MissingReplicaMoveState, PartitionMove, PartitionReassignmentState, ReassignPartitionsCommandOptions, TerseReassignmentFailureException, VerifyAssignmentResult}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}
@@ -157,19 +157,6 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   /**
-   * A result returned from verifyAssignment.
-   *
-   * @param partStates    A map from partitions to reassignment states.
-   * @param partsOngoing  True if there are any ongoing partition reassignments.
-   * @param moveStates    A map from log directories to movement states.
-   * @param movesOngoing  True if there are any ongoing moves that we know about.
-   */
-  case class VerifyAssignmentResult(partStates: Map[TopicPartition, PartitionReassignmentState],
-                                    partsOngoing: Boolean = false,
-                                    moveStates: Map[TopicPartitionReplica, LogDirMoveState] = Map.empty,
-                                    movesOngoing: Boolean = false)
-
-  /**
    * The entry point for the --verify command.
    *
    * @param adminClient           The AdminClient to use.
@@ -190,7 +177,7 @@ object ReassignPartitionsCommand extends Logging {
       // previous reassignments.
       clearAllThrottles(adminClient, targetParts)
     }
-    VerifyAssignmentResult(partStates, partsOngoing, moveStates, movesOngoing)
+    new VerifyAssignmentResult(partStates.asJava, partsOngoing, moveStates.asJava, movesOngoing)
   }
 
   /**
