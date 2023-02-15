@@ -16,14 +16,20 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -52,8 +58,11 @@ public class RocksDBVersionedStoreTest {
     private static final long BASE_TIMESTAMP = 10L;
     private static final Serializer<String> STRING_SERIALIZER = new StringSerializer();
     private static final Deserializer<String> STRING_DESERIALIZER = new StringDeserializer();
+    private static final String DROPPED_RECORDS_METRIC = "dropped-records-total";
+    private static final String TASK_LEVEL_GROUP = "stream-task-metrics";
 
     private InternalMockProcessorContext context;
+    private Map<String, String> expectedMetricsTags;
 
     private RocksDBVersionedStore store;
 
@@ -66,6 +75,11 @@ public class RocksDBVersionedStoreTest {
             new StreamsConfig(StreamsTestUtils.getStreamsConfig())
         );
         context.setTime(BASE_TIMESTAMP);
+
+        expectedMetricsTags = mkMap(
+            mkEntry("thread-id", Thread.currentThread().getName()),
+            mkEntry("task-id", context.taskId().toString())
+        );
 
         store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, HISTORY_RETENTION, SEGMENT_INTERVAL);
         store.init((StateStoreContext) context, store);
@@ -356,6 +370,8 @@ public class RocksDBVersionedStoreTest {
         // grace period has elapsed, so this put does not take place
         putToStore("k2", "v2", HISTORY_RETENTION + 9 - GRACE_PERIOD);
         verifyGetNullFromStore("k2");
+
+        verifyExpiredRecordSensor(1);
     }
 
     @Test
@@ -549,6 +565,8 @@ public class RocksDBVersionedStoreTest {
         verifyGetValueFromStore("k", "v", HISTORY_RETENTION + 10);
         verifyGetValueFromStore("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
         verifyGetNullFromStore("k2");
+
+        verifyExpiredRecordSensor(0);
     }
 
     @Test
@@ -570,7 +588,7 @@ public class RocksDBVersionedStoreTest {
         store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, 0L, SEGMENT_INTERVAL);
         store.init((StateStoreContext) context, store);
 
-        // put, get, and delete
+        // put and get
         putToStore("k", "v", BASE_TIMESTAMP);
         verifyGetValueFromStore("k", "v", BASE_TIMESTAMP);
         verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP);
@@ -589,9 +607,14 @@ public class RocksDBVersionedStoreTest {
         // query in past (history retention expired) returns null
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP + 1);
 
+        // delete existing key
+        deleteFromStore("k", BASE_TIMESTAMP + 3);
+        verifyGetNullFromStore("k");
+
         // put in past (grace period expired) does not update the store
-        putToStore("k2", "v", BASE_TIMESTAMP + 1);
+        putToStore("k2", "v", BASE_TIMESTAMP + 2);
         verifyGetNullFromStore("k2");
+        verifyExpiredRecordSensor(1);
     }
 
     private void putToStore(final String key, final String value, final long timestamp) {
@@ -640,6 +663,13 @@ public class RocksDBVersionedStoreTest {
     private void verifyTimestampedGetNullFromStore(final String key, final long timestamp) {
         final VersionedRecord<String> record = getFromStore(key, timestamp);
         assertThat(record, nullValue());
+    }
+
+    private void verifyExpiredRecordSensor(final int expectedValue) {
+        final Metric metric = context.metrics().metrics().get(
+            new MetricName(DROPPED_RECORDS_METRIC, TASK_LEVEL_GROUP, "", expectedMetricsTags)
+        );
+        assertEquals((Double) metric.metricValue(), expectedValue, 0.001);
     }
 
     private static VersionedRecord<String> deserializedRecord(final VersionedRecord<byte[]> versionedRecord) {

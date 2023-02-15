@@ -120,15 +120,15 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             LOG.warn("Skipping record for expired put.");
             return;
         }
+        observedStreamTime = Math.max(observedStreamTime, timestamp);
 
         doPut(
             versionedStoreClient,
+            observedStreamTime,
             key,
             value,
             timestamp
         );
-
-        observedStreamTime = Math.max(observedStreamTime, timestamp);
     }
 
     @Override
@@ -293,14 +293,13 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     // VisibleForTesting
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        // copy the observed stream time, for use in deciding whether to drop records during restore,
-        // when records have exceeded the store's grace period.
-        long streamTimeForRestore = observedStreamTime;
-        // advance stream time to the max timestamp in the batch, in order to speed up restore
-        // by not bothering to read from/write to segments which will have expired by the time
-        // the restoration process is complete.
+
+        // compute the observed stream time at the end of the restore batch, in order to speed up
+        // restore by not bothering to read from/write to segments which will have expired by the
+        // time the restoration process is complete.
+        long endOfBatchStreamTime = observedStreamTime;
         for (final ConsumerRecord<byte[], byte[]> record : records) {
-            observedStreamTime = Math.max(observedStreamTime, record.timestamp());
+            endOfBatchStreamTime = Math.max(endOfBatchStreamTime, record.timestamp());
         }
 
         final VersionedStoreClient<?> restoreClient = restoreWriteBuffer.getClient();
@@ -312,11 +311,13 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // records into memory. how high this memory amplification will be is very much dependent
         // on the specific workload and the value of the "segment interval" parameter.
         for (final ConsumerRecord<byte[], byte[]> record : records) {
-            if (record.timestamp() < streamTimeForRestore - gracePeriod) {
+            if (record.timestamp() < observedStreamTime - gracePeriod) {
                 // record is older than grace period and was therefore never written to the store
                 continue;
             }
-            streamTimeForRestore = Math.max(streamTimeForRestore, record.timestamp());
+            // advance observed stream time as usual, for use in deciding whether records have
+            // exceeded the store's grace period and should be dropped.
+            observedStreamTime = Math.max(observedStreamTime, record.timestamp());
 
             ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                 record,
@@ -327,6 +328,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             // put records to write buffer
             doPut(
                 restoreClient,
+                endOfBatchStreamTime,
                 new Bytes(record.key()),
                 record.value(),
                 record.timestamp()
@@ -458,8 +460,22 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         }
     }
 
+    /**
+     * Helper method shared between put and restore.
+     * <p>
+     * This method does not check whether the record being put is expired based on grace period
+     * or not; that is the caller's responsibility. This method does, however, check whether the
+     * record is expired based on history retention, by using the current
+     * {@code observedStreamTime}, and returns without inserting into the store if so. It can be
+     * possible that a record is not expired based on grace period but is expired based on
+     * history retention, even though history retention is always at least the grace period,
+     * during restore because restore advances {@code observedStreamTime} to the largest timestamp
+     * in the entire restore batch at the beginning of restore, in order to optimize for not
+     * putting records into the store which will have expired by the end of the restore.
+     */
     private <T extends VersionedStoreSegment> void doPut(
         final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
         final Bytes key,
         final byte[] value,
         final long timestamp
@@ -472,6 +488,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // check latest value store
         PutStatus status = maybePutToLatestValueStore(
             versionedStoreClient,
+            observedStreamTime,
             key,
             value,
             timestamp
@@ -485,6 +502,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // continue search in segments
         status = maybePutToSegments(
             versionedStoreClient,
+            observedStreamTime,
             key,
             value,
             timestamp,
@@ -500,6 +518,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // or segments store). insert based on foundTs here instead.
         finishPut(
             versionedStoreClient,
+            observedStreamTime,
             key,
             value,
             timestamp,
@@ -532,6 +551,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private <T extends VersionedStoreSegment> PutStatus maybePutToLatestValueStore(
         final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
         final Bytes key,
         final byte[] value,
         final long timestamp
@@ -595,6 +615,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private <T extends VersionedStoreSegment> PutStatus maybePutToSegments(
         final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
         final Bytes key,
         final byte[] value,
         final long timestamp,
@@ -621,6 +642,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     // insert and conclude the procedure.
                     putToSegment(
                         versionedStoreClient,
+                        observedStreamTime,
                         segment,
                         rawSegmentValue,
                         key,
@@ -649,6 +671,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private <T extends VersionedStoreSegment> void putToSegment(
         final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
         final T segment,
         final byte[] rawSegmentValue,
         final Bytes key,
@@ -729,6 +752,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private <T extends VersionedStoreSegment> void finishPut(
         final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
         final Bytes key,
         final byte[] value,
         final long timestamp,
