@@ -32,7 +32,6 @@ public class Consumer extends Thread {
     private final String topic;
     private final String groupId;
     private final int numMessageToConsume;
-    private volatile boolean isRunning;
     private int messageRemaining;
     private final CountDownLatch latch;
 
@@ -63,7 +62,6 @@ public class Consumer extends Thread {
         this.numMessageToConsume = numMessageToConsume;
         this.messageRemaining = numMessageToConsume;
         this.latch = latch;
-        this.isRunning = true;
     }
 
     KafkaConsumer<Integer, String> get() {
