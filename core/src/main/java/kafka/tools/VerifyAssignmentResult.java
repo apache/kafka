@@ -43,7 +43,12 @@ public final class VerifyAssignmentResult {
      * @param moveStates    A map from log directories to movement states.
      * @param movesOngoing  True if there are any ongoing moves that we know about.
      */
-    public VerifyAssignmentResult(Map<TopicPartition, PartitionReassignmentState> partStates, boolean partsOngoing, Map<TopicPartitionReplica, LogDirMoveState> moveStates, boolean movesOngoing) {
+    public VerifyAssignmentResult(
+        Map<TopicPartition, PartitionReassignmentState> partStates,
+        boolean partsOngoing,
+        Map<org.apache.kafka.common.TopicPartitionReplica, LogDirMoveState> moveStates,
+        boolean movesOngoing
+    ) {
         this.partStates = partStates;
         this.partsOngoing = partsOngoing;
         this.moveStates = moveStates;
