@@ -580,11 +580,22 @@ public class MirrorConnectorsIntegrationBaseTest {
         // Send some records to test-topic-no-checkpoints in the source cluster
         produceMessages(primary, "test-topic-no-checkpoints");
 
+        try (Consumer<byte[], byte[]> consumer = primary.kafka().createConsumer(consumerProps)) {
+            Collection<TopicPartition> tps = Arrays.asList(tp1, tp2);
+            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(tps);
+            Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = endOffsets.entrySet().stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            e -> new OffsetAndMetadata(e.getValue())
+                    ));
+            consumer.commitSync(offsetsToCommit);
+        }
+
         waitForCondition(() -> {
             Map<TopicPartition, OffsetAndMetadata> translatedOffsets = backupClient.remoteConsumerOffsets(
                     consumerGroupName, PRIMARY_CLUSTER_ALIAS, Duration.ofSeconds(30L));
             return translatedOffsets.containsKey(remoteTopicPartition(tp1, PRIMARY_CLUSTER_ALIAS)) &&
-                   !translatedOffsets.containsKey(remoteTopicPartition(tp2, PRIMARY_CLUSTER_ALIAS));
+                   translatedOffsets.containsKey(remoteTopicPartition(tp2, PRIMARY_CLUSTER_ALIAS));
         }, OFFSET_SYNC_DURATION_MS, "Checkpoints were not emitted correctly to backup cluster");
     }
 
