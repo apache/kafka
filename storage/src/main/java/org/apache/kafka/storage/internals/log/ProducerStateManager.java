@@ -122,7 +122,7 @@ public class ProducerStateManager {
     private volatile File logDir;
 
     // The same as producers.size, but for lock-free access.
-    private volatile int _producerIdCount = 0;
+    private volatile int producerIdCount = 0;
 
     // Keep track of the last timestamp from the oldest transaction. This is used
     // to detect (approximately) when a transaction has been left hanging on a partition.
@@ -166,22 +166,22 @@ public class ProducerStateManager {
     }
 
     public int producerIdCount() {
-        return _producerIdCount;
+        return producerIdCount;
     }
 
     private void addProducerId(long producerId, ProducerStateEntry entry) {
         producers.put(producerId, entry);
-        _producerIdCount = producers.size();
+        producerIdCount = producers.size();
     }
 
     private void removeProducerIds(List<Long> keys) {
         producers.keySet().removeAll(keys);
-        _producerIdCount = producers.size();
+        producerIdCount = producers.size();
     }
 
     private void clearProducerIds() {
         producers.clear();
-        _producerIdCount = 0;
+        producerIdCount = 0;
     }
 
     /**
