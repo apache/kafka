@@ -58,6 +58,8 @@ public final class ScramImage {
         }
     }
 
+    private static final String describeDuplicateUser = "Cannot describe SCRAM credentials for the same user twice in a single request: ";
+    private static final String describeUserThatDoesNotExist = "Attempt to describe a user credential that does not exist ";
     public DescribeUserScramCredentialsResponseData describe(DescribeUserScramCredentialsRequestData request) {
 
         List<UserName> users = request.users();
@@ -101,11 +103,11 @@ public final class ScramImage {
                     result.setCredentialInfos(credentialInfos);
                 } else {
                     result.setErrorCode(Errors.RESOURCE_NOT_FOUND.code())
-                          .setErrorMessage("attemptToDescribeUserThatDoesNotExist: " + user.getKey());
+                          .setErrorMessage(describeUserThatDoesNotExist + user.getKey());
                 }
             } else {
                 result.setErrorCode(Errors.DUPLICATE_RESOURCE.code())
-                      .setErrorMessage("Cannot describe SCRAM credentials for the same user twice in a single request: " + user.getKey());
+                      .setErrorMessage(describeDuplicateUser + user.getKey());
             }
             retval.results().add(result);
         }
