@@ -887,6 +887,76 @@ class AbstractFetcherThreadTest {
     fetcher.verifyLastFetchedEpoch(partition, Some(5))
   }
 
+  @Test
+  def testTruncateOnFetchDoesNotProcessPartitionData(): Unit = {
+    assumeTrue(truncateOnFetch)
+
+    val partition = new TopicPartition("topic", 0)
+
+    var truncateCalls = 0
+    var processPartitionDataCalls = 0
+    val fetcher = new MockFetcherThread {
+      override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
+        processPartitionDataCalls += 1
+        super.processPartitionData(topicPartition, fetchOffset, partitionData)
+      }
+
+      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+        truncateCalls += 1
+        super.truncate(topicPartition, truncationState)
+      }
+    }
+
+    val replicaLog = Seq(
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
+      mkBatch(baseOffset = 1, leaderEpoch = 0, new SimpleRecord("b".getBytes)),
+      mkBatch(baseOffset = 2, leaderEpoch = 2, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 3, leaderEpoch = 4, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 4, leaderEpoch = 4, new SimpleRecord("e".getBytes)),
+      mkBatch(baseOffset = 5, leaderEpoch = 4, new SimpleRecord("f".getBytes)),
+    )
+
+    val replicaState = MockFetcherThread.PartitionState(replicaLog, leaderEpoch = 5, highWatermark = 1L)
+    fetcher.setReplicaState(partition, replicaState)
+    fetcher.addPartitions(Map(partition -> initialFetchState(3L, leaderEpoch = 5)))
+    assertEquals(6L, replicaState.logEndOffset)
+    fetcher.verifyLastFetchedEpoch(partition, expectedEpoch = Some(4))
+
+    val leaderLog = Seq(
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
+      mkBatch(baseOffset = 1, leaderEpoch = 0, new SimpleRecord("b".getBytes)),
+      mkBatch(baseOffset = 2, leaderEpoch = 2, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 3, leaderEpoch = 5, new SimpleRecord("g".getBytes)),
+      mkBatch(baseOffset = 4, leaderEpoch = 5, new SimpleRecord("h".getBytes)),
+    )
+
+    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 5, highWatermark = 4L)
+    fetcher.setLeaderState(partition, leaderState)
+
+    // The first fetch should result in truncating the follower's log and
+    // it should not process the data hence not update the high watermarks.
+    fetcher.doWork()
+
+    assertEquals(1, truncateCalls)
+    assertEquals(0, processPartitionDataCalls)
+    assertEquals(3L, replicaState.logEndOffset)
+    assertEquals(1L, replicaState.highWatermark)
+
+    // Truncate should have been called only once and process partition data
+    // should have been called at least once. The log end offset and the high
+    // watermark are updated.
+    TestUtils.waitUntilTrue(() => {
+      fetcher.doWork()
+      fetcher.replicaPartitionState(partition).log == fetcher.leaderPartitionState(partition).log
+    }, "Failed to reconcile leader and follower logs")
+    fetcher.verifyLastFetchedEpoch(partition, Some(5))
+
+    assertEquals(1, truncateCalls)
+    assertTrue(processPartitionDataCalls >= 1)
+    assertEquals(5L, replicaState.logEndOffset)
+    assertEquals(4L, replicaState.highWatermark)
+  }
+
   object MockFetcherThread {
     class PartitionState(var log: mutable.Buffer[RecordBatch],
                          var leaderEpoch: Int,
@@ -951,13 +1021,8 @@ class AbstractFetcherThreadTest {
       val state = replicaPartitionState(topicPartition)
 
       if (isTruncationOnFetchSupported && partitionData.divergingEpoch.isPresent) {
-        val divergingEpoch = partitionData.divergingEpoch.get
-        truncateOnFetchResponse(Map(topicPartition -> new EpochEndOffset()
-          .setPartition(topicPartition.partition)
-          .setErrorCode(Errors.NONE.code)
-          .setLeaderEpoch(divergingEpoch.epoch)
-          .setEndOffset(divergingEpoch.endOffset)))
-        return None
+        throw new IllegalStateException("processPartitionData should not be called for a partition with " +
+          "a diverging epoch.")
       }
 
       // Throw exception if the fetchOffset does not match the fetcherThread partition state

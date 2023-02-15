@@ -582,6 +582,85 @@ class ReplicaFetcherThreadTest {
   }
 
   @Test
+  def testTruncateOnFetchDoesNotUpdateHighWatermark(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val quota: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = mock(classOf[LogManager])
+    val log: Log = mock(classOf[Log])
+    val partition: Partition = mock(classOf[Partition])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+
+    val logEndOffset = 150
+    val highWatermark = 130
+
+    expect(log.highWatermark).andReturn(highWatermark).anyTimes()
+    expect(log.latestEpoch).andReturn(Some(5)).anyTimes()
+    expect(log.endOffsetForEpoch(4)).andReturn(Some(OffsetAndEpoch(149, 4))).anyTimes()
+    expect(log.logEndOffset).andReturn(logEndOffset).anyTimes()
+    expect(log.logStartOffset).andReturn(0).anyTimes()
+
+    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
+    expect(replicaManager.brokerTopicStats).andReturn(new BrokerTopicStats).anyTimes()
+
+    expect(replicaManager.localLogOrException(t1p0)).andReturn(log).anyTimes()
+    expect(replicaManager.getPartitionOrException(t1p0)).andReturn(partition).anyTimes()
+
+    expect(partition.localLogOrException).andReturn(log).anyTimes()
+    expect(partition.appendRecordsToFollowerOrFutureReplica(anyObject(), anyObject())).andReturn(None).anyTimes()
+    expect(partition.truncateTo(140, false)).once()
+
+    expect(quota.isThrottled(anyObject())).andReturn(false).anyTimes()
+
+    replay(replicaManager, logManager, quota, partition, log)
+
+    val mockNetwork = new ReplicaFetcherMockBlockingSend(
+      Collections.emptyMap(),
+      brokerEndPoint,
+      new SystemTime()
+    )
+
+    val thread = new ReplicaFetcherThread(
+      "fetcher-thread",
+      0,
+      brokerEndPoint,
+      config,
+      failedPartitions,
+      replicaManager,
+      new Metrics(),
+      new SystemTime(),
+      quota,
+      Some(mockNetwork)
+    )
+
+    thread.addPartitions(Map(
+      t1p0 -> initialFetchState(logEndOffset))
+    )
+
+    // Prepare the fetch response data.
+    mockNetwork.setFetchPartitionDataForNextResponse(Map(
+      t1p0 -> new FetchResponse.PartitionData[Records](
+        Errors.NONE,
+        160, // HWM is higher on the leader.
+        0,
+        0,
+        Optional.empty(),
+        Collections.emptyList(),
+        Optional.of(new FetchResponseData.EpochEndOffset()
+          .setEpoch(4)
+          .setEndOffset(140)),
+        MemoryRecords.EMPTY
+      )
+    ))
+
+    // Sends the fetch request and processes the response. This should truncate the
+    // log but it should not update the high watermark.
+    thread.doWork()
+
+    assertEquals(1, mockNetwork.fetchCount)
+    verify(partition, log)
+  }
+
+  @Test
   def shouldUseLeaderEndOffsetIfInterBrokerVersionBelow20(): Unit = {
 
     // Create a capture to track what partitions/offsets are truncated
