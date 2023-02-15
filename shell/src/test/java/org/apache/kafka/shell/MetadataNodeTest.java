@@ -21,7 +21,6 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
 import org.apache.kafka.shell.MetadataNode.FileNode;
