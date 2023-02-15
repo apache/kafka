@@ -44,6 +44,12 @@ public interface ChangelogReader extends ChangelogRegister {
     void transitToUpdateStandby();
 
     /**
+     * @return true if the reader is in restoring active changelog mode;
+     *         false if the reader is in updating standby changelog mode
+     */
+    boolean isRestoringActive();
+
+    /**
      * @return the changelog partitions that have been completed restoring
      */
     Set<TopicPartition> completedChangelogs();

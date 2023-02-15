@@ -1572,62 +1572,62 @@ class DefaultStateUpdaterTest {
         final Map<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put("thread-id", "test-state-updater");
 
-        MetricName metricName = new MetricName("restoring-active-tasks",
-            "stream-state-metrics",
+        MetricName metricName = new MetricName("active-restoring-tasks",
+            "stream-state-updater-metrics",
             "The number of active tasks currently undergoing restoration",
             tagMap);
         verifyMetric(metrics, metricName, is(1.0));
 
-        metricName = new MetricName("restoring-standby-tasks",
-            "stream-state-metrics",
-            "The number of standby tasks currently undergoing restoration",
+        metricName = new MetricName("standby-updating-tasks",
+            "stream-state-updater-metrics",
+            "The number of standby tasks currently undergoing state update",
             tagMap);
         verifyMetric(metrics, metricName, is(1.0));
 
-        metricName = new MetricName("paused-active-tasks",
-            "stream-state-metrics",
+        metricName = new MetricName("active-paused-tasks",
+            "stream-state-updater-metrics",
             "The number of active tasks paused restoring",
             tagMap);
         verifyMetric(metrics, metricName, is(1.0));
 
-        metricName = new MetricName("paused-standby-tasks",
-            "stream-state-metrics",
-            "The number of standby tasks paused restoring",
+        metricName = new MetricName("standby-paused-tasks",
+            "stream-state-updater-metrics",
+            "The number of standby tasks paused state update",
             tagMap);
         verifyMetric(metrics, metricName, is(1.0));
 
         metricName = new MetricName("idle-ratio",
-            "stream-state-metrics",
+            "stream-state-updater-metrics",
             "The fraction of time the thread spent on being idle",
             tagMap);
         verifyMetric(metrics, metricName, not(0.0d));
 
-        metricName = new MetricName("restore-ratio",
-            "stream-state-metrics",
-            "The fraction of time the thread spent on restoring tasks",
+        metricName = new MetricName("active-restore-ratio",
+            "stream-state-updater-metrics",
+            "The fraction of time the thread spent on restoring active tasks",
+            tagMap);
+        verifyMetric(metrics, metricName, not(0.0d));
+
+        metricName = new MetricName("standby-update-ratio",
+            "stream-state-updater-metrics",
+            "The fraction of time the thread spent on updating standby tasks",
             tagMap);
         verifyMetric(metrics, metricName, not(0.0d));
 
         metricName = new MetricName("checkpoint-ratio",
-            "stream-state-metrics",
+            "stream-state-updater-metrics",
             "The fraction of time the thread spent on checkpointing tasks restored progress",
             tagMap);
         verifyMetric(metrics, metricName, not(0.0d));
 
-        metricName = new MetricName("restore-records-total",
-            "stream-state-metrics",
-            "The total number of records restored",
-            tagMap);
-        verifyMetric(metrics, metricName, not(0.0d));
-
         metricName = new MetricName("restore-records-rate",
-            "stream-state-metrics",
+            "stream-state-updater-metrics",
             "The average per-second number of records restored",
             tagMap);
         verifyMetric(metrics, metricName, not(0.0d));
 
         metricName = new MetricName("restore-call-rate",
-            "stream-state-metrics",
+            "stream-state-updater-metrics",
             "The average per-second number of restore calls triggered",
             tagMap);
         verifyMetric(metrics, metricName, not(0.0d));

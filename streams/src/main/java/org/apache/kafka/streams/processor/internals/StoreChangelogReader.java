@@ -330,6 +330,11 @@ public class StoreChangelogReader implements ChangelogReader {
         state = ChangelogReaderState.STANDBY_UPDATING;
     }
 
+    @Override
+    public boolean isRestoringActive() {
+        return state == ChangelogReaderState.ACTIVE_RESTORING;
+    }
+
     /**
      * Since it is shared for multiple tasks and hence multiple state managers, the registration would take its
      * corresponding state manager as well for restoring.

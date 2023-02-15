@@ -62,6 +62,11 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
+    public boolean isRestoringActive() {
+        return true;
+    }
+
+    @Override
     public Set<TopicPartition> completedChangelogs() {
         // assuming all restoring partitions are completed
         return restoringPartitions;
