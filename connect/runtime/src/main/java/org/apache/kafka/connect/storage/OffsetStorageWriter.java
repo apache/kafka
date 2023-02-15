@@ -134,11 +134,14 @@ public class OffsetStorageWriter {
     public boolean beginFlush(long timeout, TimeUnit timeUnit) throws InterruptedException, TimeoutException {
         if (flushInProgress.tryAcquire(Math.max(0, timeout), timeUnit)) {
             synchronized (this) {
-                if (data.isEmpty())
+                if (data.isEmpty()) {
+                    flushInProgress.release();
                     return false;
-                toFlush = data;
-                data = new HashMap<>();
-                return true;
+                } else {
+                    toFlush = data;
+                    data = new HashMap<>();
+                    return true;
+                }
             }
         } else {
             throw new TimeoutException("Timed out waiting for previous flush to finish");

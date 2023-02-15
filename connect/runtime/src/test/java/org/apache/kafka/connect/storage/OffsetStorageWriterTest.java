@@ -119,6 +119,7 @@ public class OffsetStorageWriterTest {
     @Test
     public void testNoOffsetsToFlush() throws InterruptedException, TimeoutException {
         assertFalse(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
+        assertFalse(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
 
         // If no offsets are flushed, we should finish immediately and not have made any calls to the
         // underlying storage layer
@@ -159,6 +160,7 @@ public class OffsetStorageWriterTest {
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
+        assertThrows(TimeoutException.class, () -> writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         writer.doFlush(callback);
         assertThrows(TimeoutException.class, () -> writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         allowStoreCompleteCountdown.countDown();
