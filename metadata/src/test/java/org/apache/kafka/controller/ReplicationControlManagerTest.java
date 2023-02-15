@@ -242,7 +242,7 @@ public class ReplicationControlManagerTest {
         CreatableTopicResult createTestTopic(String name, int[][] replicas,
                                              Map<String, String> configs,
                                              short expectedErrorCode) throws Exception {
-            assertFalse(replicas.length == 0);
+            assertNotEquals(0, replicas.length);
             CreateTopicsRequestData request = new CreateTopicsRequestData();
             CreatableTopic topic = new CreatableTopic().setName(name);
             topic.setNumPartitions(-1).setReplicationFactor((short) -1);
@@ -284,7 +284,7 @@ public class ReplicationControlManagerTest {
 
         void createPartitions(int count, String name,
                 int[][] replicas, short expectedErrorCode) throws Exception {
-            assertFalse(replicas.length == 0);
+            assertNotEquals(0, replicas.length);
             CreatePartitionsTopic topic = new CreatePartitionsTopic().
                 setName(name).
                 setCount(count);

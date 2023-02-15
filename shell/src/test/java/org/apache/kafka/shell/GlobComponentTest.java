@@ -20,6 +20,7 @@ package org.apache.kafka.shell;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -44,9 +45,9 @@ public class GlobComponentTest {
 
     @Test
     public void testToRegularExpression() {
-        assertEquals(null, GlobComponent.toRegularExpression("blah"));
-        assertEquals(null, GlobComponent.toRegularExpression(""));
-        assertEquals(null, GlobComponent.toRegularExpression("does not need a regex, actually"));
+        assertNull(GlobComponent.toRegularExpression("blah"));
+        assertNull(GlobComponent.toRegularExpression(""));
+        assertNull(GlobComponent.toRegularExpression("does not need a regex, actually"));
         assertEquals("^\\$blah.*$", GlobComponent.toRegularExpression("$blah*"));
         assertEquals("^.*$", GlobComponent.toRegularExpression("*"));
         assertEquals("^foo(?:(?:bar)|(?:baz))$", GlobComponent.toRegularExpression("foo{bar,baz}"));
