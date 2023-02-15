@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.common.ClientIdAndBroker
-import kafka.log.LogAppendInfo
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.CoreUtils.inLock
@@ -34,6 +33,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
 import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.storage.internals.log.LogAppendInfo
 
 import java.nio.ByteBuffer
 import java.util
@@ -380,7 +380,7 @@ abstract class AbstractFetcherThread(name: String,
                           // Update partitionStates only if there is no exception during processPartitionData
                           val newFetchState = PartitionFetchState(currentFetchState.topicId, nextOffset, Some(lag),
                             currentFetchState.currentLeaderEpoch, state = Fetching,
-                            logAppendInfo.lastLeaderEpoch)
+                            logAppendInfo.lastLeaderEpoch.asScala)
                           partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
                           fetcherStats.byteRate.mark(validBytes)
                         }
