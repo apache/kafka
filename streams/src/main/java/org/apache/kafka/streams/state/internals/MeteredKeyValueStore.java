@@ -81,14 +81,14 @@ public class MeteredKeyValueStore<K, V>
     protected Sensor putSensor;
     private Sensor putIfAbsentSensor;
     protected Sensor getSensor;
-    private Sensor deleteSensor;
+    protected Sensor deleteSensor;
     private Sensor putAllSensor;
     private Sensor allSensor;
     private Sensor rangeSensor;
     private Sensor prefixScanSensor;
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
-    private InternalProcessorContext context;
+    protected InternalProcessorContext context;
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
 
