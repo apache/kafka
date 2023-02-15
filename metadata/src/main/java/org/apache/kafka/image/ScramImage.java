@@ -59,7 +59,7 @@ public final class ScramImage {
     }
 
     private static final String describeDuplicateUser = "Cannot describe SCRAM credentials for the same user twice in a single request: ";
-    private static final String describeUserThatDoesNotExist = "Attempt to describe a user credential that does not exist ";
+    private static final String describeUserThatDoesNotExist = "Attempt to describe a user credential that does not exist: ";
     public DescribeUserScramCredentialsResponseData describe(DescribeUserScramCredentialsRequestData request) {
 
         List<UserName> users = request.users();
