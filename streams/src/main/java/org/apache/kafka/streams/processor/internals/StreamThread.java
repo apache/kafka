@@ -192,6 +192,10 @@ public class StreamThread extends Thread {
         stateListener = listener;
     }
 
+    public StreamThread.StateListener getStateListener() {
+        return stateListener;
+    }
+
     /**
      * @return The state this instance is in
      */

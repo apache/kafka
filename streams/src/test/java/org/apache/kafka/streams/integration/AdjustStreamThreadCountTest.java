@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreamsWrapper;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.test.TestUtils;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
@@ -260,18 +262,32 @@ public class AdjustStreamThreadCountTest {
 
     @Test
     public void testRebalanceHappensBeforeStreamThreadGetDown() throws Exception {
-        final Properties prop = new Properties();
-        prop.putAll(properties);
-        // make rebalance happen quickly
-        prop.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), prop)) {
+        try (final KafkaStreamsWrapper kafkaStreams = new KafkaStreamsWrapper(builder.build(), properties)) {
             addStreamStateChangeListener(kafkaStreams);
             startStreamsAndWaitForRunning(kafkaStreams);
             stateTransitionHistory.clear();
 
-            assertThat(kafkaStreams.removeStreamThread().isPresent(), Matchers.is(true));
+            final StreamThread thread = kafkaStreams.streamThreads().get(0);
+            final StreamThread.StateListener listener = thread.getStateListener();
+            final CountDownLatch latchBeforeDead = new CountDownLatch(1);
+            thread.setStateListener((thread1, newState, oldState) -> {
+                final StreamThread.State current = (StreamThread.State) newState;
+                if (current == StreamThread.State.DEAD) {
+                    try {
+                        // block the pending shutdown thread to test whether other running thread
+                        // can make kafka streams running
+                        latchBeforeDead.await(DEFAULT_DURATION.toMillis(), TimeUnit.MILLISECONDS);
+                    } catch (final InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                listener.onChange(thread1, newState, oldState);
+            });
+            final Optional<String> threadName = kafkaStreams.removeStreamThread();
+            assertThat(threadName.isPresent(), Matchers.is(true));
+            assertEquals(thread.getName(), threadName.get());
             waitForTransitionFromRebalancingToRunning();
-            stateTransitionHistory.clear();
+            latchBeforeDead.countDown();
         }
     }
 
