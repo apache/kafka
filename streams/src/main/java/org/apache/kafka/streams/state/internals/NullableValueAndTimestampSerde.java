@@ -37,6 +37,10 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
  * tombstones and {@code byte[0]} values).
  */
 public class NullableValueAndTimestampSerde<V> extends WrappingNullableSerde<ValueAndTimestamp<V>, Void, V> {
+
+    static final int RAW_TIMESTAMP_LENGTH = 8;
+    static final int RAW_BOOLEAN_LENGTH = 1;
+
     public NullableValueAndTimestampSerde(final Serde<V> valueSerde) {
         super(
             new NullableValueAndTimestampSerializer<>(requireNonNull(valueSerde).serializer()),
@@ -52,9 +56,7 @@ public class NullableValueAndTimestampSerde<V> extends WrappingNullableSerde<Val
             @Override
             public byte[] serialize(final String topic, final Boolean data) {
                 if (data == null) {
-                    // actually want to return null here but spotbugs won't allow deserialization so
-                    // we fail here during serialization too for consistency
-                    throw new SerializationException("BooleanSerializer does not support null");
+                    return null;
                 }
 
                 return new byte[] {
@@ -67,9 +69,9 @@ public class NullableValueAndTimestampSerde<V> extends WrappingNullableSerde<Val
             @Override
             public Boolean deserialize(final String topic, final byte[] data) {
                 if (data == null) {
-                    // actually want to return null here but spotbugs won't allow it (NP_BOOLEAN_RETURN_NULL)
-                    throw new SerializationException("BooleanDeserializer does not support null bytes");
+                    return null;
                 }
+
                 if (data.length != 1) {
                     throw new SerializationException("Size of data received by BooleanDeserializer is not 1");
                 }

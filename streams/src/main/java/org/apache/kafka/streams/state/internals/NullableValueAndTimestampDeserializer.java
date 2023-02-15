@@ -17,9 +17,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableDeserializer;
+import static org.apache.kafka.streams.state.internals.NullableValueAndTimestampSerde.RAW_BOOLEAN_LENGTH;
+import static org.apache.kafka.streams.state.internals.NullableValueAndTimestampSerde.RAW_TIMESTAMP_LENGTH;
 
 import java.util.Map;
 import java.util.Objects;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
@@ -60,7 +63,10 @@ public class NullableValueAndTimestampDeserializer<V> implements WrappingNullabl
             return ValueAndTimestamp.makeAllowNullable(null, timestamp);
         } else {
             final V value = valueDeserializer.deserialize(topic, rawValue(rawValueAndTimestamp));
-            return ValueAndTimestamp.makeAllowNullable(value, timestamp);
+            if (value == null) {
+                throw new SerializationException("Deserializer cannot deserialize non-null bytes as null");
+            }
+            return ValueAndTimestamp.make(value, timestamp);
         }
     }
 
@@ -79,21 +85,21 @@ public class NullableValueAndTimestampDeserializer<V> implements WrappingNullabl
     }
 
     private static byte[] rawTimestamp(final byte[] rawValueAndTimestamp) {
-        final byte[] rawTimestamp = new byte[8];
-        System.arraycopy(rawValueAndTimestamp, 0, rawTimestamp, 0, 8);
+        final byte[] rawTimestamp = new byte[RAW_TIMESTAMP_LENGTH];
+        System.arraycopy(rawValueAndTimestamp, 0, rawTimestamp, 0, RAW_TIMESTAMP_LENGTH);
         return rawTimestamp;
     }
 
     private static byte[] rawIsTombstone(final byte[] rawValueAndTimestamp) {
-        final byte[] rawIsTombstone = new byte[1];
-        System.arraycopy(rawValueAndTimestamp, 8, rawIsTombstone, 0, 1);
+        final byte[] rawIsTombstone = new byte[RAW_BOOLEAN_LENGTH];
+        System.arraycopy(rawValueAndTimestamp, RAW_TIMESTAMP_LENGTH, rawIsTombstone, 0, RAW_BOOLEAN_LENGTH);
         return rawIsTombstone;
     }
 
     private static byte[] rawValue(final byte[] rawValueAndTimestamp) {
-        final int rawValueLength = rawValueAndTimestamp.length - 9;
+        final int rawValueLength = rawValueAndTimestamp.length - RAW_TIMESTAMP_LENGTH - RAW_BOOLEAN_LENGTH;
         final byte[] rawValue = new byte[rawValueLength];
-        System.arraycopy(rawValueAndTimestamp, 9, rawValue, 0, rawValueLength);
+        System.arraycopy(rawValueAndTimestamp, RAW_TIMESTAMP_LENGTH + RAW_BOOLEAN_LENGTH, rawValue, 0, rawValueLength);
         return rawValue;
     }
 }

@@ -17,10 +17,13 @@
 package org.apache.kafka.streams.state.internals;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableSerializer;
+import static org.apache.kafka.streams.state.internals.NullableValueAndTimestampSerde.RAW_BOOLEAN_LENGTH;
+import static org.apache.kafka.streams.state.internals.NullableValueAndTimestampSerde.RAW_TIMESTAMP_LENGTH;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
@@ -57,10 +60,16 @@ public class NullableValueAndTimestampSerializer<V> implements WrappingNullableS
         final byte[] rawValue = valueSerializer.serialize(topic, data.value());
         final byte[] rawIsTombstone = booleanSerializer.serialize(topic, rawValue == null);
         final byte[] rawTimestamp = timestampSerializer.serialize(topic, data.timestamp());
+        if (rawIsTombstone.length != RAW_BOOLEAN_LENGTH) {
+            throw new SerializationException("Unexpected length for serialized boolean: " + rawIsTombstone.length);
+        }
+        if (rawTimestamp.length != RAW_TIMESTAMP_LENGTH) {
+            throw new SerializationException("Unexpected length for serialized timestamp: " + rawTimestamp.length);
+        }
 
         final byte[] nonNullRawValue = rawValue == null ? new byte[0] : rawValue;
         return ByteBuffer
-            .allocate(rawTimestamp.length + rawIsTombstone.length + nonNullRawValue.length)
+            .allocate(RAW_TIMESTAMP_LENGTH + RAW_BOOLEAN_LENGTH + nonNullRawValue.length)
             .put(rawTimestamp)
             .put(rawIsTombstone)
             .put(nonNullRawValue)
