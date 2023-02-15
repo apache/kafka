@@ -2844,8 +2844,7 @@ public class FetcherTest {
                 metrics,
                 metricsRegistry,
                 time,
-                isolationLevel,
-                apiVersions) {
+                isolationLevel) {
             @Override
             protected FetchSessionHandler sessionHandler(int id) {
                 final FetchSessionHandler handler = super.sessionHandler(id);
@@ -3647,8 +3646,7 @@ public class FetcherTest {
                 metrics,
                 metricsRegistry,
                 time,
-                isolationLevel,
-                apiVersions));
+                isolationLevel));
         metadataFetcher = new MetadataFetcher(logContext,
                 consumerClient,
                 metadata,

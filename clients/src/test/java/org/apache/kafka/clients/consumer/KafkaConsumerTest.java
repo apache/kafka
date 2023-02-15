@@ -2628,7 +2628,6 @@ public class KafkaConsumerTest {
                 null);
         }
         IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
-        ApiVersions apiVersions = new ApiVersions();
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,
                 consumerClient,
@@ -2646,8 +2645,7 @@ public class KafkaConsumerTest {
                 metrics,
                 metricsRegistry.fetcherMetrics,
                 time,
-                isolationLevel,
-                apiVersions);
+                isolationLevel);
         MetadataFetcher metadataFetcher = new MetadataFetcher(loggerFactory,
                 consumerClient,
                 metadata,
@@ -2656,7 +2654,7 @@ public class KafkaConsumerTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 isolationLevel,
-                apiVersions);
+                new ApiVersions());
 
         return new KafkaConsumer<>(
                 loggerFactory,

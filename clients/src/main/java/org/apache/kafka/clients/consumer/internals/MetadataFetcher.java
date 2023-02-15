@@ -451,6 +451,8 @@ public class MetadataFetcher {
      * For each partition which needs validation, make an asynchronous request to get the end-offsets for the partition
      * with the epoch less than or equal to the epoch the partition last saw.
      *
+     * <p/>
+     *
      * Requests are grouped by Node for efficiency.
      */
     private void validateOffsetsAsync(Map<TopicPartition, FetchPosition> partitionsToValidate) {
@@ -770,9 +772,9 @@ public class MetadataFetcher {
 
     /**
      * If we have seen new metadata (as tracked by {@link org.apache.kafka.clients.Metadata#updateVersion()}), then
-     * we should check that all of the assignments have a valid position.
+     * we should check that all the assignments have a valid position.
      */
-    private void validatePositionsOnMetadataChange() {
+    public void validatePositionsOnMetadataChange() {
         int newMetadataUpdateVersion = metadata.updateVersion();
         if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
             subscriptions.assignedPartitions().forEach(topicPartition -> {

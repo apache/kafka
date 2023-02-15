@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -84,7 +83,6 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * This class manages the fetching process with the brokers.
@@ -129,8 +127,6 @@ public class Fetcher<K, V> implements Closeable {
     private final IsolationLevel isolationLevel;
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
     private final Set<Integer> nodesWithPendingFetchRequests;
-    private final ApiVersions apiVersions;
-    private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
     private CompletedFetch nextInLineFetch = null;
 
@@ -150,8 +146,7 @@ public class Fetcher<K, V> implements Closeable {
                    Metrics metrics,
                    FetcherMetricsRegistry metricsRegistry,
                    Time time,
-                   IsolationLevel isolationLevel,
-                   ApiVersions apiVersions) {
+                   IsolationLevel isolationLevel) {
         this.log = logContext.logger(Fetcher.class);
         this.logContext = logContext;
         this.time = time;
@@ -170,7 +165,6 @@ public class Fetcher<K, V> implements Closeable {
         this.completedFetches = new ConcurrentLinkedQueue<>();
         this.sensors = new FetchManagerMetrics(metrics, metricsRegistry);
         this.isolationLevel = isolationLevel;
-        this.apiVersions = apiVersions;
         this.sessionHandlers = new HashMap<>();
         this.nodesWithPendingFetchRequests = new HashSet<>();
     }
@@ -296,6 +290,8 @@ public class Fetcher<K, V> implements Closeable {
     /**
      * Send Fetch Request to Kafka cluster asynchronously.
      *
+     * </p>
+     *
      * This method is visible for testing.
      *
      * @return A future that indicates result of sent Fetch request
@@ -322,6 +318,8 @@ public class Fetcher<K, V> implements Closeable {
 
     /**
      * Return the fetched records, empty the record buffer and update the consumed position.
+     *
+     * </p>
      *
      * NOTE: returning an {@link Fetch#isEmpty empty} fetch guarantees the consumed position is not updated.
      *
@@ -477,28 +475,11 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
-     * If we have seen new metadata (as tracked by {@link org.apache.kafka.clients.Metadata#updateVersion()}), then
-     * we should check that all of the assignments have a valid position.
-     */
-    private void validatePositionsOnMetadataChange() {
-        int newMetadataUpdateVersion = metadata.updateVersion();
-        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
-            subscriptions.assignedPartitions().forEach(topicPartition -> {
-                ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(topicPartition);
-                subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, topicPartition, leaderAndEpoch);
-            });
-        }
-    }
-
-    /**
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
-
-        validatePositionsOnMetadataChange();
-
         long currentTimeMs = time.milliseconds();
         Map<String, Uuid> topicIds = metadata.topicIds();
 

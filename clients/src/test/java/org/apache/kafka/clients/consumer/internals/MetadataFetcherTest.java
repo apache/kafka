@@ -1395,9 +1395,7 @@ public class MetadataFetcherTest {
                 metrics,
                 metricsRegistry,
                 time,
-                isolationLevel,
-                apiVersions);
-
+                isolationLevel);
 
         assignFromUser(singleton(tp0));
 

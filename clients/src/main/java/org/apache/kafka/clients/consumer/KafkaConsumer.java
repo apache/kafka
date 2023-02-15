@@ -813,8 +813,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metrics,
                     metricsRegistry,
                     this.time,
-                    isolationLevel,
-                    apiVersions);
+                    isolationLevel);
             this.metadataFetcher = new MetadataFetcher(logContext,
                     client,
                     metadata,
@@ -1260,7 +1259,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     //
                     // NOTE: since the consumed position has already been updated, we must not allow
                     // wakeups or any other errors to be triggered prior to returning the fetched records.
-                    if (fetcher.sendFetches() > 0 || client.hasPendingRequests()) {
+                    if (sendFetches() > 0 || client.hasPendingRequests()) {
                         client.transmitSends();
                     }
 
@@ -1278,6 +1277,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             release();
             this.kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
         }
+    }
+
+    private int sendFetches() {
+        metadataFetcher.validatePositionsOnMetadataChange();
+        return fetcher.sendFetches();
     }
 
     boolean updateAssignmentMetadataIfNeeded(final Timer timer, final boolean waitForJoinGroup) {
@@ -1302,7 +1306,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
 
         // send any new fetches (won't resend pending fetches)
-        fetcher.sendFetches();
+        sendFetches();
 
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
