@@ -124,6 +124,8 @@ public class OffsetStorageWriter {
      * Performs the first step of a flush operation, snapshotting the current state. This does not
      * actually initiate the flush with the underlying storage. Ensures that any previous flush operations
      * have finished before beginning a new flush.
+     * <p>If and only if this method returns true, the caller must call {@link #doFlush(Callback)}
+     * or {@link #cancelFlush()} to finish the flush operation and allow later calls to complete.
      *
      * @param timeout A maximum duration to wait for previous flushes to finish before giving up on waiting
      * @param timeUnit Units of the timeout argument
