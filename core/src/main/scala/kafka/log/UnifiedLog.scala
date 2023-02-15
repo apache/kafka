@@ -30,7 +30,6 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
-import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
@@ -40,24 +39,17 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetsListener, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetsListener, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
-import java.util.{Collections, Optional, OptionalInt, OptionalLong}
+import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
-
-
-
-
-
-
-
 
 /**
  * Container class which represents a snapshot of the significant offsets for a partition. This allows fetching
@@ -78,26 +70,6 @@ case class LogReadInfo(fetchedData: FetchDataInfo,
                        logStartOffset: Long,
                        logEndOffset: Long,
                        lastStableOffset: Long)
-
-/**
- * A class used to hold params required to decide to rotate a log segment or not.
- */
-case class RollParams(maxSegmentMs: Long,
-                      maxSegmentBytes: Int,
-                      maxTimestampInMessages: Long,
-                      maxOffsetInMessages: Long,
-                      messagesSize: Int,
-                      now: Long)
-
-object RollParams {
-  def apply(config: LogConfig, appendInfo: LogAppendInfo, messagesSize: Int, now: Long): RollParams = {
-   new RollParams(config.maxSegmentMs,
-     config.segmentSize,
-     appendInfo.maxTimestamp,
-     appendInfo.lastOffset,
-     messagesSize, now)
-  }
-}
 
 sealed trait LogStartOffsetIncrementReason
 case object ClientRecordDeletion extends LogStartOffsetIncrementReason {
@@ -1137,10 +1109,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       OptionalInt.of(lastLeaderEpoch)
     else
       OptionalInt.empty()
+
     new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp,
       RecordBatch.NO_TIMESTAMP, logStartOffset, RecordConversionStats.EMPTY, sourceCompression, targetCompression,
-      shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], null,
-      LeaderHwChange.NONE)
+      shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
   }
 
   /**
@@ -1494,7 +1466,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val maxTimestampInMessages = appendInfo.maxTimestamp
     val maxOffsetInMessages = appendInfo.lastOffset
 
-    if (segment.shouldRoll(RollParams(config, appendInfo, messagesSize, now))) {
+    if (segment.shouldRoll(RollParams.create(config, appendInfo, messagesSize, now))) {
       debug(s"Rolling new log segment (log_size = ${segment.size}/${config.segmentSize}}, " +
         s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
         s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
