@@ -25,7 +25,7 @@ import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, PartitionMetadataFile
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
+import org.apache.kafka.common.message.DescribeProducersResponseData
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ListOffsetsRequest
@@ -60,16 +60,6 @@ case class LogOffsetSnapshot(logStartOffset: Long,
                              logEndOffset: LogOffsetMetadata,
                              highWatermark: LogOffsetMetadata,
                              lastStableOffset: LogOffsetMetadata)
-
-/**
- * Another container which is used for lower level reads using  [[kafka.cluster.Partition.fetchRecords()]].
- */
-case class LogReadInfo(fetchedData: FetchDataInfo,
-                       divergingEpoch: Option[FetchResponseData.EpochEndOffset],
-                       highWatermark: Long,
-                       logStartOffset: Long,
-                       logEndOffset: Long,
-                       lastStableOffset: Long)
 
 sealed trait LogStartOffsetIncrementReason
 case object ClientRecordDeletion extends LogStartOffsetIncrementReason {

@@ -44,7 +44,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetsListener}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetsListener, LogReadInfo}
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -1325,7 +1325,7 @@ class Partition(val topicPartition: TopicPartition,
         (replica, logReadInfo)
       }
 
-      if (updateFetchState && logReadInfo.divergingEpoch.isEmpty) {
+      if (updateFetchState && !logReadInfo.divergingEpoch.isPresent) {
         updateFollowerFetchState(
           replica,
           followerFetchOffsetMetadata = logReadInfo.fetchedData.fetchOffsetMetadata,
@@ -1417,13 +1417,13 @@ class Partition(val topicPartition: TopicPartition,
           .setEpoch(epochEndOffset.leaderEpoch)
           .setEndOffset(epochEndOffset.endOffset)
 
-        return LogReadInfo(
-          fetchedData = FetchDataInfo.empty(fetchOffset),
-          divergingEpoch = Some(divergingEpoch),
-          highWatermark = initialHighWatermark,
-          logStartOffset = initialLogStartOffset,
-          logEndOffset = initialLogEndOffset,
-          lastStableOffset = initialLastStableOffset)
+        return new LogReadInfo(
+          FetchDataInfo.empty(fetchOffset),
+          Optional.of(divergingEpoch),
+          initialHighWatermark,
+          initialLogStartOffset,
+          initialLogEndOffset,
+          initialLastStableOffset)
       }
     }
 
@@ -1434,13 +1434,13 @@ class Partition(val topicPartition: TopicPartition,
       minOneMessage
     )
 
-    LogReadInfo(
-      fetchedData = fetchedData,
-      divergingEpoch = None,
-      highWatermark = initialHighWatermark,
-      logStartOffset = initialLogStartOffset,
-      logEndOffset = initialLogEndOffset,
-      lastStableOffset = initialLastStableOffset
+    new LogReadInfo(
+      fetchedData,
+      Optional.empty[FetchResponseData.EpochEndOffset](),
+      initialHighWatermark,
+      initialLogStartOffset,
+      initialLogEndOffset,
+      initialLastStableOffset
     )
   }
 
