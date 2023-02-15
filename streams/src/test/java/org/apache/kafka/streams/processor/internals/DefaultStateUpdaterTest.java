@@ -1560,6 +1560,7 @@ class DefaultStateUpdaterTest {
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
         when(changelogReader.restore(tasks1234)).thenReturn(1L);
         when(changelogReader.restore(tasks13)).thenReturn(1L);
+        when(changelogReader.isRestoringActive()).thenReturn(true);
         stateUpdater.start();
         stateUpdater.add(activeTask1);
         stateUpdater.add(activeTask2);
@@ -1612,7 +1613,7 @@ class DefaultStateUpdaterTest {
             "stream-state-updater-metrics",
             "The fraction of time the thread spent on updating standby tasks",
             tagMap);
-        verifyMetric(metrics, metricName, not(0.0d));
+        verifyMetric(metrics, metricName, is(0.0d));
 
         metricName = new MetricName("checkpoint-ratio",
             "stream-state-updater-metrics",
