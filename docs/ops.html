@@ -3550,14 +3550,14 @@ foo
   <h4 class="anchor-heading"><a id="kraft_deployment" class="anchor-link"></a><a href="#kraft_deployment">Deploying Considerations</a></h4>
 
   <ul>
-    <li>Kafka server's <code>process.role</code> should be set to either <code>broker</code> or <code>controller</code> but not both. Combined mode can be used in development enviroment but it should be avoided in critical deployment evironments.</li>
-    <li>For redundancy, a Kafka cluster should use 3 controllers. More than 3 servers is not recommended in critical environments. In the rare case of a partial network failure it is possible for the cluster metadata quorum to become unavailable. This limitation will be addresses in a future release of Kafka.</li>
+    <li>Kafka server's <code>process.role</code> should be set to either <code>broker</code> or <code>controller</code> but not both. Combined mode can be used in development environments, but it should be avoided in critical deployment environments.</li>
+    <li>For redundancy, a Kafka cluster should use 3 controllers. More than 3 servers is not recommended in critical environments. In the rare case of a partial network failure it is possible for the cluster metadata quorum to become unavailable. This limitation will be addressed in a future release of Kafka.</li>
     <li>The Kafka controllers store all of the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
   </ul>
 
   <h4 class="anchor-heading"><a id="kraft_missing" class="anchor-link"></a><a href="#kraft_missing">Missing Features</a></h4>
 
-  <p>The following features are not fullying implemented in KRaft mode:</p>
+  <p>The following features are not fully implemented in KRaft mode:</p>
 
   <ul>
     <li>Configuring SCRAM users via the administrative API</li>
@@ -3569,7 +3569,7 @@ foo
   <h4 class="anchor-heading"><a id="kraft_zk_migration" class="anchor-link"></a><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a></h4>
 
   <p>
-    <b>The ZooKeeper to KRaft migration feature is considered Early Access in 3.4.0. It is not recommended for production clusters.</b>
+    <b>ZooKeeper to KRaft migration is considered an Early Access feature in 3.4.0 and is not recommended for production clusters.</b>
   </p>
 
   <p>The following features are not yet supported for ZK to KRaft migrations:</p>
@@ -3587,13 +3587,13 @@ foo
 
   <h3>Terminology</h3>
   <p>
-    In this documentation, we use the term "migration" to refer to the process to changing a Kafka cluster's metadata
-    system from ZooKeeper to KRaft. An "upgrade" refers to installing a newer version of Kafka. It is not recommended to
-    upgrade the software at the same time as performing a migration.
+    We use the term "migration" here to refer to the process of changing a Kafka cluster's metadata
+    system from ZooKeeper to KRaft and migrating existing metadata. An "upgrade" refers to installing a newer version of Kafka. It is not recommended to
+    upgrade the software at the same time as performing a metadata migration.
   </p>
 
   <p>
-    This documentation uses the term "ZK mode" to refer to Kafka brokers which are using ZooKeeper as their metadata
+    We also use the term "ZK mode" to refer to Kafka brokers which are using ZooKeeper as their metadata
     system. "KRaft mode" refers Kafka brokers which are using a KRaft controller quorum as their metadata system.
   </p>
 
@@ -3612,12 +3612,12 @@ foo
   <pre>log4j.logger.org.apache.kafka.metadata.migration=TRACE</pre>
 
   <p>
-    It may generally useful to enable DEBUG logging on the KRaft controllers and the ZK brokers during the migration.
+    It is generally useful to enable DEBUG logging on the KRaft controllers and the ZK brokers during the migration.
   </p>
 
   <h3>Provisioning the KRaft controller quorum</h3>
   <p>
-    Two things are needed before the migration can begin. The brokers must be configured to support the migration and
+    Two things are needed before the migration can begin. First, the brokers must be configured to support the migration and second,
     a KRaft controller quorum must be deployed. The KRaft controllers should be provisioned with the same cluster ID as
     the existing Kafka cluster. This can be found by examining one of the "meta.properties" files in the data directories
     of the brokers, or by running the following command.
@@ -3635,6 +3635,9 @@ foo
     as well as provide ZooKeeper connection configuration.
   </p>
 
+  <p>
+    Here is a sample config for a KRaft controller that is ready for migration:
+  </p>
   <pre>
 # Sample KRaft cluster controller.properties listening on 9093
 process.roles=controller
@@ -3657,8 +3660,8 @@ zookeeper.connect=localhost:2181
   <h3>Enabling the migration on the brokers</h3>
   <p>
     Once the KRaft controller quorum has been started, the brokers will need to be reconfigured and restarted. Brokers
-    may be restarted in a rolling fashion to avoid impacting cluster availability. Each broker will need to add the
-    following configurations to allow it to communicate with the KRaft controllers and to enable the migration.
+    may be restarted in a rolling fashion to avoid impacting cluster availability. Each broker requires the
+    following configuration to communicate with the KRaft controllers and to enable the migration.
   </p>
 
   <ul>
@@ -3692,10 +3695,12 @@ controller.listener.names=CONTROLLER</pre>
 
   <p>
     <em>Note: Once the final ZK broker has been restarted with the necessary configuration, the migration will automatically begin.</em>
-    When the migration is complete, a INFO level log can be observed on the active controller.
+    When the migration is complete, an INFO level log can be observed on the active controller:
   </p>
 
-  <pre>Completed migration of metadata from Zookeeper to KRaft</pre>
+  <pre>
+    Completed migration of metadata from Zookeeper to KRaft
+  </pre>
 
   <h3>Migrating brokers to KRaft</h3>
   <p>
