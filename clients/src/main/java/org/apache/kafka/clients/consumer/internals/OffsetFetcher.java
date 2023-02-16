@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -40,13 +39,9 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochClient.OffsetForEpochResult;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -58,15 +53,18 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
-import org.apache.kafka.common.requests.MetadataRequest;
-import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
-public class MetadataFetcher {
+/**
+ * {@link OffsetFetcher} is responsible for fetching the {@link OffsetAndTimestamp offsets} for
+ * a given set of {@link TopicPartition topic and partition pairs} and for validation and resetting of offsets,
+ * as needed.
+ */
+public class OffsetFetcher {
 
     private final Logger log;
     private final ConsumerMetadata metadata;
@@ -82,15 +80,15 @@ public class MetadataFetcher {
     private final ApiVersions apiVersions;
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
 
-    public MetadataFetcher(LogContext logContext,
-                           ConsumerNetworkClient client,
-                           ConsumerMetadata metadata,
-                           SubscriptionState subscriptions,
-                           Time time,
-                           long retryBackoffMs,
-                           long requestTimeoutMs,
-                           IsolationLevel isolationLevel,
-                           ApiVersions apiVersions) {
+    public OffsetFetcher(LogContext logContext,
+                         ConsumerNetworkClient client,
+                         ConsumerMetadata metadata,
+                         SubscriptionState subscriptions,
+                         Time time,
+                         long retryBackoffMs,
+                         long requestTimeoutMs,
+                         IsolationLevel isolationLevel,
+                         ApiVersions apiVersions) {
         this.log = logContext.logger(getClass());
         this.time = time;
         this.client = client;
@@ -135,94 +133,6 @@ public class MetadataFetcher {
             return OffsetResetStrategy.LATEST;
         else
             return null;
-    }
-
-    /**
-     * Get topic metadata for all topics in the cluster
-     * @param timer Timer bounding how long this method can block
-     * @return The map of topics with their partition information
-     */
-    public Map<String, List<PartitionInfo>> getAllTopicMetadata(Timer timer) {
-        return getTopicMetadata(MetadataRequest.Builder.allTopics(), timer);
-    }
-
-    /**
-     * Get metadata for all topics present in Kafka cluster
-     *
-     * @param request The MetadataRequest to send
-     * @param timer Timer bounding how long this method can block
-     * @return The map of topics with their partition information
-     */
-    public Map<String, List<PartitionInfo>> getTopicMetadata(MetadataRequest.Builder request, Timer timer) {
-        // Save the round trip if no topics are requested.
-        if (!request.isAllTopics() && request.emptyTopicList())
-            return Collections.emptyMap();
-
-        do {
-            RequestFuture<ClientResponse> future = sendMetadataRequest(request);
-            client.poll(future, timer);
-
-            if (future.failed() && !future.isRetriable())
-                throw future.exception();
-
-            if (future.succeeded()) {
-                MetadataResponse response = (MetadataResponse) future.value().responseBody();
-                Cluster cluster = response.buildCluster();
-
-                Set<String> unauthorizedTopics = cluster.unauthorizedTopics();
-                if (!unauthorizedTopics.isEmpty())
-                    throw new TopicAuthorizationException(unauthorizedTopics);
-
-                boolean shouldRetry = false;
-                Map<String, Errors> errors = response.errors();
-                if (!errors.isEmpty()) {
-                    // if there were errors, we need to check whether they were fatal or whether
-                    // we should just retry
-
-                    log.debug("Topic metadata fetch included errors: {}", errors);
-
-                    for (Map.Entry<String, Errors> errorEntry : errors.entrySet()) {
-                        String topic = errorEntry.getKey();
-                        Errors error = errorEntry.getValue();
-
-                        if (error == Errors.INVALID_TOPIC_EXCEPTION)
-                            throw new InvalidTopicException("Topic '" + topic + "' is invalid");
-                        else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION)
-                            // if a requested topic is unknown, we just continue and let it be absent
-                            // in the returned map
-                            continue;
-                        else if (error.exception() instanceof RetriableException)
-                            shouldRetry = true;
-                        else
-                            throw new KafkaException("Unexpected error fetching metadata for topic " + topic,
-                                    error.exception());
-                    }
-                }
-
-                if (!shouldRetry) {
-                    HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
-                    for (String topic : cluster.topics())
-                        topicsPartitionInfos.put(topic, cluster.partitionsForTopic(topic));
-                    return topicsPartitionInfos;
-                }
-            }
-
-            timer.sleep(retryBackoffMs);
-        } while (timer.notExpired());
-
-        throw new TimeoutException("Timeout expired while fetching topic metadata");
-    }
-
-    /**
-     * Send Metadata Request to least loaded node in Kafka cluster asynchronously
-     * @return A future that indicates result of sent metadata request
-     */
-    private RequestFuture<ClientResponse> sendMetadataRequest(MetadataRequest.Builder request) {
-        final Node node = client.leastLoadedNode();
-        if (node == null)
-            return RequestFuture.noBrokersAvailable();
-        else
-            return client.send(node, request);
     }
 
     /**

@@ -97,8 +97,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *     <li>If a response handler accesses any shared state of the coordinator (e.g. SubscriptionState),
  *     it is assumed that all access to that state is synchronized on the coordinator instance by
  *     the caller.</li>
- *     <li>Responses that collate partial responses from multiple brokers (e.g. to list offsets) are
- *     synchronized on the response future.</li>
  *     <li>At most one request is pending for each node at any time. Nodes with pending requests are
  *     tracked and updated after processing the response. This ensures that any state (e.g. epoch)
  *     updated while processing responses on one thread are visible while creating the subsequent request
