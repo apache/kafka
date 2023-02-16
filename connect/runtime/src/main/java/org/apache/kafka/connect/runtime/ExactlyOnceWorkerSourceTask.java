@@ -219,9 +219,6 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         if (failed) {
             log.debug("Skipping final offset commit as task has failed");
             return;
-        } else if (isCancelled()) {
-            log.debug("Skipping final offset commit as task has been cancelled");
-            return;
         }
 
         // It should be safe to commit here even if we were in the middle of retrying on RetriableExceptions in the
@@ -263,7 +260,16 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         maybeBeginTransaction();
 
         AtomicReference<Throwable> flushError = new AtomicReference<>();
-        if (offsetWriter.beginFlush()) {
+        boolean shouldFlush = false;
+        try {
+            // Begin the flush without waiting, as there should not be any concurrent flushes.
+            // This is because commitTransaction is always called on the same thread, and should always block until
+            // the flush is complete, or cancel the flush if an error occurs.
+            shouldFlush = offsetWriter.beginFlush();
+        } catch (Throwable e) {
+            flushError.compareAndSet(null, e);
+        }
+        if (shouldFlush) {
             // Now we can actually write the offsets to the internal topic.
             // No need to track the flush future here since it's guaranteed to complete by the time
             // Producer::commitTransaction completes
