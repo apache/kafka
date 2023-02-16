@@ -79,6 +79,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -904,7 +905,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         workerTaskFuture = executor.submit(workerTask);
     }
 
-    private void expectSuccessfulFlushes() {
+    private void expectSuccessfulFlushes() throws InterruptedException, TimeoutException {
         when(offsetWriter.beginFlush()).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             Callback<Void> cb = invocation.getArgument(0);
@@ -1036,7 +1037,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verify(producer, times(count)).send(any(), any());
     }
 
-    private void verifyTransactions(int numBatches) throws InterruptedException {
+    private void verifyTransactions(int numBatches) throws InterruptedException, TimeoutException {
         VerificationMode mode = times(numBatches);
         verify(producer, mode).beginTransaction();
         verify(producer, mode).commitTransaction();
