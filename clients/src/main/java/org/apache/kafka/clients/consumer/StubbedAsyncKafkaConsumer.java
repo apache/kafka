@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.consumer.internals.asyncstate.ForegroundState;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SerializedRecordWrapper;
 import org.apache.kafka.clients.consumer.internals.events.AssignPartitionsEvent;
@@ -34,6 +34,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -50,9 +51,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -63,7 +64,7 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     private EventHandler eventHandler;
 
-    private ForegroundState foregroundState;
+    private SubscriptionState subscriptions;
 
     private Deserializer<K> keyDeserializer;
 
@@ -71,14 +72,18 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     private long defaultApiTimeoutMs;
 
+    private List<ConsumerPartitionAssignor> assignors;
+
+    private Optional<String> groupId;
+
     @Override
     public Set<TopicPartition> assignment() {
-        return Collections.unmodifiableSet(foregroundState.manualAssignment());
+        return Collections.unmodifiableSet(subscriptions.assignedPartitions());
     }
 
     @Override
     public Set<String> subscription() {
-        return Collections.unmodifiableSet(foregroundState.subscription());
+        return Collections.unmodifiableSet(subscriptions.subscription());
     }
 
     @Override
@@ -88,19 +93,21 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback) {
-        // TODO:    Question 1: who "owns" the callback? The rebalance happens on the background thread,
-        //          but on which thread do we want to invoke the callback--background or foreground?
-        //          -
-        //          Question 2: Do we want to send the list of topics to the background thread and have it reconcile
-        //          the set of topics, or should we let the foreground state resolve the subscriptions and then just
-        //          pass that to the background thread to let it update its state?
-        foregroundState.subscribe(new HashSet<>(topics));
+        maybeThrowInvalidGroupIdException();
+        if (topics == null)
+            throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
+        if (topics.isEmpty()) {
+            // treat subscribing to empty topic list as the same as unsubscribing
+            this.unsubscribe();
+        } else {
+            for (String topic : topics) {
+                if (Utils.isBlank(topic))
+                    throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
+            }
 
-        // The background thread will do the following when it receives this event:
-        //
-        // 1. Determine the topics that were removed and clear any previously-fetched data
-        // 2. Request any metadata for the topics that were added
-        eventHandler.add(new SubscribeTopicsEvent(topics, callback));
+            throwIfNoAssignorsConfigured();
+            eventHandler.add(new SubscribeTopicsEvent(topics, callback));
+        }
     }
 
     @Override
@@ -110,41 +117,35 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener callback) {
-        // TODO: Same questions about callbacks and state as on other subscribe method.
-        foregroundState.subscribe(pattern);
+        maybeThrowInvalidGroupIdException();
+        if (pattern == null || pattern.toString().equals(""))
+            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
+                    "null" : "empty"));
 
-        // The background thread will do the following when it receives this event:
-        //
-        // 1. Determine the topics that were removed and clear any previously-fetched data
-        //    The existing code doesn't seem to do this?!?
-        // 2. Request any metadata for the topics that were added
+        throwIfNoAssignorsConfigured();
         eventHandler.add(new SubscribePatternEvent(pattern, callback));
     }
 
     @Override
     public void unsubscribe() {
-        // The background thread will do the following when it receives this event:
-        //
-        // 1. Remove all topics' previously-fetched data
-        // 2. Run the 'leave group' coordinator logic
-        // 3. Clear out its set of topics/assignments
         eventHandler.add(new UnsubscribeEvent());
-
-        // TODO: I assume the background state is easier to resolve here as it's just cleared out.
-        foregroundState.unsubscribe();
     }
 
     @Override
     public void assign(Collection<TopicPartition> partitions) {
-        // TODO: Same questions about state as on subscribe methods.
-        foregroundState.assign(new HashSet<>(partitions));
+        if (partitions == null) {
+            throw new IllegalArgumentException("Topic partition collection to assign to cannot be null");
+        } else if (partitions.isEmpty()) {
+            this.unsubscribe();
+        } else {
+            for (TopicPartition tp : partitions) {
+                String topic = (tp != null) ? tp.topic() : null;
+                if (Utils.isBlank(topic))
+                    throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
+            }
 
-        // The background thread will do the following when it receives this event:
-        //
-        // 1. Determine the topics that were removed and clear any previously-fetched data
-        // 2. Run the 'maybe auto commit offsets' logic
-        // 3. Request any metadata for the topics that were added
-        eventHandler.add(new AssignPartitionsEvent(partitions));
+            eventHandler.add(new AssignPartitionsEvent(partitions));
+        }
     }
 
     @Deprecated
@@ -179,7 +180,7 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
             // Make sure that this topic partition is still on our set of subscribed topics/assigned partitions,
             // as this might have changed since the fetcher submitted the fetch request.
-            if (foregroundState.isRelevant(tp)) {
+            if (isRelevant(tp)) {
                 ConsumerRecord<K, V> record = parseRecord(recordWrapper);
                 List<ConsumerRecord<K, V>> list = records.computeIfAbsent(tp, __ -> new ArrayList<>());
                 list.add(record);
@@ -225,7 +226,7 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitSync(Duration timeout) {
-        commitSync(foregroundState.allConsumed(), timeout);
+        commitSync(subscriptions.allConsumed(), timeout);
     }
 
     @Override
@@ -249,7 +250,7 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-        commitAsync(foregroundState.allConsumed(), callback);
+        commitAsync(subscriptions.allConsumed(), callback);
     }
 
     @Override
@@ -264,13 +265,11 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void seek(TopicPartition partition, long offset) {
         // TODO: This needs to be propagated to the background thread, right?
-        foregroundState.seek(partition, offset);
+        subscriptions.seek(partition, offset);
     }
 
     @Override
     public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
-        // TODO: This needs to be propagated to the background thread, right?
-        foregroundState.seek(partition, offsetAndMetadata);
     }
 
     @Override
@@ -429,4 +428,21 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
     public void wakeup() {
 
     }
+
+    private void throwIfNoAssignorsConfigured() {
+        if (assignors.isEmpty())
+            throw new IllegalStateException("Must configure at least one partition assigner class name to " +
+                    ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
+    }
+
+    private void maybeThrowInvalidGroupIdException() {
+        if (!groupId.isPresent())
+            throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
+                    "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
+    }
+
+    private boolean isRelevant(TopicPartition tp) {
+        return true;
+    }
+
 }

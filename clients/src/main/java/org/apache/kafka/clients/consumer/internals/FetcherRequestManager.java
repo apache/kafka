@@ -14,37 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.asyncstate;
+package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Pattern;
+import java.util.Collection;
 
-public interface ForegroundState {
+public interface FetcherRequestManager extends RequestManager {
 
-    void subscribe(Set<String> topics);
+    void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions);
 
-    void subscribe(Pattern pattern) ;
-
-    void assign(Set<TopicPartition> partitions);
-
-    void unsubscribe() ;
-
-    Set<String> subscription();
-
-    Set<TopicPartition> manualAssignment() ;
-
-    boolean isRelevant(TopicPartition tp);
-
-    boolean hasAllFetchPositions();
-
-    Map<TopicPartition, OffsetAndMetadata> allConsumed();
-
-    void seek(TopicPartition partition, long offset);
-
-    void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata);
+    void clearBufferedDataForUnassignedTopics(Collection<String> assignedTopics);
 
 }

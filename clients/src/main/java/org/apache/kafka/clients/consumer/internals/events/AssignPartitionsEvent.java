@@ -30,7 +30,7 @@ public class AssignPartitionsEvent extends ApplicationEvent {
         this.partitions = Collections.unmodifiableCollection(partitions);
     }
 
-    public Collection<TopicPartition> topics() {
+    public Collection<TopicPartition> partitions() {
         return partitions;
     }
 
