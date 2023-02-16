@@ -3205,7 +3205,7 @@ public class FetcherTest {
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED,
                 apiVersions);
-        offsetFetcher.validateOffsetsIfNeeded();
+        offsetFetcher.validatePositionsIfNeeded();
 
         // No fetches sent since we entered validation
         assertEquals(0, sendFetches());

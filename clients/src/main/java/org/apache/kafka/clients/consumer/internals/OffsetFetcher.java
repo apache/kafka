@@ -61,7 +61,7 @@ import org.slf4j.Logger;
 
 /**
  * {@link OffsetFetcher} is responsible for fetching the {@link OffsetAndTimestamp offsets} for
- * a given set of {@link TopicPartition topic and partition pairs} and for validation and resetting of offsets,
+ * a given set of {@link TopicPartition topic and partition pairs} and for validation and resetting of positions,
  * as needed.
  */
 public class OffsetFetcher {
@@ -141,7 +141,7 @@ public class OffsetFetcher {
      * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
      *   and one or more partitions aren't awaiting a seekToBeginning() or seekToEnd().
      */
-    public void resetOffsetsIfNeeded() {
+    public void resetPositionsIfNeeded() {
         // Raise exception from previous offset fetch if there is one
         RuntimeException exception = cachedListOffsetsException.getAndSet(null);
         if (exception != null)
@@ -158,13 +158,13 @@ public class OffsetFetcher {
                 offsetResetTimestamps.put(partition, timestamp);
         }
 
-        resetOffsetsAsync(offsetResetTimestamps);
+        resetPositionsAsync(offsetResetTimestamps);
     }
 
     /**
      * Validate offsets for all assigned partitions for which a leader change has been detected.
      */
-    public void validateOffsetsIfNeeded() {
+    public void validatePositionsIfNeeded() {
         RuntimeException exception = cachedOffsetForLeaderException.getAndSet(null);
         if (exception != null)
             throw exception;
@@ -180,7 +180,7 @@ public class OffsetFetcher {
                 .filter(tp -> subscriptions.position(tp) != null)
                 .collect(Collectors.toMap(Function.identity(), subscriptions::position));
 
-        validateOffsetsAsync(partitionsToValidate);
+        validatePositionsAsync(partitionsToValidate);
     }
 
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
@@ -303,7 +303,7 @@ public class OffsetFetcher {
     }
 
     // Visible for testing
-    void resetOffsetIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData) {
+    void resetPositionIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData) {
         FetchPosition position = new FetchPosition(
                 offsetData.offset,
                 Optional.empty(), // This will ensure we skip validation
@@ -312,7 +312,7 @@ public class OffsetFetcher {
         subscriptions.maybeSeekUnvalidated(partition, position, requestedResetStrategy);
     }
 
-    private void resetOffsetsAsync(Map<TopicPartition, Long> partitionResetTimestamps) {
+    private void resetPositionsAsync(Map<TopicPartition, Long> partitionResetTimestamps) {
         Map<Node, Map<TopicPartition, ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(partitionResetTimestamps, new HashSet<>());
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
@@ -333,7 +333,7 @@ public class OffsetFetcher {
                         TopicPartition partition = fetchedOffset.getKey();
                         ListOffsetData offsetData = fetchedOffset.getValue();
                         ListOffsetsPartition requestedReset = resetTimestamps.get(partition);
-                        resetOffsetIfNeeded(partition, timestampToOffsetResetStrategy(requestedReset.timestamp()), offsetData);
+                        resetPositionIfNeeded(partition, timestampToOffsetResetStrategy(requestedReset.timestamp()), offsetData);
                     }
                 }
 
@@ -365,7 +365,7 @@ public class OffsetFetcher {
      *
      * Requests are grouped by Node for efficiency.
      */
-    private void validateOffsetsAsync(Map<TopicPartition, FetchPosition> partitionsToValidate) {
+    private void validatePositionsAsync(Map<TopicPartition, FetchPosition> partitionsToValidate) {
         final Map<Node, Map<TopicPartition, FetchPosition>> regrouped =
                 regroupFetchPositionsByLeader(partitionsToValidate);
 

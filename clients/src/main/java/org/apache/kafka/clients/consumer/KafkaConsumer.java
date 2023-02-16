@@ -2504,7 +2504,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     private boolean updateFetchPositions(final Timer timer) {
         // If any partitions have been truncated due to a leader change, we need to validate the offsets
-        offsetFetcher.validateOffsetsIfNeeded();
+        offsetFetcher.validatePositionsIfNeeded();
 
         cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
         if (cachedSubscriptionHasAllFetchPositions) return true;
@@ -2521,9 +2521,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // are partitions with a missing position, then we will raise an exception.
         subscriptions.resetInitializingPositions();
 
-        // Finally send an asynchronous request to lookup and update the positions of any
+        // Finally send an asynchronous request to look up and update the positions of any
         // partitions which are awaiting reset.
-        offsetFetcher.resetOffsetsIfNeeded();
+        offsetFetcher.resetPositionsIfNeeded();
 
         return true;
     }
