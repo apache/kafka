@@ -190,7 +190,7 @@ public class ReadOnlyTask implements Task {
 
     @Override
     public boolean commitNeeded() {
-        return task.commitNeeded();
+        throw new UnsupportedOperationException("This task is read-only");
     }
 
     @Override

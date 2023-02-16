@@ -1549,6 +1549,17 @@ public class TaskManager {
         }
     }
 
+    /**
+     * Returns tasks owned by the stream thread. With state updater disabled, these are all tasks. With
+     * state updater enabled, this does not return any tasks currently owned by the state updater.
+     * @return
+     */
+    Map<TaskId, Task> allOwnedTasks() {
+        // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
+        // if any outside code modifies the map or the tasks, it would be a severe transgression.
+        return tasks.allTasksPerId();
+    }
+
     Map<TaskId, Task> notPausedTasks() {
         return Collections.unmodifiableMap(tasks.allTasks()
             .stream()
