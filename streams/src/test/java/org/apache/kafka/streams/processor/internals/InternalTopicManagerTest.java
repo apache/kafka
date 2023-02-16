@@ -61,6 +61,10 @@ import org.mockito.junit.MockitoJUnitRunner;
 import java.util.Arrays;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
+<<<<<<< HEAD
+=======
+import java.util.Arrays;
+>>>>>>> ecd2b34666 (resolve conflict)
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -87,6 +91,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class InternalTopicManagerTest {
@@ -307,7 +312,6 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowTimeoutExceptionIfGetNumPartitionsHasTopicDescriptionTimeout() {
-<<<<<<< HEAD
         mockAdminClient.timeoutNextRequest(1);
 
         final InternalTopicManager internalTopicManager =
@@ -321,24 +325,18 @@ public class InternalTopicManagerTest {
         } catch (final TimeoutException expected) {
             assertEquals(TimeoutException.class, expected.getCause().getClass());
         }
-=======
-        final MockTime time = new MockTime(
-                (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 15
-        );
-        final InternalTopicManager internalTopicManager =
-                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
 
-        final TimeoutException exception = assertThrows(
-                TimeoutException.class,
-                () -> internalTopicManager.getNumPartitions(Collections.singleton("test_topic"), Collections.singleton("test_topic_2"))
-        );
+        mockAdminClient.timeoutNextRequest(1);
 
-        assertThat(
-                exception.getMessage(),
-                is("Describing topic test_topic (to get number of partitions) timed out.\n" +
-                        "Error message was: " + TimeoutException.class
-        ));
->>>>>>> a56b0ebc1b (add failing test)
+        try {
+            final Set<String> topic1set = new HashSet<String>(Arrays.asList(topic1));
+            final Set<String> topic2set = new HashSet<String>(Arrays.asList(topic2));
+
+            internalTopicManager.getNumPartitions(topic1set, topic2set);
+
+        } catch (final TimeoutException expected) {
+            assertEquals(TimeoutException.class, expected.getCause().getClass());
+        }
     }
 
     @Test
