@@ -255,10 +255,6 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
         long started = time.milliseconds();
 
-        // We might have just aborted a transaction, in which case we'll have to begin a new one
-        // in order to commit offsets
-        maybeBeginTransaction();
-
         AtomicReference<Throwable> flushError = new AtomicReference<>();
         boolean shouldFlush = false;
         try {
@@ -269,6 +265,20 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         } catch (Throwable e) {
             flushError.compareAndSet(null, e);
         }
+        if (flushError.get() == null && !transactionOpen && !shouldFlush) {
+            // There is no contents on the framework side to commit, so skip the offset flush and producer commit
+            long durationMillis = time.milliseconds() - started;
+            recordCommitSuccess(durationMillis);
+            log.debug("{} Finished commitOffsets successfully in {} ms", this, durationMillis);
+
+            commitSourceTask();
+            return;
+        }
+
+        // We might have just aborted a transaction, in which case we'll have to begin a new one
+        // in order to commit offsets
+        maybeBeginTransaction();
+
         if (shouldFlush) {
             // Now we can actually write the offsets to the internal topic.
             // No need to track the flush future here since it's guaranteed to complete by the time
@@ -393,7 +403,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         }
 
         private void maybeCommitTransaction(boolean shouldCommit) {
-            if (shouldCommit && (transactionOpen || offsetWriter.willFlush())) {
+            if (shouldCommit) {
                 try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
                     commitTransaction();
                 }
