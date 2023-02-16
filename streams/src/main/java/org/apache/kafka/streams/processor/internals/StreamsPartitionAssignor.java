@@ -637,8 +637,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                    statefulTasks,
                                                                    assignmentConfigs);
 
-        log.info("Assigned tasks {} including stateful {} to clients as: \n{}.",
-                allTasks, statefulTasks, clientStates.entrySet().stream()
+        log.info("Assigned {} tasks {} including {} stateful {} to {} clients as: \n{}.",
+                allTasks.size(), allTasks, statefulTasks.size(), statefulTasks, clientStates.size(), clientStates.entrySet().stream()
                         .map(entry -> entry.getKey() + "=" + entry.getValue().currentAssignment())
                         .collect(Collectors.joining(Utils.NL)));
 
