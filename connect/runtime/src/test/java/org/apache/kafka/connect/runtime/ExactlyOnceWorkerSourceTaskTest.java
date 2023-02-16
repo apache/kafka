@@ -103,6 +103,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -1042,7 +1043,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verify(producer, mode).commitTransaction();
         verify(offsetWriter, mode).beginFlush();
         verify(offsetWriter, mode).doFlush(any());
-        verify(sourceTask, mode).commit();
+        verify(sourceTask, atLeast(numBatches)).commit();
     }
 
     private void assertTransactionMetrics(int minimumMaxSizeExpected) {
