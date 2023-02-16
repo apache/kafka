@@ -349,8 +349,10 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                         recordPollReturned(toSend.size(), time.milliseconds() - start);
                     }
                 }
-                if (toSend == null)
+                if (toSend == null) {
+                    batchDispatched();
                     continue;
+                }
                 log.trace("{} About to send {} records to Kafka", this, toSend.size());
                 if (sendRecords()) {
                     batchDispatched();

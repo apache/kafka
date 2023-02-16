@@ -257,7 +257,8 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         });
 
         // The task checks to see if there are offsets to commit before pausing
-        EasyMock.expect(offsetWriter.willFlush()).andReturn(false);
+        EasyMock.expect(offsetWriter.beginFlush()).andReturn(false);
+        expectCall(sourceTask::commit);
 
         expectClose();
 
@@ -288,7 +289,7 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         AtomicInteger flushes = new AtomicInteger(0);
         pollLatch = new CountDownLatch(10);
         expectPolls(polls);
-        expectAnyFlushes(flushes);
+        expectFlush(true, flushes);
 
         expectTopicCreation(TOPIC);
 
@@ -430,7 +431,7 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         AtomicInteger flushes = new AtomicInteger(0);
         pollLatch = new CountDownLatch(10);
         expectPolls(polls);
-        expectAnyFlushes(flushes);
+        expectFlush(true, flushes);
 
         expectTopicCreation(TOPIC);
 
@@ -576,8 +577,13 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         expectStartup();
 
         final CountDownLatch pollLatch = expectEmptyPolls(1, new AtomicInteger());
-        EasyMock.expect(offsetWriter.willFlush()).andReturn(false).anyTimes();
+        EasyMock.expect(offsetWriter.beginFlush()).andReturn(false).anyTimes();
 
+        final AtomicInteger taskCommits = new AtomicInteger(0);
+        expectCall(sourceTask::commit).andAnswer(() -> {
+            taskCommits.incrementAndGet();
+            return null;
+        }).anyTimes();
         expectCall(sourceTask::stop);
         expectCall(() -> statusListener.onShutdown(taskId));
 
@@ -595,6 +601,11 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         taskFuture.get();
         assertPollMetrics(0);
 
+        assertTrue(
+                "SourceTask::commit should have been invoked at least twice: once after polling an empty batch, and once during shutdown",
+                taskCommits.get() >= 2
+        );
+
         PowerMock.verifyAll();
     }
 
@@ -611,7 +622,7 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         AtomicInteger polls = new AtomicInteger();
         AtomicInteger flushes = new AtomicInteger();
         expectPolls(polls);
-        expectAnyFlushes(flushes);
+        expectFlush(true, flushes);
 
         expectTopicCreation(TOPIC);
 
@@ -724,11 +735,9 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
 
         // Third flush: triggered by TransactionContext::abortTransaction (batch)
         expectCall(producer::abortTransaction);
-        EasyMock.expect(offsetWriter.willFlush()).andReturn(true);
         expectFlush(false, flushes);
 
         // Third flush: triggered by TransactionContext::abortTransaction (record)
-        EasyMock.expect(offsetWriter.willFlush()).andReturn(true);
         expectCall(producer::abortTransaction);
         expectFlush(false, flushes);
 
@@ -834,8 +843,7 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
 
         expectPolls();
 
-        EasyMock.expect(offsetWriter.willFlush()).andReturn(true).anyTimes();
-        EasyMock.expect(offsetWriter.beginFlush()).andReturn(true);
+        EasyMock.expect(offsetWriter.beginFlush()).andReturn(true).anyTimes();
         expectCall(offsetWriter::cancelFlush);
 
         expectTopicCreation(TOPIC);
@@ -950,8 +958,9 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
 
         expectCall(() -> statusListener.onStartup(taskId));
 
+        expectCall(sourceTask::commit);
         expectCall(sourceTask::stop);
-        EasyMock.expect(offsetWriter.willFlush()).andReturn(false);
+        EasyMock.expect(offsetWriter.beginFlush()).andReturn(false);
 
         expectCall(() -> statusListener.onShutdown(taskId));
 
@@ -1215,11 +1224,6 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
             expectCall(sourceTask::commit);
         }
         return result;
-    }
-
-    private CountDownLatch expectAnyFlushes(AtomicInteger flushCount) {
-        EasyMock.expect(offsetWriter.willFlush()).andReturn(true).anyTimes();
-        return expectFlush(true, flushCount);
     }
 
     private void assertTransactionMetrics(int minimumMaxSizeExpected) {
