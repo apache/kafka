@@ -190,7 +190,7 @@ public class MockAdminClient extends AdminClient {
             return new MockAdminClient(brokers,
                 controller == null ? brokers.get(0) : controller,
                 clusterId,
-                defaultPartitions != null ? defaultPartitions.shortValue() : 1,
+                defaultPartitions != null ? defaultPartitions : 1,
                 defaultReplicationFactor != null ? defaultReplicationFactor.shortValue() : Math.min(brokers.size(), 3),
                 brokerLogDirs,
                 usingRaftController,
@@ -857,7 +857,7 @@ public class MockAdminClient extends AdminClient {
             case BROKER: {
                 int brokerId;
                 try {
-                    brokerId = Integer.valueOf(resource.name());
+                    brokerId = Integer.parseInt(resource.name());
                 } catch (NumberFormatException e) {
                     return e;
                 }
@@ -996,7 +996,7 @@ public class MockAdminClient extends AdminClient {
                 newReassignments.entrySet()) {
             TopicPartition partition = entry.getKey();
             Optional<NewPartitionReassignment> newReassignment = entry.getValue();
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<Void>();
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             futures.put(partition, future);
             TopicMetadata topicMetadata = allTopics.get(partition.topic());
             if (partition.partition() < 0 ||
@@ -1133,7 +1133,7 @@ public class MockAdminClient extends AdminClient {
     ) {
         Map<String, KafkaFuture<Void>> results = new HashMap<>();
         for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<Void>();
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             String feature = entry.getKey();
             try {
                 short cur = featureLevels.getOrDefault(feature, (short) 0);

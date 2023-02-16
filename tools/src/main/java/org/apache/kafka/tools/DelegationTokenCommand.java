@@ -70,14 +70,14 @@ public class DelegationTokenCommand {
         CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to create, renew, expire, or describe delegation tokens.");
 
         // should have exactly one action
-        Long numberOfActions = Stream.of(opts.hasCreateOpt(), opts.hasRenewOpt(), opts.hasExpireOpt(), opts.hasDescribeOpt()).filter(b -> b).count();
+        long numberOfActions = Stream.of(opts.hasCreateOpt(), opts.hasRenewOpt(), opts.hasExpireOpt(), opts.hasDescribeOpt()).filter(b -> b).count();
         if (numberOfActions != 1) {
             CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --create, --renew, --expire or --describe");
         }
 
         opts.checkArgs();
 
-        try (Admin adminClient = createAdminClient(opts)){
+        try (Admin adminClient = createAdminClient(opts)) {
             if (opts.hasCreateOpt()) {
                 createToken(adminClient, opts);
             } else if (opts.hasRenewOpt()) {
@@ -92,7 +92,7 @@ public class DelegationTokenCommand {
 
     public static DelegationToken createToken(Admin adminClient, DelegationTokenCommandOptions opts) throws ExecutionException, InterruptedException {
         List<KafkaPrincipal> renewerPrincipals = getPrincipals(opts, opts.renewPrincipalsOpt);
-        Long maxLifeTimeMs = opts.options.valueOf(opts.maxLifeTimeOpt);
+        Long maxLifeTimeMs = opts.maxLifeTime();
 
         System.out.println("Calling create token operation with renewers :" + renewerPrincipals + " , max-life-time-period :" + maxLifeTimeMs);
         CreateDelegationTokenOptions createDelegationTokenOptions = new CreateDelegationTokenOptions().maxlifeTimeMs(maxLifeTimeMs).renewers(renewerPrincipals);
@@ -139,8 +139,8 @@ public class DelegationTokenCommand {
     }
 
     public static Long renewToken(Admin adminClient, DelegationTokenCommandOptions opts) throws ExecutionException, InterruptedException {
-        String hmac = opts.options.valueOf(opts.hmacOpt);
-        Long renewTimePeriodMs = opts.options.valueOf(opts.renewTimePeriodOpt);
+        String hmac = opts.hmac();
+        Long renewTimePeriodMs = opts.renewTimePeriod();
 
         System.out.println("Calling renew token operation with hmac :" + hmac + " , renew-time-period :" + renewTimePeriodMs);
         RenewDelegationTokenResult renewResult = adminClient.renewDelegationToken(Base64.getDecoder().decode(hmac), new RenewDelegationTokenOptions().renewTimePeriodMs(renewTimePeriodMs));
@@ -151,8 +151,8 @@ public class DelegationTokenCommand {
     }
 
     public static void expireToken(Admin adminClient, DelegationTokenCommandOptions opts) throws ExecutionException, InterruptedException {
-        String hmac = opts.options.valueOf(opts.hmacOpt);
-        Long expiryTimePeriodMs = opts.options.valueOf(opts.expiryTimePeriodOpt);
+        String hmac = opts.hmac();
+        Long expiryTimePeriodMs = opts.expiryTimePeriod();
 
         System.out.println("Calling expire token operation with hmac :" + hmac + " , expire-time-period :" + expiryTimePeriodMs);
         ExpireDelegationTokenResult renewResult = adminClient.expireDelegationToken(Base64.getDecoder().decode(hmac), new ExpireDelegationTokenOptions().expiryTimePeriodMs(expiryTimePeriodMs));
@@ -264,6 +264,22 @@ public class DelegationTokenCommand {
             return options.has(describeOpt);
         }
 
+        public long maxLifeTime() {
+            return  options.valueOf(maxLifeTimeOpt);
+        }
+
+        public long renewTimePeriod() {
+            return  options.valueOf(renewTimePeriodOpt);
+        }
+
+        public long expiryTimePeriod() {
+            return options.valueOf(expiryTimePeriodOpt);
+        }
+
+        public String hmac() {
+            return options.valueOf(hmacOpt);
+        }
+        
         public void checkArgs() {
             // check required args
             CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, commandConfigOpt);
