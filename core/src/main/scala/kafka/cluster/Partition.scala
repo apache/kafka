@@ -68,12 +68,13 @@ trait PartitionListener {
   def onHighWatermarkUpdated(partition: TopicPartition, offset: Long): Unit = {}
 
   /**
-   * Called when the Partition has a failure (e.g. goes offline).
+   * Called when the Partition (or replica) on this broker has a failure (e.g. goes offline).
    */
   def onFailed(partition: TopicPartition): Unit = {}
 
   /**
-   * Called when the Partition is deleted.
+   * Called when the Partition (or replica) on this broker is deleted. Note that it does not mean
+   * that the partition was deleted but only that this broker does not host a replica of it any more.
    */
   def onDeleted(partition: TopicPartition): Unit = {}
 }
@@ -362,8 +363,7 @@ class Partition(val topicPartition: TopicPartition,
     inReadLock(leaderIsrUpdateLock) {
       // `log` is set to `None` when the partition is failed or deleted.
       log match {
-        case Some(log) =>
-          listener.onHighWatermarkUpdated(topicPartition, log.highWatermark)
+        case Some(_) =>
           listeners.add(listener)
           true
 
@@ -616,7 +616,7 @@ class Partition(val topicPartition: TopicPartition,
    * Fail the partition. This is called by the ReplicaManager when the partition
    * transitions to Offline.
    */
-  def fail(): Unit = {
+  def markOffline(): Unit = {
     inWriteLock(leaderIsrUpdateLock) {
       clear()
 

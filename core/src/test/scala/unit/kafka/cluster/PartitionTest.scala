@@ -2861,7 +2861,7 @@ class PartitionTest extends AbstractPartitionTest {
     val listener2 = new MockPartitionListener()
 
     assertTrue(partition.maybeAddListener(listener1))
-    listener1.verify(expectedHighWatermark = 0L)
+    listener1.verify()
 
     partition.appendRecordsToLeader(
       records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
@@ -2874,7 +2874,7 @@ class PartitionTest extends AbstractPartitionTest {
     listener2.verify()
 
     assertTrue(partition.maybeAddListener(listener2))
-    listener2.verify(expectedHighWatermark = 0L)
+    listener2.verify()
 
     partition.appendRecordsToLeader(
       records = TestUtils.records(List(new SimpleRecord("k2".getBytes, "v2".getBytes))),
@@ -2950,7 +2950,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     val listener = new MockPartitionListener()
     assertTrue(partition.maybeAddListener(listener))
-    listener.verify(expectedHighWatermark = 0L)
+    listener.verify()
 
     partition.appendRecordsToLeader(
       records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
@@ -2991,10 +2991,10 @@ class PartitionTest extends AbstractPartitionTest {
       topicId = None)
 
     val listener = new MockPartitionListener()
-    partition.maybeAddListener(listener)
-    listener.verify(expectedHighWatermark = 0L)
+    assertTrue(partition.maybeAddListener(listener))
+    listener.verify()
 
-    partition.fail()
+    partition.markOffline()
     listener.verify(expectedFailed = true)
   }
 
@@ -3015,8 +3015,8 @@ class PartitionTest extends AbstractPartitionTest {
       topicId = None)
 
     val listener = new MockPartitionListener()
-    partition.maybeAddListener(listener)
-    listener.verify(expectedHighWatermark = 0L)
+    assertTrue(partition.maybeAddListener(listener))
+    listener.verify()
 
     partition.delete()
     listener.verify(expectedDeleted = true)
@@ -3042,7 +3042,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     val listener = new MockPartitionListener()
     assertTrue(partition.maybeAddListener(listener))
-    listener.verify(expectedHighWatermark = 0L)
+    listener.verify()
 
     val records = TestUtils.records(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),

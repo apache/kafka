@@ -4176,7 +4176,7 @@ class ReplicaManagerTest {
 
       // Registering it should succeed now.
       assertTrue(replicaManager.maybeAddListener(tp, listener))
-      listener.verify(expectedHighWatermark = 0L)
+      listener.verify()
 
       // Leader appends some data
       for (i <- 1 to 5) {

@@ -1868,7 +1868,7 @@ class ReplicaManager(val config: KafkaConfig,
   def markPartitionOffline(tp: TopicPartition): Unit = replicaStateChangeLock synchronized {
     allPartitions.put(tp, HostedPartition.Offline) match {
       case HostedPartition.Online(partition) =>
-        partition.fail()
+        partition.markOffline()
       case _ => // Nothing
     }
   }
