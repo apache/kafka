@@ -59,6 +59,8 @@ import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Arrays;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
