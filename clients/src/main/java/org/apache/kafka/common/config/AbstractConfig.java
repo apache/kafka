@@ -401,19 +401,15 @@ public class AbstractConfig {
             o = Utils.newInstance((Class<?>) klass);
         } else
             throw new KafkaException("Unexpected element of type " + klass.getClass().getName() + ", expected String or Class");
-
         try {
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
-
             if (o instanceof Configurable)
                 ((Configurable) o).configure(configPairs);
-
         } catch (Exception e) {
             maybeClose(o, "AutoCloseable object constructed and configured during failed call to getConfiguredInstance");
             throw e;
         }
-
         return t.cast(o);
     }
 
