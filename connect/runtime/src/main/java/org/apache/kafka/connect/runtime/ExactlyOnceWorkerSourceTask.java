@@ -258,17 +258,13 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
         long started = time.milliseconds();
 
-        if (!transactionOpen && !offsetWriter.willFlush()) {
+        boolean shouldFlush = offsetWriter.beginFlush();
+        if (!transactionOpen && !shouldFlush) {
             // There is no contents on the framework side to commit, so skip the offset flush and producer commit
             long durationMillis = time.milliseconds() - started;
             recordCommitSuccess(durationMillis);
             log.debug("{} Finished commitOffsets successfully in {} ms", this, durationMillis);
 
-            // Synchronize in order to guarantee that writes on other threads are picked up by this one
-            synchronized (commitableRecords) {
-                commitableRecords.forEach(this::commitTaskRecord);
-                commitableRecords.clear();
-            }
             commitSourceTask();
             return;
         }
@@ -278,7 +274,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         maybeBeginTransaction();
 
         AtomicReference<Throwable> flushError = new AtomicReference<>();
-        if (offsetWriter.beginFlush()) {
+        if (shouldFlush) {
             // Now we can actually write the offsets to the internal topic.
             // No need to track the flush future here since it's guaranteed to complete by the time
             // Producer::commitTransaction completes
