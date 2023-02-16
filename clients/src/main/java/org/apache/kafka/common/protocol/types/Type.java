@@ -688,8 +688,10 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            buffer.limit(buffer.position() + size);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
+            buffer.limit(limit);
             buffer.position(buffer.position() + size);
             return val;
         }
@@ -738,8 +740,10 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            buffer.limit(buffer.position() + size);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
+            buffer.limit(limit);
             buffer.position(buffer.position() + size);
             return val;
         }
@@ -799,8 +803,10 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            buffer.limit(buffer.position() + size);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
+            buffer.limit(limit);
             buffer.position(buffer.position() + size);
             return val;
         }
@@ -864,8 +870,10 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            buffer.limit(buffer.position() + size);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
+            buffer.limit(limit);
             buffer.position(buffer.position() + size);
             return val;
         }
