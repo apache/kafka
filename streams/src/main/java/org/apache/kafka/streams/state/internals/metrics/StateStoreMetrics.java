@@ -276,10 +276,7 @@ public class StateStoreMetrics {
                                           final String storeType,
                                           final String storeName,
                                           final StreamsMetricsImpl streamsMetrics) {
-
-        final String latencyMetricName = PREFIX_SCAN + LATENCY_SUFFIX;
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
-
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, PREFIX_SCAN, RecordingLevel.DEBUG);
         addInvocationRateToSensor(
             sensor,
@@ -292,7 +289,7 @@ public class StateStoreMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             tagMap,
-            latencyMetricName,
+            PREFIX_SCAN + LATENCY_SUFFIX,
             PREFIX_SCAN_AVG_LATENCY_DESCRIPTION,
             PREFIX_SCAN_MAX_LATENCY_DESCRIPTION
         );
@@ -440,34 +437,36 @@ public class StateStoreMetrics {
     private static Sensor sizeOrCountSensor(final String taskId,
                                             final String storeType,
                                             final String storeName,
-                                            final String metricName,
+                                            final String gaugeName,
                                             final String descriptionOfAvg,
                                             final String descriptionOfMax,
                                             final RecordingLevel recordingLevel,
                                             final StreamsMetricsImpl streamsMetrics) {
-        final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, metricName, recordingLevel);
+        // use the gauge name (either size or count) as the sensor suffix, and metric name prefix
+        final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, gaugeName, recordingLevel);
         final String group;
         final Map<String, String> tagMap;
         group = STATE_STORE_LEVEL_GROUP;
         tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
-        addAvgAndMaxToSensor(sensor, group, tagMap, metricName, descriptionOfAvg, descriptionOfMax);
+        addAvgAndMaxToSensor(sensor, group, tagMap, gaugeName, descriptionOfAvg, descriptionOfMax);
         return sensor;
     }
 
     private static Sensor throughputAndLatencySensor(final String taskId,
                                                      final String storeType,
                                                      final String storeName,
-                                                     final String metricName,
+                                                     final String operation,
                                                      final String descriptionOfRate,
                                                      final String descriptionOfAvg,
                                                      final String descriptionOfMax,
                                                      final RecordingLevel recordingLevel,
                                                      final StreamsMetricsImpl streamsMetrics) {
+        // use operation as the sensor suffix and metric name prefix
         final Sensor sensor;
-        final String latencyMetricName = metricName + LATENCY_SUFFIX;
+        final String latencyMetricName = operation + LATENCY_SUFFIX;
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
-        sensor = streamsMetrics.storeLevelSensor(taskId, storeName, metricName, recordingLevel);
-        addInvocationRateToSensor(sensor, STATE_STORE_LEVEL_GROUP, tagMap, metricName, descriptionOfRate);
+        sensor = streamsMetrics.storeLevelSensor(taskId, storeName, operation, recordingLevel);
+        addInvocationRateToSensor(sensor, STATE_STORE_LEVEL_GROUP, tagMap, operation, descriptionOfRate);
         addAvgAndMaxToSensor(
             sensor,
             STATE_STORE_LEVEL_GROUP,
