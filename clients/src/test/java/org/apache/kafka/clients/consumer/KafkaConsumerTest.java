@@ -151,6 +151,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class KafkaConsumerTest {
+
     private final String topic = "test";
     private final Uuid topicId = Uuid.randomUuid();
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
@@ -477,6 +478,32 @@ public class KafkaConsumerTest {
 
         } finally {
             // cleanup since we are using mutable static variables in MockConsumerInterceptor
+            MockConsumerInterceptor.resetCounters();
+        }
+    }
+
+    @Test
+    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
+        final int targetInterceptor = 3;
+
+        try {
+            Properties props = new Properties();
+            props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,  MockConsumerInterceptor.class.getName() + ", "
+                    + MockConsumerInterceptor.class.getName() + ", "
+                    + MockConsumerInterceptor.class.getName());
+
+            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
+
+            assertThrows(KafkaException.class, () -> {
+                new KafkaConsumer<>(
+                        props, new StringDeserializer(), new StringDeserializer());
+            });
+
+            assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
+            assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
+
+        } finally {
             MockConsumerInterceptor.resetCounters();
         }
     }
