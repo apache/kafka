@@ -50,6 +50,7 @@ class EndToEndLatencyService(PerformanceService):
                                                      root=EndToEndLatencyService.PERSISTENT_ROOT)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
+        self.version = ''
 
         security_protocol = self.security_config.security_protocol
 
@@ -73,11 +74,12 @@ class EndToEndLatencyService(PerformanceService):
 
     def start_cmd(self, node):
         args = self.args.copy()
+        self.version = get_version(node)
         args.update({
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'config_file': EndToEndLatencyService.CONFIG_FILE,
             'kafka_run_class': self.path.script("kafka-run-class.sh", node),
-            'java_class_name': self.java_class_name(get_version(node))
+            'java_class_name': self.java_class_name()
         })
         if not node.version.consumer_supports_bootstrap_server():
             args.update({
@@ -123,8 +125,8 @@ class EndToEndLatencyService(PerformanceService):
                 results['latency_999th_ms'] = float(line.split()[9])
         self.results[idx-1] = results
 
-    def java_class_name(self, version):
-        if version <= V_3_4_0:
+    def java_class_name(self):
+        if self.version <= V_3_4_0:
             return "kafka.tools.EndToEndLatency"
         else:
             return "org.apache.kafka.tools.EndToEndLatency"
