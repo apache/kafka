@@ -372,6 +372,30 @@ public class MirrorMakerConfigTest {
         assertTrue(allNames.contains("emit.heartbeats.enabled"));
     }
 
+    @Test
+    public void testLazyConfigResolution() {
+        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+            "clusters", "a, b",
+            "config.providers", "fake",
+            "config.providers.fake.class", FakeConfigProvider.class.getName(),
+            "replication.policy.separator", "__",
+            "offset.storage.replication.factor", "123",
+            "b.status.storage.replication.factor", "456",
+            "b.producer.client.id", "client-one",
+            "b.security.protocol", "PLAINTEXT",
+            "b.producer.security.protocol", "SASL",
+            "ssl.truststore.password", "secret1",
+            "ssl.key.password", "${fake:secret:password}",  // should not be resolved
+            "b.xxx", "yyy",
+            "b->a.topics", "${fake:secret:password}")); // should not be resolved
+        SourceAndTarget a = new SourceAndTarget("b", "a");
+        Map<String, String> props = mirrorConfig.connectorBaseConfig(a, MirrorSourceConnector.class);
+        assertEquals("${fake:secret:password}", props.get("ssl.key.password"),
+            "connector properties should not be transformed");
+        assertEquals("${fake:secret:password}", props.get("topics"),
+            "connector properties should not be transformed");
+    }
+
     public static class FakeConfigProvider implements ConfigProvider {
 
         Map<String, String> secrets = Collections.singletonMap("password", "secret2");

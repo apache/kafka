@@ -45,7 +45,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator, ProducerAppendInfo}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig}
 
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
@@ -667,7 +667,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def activeProducers: Seq[DescribeProducersResponseData.ProducerState] = {
     lock synchronized {
-      producerStateManager.activeProducers.map { case (producerId, state) =>
+      producerStateManager.activeProducers.asScala.map { case (producerId, state) =>
         new DescribeProducersResponseData.ProducerState()
           .setProducerId(producerId)
           .setProducerEpoch(state.producerEpoch)
@@ -679,20 +679,24 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }.toSeq
   }
 
-  private[log] def activeProducersWithLastSequence: Map[Long, Int] = lock synchronized {
-    producerStateManager.activeProducers.map { case (producerId, producerIdEntry) =>
-      (producerId, producerIdEntry.lastSeq)
+  private[log] def activeProducersWithLastSequence: mutable.Map[Long, Int] = lock synchronized {
+    val result = mutable.Map[Long, Int]()
+    producerStateManager.activeProducers.forEach { case (producerId, producerIdEntry) =>
+      result.put(producerId.toLong, producerIdEntry.lastSeq)
     }
+    result
   }
 
-  private[log] def lastRecordsOfActiveProducers: Map[Long, LastRecord] = lock synchronized {
-    producerStateManager.activeProducers.map { case (producerId, producerIdEntry) =>
-      val lastDataOffset =
-        if (producerIdEntry.lastDataOffset >= 0) OptionalLong.of(producerIdEntry.lastDataOffset)
-        else OptionalLong.empty()
-      val lastRecord = new LastRecord(lastDataOffset, producerIdEntry.producerEpoch)
-      producerId -> lastRecord
+  private[log] def lastRecordsOfActiveProducers: mutable.Map[Long, LastRecord] = lock synchronized {
+    val result = mutable.Map[Long, LastRecord]()
+    producerStateManager.activeProducers.forEach { case (producerId, producerIdEntry) =>
+      val lastDataOffset = if (producerIdEntry.lastDataOffset >= 0) Some(producerIdEntry.lastDataOffset) else None
+      val lastRecord = new LastRecord(
+        if (lastDataOffset.isEmpty) OptionalLong.empty() else OptionalLong.of(lastDataOffset.get),
+        producerIdEntry.producerEpoch)
+      result.put(producerId.toLong, lastRecord)
     }
+    result
   }
 
   /**
@@ -1023,7 +1027,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def maybeIncrementFirstUnstableOffset(): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
 
-    val updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset match {
+    val updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset.asScala match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
         val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
         Some(convertToOffsetMetadataOrThrow(offset))
@@ -1088,8 +1092,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         if (origin == AppendOrigin.CLIENT) {
           val maybeLastEntry = producerStateManager.lastEntry(batch.producerId)
 
-          maybeLastEntry.flatMap(_.findDuplicateBatch(batch).asScala).foreach { duplicate =>
-            return (updatedProducers, completedTxns.toList, Some(duplicate))
+          val duplicateBatch = maybeLastEntry.flatMap(_.findDuplicateBatch(batch))
+          if (duplicateBatch.isPresent) {
+            return (updatedProducers, completedTxns.toList, Some(duplicateBatch.get()))
           }
         }
 
@@ -1678,12 +1683,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   // visible for testing
-  private[log] def latestProducerSnapshotOffset: Option[Long] = lock synchronized {
+  private[log] def latestProducerSnapshotOffset: OptionalLong = lock synchronized {
     producerStateManager.latestSnapshotOffset
   }
 
   // visible for testing
-  private[log] def oldestProducerSnapshotOffset: Option[Long] = lock synchronized {
+  private[log] def oldestProducerSnapshotOffset: OptionalLong = lock synchronized {
     producerStateManager.oldestSnapshotOffset
   }
 
@@ -1856,11 +1861,7 @@ object UnifiedLog extends Logging {
 
   val TimeIndexFileSuffix = LocalLog.TimeIndexFileSuffix
 
-  val ProducerSnapshotFileSuffix = ".snapshot"
-
   val TxnIndexFileSuffix = LocalLog.TxnIndexFileSuffix
-
-  val DeletedFileSuffix = LocalLog.DeletedFileSuffix
 
   val CleanedFileSuffix = LocalLog.CleanedFileSuffix
 
@@ -1947,15 +1948,6 @@ object UnifiedLog extends Logging {
 
   def deleteFileIfExists(file: File, suffix: String = ""): Unit =
     Files.deleteIfExists(new File(file.getPath + suffix).toPath)
-
-  /**
-   * Construct a producer id snapshot file using the given offset.
-   *
-   * @param dir    The directory in which the log will reside
-   * @param offset The last offset (exclusive) included in the snapshot
-   */
-  def producerSnapshotFile(dir: File, offset: Long): File =
-    new File(dir, LocalLog.filenamePrefixFromOffset(offset) + ProducerSnapshotFileSuffix)
 
   def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.transactionIndexFile(dir, offset, suffix)
 
@@ -2116,7 +2108,7 @@ object UnifiedLog extends Logging {
     // (or later snapshots). Otherwise, if there is no snapshot file, then we have to rebuild producer state
     // from the first segment.
     if (recordVersion.value < RecordBatch.MAGIC_VALUE_V2 ||
-      (producerStateManager.latestSnapshotOffset.isEmpty && reloadFromCleanShutdown)) {
+      (!producerStateManager.latestSnapshotOffset.isPresent && reloadFromCleanShutdown)) {
       // To avoid an expensive scan through all of the segments, we take empty snapshots from the start of the
       // last two segments and the last offset. This should avoid the full scan in the case that the log needs
       // truncation.
@@ -2189,7 +2181,7 @@ object UnifiedLog extends Logging {
                                            parentDir: String,
                                            topicPartition: TopicPartition): Unit = {
     val snapshotsToDelete = segments.flatMap { segment =>
-      producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)
+      producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset).asScala
     }
 
     def deleteProducerSnapshots(): Unit = {

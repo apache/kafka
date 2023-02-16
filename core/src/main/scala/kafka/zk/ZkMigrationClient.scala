@@ -31,7 +31,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.{MigrationClient, ZkMigrationLeadershipState}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, KeeperException}
 
@@ -77,9 +77,10 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
-  def migrateTopics(metadataVersion: MetadataVersion,
-                    recordConsumer: Consumer[util.List[ApiMessageAndVersion]],
-                    brokerIdConsumer: Consumer[Integer]): Unit = {
+  def migrateTopics(
+    recordConsumer: Consumer[util.List[ApiMessageAndVersion]],
+    brokerIdConsumer: Consumer[Integer]
+  ): Unit = {
     val topics = zkClient.getAllTopicsInCluster()
     val topicConfigs = zkClient.getEntitiesConfigs(ConfigType.Topic, topics)
     val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(topics)
@@ -89,7 +90,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
       val topicBatch = new util.ArrayList[ApiMessageAndVersion]()
       topicBatch.add(new ApiMessageAndVersion(new TopicRecord()
         .setName(topic)
-        .setTopicId(topicIdOpt.get), TopicRecord.HIGHEST_SUPPORTED_VERSION))
+        .setTopicId(topicIdOpt.get), 0.toShort))
 
       partitionAssignments.foreach { case (topicPartition, replicaAssignment) =>
         replicaAssignment.replicas.foreach(brokerIdConsumer.accept(_))
@@ -118,7 +119,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
               .setPartitionEpoch(0)
               .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
         }
-        topicBatch.add(new ApiMessageAndVersion(record, PartitionRecord.HIGHEST_SUPPORTED_VERSION))
+        topicBatch.add(new ApiMessageAndVersion(record, 0.toShort))
       }
 
       val props = topicConfigs(topic)
@@ -127,14 +128,13 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
           .setResourceType(ConfigResource.Type.TOPIC.id)
           .setResourceName(topic)
           .setName(key.toString)
-          .setValue(value.toString), ConfigRecord.HIGHEST_SUPPORTED_VERSION))
+          .setValue(value.toString), 0.toShort))
       }
       recordConsumer.accept(topicBatch)
     }
   }
 
-  def migrateBrokerConfigs(metadataVersion: MetadataVersion,
-                           recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
+  def migrateBrokerConfigs(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
     val brokerEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Broker)
     val batch = new util.ArrayList[ApiMessageAndVersion]()
     zkClient.getEntitiesConfigs(ConfigType.Broker, brokerEntities.toSet).foreach { case (broker, props) =>
@@ -148,7 +148,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
           .setResourceType(ConfigResource.Type.BROKER.id)
           .setResourceName(brokerResource)
           .setName(key.toString)
-          .setValue(value.toString), ConfigRecord.HIGHEST_SUPPORTED_VERSION))
+          .setValue(value.toString), 0.toShort))
       }
     }
     if (!batch.isEmpty) {
@@ -156,8 +156,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
-  def migrateClientQuotas(metadataVersion: MetadataVersion,
-                          recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
+  def migrateClientQuotas(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
     val adminZkClient = new AdminZkClient(zkClient)
 
     def migrateEntityType(entityType: String): Unit = {
@@ -168,7 +167,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
           batch.add(new ApiMessageAndVersion(new ClientQuotaRecord()
             .setEntity(List(entity).asJava)
             .setKey(key)
-            .setValue(value), ClientQuotaRecord.HIGHEST_SUPPORTED_VERSION))
+            .setValue(value), 0.toShort))
         }
         recordConsumer.accept(batch)
       }
@@ -191,7 +190,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
         batch.add(new ApiMessageAndVersion(new ClientQuotaRecord()
           .setEntity(entity.asJava)
           .setKey(key)
-          .setValue(value), ClientQuotaRecord.HIGHEST_SUPPORTED_VERSION))
+          .setValue(value), 0.toShort))
       }
       recordConsumer.accept(batch)
     }
@@ -199,8 +198,7 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     migrateEntityType(ConfigType.Ip)
   }
 
-  def migrateProducerId(metadataVersion: MetadataVersion,
-                        recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
+  def migrateProducerId(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
     val (dataOpt, _) = zkClient.getDataAndVersion(ProducerIdBlockZNode.path)
     dataOpt match {
       case Some(data) =>
@@ -208,17 +206,17 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
         recordConsumer.accept(List(new ApiMessageAndVersion(new ProducerIdsRecord()
           .setBrokerEpoch(-1)
           .setBrokerId(producerIdBlock.assignedBrokerId)
-          .setNextProducerId(producerIdBlock.firstProducerId()), ProducerIdsRecord.HIGHEST_SUPPORTED_VERSION)).asJava)
+          .setNextProducerId(producerIdBlock.firstProducerId()), 0.toShort)).asJava)
       case None => // Nothing to migrate
     }
   }
 
   override def readAllMetadata(batchConsumer: Consumer[util.List[ApiMessageAndVersion]],
                                brokerIdConsumer: Consumer[Integer]): Unit = {
-    migrateTopics(MetadataVersion.latest(), batchConsumer, brokerIdConsumer)
-    migrateBrokerConfigs(MetadataVersion.latest(), batchConsumer)
-    migrateClientQuotas(MetadataVersion.latest(), batchConsumer)
-    migrateProducerId(MetadataVersion.latest(), batchConsumer)
+    migrateTopics(batchConsumer, brokerIdConsumer)
+    migrateBrokerConfigs(batchConsumer)
+    migrateClientQuotas(batchConsumer)
+    migrateProducerId(batchConsumer)
   }
 
   override def readBrokerIds(): util.Set[Integer] = {

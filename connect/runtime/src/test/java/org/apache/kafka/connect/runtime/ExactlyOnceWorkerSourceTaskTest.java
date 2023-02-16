@@ -79,6 +79,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -892,7 +893,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         workerTaskFuture = executor.submit(workerTask);
     }
 
-    private void expectSuccessfulFlushes() {
+    private void expectSuccessfulFlushes() throws InterruptedException, TimeoutException {
         when(offsetWriter.beginFlush()).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             Callback<Void> cb = invocation.getArgument(0);
@@ -1062,7 +1063,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
             assertEquals(RECORDS.size(), metrics.currentMetricValueAsDouble(taskGroup, "batch-size-avg"), 0.000001d);
             assertTrue(pollRate > 0.0d);
         } else {
-            assertTrue(pollRate == 0.0d);
+            assertEquals(0.0d, pollRate, 0.0);
         }
         assertTrue(pollTotal >= minimumPollCountExpected);
 
@@ -1071,7 +1072,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         if (minimumPollCountExpected > 0) {
             assertTrue(writeRate > 0.0d);
         } else {
-            assertTrue(writeRate == 0.0d);
+            assertEquals(0.0d, writeRate, 0.0);
         }
         assertTrue(writeTotal >= minimumPollCountExpected);
 

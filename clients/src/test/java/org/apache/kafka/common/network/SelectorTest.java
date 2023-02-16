@@ -430,9 +430,6 @@ public class SelectorTest {
                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
                 throw new RuntimeException("Test exception");
             }
-            @Override
-            public void close() {
-            }
         };
         Selector selector = new Selector(CONNECTION_MAX_IDLE_MS, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
         SocketChannel socketChannel = SocketChannel.open();

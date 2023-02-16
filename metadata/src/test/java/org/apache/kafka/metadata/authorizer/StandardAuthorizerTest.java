@@ -87,6 +87,7 @@ import static org.apache.kafka.server.authorizer.AuthorizationResult.ALLOWED;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.DENIED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -280,16 +281,16 @@ public class StandardAuthorizerTest {
                 newFooAcl(op, ALLOW)));
         }
         // CREATE does not imply DESCRIBE
-        assertEquals(null, findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
-            new MockAuthorizableRequestContext.Builder().
-                setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-            newFooAcl(CREATE, ALLOW)));
+        assertNull(findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
+                new MockAuthorizableRequestContext.Builder().
+                        setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
+                newFooAcl(CREATE, ALLOW)));
         // Deny ACLs don't do "implication".
         for (AclOperation op : asList(READ, WRITE, DELETE, ALTER)) {
-            assertEquals(null, findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
-                new MockAuthorizableRequestContext.Builder().
-                    setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-                newFooAcl(op, DENY)));
+            assertNull(findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
+                    new MockAuthorizableRequestContext.Builder().
+                            setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
+                    newFooAcl(op, DENY)));
         }
         // Exact match
         assertEquals(DENIED, findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
@@ -304,10 +305,10 @@ public class StandardAuthorizerTest {
                 newFooAcl(op, ALLOW)));
         }
         // Deny ACLs don't do "implication".
-        assertEquals(null, findResult(newAction(DESCRIBE_CONFIGS, TOPIC, "foo_bar"),
-            new MockAuthorizableRequestContext.Builder().
-                setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-            newFooAcl(ALTER_CONFIGS, DENY)));
+        assertNull(findResult(newAction(DESCRIBE_CONFIGS, TOPIC, "foo_bar"),
+                new MockAuthorizableRequestContext.Builder().
+                        setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
+                newFooAcl(ALTER_CONFIGS, DENY)));
         // Exact match
         assertEquals(DENIED, findResult(newAction(ALTER_CONFIGS, TOPIC, "foo_bar"),
             new MockAuthorizableRequestContext.Builder().
@@ -333,10 +334,10 @@ public class StandardAuthorizerTest {
                 setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
             newFooAcl(READ, ALLOW)));
         // Principal does not match.
-        assertEquals(null, findResult(newAction(READ, TOPIC, "foo_bar"),
-            new MockAuthorizableRequestContext.Builder().
-                setPrincipal(new KafkaPrincipal(USER_TYPE, "alice")).build(),
-            newFooAcl(READ, ALLOW)));
+        assertNull(findResult(newAction(READ, TOPIC, "foo_bar"),
+                new MockAuthorizableRequestContext.Builder().
+                        setPrincipal(new KafkaPrincipal(USER_TYPE, "alice")).build(),
+                newFooAcl(READ, ALLOW)));
         // Wildcard principal matches anything.
         assertEquals(DENIED, findResult(newAction(READ, GROUP, "bar"),
             new MockAuthorizableRequestContext.Builder().

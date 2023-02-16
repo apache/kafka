@@ -212,7 +212,7 @@ public class DistributedConfig extends WorkerConfig {
         + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
     private Crypto crypto;
 
-    private enum ExactlyOnceSourceSupport {
+    public enum ExactlyOnceSourceSupport {
         DISABLED(false),
         PREPARING(true),
         ENABLED(true);
