@@ -41,7 +41,6 @@ ec2_keypair_file = nil
 ec2_region = "us-east-1"
 ec2_az = nil # Uses set by AWS
 ec2_ami = "ami-29ebb519"
-ec2_instance_type = "m3.medium"
 ec2_spot_instance = ENV['SPOT_INSTANCE'] ? ENV['SPOT_INSTANCE'] == 'true' : true
 ec2_spot_max_price = "0.113"  # On-demand price for instance type
 ec2_user = "ubuntu"
@@ -63,6 +62,7 @@ if File.exists?(local_config_file) then
   eval(File.read(local_config_file), binding, "Vagrantfile.local")
 end
 
+ec2_instance_type = "c4.xlarge"
 # override any instance type set by Vagrantfile.local or above via an environment variable
 if ENV['INSTANCE_TYPE'] then
   ec2_instance_type = ENV['INSTANCE_TYPE']
@@ -161,6 +161,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     node.vm.provider :aws do |aws|
       aws.tags = {
         'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name,
+        'role' => 'ce-kafka',
+        'Owner' => 'ce-kafka',
         'JenkinsBuildUrl' => ENV['BUILD_URL']
       }
     end
