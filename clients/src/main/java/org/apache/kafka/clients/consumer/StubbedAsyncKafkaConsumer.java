@@ -270,6 +270,7 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
+        // TODO: This needs to be propagated to the background thread, right?
     }
 
     @Override
