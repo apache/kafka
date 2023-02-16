@@ -213,7 +213,7 @@ public class MirrorSourceTaskTest {
     }
 
     @Test
-    public void testCommitRecordWithNullMetadata() throws InterruptedException {
+    public void testCommitRecordWithNullMetadata() {
         // Create a consumer mock
         byte[] key1 = "abc".getBytes();
         byte[] value1 = "fgh".getBytes();
@@ -243,7 +243,7 @@ public class MirrorSourceTaskTest {
     }
 
     @Test
-    public void testSendSyncEvent() throws InterruptedException {
+    public void testSendSyncEvent() {
         byte[] recordKey = "key".getBytes();
         byte[] recordValue = "value".getBytes();
         int maxOffsetLag = 50;

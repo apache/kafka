@@ -114,10 +114,10 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     @Override
-    public void commit() throws InterruptedException {
+    public void commit() {
         // Publish any offset syncs that we've queued up, but have not yet been able to publish
         // (likely because we previously reached our limit for number of outstanding syncs)
-        firePendingOffsetSyncs(true);
+        firePendingOffsetSyncs();
     }
 
     @Override
@@ -181,7 +181,7 @@ public class MirrorSourceTask extends SourceTask {
     }
  
     @Override
-    public void commitRecord(SourceRecord record, RecordMetadata metadata) throws InterruptedException {
+    public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {
             return;
         }
@@ -202,7 +202,7 @@ public class MirrorSourceTask extends SourceTask {
         long downstreamOffset = metadata.offset();
         maybeQueueOffsetSyncs(sourceTopicPartition, upstreamOffset, downstreamOffset);
         // We may be able to immediately publish an offset sync that we've queued up here
-        firePendingOffsetSyncs(false);
+        firePendingOffsetSyncs();
     }
 
     // updates partition state and queues up OffsetSync if necessary
@@ -219,7 +219,7 @@ public class MirrorSourceTask extends SourceTask {
         }
     }
 
-    private void firePendingOffsetSyncs(boolean drainPendingSyncs) throws InterruptedException {
+    private void firePendingOffsetSyncs() {
         while (true) {
             OffsetSync pendingOffsetSync;
             synchronized (this) {
@@ -233,11 +233,7 @@ public class MirrorSourceTask extends SourceTask {
                 if (!outstandingOffsetSyncs.tryAcquire()) {
                     // Too many outstanding syncs
                     log.trace("Too many in-flight offset syncs; will try to send remaining offset syncs later");
-                    if (drainPendingSyncs) {
-                        outstandingOffsetSyncs.acquire();
-                    } else {
-                        return;
-                    }
+                    return;
                 }
                 syncIterator.remove();
             }
