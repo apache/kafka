@@ -239,7 +239,19 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         // though we may update them here with newer offsets for acked records.
         offsetsToCommit.offsets().forEach(offsetWriter::offset);
 
-        if (!offsetWriter.beginFlush()) {
+        boolean shouldFlush;
+        try {
+            shouldFlush = offsetWriter.beginFlush(timeout - time.milliseconds(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            log.warn("{} Interrupted while waiting for previous offset flush to complete, cancelling", this);
+            recordCommitFailure(time.milliseconds() - started, e);
+            return false;
+        } catch (TimeoutException e) {
+            log.warn("{} Timed out while waiting for previous offset flush to complete, cancelling", this);
+            recordCommitFailure(time.milliseconds() - started, e);
+            return false;
+        }
+        if (!shouldFlush) {
             // There was nothing in the offsets to process, but we still mark a successful offset commit.
             long durationMillis = time.milliseconds() - started;
             recordCommitSuccess(durationMillis);

@@ -412,7 +412,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
 
         expectClose();
 
@@ -1004,7 +1003,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     @SuppressWarnings("unchecked")
     private void expectOffsetFlush(boolean succeed) throws Exception {
-        EasyMock.expect(offsetWriter.beginFlush()).andReturn(true);
+        EasyMock.expect(offsetWriter.beginFlush(EasyMock.anyLong(), EasyMock.anyObject())).andReturn(true);
         Future<Void> flushFuture = PowerMock.createMock(Future.class);
         EasyMock.expect(offsetWriter.doFlush(EasyMock.anyObject(Callback.class))).andReturn(flushFuture);
         // Should throw for failure
@@ -1019,6 +1018,12 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             offsetWriter.cancelFlush();
             PowerMock.expectLastCall();
         }
+    }
+
+    private void expectEmptyOffsetFlush() throws Exception {
+        EasyMock.expect(offsetWriter.beginFlush(EasyMock.anyLong(), EasyMock.anyObject())).andReturn(false);
+        sourceTask.commit();
+        EasyMock.expectLastCall();
     }
 
     private void assertPollMetrics(int minimumPollCountExpected) {
