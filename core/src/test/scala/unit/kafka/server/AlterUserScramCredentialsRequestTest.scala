@@ -19,6 +19,7 @@ package kafka.server
 
 import java.nio.charset.StandardCharsets
 import java.util
+import kafka.utils.TestUtils
 import kafka.utils.TestInfoUtils
 import kafka.network.SocketServer
 import kafka.security.authorizer.AclAuthorizer
@@ -276,7 +277,10 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     checkUserAppearsInAlterResults(results1_1, user1)
     checkUserAppearsInAlterResults(results1_1, user2)
 
-    Thread.sleep(10000)
+    // KRaft is eventually consistent so it is possible to call describe before 
+    // the credential is propogated from the controller to the broker.
+    TestUtils.waitUntilTrue(() => describeAllWithNoTopLevelErrorConfirmed().data.results.size == 2,
+                               "describeAllWithNoTopLevelErrorConfirmed does not see 2 users");
 
     // now describe them all
     val results2 = describeAllWithNoTopLevelErrorConfirmed().data.results
@@ -335,7 +339,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     checkUserAppearsInAlterResults(results4, user1)
     checkUserAppearsInAlterResults(results4, user2)
 
-    Thread.sleep(10000)
+    TestUtils.waitUntilTrue(() => describeAllWithNoTopLevelErrorConfirmed().data.results.size == 1,
+                               "describeAllWithNoTopLevelErrorConfirmed does not see only 1 user");
 
     // now describe them all, which should just yield 1 credential
     val results5 = describeAllWithNoTopLevelErrorConfirmed().data.results
@@ -354,7 +359,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     checkNoErrorsAlteringCredentials(results6)
     checkUserAppearsInAlterResults(results6, user1)
 
-    Thread.sleep(10000)
+    TestUtils.waitUntilTrue(() => describeAllWithNoTopLevelErrorConfirmed().data.results.size == 0,
+                               "describeAllWithNoTopLevelErrorConfirmed does not see empty user");
 
     // now describe them all, which should yield 0 credentials
     val results7 = describeAllWithNoTopLevelErrorConfirmed().data.results

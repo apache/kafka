@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.util
-// import java.util.Properties
 import kafka.utils.TestInfoUtils
 import kafka.network.SocketServer
 import kafka.security.authorizer.AclAuthorizer
