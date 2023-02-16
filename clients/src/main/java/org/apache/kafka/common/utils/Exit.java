@@ -22,10 +22,12 @@ package org.apache.kafka.common.utils;
  */
 public class Exit {
 
+    @FunctionalInterface
     public interface Procedure {
         void execute(int statusCode, String message);
     }
 
+    @FunctionalInterface
     public interface ShutdownHookAdder {
         void addShutdownHook(String name, Runnable runnable);
     }

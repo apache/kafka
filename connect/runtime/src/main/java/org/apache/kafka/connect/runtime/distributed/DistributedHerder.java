@@ -119,12 +119,11 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
  * </p>
  * <p>
  *     Under the hood, this is implemented as a group managed by Kafka's group membership facilities (i.e. the generalized
- *     group/consumer coordinator). Each instance of DistributedHerder joins the group and indicates what it's current
+ *     group/consumer coordinator). Each instance of DistributedHerder joins the group and indicates what its current
  *     configuration state is (where it is in the configuration log). The group coordinator selects one member to take
- *     this information and assign each instance a subset of the active connectors & tasks to execute. This assignment
- *     is currently performed in a simple round-robin fashion, but this is not guaranteed -- the herder may also choose
- *     to, e.g., use a sticky assignment to avoid the usual start/stop costs associated with connectors and tasks. Once
- *     an assignment is received, the DistributedHerder simply runs its assigned connectors and tasks in a Worker.
+ *     this information and assign each instance a subset of the active connectors & tasks to execute. The assignment
+ *     strategy depends on the {@link ConnectAssignor} used. Once an assignment is received, the DistributedHerder simply
+ *     runs its assigned connectors and tasks in a {@link Worker}.
  * </p>
  * <p>
  *     In addition to distributing work, the DistributedHerder uses the leader determined during the work assignment
@@ -200,6 +199,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private Set<String> connectorTargetStateChanges = new HashSet<>();
     // Access to this map is protected by the herder's monitor
     private final Map<String, ZombieFencing> activeZombieFencings = new HashMap<>();
+    private final List<String> restNamespace;
     private boolean needsReconfigRebalance;
     private volatile boolean fencedFromConfigTopic;
     private volatile int generation;
@@ -229,9 +229,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      * @param kafkaClusterId     the identifier of the Kafka cluster to use for internal topics; may not be null
      * @param statusBackingStore the backing store for statuses; may not be null
      * @param configBackingStore the backing store for connector configurations; may not be null
-     * @param restUrl            the URL of this herder's REST API; may not be null
+     * @param restUrl            the URL of this herder's REST API; may not be null, but may be an arbitrary placeholder
+     *                           value if this worker does not expose a REST API
+     * @param restClient         a REST client that can be used to issue requests to other workers in the cluster; may
+     *                           be null if inter-worker communication is not enabled
      * @param connectorClientConfigOverridePolicy the policy specifying the client configuration properties that may be overridden
      *                                            in connector configurations; may not be null
+     * @param restNamespace      zero or more path elements to prepend to the paths of forwarded REST requests; may be empty, but not null
      * @param uponShutdown       any {@link AutoCloseable} objects that should be closed when this herder is {@link #stop() stopped},
      *                           after all services and resources owned by this herder are stopped
      */
@@ -244,10 +248,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                              String restUrl,
                              RestClient restClient,
                              ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                             List<String> restNamespace,
                              AutoCloseable... uponShutdown) {
-        this(config, worker, worker.workerId(), kafkaClusterId, statusBackingStore, configBackingStore,
-             null, restUrl, restClient, worker.metrics(),
-             time, connectorClientConfigOverridePolicy, uponShutdown);
+        this(config, worker, worker.workerId(), kafkaClusterId, statusBackingStore, configBackingStore, null, restUrl, restClient, worker.metrics(),
+                time, connectorClientConfigOverridePolicy, restNamespace, uponShutdown);
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
@@ -264,6 +268,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       ConnectMetrics metrics,
                       Time time,
                       ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                      List<String> restNamespace,
                       AutoCloseable... uponShutdown) {
         super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
 
@@ -278,6 +283,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.keyGenerator = config.getInternalRequestKeyGenerator();
         this.restClient = restClient;
         this.isTopicTrackingEnabled = config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        this.restNamespace = Objects.requireNonNull(restNamespace);
         this.uponShutdown = Arrays.asList(uponShutdown);
 
         String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
@@ -1163,11 +1169,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 callback.onCompletion(null, null);
             } else if (error instanceof NotLeaderException) {
                 if (restClient != null) {
-                    String forwardedUrl = ((NotLeaderException) error).forwardUrl() + "connectors/" + id.connector() + "/fence";
-                    log.trace("Forwarding zombie fencing request for connector {} to leader at {}", id.connector(), forwardedUrl);
+                    String workerUrl = ((NotLeaderException) error).forwardUrl();
+                    String fenceUrl = namespacedUrl(workerUrl)
+                            .path("connectors")
+                            .path(id.connector())
+                            .path("fence")
+                            .build()
+                            .toString();
+                    log.trace("Forwarding zombie fencing request for connector {} to leader at {}", id.connector(), fenceUrl);
                     forwardRequestExecutor.execute(() -> {
                         try {
-                            restClient.httpRequest(forwardedUrl, "PUT", null, null, null, sessionKey, requestSignatureAlgorithm);
+                            restClient.httpRequest(fenceUrl, "PUT", null, null, null, sessionKey, requestSignatureAlgorithm);
                             callback.onCompletion(null, null);
                         } catch (Throwable t) {
                             callback.onCompletion(t, null);
@@ -1176,12 +1188,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 } else {
                     callback.onCompletion(
                             new ConnectException(
-                                    // TODO: Update this message if KIP-710 is accepted and merged
-                                    //       (https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters)
                                     "This worker is not able to communicate with the leader of the cluster, "
                                             + "which is required for exactly-once source tasks. If running MirrorMaker 2 "
-                                            + "in dedicated mode, consider either disabling exactly-once support, or deploying "
-                                            + "the connectors for MirrorMaker 2 directly onto a distributed Kafka Connect cluster."
+                                            + "in dedicated mode, consider enabling inter-worker communication via the "
+                                            + "'dedicated.mode.enable.internal.rest' property."
                             ),
                             null
                     );
@@ -1617,7 +1627,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     /**
-     * Try to read to the end of the config log within the given timeout
+     * Try to read to the end of the config log within the given timeout and capture a fresh snapshot via
+     * {@link ConfigBackingStore#snapshot()}
+     *
      * @param timeoutMs maximum time to wait to sync to the end of the log
      * @return true if successful; false if timed out
      */
@@ -1715,7 +1727,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         log.info("Finished starting connectors and tasks");
     }
 
-    // arguments should assignment collections (connectors or tasks) and should not be null
+    // arguments should be assignment collections (connectors or tasks) and should not be null
     private static <T> Collection<T> assignmentDifference(Collection<T> update, Collection<T> running) {
         if (running.isEmpty()) {
             return update;
@@ -1935,12 +1947,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, rawTaskProps));
                     cb.onCompletion(null, null);
                 } else if (restClient == null) {
-                    // TODO: Update this message if KIP-710 is accepted and merged
-                    //       (https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters)
                     throw new NotLeaderException("This worker is not able to communicate with the leader of the cluster, "
                             + "which is required for dynamically-reconfiguring connectors. If running MirrorMaker 2 "
-                            + "in dedicated mode, consider deploying the connectors for MirrorMaker 2 directly onto a "
-                            + "distributed Kafka Connect cluster.",
+                            + "in dedicated mode, consider enabling inter-worker communication via the "
+                            + "'dedicated.mode.enable.internal.rest' property.",
                             leaderUrl()
                     );
                 } else {
@@ -1955,7 +1965,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                         "because the URL of the leader's REST interface is empty!"), null);
                                 return;
                             }
-                            String reconfigUrl = UriBuilder.fromUri(leaderUrl)
+                            String reconfigUrl = namespacedUrl(leaderUrl)
                                     .path("connectors")
                                     .path(connName)
                                     .path("tasks")
@@ -1964,6 +1974,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             log.trace("Forwarding task configurations for connector {} to leader", connName);
                             restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, sessionKey, requestSignatureAlgorithm);
                             cb.onCompletion(null, null);
+                            log.trace("Request to leader to reconfigure connector tasks succeeded");
                         } catch (ConnectException e) {
                             log.error("Request to leader to reconfigure connector tasks failed", e);
                             cb.onCompletion(e, null);
@@ -2459,6 +2470,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return false;
     }
 
+    private UriBuilder namespacedUrl(String workerUrl) {
+        UriBuilder result = UriBuilder.fromUri(workerUrl);
+        for (String namespacePath : restNamespace) {
+            result = result.path(namespacePath);
+        }
+        return result;
+    }
+
     /**
      * Represents an active zombie fencing: that is, an in-progress attempt to invoke
      * {@link Worker#fenceZombies(String, int, Map)} and then, if successful, write a new task count
@@ -2576,6 +2595,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
+    /**
+     * A collection of cluster rebalance related metrics.
+     */
     class HerderMetrics {
         private final MetricGroup metricGroup;
         private final Sensor rebalanceCompletedCounts;

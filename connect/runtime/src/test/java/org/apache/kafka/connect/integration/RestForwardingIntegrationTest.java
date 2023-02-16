@@ -34,8 +34,9 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.ConnectRestServer;
 import org.apache.kafka.connect.runtime.rest.RestClient;
-import org.apache.kafka.connect.runtime.rest.RestServer;
+import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
@@ -80,10 +81,10 @@ public class RestForwardingIntegrationTest {
     private Map<String, Object> sslConfig;
     @Mock
     private Plugins plugins;
-    private RestServer followerServer;
+    private ConnectRestServer followerServer;
     @Mock
     private Herder followerHerder;
-    private RestServer leaderServer;
+    private ConnectRestServer leaderServer;
     @Mock
     private Herder leaderHerder;
 
@@ -158,14 +159,14 @@ public class RestForwardingIntegrationTest {
 
         // Follower worker setup
         RestClient followerClient = new RestClient(followerConfig);
-        followerServer = new RestServer(followerConfig, followerClient);
+        followerServer = new ConnectRestServer(null, followerClient, followerConfig.originals());
         followerServer.initializeServer();
         when(followerHerder.plugins()).thenReturn(plugins);
         followerServer.initializeResources(followerHerder);
 
         // Leader worker setup
         RestClient leaderClient = new RestClient(leaderConfig);
-        leaderServer = new RestServer(leaderConfig, leaderClient);
+        leaderServer = new ConnectRestServer(null, leaderClient, leaderConfig.originals());
         leaderServer.initializeServer();
         when(leaderHerder.plugins()).thenReturn(plugins);
         leaderServer.initializeResources(leaderHerder);
@@ -235,13 +236,13 @@ public class RestForwardingIntegrationTest {
             }
         }
         if (dualListener) {
-            workerProps.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:0, https://localhost:0");
+            workerProps.put(RestServerConfig.LISTENERS_CONFIG, "http://localhost:0, https://localhost:0");
             // This server is brought up with both a plaintext and an SSL listener; we use this property
             // to dictate which URL it advertises to other servers when a request must be forwarded to it
             // and which URL we issue requests against during testing
-            workerProps.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, advertiseSSL ? "https" : "http");
+            workerProps.put(RestServerConfig.REST_ADVERTISED_LISTENER_CONFIG, advertiseSSL ? "https" : "http");
         } else {
-            workerProps.put(WorkerConfig.LISTENERS_CONFIG, advertiseSSL ? "https://localhost:0" : "http://localhost:0");
+            workerProps.put(RestServerConfig.LISTENERS_CONFIG, advertiseSSL ? "https://localhost:0" : "http://localhost:0");
         }
 
         return workerProps;

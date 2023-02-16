@@ -23,7 +23,7 @@ package org.apache.kafka.connect.runtime;
  * the Connect framework will attempt to start it after its tasks have been assigned.
  * After the connector has been paused, the target state will change to PAUSED,
  * and all the tasks will stop doing work.
- *
+ * <p>
  * Target states are persisted in the config topic, which is read by all of the
  * workers in the group. When a worker sees a new target state for a connector which
  * is running, it will transition any tasks which it owns (i.e. which have been

@@ -255,6 +255,8 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
     assertTrue(isAclCorrect(consumersAcl, false, false), ConsumerPathZNode.path)
     assertTrue(isAclCorrect(firstZk.getAcl("/kafka-acl-extended"), secondZk.secure,
       ZkData.sensitivePath(ExtendedAclZNode.path)), "/kafka-acl-extended")
+    assertTrue(isAclCorrect(firstZk.getAcl("/feature"), secondZk.secure,
+      ZkData.sensitivePath(FeatureZNode.path)), "ACL mismatch for /feature path")
   }
 
   /**
