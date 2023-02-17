@@ -60,13 +60,13 @@ public class ConsumerMetadata extends Metadata {
         return new MetadataRequest.Builder(topics, allowAutoTopicCreation);
     }
 
-    synchronized void addTransientTopics(Set<String> topics) {
+    public synchronized void addTransientTopics(Set<String> topics) {
         this.transientTopics.addAll(topics);
         if (!fetch().topics().containsAll(topics))
             requestUpdateForNewTopics();
     }
 
-    synchronized void clearTransientTopics() {
+    public synchronized void clearTransientTopics() {
         this.transientTopics.clear();
     }
 

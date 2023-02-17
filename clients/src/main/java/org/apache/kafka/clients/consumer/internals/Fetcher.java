@@ -1127,7 +1127,7 @@ public class Fetcher<K, V> implements Closeable {
             future.complete(new ListOffsetResult(fetchedOffsets, partitionsToRetry));
     }
 
-    static class ListOffsetResult {
+    public static class ListOffsetResult {
         private final Map<TopicPartition, ListOffsetData> fetchedOffsets;
         private final Set<TopicPartition> partitionsToRetry;
 

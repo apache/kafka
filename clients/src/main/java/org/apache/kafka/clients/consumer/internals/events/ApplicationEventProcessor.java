@@ -16,17 +16,16 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.CoordinatorRequestManager;
-import org.apache.kafka.clients.consumer.internals.FetcherRequestManager;
+import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
 import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.OffsetFetchRequestManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -35,9 +34,13 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.function.Function;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class ApplicationEventProcessor {
 
@@ -47,7 +50,9 @@ public class ApplicationEventProcessor {
 
     private Time time;
 
-    private FetcherRequestManager fetcherRequestManager;
+    private FetchRequestManager fetchRequestManager;
+
+    private OffsetFetchRequestManager offsetFetchRequestManager;
 
     private CoordinatorRequestManager coordinatorRequestManager;
 
@@ -77,6 +82,8 @@ public class ApplicationEventProcessor {
                 return process((SubscribeEvent) event);
             case UNSUBSCRIBE:
                 return process((UnsubscribeEvent) event);
+            case FETCH_OFFSETS:
+                return process((FetchOffsetsEvent) event);
         }
         return false;
     }
@@ -105,7 +112,7 @@ public class ApplicationEventProcessor {
      */
     private boolean process(final AssignPartitionsEvent event) {
         Collection<TopicPartition> partitions = event.partitions();
-        fetcherRequestManager.clearBufferedDataForUnassignedPartitions(partitions);
+        fetchRequestManager.clearBufferedDataForUnassignedPartitions(partitions);
 
         // make sure the offsets of topic partitions the consumer is unsubscribing from
         // are committed since there will be no following rebalance
@@ -142,7 +149,7 @@ public class ApplicationEventProcessor {
 
         if (event instanceof SubscribeTopicsEvent) {
             Collection<String> topics = ((SubscribeTopicsEvent) event).topics();
-            fetcherRequestManager.clearBufferedDataForUnassignedTopics(topics);
+            fetchRequestManager.clearBufferedDataForUnassignedTopics(topics);
             log.info("Subscribed to topic(s): {}", Utils.join(topics, ", "));
 
             if (subscriptions.subscribe(new HashSet<>(topics), listener))
@@ -159,7 +166,7 @@ public class ApplicationEventProcessor {
     }
 
     private boolean process(final UnsubscribeEvent event) {
-        fetcherRequestManager.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
+        fetchRequestManager.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
 
         if (coordinator != null) {
             coordinator.onLeavePrepare();
@@ -170,4 +177,25 @@ public class ApplicationEventProcessor {
         log.info("Unsubscribed all topics or patterns and assigned partitions");
         return true;
     }
+
+    private boolean process(final FetchOffsetsEvent event) {
+        Collection<TopicPartition> partitions = event.partitions();
+
+        Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
+                .distinct()
+                .collect(Collectors.toMap(Function.identity(), tp -> event.timestamp()));
+
+        // TODO: these calls to add and clear the transient topics needs to be handled by the implementation
+        //       of OffsetFetchRequestManager.fetchOffsetsByTimes, not here...
+        metadata.addTransientTopics(topicsForPartitions(partitions));
+        offsetFetchRequestManager.fetchOffsetsByTimes(timestampsToSearch, false, event.future());
+        metadata.clearTransientTopics();
+
+        return true;
+    }
+
+    private Set<String> topicsForPartitions(Collection<TopicPartition> partitions) {
+        return partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+    }
+
 }

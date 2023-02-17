@@ -18,12 +18,13 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.Collection;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
-public interface FetcherRequestManager extends RequestManager {
+public interface OffsetFetchRequestManager extends RequestManager {
 
-    void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions);
-
-    void clearBufferedDataForUnassignedTopics(Collection<String> assignedTopics);
+    void fetchOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
+                             boolean requireTimestamps,
+                             CompletableFuture<Map<TopicPartition, Long>> future);
 
 }
