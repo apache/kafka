@@ -76,9 +76,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-
+import static java.util.Map.Entry.comparingByKey;
 import static java.util.UUID.randomUUID;
-
 import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsFuture;
@@ -619,10 +618,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean lagComputationSuccessful =
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogTopics);
 
-        log.info("All members participating in this rebalance: \n{}.",
-                 clientStates.entrySet().stream()
-                     .map(entry -> entry.getKey() + ": " + entry.getValue().consumers())
-                     .collect(Collectors.joining(Utils.NL)));
+        log.info("{} members participating in this rebalance: \n{}.",
+                clientStates.size(),
+                clientStates.entrySet().stream()
+                        .sorted(comparingByKey())
+                        .map(entry -> entry.getKey() + ": " + entry.getValue().consumers())
+                        .collect(Collectors.joining(Utils.NL)));
 
         final Set<TaskId> allTasks = partitionsForTask.keySet();
         statefulTasks.addAll(changelogTopics.statefulTaskIds());
@@ -637,8 +638,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                    statefulTasks,
                                                                    assignmentConfigs);
 
-        log.info("Assigned tasks {} including stateful {} to clients as: \n{}.",
-                allTasks, statefulTasks, clientStates.entrySet().stream()
+        log.info("{} assigned tasks {} including stateful {} to {} clients as: \n{}.",
+                allTasks.size(),
+                allTasks,
+                statefulTasks,
+                clientStates.size(),
+                clientStates.entrySet().stream()
+                        .sorted(comparingByKey())
                         .map(entry -> entry.getKey() + "=" + entry.getValue().currentAssignment())
                         .collect(Collectors.joining(Utils.NL)));
 

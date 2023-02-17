@@ -95,7 +95,7 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
         }
 
         // test inserting at each possible index
-        for (int insertIdx = 0; insertIdx <= testCase.records.size(); insertIdx++) {
+        for (int insertIdx = 0; insertIdx <= testCase.records.size() - 1; insertIdx++) {
             // build record to insert
             final long newRecordTimestamp;
             if (insertIdx == 0) {
@@ -106,7 +106,7 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
                 }
             } else {
                 newRecordTimestamp = testCase.records.get(insertIdx - 1).timestamp - 1;
-                if (newRecordTimestamp < 0 || (insertIdx < testCase.records.size() && newRecordTimestamp == testCase.records.get(insertIdx).timestamp)) {
+                if (newRecordTimestamp < 0 || (newRecordTimestamp == testCase.records.get(insertIdx).timestamp)) {
                     // cannot insert because timestamps of existing records are adjacent
                     continue;
                 }
@@ -116,9 +116,8 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             final SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
 
             // insert() first requires a call to find()
-            if (insertIdx > 0) {
-                segmentValue.find(testCase.records.get(insertIdx - 1).timestamp, false);
-            }
+            segmentValue.find(testCase.records.get(insertIdx).timestamp, false);
+
             segmentValue.insert(newRecord.timestamp, newRecord.value, insertIdx);
 
             // create expected results
@@ -176,6 +175,9 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
 
         // build expected mapping from timestamp -> record
         final Map<Long, Integer> expectedRecordIndices = new HashMap<>();
+        // it's important that this for-loop iterates backwards through the record indices, so that
+        // when adjacent records have adjacent timestamps, then the record with the later timestamp
+        // (i.e., the earlier index) takes precedence
         for (int recordIdx = testCase.records.size() - 1; recordIdx >= 0; recordIdx--) {
             if (recordIdx < testCase.records.size() - 1) {
                 expectedRecordIndices.put(testCase.records.get(recordIdx).timestamp - 1, recordIdx + 1);

@@ -36,7 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.time.Duration;
 
-/** Shared config properties used by MirrorSourceConnector, MirrorCheckpointConnector, and MirrorHeartbeatConnector.
+/** Shared config properties used by {@link MirrorSourceConnector}, {@link MirrorCheckpointConnector}, and {@link MirrorHeartbeatConnector}.
  *  <p>
  *  Generally, these properties are filled-in automatically by MirrorMaker based on a top-level mm2.properties file.
  *  However, when running MM2 connectors as plugins on a Connect-as-a-Service cluster, these properties must be configured manually,
@@ -146,14 +146,18 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     }
 
     Map<String, Object> sourceConsumerConfig() {
-        Map<String, Object> props = new HashMap<>();
-        props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
-        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
-        props.putAll(originalsWithPrefix(CONSUMER_CLIENT_PREFIX));
-        props.putAll(originalsWithPrefix(SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX));
-        props.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
-        return props;
+        return sourceConsumerConfig(originals());
+    }
+
+    static Map<String, Object> sourceConsumerConfig(Map<String, ?> props) {
+        Map<String, Object> result = new HashMap<>();
+        result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX));
+        result.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
+        result.putAll(Utils.entriesWithPrefix(props, CONSUMER_CLIENT_PREFIX));
+        result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX));
+        result.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
+        result.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        return result;
     }
 
     Map<String, Object> targetAdminConfig() {

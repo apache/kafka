@@ -26,8 +26,6 @@ import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.checkpoints.LeaderEpochCheckpointFile
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, OffsetAndEpoch, PartitionMetadataFile, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.errors._
@@ -42,10 +40,12 @@ import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
-import org.apache.kafka.server.log.internals.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, FetchIsolation, LastRecord, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator, ProducerAppendInfo}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig}
 
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
@@ -667,7 +667,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def activeProducers: Seq[DescribeProducersResponseData.ProducerState] = {
     lock synchronized {
-      producerStateManager.activeProducers.map { case (producerId, state) =>
+      producerStateManager.activeProducers.asScala.map { case (producerId, state) =>
         new DescribeProducersResponseData.ProducerState()
           .setProducerId(producerId)
           .setProducerEpoch(state.producerEpoch)
@@ -679,20 +679,24 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }.toSeq
   }
 
-  private[log] def activeProducersWithLastSequence: Map[Long, Int] = lock synchronized {
-    producerStateManager.activeProducers.map { case (producerId, producerIdEntry) =>
-      (producerId, producerIdEntry.lastSeq)
+  private[log] def activeProducersWithLastSequence: mutable.Map[Long, Int] = lock synchronized {
+    val result = mutable.Map[Long, Int]()
+    producerStateManager.activeProducers.forEach { case (producerId, producerIdEntry) =>
+      result.put(producerId.toLong, producerIdEntry.lastSeq)
     }
+    result
   }
 
-  private[log] def lastRecordsOfActiveProducers: Map[Long, LastRecord] = lock synchronized {
-    producerStateManager.activeProducers.map { case (producerId, producerIdEntry) =>
-      val lastDataOffset =
-        if (producerIdEntry.lastDataOffset >= 0) OptionalLong.of(producerIdEntry.lastDataOffset)
-        else OptionalLong.empty()
-      val lastRecord = new LastRecord(lastDataOffset, producerIdEntry.producerEpoch)
-      producerId -> lastRecord
+  private[log] def lastRecordsOfActiveProducers: mutable.Map[Long, LastRecord] = lock synchronized {
+    val result = mutable.Map[Long, LastRecord]()
+    producerStateManager.activeProducers.forEach { case (producerId, producerIdEntry) =>
+      val lastDataOffset = if (producerIdEntry.lastDataOffset >= 0) Some(producerIdEntry.lastDataOffset) else None
+      val lastRecord = new LastRecord(
+        if (lastDataOffset.isEmpty) OptionalLong.empty() else OptionalLong.of(lastDataOffset.get),
+        producerIdEntry.producerEpoch)
+      result.put(producerId.toLong, lastRecord)
     }
+    result
   }
 
   /**
@@ -1007,11 +1011,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  def latestEpoch: Option[Int] = leaderEpochCache.flatMap(_.latestEpoch)
+  def latestEpoch: Option[Int] = leaderEpochCache.flatMap(_.latestEpoch.asScala)
 
   def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
     leaderEpochCache.flatMap { cache =>
-      val (foundEpoch, foundOffset) = cache.endOffsetFor(leaderEpoch, logEndOffset)
+      val entry = cache.endOffsetFor(leaderEpoch, logEndOffset)
+      val (foundEpoch, foundOffset) = (entry.getKey(), entry.getValue())
       if (foundOffset == UNDEFINED_EPOCH_OFFSET)
         None
       else
@@ -1022,7 +1027,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def maybeIncrementFirstUnstableOffset(): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
 
-    val updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset match {
+    val updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset.asScala match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
         val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
         Some(convertToOffsetMetadataOrThrow(offset))
@@ -1087,8 +1092,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         if (origin == AppendOrigin.CLIENT) {
           val maybeLastEntry = producerStateManager.lastEntry(batch.producerId)
 
-          maybeLastEntry.flatMap(_.findDuplicateBatch(batch).asScala).foreach { duplicate =>
-            return (updatedProducers, completedTxns.toList, Some(duplicate))
+          val duplicateBatch = maybeLastEntry.flatMap(_.findDuplicateBatch(batch))
+          if (duplicateBatch.isPresent) {
+            return (updatedProducers, completedTxns.toList, Some(duplicateBatch.get()))
           }
         }
 
@@ -1284,6 +1290,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
+      def latestEpochAsOptional(leaderEpochCache: Option[LeaderEpochFileCache]): Optional[Integer] = {
+        leaderEpochCache match {
+          case Some(cache) => {
+            val latestEpoch = cache.latestEpoch()
+            if (latestEpoch.isPresent) Optional.of(latestEpoch.getAsInt) else Optional.empty[Integer]()
+          }
+          case None => Optional.empty[Integer]()
+        }
+      }
+
       if (config.messageFormatVersion.isLessThan(IBP_0_10_0_IV0) &&
         targetTimestamp != ListOffsetsRequest.EARLIEST_TIMESTAMP &&
         targetTimestamp != ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP &&
@@ -1298,36 +1314,37 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // The first cached epoch usually corresponds to the log start offset, but we have to verify this since
         // it may not be true following a message format version bump as the epoch will not be available for
         // log entries written in the older format.
-        val earliestEpochEntry = leaderEpochCache.flatMap(_.earliestEntry)
-        val epochOpt = earliestEpochEntry match {
-          case Some(entry) if entry.startOffset <= logStartOffset => Optional.of[Integer](entry.epoch)
-          case _ => Optional.empty[Integer]()
-        }
+        val earliestEpochEntry = leaderEpochCache.asJava.flatMap(_.earliestEntry())
+        val epochOpt = if (earliestEpochEntry.isPresent && earliestEpochEntry.get().startOffset <= logStartOffset) {
+          Optional.of[Integer](earliestEpochEntry.get().epoch)
+        } else Optional.empty[Integer]()
+
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
         val curLocalLogStartOffset = localLogStartOffset()
-        val earliestLocalLogEpochEntry = leaderEpochCache.flatMap(cache =>
-          cache.epochForOffset(curLocalLogStartOffset).flatMap(cache.epochEntry))
-        val epochOpt = earliestLocalLogEpochEntry match {
-          case Some(entry) if entry.startOffset <= curLocalLogStartOffset => Optional.of[Integer](entry.epoch)
-          case _ => Optional.empty[Integer]()
-        }
+
+        val earliestLocalLogEpochEntry = leaderEpochCache.asJava.flatMap(cache => {
+          val epoch = cache.epochForOffset(curLocalLogStartOffset)
+          if (epoch.isPresent) (cache.epochEntry(epoch.getAsInt)) else Optional.empty[EpochEntry]()
+        })
+
+        val epochOpt = if (earliestLocalLogEpochEntry.isPresent && earliestLocalLogEpochEntry.get().startOffset <= curLocalLogStartOffset)
+          Optional.of[Integer](earliestLocalLogEpochEntry.get().epoch)
+        else Optional.empty[Integer]()
+
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
-        val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
-        val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
-        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epochOptional))
+        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, latestEpochAsOptional(leaderEpochCache)))
       } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
         // constant time access while being safe to use with concurrent collections unlike `toArray`.
         val segmentsCopy = logSegments.toBuffer
         val latestTimestampSegment = segmentsCopy.maxBy(_.maxTimestampSoFar)
-        val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
-        val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
         val latestTimestampAndOffset = latestTimestampSegment.maxTimestampAndOffsetSoFar
+
         Some(new TimestampAndOffset(latestTimestampAndOffset.timestamp,
           latestTimestampAndOffset.offset,
-          epochOptional))
+          latestEpochAsOptional(leaderEpochCache)))
       } else {
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
         val remoteOffset = if (remoteLogEnabled()) {
@@ -1666,12 +1683,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   // visible for testing
-  private[log] def latestProducerSnapshotOffset: Option[Long] = lock synchronized {
+  private[log] def latestProducerSnapshotOffset: OptionalLong = lock synchronized {
     producerStateManager.latestSnapshotOffset
   }
 
   // visible for testing
-  private[log] def oldestProducerSnapshotOffset: Option[Long] = lock synchronized {
+  private[log] def oldestProducerSnapshotOffset: OptionalLong = lock synchronized {
     producerStateManager.oldestSnapshotOffset
   }
 
@@ -1844,11 +1861,7 @@ object UnifiedLog extends Logging {
 
   val TimeIndexFileSuffix = LocalLog.TimeIndexFileSuffix
 
-  val ProducerSnapshotFileSuffix = ".snapshot"
-
   val TxnIndexFileSuffix = LocalLog.TxnIndexFileSuffix
-
-  val DeletedFileSuffix = LocalLog.DeletedFileSuffix
 
   val CleanedFileSuffix = LocalLog.CleanedFileSuffix
 
@@ -1935,15 +1948,6 @@ object UnifiedLog extends Logging {
 
   def deleteFileIfExists(file: File, suffix: String = ""): Unit =
     Files.deleteIfExists(new File(file.getPath + suffix).toPath)
-
-  /**
-   * Construct a producer id snapshot file using the given offset.
-   *
-   * @param dir    The directory in which the log will reside
-   * @param offset The last offset (exclusive) included in the snapshot
-   */
-  def producerSnapshotFile(dir: File, offset: Long): File =
-    new File(dir, LocalLog.filenamePrefixFromOffset(offset) + ProducerSnapshotFileSuffix)
 
   def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.transactionIndexFile(dir, offset, suffix)
 
@@ -2104,7 +2108,7 @@ object UnifiedLog extends Logging {
     // (or later snapshots). Otherwise, if there is no snapshot file, then we have to rebuild producer state
     // from the first segment.
     if (recordVersion.value < RecordBatch.MAGIC_VALUE_V2 ||
-      (producerStateManager.latestSnapshotOffset.isEmpty && reloadFromCleanShutdown)) {
+      (!producerStateManager.latestSnapshotOffset.isPresent && reloadFromCleanShutdown)) {
       // To avoid an expensive scan through all of the segments, we take empty snapshots from the start of the
       // last two segments and the last offset. This should avoid the full scan in the case that the log needs
       // truncation.
@@ -2177,7 +2181,7 @@ object UnifiedLog extends Logging {
                                            parentDir: String,
                                            topicPartition: TopicPartition): Unit = {
     val snapshotsToDelete = segments.flatMap { segment =>
-      producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)
+      producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset).asScala
     }
 
     def deleteProducerSnapshots(): Unit = {

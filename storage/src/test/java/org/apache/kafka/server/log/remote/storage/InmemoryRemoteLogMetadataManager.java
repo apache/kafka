@@ -49,8 +49,7 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     }
 
     @Override
-    public CompletableFuture<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
-            throws RemoteStorageException {
+    public CompletableFuture<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         log.debug("Adding remote log segment : [{}]", remoteLogSegmentMetadata);
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
 
@@ -104,8 +103,7 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     }
 
     @Override
-    public CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
-            throws RemoteStorageException {
+    public CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata) {
         log.debug("Adding delete state with: [{}]", remotePartitionDeleteMetadata);
         Objects.requireNonNull(remotePartitionDeleteMetadata, "remotePartitionDeleteMetadata can not be null");
 

@@ -48,5 +48,5 @@ public enum MessageSpecType {
      * Other message spec types.
      */
     @JsonProperty("data")
-    DATA;
+    DATA
 }
