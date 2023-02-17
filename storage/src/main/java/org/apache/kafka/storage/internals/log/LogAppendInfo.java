@@ -241,10 +241,6 @@ public class LogAppendInfo {
         return errorMessage;
     }
 
-    public void setErrorMessage(String errorMessage) {
-        this.errorMessage = errorMessage;
-    }
-
     public LeaderHwChange leaderHwChange() {
         return leaderHwChange;
     }
@@ -265,7 +261,7 @@ public class LogAppendInfo {
      * @return Maximum possible number of messages described by LogAppendInfo
      */
     public long numMessages() {
-        if (firstOffset.isPresent() && (firstOffset.get().messageOffset >= 0 && lastOffset >= 0)) {
+        if (firstOffset.isPresent() && firstOffset.get().messageOffset >= 0 && lastOffset >= 0) {
             return lastOffset - firstOffset.get().messageOffset + 1;
         }
         return 0;
