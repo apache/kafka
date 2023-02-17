@@ -86,7 +86,7 @@ class RemoteIndexCacheTest {
 
   @Test
   def testFetchIndexFromRemoteStorage(): Unit = {
-    val offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex.get
+    val offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex
     val offsetPosition1 = offsetIndex.entry(1)
     // this call should have invoked fetchOffsetIndex, fetchTimestampIndex once
     val resultPosition = cache.lookupOffset(rlsMetadata, offsetPosition1.offset)
@@ -104,7 +104,7 @@ class RemoteIndexCacheTest {
 
   @Test
   def testPositionForNonExistingIndexFromRemoteStorage(): Unit = {
-    val offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex.get
+    val offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex
     val lastOffsetPosition = cache.lookupOffset(rlsMetadata, offsetIndex.lastOffset)
     val greaterOffsetThanLastOffset = offsetIndex.lastOffset + 1
     assertEquals(lastOffsetPosition, cache.lookupOffset(rlsMetadata, greaterOffsetThanLastOffset))

@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.ToolsUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -86,14 +87,8 @@ public class MetadataQuorumCommand {
             Namespace namespace = parser.parseArgsOrFail(args);
             String command = namespace.getString("command");
 
-            File commandConfig = namespace.get("command_config");
-            Properties props = new Properties();
-            if (commandConfig != null) {
-                if (!commandConfig.exists())
-                    throw new TerseException("Properties file " + commandConfig.getPath() + " does not exists!");
-
-                Utils.loadProps(commandConfig.getPath());
-            }
+            File optionalCommandConfig = namespace.get("command_config");
+            final Properties props = getProperties(optionalCommandConfig);
             props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, namespace.getString("bootstrap_server"));
             admin = Admin.create(props);
 
@@ -113,6 +108,16 @@ public class MetadataQuorumCommand {
         } finally {
             if (admin != null)
                 admin.close();
+        }
+    }
+
+    private static Properties getProperties(File optionalCommandConfig) throws TerseException, IOException {
+        if (optionalCommandConfig == null) {
+            return new Properties();
+        } else {
+            if (!optionalCommandConfig.exists())
+                throw new TerseException("Properties file " + optionalCommandConfig.getPath() + " does not exists!");
+            return Utils.loadProps(optionalCommandConfig.getPath());
         }
     }
 

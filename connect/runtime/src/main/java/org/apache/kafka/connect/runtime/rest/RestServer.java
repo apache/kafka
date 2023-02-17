@@ -24,15 +24,10 @@ import org.apache.kafka.connect.health.ConnectClusterDetails;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.health.ConnectClusterDetailsImpl;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResource;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
-import org.apache.kafka.connect.runtime.rest.resources.LoggingResource;
-import org.apache.kafka.connect.runtime.rest.resources.RootResource;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.CustomRequestLog;
@@ -67,12 +62,10 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.connect.runtime.WorkerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX;
-
 /**
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
  */
-public class RestServer {
+public abstract class RestServer {
     private static final Logger log = LoggerFactory.getLogger(RestServer.class);
 
     // Used to distinguish between Admin connectors and regular REST API connectors when binding admin handlers
@@ -84,9 +77,7 @@ public class RestServer {
     private static final String PROTOCOL_HTTP = "http";
     private static final String PROTOCOL_HTTPS = "https";
 
-    private final WorkerConfig config;
-
-    private final RestClient restClient;
+    protected final RestServerConfig config;
     private final ContextHandlerCollection handlers;
     private final Server jettyServer;
 
@@ -96,12 +87,11 @@ public class RestServer {
     /**
      * Create a REST server for this herder using the specified configs.
      */
-    public RestServer(WorkerConfig config, RestClient restClient) {
+    protected RestServer(RestServerConfig config) {
         this.config = config;
-        this.restClient = restClient;
 
-        List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
-        List<String> adminListeners = config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG);
+        List<String> listeners = config.listeners();
+        List<String> adminListeners = config.adminListeners();
 
         jettyServer = new Server();
         handlers = new ContextHandlerCollection();
@@ -161,7 +151,7 @@ public class RestServer {
         if (PROTOCOL_HTTPS.equals(protocol)) {
             SslContextFactory ssl;
             if (isAdmin) {
-                ssl = SSLUtils.createServerSideSslContextFactory(config, ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX);
+                ssl = SSLUtils.createServerSideSslContextFactory(config, RestServerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX);
             } else {
                 ssl = SSLUtils.createServerSideSslContextFactory(config);
             }
@@ -210,44 +200,47 @@ public class RestServer {
         }
 
         log.info("REST server listening at " + jettyServer.getURI() + ", advertising URL " + advertisedUrl());
-        log.info("REST admin endpoints at " + adminUrl());
+        URI adminUrl = adminUrl();
+        if (adminUrl != null)
+            log.info("REST admin endpoints at " + adminUrl);
     }
 
-    public void initializeResources(Herder herder) {
+    protected final void initializeResources() {
         log.info("Initializing REST resources");
+        resources = new ArrayList<>();
 
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.register(new JacksonJsonProvider());
 
-        this.resources = new ArrayList<>();
-        resources.add(new RootResource(herder));
-        resources.add(new ConnectorsResource(herder, config, restClient));
-        resources.add(new ConnectorPluginsResource(herder));
-        resources.forEach(resourceConfig::register);
+        Collection<ConnectResource> regularResources = regularResources();
+        regularResources.forEach(resourceConfig::register);
+        resources.addAll(regularResources);
 
         resourceConfig.register(ConnectExceptionMapper.class);
         resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
 
-        registerRestExtensions(herder, resourceConfig);
+        configureRegularResources(resourceConfig);
 
-        List<String> adminListeners = config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG);
+        List<String> adminListeners = config.adminListeners();
         ResourceConfig adminResourceConfig;
         if (adminListeners == null) {
             log.info("Adding admin resources to main listener");
             adminResourceConfig = resourceConfig;
-            LoggingResource loggingResource = new LoggingResource();
-            this.resources.add(loggingResource);
-            adminResourceConfig.register(loggingResource);
+            Collection<ConnectResource> adminResources = adminResources();
+            resources.addAll(adminResources);
+            adminResources.forEach(adminResourceConfig::register);
+            configureAdminResources(adminResourceConfig);
         } else if (adminListeners.size() > 0) {
             // TODO: we need to check if these listeners are same as 'listeners'
             // TODO: the following code assumes that they are different
             log.info("Adding admin resources to admin listener");
             adminResourceConfig = new ResourceConfig();
             adminResourceConfig.register(new JacksonJsonProvider());
-            LoggingResource loggingResource = new LoggingResource();
-            this.resources.add(loggingResource);
-            adminResourceConfig.register(loggingResource);
+            Collection<ConnectResource> adminResources = adminResources();
+            resources.addAll(adminResources);
+            adminResources.forEach(adminResourceConfig::register);
             adminResourceConfig.register(ConnectExceptionMapper.class);
+            configureAdminResources(adminResourceConfig);
         } else {
             log.info("Skipping adding admin resources");
             // set up adminResource but add no handlers to it
@@ -273,21 +266,21 @@ public class RestServer {
             contextHandlers.add(adminContext);
         }
 
-        String allowedOrigins = config.getString(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG);
+        String allowedOrigins = config.allowedOrigins();
         if (!Utils.isBlank(allowedOrigins)) {
             FilterHolder filterHolder = new FilterHolder(new CrossOriginFilter());
             filterHolder.setName("cross-origin");
             filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_ORIGINS_PARAM, allowedOrigins);
-            String allowedMethods = config.getString(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG);
+            String allowedMethods = config.allowedMethods();
             if (!Utils.isBlank(allowedMethods)) {
                 filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_METHODS_PARAM, allowedMethods);
             }
             context.addFilter(filterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
         }
 
-        String headerConfig = config.getString(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG);
+        String headerConfig = config.responseHeaders();
         if (!Utils.isBlank(headerConfig)) {
-            configureHttpResponseHeaderFilter(context);
+            configureHttpResponseHeaderFilter(context, headerConfig);
         }
 
         handlers.setHandlers(contextHandlers.toArray(new Handler[0]));
@@ -307,6 +300,44 @@ public class RestServer {
         }
 
         log.info("REST resources initialized; server is started and ready to handle requests");
+    }
+
+    /**
+     * @return the {@link ConnectResource resources} that should be registered with the
+     * standard (i.e., non-admin) listener for this server; may be empty, but not null
+     */
+    protected abstract Collection<ConnectResource> regularResources();
+
+    /**
+     * @return the {@link ConnectResource resources} that should be registered with the
+     * admin listener for this server; may be empty, but not null
+     */
+    protected abstract Collection<ConnectResource> adminResources();
+
+    /**
+     * Pluggable hook to customize the regular (i.e., non-admin) resources on this server
+     * after they have been instantiated and registered with the given {@link ResourceConfig}.
+     * This may be used to, for example, add REST extensions via {@link #registerRestExtensions(Herder, ResourceConfig)}.
+     * <p>
+     * <em>N.B.: Classes do <b>not</b> need to register the resources provided in {@link #regularResources()} with
+     * the {@link ResourceConfig} parameter in this method; they are automatically registered by the parent class.</em>
+     * @param resourceConfig the {@link ResourceConfig} that the server's regular listeners are registered with; never null
+     */
+    protected void configureRegularResources(ResourceConfig resourceConfig) {
+        // No-op by default
+    }
+
+    /**
+     * Pluggable hook to customize the admin resources on this server after they have been instantiated and registered
+     * with the given {@link ResourceConfig}. This may be used to, for example, add REST extensions via
+     * {@link #registerRestExtensions(Herder, ResourceConfig)}.
+     * <p>
+     * <em>N.B.: Classes do <b>not</b> need to register the resources provided in {@link #adminResources()} with
+     * the {@link ResourceConfig} parameter in this method; they are automatically registered by the parent class.</em>
+     * @param adminResourceConfig the {@link ResourceConfig} that the server's regular listeners are registered with; never null
+     */
+    protected void configureAdminResources(ResourceConfig adminResourceConfig) {
+        // No-op by default
     }
 
     public URI serverUrl() {
@@ -346,13 +377,13 @@ public class RestServer {
         ServerConnector serverConnector = findConnector(advertisedSecurityProtocol);
         builder.scheme(advertisedSecurityProtocol);
 
-        String advertisedHostname = config.getString(WorkerConfig.REST_ADVERTISED_HOST_NAME_CONFIG);
+        String advertisedHostname = config.advertisedHostName();
         if (advertisedHostname != null && !advertisedHostname.isEmpty())
             builder.host(advertisedHostname);
         else if (serverConnector != null && serverConnector.getHost() != null && serverConnector.getHost().length() > 0)
             builder.host(serverConnector.getHost());
 
-        Integer advertisedPort = config.getInt(WorkerConfig.REST_ADVERTISED_PORT_CONFIG);
+        Integer advertisedPort = config.advertisedPort();
         if (advertisedPort != null)
             builder.port(advertisedPort);
         else if (serverConnector != null && serverConnector.getPort() > 0)
@@ -376,7 +407,7 @@ public class RestServer {
         }
 
         if (adminConnector == null) {
-            List<String> adminListeners = config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG);
+            List<String> adminListeners = config.adminListeners();
             if (adminListeners == null) {
                 return advertisedUrl();
             } else if (adminListeners.isEmpty()) {
@@ -399,9 +430,9 @@ public class RestServer {
     }
 
     String determineAdvertisedProtocol() {
-        String advertisedSecurityProtocol = config.getString(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG);
+        String advertisedSecurityProtocol = config.advertisedListener();
         if (advertisedSecurityProtocol == null) {
-            String listeners = (String) config.originals().get(WorkerConfig.LISTENERS_CONFIG);
+            String listeners = config.rawListeners();
 
             if (listeners == null)
                 return PROTOCOL_HTTP;
@@ -440,14 +471,14 @@ public class RestServer {
         return null;
     }
 
-    void registerRestExtensions(Herder herder, ResourceConfig resourceConfig) {
+    protected final void registerRestExtensions(Herder herder, ResourceConfig resourceConfig) {
         connectRestExtensions = herder.plugins().newPlugins(
-            config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
+            config.restExtensions(),
             config, ConnectRestExtension.class);
 
         long herderRequestTimeoutMs = ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
-        Integer rebalanceTimeoutMs = config.getRebalanceTimeout();
+        Integer rebalanceTimeoutMs = config.rebalanceTimeoutMs();
 
         if (rebalanceTimeoutMs != null) {
             herderRequestTimeoutMs = Math.min(herderRequestTimeoutMs, rebalanceTimeoutMs.longValue());
@@ -472,8 +503,7 @@ public class RestServer {
      * Register header filter to ServletContextHandler.
      * @param context The servlet context handler
      */
-    protected void configureHttpResponseHeaderFilter(ServletContextHandler context) {
-        String headerConfig = config.getString(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG);
+    protected void configureHttpResponseHeaderFilter(ServletContextHandler context, String headerConfig) {
         FilterHolder headerFilterHolder = new FilterHolder(HeaderFilter.class);
         headerFilterHolder.setInitParameter("headerConfig", headerConfig);
         context.addFilter(headerFilterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));

@@ -16,10 +16,15 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.Locale;
 import java.util.Map.Entry;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
@@ -47,6 +52,7 @@ import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Collection;
@@ -69,6 +75,8 @@ public class MirrorSourceConnector extends SourceConnector {
     private static final ResourcePatternFilter ANY_TOPIC = new ResourcePatternFilter(ResourceType.TOPIC,
         null, PatternType.ANY);
     private static final AclBindingFilter ANY_TOPIC_ACL = new AclBindingFilter(ANY_TOPIC, AccessControlEntryFilter.ANY);
+    private static final String READ_COMMITTED = IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT);
+    private static final String EXACTLY_ONCE_SUPPORT_CONFIG = "exactly.once.support";
 
     private Scheduler scheduler;
     private MirrorSourceConfig config;
@@ -189,8 +197,49 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     @Override
+    public org.apache.kafka.common.config.Config validate(Map<String, String> props) {
+        List<ConfigValue> configValues = super.validate(props).configValues();
+        if ("required".equals(props.get(EXACTLY_ONCE_SUPPORT_CONFIG))) {
+            if (!consumerUsesReadCommitted(props)) {
+                ConfigValue exactlyOnceSupport = configValues.stream()
+                        .filter(cv -> EXACTLY_ONCE_SUPPORT_CONFIG.equals(cv.name()))
+                        .findAny()
+                        .orElseGet(() -> {
+                            ConfigValue result = new ConfigValue(EXACTLY_ONCE_SUPPORT_CONFIG);
+                            configValues.add(result);
+                            return result;
+                        });
+                // The Connect framework will already generate an error for this property if we return ExactlyOnceSupport.UNSUPPORTED
+                // from our exactlyOnceSupport method, but it will be fairly generic
+                // We add a second error message here to give users more insight into why this specific connector can't support exactly-once
+                // guarantees with the given configuration
+                exactlyOnceSupport.addErrorMessage(
+                        "MirrorSourceConnector can only provide exactly-once guarantees when its source consumer is configured with "
+                                + ConsumerConfig.ISOLATION_LEVEL_CONFIG + " set to '" + READ_COMMITTED + "'; "
+                                + "otherwise, records from aborted and uncommitted transactions will be replicated from the "
+                                + "source cluster to the target cluster."
+                );
+            }
+        }
+        return new org.apache.kafka.common.config.Config(configValues);
+    }
+
+    @Override
     public String version() {
         return AppInfoParser.getVersion();
+    }
+
+    @Override
+    public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> props) {
+        return consumerUsesReadCommitted(props)
+                ? ExactlyOnceSupport.SUPPORTED
+                : ExactlyOnceSupport.UNSUPPORTED;
+    }
+
+    private boolean consumerUsesReadCommitted(Map<String, String> props) {
+        Object consumerIsolationLevel = MirrorSourceConfig.sourceConsumerConfig(props)
+                .get(ConsumerConfig.ISOLATION_LEVEL_CONFIG);
+        return Objects.equals(READ_COMMITTED, consumerIsolationLevel);
     }
 
     // visible for testing

@@ -146,14 +146,18 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     }
 
     Map<String, Object> sourceConsumerConfig() {
-        Map<String, Object> props = new HashMap<>();
-        props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
-        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
-        props.putAll(originalsWithPrefix(CONSUMER_CLIENT_PREFIX));
-        props.putAll(originalsWithPrefix(SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX));
-        props.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
-        return props;
+        return sourceConsumerConfig(originals());
+    }
+
+    static Map<String, Object> sourceConsumerConfig(Map<String, ?> props) {
+        Map<String, Object> result = new HashMap<>();
+        result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX));
+        result.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
+        result.putAll(Utils.entriesWithPrefix(props, CONSUMER_CLIENT_PREFIX));
+        result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX));
+        result.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
+        result.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        return result;
     }
 
     Map<String, Object> targetAdminConfig() {

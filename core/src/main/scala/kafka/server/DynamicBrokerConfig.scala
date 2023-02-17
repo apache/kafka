@@ -22,7 +22,7 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.cluster.EndPoint
-import kafka.log.{LogCleaner, LogManager, ProducerStateManagerConfig}
+import kafka.log.{LogCleaner, LogManager}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.server.DynamicBrokerConfig._
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
@@ -36,7 +36,7 @@ import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
 
 import scala.annotation.nowarn
 import scala.collection._
@@ -59,7 +59,7 @@ import scala.jdk.CollectionConverters._
   * </ol>
   * Log configs use topic config overrides if defined and fallback to broker defaults using the order of precedence above.
   * Topic config overrides may use a different config name from the default broker config.
-  * See [[kafka.log.LogConfig#TopicConfigSynonyms]] for the mapping.
+  * See [[org.apache.kafka.storage.internals.log.LogConfig#TopicConfigSynonyms]] for the mapping.
   * <p>
   * AdminClient returns all config synonyms in the order of precedence when configs are described with
   * <code>includeSynonyms</code>. In addition to configs that may be defined with the same name at different levels,
@@ -87,7 +87,7 @@ object DynamicBrokerConfig {
     Set(KafkaConfig.MetricReporterClassesProp) ++
     DynamicListenerConfig.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs ++
-    ProducerStateManagerConfig.ReconfigurableConfigs
+    ProducerStateManagerConfig.RECONFIGURABLE_CONFIGS.asScala
 
   private val ClusterLevelListenerConfigs = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp, KafkaConfig.NumNetworkThreadsProp)
   private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
@@ -268,7 +268,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(kafkaServer.socketServer)
-    addBrokerReconfigurable(kafkaServer.logManager.producerStateManagerConfig)
+    addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
@@ -1029,5 +1029,22 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
 
   private def listenersToMap(listeners: Seq[EndPoint]): Map[ListenerName, EndPoint] =
     listeners.map(e => (e.listenerName, e)).toMap
+
+}
+
+class DynamicProducerStateManagerConfig(val producerStateManagerConfig: ProducerStateManagerConfig) extends BrokerReconfigurable with Logging {
+  def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+    if (producerStateManagerConfig.producerIdExpirationMs() != newConfig.producerIdExpirationMs) {
+      info(s"Reconfigure ${KafkaConfig.ProducerIdExpirationMsProp} from ${producerStateManagerConfig.producerIdExpirationMs()} to ${newConfig.producerIdExpirationMs}")
+      producerStateManagerConfig.setProducerIdExpirationMs(newConfig.producerIdExpirationMs)
+    }
+  }
+
+  def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+    if (newConfig.producerIdExpirationMs < 0)
+      throw new ConfigException(s"${KafkaConfig.ProducerIdExpirationMsProp} cannot be less than 0, current value is ${producerStateManagerConfig.producerIdExpirationMs}, and new value is ${newConfig.producerIdExpirationMs}")
+  }
+
+  override def reconfigurableConfigs: Set[String] = ProducerStateManagerConfig.RECONFIGURABLE_CONFIGS.asScala
 
 }

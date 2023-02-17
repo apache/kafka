@@ -68,4 +68,12 @@ public class SnapshotFile {
             file = renamed;
         }
     }
+
+    @Override
+    public String toString() {
+        return "SnapshotFile(" +
+                "offset=" + offset +
+                ", file=" + file +
+                ')';
+    }
 }
