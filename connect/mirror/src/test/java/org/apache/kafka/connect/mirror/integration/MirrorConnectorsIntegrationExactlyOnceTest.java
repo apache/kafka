@@ -43,9 +43,6 @@ public class MirrorConnectorsIntegrationExactlyOnceTest extends MirrorConnectors
             brokerProps.put("transaction.state.log.replication.factor", "1");
             brokerProps.put("transaction.state.log.min.isr", "1");
         }
-        // Transaction marker records will cause translated offsets to not match
-        // between source and target
-        exactOffsetTranslation = false;
         super.startClusters();
     }
 

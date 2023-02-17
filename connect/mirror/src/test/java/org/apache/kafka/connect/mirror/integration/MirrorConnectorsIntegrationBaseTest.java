@@ -44,6 +44,7 @@ import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.connect.util.clusters.UngracefulShutdownException;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -55,6 +56,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Tag;
@@ -120,8 +122,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     protected Properties backupBrokerProps = new Properties();
     protected Map<String, String> primaryWorkerProps = new HashMap<>();
     protected Map<String, String> backupWorkerProps = new HashMap<>();
-    protected boolean exactOffsetTranslation = true;
-    
+
     @BeforeEach
     public void startClusters() throws Exception {
         startClusters(new HashMap<String, String>() {{
@@ -447,7 +448,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             consumerProps, "primary.test-topic-1")) {
 
             waitForConsumerGroupFullSync(backup, Collections.singletonList("primary.test-topic-1"),
-                    consumerGroupName, NUM_RECORDS_PRODUCED, exactOffsetTranslation);
+                    consumerGroupName, NUM_RECORDS_PRODUCED);
 
             ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
 
@@ -477,7 +478,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             "group.id", consumerGroupName), "primary.test-topic-1", "primary.test-topic-2")) {
 
             waitForConsumerGroupFullSync(backup, Arrays.asList("primary.test-topic-1", "primary.test-topic-2"),
-                    consumerGroupName, NUM_RECORDS_PRODUCED, exactOffsetTranslation);
+                    consumerGroupName, NUM_RECORDS_PRODUCED);
 
             ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
             // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
@@ -613,7 +614,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
             waitForConsumingAllRecords(primaryConsumer, NUM_RECORDS_PRODUCED);
         }
-        waitForConsumerGroupFullSync(backup, Collections.singletonList(remoteTopic), consumerGroupName, NUM_RECORDS_PRODUCED, exactOffsetTranslation);
+        waitForConsumerGroupFullSync(backup, Collections.singletonList(remoteTopic), consumerGroupName, NUM_RECORDS_PRODUCED);
         restartMirrorMakerConnectors(backup, CONNECTOR_LIST);
         assertMonotonicCheckpoints(backup, "primary.checkpoints.internal");
         Thread.sleep(5000);
@@ -621,7 +622,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic-1")) {
             waitForConsumingAllRecords(primaryConsumer, NUM_RECORDS_PRODUCED);
         }
-        waitForConsumerGroupFullSync(backup, Collections.singletonList(remoteTopic), consumerGroupName, 2 * NUM_RECORDS_PRODUCED, exactOffsetTranslation);
+        waitForConsumerGroupFullSync(backup, Collections.singletonList(remoteTopic), consumerGroupName, 2 * NUM_RECORDS_PRODUCED);
         assertMonotonicCheckpoints(backup, "primary.checkpoints.internal");
     }
 
@@ -799,44 +800,46 @@ public class MirrorConnectorsIntegrationBaseTest {
      * offsets are eventually synced to the expected offset numbers
      */
     protected static <T> void waitForConsumerGroupFullSync(
-            EmbeddedConnectCluster connect, List<String> topics, String consumerGroupId, int numRecords, boolean exactOffsetTranslation
+            EmbeddedConnectCluster connect, List<String> topics, String consumerGroupId, int numRecords
     ) throws InterruptedException {
+        int expectedRecords = numRecords * topics.size();
+        Map<String, Object> consumerProps = new HashMap<>();
+        consumerProps.put("isolation.level", "read_committed");
+        consumerProps.put("auto.offset.reset", "earliest");
+        Map<TopicPartition, Long> lastOffset = new HashMap<>();
+        try (Consumer<byte[], byte[]> consumer = connect.kafka().createConsumerAndSubscribeTo(consumerProps, topics.toArray(new String[0]))) {
+            final AtomicInteger totalConsumedRecords = new AtomicInteger(0);
+            waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(CONSUMER_POLL_TIMEOUT_MS);
+                records.forEach(record -> lastOffset.put(new TopicPartition(record.topic(), record.partition()), record.offset()));
+                return expectedRecords == totalConsumedRecords.addAndGet(records.count());
+            }, RECORD_CONSUME_DURATION_MS, "Consumer cannot consume all records in time");
+        }
         try (Admin adminClient = connect.kafka().createAdminClient()) {
-            Map<TopicPartition, OffsetSpec> tps = new HashMap<>(NUM_PARTITIONS * topics.size());
+            List<TopicPartition> tps = new ArrayList<>(NUM_PARTITIONS * topics.size());
             for (int partitionIndex = 0; partitionIndex < NUM_PARTITIONS; partitionIndex++) {
                 for (String topic : topics) {
-                    tps.put(new TopicPartition(topic, partitionIndex), OffsetSpec.latest());
+                    tps.add(new TopicPartition(topic, partitionIndex));
                 }
             }
-            long expectedTotalOffsets = numRecords * topics.size();
 
             waitForCondition(() -> {
                 Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets =
-                    adminClient.listConsumerGroupOffsets(consumerGroupId).partitionsToOffsetAndMetadata().get();
-                long totalConsumerGroupOffsets = consumerGroupOffsets.values().stream()
-                    .mapToLong(OffsetAndMetadata::offset).sum();
-
+                        adminClient.listConsumerGroupOffsets(consumerGroupId).partitionsToOffsetAndMetadata().get();
+                Map<TopicPartition, OffsetSpec> endOffsetRequest = tps.stream()
+                        .collect(Collectors.toMap(Function.identity(), ignored -> OffsetSpec.latest()));
                 Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> endOffsets =
-                        adminClient.listOffsets(tps).all().get();
-                long totalEndOffsets = endOffsets.values().stream()
-                        .mapToLong(ListOffsetsResult.ListOffsetsResultInfo::offset).sum();
+                        adminClient.listOffsets(endOffsetRequest).all().get();
 
-                for (TopicPartition tp : endOffsets.keySet()) {
-                    if (consumerGroupOffsets.containsKey(tp)) {
-                        assertTrue(consumerGroupOffsets.get(tp).offset() <= endOffsets.get(tp).offset(),
-                                "Consumer group committed downstream offsets beyond the log end, this would lead to negative lag metrics"
-                        );
-                    }
+                for (TopicPartition tp : tps) {
+                    assertTrue(consumerGroupOffsets.containsKey(tp),
+                            "TopicPartition " + tp + " does not have translated offsets");
+                    assertTrue(consumerGroupOffsets.get(tp).offset() > lastOffset.get(tp),
+                            "TopicPartition " + tp + " does not have fully-translated offsets");
+                    assertTrue(consumerGroupOffsets.get(tp).offset() <= endOffsets.get(tp).offset(),
+                            "TopicPartition " + tp + " has downstream offsets beyond the log end, this would lead to negative lag metrics");
                 }
-                boolean totalOffsetsMatch = exactOffsetTranslation
-                        ? totalEndOffsets == expectedTotalOffsets
-                        : totalEndOffsets >= expectedTotalOffsets;
-
-                boolean consumerGroupOffsetsMatch = exactOffsetTranslation
-                        ? totalConsumerGroupOffsets == expectedTotalOffsets
-                        : totalConsumerGroupOffsets >= expectedTotalOffsets;
-                // make sure the consumer group offsets are synced to expected number
-                return totalOffsetsMatch && consumerGroupOffsetsMatch;
+                return true;
             }, OFFSET_SYNC_DURATION_MS, "Consumer group offset sync is not complete in time");
         }
     }

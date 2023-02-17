@@ -221,7 +221,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
                 consumerProps, "test-topic-1")) {
 
             waitForConsumerGroupFullSync(backup, Collections.singletonList("test-topic-1"),
-                    consumerGroupName, NUM_RECORDS_PRODUCED, true);
+                    consumerGroupName, NUM_RECORDS_PRODUCED);
 
             ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
 
@@ -251,7 +251,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
                 "group.id", consumerGroupName), "test-topic-1", "test-topic-2")) {
 
             waitForConsumerGroupFullSync(backup, Arrays.asList("test-topic-1", "test-topic-2"),
-                    consumerGroupName, NUM_RECORDS_PRODUCED, true);
+                    consumerGroupName, NUM_RECORDS_PRODUCED);
 
             ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
             // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
