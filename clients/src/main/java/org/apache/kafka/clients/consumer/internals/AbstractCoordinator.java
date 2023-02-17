@@ -353,7 +353,8 @@ public abstract class AbstractCoordinator implements Closeable {
     protected synchronized long timeToNextHeartbeat(long now) {
         // if we have not joined the group or we are preparing rebalance,
         // we don't need to send heartbeats
-        if (state.hasNotJoinedGroup())
+        if (state.hasNotJoinedGroup() ||
+                (heartbeatThread != null && (heartbeatThread.hasFailed() || heartbeatThread.closed)))
             return Long.MAX_VALUE;
         return heartbeat.timeToNextHeartbeat(now);
     }
@@ -1531,6 +1532,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     this.failed.set(new RuntimeException(e));
             } finally {
                 log.debug("Heartbeat thread has closed");
+                this.closed = true;
             }
         }
 
