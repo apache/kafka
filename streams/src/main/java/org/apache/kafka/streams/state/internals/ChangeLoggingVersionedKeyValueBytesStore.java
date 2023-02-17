@@ -36,7 +36,7 @@ public class ChangeLoggingVersionedKeyValueBytesStore extends ChangeLoggingKeyVa
     ChangeLoggingVersionedKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
         if (!(inner instanceof VersionedBytesStore)) {
-            throw new IllegalStateException("inner store must be versioned");
+            throw new IllegalArgumentException("inner store must be versioned");
         }
         this.inner = (VersionedBytesStore) inner;
     }

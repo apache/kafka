@@ -87,7 +87,7 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
 
     @Test
     public void shouldThrowIfInnerIsNotVersioned() {
-        assertThrows(IllegalStateException.class,
+        assertThrows(IllegalArgumentException.class,
             () -> new ChangeLoggingVersionedKeyValueBytesStore(new InMemoryKeyValueStore("kv")));
     }
 
@@ -136,13 +136,13 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
     public void shouldPropagateAndLogOnPutNull() {
         final Bytes rawKey = Bytes.wrap(rawBytes("k"));
         final long timestamp = 10L;
-        final byte[] rawValueAndTimestamp = rawValueAndTimestamp(null, timestamp);
+        final byte[] rawTombstoneAndTimestamp = rawValueAndTimestamp(null, timestamp);
         // put initial record to inner, so that later verification confirms that store.put() has an effect
         final byte[] initialRawValueAndTimestamp = rawValueAndTimestamp("foo", timestamp - 1);
         inner.put(rawKey, initialRawValueAndTimestamp);
         assertThat(inner.get(rawKey), equalTo(initialRawValueAndTimestamp));
 
-        store.put(rawKey, rawValueAndTimestamp);
+        store.put(rawKey, rawTombstoneAndTimestamp);
 
         assertThat(inner.get(rawKey), nullValue());
         assertThat(collector.collected().size(), equalTo(1));
