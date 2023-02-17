@@ -152,7 +152,7 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
 
     @Override
     public byte[] delete(final Bytes key) {
-        throw new UnsupportedOperationException("Versioned key-value stores do not support delete(key)");
+        throw new UnsupportedOperationException("Versioned key-value stores do not support delete(key). Use delete(key, timestamp) instead.");
     }
 
     @Override
