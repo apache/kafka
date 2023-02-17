@@ -477,10 +477,6 @@ public class RemoteLogSegmentLifecycleTest {
             tearDown();
         }
 
-        @Override
-        public int brokerCount() {
-            return 3;
-        }
     }
 
     /**

@@ -703,10 +703,15 @@ class ProducerStateManagerTest {
 
     // First we ensure that we raise an OutOfOrderSequenceException is raised when the append comes from a client.
     assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, epoch, outOfOrderSequence, 1L, 1, origin = AppendOrigin.CLIENT))
+    assertTrue(stateManager.activeProducers.containsKey(producerId))
+    val producerStateEntry = stateManager.activeProducers.get(producerId)
+    assertNotNull(producerStateEntry)
+    assertEquals(0L, producerStateEntry.lastSeq)
 
-    assertEquals(0L, stateManager.activeProducers.get(producerId).lastSeq)
     append(stateManager, producerId, epoch, outOfOrderSequence, 1L, 1, origin = AppendOrigin.REPLICATION)
-    assertEquals(outOfOrderSequence, stateManager.activeProducers.get(producerId).lastSeq)
+    val producerStateEntryForReplication = stateManager.activeProducers.get(producerId)
+    assertNotNull(producerStateEntryForReplication)
+    assertEquals(outOfOrderSequence, producerStateEntryForReplication.lastSeq)
   }
 
   @Test
@@ -1110,6 +1115,7 @@ class ProducerStateManagerTest {
     assertFalse(snapshotToTruncate.exists())
 
     val loadedProducerState = reloadedStateManager.activeProducers.get(producerId)
+    assertNotNull(loadedProducerState)
     assertEquals(0L, loadedProducerState.lastDataOffset)
   }
 

@@ -91,6 +91,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -247,8 +248,8 @@ public class AbstractWorkerSourceTaskTest {
 
         workerTask.toSend = records;
         workerTask.sendRecords();
-        assertEquals(SERIALIZED_KEY, sent.getValue().key());
-        assertEquals(SERIALIZED_RECORD, sent.getValue().value());
+        assertArrayEquals(SERIALIZED_KEY, sent.getValue().key());
+        assertArrayEquals(SERIALIZED_RECORD, sent.getValue().value());
 
         PowerMock.verifyAll();
     }
@@ -339,8 +340,8 @@ public class AbstractWorkerSourceTaskTest {
 
         workerTask.toSend = records;
         workerTask.sendRecords();
-        assertEquals(SERIALIZED_KEY, sent.getValue().key());
-        assertEquals(SERIALIZED_RECORD, sent.getValue().value());
+        assertArrayEquals(SERIALIZED_KEY, sent.getValue().key());
+        assertArrayEquals(SERIALIZED_RECORD, sent.getValue().value());
         assertEquals(headers, sent.getValue().headers());
 
         PowerMock.verifyAll();

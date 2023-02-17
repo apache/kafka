@@ -33,6 +33,7 @@ import static org.apache.kafka.metalog.MockMetaLogManagerListener.COMMIT;
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.LAST_COMMITTED_OFFSET;
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.SHUTDOWN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 
 @Timeout(value = 40)
@@ -48,7 +49,7 @@ public class LocalLogManagerTest {
                 buildWithMockListeners()
         ) {
             env.close();
-            assertEquals(null, env.firstError.get());
+            assertNull(env.firstError.get());
         }
     }
 
@@ -63,7 +64,7 @@ public class LocalLogManagerTest {
         ) {
             assertEquals(new LeaderAndEpoch(OptionalInt.of(0), 1), env.waitForLeader());
             env.close();
-            assertEquals(null, env.firstError.get());
+            assertNull(env.firstError.get());
         }
     }
 
@@ -95,7 +96,7 @@ public class LocalLogManagerTest {
                 cur = next;
             } while (cur.leaderId().equals(first.leaderId()));
             env.close();
-            assertEquals(null, env.firstError.get());
+            assertNull(env.firstError.get());
         }
     }
 

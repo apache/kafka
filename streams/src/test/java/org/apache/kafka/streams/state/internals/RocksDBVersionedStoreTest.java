@@ -16,14 +16,20 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -47,12 +53,16 @@ public class RocksDBVersionedStoreTest {
     private static final String STORE_NAME = "myversionedrocks";
     private static final String METRICS_SCOPE = "versionedrocksdb";
     private static final long HISTORY_RETENTION = 300_000L;
+    private static final long GRACE_PERIOD = HISTORY_RETENTION; // history retention doubles as grace period for now
     private static final long SEGMENT_INTERVAL = HISTORY_RETENTION / 3;
     private static final long BASE_TIMESTAMP = 10L;
     private static final Serializer<String> STRING_SERIALIZER = new StringSerializer();
     private static final Deserializer<String> STRING_DESERIALIZER = new StringDeserializer();
+    private static final String DROPPED_RECORDS_METRIC = "dropped-records-total";
+    private static final String TASK_LEVEL_GROUP = "stream-task-metrics";
 
     private InternalMockProcessorContext context;
+    private Map<String, String> expectedMetricsTags;
 
     private RocksDBVersionedStore store;
 
@@ -65,6 +75,11 @@ public class RocksDBVersionedStoreTest {
             new StreamsConfig(StreamsTestUtils.getStreamsConfig())
         );
         context.setTime(BASE_TIMESTAMP);
+
+        expectedMetricsTags = mkMap(
+            mkEntry("thread-id", Thread.currentThread().getName()),
+            mkEntry("task-id", context.taskId().toString())
+        );
 
         store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, HISTORY_RETENTION, SEGMENT_INTERVAL);
         store.init((StateStoreContext) context, store);
@@ -345,6 +360,21 @@ public class RocksDBVersionedStoreTest {
     }
 
     @Test
+    public void shouldNotPutExpired() {
+        putToStore("k", "v", HISTORY_RETENTION + 10);
+
+        // grace period has not elapsed
+        putToStore("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
+        verifyGetValueFromStore("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
+
+        // grace period has elapsed, so this put does not take place
+        putToStore("k2", "v2", HISTORY_RETENTION + 9 - GRACE_PERIOD);
+        verifyGetNullFromStore("k2");
+
+        verifyExpiredRecordSensor(1);
+    }
+
+    @Test
     public void shouldGetFromOlderSegments() {
         // use a different key to create three different segments
         putToStore("ko", null, SEGMENT_INTERVAL - 10);
@@ -523,6 +553,70 @@ public class RocksDBVersionedStoreTest {
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 15);
     }
 
+    @Test
+    public void shouldNotRestoreExpired() {
+        final List<DataRecord> records = new ArrayList<>();
+        records.add(new DataRecord("k", "v", HISTORY_RETENTION + 10));
+        records.add(new DataRecord("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD)); // grace period has not elapsed
+        records.add(new DataRecord("k2", "v2", HISTORY_RETENTION + 9 - GRACE_PERIOD)); // grace period has elapsed, so this record should not be restored
+
+        store.restoreBatch(getChangelogRecords(records));
+
+        verifyGetValueFromStore("k", "v", HISTORY_RETENTION + 10);
+        verifyGetValueFromStore("k1", "v1", HISTORY_RETENTION + 10 - GRACE_PERIOD);
+        verifyGetNullFromStore("k2");
+
+        verifyExpiredRecordSensor(0);
+    }
+
+    @Test
+    public void shouldRestoreEvenIfRecordWouldBeExpiredByEndOfBatch() {
+        final List<DataRecord> records = new ArrayList<>();
+        records.add(new DataRecord("k2", "v2", HISTORY_RETENTION - GRACE_PERIOD)); // this record will be older than grace period by the end of the batch, but should still be restored
+        records.add(new DataRecord("k", "v", HISTORY_RETENTION + 10));
+
+        store.restoreBatch(getChangelogRecords(records));
+
+        verifyGetValueFromStore("k2", "v2", HISTORY_RETENTION - GRACE_PERIOD);
+        verifyGetValueFromStore("k", "v", HISTORY_RETENTION + 10);
+    }
+
+    @Test
+    public void shouldAllowZeroHistoryRetention() {
+        // recreate store with zero history retention
+        store.close();
+        store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, 0L, SEGMENT_INTERVAL);
+        store.init((StateStoreContext) context, store);
+
+        // put and get
+        putToStore("k", "v", BASE_TIMESTAMP);
+        verifyGetValueFromStore("k", "v", BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 1, "v", BASE_TIMESTAMP); // query in "future" is allowed
+
+        // update existing record at same timestamp
+        putToStore("k", "updated", BASE_TIMESTAMP);
+        verifyGetValueFromStore("k", "updated", BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "updated", BASE_TIMESTAMP);
+
+        // put new record version
+        putToStore("k", "v2", BASE_TIMESTAMP + 2);
+        verifyGetValueFromStore("k", "v2", BASE_TIMESTAMP + 2);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 2, "v2", BASE_TIMESTAMP + 2);
+
+        // query in past (history retention expired) returns null
+        verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP + 1);
+
+        // delete existing key
+        deleteFromStore("k", BASE_TIMESTAMP + 3);
+        verifyGetNullFromStore("k");
+
+        // put in past (grace period expired) does not update the store
+        putToStore("k2", "v", BASE_TIMESTAMP + 2);
+        verifyGetNullFromStore("k2");
+        verifyExpiredRecordSensor(1);
+    }
+
     private void putToStore(final String key, final String value, final long timestamp) {
         store.put(
             new Bytes(STRING_SERIALIZER.serialize(null, key)),
@@ -569,6 +663,13 @@ public class RocksDBVersionedStoreTest {
     private void verifyTimestampedGetNullFromStore(final String key, final long timestamp) {
         final VersionedRecord<String> record = getFromStore(key, timestamp);
         assertThat(record, nullValue());
+    }
+
+    private void verifyExpiredRecordSensor(final int expectedValue) {
+        final Metric metric = context.metrics().metrics().get(
+            new MetricName(DROPPED_RECORDS_METRIC, TASK_LEVEL_GROUP, "", expectedMetricsTags)
+        );
+        assertEquals((Double) metric.metricValue(), expectedValue, 0.001);
     }
 
     private static VersionedRecord<String> deserializedRecord(final VersionedRecord<byte[]> versionedRecord) {
