@@ -66,7 +66,7 @@ import scala.jdk.CollectionConverters;
  local log start offset.
  */
 public class ReplicaFetcherTierStateMachine implements TierStateMachine {
-    private final Logger log = LoggerFactory.getLogger(ReplicaFetcherTierStateMachine.class);
+    private static final Logger log = LoggerFactory.getLogger(ReplicaFetcherTierStateMachine.class);
 
     private LeaderEndPoint leader;
     private ReplicaManager replicaMgr;

@@ -23,8 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 
 /**
- * This interface defines the APIs needed to handle any state transitions
- * related to tiering in AbstractFetcherThread.
+ * This interface defines the APIs needed to handle any state transitions related to tiering
  */
 public interface TierStateMachine {
 
@@ -52,7 +51,7 @@ public interface TierStateMachine {
      * @param currentFetchState the current PartitionFetchState which will
      *                          be used to derive the return value
      *
-     * @return the new PartitionFetchState if the tier state machine was advanced
+     * @return the new PartitionFetchState if the tier state machine was advanced, otherwise, return the currentFetchState
      */
     Optional<PartitionFetchState> maybeAdvanceState(TopicPartition topicPartition,
                                                     PartitionFetchState currentFetchState);
