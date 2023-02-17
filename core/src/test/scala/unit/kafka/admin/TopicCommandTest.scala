@@ -24,6 +24,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartitionInfo
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.server.common.AdminOperationException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatcher

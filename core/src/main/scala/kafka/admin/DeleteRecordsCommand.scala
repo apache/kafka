@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin.{Admin, RecordsToDelete}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
