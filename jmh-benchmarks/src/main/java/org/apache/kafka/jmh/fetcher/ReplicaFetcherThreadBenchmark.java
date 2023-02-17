@@ -318,8 +318,8 @@ public class ReplicaFetcherThreadBenchmark {
                             config::interBrokerProtocolVersion
                     ) {
                         @Override
-                        public Tuple2<Object, Object> fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
-                            return Tuple2.apply(0, 0);
+                        public OffsetAndEpoch fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
+                            return new OffsetAndEpoch(0L, 0);
                         }
 
                         @Override
