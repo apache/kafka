@@ -1207,17 +1207,21 @@ public class AbstractCoordinatorTest {
             return false;
         }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
 
+        int times = 0;
         try {
             coordinator.ensureActiveGroup();
             mockTime.sleep(HEARTBEAT_INTERVAL_MS);
             long startMs = System.currentTimeMillis();
             while (System.currentTimeMillis() - startMs < 1000) {
                 Thread.sleep(10);
+                if (Long.MAX_VALUE == coordinator.timeToNextHeartbeat(0))
+                    times++;
                 coordinator.pollHeartbeat(mockTime.milliseconds());
             }
             fail("Expected pollHeartbeat to raise an error in 1 second");
         } catch (RuntimeException exception) {
             assertEquals(exception, e);
+            assertEquals(1, times);
         }
     }
 
