@@ -187,6 +187,7 @@ public class DefaultEventHandler implements EventHandler {
 
     @Override
     public <T> T addAndGet(CompletableApplicationEvent<T> event, Timer timer) {
+        add(event);
         return event.get(timer);
     }
 
