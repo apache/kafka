@@ -44,4 +44,10 @@ public abstract class ApplicationEvent {
         return type;
     }
 
+    @Override
+    public String toString() {
+        return "ApplicationEvent{" +
+                "type=" + type +
+                '}';
+    }
 }
