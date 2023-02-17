@@ -17,23 +17,30 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 
-public class TimestampedKeyValueStoreMaterializer<K, V> {
+/**
+ * Materializes a key-value store as either a {@link TimestampedKeyValueStoreBuilder} or a
+ * {@link VersionedKeyValueStoreBuilder} depending on whether the store is versioned or not.
+ */
+public class KeyValueStoreMaterializer<K, V> {
     private final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized;
 
-    public TimestampedKeyValueStoreMaterializer(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+    public KeyValueStoreMaterializer(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         this.materialized = materialized;
     }
 
     /**
      * @return  StoreBuilder
      */
-    public StoreBuilder<TimestampedKeyValueStore<K, V>> materialize() {
+    public StoreBuilder<?> materialize() {
         KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             switch (materialized.storeType()) {
@@ -48,10 +55,19 @@ public class TimestampedKeyValueStoreMaterializer<K, V> {
             }
         }
 
-        final StoreBuilder<TimestampedKeyValueStore<K, V>> builder = Stores.timestampedKeyValueStoreBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde());
+        final StoreBuilder<?> builder;
+        if (supplier instanceof VersionedBytesStoreSupplier) {
+            builder = new VersionedKeyValueStoreBuilder<>(
+                (VersionedBytesStoreSupplier) supplier,
+                materialized.keySerde(),
+                materialized.valueSerde(),
+                Time.SYSTEM);
+        } else {
+            builder = Stores.timestampedKeyValueStoreBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
+        }
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());
@@ -59,7 +75,8 @@ public class TimestampedKeyValueStoreMaterializer<K, V> {
             builder.withLoggingDisabled();
         }
 
-        if (materialized.cachingEnabled()) {
+        // versioned stores do not support caching
+        if (materialized.cachingEnabled() && !(builder instanceof VersionedKeyValueStoreBuilder)) {
             builder.withCachingEnabled();
         }
         return builder;
