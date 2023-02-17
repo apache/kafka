@@ -43,15 +43,6 @@ public class RollParams {
         this.now = now;
     }
 
-    public static RollParams create(LogConfig config, LogAppendInfo appendInfo, int messagesSize, long now) {
-        return new RollParams(config.maxSegmentMs(),
-                config.segmentSize,
-                appendInfo.maxTimestamp(),
-                appendInfo.lastOffset(),
-                messagesSize,
-                now);
-    }
-
     @Override
     public String toString() {
         return "RollParams(" +
