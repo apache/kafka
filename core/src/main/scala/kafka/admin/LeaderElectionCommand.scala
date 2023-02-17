@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.errors.ElectionNotNeededException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._

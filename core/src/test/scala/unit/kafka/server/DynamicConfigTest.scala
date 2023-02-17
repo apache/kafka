@@ -16,11 +16,11 @@
   */
 package kafka.server
 
-import kafka.admin.AdminOperationException
 import kafka.utils.CoreUtils._
 import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.config._
 import org.apache.kafka.common.config.internals.QuotaConfigs
+import org.apache.kafka.server.common.AdminOperationException
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 

@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin.{Config, MockAdminClient, PartitionReassig
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidReplicationFactorException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
+import org.apache.kafka.server.common.AdminOperationException
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 
