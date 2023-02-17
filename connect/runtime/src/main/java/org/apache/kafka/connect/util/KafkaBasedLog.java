@@ -152,12 +152,12 @@ public class KafkaBasedLog<K, V> {
      * @param initializer        the function that should be run when this log is {@link #start() started}; may be null
      */
     public KafkaBasedLog(String topic,
-                         Map<String, Object> producerConfigs,
-                         Map<String, Object> consumerConfigs,
-                         Supplier<TopicAdmin> topicAdminSupplier,
-                         Callback<ConsumerRecord<K, V>> consumedCallback,
-                         Time time,
-                         java.util.function.Consumer<TopicAdmin> initializer) {
+            Map<String, Object> producerConfigs,
+            Map<String, Object> consumerConfigs,
+            Supplier<TopicAdmin> topicAdminSupplier,
+            Callback<ConsumerRecord<K, V>> consumedCallback,
+            Time time,
+            java.util.function.Consumer<TopicAdmin> initializer) {
         this.topic = topic;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
