@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogDirFailureChannel, OffsetMap, SkimpyOffsetMap, TransactionIndex}
 
 import scala.jdk.CollectionConverters._
@@ -298,9 +299,10 @@ class LogCleaner(initialConfig: CleanerConfig,
    * choosing the dirtiest log, cleaning it, and then swapping in the cleaned segments.
    */
   private[log] class CleanerThread(threadId: Int)
-    extends ShutdownableThread(name = s"kafka-log-cleaner-thread-$threadId", isInterruptible = false) {
-
+    extends ShutdownableThread(s"kafka-log-cleaner-thread-$threadId", false) with Logging {
     protected override def loggerName = classOf[LogCleaner].getName
+
+    this.logIdent = logPrefix
 
     if (config.dedupeBufferSize / config.numThreads > Int.MaxValue)
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
