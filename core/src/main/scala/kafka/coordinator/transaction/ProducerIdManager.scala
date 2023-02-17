@@ -26,8 +26,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AllocateProducerIdsRequest, AllocateProducerIdsResponse}
 import org.apache.kafka.server.common.ProducerIdsBlock
 
-import java.util.concurrent.{ArrayBlockingQueue, TimeUnit}
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -49,16 +49,19 @@ object ProducerIdManager {
 
   // Creates a ProducerIdGenerate that uses AllocateProducerIds RPC, IBP >= 3.0-IV0
   def rpc(brokerId: Int,
-            brokerEpochSupplier: () => Long,
-            controllerChannel: BrokerToControllerChannelManager,
-            maxWaitMs: Int): RPCProducerIdManager = {
-    new RPCProducerIdManager(brokerId, brokerEpochSupplier, controllerChannel, maxWaitMs)
+          brokerEpochSupplier: () => Long,
+          controllerChannel: BrokerToControllerChannelManager): RPCProducerIdManager = {
+
+    new RPCProducerIdManager(brokerId, brokerEpochSupplier, controllerChannel)
   }
 }
 
 trait ProducerIdManager {
-  def generateProducerId(): Long
+  def generateProducerId(): Try[Long]
   def shutdown() : Unit = {}
+
+  // For testing purposes
+  def hasValidBlock: Boolean
 }
 
 object ZkProducerIdManager {
@@ -103,8 +106,7 @@ object ZkProducerIdManager {
   }
 }
 
-class ZkProducerIdManager(brokerId: Int,
-                          zkClient: KafkaZkClient) extends ProducerIdManager with Logging {
+class ZkProducerIdManager(brokerId: Int, zkClient: KafkaZkClient) extends ProducerIdManager with Logging {
 
   this.logIdent = "[ZK ProducerId Manager " + brokerId + "]: "
 
@@ -123,69 +125,98 @@ class ZkProducerIdManager(brokerId: Int,
     }
   }
 
-  def generateProducerId(): Long = {
+  def generateProducerId(): Try[Long] = {
     this synchronized {
       // grab a new block of producerIds if this block has been exhausted
       if (nextProducerId > currentProducerIdBlock.lastProducerId) {
-        allocateNewProducerIdBlock()
+        try {
+          allocateNewProducerIdBlock()
+        } catch {
+          case t: Throwable =>
+            return Failure(t)
+        }
         nextProducerId = currentProducerIdBlock.firstProducerId
       }
       nextProducerId += 1
-      nextProducerId - 1
+      Success(nextProducerId - 1)
+    }
+  }
+
+  override def hasValidBlock: Boolean = {
+    this synchronized {
+      !currentProducerIdBlock.equals(ProducerIdsBlock.EMPTY)
     }
   }
 }
 
+/**
+ * RPCProducerIdManager allocates producer id blocks asynchronously. generateProducerId() will return an
+ * error for the producer to retry if the manager is waiting for a new block.
+ *
+ * We return COORDINATOR_LOAD_IN_PROGRESS rather than REQUEST_TIMED_OUT since older clients treat timeout as fatal
+ * when it should be retriable like COORDINATOR_LOAD_IN_PROGRESS.
+ */
 class RPCProducerIdManager(brokerId: Int,
                            brokerEpochSupplier: () => Long,
-                           controllerChannel: BrokerToControllerChannelManager,
-                           maxWaitMs: Int) extends ProducerIdManager with Logging {
+                           controllerChannel: BrokerToControllerChannelManager) extends ProducerIdManager with Logging {
 
   this.logIdent = "[RPC ProducerId Manager " + brokerId + "]: "
 
-  private val nextProducerIdBlock = new ArrayBlockingQueue[Try[ProducerIdsBlock]](1)
+  // Visible for testing
+  private[transaction] var nextProducerIdBlock = new AtomicReference[Try[ProducerIdsBlock]](null)
+  private val currentProducerIdBlock: AtomicReference[ProducerIdsBlock] = new AtomicReference(ProducerIdsBlock.EMPTY)
   private val requestInFlight = new AtomicBoolean(false)
-  private var currentProducerIdBlock: ProducerIdsBlock = ProducerIdsBlock.EMPTY
-  private var nextProducerId: Long = -1L
+  private val blockCount = new AtomicLong(0)
 
-  override def generateProducerId(): Long = {
-    this synchronized {
-      if (nextProducerId == -1L) {
-        // Send an initial request to get the first block
-        maybeRequestNextBlock()
-        nextProducerId = 0L
-      } else {
-        nextProducerId += 1
+  override def hasValidBlock: Boolean = {
+    nextProducerIdBlock.get != null
+  }
 
-        // Check if we need to fetch the next block
-        if (nextProducerId >= (currentProducerIdBlock.firstProducerId + currentProducerIdBlock.size * ProducerIdManager.PidPrefetchThreshold)) {
-          maybeRequestNextBlock()
-        }
-      }
-
-      // If we've exhausted the current block, grab the next block (waiting if necessary)
-      if (nextProducerId > currentProducerIdBlock.lastProducerId) {
-        val block = nextProducerIdBlock.poll(maxWaitMs, TimeUnit.MILLISECONDS)
+  override def generateProducerId(): Try[Long] = {
+    val currentBlockCount = blockCount.get
+    currentProducerIdBlock.get.claimNextId().asScala match {
+      case None =>
+        // Check the next block if current block is full
+        val block = nextProducerIdBlock.getAndSet(null)
         if (block == null) {
-          // Return COORDINATOR_LOAD_IN_PROGRESS rather than REQUEST_TIMED_OUT since older clients treat the error as fatal
-          // when it should be retriable like COORDINATOR_LOAD_IN_PROGRESS.
-          throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Timed out waiting for next producer ID block")
+          // Next block is unavailable. Return immediately
+          maybeRequestNextBlock(currentBlockCount)
+          Failure(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block"))
         } else {
+          // Fence other threads from sending another AllocateProducerIdsRequest
+          blockCount.incrementAndGet()
           block match {
             case Success(nextBlock) =>
-              currentProducerIdBlock = nextBlock
-              nextProducerId = currentProducerIdBlock.firstProducerId
-            case Failure(t) => throw t
+              currentProducerIdBlock.set(nextBlock)
+              nextBlock.claimNextId().asScala match {
+                case Some(nextProducerId) =>
+                  Success(nextProducerId.toLong)
+                case None =>
+                  throw new IllegalStateException("Newly allocated producer id block should not be empty.")
+              }
+
+            case Failure(t) =>
+              error(s"Failed while processing AllocateProducerIdsResponse.", t)
+              maybeRequestNextBlock(currentBlockCount)
+              Failure(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block"))
           }
         }
-      }
-      nextProducerId
+
+      case Some(nextProducerId) =>
+        // Check if we need to prefetch the next block
+        val prefetchTarget = currentProducerIdBlock.get.firstProducerId + (currentProducerIdBlock.get.size * ProducerIdManager.PidPrefetchThreshold).toLong
+        if (nextProducerId == prefetchTarget) {
+          maybeRequestNextBlock(currentBlockCount)
+        }
+        Success(nextProducerId)
     }
   }
 
 
-  private def maybeRequestNextBlock(): Unit = {
-    if (nextProducerIdBlock.isEmpty && requestInFlight.compareAndSet(false, true)) {
+  private def maybeRequestNextBlock(currentBlockCount: Long): Unit = {
+    if (nextProducerIdBlock.get == null &&
+      currentBlockCount == blockCount.get &&
+      requestInFlight.compareAndSet(false, true) ) {
       sendRequest()
     }
   }
@@ -208,36 +239,33 @@ class RPCProducerIdManager(brokerId: Int,
   }
 
   private[transaction] def handleAllocateProducerIdsResponse(response: AllocateProducerIdsResponse): Unit = {
-    requestInFlight.set(false)
     val data = response.data
     Errors.forCode(data.errorCode()) match {
       case Errors.NONE =>
         debug(s"Got next producer ID block from controller $data")
         // Do some sanity checks on the response
-        if (data.producerIdStart() < currentProducerIdBlock.lastProducerId) {
-          nextProducerIdBlock.put(Failure(new KafkaException(
+        if (data.producerIdStart() < currentProducerIdBlock.get.lastProducerId) {
+          nextProducerIdBlock.set(Failure(new KafkaException(
             s"Producer ID block is not monotonic with current block: current=$currentProducerIdBlock response=$data")))
         } else if (data.producerIdStart() < 0 || data.producerIdLen() < 0 || data.producerIdStart() > Long.MaxValue - data.producerIdLen()) {
-          nextProducerIdBlock.put(Failure(new KafkaException(s"Producer ID block includes invalid ID range: $data")))
+          nextProducerIdBlock.set(Failure(new KafkaException(s"Producer ID block includes invalid ID range: $data")))
         } else {
-          nextProducerIdBlock.put(
-            Success(new ProducerIdsBlock(brokerId, data.producerIdStart(), data.producerIdLen())))
+          nextProducerIdBlock.set(Success(new ProducerIdsBlock(brokerId, data.producerIdStart(), data.producerIdLen())))
         }
       case Errors.STALE_BROKER_EPOCH =>
-        warn("Our broker epoch was stale, trying again.")
-        maybeRequestNextBlock()
+        warn("Our broker currentBlockCount was stale, trying again.")
       case Errors.BROKER_ID_NOT_REGISTERED =>
         warn("Our broker ID is not yet known by the controller, trying again.")
-        maybeRequestNextBlock()
       case e: Errors =>
-        warn("Had an unknown error from the controller, giving up.")
-        nextProducerIdBlock.put(Failure(e.exception()))
+        warn("Had an unknown error from the controller.")
+        nextProducerIdBlock.set(Failure(e.exception()))
     }
+    requestInFlight.set(false)
   }
 
   private[transaction] def handleTimeout(): Unit = {
     warn("Timed out when requesting AllocateProducerIds from the controller.")
     requestInFlight.set(false)
-    maybeRequestNextBlock()
+    maybeRequestNextBlock(blockCount.get)
   }
 }

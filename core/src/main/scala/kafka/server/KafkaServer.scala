@@ -461,8 +461,7 @@ class KafkaServer(
           ProducerIdManager.rpc(
             config.brokerId,
             brokerEpochSupplier = brokerEpochSupplier,
-            clientToControllerChannelManager,
-            config.requestTimeoutMs
+            clientToControllerChannelManager
           )
         } else {
           ProducerIdManager.zk(config.brokerId, zkClient)

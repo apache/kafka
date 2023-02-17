@@ -33,6 +33,7 @@ import org.apache.kafka.server.util.Scheduler
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
+import scala.util.{Failure, Success}
 
 object TransactionCoordinator {
 
@@ -114,8 +115,13 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
-      val producerId = producerIdManager.generateProducerId()
-      responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
+      val result = producerIdManager.generateProducerId()
+      result match {
+        case Success(producerId) =>
+          responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
+        case Failure(exception) =>
+          responseCallback(initTransactionError(Errors.forException(exception)))
+      }
     } else if (transactionalId.isEmpty) {
       // if transactional id is empty then return error as invalid request. This is
       // to make TransactionCoordinator's behavior consistent with producer client
@@ -126,17 +132,22 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     } else {
       val coordinatorEpochAndMetadata = txnManager.getTransactionState(transactionalId).flatMap {
         case None =>
-          val producerId = producerIdManager.generateProducerId()
-          val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
-            producerId = producerId,
-            lastProducerId = RecordBatch.NO_PRODUCER_ID,
-            producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-            lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-            txnTimeoutMs = transactionTimeoutMs,
-            state = Empty,
-            topicPartitions = collection.mutable.Set.empty[TopicPartition],
-            txnLastUpdateTimestamp = time.milliseconds())
-          txnManager.putTransactionStateIfNotExists(createdMetadata)
+          val result = producerIdManager.generateProducerId()
+          result match {
+            case Success(producerId) =>
+              val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
+                producerId = producerId,
+                lastProducerId = RecordBatch.NO_PRODUCER_ID,
+                producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+                lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+                txnTimeoutMs = transactionTimeoutMs,
+                state = Empty,
+                topicPartitions = collection.mutable.Set.empty[TopicPartition],
+                txnLastUpdateTimestamp = time.milliseconds())
+              txnManager.putTransactionStateIfNotExists(createdMetadata)
+            case Failure(exception) =>
+              Left(Errors.forException(exception))
+          }
 
         case Some(epochAndTxnMetadata) => Right(epochAndTxnMetadata)
       }
@@ -232,9 +243,15 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             // If the epoch is exhausted and the expected epoch (if provided) matches it, generate a new producer ID
             if (txnMetadata.isProducerEpochExhausted &&
                 expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch)) {
-              val newProducerId = producerIdManager.generateProducerId()
-              Right(txnMetadata.prepareProducerIdRotation(newProducerId, transactionTimeoutMs, time.milliseconds(),
-                expectedProducerIdAndEpoch.isDefined))
+
+              val result = producerIdManager.generateProducerId()
+              result match {
+                case Success(producerId) =>
+                  Right(txnMetadata.prepareProducerIdRotation(producerId, transactionTimeoutMs, time.milliseconds(),
+                    expectedProducerIdAndEpoch.isDefined))
+                case Failure(exception) =>
+                  Left(Errors.forException(exception))
+              }
             } else {
               txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, expectedProducerIdAndEpoch.map(_.epoch),
                 time.milliseconds())
