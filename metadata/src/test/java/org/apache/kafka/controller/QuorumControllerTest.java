@@ -114,6 +114,7 @@ import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.SCHEMA;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -314,8 +315,7 @@ public class QuorumControllerTest {
             int[] expectedIsr = {1};
             int[] isrFoo = active.replicationControl().getPartition(topicIdFoo, 0).isr;
 
-            assertTrue(Arrays.equals(isrFoo, expectedIsr),
-                "The ISR for topic foo was " + Arrays.toString(isrFoo) +
+            assertArrayEquals(isrFoo, expectedIsr, "The ISR for topic foo was " + Arrays.toString(isrFoo) +
                     ". It is expected to be " + Arrays.toString(expectedIsr));
 
             int fooLeader = active.replicationControl().getPartition(topicIdFoo, 0).leader;

@@ -16,17 +16,22 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
@@ -38,6 +43,8 @@ import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStoreSegmentValueFormatter.SegmentValue;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStoreSegmentValueFormatter.SegmentValue.SegmentSearchResult;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,16 +81,19 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private final String name;
     private final long historyRetention;
+    private final long gracePeriod;
     private final RocksDBMetricsRecorder metricsRecorder;
 
     private final RocksDBStore latestValueStore;
     private final LogicalKeyValueSegments segmentStores;
-    private final VersionedStoreClient<LogicalKeyValueSegment> versionedStoreClient;
+    private final RocksDBVersionedStoreClient versionedStoreClient;
+    private final RocksDBVersionedStoreRestoreWriteBuffer restoreWriteBuffer;
 
     private ProcessorContext context;
     private StateStoreContext stateStoreContext;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+    private boolean consistencyEnabled = false;
     private Position position;
     private OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
@@ -91,24 +101,34 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     RocksDBVersionedStore(final String name, final String metricsScope, final long historyRetention, final long segmentInterval) {
         this.name = name;
         this.historyRetention = historyRetention;
+        // history retention doubles as grace period for now. could be nice to allow users to
+        // configure the two separately in the future. if/when we do, we should enforce that
+        // history retention >= grace period, for sound semantics.
+        this.gracePeriod = historyRetention;
         this.metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
         this.latestValueStore = new RocksDBStore(latestValueStoreName(name), name, metricsRecorder);
         this.segmentStores = new LogicalKeyValueSegments(segmentsStoreName(name), name, historyRetention, segmentInterval, metricsRecorder);
         this.versionedStoreClient = new RocksDBVersionedStoreClient();
+        this.restoreWriteBuffer = new RocksDBVersionedStoreRestoreWriteBuffer(versionedStoreClient);
     }
 
     @Override
     public void put(final Bytes key, final byte[] value, final long timestamp) {
 
+        if (timestamp < observedStreamTime - gracePeriod) {
+            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            LOG.warn("Skipping record for expired put.");
+            return;
+        }
+        observedStreamTime = Math.max(observedStreamTime, timestamp);
+
         doPut(
             versionedStoreClient,
-            Optional.of(expiredRecordSensor),
+            observedStreamTime,
             key,
             value,
             timestamp
         );
-
-        observedStreamTime = Math.max(observedStreamTime, timestamp);
     }
 
     @Override
@@ -121,11 +141,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     @Override
     public VersionedRecord<byte[]> get(final Bytes key) {
         // latest value (if present) is guaranteed to be in the latest value store
-        final byte[] latestValue = latestValueStore.get(key);
-        if (latestValue != null) {
+        final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
+        if (rawLatestValueAndTimestamp != null) {
             return new VersionedRecord<>(
-                LatestValueFormatter.getValue(latestValue),
-                LatestValueFormatter.getTimestamp(latestValue)
+                LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
+                LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp)
             );
         } else {
             return null;
@@ -136,6 +156,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     public VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp) {
 
         if (asOfTimestamp < observedStreamTime - historyRetention) {
+            LOG.warn("Returning null for expired get.");
             // history retention has elapsed. return null for predictability, even if data
             // is still present in store.
             return null;
@@ -256,6 +277,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         );
 
         open = true;
+
+        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+            context.appConfigs(),
+            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+            false
+        );
     }
 
     @Override
@@ -266,7 +293,53 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     // VisibleForTesting
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        throw new UnsupportedOperationException("not yet implemented");
+
+        // compute the observed stream time at the end of the restore batch, in order to speed up
+        // restore by not bothering to read from/write to segments which will have expired by the
+        // time the restoration process is complete.
+        long endOfBatchStreamTime = observedStreamTime;
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            endOfBatchStreamTime = Math.max(endOfBatchStreamTime, record.timestamp());
+        }
+
+        final VersionedStoreClient<?> restoreClient = restoreWriteBuffer.getClient();
+
+        // note: there is increased risk for hitting an out-of-memory during this restore loop,
+        // compared to for non-versioned key-value stores, because this versioned store
+        // implementation stores multiple records (for the same key) together in a single RocksDB
+        // "segment" entry -- restoring a single changelog entry could require loading multiple
+        // records into memory. how high this memory amplification will be is very much dependent
+        // on the specific workload and the value of the "segment interval" parameter.
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            if (record.timestamp() < observedStreamTime - gracePeriod) {
+                // record is older than grace period and was therefore never written to the store
+                continue;
+            }
+            // advance observed stream time as usual, for use in deciding whether records have
+            // exceeded the store's grace period and should be dropped.
+            observedStreamTime = Math.max(observedStreamTime, record.timestamp());
+
+            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                record,
+                consistencyEnabled,
+                position
+            );
+
+            // put records to write buffer
+            doPut(
+                restoreClient,
+                endOfBatchStreamTime,
+                new Bytes(record.key()),
+                record.value(),
+                record.timestamp()
+            );
+        }
+
+        try {
+            restoreWriteBuffer.flush();
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error restoring batch to store " + name, e);
+        }
     }
 
     /**
@@ -329,7 +402,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     /**
      * Client for writing into (and reading from) this persistent {@link RocksDBVersionedStore}.
      */
-    private class RocksDBVersionedStoreClient implements VersionedStoreClient<LogicalKeyValueSegment> {
+    class RocksDBVersionedStoreClient implements VersionedStoreClient<LogicalKeyValueSegment> {
 
         @Override
         public byte[] getLatestValue(final Bytes key) {
@@ -360,11 +433,49 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         public long segmentIdForTimestamp(final long timestamp) {
             return segmentStores.segmentId(timestamp);
         }
+
+        /**
+         * Adds the provided record into the provided batch, in preparation for writing into the
+         * latest value store.
+         * <p>
+         * Together with {@link #writeLatestValues(WriteBatch)}, this method supports batch writes
+         * into the latest value store.
+         *
+         * @throws RocksDBException if a failure occurs adding the record to the {@link WriteBatch}
+         */
+        public void addToLatestValueBatch(final KeyValue<byte[], byte[]> record, final WriteBatch batch) throws RocksDBException {
+            latestValueStore.addToBatch(record, batch);
+        }
+
+        /**
+         * Writes the provided batch of records into the latest value store.
+         * <p>
+         * Together with {@link #addToLatestValueBatch(KeyValue, WriteBatch)}, this method supports
+         * batch writes into the latest value store.
+         *
+         * @throws RocksDBException if a failure occurs while writing the {@link WriteBatch} to the store
+         */
+        public void writeLatestValues(final WriteBatch batch) throws RocksDBException {
+            latestValueStore.write(batch);
+        }
     }
 
+    /**
+     * Helper method shared between put and restore.
+     * <p>
+     * This method does not check whether the record being put is expired based on grace period
+     * or not; that is the caller's responsibility. This method does, however, check whether the
+     * record is expired based on history retention, by using the current
+     * {@code observedStreamTime}, and returns without inserting into the store if so. It can be
+     * possible that a record is not expired based on grace period but is expired based on
+     * history retention, even though history retention is always at least the grace period,
+     * during restore because restore advances {@code observedStreamTime} to the largest timestamp
+     * in the entire restore batch at the beginning of restore, in order to optimize for not
+     * putting records into the store which will have expired by the end of the restore.
+     */
     private <T extends VersionedStoreSegment> void doPut(
         final VersionedStoreClient<T> versionedStoreClient,
-        final Optional<Sensor> expiredRecordSensor,
+        final long observedStreamTime,
         final Bytes key,
         final byte[] value,
         final long timestamp
@@ -377,6 +488,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // check latest value store
         PutStatus status = maybePutToLatestValueStore(
             versionedStoreClient,
+            observedStreamTime,
             key,
             value,
             timestamp
@@ -390,7 +502,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // continue search in segments
         status = maybePutToSegments(
             versionedStoreClient,
-            expiredRecordSensor,
+            observedStreamTime,
             key,
             value,
             timestamp,
@@ -406,7 +518,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // or segments store). insert based on foundTs here instead.
         finishPut(
             versionedStoreClient,
-            expiredRecordSensor,
+            observedStreamTime,
             key,
             value,
             timestamp,
@@ -439,6 +551,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private <T extends VersionedStoreSegment> PutStatus maybePutToLatestValueStore(
         final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
         final Bytes key,
         final byte[] value,
         final long timestamp
@@ -502,7 +615,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private <T extends VersionedStoreSegment> PutStatus maybePutToSegments(
         final VersionedStoreClient<T> versionedStoreClient,
-        final Optional<Sensor> expiredRecordSensor,
+        final long observedStreamTime,
         final Bytes key,
         final byte[] value,
         final long timestamp,
@@ -529,6 +642,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     // insert and conclude the procedure.
                     putToSegment(
                         versionedStoreClient,
+                        observedStreamTime,
                         segment,
                         rawSegmentValue,
                         key,
@@ -539,11 +653,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 }
 
                 if (foundMinTs < observedStreamTime - historyRetention) {
-                    // the record being inserted does not affect version history. discard and return
-                    if (expiredRecordSensor.isPresent()) {
-                        expiredRecordSensor.get().record(1.0d, context.currentSystemTimeMs());
-                        LOG.warn("Skipping record for expired put.");
-                    }
+                    // the record being inserted does not affect version history. discard and return.
+                    // this can happen during restore because individual put calls are executed after
+                    // observedStreamTime is fast-forwarded for the entire batch of records being
+                    // restored at once.
                     return new PutStatus(true, foundTs);
                 }
 
@@ -558,6 +671,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private <T extends VersionedStoreSegment> void putToSegment(
         final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
         final T segment,
         final byte[] rawSegmentValue,
         final Bytes key,
@@ -638,7 +752,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     private <T extends VersionedStoreSegment> void finishPut(
         final VersionedStoreClient<T> versionedStoreClient,
-        final Optional<Sensor> expiredRecordSensor,
+        final long observedStreamTime,
         final Bytes key,
         final byte[] value,
         final long timestamp,
@@ -654,10 +768,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 final T segment = versionedStoreClient.getOrCreateSegmentIfLive(
                     versionedStoreClient.segmentIdForTimestamp(timestamp), context, observedStreamTime);
                 if (segment == null) {
-                    if (expiredRecordSensor.isPresent()) {
-                        expiredRecordSensor.get().record(1.0d, context.currentSystemTimeMs());
-                        LOG.warn("Skipping record for expired put.");
-                    }
+                    // the record being inserted does not affect version history. discard and return.
+                    // this can happen during restore because individual put calls are executed after
+                    // observedStreamTime is fast-forwarded for the entire batch of records being
+                    // restored at once.
                     return;
                 }
 
@@ -701,10 +815,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             final T segment = versionedStoreClient.getOrCreateSegmentIfLive(
                 versionedStoreClient.segmentIdForTimestamp(foundTs), context, observedStreamTime);
             if (segment == null) {
-                if (expiredRecordSensor.isPresent()) {
-                    expiredRecordSensor.get().record(1.0d, context.currentSystemTimeMs());
-                    LOG.warn("Skipping record for expired put.");
-                }
+                // the record being inserted does not affect version history. discard and return.
+                // this can happen during restore because individual put calls are executed after
+                // observedStreamTime is fast-forwarded for the entire batch of records being
+                // restored at once.
                 return;
             }
 

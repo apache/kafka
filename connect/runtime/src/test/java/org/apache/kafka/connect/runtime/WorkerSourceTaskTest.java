@@ -417,7 +417,6 @@ public class WorkerSourceTaskTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
 
         expectClose();
 
@@ -1006,7 +1005,7 @@ public class WorkerSourceTaskTest {
 
     @SuppressWarnings("unchecked")
     private void expectOffsetFlush(boolean succeed) throws Exception {
-        EasyMock.expect(offsetWriter.beginFlush()).andReturn(true);
+        EasyMock.expect(offsetWriter.beginFlush(EasyMock.anyLong(), EasyMock.anyObject())).andReturn(true);
         Future<Void> flushFuture = PowerMock.createMock(Future.class);
         EasyMock.expect(offsetWriter.doFlush(EasyMock.anyObject(Callback.class))).andReturn(flushFuture);
         // Should throw for failure
@@ -1024,7 +1023,7 @@ public class WorkerSourceTaskTest {
     }
 
     private void expectEmptyOffsetFlush() throws Exception {
-        EasyMock.expect(offsetWriter.beginFlush()).andReturn(false);
+        EasyMock.expect(offsetWriter.beginFlush(EasyMock.anyLong(), EasyMock.anyObject())).andReturn(false);
         sourceTask.commit();
         EasyMock.expectLastCall();
     }
