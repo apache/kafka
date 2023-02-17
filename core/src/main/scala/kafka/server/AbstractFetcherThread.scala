@@ -672,7 +672,8 @@ abstract class AbstractFetcherThread(name: String,
      *
      * There is a potential for a mismatch between the logs of the two replicas here. We don't fix this mismatch as of now.
      */
-    val (_, leaderEndOffset) = leader.fetchLatestOffset(topicPartition, currentLeaderEpoch)
+    val offsetAndEpoch = leader.fetchLatestOffset(topicPartition, currentLeaderEpoch)
+    val leaderEndOffset = offsetAndEpoch.offset
     if (leaderEndOffset < replicaEndOffset) {
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's latest offset $leaderEndOffset")
@@ -704,10 +705,10 @@ abstract class AbstractFetcherThread(name: String,
        * Putting the two cases together, the follower should fetch from the higher one of its replica log end offset
        * and the current leader's (local-log-start-offset or) log start offset.
        */
-      val (epoch, leaderStartOffset) = if (fetchFromLocalLogStartOffset)
+      val offsetAndEpoch = if (fetchFromLocalLogStartOffset)
         leader.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch) else
         leader.fetchEarliestOffset(topicPartition, currentLeaderEpoch)
-
+      val leaderStartOffset = offsetAndEpoch.offset
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's start offset $leaderStartOffset")
       val offsetToFetch =
@@ -715,7 +716,7 @@ abstract class AbstractFetcherThread(name: String,
           // Only truncate log when current leader's log start offset (local log start offset if >= 3.4 version incaseof
           // OffsetMovedToTieredStorage error) is greater than follower's log end offset.
           // truncateAndBuild returns offset value from which it needs to start fetching.
-          truncateAndBuild(epoch, leaderStartOffset)
+          truncateAndBuild(offsetAndEpoch.leaderEpoch, leaderStartOffset)
         } else {
           replicaEndOffset
         }
@@ -1024,10 +1025,4 @@ case class OffsetTruncationState(offset: Long, truncationCompleted: Boolean) {
   def this(offset: Long) = this(offset, true)
 
   override def toString: String = s"TruncationState(offset=$offset, completed=$truncationCompleted)"
-}
-
-case class OffsetAndEpoch(offset: Long, leaderEpoch: Int) {
-  override def toString: String = {
-    s"(offset=$offset, leaderEpoch=$leaderEpoch)"
-  }
 }

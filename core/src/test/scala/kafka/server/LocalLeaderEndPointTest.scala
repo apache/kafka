@@ -83,41 +83,41 @@ class LocalLeaderEndPointTest {
   def testFetchLatestOffset(): Unit = {
     appendRecords(replicaManager, topicPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    assertEquals((0, 3L), endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch = 0))
+    assertEquals(OffsetAndEpoch(3L, 0), endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch = 0))
     val leaderAndIsrRequest =  buildLeaderAndIsrRequest(leaderEpoch = 4)
     replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
     appendRecords(replicaManager, topicPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    assertEquals((4, 6L), endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch = 7))
+    assertEquals(OffsetAndEpoch(6L, 4), endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch = 7))
   }
 
   @Test
   def testFetchEarliestOffset(): Unit = {
     appendRecords(replicaManager, topicPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    assertEquals((0, 0L), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 0))
+    assertEquals(OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 0))
 
     val leaderAndIsrRequest = buildLeaderAndIsrRequest(leaderEpoch = 4)
     replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
     appendRecords(replicaManager, topicPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
     replicaManager.deleteRecords(timeout = 1000L, Map(topicPartition -> 3), _ => ())
-    assertEquals((4, 3L), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 7))
+    assertEquals(OffsetAndEpoch(3L, 4), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 7))
   }
 
   @Test
   def testFetchEarliestLocalOffset(): Unit = {
     appendRecords(replicaManager, topicPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    assertEquals((0, 0L), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch = 0))
+    assertEquals(OffsetAndEpoch(0L, 0), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch = 0))
 
     val leaderAndIsrRequest = buildLeaderAndIsrRequest(leaderEpoch = 4)
     replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
     appendRecords(replicaManager, topicPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
     replicaManager.logManager.getLog(topicPartition).foreach(log => log._localLogStartOffset = 3)
-    assertEquals((0, 0L), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 7))
-    assertEquals((4, 3L), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch = 7))
+    assertEquals(OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 7))
+    assertEquals(OffsetAndEpoch(3L, 4), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch = 7))
   }
 
   @Test
