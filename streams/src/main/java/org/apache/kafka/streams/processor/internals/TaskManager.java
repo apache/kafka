@@ -714,6 +714,7 @@ public class TaskManager {
                 if (restored.containsAll(task.changelogPartitions())) {
                     try {
                         task.completeRestoration(offsetResetter);
+                        task.maybeCheckpoint(true);
                         task.clearTaskTimeout();
                     } catch (final TimeoutException timeoutException) {
                         task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
