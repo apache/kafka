@@ -489,6 +489,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     <!-- END Suppress warnings for unused members that are undetectably used by Jackson -->
 
     <Match>
+        <!-- Boolean deserializer intentionally returns null on null input. -->
+        <Class name="org.apache.kafka.streams.state.internals.NullableValueAndTimestampSerde$BooleanSerde$BooleanDeserializer"/>
+        <Method name="deserialize"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
+
+    <Match>
         <!-- Suppress a warning about ignoring return value because this is intentional. -->
         <Class name="org.apache.kafka.common.config.AbstractConfig$ResolvingMap"/>
         <Method name="get"/>

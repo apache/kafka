@@ -48,6 +48,7 @@ import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
+import org.apache.kafka.storage.internals.log.LogFileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Option;
@@ -238,7 +239,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                 log.debug("Updated the epoch cache from remote tier till offset: {} with size: {} for {}", leaderLocalLogStartOffset, epochs.size(), partition);
 
                 // Restore producer snapshot
-                File snapshotFile = UnifiedLog.producerSnapshotFile(unifiedLog.dir(), nextOffset);
+                File snapshotFile = LogFileUtils.producerSnapshotFile(unifiedLog.dir(), nextOffset);
                 buildProducerSnapshotFile(snapshotFile, remoteLogSegmentMetadata, rlm);
 
                 // Reload producer snapshots.

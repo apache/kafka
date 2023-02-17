@@ -26,6 +26,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * <p>
@@ -73,6 +76,7 @@ public class OffsetStorageWriter {
     private Map<Map<String, Object>, Map<String, Object>> data = new HashMap<>();
 
     private Map<Map<String, Object>, Map<String, Object>> toFlush = null;
+    private final Semaphore flushInProgress = new Semaphore(1);
     // Unique ID for each flush request to handle callbacks after timeouts
     private long currentFlushId = 0;
 
@@ -100,30 +104,50 @@ public class OffsetStorageWriter {
 
     /**
      * Performs the first step of a flush operation, snapshotting the current state. This does not
-     * actually initiate the flush with the underlying storage.
+     * actually initiate the flush with the underlying storage. Ensures that any previous flush operations
+     * have finished before beginning a new flush.
      *
      * @return true if a flush was initiated, false if no data was available
+     * @throws ConnectException if the previous flush is not complete before this method is called
      */
-    public synchronized boolean beginFlush() {
-        if (flushing()) {
-            log.error("Invalid call to OffsetStorageWriter flush() while already flushing, the "
+    public boolean beginFlush() {
+        try {
+            return beginFlush(0, TimeUnit.NANOSECONDS);
+        } catch (InterruptedException | TimeoutException e) {
+            log.error("Invalid call to OffsetStorageWriter beginFlush() while already flushing, the "
                     + "framework should not allow this");
             throw new ConnectException("OffsetStorageWriter is already flushing");
         }
-
-        if (data.isEmpty())
-            return false;
-
-        toFlush = data;
-        data = new HashMap<>();
-        return true;
     }
 
     /**
-     * @return whether there's anything to flush right now.
+     * Performs the first step of a flush operation, snapshotting the current state. This does not
+     * actually initiate the flush with the underlying storage. Ensures that any previous flush operations
+     * have finished before beginning a new flush.
+     * <p>If and only if this method returns true, the caller must call {@link #doFlush(Callback)}
+     * or {@link #cancelFlush()} to finish the flush operation and allow later calls to complete.
+     *
+     * @param timeout A maximum duration to wait for previous flushes to finish before giving up on waiting
+     * @param timeUnit Units of the timeout argument
+     * @return true if a flush was initiated, false if no data was available
+     * @throws InterruptedException if this thread was interrupted while waiting for the previous flush to complete
+     * @throws TimeoutException if the {@code timeout} elapses before previous flushes are complete.
      */
-    public synchronized boolean willFlush() {
-        return !data.isEmpty();
+    public boolean beginFlush(long timeout, TimeUnit timeUnit) throws InterruptedException, TimeoutException {
+        if (flushInProgress.tryAcquire(Math.max(0, timeout), timeUnit)) {
+            synchronized (this) {
+                if (data.isEmpty()) {
+                    flushInProgress.release();
+                    return false;
+                } else {
+                    toFlush = data;
+                    data = new HashMap<>();
+                    return true;
+                }
+            }
+        } else {
+            throw new TimeoutException("Timed out waiting for previous flush to finish");
+        }
     }
 
     /**
@@ -193,6 +217,7 @@ public class OffsetStorageWriter {
             toFlush.putAll(data);
             data = toFlush;
             currentFlushId++;
+            flushInProgress.release();
             toFlush = null;
         }
     }
@@ -211,6 +236,7 @@ public class OffsetStorageWriter {
             cancelFlush();
         } else {
             currentFlushId++;
+            flushInProgress.release();
             toFlush = null;
         }
         return true;

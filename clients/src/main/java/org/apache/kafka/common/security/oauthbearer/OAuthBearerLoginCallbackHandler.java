@@ -65,7 +65,6 @@ import org.slf4j.LoggerFactory;
  * Note that while this callback handler class must be specified for a Kafka client that wants to
  * use OAuth functionality, in the case of OAuth-based inter-broker communication, the callback
  * handler must be used on the Kafka broker side as well.
- * {@link }
  * </p>
  *
  * <p>

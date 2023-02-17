@@ -141,26 +141,23 @@ public class LazyIndex<T extends AbstractIndex> {
     private final Lock lock = new ReentrantLock();
     private final long baseOffset;
     private final int maxIndexSize;
-    private final boolean writable;
     private final IndexType indexType;
 
     private volatile IndexWrapper indexWrapper;
 
-    private LazyIndex(IndexWrapper indexWrapper, long baseOffset, int maxIndexSize, boolean writable,
-                      IndexType indexType) {
+    private LazyIndex(IndexWrapper indexWrapper, long baseOffset, int maxIndexSize, IndexType indexType) {
         this.indexWrapper = indexWrapper;
         this.baseOffset = baseOffset;
         this.maxIndexSize = maxIndexSize;
-        this.writable = writable;
         this.indexType = indexType;
     }
 
-    public static LazyIndex<OffsetIndex> forOffset(File file, long baseOffset, int maxIndexSize, boolean writable) {
-        return new LazyIndex<>(new IndexFile(file), baseOffset, maxIndexSize, writable, IndexType.OFFSET);
+    public static LazyIndex<OffsetIndex> forOffset(File file, long baseOffset, int maxIndexSize) {
+        return new LazyIndex<>(new IndexFile(file), baseOffset, maxIndexSize, IndexType.OFFSET);
     }
 
-    public static LazyIndex<TimeIndex> forTime(File file, long baseOffset, int maxIndexSize, boolean writable) {
-        return new LazyIndex<>(new IndexFile(file), baseOffset, maxIndexSize, writable, IndexType.TIME);
+    public static LazyIndex<TimeIndex> forTime(File file, long baseOffset, int maxIndexSize) {
+        return new LazyIndex<>(new IndexFile(file), baseOffset, maxIndexSize, IndexType.TIME);
     }
 
     public File file() {
@@ -234,9 +231,9 @@ public class LazyIndex<T extends AbstractIndex> {
     private T loadIndex(File file) throws IOException {
         switch (indexType) {
             case OFFSET:
-                return (T) new OffsetIndex(file, baseOffset, maxIndexSize, writable);
+                return (T) new OffsetIndex(file, baseOffset, maxIndexSize, true);
             case TIME:
-                return (T) new TimeIndex(file, baseOffset, maxIndexSize, writable);
+                return (T) new TimeIndex(file, baseOffset, maxIndexSize, true);
             default:
                 throw new IllegalStateException("Unexpected indexType " + indexType);
         }
