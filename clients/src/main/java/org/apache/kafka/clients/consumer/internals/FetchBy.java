@@ -1,4 +1,4 @@
-package org.apache.kafka.clients.consumer.internals.asyncstate;
+package org.apache.kafka.clients.consumer.internals;
 
 public enum FetchBy {
 

@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.SerializedRecordWrapper;
+import org.apache.kafka.clients.consumer.internals.Fetcher.CompletedFetch;
 
 import java.util.List;
 
-public class FetchRecordsEvent extends CompletableApplicationEvent<List<SerializedRecordWrapper>> {
+public class FetchRecordsEvent extends CompletableApplicationEvent<CompletedFetch> {
 
     public FetchRecordsEvent() {
         super(Type.FETCH_RECORDS);

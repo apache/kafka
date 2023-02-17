@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.internals.SerializedRecordWrapper;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignPartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitAsyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitSyncEvent;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Time;
@@ -47,7 +49,6 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -58,8 +59,27 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+/**
+ * This {@link StubbedAsyncKafkaConsumer stub} implementation of {@link Consumer} serves as a <i>wireframe</i> or
+ * <i>sketch</i>, showing the interaction between the foreground and background threads. Each of the main API methods
+ * will need to answer the following questions:
+ *
+ * <ol>
+ *     <li>Does this method block?</li>
+ *     <li>Does this method interact with the background thread?</li>
+ *     <li>If yes, what data is passed as input to the background thread?</li>
+ *     <li>If yes, what data is returned as output from the background thread?</li>
+ * </ol>
+ *
+ * @param <K> Key
+ * @param <V> Value
+ * @see ApplicationEventProcessor for the logic of the background event handler
+ */
 public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
+    /**
+     * These instance variables are intentionally left unassigned, to avoid clutter...
+     */
     private Time time;
 
     private EventHandler eventHandler;
@@ -76,21 +96,54 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     private Optional<String> groupId;
 
+    /**
+     * Answers to the above questions:
+     *
+     * <ol>
+     *     <li>No</li>
+     *     <li>No</li>
+     *     <li><i>n/a</i></li>
+     *     <li><i>n/a</i></li>
+     * </ol>
+     */
     @Override
     public Set<TopicPartition> assignment() {
         return Collections.unmodifiableSet(subscriptions.assignedPartitions());
     }
 
+    /**
+     * Answers to the above questions:
+     *
+     * <ol>
+     *     <li>No</li>
+     *     <li>No</li>
+     *     <li><i>n/a</i></li>
+     *     <li><i>n/a</i></li>
+     * </ol>
+     */
     @Override
     public Set<String> subscription() {
         return Collections.unmodifiableSet(subscriptions.subscription());
     }
 
+    /**
+     * @see #subscribe(Collection, ConsumerRebalanceListener)
+     */
     @Override
     public void subscribe(Collection<String> topics) {
         subscribe(topics, new NoOpConsumerRebalanceListener());
     }
 
+    /**
+     * Answers to the above questions:
+     *
+     * <ol>
+     *     <li>No</li>
+     *     <li>Yes, except in cases of bad input data</li>
+     *     <li>Topic list and {@link ConsumerRebalanceListener}</li>
+     *     <li><i>n/a</i></li>
+     * </ol>
+     */
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback) {
         maybeThrowInvalidGroupIdException();
@@ -110,11 +163,23 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    @Override
+    /**
+     * @see #subscribe(Pattern, ConsumerRebalanceListener)
+     */    @Override
     public void subscribe(Pattern pattern) {
         subscribe(pattern, new NoOpConsumerRebalanceListener());
     }
 
+    /**
+     * Answers to the above questions:
+     *
+     * <ol>
+     *     <li>No</li>
+     *     <li>Yes, except in cases of bad input data</li>
+     *     <li>{@link Pattern} and {@link ConsumerRebalanceListener}</li>
+     *     <li><i>n/a</i></li>
+     * </ol>
+     */
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener callback) {
         maybeThrowInvalidGroupIdException();
@@ -126,11 +191,31 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
         eventHandler.add(new SubscribePatternEvent(pattern, callback));
     }
 
+    /**
+     * Answers to the above questions:
+     *
+     * <ol>
+     *     <li>No</li>
+     *     <li>Yes</li>
+     *     <li>None</li>
+     *     <li>None</li>
+     * </ol>
+     */
     @Override
     public void unsubscribe() {
         eventHandler.add(new UnsubscribeEvent());
     }
 
+    /**
+     * Answers to the above questions:
+     *
+     * <ol>
+     *     <li>No</li>
+     *     <li>Yes</li>
+     *     <li>List of {@link TopicPartition partitions}</li>
+     *     <li>None</li>
+     * </ol>
+     */
     @Override
     public void assign(Collection<TopicPartition> partitions) {
         if (partitions == null) {
@@ -159,6 +244,16 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
         return poll(time.timer(timeout), true);
     }
 
+    /**
+     * Answers to the above questions:
+     *
+     * <ol>
+     *     <li>Yes</li>
+     *     <li>Yes</li>
+     *     <li>List of {@link TopicPartition partitions}</li>
+     *     <li>None</li>
+     * </ol>
+     */
     private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = new HashMap<>();
 
@@ -171,21 +266,21 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
         //    Reset positions & offsets
         // 2. Collect and return any previously loaded fetches
         // 3. Submit fetch requests for any ready partitions, including any we might have collected
-        List<SerializedRecordWrapper> wrappers = eventHandler.addAndGet(new FetchRecordsEvent(), timer);
+        Fetcher.CompletedFetch completedFetch = eventHandler.addAndGet(new FetchRecordsEvent(), timer);
 
-        // We return the serialized records from the background thread to the foreground thread so that the
+        // We return the raw fetch records from the background thread to the foreground thread so that the
         // potentially expensive task of deserializing the record won't stall out our background thread.
-        for (SerializedRecordWrapper recordWrapper : wrappers) {
-            TopicPartition tp = recordWrapper.topicPartition();
-
-            // Make sure that this topic partition is still on our set of subscribed topics/assigned partitions,
-            // as this might have changed since the fetcher submitted the fetch request.
-            if (isRelevant(tp)) {
-                ConsumerRecord<K, V> record = parseRecord(recordWrapper);
-                List<ConsumerRecord<K, V>> list = records.computeIfAbsent(tp, __ -> new ArrayList<>());
-                list.add(record);
-            }
-        }
+        //for (SerializedRecordWrapper recordWrapper : wrappers) {
+        //    TopicPartition tp = recordWrapper.topicPartition();
+        //
+        //    // Make sure that this topic partition is still on our set of subscribed topics/assigned partitions,
+        //    // as this might have changed since the fetcher submitted the fetch request.
+        //    if (isRelevant(tp)) {
+        //        ConsumerRecord<K, V> record = parseRecord(recordWrapper);
+        //        List<ConsumerRecord<K, V>> list = records.computeIfAbsent(tp, __ -> new ArrayList<>());
+        //        list.add(record);
+        //    }
+        //}
 
         return !records.isEmpty() ? new ConsumerRecords<>(records) : ConsumerRecords.empty();
     }
@@ -193,10 +288,10 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Mostly stolen from Fetcher.CompletedFetch's parseRecord...
      */
-    private ConsumerRecord<K, V> parseRecord(SerializedRecordWrapper recordWrapper) {
-        Record record = recordWrapper.record();
-        TopicPartition partition = recordWrapper.topicPartition();
-
+    private ConsumerRecord<K, V> parseRecord(Record record,
+                                             TopicPartition partition,
+                                             TimestampType timestampType,
+                                             Optional<Integer> leaderEpoch) {
         try {
             long offset = record.offset();
             long timestamp = record.timestamp();
@@ -208,10 +303,10 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
             byte[] valueByteArray = valueBytes == null ? null : Utils.toArray(valueBytes);
             V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), headers, valueByteArray);
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
-                    timestamp, recordWrapper.timestampType(),
+                    timestamp, timestampType,
                     keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
                     valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
-                    key, value, headers, recordWrapper.leaderEpoch());
+                    key, value, headers, leaderEpoch);
         } catch (RuntimeException e) {
             throw new RecordDeserializationException(partition, record.offset(),
                     "Error deserializing key/value for partition " + partition +
@@ -444,6 +539,10 @@ public class StubbedAsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     private boolean isRelevant(TopicPartition tp) {
         return true;
+    }
+
+    private static class CompletedFetch {
+
     }
 
 }
