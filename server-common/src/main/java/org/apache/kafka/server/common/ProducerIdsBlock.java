@@ -56,13 +56,6 @@ public class ProducerIdsBlock {
     }
 
     /**
-     * Returns whether all IDs are used
-     */
-    public boolean isExhausted() {
-        return producerIdCounter.get() == lastProducerId();
-    }
-
-    /**
      * Get the ID of the broker that this block was assigned to.
      */
     public int assignedBrokerId() {
