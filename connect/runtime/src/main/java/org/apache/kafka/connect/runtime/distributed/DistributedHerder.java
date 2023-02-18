@@ -26,6 +26,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
@@ -147,7 +148,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private static final long FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
-    private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
+    private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_INITIAL_MS = 250;
+    private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MAX_MS = 60000;
     private static final long CONFIG_TOPIC_WRITE_PRIVILEGES_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
     private static final short BACKOFF_RETRIES = 5;
@@ -1090,7 +1092,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         addRequest(
             () -> {
-                reconfigureConnectorTasksWithRetry(time.milliseconds(), connName);
+                ExponentialBackoff exponentialBackoff = new ExponentialBackoff(
+                        RECONFIGURE_CONNECTOR_TASKS_BACKOFF_INITIAL_MS,
+                        2, RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MAX_MS,
+                        0);
+                reconfigureConnectorTasksWithRetry(time.milliseconds(), connName, exponentialBackoff, 0);
                 return null;
             },
             (error, result) -> {
@@ -1827,10 +1833,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             if (newState == TargetState.STARTED) {
                 addRequest(
                     () -> {
+                        ExponentialBackoff exponentialBackoff = new ExponentialBackoff(
+                                RECONFIGURE_CONNECTOR_TASKS_BACKOFF_INITIAL_MS,
+                                2, RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MAX_MS,
+                                0);
                         // Request configuration since this could be a brand new connector. However, also only update those
                         // task configs if they are actually different from the existing ones to avoid unnecessary updates when this is
                         // just restoring an existing connector.
-                        reconfigureConnectorTasksWithRetry(time.milliseconds(), connectorName);
+                        reconfigureConnectorTasksWithRetry(time.milliseconds(), connectorName, exponentialBackoff, 0);
                         callback.onCompletion(null, null);
                         return null;
                     },
@@ -1870,7 +1880,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         };
     }
 
-    private void reconfigureConnectorTasksWithRetry(long initialRequestTime, final String connName) {
+    /**
+     * Request task configs from the connector and write them to the config storage in case the configs are detected to
+     * have changed. This method retries infinitely in case of any errors.
+     *
+     * @param initialRequestTime the time in milliseconds when the original request was made (i.e. before any retries)
+     * @param connName the name of the connector
+     * @param exponentialBackoff {@link ExponentialBackoff} used to calculate the retry backoff duration
+     * @param attempts the number of retry attempts that have been made
+     */
+    private void reconfigureConnectorTasksWithRetry(long initialRequestTime, final String connName, ExponentialBackoff exponentialBackoff, int attempts) {
         reconfigureConnector(connName, (error, result) -> {
             // If we encountered an error, we don't have much choice but to just retry. If we don't, we could get
             // stuck with a connector that thinks it has generated tasks, but wasn't actually successful and therefore
@@ -1882,9 +1901,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 } else {
                     log.error("Failed to reconfigure connector's tasks ({}), retrying after backoff:", connName, error);
                 }
-                addRequest(RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS,
+                addRequest(exponentialBackoff.backoff(attempts),
                     () -> {
-                        reconfigureConnectorTasksWithRetry(initialRequestTime, connName);
+                        reconfigureConnectorTasksWithRetry(initialRequestTime, connName, exponentialBackoff, attempts + 1);
                         return null;
                     }, (err, res) -> {
                         if (err != null) {
