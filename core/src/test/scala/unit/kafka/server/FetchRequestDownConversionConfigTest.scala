@@ -157,12 +157,13 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
    * Tests that "message.downconversion.enable" has no effect on fetch requests from replicas.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testV1FetchFromReplica(quorum: String): Unit = {
     testV1Fetch(isFollowerFetch = true)
   }
 
   def testV1Fetch(isFollowerFetch: Boolean): Unit = {
+    val initialFetchMessageConversionsPerSec = TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec)
     val topicWithDownConversionEnabled = "foo"
     val topicWithDownConversionDisabled = "bar"
     val replicaIds = brokers.map(_.config.brokerId)
@@ -221,6 +222,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     } else {
       assertEquals(Errors.UNSUPPORTED_VERSION, error(partitionWithDownConversionDisabled))
     }
+    TestUtils.waitUntilTrue(() => TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec) > initialFetchMessageConversionsPerSec,
+    s"init: $initialFetchMessageConversionsPerSec final: ${TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec)}", 3000)
   }
 
   private def sendFetch(

@@ -49,7 +49,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ListenerName, Send}
+import org.apache.kafka.common.network.{ListenerName, NetworkSend, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
@@ -893,6 +893,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             send.recordConversionStats.asScala.toMap.foreach {
               case (tp, stats) => updateRecordConversionStats(request, tp, stats)
             }
+          case send: NetworkSend =>
+            updateConversionStats(send.send())
           case _ =>
         }
       }
