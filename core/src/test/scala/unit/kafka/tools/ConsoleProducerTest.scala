@@ -17,14 +17,21 @@
 
 package kafka.tools
 
+import kafka.common.MessageReader
+
 import java.nio.file.Files
 import kafka.tools.ConsoleProducer.LineMessageReader
 import kafka.utils.{Exit, TestUtils}
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
+import org.apache.kafka.clients.producer.{Producer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.tools.RecordReader
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito
 
+import java.io.InputStream
 import java.util
+import java.util.Properties
+import scala.annotation.nowarn
 
 class ConsoleProducerTest {
 
@@ -220,4 +227,59 @@ class ConsoleProducerTest {
       producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG))
   }
 
+  @Test
+  def testNewReader(): Unit = {
+    ConsoleProducerTest.configured = false
+    ConsoleProducerTest.closed = false
+    val reader = ConsoleProducer.newReader(classOf[ConsoleProducerTest.DumbMessageReader].getName,
+      System.in, new Properties())
+    assertTrue(ConsoleProducerTest.configured)
+    assertFalse(ConsoleProducerTest.closed)
+    reader.close()
+    assertTrue(ConsoleProducerTest.closed)
+
+    ConsoleProducerTest.configured = false
+    ConsoleProducerTest.closed = false
+
+    val reader1 = ConsoleProducer.newReader(classOf[ConsoleProducerTest.DumbRecordReader].getName,
+      System.in, new Properties())
+    assertTrue(ConsoleProducerTest.configured)
+    assertFalse(ConsoleProducerTest.closed)
+    reader1.close()
+    assertTrue(ConsoleProducerTest.closed)
+  }
+
+  @Test
+  def testLoopReader(): Unit = {
+    ConsoleProducerTest.configured = false
+    ConsoleProducerTest.closed = false
+    val reader = ConsoleProducer.newReader(classOf[ConsoleProducerTest.DumbRecordReader].getName,
+      System.in, new Properties())
+
+    ConsoleProducer.loopReader(Mockito.mock(classOf[Producer[Array[Byte], Array[Byte]]]),
+      reader, false)
+
+    assertTrue(ConsoleProducerTest.configured)
+    assertTrue(ConsoleProducerTest.closed)
+  }
+}
+
+@nowarn("cat=deprecation")
+object ConsoleProducerTest {
+  var configured: Boolean = false
+  var closed: Boolean = false
+  class DumbMessageReader extends MessageReader {
+    override def init(inputStream: InputStream, props: Properties): Unit = configured = true
+    override def readMessage(): ProducerRecord[Array[Byte], Array[Byte]] = null
+
+    override def close(): Unit = closed = true
+
+  }
+
+  class DumbRecordReader extends RecordReader {
+    override def configure(input: InputStream, configs: util.Map[String, _]): Unit = configured = true
+    override def readRecord(): ProducerRecord[Array[Byte], Array[Byte]] = null
+
+    override def close(): Unit = closed = true
+  }
 }

@@ -24,33 +24,55 @@ import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common.MessageReader
 import kafka.utils.Implicits._
-import kafka.utils.{Exit, ToolsUtils}
+import kafka.utils.{Exit, Logging, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, Producer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.tools.RecordReader
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
-object ConsoleProducer {
+import scala.annotation.nowarn
+
+@nowarn("cat=deprecation")
+object ConsoleProducer extends Logging {
+
+  private[tools] def newReader(className: String, inputStream: InputStream, prop: Properties): RecordReader = {
+    val reader = Class.forName(className).getDeclaredConstructor().newInstance()
+    reader match {
+      case r: RecordReader =>
+        r.configure(inputStream, prop.asInstanceOf[java.util.Map[String, _]])
+        r
+      case r: MessageReader =>
+        logger.warn("MessageReader is deprecated. Please use org.apache.kafka.server.tools.RecordReader instead")
+        r.init(inputStream, prop)
+        new RecordReader {
+          override def readRecord(): ProducerRecord[Array[Byte], Array[Byte]] = r.readMessage()
+          override def close(): Unit = r.close()
+        }
+      case _ => throw new IllegalArgumentException(f"the reader must extend ${classOf[RecordReader].getName}")
+    }
+  }
+
+  private[tools] def loopReader(producer: Producer[Array[Byte], Array[Byte]],
+                               reader: RecordReader,
+                               sync: Boolean): Unit =
+    try while (true) {
+      val record = reader.readRecord()
+      if (record == null) return
+      else send(producer, record, sync)
+    } finally reader.close()
 
   def main(args: Array[String]): Unit = {
 
     try {
-        val config = new ProducerConfig(args)
-        val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[MessageReader]
-        reader.init(System.in, getReaderProps(config))
-
-        val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
-
-    Exit.addShutdownHook("producer-shutdown-hook", producer.close)
-
-        var record: ProducerRecord[Array[Byte], Array[Byte]] = null
-        do {
-          record = reader.readMessage()
-          if (record != null)
-            send(producer, record, config.sync)
-        } while (record != null)
+      val config = new ProducerConfig(args)
+      val input = System.in
+      val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
+      try loopReader(producer, newReader(config.readerClass, input, getReaderProps(config)), config.sync)
+      finally producer.close()
+      Exit.exit(0)
     } catch {
       case e: joptsimple.OptionException =>
         System.err.println(e.getMessage)
@@ -59,10 +81,9 @@ object ConsoleProducer {
         e.printStackTrace
         Exit.exit(1)
     }
-    Exit.exit(0)
   }
 
-  private def send(producer: KafkaProducer[Array[Byte], Array[Byte]],
+  private def send(producer: Producer[Array[Byte], Array[Byte]],
                          record: ProducerRecord[Array[Byte], Array[Byte]], sync: Boolean): Unit = {
     if (sync)
       producer.send(record).get()
