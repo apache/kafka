@@ -158,6 +158,21 @@ class LocalLeaderEndPointTest {
         .setEndOffset(6L))
 
     assertEquals(expected, result)
+
+    // Check missing epoch
+    result = endPoint.fetchEpochEndOffsets(Map(
+      topicPartition -> new OffsetForLeaderPartition()
+        .setPartition(topicPartition.partition)
+        .setLeaderEpoch(5)))
+
+    expected = Map(
+      topicPartition -> new EpochEndOffset()
+        .setPartition(topicPartition.partition)
+        .setErrorCode(Errors.NONE.code)
+        .setLeaderEpoch(-1)
+        .setEndOffset(-1L))
+
+    assertEquals(expected, result)
   }
 
   private class CallbackResult[T] {
