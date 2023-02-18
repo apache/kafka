@@ -292,6 +292,7 @@ class BrokerServer(
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
         config.brokerId,
+        time,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
         clientToControllerChannelManager
       )

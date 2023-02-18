@@ -16,14 +16,16 @@
  */
 package kafka.coordinator.transaction
 
+import kafka.coordinator.transaction.ProducerIdManager.RetryBackoffMs
 import kafka.server.BrokerToControllerChannelManager
-import kafka.utils.TestUtils
+import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.ProducerIdsBlock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -34,7 +36,7 @@ import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mock, when}
 
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.mutable
 import scala.util.{Failure, Success}
 
@@ -49,10 +51,13 @@ class ProducerIdManagerTest {
     var idStart: Long,
     val idLen: Int,
     var error: Errors = Errors.NONE,
-    var capturedFailure: AtomicReference[Throwable] = new AtomicReference[Throwable]()
-  ) extends RPCProducerIdManager(brokerId, () => 1, brokerToController) {
+    val isErroneousBlock: Boolean = false,
+    val time: Time = Time.SYSTEM
+  ) extends RPCProducerIdManager(brokerId, time, () => 1, brokerToController) {
 
     private val brokerToControllerRequestExecutor = Executors.newSingleThreadExecutor()
+    private var remainingRetries = 1
+    val capturedFailure: AtomicBoolean = new AtomicBoolean(false)
 
     override private[transaction] def sendRequest(): Unit = {
 
@@ -60,7 +65,9 @@ class ProducerIdManagerTest {
         if (error == Errors.NONE) {
           handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
             new AllocateProducerIdsResponseData().setProducerIdStart(idStart).setProducerIdLen(idLen)))
-          idStart += idLen
+          if (!isErroneousBlock) {
+            idStart += idLen
+          }
         } else {
           handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
             new AllocateProducerIdsResponseData().setErrorCode(error.code)))
@@ -69,10 +76,19 @@ class ProducerIdManagerTest {
     }
 
     override private[transaction] def handleAllocateProducerIdsResponse(response: AllocateProducerIdsResponse): Unit = {
-      brokerToControllerRequestExecutor.submit(() => {
-        super.handleAllocateProducerIdsResponse(response)
-        capturedFailure.set(nextProducerIdBlock.get.failed.get)
-      }, 0)
+      super.handleAllocateProducerIdsResponse(response)
+      capturedFailure.set(nextProducerIdBlock.get == null)
+    }
+
+    override private[transaction] def maybeRequestNextBlock(currentBlockCount: Long): Unit = {
+      if (error == Errors.NONE && !isErroneousBlock) {
+        super.maybeRequestNextBlock(currentBlockCount)
+      } else {
+        if (remainingRetries > 0) {
+          super.maybeRequestNextBlock(currentBlockCount)
+          remainingRetries -= 1
+        }
+      }
     }
   }
 
@@ -159,7 +175,7 @@ class ProducerIdManagerTest {
         }
       }, 0)
     }
-    assertTrue(latch.await(30000, TimeUnit.MILLISECONDS))
+    assertTrue(latch.await(15000, TimeUnit.MILLISECONDS))
     requestHandlerThreadPool.shutdown()
 
     assertEquals(idBlockLen * 3, pidMap.size)
@@ -177,7 +193,7 @@ class ProducerIdManagerTest {
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
 
     manager.error = error
-    verifyFailure(manager, error.exception)
+    verifyFailure(manager)
 
     manager.error = Errors.NONE
     assertEquals(classOf[CoordinatorLoadInProgressException], manager.generateProducerId().failed.get.getClass)
@@ -186,24 +202,35 @@ class ProducerIdManagerTest {
 
   @Test
   def testInvalidRanges(): Unit = {
-    var manager = new MockProducerIdManager(0, -1, 10)
-    verifyFailure(manager, new KafkaException())
+    var manager = new MockProducerIdManager(0, -1, 10, isErroneousBlock = true)
+    verifyFailure(manager)
 
-    manager = new MockProducerIdManager(0, 0, -1)
-    verifyFailure(manager, new KafkaException())
+    manager = new MockProducerIdManager(0, 0, -1, isErroneousBlock = true)
+    verifyFailure(manager)
 
-    manager = new MockProducerIdManager(0, Long.MaxValue-1, 10)
-    verifyFailure(manager, new KafkaException())
+    manager = new MockProducerIdManager(0, Long.MaxValue-1, 10, isErroneousBlock = true)
+    verifyFailure(manager)
   }
 
-  private def verifyFailure(manager: MockProducerIdManager, exception: Throwable): Unit = {
+  @Test
+  def testRetryBackoff(): Unit = {
+    val time = new MockTime()
+    val manager = new MockProducerIdManager(0, 0, 1,
+      error = Errors.UNKNOWN_SERVER_ERROR, time = time)
+
+    val nowMs = time.milliseconds
+    verifyFailure(manager)
+    assertEquals(RetryBackoffMs, time.milliseconds - nowMs)
+  }
+
+  private def verifyFailure(manager: MockProducerIdManager): Unit = {
     assertEquals(classOf[CoordinatorLoadInProgressException], manager.generateProducerId().failed.get.getClass)
     TestUtils.waitUntilTrue(() => {
       manager synchronized {
-        manager.capturedFailure.get != null
+        manager.capturedFailure.get
       }
-    }, "expected exception but no exception was caught.")
-    assertEquals(exception.getClass, manager.capturedFailure.get.getClass)
+    }, "Expected failure")
+    manager.capturedFailure.set(false)
   }
 
   private def verifyNewBlockAndProducerId(manager: MockProducerIdManager,
@@ -213,7 +240,7 @@ class ProducerIdManagerTest {
     assertEquals(classOf[CoordinatorLoadInProgressException], manager.generateProducerId().failed.get.getClass)
     TestUtils.waitUntilTrue(() => {
       val nextBlock = manager.nextProducerIdBlock.get
-      nextBlock != null && nextBlock.get.equals(expectedBlock)
+      nextBlock != null && nextBlock.equals(expectedBlock)
     }, "failed to generate block")
     assertEquals(expectedPid, manager.generateProducerId().get)
   }
