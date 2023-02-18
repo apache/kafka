@@ -17,18 +17,21 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
-import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
-import org.apache.kafka.streams.kstream.internals.KTableSource;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 /**
- * Class used to represent a {@link ProcessorSupplier} and the name
+ * Class used to represent a {@link ProcessorSupplier} or {@link FixedKeyProcessorSupplier} and the name
  * used to register it with the {@link org.apache.kafka.streams.processor.internals.InternalTopologyBuilder}
  *
  * Used by the Join nodes as there are several parameters, this abstraction helps
  * keep the number of arguments more reasonable.
+ *
+ * @see ProcessorSupplier
+ * @see FixedKeyProcessorSupplier
  */
 public class ProcessorParameters<KIn, VIn, KOut, VOut> {
 
@@ -37,6 +40,7 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
     @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> oldProcessorSupplier;
     private final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier;
+    private final FixedKeyProcessorSupplier<KIn, VIn, VOut> fixedKeyProcessorSupplier;
     private final String processorName;
 
     @SuppressWarnings("deprecation") // Old PAPI compatibility.
@@ -44,6 +48,7 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
                                final String processorName) {
         oldProcessorSupplier = processorSupplier;
         this.processorSupplier = () -> ProcessorAdapter.adapt(processorSupplier.get());
+        fixedKeyProcessorSupplier = null;
         this.processorName = processorName;
     }
 
@@ -51,6 +56,15 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
                                final String processorName) {
         oldProcessorSupplier = null;
         this.processorSupplier = processorSupplier;
+        fixedKeyProcessorSupplier = null;
+        this.processorName = processorName;
+    }
+
+    public ProcessorParameters(final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier,
+                               final String processorName) {
+        oldProcessorSupplier = null;
+        this.processorSupplier = null;
+        fixedKeyProcessorSupplier = processorSupplier;
         this.processorName = processorName;
     }
 
@@ -58,25 +72,36 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
         return processorSupplier;
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    public org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> oldProcessorSupplier() {
-        return oldProcessorSupplier;
+    public FixedKeyProcessorSupplier<KIn, VIn, VOut> fixedKeyProcessorSupplier() {
+        return fixedKeyProcessorSupplier;
     }
 
-    @SuppressWarnings("unchecked")
-    KTableSource<KIn, VIn> kTableSourceSupplier() {
-        return processorSupplier instanceof KTableSource ? (KTableSource<KIn, VIn>) processorSupplier : null;
-    }
+    public void addProcessorTo(final InternalTopologyBuilder topologyBuilder, final String[] parentNodeNames) {
+        if (processorSupplier != null) {
+            topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames);
+            if (processorSupplier.stores() != null) {
+                for (final StoreBuilder<?> storeBuilder : processorSupplier.stores()) {
+                    topologyBuilder.addStateStore(storeBuilder, processorName);
+                }
+            }
+        }
 
-    @SuppressWarnings("unchecked")
-    <KR, VR> KTableProcessorSupplier<KIn, VIn, KR, VR> kTableProcessorSupplier() {
-        // This cast always works because KTableProcessorSupplier hasn't been converted yet.
-        return (KTableProcessorSupplier<KIn, VIn, KR, VR>) processorSupplier;
-    }
+        if (fixedKeyProcessorSupplier != null) {
+            topologyBuilder.addProcessor(processorName, fixedKeyProcessorSupplier, parentNodeNames);
+            if (fixedKeyProcessorSupplier.stores() != null) {
+                for (final StoreBuilder<?> storeBuilder : fixedKeyProcessorSupplier.stores()) {
+                    topologyBuilder.addStateStore(storeBuilder, processorName);
+                }
+            }
+        }
 
-    @SuppressWarnings("unchecked")
-    KTableKTableJoinMerger<KIn, VIn> kTableKTableJoinMergerProcessorSupplier() {
-        return (KTableKTableJoinMerger<KIn, VIn>) processorSupplier;
+        // temporary hack until KIP-478 is fully implemented
+        // Old PAPI. Needs to be migrated.
+        if (oldProcessorSupplier != null && oldProcessorSupplier.stores() != null) {
+            for (final StoreBuilder<?> storeBuilder : oldProcessorSupplier.stores()) {
+                topologyBuilder.addStateStore(storeBuilder, processorName);
+            }
+        }
     }
 
     public String processorName() {
@@ -86,7 +111,8 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
     @Override
     public String toString() {
         return "ProcessorParameters{" +
-            "processor class=" + processorSupplier.get().getClass() +
+            "processor supplier class=" + (processorSupplier != null ? processorSupplier.getClass() : "null") +
+            ", fixed key processor supplier class=" + (fixedKeyProcessorSupplier != null ? fixedKeyProcessorSupplier.getClass() : "null") +
             ", processor name='" + processorName + '\'' +
             '}';
     }

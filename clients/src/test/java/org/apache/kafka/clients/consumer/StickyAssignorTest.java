@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,15 +51,26 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     }
 
     @Override
-    public Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions) {
-        return new Subscription(topics,
-            serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(DEFAULT_GENERATION))));
+    public Subscription buildSubscriptionV0(List<String> topics, List<TopicPartition> partitions, int generationId) {
+        return new Subscription(topics, serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generationId))),
+            Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
     }
 
     @Override
-    public Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation) {
-        return new Subscription(topics,
-                                serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generation))));
+    public Subscription buildSubscriptionV1(List<String> topics, List<TopicPartition> partitions, int generationId) {
+        return new Subscription(topics, serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generationId))),
+            partitions, DEFAULT_GENERATION, Optional.empty());
+    }
+
+    @Override
+    public Subscription buildSubscriptionV2Above(List<String> topics, List<TopicPartition> partitions, int generationId) {
+        return new Subscription(topics, serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generationId))),
+            partitions, generationId, Optional.empty());
+    }
+
+    @Override
+    public ByteBuffer generateUserData(List<String> topics, List<TopicPartition> partitions, int generation) {
+        return serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generation)));
     }
 
     @Test
@@ -66,9 +78,9 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
 
-        subscriptions.put(consumer1, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 1))));
-        subscriptions.put(consumer2, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 2))));
-        subscriptions.put(consumer3, buildSubscription(topics(topic), emptyList()));
+        subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic), partitions(tp(topic, 0), tp(topic, 1)), generationId));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(topics(topic), partitions(tp(topic, 0), tp(topic, 2)), generationId));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(topics(topic), emptyList(), generationId));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 1)), assignment.get(consumer1));
@@ -84,9 +96,9 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 4);
 
-        subscriptions.put(consumer1, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 1))));
-        subscriptions.put(consumer2, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 2))));
-        subscriptions.put(consumer3, buildSubscription(topics(topic), emptyList()));
+        subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic), partitions(tp(topic, 0), tp(topic, 1)), generationId));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(topics(topic), partitions(tp(topic, 0), tp(topic, 2)), generationId));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(topics(topic), emptyList(), generationId));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 1), tp(topic, 3)), assignment.get(consumer1));
@@ -118,8 +130,8 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
 
-        subscriptions.put(consumer1, buildSubscription(allTopics, r1partitions1));
-        subscriptions.put(consumer2, buildSubscription(consumer2SubscribedTopics, r1partitions2));
+        subscriptions.put(consumer1, buildSubscriptionV2Above(allTopics, r1partitions1, generationId));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(consumer2SubscribedTopics, r1partitions2, generationId));
         subscriptions.remove(consumer3);
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
@@ -136,8 +148,8 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertFalse(Collections.disjoint(r2partitions2, r1partitions3));
 
         subscriptions.remove(consumer1);
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(consumer2SubscribedTopics, r2partitions2, 2));
-        subscriptions.put(consumer3, buildSubscriptionWithGeneration(allTopics, r1partitions3, 1));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(consumer2SubscribedTopics, r2partitions2, 2));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(allTopics, r1partitions3, 1));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> r3partitions2 = assignment.get(consumer2);
@@ -172,7 +184,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(isFullyBalanced(assignment));
 
         subscriptions.remove(consumer1);
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(allTopics, r1partitions2, 1));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(allTopics, r1partitions2, 1));
         subscriptions.remove(consumer3);
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
@@ -182,9 +194,9 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
 
-        subscriptions.put(consumer1, buildSubscriptionWithGeneration(consumer1SubscribedTopics, r1partitions1, 1));
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(allTopics, r2partitions2, 2));
-        subscriptions.put(consumer3, buildSubscriptionWithGeneration(consumer3SubscribedTopics, r1partitions3, 1));
+        subscriptions.put(consumer1, buildSubscriptionV2Above(consumer1SubscribedTopics, r1partitions1, 1));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(allTopics, r2partitions2, 2));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(consumer3SubscribedTopics, r1partitions3, 1));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> r3partitions1 = assignment.get(consumer1);
@@ -228,9 +240,9 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
             partitions(tp0, tp1, tp2, tp3);
         List<TopicPartition> c2partitions0 = partitions(tp0, tp1, t2p0, t2p1, t2p2, t2p3);
         List<TopicPartition> c3partitions0 = partitions(tp2, tp3, t3p0, t3p1, t3p2, t3p3);
-        subscriptions.put(consumer1, buildSubscriptionWithGeneration(consumer1SubscribedTopics, c1partitions0, 1));
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(consumer2SubscribedTopics, c2partitions0, 2));
-        subscriptions.put(consumer3, buildSubscriptionWithGeneration(allTopics, c3partitions0, 2));
+        subscriptions.put(consumer1, buildSubscriptionV2Above(consumer1SubscribedTopics, c1partitions0, 1));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(consumer2SubscribedTopics, c2partitions0, 2));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(allTopics, c3partitions0, 2));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> c1partitions = assignment.get(consumer1);
@@ -258,7 +270,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
 
         List<TopicPartition> c1partitions0 = partitions(tp0, tp2);
         List<TopicPartition> c2partitions0 = partitions(tp1);
-        subscriptions.put(consumer1, buildSubscriptionWithGeneration(topics(topic), c1partitions0, 1));
+        subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic), c1partitions0, 1));
         subscriptions.put(consumer2, buildSubscriptionWithOldSchema(topics(topic), c2partitions0));
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> c1partitions = assignment.get(consumer1);
@@ -268,6 +280,57 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(c1partitions.size() == 1 && c2partitions.size() == 1 && c3partitions.size() == 1);
         assertTrue(c1partitions0.containsAll(c1partitions));
         assertTrue(c2partitions0.containsAll(c2partitions));
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    @Test
+    public void testMemberDataWithInconsistentData() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 2);
+        List<TopicPartition> ownedPartitionsInUserdata = partitions(tp1);
+        List<TopicPartition> ownedPartitionsInSubscription = partitions(tp0);
+
+        assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(ownedPartitionsInUserdata), new ConsumerGroupMetadata(groupId, generationId, consumer1, Optional.empty()));
+        ByteBuffer userDataWithHigherGenerationId = assignor.subscriptionUserData(new HashSet<>(topics(topic)));
+
+        Subscription subscription = new Subscription(topics(topic), userDataWithHigherGenerationId, ownedPartitionsInSubscription);
+        AbstractStickyAssignor.MemberData memberData = memberData(subscription);
+
+        // In StickyAssignor, we'll serialize owned partition in assignment into userData and always honor userData
+        assertEquals(ownedPartitionsInUserdata, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
+        assertEquals(generationId, memberData.generation.orElse(-1), "subscription: " + subscription + " doesn't have expected generation id");
+    }
+
+    @Test
+    public void testMemberDataWillHonorUserData() {
+        List<String> topics = topics(topic);
+        List<TopicPartition> ownedPartitions = partitions(tp(topic1, 0), tp(topic2, 1));
+        int generationIdInUserData = generationId - 1;
+
+        Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationIdInUserData), Collections.emptyList(), generationId, Optional.empty());
+        AbstractStickyAssignor.MemberData memberData = memberData(subscription);
+        // in StickyAssignor with eager rebalance protocol, we'll always honor data in user data
+        assertEquals(ownedPartitions, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
+        assertEquals(generationIdInUserData, memberData.generation.orElse(-1), "subscription: " + subscription + " doesn't have expected generation id");
+    }
+
+    @Test
+    public void testAssignorWithOldVersionSubscriptions() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, 3);
+
+        List<String> subscribedTopics = topics(topic1);
+
+        subscriptions.put(consumer1, buildSubscriptionV0(subscribedTopics, partitions(tp(topic1, 0)), generationId));
+        subscriptions.put(consumer2, buildSubscriptionV1(subscribedTopics, partitions(tp(topic1, 1)), generationId));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(subscribedTopics, Collections.emptyList(), generationId));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp(topic1, 0)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 1)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic1, 2)), assignment.get(consumer3));
+
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }

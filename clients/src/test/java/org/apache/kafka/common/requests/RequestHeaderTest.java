@@ -25,6 +25,9 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 public class RequestHeaderTest {
 
@@ -112,5 +115,33 @@ public class RequestHeaderTest {
         assertEquals(123, parsed.correlationId());
         assertEquals(ApiKeys.FIND_COORDINATOR, parsed.apiKey());
         assertEquals((short) 10, parsed.apiVersion());
+    }
+
+    @Test
+    public void verifySizeMethodsReturnSameValue() {
+        // Create a dummy RequestHeaderData
+        RequestHeaderData headerData = new RequestHeaderData().
+            setClientId("hakuna-matata").
+            setCorrelationId(123).
+            setRequestApiKey(ApiKeys.FIND_COORDINATOR.id).
+            setRequestApiVersion((short) 10);
+
+        // Serialize RequestHeaderData to a buffer
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(headerData.size(serializationCache, (short) 2));
+        headerData.write(new ByteBufferAccessor(buffer), serializationCache, (short) 2);
+        buffer.flip();
+
+        // actual call to generate the RequestHeader from buffer containing RequestHeaderData
+        RequestHeader parsed = spy(RequestHeader.parse(buffer));
+
+        // verify that the result of cached value of size is same as actual calculation of size
+        int sizeCalculatedFromData = parsed.size(new ObjectSerializationCache());
+        int sizeFromCache = parsed.size();
+        assertEquals(sizeCalculatedFromData, sizeFromCache);
+
+        // verify that size(ObjectSerializationCache) is only called once, i.e. during assertEquals call. This validates
+        // that size() method does not calculate the size instead it uses the cached value
+        verify(parsed).size(any(ObjectSerializationCache.class));
     }
 }

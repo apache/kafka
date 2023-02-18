@@ -91,7 +91,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     if (nextCommitted != committed + 1) {
                         throw new AssertionError(
                             String.format(
-                                "Expected next committed value to be %s, but instead found %s on node %s",
+                                "Expected next committed value to be %d, but instead found %d on node %d",
                                 committed + 1,
                                 nextCommitted,
                                 nodeId
@@ -109,14 +109,13 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
 
             if (lastOffsetSnapshotted + snapshotDelayInRecords < lastCommittedOffset) {
                 log.debug(
-                    "Generating new snapshot with committed offset {} and epoch {} since the previoud snapshot includes {}",
+                    "Generating new snapshot with committed offset {} and epoch {} since the previous snapshot includes {}",
                     lastCommittedOffset,
                     lastCommittedEpoch,
                     lastOffsetSnapshotted
                 );
                 Optional<SnapshotWriter<Integer>> snapshot = client.createSnapshot(
-                    lastCommittedOffset,
-                    lastCommittedEpoch,
+                    new OffsetAndEpoch(lastCommittedOffset + 1, lastCommittedEpoch),
                     lastCommittedTimestamp);
                 if (snapshot.isPresent()) {
                     try {

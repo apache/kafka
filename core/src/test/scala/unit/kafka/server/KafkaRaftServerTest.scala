@@ -18,12 +18,13 @@ package kafka.server
 
 import java.io.File
 import java.nio.file.Files
-import java.util.Properties
-
+import java.util.{Optional, Properties}
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException}
 import kafka.log.UnifiedLog
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -44,7 +45,7 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
 
-    val (loadedMetaProperties, offlineDirs) =
+    val (loadedMetaProperties, _, offlineDirs) =
       invokeLoadMetaProperties(metaProperties, configProperties)
 
     assertEquals(metaProperties, loadedMetaProperties)
@@ -71,12 +72,13 @@ class KafkaRaftServerTest {
 
   private def invokeLoadMetaProperties(
     metaProperties: MetaProperties,
-    configProperties: Properties
-  ): (MetaProperties, collection.Seq[String]) = {
+    configProperties: Properties,
+    metadataVersion: Option[MetadataVersion] = Some(MetadataVersion.latest())
+  ): (MetaProperties, BootstrapMetadata, collection.Seq[String]) = {
     val tempLogDir = TestUtils.tempDirectory()
     try {
       writeMetaProperties(tempLogDir, metaProperties)
-
+      metadataVersion.foreach(mv => writeBootstrapMetadata(tempLogDir, mv))
       configProperties.put(KafkaConfig.LogDirProp, tempLogDir.getAbsolutePath)
       val config = KafkaConfig.fromProps(configProperties)
       KafkaRaftServer.initializeLogDirs(config)
@@ -92,6 +94,11 @@ class KafkaRaftServerTest {
     val metaPropertiesFile = new File(logDir.getAbsolutePath, "meta.properties")
     val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesFile)
     checkpoint.write(metaProperties.toProperties)
+  }
+
+  private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion): Unit = {
+    val bootstrapDirectory = new BootstrapDirectory(logDir.toString(), Optional.empty())
+    bootstrapDirectory.writeBinaryFile(BootstrapMetadata.fromVersion(metadataVersion, "test"))
   }
 
   @Test
@@ -147,6 +154,7 @@ class KafkaRaftServerTest {
     // One log dir is online and has properly formatted `meta.properties`
     val validDir = TestUtils.tempDirectory()
     writeMetaProperties(validDir, MetaProperties(clusterId, nodeId))
+    writeBootstrapMetadata(validDir, MetadataVersion.latest())
 
     // Use a regular file as an invalid log dir to trigger an IO error
     val invalidDir = TestUtils.tempFile("blah")
@@ -159,7 +167,7 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     val config = KafkaConfig.fromProps(configProperties)
 
-    val (loadedProperties, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
+    val (loadedProperties, _, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
     assertEquals(nodeId, loadedProperties.nodeId)
     assertEquals(Seq(invalidDir.getAbsolutePath), offlineDirs)
   }
@@ -215,4 +223,50 @@ class KafkaRaftServerTest {
       () => KafkaRaftServer.initializeLogDirs(config))
   }
 
+  @Test
+  def testKRaftUpdateWithIBP(): Unit = {
+    val clusterId = clusterIdBase64
+    val nodeId = 0
+    val metaProperties = MetaProperties(clusterId, nodeId)
+
+    val configProperties = new Properties
+    configProperties.put(KafkaConfig.ProcessRolesProp, "broker,controller")
+    configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    configProperties.put(KafkaConfig.InterBrokerProtocolVersionProp, "3.3-IV1")
+
+    val (loadedMetaProperties, bootstrapMetadata, offlineDirs) =
+      invokeLoadMetaProperties(metaProperties, configProperties, None)
+
+    assertEquals(metaProperties, loadedMetaProperties)
+    assertEquals(Seq.empty, offlineDirs)
+    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.IBP_3_3_IV1)
+  }
+
+  @Test
+  def testKRaftUpdateWithoutIBP(): Unit = {
+    val clusterId = clusterIdBase64
+    val nodeId = 0
+    val metaProperties = MetaProperties(clusterId, nodeId)
+
+    val logDir = TestUtils.tempDirectory()
+    writeMetaProperties(logDir, metaProperties)
+
+    val configProperties = new Properties
+    configProperties.put(KafkaConfig.ProcessRolesProp, "broker,controller")
+    configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
+    configProperties.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
+    configProperties.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
+    configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    configProperties.put(KafkaConfig.LogDirProp, logDir.getAbsolutePath)
+
+    val (loadedMetaProperties, bootstrapMetadata, offlineDirs) =
+      invokeLoadMetaProperties(metaProperties, configProperties, None)
+
+    assertEquals(metaProperties, loadedMetaProperties)
+    assertEquals(Seq.empty, offlineDirs)
+    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.latest())
+  }
 }

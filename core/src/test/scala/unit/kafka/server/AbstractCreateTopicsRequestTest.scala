@@ -91,16 +91,8 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     topic
   }
 
-  def createTopicsSocketServer: SocketServer = {
-    if (isKRaftTest()) {
-      anySocketServer
-    } else {
-      controllerSocketServer
-    }
-  }
-
   protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
-    val response = sendCreateTopicRequest(request, createTopicsSocketServer)
+    val response = sendCreateTopicRequest(request, adminSocketServer)
 
     assertFalse(response.errorCounts().keySet().asScala.exists(_.code() > 0),
       s"There should be no errors, found ${response.errorCounts().keySet().asScala.mkString(", ")},")
@@ -162,7 +154,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   protected def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,
                                                   expectedResponse: Map[String, ApiError],
                                                   checkErrorMessage: Boolean = true): Unit = {
-    val response = sendCreateTopicRequest(request, createTopicsSocketServer)
+    val response = sendCreateTopicRequest(request, adminSocketServer)
     assertEquals(expectedResponse.size, response.data().topics().size, "The response size should match")
 
     expectedResponse.foreach { case (topicName, expectedError) =>
@@ -171,9 +163,9 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       if (actual == null) {
         throw new RuntimeException(s"No response data found for topic $topicName")
       }
-      assertEquals(expected.error.code(), actual.errorCode(), "The response error should match")
+      assertEquals(expected.error.code(), actual.errorCode(), "The response error code should match")
       if (checkErrorMessage) {
-        assertEquals(expected.message, actual.errorMessage())
+        assertEquals(expected.message, actual.errorMessage(), "The response error message should match")
       }
       // If no error validate topic exists
       if (expectedError.isSuccess && !request.data.validateOnly) {

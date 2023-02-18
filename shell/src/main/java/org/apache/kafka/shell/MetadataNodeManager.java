@@ -21,9 +21,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.metadata.AccessControlEntryRecord;
+import org.apache.kafka.common.metadata.AccessControlEntryRecordJsonConverter;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecordJsonConverter;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -31,6 +36,7 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.PartitionRecordJsonConverter;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
@@ -39,6 +45,8 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
+import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
@@ -207,7 +215,7 @@ public final class MetadataNodeManager implements AutoCloseable {
     }
 
     private void handleCommitImpl(MetadataRecordType type, ApiMessage message)
-            throws Exception {
+        throws Exception {
         switch (type) {
             case REGISTER_BROKER_RECORD: {
                 DirectoryNode brokersNode = data.root.mkdirs("brokers");
@@ -260,7 +268,7 @@ public final class MetadataNodeManager implements AutoCloseable {
                             "Can't handle ConfigResource.Type " + record.resourceType());
                 }
                 DirectoryNode configDirectory = data.root.mkdirs("configs").
-                    mkdirs(typeString).mkdirs(record.resourceName());
+                    mkdirs(typeString).mkdirs(record.resourceName().isEmpty() ? "<default>" : record.resourceName());
                 if (record.value() == null) {
                     configDirectory.rmrf(record.name());
                 } else {
@@ -302,6 +310,22 @@ public final class MetadataNodeManager implements AutoCloseable {
                     create("isFenced").setContents("false");
                 break;
             }
+            case BROKER_REGISTRATION_CHANGE_RECORD: {
+                BrokerRegistrationChangeRecord record = (BrokerRegistrationChangeRecord) message;
+                BrokerRegistrationFencingChange fencingChange =
+                    BrokerRegistrationFencingChange.fromValue(record.fenced()).get();
+                if (fencingChange != BrokerRegistrationFencingChange.NONE) {
+                    data.root.mkdirs("brokers", Integer.toString(record.brokerId()))
+                        .create("isFenced").setContents(Boolean.toString(fencingChange.asBoolean().get()));
+                }
+                BrokerRegistrationInControlledShutdownChange inControlledShutdownChange =
+                    BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown()).get();
+                if (inControlledShutdownChange != BrokerRegistrationInControlledShutdownChange.NONE) {
+                    data.root.mkdirs("brokers", Integer.toString(record.brokerId()))
+                        .create("inControlledShutdown").setContents(Boolean.toString(inControlledShutdownChange.asBoolean().get()));
+                }
+                break;
+            }
             case REMOVE_TOPIC_RECORD: {
                 RemoveTopicRecord record = (RemoveTopicRecord) message;
                 DirectoryNode topicsDirectory =
@@ -331,6 +355,35 @@ public final class MetadataNodeManager implements AutoCloseable {
                 producerIds.create("lastBlockBrokerEpoch").setContents(record.brokerEpoch() + "");
 
                 producerIds.create("nextBlockStartId").setContents(record.nextProducerId() + "");
+                break;
+            }
+            case ACCESS_CONTROL_ENTRY_RECORD: {
+                AccessControlEntryRecord record = (AccessControlEntryRecord) message;
+                DirectoryNode acls = data.root.mkdirs("acl").mkdirs("id");
+                FileNode file = acls.create(record.id().toString());
+                file.setContents(AccessControlEntryRecordJsonConverter.write(record,
+                    AccessControlEntryRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString());
+                break;
+            }
+            case REMOVE_ACCESS_CONTROL_ENTRY_RECORD: {
+                RemoveAccessControlEntryRecord record = (RemoveAccessControlEntryRecord) message;
+                DirectoryNode acls = data.root.mkdirs("acl").mkdirs("id");
+                acls.rmrf(record.id().toString());
+                break;
+            }
+            case FEATURE_LEVEL_RECORD: {
+                FeatureLevelRecord record = (FeatureLevelRecord) message;
+                DirectoryNode features = data.root.mkdirs("features");
+                if (record.featureLevel() == 0) {
+                    features.rmrf(record.name());
+                } else {
+                    FileNode file = features.create(record.name());
+                    file.setContents(FeatureLevelRecordJsonConverter.write(record,
+                        FeatureLevelRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString());
+                }
+                break;
+            }
+            case NO_OP_RECORD: {
                 break;
             }
             default:

@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
+import org.apache.kafka.server.common.MetadataVersion;
 
 
 public final class ProducerIdsDelta {
@@ -39,11 +40,20 @@ public final class ProducerIdsDelta {
         // Nothing to do
     }
 
+    public void handleMetadataVersionChange(MetadataVersion newVersion) {
+        // no-op
+    }
+
     public void replay(ProducerIdsRecord record) {
         nextProducerId = record.nextProducerId();
     }
 
     public ProducerIdsImage apply() {
         return new ProducerIdsImage(nextProducerId);
+    }
+
+    @Override
+    public String toString() {
+        return "ProducerIdsDelta(nextProducerId=" + nextProducerId + ")";
     }
 }

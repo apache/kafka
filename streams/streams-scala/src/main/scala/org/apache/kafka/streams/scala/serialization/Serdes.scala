@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.UUID
 
-import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer, Serdes => JSerdes}
+import org.apache.kafka.common.serialization.{Deserializer, Serde, Serdes => JSerdes, Serializer}
 import org.apache.kafka.streams.kstream.WindowedSerdes
 
 object Serdes extends LowPrioritySerdes {

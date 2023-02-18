@@ -35,6 +35,7 @@ import java.util.Map;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestSslUtils.CertificateBuilder;
+import org.apache.kafka.test.TestUtils;
 
 public class TestKeyManagerFactory extends KeyManagerFactorySpi {
     public static final String ALGORITHM = "TestAlgorithm";
@@ -70,7 +71,7 @@ public class TestKeyManagerFactory extends KeyManagerFactorySpi {
                 this.certificate = certBuilder.generate("CN=" + CN + ", O=A server", this.keyPair);
                 Map<String, X509Certificate> certificates = new HashMap<>();
                 certificates.put(ALIAS, certificate);
-                File trustStoreFile = File.createTempFile("testTrustStore", ".jks");
+                File trustStoreFile = TestUtils.tempFile("testTrustStore", ".jks");
                 mockTrustStoreFile = trustStoreFile.getPath();
                 TestSslUtils.createTrustStore(mockTrustStoreFile, new Password(TestSslUtils.TRUST_STORE_PASSWORD), certificates);
             } catch (IOException | GeneralSecurityException e) {

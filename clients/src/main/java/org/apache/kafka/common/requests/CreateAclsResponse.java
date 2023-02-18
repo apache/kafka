@@ -43,6 +43,11 @@ public class CreateAclsResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     public List<CreateAclsResponseData.AclCreationResult> results() {
         return data.results();
     }

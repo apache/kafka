@@ -23,11 +23,16 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
+import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 
 /**
@@ -53,12 +58,27 @@ public final class ClusterDelta {
         return image.broker(nodeId);
     }
 
+    public Set<Integer> liveZkBrokerIdChanges() {
+        return changedBrokers
+            .values()
+            .stream()
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .filter(registration -> registration.isMigratingZkBroker() && !registration.fenced())
+            .map(BrokerRegistration::id)
+            .collect(Collectors.toSet());
+    }
+
     public void finishSnapshot() {
         for (Integer brokerId : image.brokers().keySet()) {
             if (!changedBrokers.containsKey(brokerId)) {
                 changedBrokers.put(brokerId, Optional.empty());
             }
         }
+    }
+
+    public void handleMetadataVersionChange(MetadataVersion newVersion) {
+        // no-op
     }
 
     public void replay(RegisterBrokerRecord record) {
@@ -85,22 +105,38 @@ public final class ClusterDelta {
     }
 
     public void replay(FenceBrokerRecord record) {
-        BrokerRegistration broker = getBrokerOrThrow(record.id(), record.epoch(), "fence");
-        changedBrokers.put(record.id(), Optional.of(broker.cloneWithFencing(true)));
+        BrokerRegistration curRegistration = getBrokerOrThrow(record.id(), record.epoch(), "fence");
+        changedBrokers.put(record.id(), Optional.of(curRegistration.cloneWith(
+            BrokerRegistrationFencingChange.FENCE.asBoolean(),
+            Optional.empty()
+        )));
     }
 
     public void replay(UnfenceBrokerRecord record) {
-        BrokerRegistration broker = getBrokerOrThrow(record.id(), record.epoch(), "unfence");
-        changedBrokers.put(record.id(), Optional.of(broker.cloneWithFencing(false)));
+        BrokerRegistration curRegistration = getBrokerOrThrow(record.id(), record.epoch(), "unfence");
+        changedBrokers.put(record.id(), Optional.of(curRegistration.cloneWith(
+            BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
+            Optional.empty()
+        )));
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {
-        BrokerRegistration broker =
+        BrokerRegistration curRegistration =
             getBrokerOrThrow(record.brokerId(), record.brokerEpoch(), "change");
-        if (record.fenced() < 0) {
-            changedBrokers.put(record.brokerId(), Optional.of(broker.cloneWithFencing(false)));
-        } else if (record.fenced() > 0) {
-            changedBrokers.put(record.brokerId(), Optional.of(broker.cloneWithFencing(true)));
+        BrokerRegistrationFencingChange fencingChange =
+            BrokerRegistrationFencingChange.fromValue(record.fenced()).orElseThrow(
+                () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
+                    "value for fenced field: %d", record, record.fenced())));
+        BrokerRegistrationInControlledShutdownChange inControlledShutdownChange =
+            BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown()).orElseThrow(
+                () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
+                    "value for inControlledShutdown field: %d", record, record.inControlledShutdown())));
+        BrokerRegistration nextRegistration = curRegistration.cloneWith(
+            fencingChange.asBoolean(),
+            inControlledShutdownChange.asBoolean()
+        );
+        if (!curRegistration.equals(nextRegistration)) {
+            changedBrokers.put(record.brokerId(), Optional.of(nextRegistration));
         }
     }
 

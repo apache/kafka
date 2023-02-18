@@ -34,16 +34,28 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     private static final int SUFFIX_SIZE = 2 * TIMESTAMP_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 
+    public static int keyByteLength(final Bytes key) {
+        return (key == null ? 0 : key.get().length) + 2 * TIMESTAMP_SIZE;
+    }
+
     @Override
     public Bytes upperRangeFixedSize(final Bytes key, final long to) {
-        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
+        final Windowed<Bytes> sessionKey = upperRangeFixedWindow(key, to);
         return SessionKeySchema.toBinary(sessionKey);
+    }
+
+    public static <K> Windowed<K> upperRangeFixedWindow(final K key, final long to) {
+        return new Windowed<K>(key, new SessionWindow(to, Long.MAX_VALUE));
     }
 
     @Override
     public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
-        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, from)));
+        final Windowed<Bytes> sessionKey = lowerRangeFixedWindow(key, from);
         return SessionKeySchema.toBinary(sessionKey);
+    }
+
+    public static <K> Windowed<K> lowerRangeFixedWindow(final K key, final long from) {
+        return new Windowed<K>(key, new SessionWindow(0, Math.max(0, from)));
     }
 
     @Override
@@ -161,11 +173,27 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     public static Bytes toBinary(final Bytes key,
                                  final long startTime,
                                  final long endTime) {
-        final byte[] bytes = key.get();
-        final ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
-        buf.put(bytes);
+        final ByteBuffer buf = ByteBuffer.allocate(keyByteLength(key));
+        writeBinary(buf, key, startTime, endTime);
+        return Bytes.wrap(buf.array());
+    }
+
+    public static void writeBinary(final ByteBuffer buf, final Windowed<Bytes> sessionKey) {
+        writeBinary(buf, sessionKey.key(), sessionKey.window().start(), sessionKey.window().end());
+    }
+
+    public static void writeBinary(final ByteBuffer buf,
+                                   final Bytes key,
+                                   final long startTime,
+                                   final long endTime) {
+        // we search for the session window that can overlap with the [ESET, LSST] range
+        // since the session window length can vary, we define the search boundary as:
+        // lower: [0, ESET]
+        // upper: [LSST, INF]
+        // and by puting the end time first and then the start time, the serialized search boundary
+        // is: [(ESET-0), (INF-LSST)]
+        buf.put(key.get());
         buf.putLong(endTime);
         buf.putLong(startTime);
-        return Bytes.wrap(buf.array());
     }
 }

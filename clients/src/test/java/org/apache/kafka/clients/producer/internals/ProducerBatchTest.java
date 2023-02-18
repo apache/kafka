@@ -155,9 +155,9 @@ public class ProducerBatchTest {
             for (ProducerBatch splitProducerBatch : batches) {
                 for (RecordBatch splitBatch : splitProducerBatch.records().batches()) {
                     for (Record record : splitBatch) {
-                        assertTrue(record.headers().length == 1, "Header size should be 1.");
-                        assertTrue(record.headers()[0].key().equals("header-key"), "Header key should be 'header-key'.");
-                        assertTrue(new String(record.headers()[0].value()).equals("header-value"), "Header value should be 'header-value'.");
+                        assertEquals(1, record.headers().length, "Header size should be 1.");
+                        assertEquals("header-key", record.headers()[0].key(), "Header key should be 'header-key'.");
+                        assertEquals("header-value", new String(record.headers()[0].value()), "Header value should be 'header-value'.");
                     }
                 }
             }

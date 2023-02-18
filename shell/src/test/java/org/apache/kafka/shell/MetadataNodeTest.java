@@ -19,8 +19,8 @@ package org.apache.kafka.shell;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
 import org.apache.kafka.shell.MetadataNode.FileNode;
@@ -38,9 +38,9 @@ public class MetadataNodeTest {
         DirectoryNode root = new DirectoryNode();
         DirectoryNode defNode = root.mkdirs("abc", "def");
         DirectoryNode defNode2 = root.mkdirs("abc", "def");
-        assertTrue(defNode == defNode2);
+        assertSame(defNode, defNode2);
         DirectoryNode defNode3 = root.directory("abc", "def");
-        assertTrue(defNode == defNode3);
+        assertSame(defNode, defNode3);
         root.mkdirs("ghi");
         assertEquals(new HashSet<>(Arrays.asList("abc", "ghi")), root.children().keySet());
         assertEquals(Collections.singleton("def"), root.mkdirs("abc").children().keySet());

@@ -28,7 +28,6 @@ import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
-import org.apache.kafka.metadata.authorizer.StandardAclRecordIterator;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.authorizer.AclCreateResult;
@@ -41,11 +40,13 @@ import org.apache.kafka.timeline.TimelineHashSet;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 
 /**
@@ -142,7 +143,7 @@ public class AclControlManager {
 
     ControllerResult<List<AclDeleteResult>> deleteAcls(List<AclBindingFilter> filters) {
         List<AclDeleteResult> results = new ArrayList<>();
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        Set<ApiMessageAndVersion> records = new HashSet<>();
         for (AclBindingFilter filter : filters) {
             try {
                 validateFilter(filter);
@@ -152,11 +153,11 @@ public class AclControlManager {
                 results.add(new AclDeleteResult(ApiError.fromThrowable(e).exception()));
             }
         }
-        return ControllerResult.atomicOf(records, results);
+        return ControllerResult.atomicOf(records.stream().collect(Collectors.toList()), results);
     }
 
     AclDeleteResult deleteAclsForFilter(AclBindingFilter filter,
-                                        List<ApiMessageAndVersion> records) {
+                                        Set<ApiMessageAndVersion> records) {
         List<AclBindingDeleteResult> deleted = new ArrayList<>();
         for (Entry<Uuid, StandardAcl> entry : idToAcl.entrySet()) {
             Uuid id = entry.getKey();
@@ -212,21 +213,5 @@ public class AclControlManager {
 
     Map<Uuid, StandardAcl> idToAcl() {
         return Collections.unmodifiableMap(idToAcl);
-    }
-
-    Iterator<List<ApiMessageAndVersion>> iterator(long epoch) {
-        Iterator<Entry<Uuid, StandardAcl>> iterator = idToAcl.entrySet(epoch).iterator();
-        return new StandardAclRecordIterator(new Iterator<StandardAclWithId>() {
-            @Override
-            public boolean hasNext() {
-                return iterator.hasNext();
-            }
-
-            @Override
-            public StandardAclWithId next() {
-                Entry<Uuid, StandardAcl> entry = iterator.next();
-                return new StandardAclWithId(entry.getKey(), entry.getValue());
-            }
-        });
     }
 }

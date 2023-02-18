@@ -37,12 +37,13 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -53,9 +54,9 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
+@Timeout(600)
 @Category({IntegrationTest.class})
 public class PurgeRepartitionTopicIntegrationTest {
-
     private static final int NUM_BROKERS = 1;
 
     private static final String INPUT_TOPIC = "input-stream";
@@ -74,13 +75,13 @@ public class PurgeRepartitionTopicIntegrationTest {
         }
     });
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
         CLUSTER.createTopic(INPUT_TOPIC, 1, 1);
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -151,7 +152,7 @@ public class PurgeRepartitionTopicIntegrationTest {
         }
     }
 
-    @Before
+    @BeforeEach
     public void setup() {
         // create admin client for verification
         final Properties adminConfig = new Properties();
@@ -178,7 +179,7 @@ public class PurgeRepartitionTopicIntegrationTest {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration, time);
     }
 
-    @After
+    @AfterEach
     public void shutdown() {
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30));

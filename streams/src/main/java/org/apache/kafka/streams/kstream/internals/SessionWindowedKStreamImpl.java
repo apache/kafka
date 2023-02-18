@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -47,6 +49,8 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     private final SessionWindows windows;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Merger<K, Long> countMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
+
+    private EmitStrategy emitStrategy = EmitStrategy.onWindowUpdate();
 
     SessionWindowedKStreamImpl(final SessionWindows windows,
                                final InternalStreamsBuilder builder,
@@ -90,6 +94,12 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         return doCount(named, materialized);
     }
 
+    @Override
+    public SessionWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy) {
+        this.emitStrategy = emitStrategy;
+        return this;
+    }
+
     private KTable<Windowed<K>, Long> doCount(final Named named,
                                               final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized) {
         final MaterializedInternal<K, Long, SessionStore<Bytes, byte[]>> materializedInternal =
@@ -109,6 +119,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
+                emitStrategy,
                 aggregateBuilder.countInitializer,
                 aggregateBuilder.countAggregator,
                 countMerger),
@@ -157,6 +168,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
+                emitStrategy,
                 aggregateBuilder.reduceInitializer,
                 reduceAggregator,
                 mergerForAggregator(reduceAggregator)
@@ -214,6 +226,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
+                emitStrategy,
                 initializer,
                 aggregator,
                 sessionMerger),
@@ -246,10 +259,15 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                     );
                     break;
                 case ROCKS_DB:
-                    supplier = Stores.persistentSessionStore(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod)
-                    );
+                    supplier = emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE ?
+                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                            materialized.storeName(),
+                            retentionPeriod,
+                            true) :
+                        Stores.persistentSessionStore(
+                            materialized.storeName(),
+                            Duration.ofMillis(retentionPeriod)
+                        );
                     break;
                 default:
                     throw new IllegalStateException("Unknown store type: " + materialized.storeType());
@@ -268,9 +286,13 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             builder.withLoggingDisabled();
         }
 
-        if (materialized.cachingEnabled()) {
+        // do not enable cache if the emit final strategy is used
+        if (materialized.cachingEnabled() && emitStrategy.type() != EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
             builder.withCachingEnabled();
+        } else {
+            builder.withCachingDisabled();
         }
+
         return builder;
     }
 

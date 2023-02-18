@@ -200,34 +200,6 @@ class BrokerEndPointTest {
   }
 
   @Test
-  def testBrokerEndpointFromUri(): Unit = {
-    var connectionString = "localhost:9092"
-    var endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assertEquals("localhost", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    //KAFKA-3719
-    connectionString = "local_host:9092"
-    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assertEquals("local_host", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    // also test for ipv6
-    connectionString = "[::1]:9092"
-    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assertEquals("::1", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    // test for ipv6 with % character
-    connectionString = "[fe80::b1da:69ca:57f7:63d8%3]:9092"
-    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assertEquals("fe80::b1da:69ca:57f7:63d8%3", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    // add test for uppercase in hostname
-    connectionString = "MyHostname:9092"
-    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assertEquals("MyHostname", endpoint.host)
-    assertEquals(9092, endpoint.port)
-  }
-
-  @Test
   def testEndpointFromUri(): Unit = {
     var connectionString = "PLAINTEXT://localhost:9092"
     var endpoint = EndPoint.createEndPoint(connectionString, None)

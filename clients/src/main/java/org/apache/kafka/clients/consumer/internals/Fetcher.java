@@ -104,6 +104,7 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -159,7 +160,7 @@ public class Fetcher<K, V> implements Closeable {
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
-
+    private final AtomicBoolean isClosed = new AtomicBoolean(false);
     private CompletedFetch nextInLineFetch = null;
 
     public Fetcher(LogContext logContext,
@@ -253,25 +254,7 @@ public class Fetcher<K, V> implements Closeable {
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
             final Node fetchTarget = entry.getKey();
             final FetchSessionHandler.FetchRequestData data = entry.getValue();
-            final short maxVersion;
-            if (!data.canUseTopicIds()) {
-                maxVersion = (short) 12;
-            } else {
-                maxVersion = ApiKeys.FETCH.latestVersion();
-            }
-            final FetchRequest.Builder request = FetchRequest.Builder
-                    .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend())
-                    .isolationLevel(isolationLevel)
-                    .setMaxBytes(this.maxBytes)
-                    .metadata(data.metadata())
-                    .removed(data.toForget())
-                    .replaced(data.toReplace())
-                    .rackId(clientRackId);
-
-            if (log.isDebugEnabled()) {
-                log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
-            }
-            RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
+            final RequestFuture<ClientResponse> future = sendFetchRequestToNode(data, fetchTarget);
             // We add the node to the set of nodes with pending fetch requests before adding the
             // listener because the future may have been fulfilled on another thread (e.g. during a
             // disconnection being handled by the heartbeat thread) which will mean the listener
@@ -346,6 +329,7 @@ public class Fetcher<K, V> implements Closeable {
                             FetchSessionHandler handler = sessionHandler(fetchTarget.id());
                             if (handler != null) {
                                 handler.handleError(e);
+                                handler.sessionTopicPartitions().forEach(subscriptions::clearPreferredReadReplica);
                             }
                         } finally {
                             nodesWithPendingFetchRequests.remove(fetchTarget.id());
@@ -444,6 +428,33 @@ public class Fetcher<K, V> implements Closeable {
             return RequestFuture.noBrokersAvailable();
         else
             return client.send(node, request);
+    }
+
+    /**
+     * Send Fetch Request to Kafka cluster asynchronously.
+     *
+     * This method is visible for testing.
+     *
+     * @return A future that indicates result of sent Fetch request
+     */
+    private RequestFuture<ClientResponse> sendFetchRequestToNode(final FetchSessionHandler.FetchRequestData requestData,
+                                                                 final Node fetchTarget) {
+        // Version 12 is the maximum version that could be used without topic IDs. See FetchRequest.json for schema
+        // changelog.
+        final short maxVersion = requestData.canUseTopicIds() ? ApiKeys.FETCH.latestVersion() : (short) 12;
+
+        final FetchRequest.Builder request = FetchRequest.Builder
+                .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, requestData.toSend())
+                .isolationLevel(isolationLevel)
+                .setMaxBytes(this.maxBytes)
+                .metadata(requestData.metadata())
+                .removed(requestData.toForget())
+                .replaced(requestData.toReplace())
+                .rackId(clientRackId);
+
+        log.debug("Sending {} {} to broker {}", isolationLevel, requestData, fetchTarget);
+
+        return client.send(fetchTarget, request);
     }
 
     private Long offsetResetStrategyTimestamp(final TopicPartition partition) {
@@ -1154,7 +1165,9 @@ public class Fetcher<K, V> implements Closeable {
             } else {
                 log.trace("Not fetching from {} for partition {} since it is marked offline or is missing from our metadata," +
                           " using the leader instead.", nodeId, partition);
-                subscriptions.clearPreferredReadReplica(partition);
+                // Note that this condition may happen due to stale metadata, so we clear preferred replica and
+                // refresh metadata.
+                requestMetadataUpdate(partition);
                 return leaderReplica;
             }
         } else {
@@ -1201,7 +1214,7 @@ public class Fetcher<K, V> implements Closeable {
                 continue;
             }
 
-            // Use the preferred read replica if set, otherwise the position's leader
+            // Use the preferred read replica if set, otherwise the partition's leader
             Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
             if (client.isUnavailable(node)) {
                 client.maybeThrowAuthFailure(node);
@@ -1335,16 +1348,16 @@ public class Fetcher<K, V> implements Closeable {
                        error == Errors.FENCED_LEADER_EPOCH ||
                        error == Errors.OFFSET_NOT_AVAILABLE) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
-                this.metadata.requestUpdate();
+                requestMetadataUpdate(tp);
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
-                this.metadata.requestUpdate();
+                requestMetadataUpdate(tp);
             } else if (error == Errors.UNKNOWN_TOPIC_ID) {
                 log.warn("Received unknown topic ID error in fetch for partition {}", tp);
-                this.metadata.requestUpdate();
+                requestMetadataUpdate(tp);
             } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
                 log.warn("Received inconsistent topic ID error in fetch for partition {}", tp);
-                this.metadata.requestUpdate();
+                requestMetadataUpdate(tp);
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
                 Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);
                 if (!clearedReplicaId.isPresent()) {
@@ -1866,12 +1879,11 @@ public class Fetcher<K, V> implements Closeable {
                 for (TopicPartition tp : newAssignedPartitions) {
                     if (!this.assignedPartitions.contains(tp)) {
                         MetricName metricName = partitionPreferredReadReplicaMetricName(tp);
-                        if (metrics.metric(metricName) == null) {
-                            metrics.addMetric(
-                                metricName,
-                                (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
-                            );
-                        }
+                        metrics.addMetricIfAbsent(
+                            metricName,
+                            null,
+                            (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
+                        );
                     }
                 }
 
@@ -1934,15 +1946,86 @@ public class Fetcher<K, V> implements Closeable {
         }
     }
 
+    // Visible for testing
+    void maybeCloseFetchSessions(final Timer timer) {
+        final Cluster cluster = metadata.fetch();
+        final List<RequestFuture<ClientResponse>> requestFutures = new ArrayList<>();
+        sessionHandlers.forEach((fetchTargetNodeId, sessionHandler) -> {
+            // set the session handler to notify close. This will set the next metadata request to send close message.
+            sessionHandler.notifyClose();
+
+            final int sessionId = sessionHandler.sessionId();
+            // FetchTargetNode may not be available as it may have disconnected the connection. In such cases, we will
+            // skip sending the close request.
+            final Node fetchTarget = cluster.nodeById(fetchTargetNodeId);
+            if (fetchTarget == null || client.isUnavailable(fetchTarget)) {
+                log.debug("Skip sending close session request to broker {} since it is not reachable", fetchTarget);
+                return;
+            }
+
+            final RequestFuture<ClientResponse> responseFuture = sendFetchRequestToNode(sessionHandler.newBuilder().build(), fetchTarget);
+            responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
+                @Override
+                public void onSuccess(ClientResponse value) {
+                    log.debug("Successfully sent a close message for fetch session: {} to node: {}", sessionId, fetchTarget);
+                }
+
+                @Override
+                public void onFailure(RuntimeException e) {
+                    log.debug("Unable to a close message for fetch session: {} to node: {}. " +
+                        "This may result in unnecessary fetch sessions at the broker.", sessionId, fetchTarget, e);
+                }
+            });
+
+            requestFutures.add(responseFuture);
+        });
+
+        // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
+        // all requests have received a response.
+        while (timer.notExpired() && !requestFutures.stream().allMatch(RequestFuture::isDone)) {
+            client.poll(timer, null, true);
+        }
+
+        if (!requestFutures.stream().allMatch(RequestFuture::isDone)) {
+            // we ran out of time before completing all futures. It is ok since we don't want to block the shutdown
+            // here.
+            log.debug("All requests couldn't be sent in the specific timeout period {}ms. " +
+                "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
+                "KafkaConsumer.close(Duration timeout)", timer.timeoutMs());
+        }
+    }
+
+    public void close(final Timer timer) {
+        if (!isClosed.compareAndSet(false, true)) {
+            log.info("Fetcher {} is already closed.", this);
+            return;
+        }
+
+        // Shared states (e.g. sessionHandlers) could be accessed by multiple threads (such as heartbeat thread), hence,
+        // it is necessary to acquire a lock on the fetcher instance before modifying the states.
+        synchronized (Fetcher.this) {
+            // we do not need to re-enable wakeups since we are closing already
+            client.disableWakeups();
+            if (nextInLineFetch != null)
+                nextInLineFetch.drain();
+            maybeCloseFetchSessions(timer);
+            Utils.closeQuietly(decompressionBufferSupplier, "decompressionBufferSupplier");
+            sessionHandlers.clear();
+        }
+    }
+
     @Override
     public void close() {
-        if (nextInLineFetch != null)
-            nextInLineFetch.drain();
-        decompressionBufferSupplier.close();
+        close(time.timer(0));
     }
 
     private Set<String> topicsForPartitions(Collection<TopicPartition> partitions) {
         return partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+    }
+
+    private void requestMetadataUpdate(TopicPartition topicPartition) {
+        this.metadata.requestUpdate();
+        this.subscriptions.clearPreferredReadReplica(topicPartition);
     }
 
 }

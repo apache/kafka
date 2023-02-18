@@ -26,6 +26,7 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
@@ -55,11 +56,11 @@ import java.util.Map;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 
 /**
- * Implementation of Converter that uses JSON to store schemas and objects. By default this converter will serialize Connect keys, values,
- * and headers with schemas, although this can be disabled with {@link JsonConverterConfig#SCHEMAS_ENABLE_CONFIG schemas.enable}
- * configuration option.
- *
- * This implementation currently does nothing with the topic names or header names.
+ * Implementation of {@link Converter} and {@link HeaderConverter} that uses JSON to store schemas and objects. By
+ * default this converter will serialize Connect keys, values, and headers with schemas, although this can be disabled with
+ * the {@link JsonConverterConfig#SCHEMAS_ENABLE_CONFIG schemas.enable} configuration option.
+ * <p>
+ * This implementation currently does nothing with the topic names or header keys.
  */
 public class JsonConverter implements Converter, HeaderConverter {
 
@@ -282,7 +283,8 @@ public class JsonConverter implements Converter, HeaderConverter {
 
     @Override
     public void close() {
-        // do nothing
+        Utils.closeQuietly(this.serializer, "JSON converter serializer");
+        Utils.closeQuietly(this.deserializer, "JSON converter deserializer");
     }
 
     @Override
@@ -540,8 +542,8 @@ public class JsonConverter implements Converter, HeaderConverter {
 
 
     /**
-     * Convert this object, in org.apache.kafka.connect.data format, into a JSON object with an envelope object
-     * containing schema and payload fields.
+     * Convert this object, in the {@link org.apache.kafka.connect.data} format, into a JSON object with an envelope
+     * object containing schema and payload fields.
      * @param schema the schema for the data
      * @param value the value
      * @return JsonNode-encoded version
@@ -555,8 +557,8 @@ public class JsonConverter implements Converter, HeaderConverter {
     }
 
     /**
-     * Convert this object, in the org.apache.kafka.connect.data format, into a JSON object, returning both the schema
-     * and the converted object.
+     * Convert this object, in the {@link org.apache.kafka.connect.data} format, into a JSON object, returning both the
+     * schema and the converted object.
      */
     private JsonNode convertToJson(Schema schema, Object value) {
         if (value == null) {

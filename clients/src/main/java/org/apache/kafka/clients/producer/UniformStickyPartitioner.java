@@ -23,6 +23,10 @@ import org.apache.kafka.common.Cluster;
 
 
 /**
+ * @deprecated Since 3.3.0, in order to use default partitioning logic
+ * remove the {@code partitioner.class} configuration setting and set {@code partitioner.ignore.keys=true}.
+ * See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-794%3A+Strictly+Uniform+Sticky+Partitioner">KIP-794</a> for more info.
+ *
  * The partitioning strategy:
  * <ul>
  * <li>If a partition is specified in the record, use it
@@ -31,8 +35,9 @@ import org.apache.kafka.common.Cluster;
  * NOTE: In contrast to the DefaultPartitioner, the record key is NOT used as part of the partitioning strategy in this
  *       partitioner. Records with the same key are not guaranteed to be sent to the same partition.
  * 
- * See KIP-480 for details about sticky partitioning.
+ * See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-480%3A+Sticky+Partitioner">KIP-480</a> for details about sticky partitioning.
  */
+@Deprecated
 public class UniformStickyPartitioner implements Partitioner {
 
     private final StickyPartitionCache stickyPartitionCache = new StickyPartitionCache();
@@ -59,6 +64,7 @@ public class UniformStickyPartitioner implements Partitioner {
      * If a batch completed for the current sticky partition, change the sticky partition. 
      * Alternately, if no sticky partition has been determined, set one.
      */
+    @SuppressWarnings("deprecation")
     public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
         stickyPartitionCache.nextPartition(topic, cluster, prevPartition);
     }

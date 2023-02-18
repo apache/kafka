@@ -76,8 +76,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static java.util.Map.Entry.comparingByKey;
 import static java.util.UUID.randomUUID;
-
 import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsFuture;
@@ -421,7 +421,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             if (minReceivedMetadataVersion >= 2) {
                 populatePartitionsByHostMaps(partitionsByHost, standbyPartitionsByHost, partitionsForTask, clientMetadataMap);
             }
-            streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fullMetadata);
 
             // ---------------- Step Four ---------------- //
 
@@ -619,10 +618,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean lagComputationSuccessful =
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogTopics);
 
-        log.info("All members participating in this rebalance: \n{}.",
-                 clientStates.entrySet().stream()
-                     .map(entry -> entry.getKey() + ": " + entry.getValue().consumers())
-                     .collect(Collectors.joining(Utils.NL)));
+        log.info("{} members participating in this rebalance: \n{}.",
+                clientStates.size(),
+                clientStates.entrySet().stream()
+                        .sorted(comparingByKey())
+                        .map(entry -> entry.getKey() + ": " + entry.getValue().consumers())
+                        .collect(Collectors.joining(Utils.NL)));
 
         final Set<TaskId> allTasks = partitionsForTask.keySet();
         statefulTasks.addAll(changelogTopics.statefulTaskIds());
@@ -637,8 +638,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                    statefulTasks,
                                                                    assignmentConfigs);
 
-        log.info("Assigned tasks {} including stateful {} to clients as: \n{}.",
-                allTasks, statefulTasks, clientStates.entrySet().stream()
+        log.info("{} assigned tasks {} including stateful {} to {} clients as: \n{}.",
+                allTasks.size(),
+                allTasks,
+                statefulTasks,
+                clientStates.size(),
+                clientStates.entrySet().stream()
+                        .sorted(comparingByKey())
                         .map(entry -> entry.getKey() + "=" + entry.getValue().currentAssignment())
                         .collect(Collectors.joining(Utils.NL)));
 
@@ -956,8 +962,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.info("Requesting followup rebalance be scheduled by {} for {} ms to probe for caught-up replica tasks.",
-                        consumer, nextRebalanceTimeMs);
+                log.info("Requesting followup rebalance be scheduled by {} for {} to probe for caught-up replica tasks.",
+                        consumer, Utils.toLogDateTimeFormat(nextRebalanceTimeMs));
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalance = false;
             }
@@ -1355,7 +1361,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             log.info("Requested to schedule immediate rebalance for new tasks to be safely revoked from current owner.");
             nextScheduledRebalanceMs.set(0L);
         } else if (encodedNextScheduledRebalanceMs < Long.MAX_VALUE) {
-            log.info("Requested to schedule probing rebalance for {} ms.", encodedNextScheduledRebalanceMs);
+            log.info(
+                "Requested to schedule next probing rebalance at {} to try for a more balanced assignment.",
+                Utils.toLogDateTimeFormat(encodedNextScheduledRebalanceMs)
+            );
             nextScheduledRebalanceMs.set(encodedNextScheduledRebalanceMs);
         } else {
             log.info("No followup rebalance was requested, resetting the rebalance schedule.");

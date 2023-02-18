@@ -19,29 +19,44 @@ package kafka.controller
 
 import java.util.Properties
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingQueue, TimeUnit}
-
+import java.util.stream.{Stream => JStream}
 import com.yammer.metrics.core.Timer
-import kafka.api.{ApiVersion, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
-import kafka.controller.KafkaController.AlterPartitionCallback
+import kafka.api.LeaderAndIsr
 import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk.{FeatureZNodeStatus, _}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
-import org.apache.kafka.common.feature.Features
+import org.apache.kafka.common.message.{AlterPartitionRequestData, AlterPartitionResponseData}
 import org.apache.kafka.common.metrics.KafkaMetric
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_6_IV0, IBP_2_7_IV0, IBP_3_2_IV0}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
 
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
+
+object ControllerIntegrationTest {
+  def testAlterPartitionSource(): JStream[Arguments] = {
+    Seq(MetadataVersion.IBP_2_7_IV0, MetadataVersion.latest).asJava.stream.flatMap { metadataVersion =>
+      ApiKeys.ALTER_PARTITION.allVersions.stream.map { alterPartitionVersion =>
+        Arguments.of(metadataVersion, alterPartitionVersion)
+      }
+    }
+  }
+}
 
 class ControllerIntegrationTest extends QuorumTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -125,7 +140,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     // Need to make sure the broker we shutdown and startup are not the controller. Otherwise we will send out
-    // full UpdateMetadataReuqest to all brokers during controller failover.
+    // full UpdateMetadataRequest to all brokers during controller failover.
     val testBroker = servers.filter(e => e.config.brokerId != controllerId).head
     val remainingBrokers = servers.filter(_.config.brokerId != testBroker.config.brokerId)
     val topic = "topic1"
@@ -257,7 +272,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(0))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
   }
 
@@ -271,7 +286,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(otherBrokerId, controllerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers.take(1))
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
   }
 
@@ -286,7 +301,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       tp1 -> ReplicaAssignment(Seq(0), Seq(), Seq()))
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
     zkClient.setTopicAssignment(tp0.topic, Some(Uuid.randomUuid()), expandedAssignment, firstControllerEpochZkVersion)
-    waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitForPartitionMetadata(servers, tp1.topic, tp1.partition)
   }
@@ -306,7 +321,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
     zkClient.setTopicAssignment(tp0.topic, Some(Uuid.randomUuid()), expandedAssignment, firstControllerEpochZkVersion)
-    waitForPartitionState(tp1, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp1, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitForPartitionMetadata(Seq(servers(controllerId)), tp1.topic, tp1.partition)
   }
@@ -325,7 +340,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val reassignment = Map(tp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
-    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 3,
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch + 3,
       "failed to get expected partition state after partition reassignment")
     TestUtils.waitUntilTrue(() =>  zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
@@ -364,7 +379,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val reassignment = Map(tp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
-    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 3,
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch + 3,
       "with an offline log directory on the target broker, the partition reassignment stalls")
     TestUtils.waitUntilTrue(() =>  zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
@@ -389,7 +404,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     servers(otherBrokerId).awaitShutdown()
     val controller = getController()
     zkClient.setOrCreatePartitionReassignment(reassignment, controller.kafkaController.controllerContext.epochZkVersion)
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch + 1,
       "failed to get expected partition state during partition reassignment with offline replica")
     TestUtils.waitUntilTrue(() => zkClient.reassignPartitionsInProgress,
       "partition reassignment path should remain while reassignment in progress")
@@ -407,10 +422,10 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
     zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch + 1,
       "failed to get expected partition state during partition reassignment with offline replica")
     servers(otherBrokerId).startup()
-    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 4,
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch + 4,
       "failed to get expected partition state after partition reassignment")
     TestUtils.waitUntilTrue(() => zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
@@ -426,7 +441,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(otherBroker.config.brokerId, controllerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    preferredReplicaLeaderElection(controllerId, otherBroker, tp, assignment(tp.partition).toSet, LeaderAndIsr.initialLeaderEpoch)
+    preferredReplicaLeaderElection(controllerId, otherBroker, tp, assignment(tp.partition).toSet, LeaderAndIsr.InitialLeaderEpoch)
   }
 
   @Test
@@ -437,8 +452,8 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(otherBroker.config.brokerId, controllerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    preferredReplicaLeaderElection(controllerId, otherBroker, tp, assignment(tp.partition).toSet, LeaderAndIsr.initialLeaderEpoch)
-    preferredReplicaLeaderElection(controllerId, otherBroker, tp, assignment(tp.partition).toSet, LeaderAndIsr.initialLeaderEpoch + 2)
+    preferredReplicaLeaderElection(controllerId, otherBroker, tp, assignment(tp.partition).toSet, LeaderAndIsr.InitialLeaderEpoch)
+    preferredReplicaLeaderElection(controllerId, otherBroker, tp, assignment(tp.partition).toSet, LeaderAndIsr.InitialLeaderEpoch + 2)
   }
 
   @Test
@@ -454,7 +469,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     zkClient.createPreferredReplicaElection(Set(tp))
     TestUtils.waitUntilTrue(() => !zkClient.pathExists(PreferredReplicaElectionZNode.path),
       "failed to remove preferred replica leader election path after giving up")
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch + 1,
       "failed to get expected partition state upon broker shutdown")
   }
 
@@ -468,11 +483,92 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch + 1,
       "failed to get expected partition state upon broker shutdown")
     servers(otherBrokerId).startup()
-    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 2,
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch + 2,
       "failed to get expected partition state upon broker startup")
+  }
+
+  @Test
+  def testAutoPreferredReplicaLeaderElectionWithOtherReassigningPartitions(): Unit = {
+    servers = makeServers(3, autoLeaderRebalanceEnable = true)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val leaderBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
+    val otherBrokerId = servers.map(_.config.brokerId).filter(e => e != controllerId && e != leaderBrokerId).head
+
+    // Partition tp: [leaderBrokerId, controllerId]
+    // Partition reassigningTp: [controllerId]
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(leaderBrokerId, controllerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    val reassigningTp = new TopicPartition("reassigning", 0)
+    val reassigningTpAssignment = Map(reassigningTp.partition -> Seq(controllerId))
+    TestUtils.createTopic(zkClient, reassigningTp.topic, partitionReplicaAssignment = reassigningTpAssignment, servers = servers)
+
+    // Shutdown broker leaderBrokerId so that broker controllerId will be elected as leader for partition tp
+    servers(leaderBrokerId).shutdown()
+    servers(leaderBrokerId).awaitShutdown()
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch + 1,
+      "failed to get expected partition state upon broker shutdown")
+
+    // Shutdown broker otherBrokerId and reassign partition reassigningTp from [controllerId] to [otherBrokerId]
+    // to create a stuck reassignment.
+    servers(otherBrokerId).shutdown()
+    servers(otherBrokerId).awaitShutdown()
+    val reassignment = Map(reassigningTp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
+    zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
+    waitForPartitionState(reassigningTp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch + 1,
+      "failed to get expected partition state during partition reassignment with offline replica")
+
+    // Start broker leaderBrokerId and make sure it is elected as leader (preferred) of partition tp automatically
+    // even though there is some other ongoing reassignment.
+    servers(leaderBrokerId).startup()
+    waitForPartitionState(tp, firstControllerEpoch, leaderBrokerId, LeaderAndIsr.InitialLeaderEpoch + 2,
+      "failed to get expected partition state upon leader broker startup")
+
+    // Start broker otherBrokerId and make sure the reassignment which was stuck can be fulfilled.
+    servers(otherBrokerId).startup()
+    waitForPartitionState(reassigningTp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch + 4,
+      "failed to get expected partition state upon other broker startup")
+    TestUtils.waitUntilTrue(() => zkClient.getFullReplicaAssignmentForTopics(Set(reassigningTp.topic)) == reassignment,
+      "failed to get updated partition assignment on topic znode after partition reassignment")
+    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
+      "failed to remove reassign partitions path after completion")
+  }
+
+  @Test
+  def testAutoPreferredReplicaLeaderElectionWithSamePartitionBeingReassigned(): Unit = {
+    servers = makeServers(3, autoLeaderRebalanceEnable = true)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val leaderBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
+    val otherBrokerId = servers.map(_.config.brokerId).filter(e => e != controllerId && e != leaderBrokerId).head
+
+    // Partition tp: [controllerId, leaderBrokerId]
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId, leaderBrokerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+
+    // Shutdown broker otherBrokerId and reassign partition tp from [controllerId, leaderBrokerId] to [leaderBrokerId, controllerId, otherBrokerId]
+    // to create a stuck reassignment.
+    servers(otherBrokerId).shutdown()
+    servers(otherBrokerId).awaitShutdown()
+    val reassignment = Map(tp -> ReplicaAssignment(Seq(leaderBrokerId, controllerId, otherBrokerId), List(), List()))
+    zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
+
+    //Make sure broker leaderBrokerId is elected as leader (preferred) of partition tp automatically
+    // even though the reassignment is still ongoing.
+    waitForPartitionState(tp, firstControllerEpoch, leaderBrokerId, LeaderAndIsr.InitialLeaderEpoch + 2,
+      "failed to get expected partition state after auto preferred replica leader election")
+
+    // Start broker otherBrokerId and make sure the reassignment which was stuck can be fulfilled.
+    servers(otherBrokerId).startup()
+    waitForPartitionState(tp, firstControllerEpoch, leaderBrokerId, LeaderAndIsr.InitialLeaderEpoch + 3,
+      "failed to get expected partition state upon broker startup")
+    TestUtils.waitUntilTrue(() => zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
+      "failed to get updated partition assignment on topic znode after partition reassignment")
+    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
+      "failed to remove reassign partitions path after completion")
   }
 
   @Test
@@ -483,14 +579,14 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(otherBrokerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
     TestUtils.waitUntilTrue(() => {
       val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
       leaderIsrAndControllerEpochMap.contains(tp) &&
-        isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), firstControllerEpoch, LeaderAndIsr.NoLeader, LeaderAndIsr.initialLeaderEpoch + 1) &&
+        isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), firstControllerEpoch, LeaderAndIsr.NoLeader, LeaderAndIsr.InitialLeaderEpoch + 1) &&
         leaderIsrAndControllerEpochMap(tp).leaderAndIsr.isr == List(otherBrokerId)
     }, "failed to get expected partition state after entire isr went offline")
   }
@@ -503,14 +599,14 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(otherBrokerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
     TestUtils.waitUntilTrue(() => {
       val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
       leaderIsrAndControllerEpochMap.contains(tp) &&
-        isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), firstControllerEpoch, LeaderAndIsr.NoLeader, LeaderAndIsr.initialLeaderEpoch + 1) &&
+        isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), firstControllerEpoch, LeaderAndIsr.NoLeader, LeaderAndIsr.InitialLeaderEpoch + 1) &&
         leaderIsrAndControllerEpochMap(tp).leaderAndIsr.isr == List(otherBrokerId)
     }, "failed to get expected partition state after entire isr went offline")
   }
@@ -526,7 +622,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     // create the topic
     TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
 
-    val controllerId = zkClient.getControllerId.get
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
     val resultQueue = new LinkedBlockingQueue[Try[collection.Set[TopicPartition]]]()
     val controlledShutdownCallback = (controlledShutdownResult: Try[collection.Set[TopicPartition]]) => resultQueue.put(controlledShutdownResult)
@@ -630,32 +726,32 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithNonExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Option.empty, KAFKA_2_7_IV0)
+    testControllerFeatureZNodeSetup(Option.empty, IBP_2_7_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithDisabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), KAFKA_2_7_IV0)
+    testControllerFeatureZNodeSetup(Some(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Disabled, Map.empty[String, Short])), IBP_2_7_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithEnabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), KAFKA_2_7_IV0)
+    testControllerFeatureZNodeSetup(Some(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Enabled, Map.empty[String, Short])), IBP_2_7_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithNonExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Option.empty, KAFKA_2_6_IV0)
+    testControllerFeatureZNodeSetup(Option.empty, IBP_2_6_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithDisabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), KAFKA_2_6_IV0)
+    testControllerFeatureZNodeSetup(Some(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Disabled, Map.empty[String, Short])), IBP_2_6_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithEnabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), KAFKA_2_6_IV0)
+    testControllerFeatureZNodeSetup(Some(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Enabled, Map.empty[String, Short])), IBP_2_6_IV0)
   }
 
   @Test
@@ -669,7 +765,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val assignment = Map(tp.partition -> Seq(0, 1))
 
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
 
     // Wait until the event thread is idle
@@ -782,7 +878,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   }
 
   private def testControllerFeatureZNodeSetup(initialZNode: Option[FeatureZNode],
-                                              interBrokerProtocolVersion: ApiVersion): Unit = {
+                                              interBrokerProtocolVersion: MetadataVersion): Unit = {
     val versionBeforeOpt = initialZNode match {
       case Some(node) =>
         zkClient.createFeatureZNode(node)
@@ -809,8 +905,8 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
     val (mayBeFeatureZNodeBytes, versionAfter) = zkClient.getDataAndVersion(FeatureZNode.path)
     val newZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-    if (interBrokerProtocolVersion >= KAFKA_2_7_IV0) {
-      val emptyZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures)
+    if (interBrokerProtocolVersion.isAtLeast(IBP_2_7_IV0)) {
+      val emptyZNode = FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Enabled, Map.empty[String, Short])
       initialZNode match {
         case Some(node) => {
           node.status match {
@@ -824,10 +920,10 @@ class ControllerIntegrationTest extends QuorumTestHarness {
         }
         case None =>
           assertEquals(0, versionAfter)
-          assertEquals(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures), newZNode)
+          assertEquals(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Enabled, Map.empty[String, Short]), newZNode)
       }
     } else {
-      val emptyZNode = new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures)
+      val emptyZNode = FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Disabled, Map.empty[String, Short])
       initialZNode match {
         case Some(node) => {
           node.status match {
@@ -841,13 +937,132 @@ class ControllerIntegrationTest extends QuorumTestHarness {
         }
         case None =>
           assertEquals(0, versionAfter)
-          assertEquals(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures), newZNode)
+          assertEquals(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Disabled, Map.empty[String, Short]), newZNode)
       }
     }
   }
 
+  @ParameterizedTest
+  @MethodSource(Array("testAlterPartitionSource"))
+  def testAlterPartition(metadataVersion: MetadataVersion, alterPartitionVersion: Short): Unit = {
+    if (!metadataVersion.isTopicIdsSupported && alterPartitionVersion > 1) {
+      // This combination is not valid. We cannot use alter partition version > 1
+      // if the broker is on an IBP < 2.8 because topics don't have id in this case.
+      return
+    }
+
+    servers = makeServers(1, interBrokerProtocolVersion = Some(metadataVersion))
+
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+
+    val controller = getController().kafkaController
+    val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
+    val newLeaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
+    val topicId = controller.controllerContext.topicIds.getOrElse(tp.topic, Uuid.ZERO_UUID)
+    val brokerId = controllerId
+    val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(controllerId)
+
+    // The caller of the AlterPartition API can only use topics ids iff 1) the controller is
+    // on IBP >= 2.8 and 2) the AlterPartition version 2 and above is used.
+    val canCallerUseTopicIds = metadataVersion.isTopicIdsSupported && alterPartitionVersion > 1
+
+    val alterPartitionRequest = new AlterPartitionRequestData()
+      .setBrokerId(brokerId)
+      .setBrokerEpoch(brokerEpoch)
+      .setTopics(Seq(new AlterPartitionRequestData.TopicData()
+        .setTopicName(if (!canCallerUseTopicIds) tp.topic else "")
+        .setTopicId(if (canCallerUseTopicIds) topicId else Uuid.ZERO_UUID)
+        .setPartitions(Seq(new AlterPartitionRequestData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
+          .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
+          .setNewIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
+          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
+        ).asJava)
+      ).asJava)
+
+    val future = alterPartitionFuture(alterPartitionRequest, alterPartitionVersion)
+
+    val expectedAlterPartitionResponse = new AlterPartitionResponseData()
+      .setTopics(Seq(new AlterPartitionResponseData.TopicData()
+        .setTopicName(if (!canCallerUseTopicIds) tp.topic else "")
+        .setTopicId(if (canCallerUseTopicIds) topicId else Uuid.ZERO_UUID)
+        .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setLeaderId(brokerId)
+          .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
+          .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
+          .setIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
+          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
+        ).asJava)
+      ).asJava)
+
+    assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
+  }
+
   @Test
-  def testIdempotentAlterIsr(): Unit = {
+  def testAlterPartitionVersion2KeepWorkingWhenControllerDowngradeToPre28IBP(): Unit = {
+    // When the controller downgrades from IBP >= 2.8 to IBP < 2.8, it does not assign
+    // topic ids anymore. However, the already assigned topic ids are kept. This means
+    // that using AlterPartition version 2 should still work assuming that it only
+    // contains topic with topics ids.
+    servers = makeServers(1, interBrokerProtocolVersion = Some(MetadataVersion.latest))
+
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+
+    // Downgrade controller to IBP 2.7
+    servers(0).shutdown()
+    servers(0).awaitShutdown()
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
+    TestUtils.waitUntilControllerElected(zkClient)
+
+    val controller = getController().kafkaController
+    val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
+    val newLeaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
+    val topicId = controller.controllerContext.topicIds.getOrElse(tp.topic, Uuid.ZERO_UUID)
+    val brokerId = controllerId
+    val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(controllerId)
+
+    val alterPartitionRequest = new AlterPartitionRequestData()
+      .setBrokerId(brokerId)
+      .setBrokerEpoch(brokerEpoch)
+      .setTopics(Seq(new AlterPartitionRequestData.TopicData()
+        .setTopicId(topicId)
+        .setPartitions(Seq(new AlterPartitionRequestData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
+          .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
+          .setNewIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
+          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
+        ).asJava)
+      ).asJava)
+
+    val future = alterPartitionFuture(alterPartitionRequest, ApiKeys.ALTER_PARTITION.latestVersion)
+
+    val expectedAlterPartitionResponse = new AlterPartitionResponseData()
+      .setTopics(Seq(new AlterPartitionResponseData.TopicData()
+        .setTopicId(topicId)
+        .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setLeaderId(brokerId)
+          .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
+          .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
+          .setIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
+          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
+        ).asJava)
+      ).asJava)
+
+    assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
+  }
+
+  @Test
+  def testIdempotentAlterPartition(): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBroker = servers.find(_.config.brokerId != controllerId).get
@@ -855,33 +1070,126 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val assignment = Map(tp.partition -> Seq(otherBroker.config.brokerId, controllerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
 
-    val latch = new CountDownLatch(1)
     val controller = getController().kafkaController
-
     val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
-    val newLeaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
+    val oldLeaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
+    val newIsr = List(oldLeaderAndIsr.leader)
+    val newPartitionEpoch = oldLeaderAndIsr.partitionEpoch + 1
+    val topicId = controller.controllerContext.topicIds(tp.topic)
+    val brokerId = otherBroker.config.brokerId
+    val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(otherBroker.config.brokerId)
 
-    val callback = (result: Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors]) => {
-      result match {
-        case Left(partitionResults: Map[TopicPartition, Either[Errors, LeaderAndIsr]]) =>
-          partitionResults.get(tp) match {
-            case Some(Left(error: Errors)) => throw new AssertionError(s"Should not have seen error for $tp")
-            case Some(Right(leaderAndIsr: LeaderAndIsr)) => assertEquals(leaderAndIsr, newLeaderAndIsr, "ISR should remain unchanged")
-            case None => throw new AssertionError(s"Should have seen $tp in result")
-          }
-        case Right(_: Errors) => throw new AssertionError("Should not have had top-level error here")
-      }
-      latch.countDown()
+    def sendAndVerifyAlterPartitionResponse(requestPartitionEpoch: Int): Unit = {
+      val alterPartitionRequest = new AlterPartitionRequestData()
+        .setBrokerId(brokerId)
+        .setBrokerEpoch(brokerEpoch)
+        .setTopics(Seq(new AlterPartitionRequestData.TopicData()
+          .setTopicId(topicId)
+          .setPartitions(Seq(new AlterPartitionRequestData.PartitionData()
+            .setPartitionIndex(tp.partition)
+            .setLeaderEpoch(oldLeaderAndIsr.leaderEpoch)
+            .setPartitionEpoch(requestPartitionEpoch)
+            .setNewIsr(newIsr.map(Int.box).asJava)
+            .setLeaderRecoveryState(oldLeaderAndIsr.leaderRecoveryState.value)
+          ).asJava)
+        ).asJava)
+
+    val future = alterPartitionFuture(alterPartitionRequest, AlterPartitionRequestData.HIGHEST_SUPPORTED_VERSION)
+
+      // When re-sending an ISR update, we should not get and error or any ISR changes
+      val expectedAlterPartitionResponse = new AlterPartitionResponseData()
+        .setTopics(Seq(new AlterPartitionResponseData.TopicData()
+          .setTopicId(topicId)
+          .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
+            .setPartitionIndex(tp.partition)
+            .setLeaderId(brokerId)
+            .setLeaderEpoch(oldLeaderAndIsr.leaderEpoch)
+            .setPartitionEpoch(newPartitionEpoch)
+            .setIsr(newIsr.map(Int.box).asJava)
+            .setLeaderRecoveryState(oldLeaderAndIsr.leaderRecoveryState.value)
+          ).asJava)
+        ).asJava)
+      assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
     }
 
-    val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs.get(otherBroker.config.brokerId).get
-    // When re-sending the current ISR, we should not get and error or any ISR changes
-    controller.eventManager.put(AlterPartitionReceived(otherBroker.config.brokerId, brokerEpoch, Map(tp -> newLeaderAndIsr), callback))
-    latch.await()
+    // send a request, expect the partition epoch to be incremented
+    sendAndVerifyAlterPartitionResponse(oldLeaderAndIsr.partitionEpoch)
+
+    // re-send the same request with various partition epochs (less/equal/greater than the current
+    // epoch), expect it to succeed while the partition epoch remains the same
+    sendAndVerifyAlterPartitionResponse(oldLeaderAndIsr.partitionEpoch)
+    sendAndVerifyAlterPartitionResponse(newPartitionEpoch)
+  }
+
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
+  def testShutdownBrokerNotAddedToIsr(alterPartitionVersion: Short): Unit = {
+    servers = makeServers(2)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val otherBroker = servers.find(_.config.brokerId != controllerId).get
+    val brokerId = otherBroker.config.brokerId
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId, brokerId))
+    val fullIsr = List(controllerId, brokerId)
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+
+    // Shut down follower.
+    servers(brokerId).shutdown()
+    servers(brokerId).awaitShutdown()
+
+    val controller = getController().kafkaController
+    val leaderIsrAndControllerEpochMap = controller.controllerContext.partitionsLeadershipInfo
+    val leaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
+    val topicId = controller.controllerContext.topicIds(tp.topic)
+    val controllerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(controllerId)
+
+    // We expect only the controller (online broker) to be in ISR
+    assertEquals(List(controllerId), leaderAndIsr.isr)
+
+    val requestTopic = new AlterPartitionRequestData.TopicData()
+      .setPartitions(Seq(new AlterPartitionRequestData.PartitionData()
+        .setPartitionIndex(tp.partition)
+        .setLeaderEpoch(leaderAndIsr.leaderEpoch)
+        .setPartitionEpoch(leaderAndIsr.partitionEpoch)
+        .setNewIsr(fullIsr.map(Int.box).asJava)
+        .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)).asJava)
+    if (alterPartitionVersion > 1) requestTopic.setTopicId(topicId) else requestTopic.setTopicName(tp.topic)
+
+    // Try to update ISR to contain the offline broker.
+    val alterPartitionRequest = new AlterPartitionRequestData()
+      .setBrokerId(controllerId)
+      .setBrokerEpoch(controllerEpoch)
+      .setTopics(Seq(requestTopic).asJava)
+
+    val future = alterPartitionFuture(alterPartitionRequest, alterPartitionVersion)
+
+    val expectedError = if (alterPartitionVersion > 1) Errors.INELIGIBLE_REPLICA else Errors.OPERATION_NOT_ATTEMPTED
+    val expectedResponseTopic = new AlterPartitionResponseData.TopicData()
+      .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
+        .setPartitionIndex(tp.partition)
+        .setErrorCode(expectedError.code())
+        .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
+      ).asJava)
+    if (alterPartitionVersion > 1) expectedResponseTopic.setTopicId(topicId) else expectedResponseTopic.setTopicName(tp.topic)
+
+    // We expect an ineligble replica error response for the partition.
+    val expectedAlterPartitionResponse = new AlterPartitionResponseData()
+      .setTopics(Seq(expectedResponseTopic).asJava)
+
+    val newLeaderIsrAndControllerEpochMap = controller.controllerContext.partitionsLeadershipInfo
+    val newLeaderAndIsr = newLeaderIsrAndControllerEpochMap(tp).leaderAndIsr
+    assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
+    assertEquals(List(controllerId), newLeaderAndIsr.isr)
+
+    // Bring replica back online.
+    servers(brokerId).startup()
+
+    // Wait for broker to rejoin ISR.
+    TestUtils.waitUntilTrue(() => fullIsr == zkClient.getTopicPartitionState(tp).get.leaderAndIsr.isr, "Replica did not rejoin ISR.")
   }
 
   @Test
-  def testAlterIsrErrors(): Unit = {
+  def testAlterPartitionErrors(): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val tp = new TopicPartition("t", 0)
@@ -890,66 +1198,310 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     val controller = getController().kafkaController
-    var future = captureAlterIsrError(controllerId, controller.brokerEpoch - 1,
-      Map(tp -> LeaderAndIsr(controllerId, replicas)))
-    var capturedError = future.get(5, TimeUnit.SECONDS)
-    assertEquals(Errors.STALE_BROKER_EPOCH, capturedError)
+    val partitionState = controller.controllerContext.partitionLeadershipInfo(tp).get
+    val leaderId = partitionState.leaderAndIsr.leader
+    val leaderBrokerEpoch = servers(leaderId).kafkaController.brokerEpoch
+    val leaderEpoch = partitionState.leaderAndIsr.leaderEpoch
+    val partitionEpoch = partitionState.leaderAndIsr.partitionEpoch
+    val topicId = controller.controllerContext.topicIds.get(tp.topic)
 
-    future = captureAlterIsrError(99, controller.brokerEpoch,
-      Map(tp -> LeaderAndIsr(controllerId, replicas)))
-    capturedError = future.get(5, TimeUnit.SECONDS)
-    assertEquals(Errors.STALE_BROKER_EPOCH, capturedError)
+    def assertAlterPartition(
+      topLevelError: Errors = Errors.NONE,
+      partitionError: Errors = Errors.NONE,
+      topicPartition: TopicPartition = tp,
+      topicIdOpt: Option[Uuid] = topicId,
+      leaderId: Int = leaderId,
+      brokerEpoch: Long = leaderBrokerEpoch,
+      leaderEpoch: Int = leaderEpoch,
+      partitionEpoch: Int = partitionEpoch,
+      isr: Set[Int] = replicas.toSet,
+      leaderRecoveryState: Byte = LeaderRecoveryState.RECOVERED.value
+    ): Unit = {
+      assertAlterPartitionError(
+        topicPartition = topicPartition,
+        topicIdOpt = topicIdOpt,
+        leaderId = leaderId,
+        brokerEpoch = brokerEpoch,
+        leaderEpoch = leaderEpoch,
+        partitionEpoch = partitionEpoch,
+        isr = isr,
+        leaderRecoveryState = leaderRecoveryState,
+        topLevelError = topLevelError,
+        partitionError = partitionError
+      )
+    }
 
-    val unknownTopicPartition = new TopicPartition("unknown", 99)
-    future = captureAlterIsrPartitionError(controllerId, controller.brokerEpoch,
-      Map(unknownTopicPartition -> LeaderAndIsr(controllerId, replicas)), unknownTopicPartition)
-    capturedError = future.get(5, TimeUnit.SECONDS)
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, capturedError)
+    assertAlterPartition(
+      topLevelError = Errors.STALE_BROKER_EPOCH,
+      brokerEpoch = leaderBrokerEpoch - 1
+    )
 
-    future = captureAlterIsrPartitionError(controllerId, controller.brokerEpoch,
-      Map(tp -> LeaderAndIsr(controllerId, 1, replicas, LeaderRecoveryState.RECOVERED, 99)), tp)
-    capturedError = future.get(5, TimeUnit.SECONDS)
-    assertEquals(Errors.INVALID_UPDATE_VERSION, capturedError)
+    assertAlterPartition(
+      topLevelError = Errors.STALE_BROKER_EPOCH,
+      leaderId = 99,
+    )
 
-    future = captureAlterIsrPartitionError(controllerId, controller.brokerEpoch,
-      Map(tp -> LeaderAndIsr(controllerId, 1, replicas, LeaderRecoveryState.RECOVERING, 1)), tp)
-    capturedError = future.get(5, TimeUnit.SECONDS)
-    assertEquals(Errors.INVALID_REQUEST, capturedError)
+    assertAlterPartition(
+      partitionError = Errors.UNKNOWN_TOPIC_ID,
+      topicIdOpt = Some(Uuid.randomUuid())
+    )
 
-    future = captureAlterIsrPartitionError(controllerId, controller.brokerEpoch,
-      Map(tp -> LeaderAndIsr(controllerId, 1, List(controllerId), LeaderRecoveryState.RECOVERING, 1)), tp)
-    capturedError = future.get(5, TimeUnit.SECONDS)
-    assertEquals(Errors.INVALID_REQUEST, capturedError)
+    assertAlterPartition(
+      partitionError = Errors.UNKNOWN_TOPIC_OR_PARTITION,
+      topicPartition = new TopicPartition("unknown", 0),
+      topicIdOpt = None
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.UNKNOWN_TOPIC_OR_PARTITION,
+      topicPartition = new TopicPartition(tp.topic, 1),
+      topicIdOpt = None
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.INVALID_UPDATE_VERSION,
+      isr = Set(leaderId),
+      partitionEpoch = partitionEpoch - 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.NOT_CONTROLLER,
+      partitionEpoch = partitionEpoch + 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.FENCED_LEADER_EPOCH,
+      leaderEpoch = leaderEpoch - 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.NOT_CONTROLLER,
+      leaderEpoch = leaderEpoch + 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.INVALID_REQUEST,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.INVALID_REQUEST,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value,
+      isr = Set(controllerId)
+    )
+
+    // Version/epoch errors take precedence over other validations since
+    // the leader may be working with outdated state.
+
+    assertAlterPartition(
+      partitionError = Errors.INVALID_UPDATE_VERSION,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value,
+      partitionEpoch = partitionEpoch - 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.NOT_CONTROLLER,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value,
+      partitionEpoch = partitionEpoch + 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.FENCED_LEADER_EPOCH,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value,
+      leaderEpoch = leaderEpoch - 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.NOT_CONTROLLER,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value,
+      leaderEpoch = leaderEpoch + 1
+    )
+
+    // Validate that unexpected exceptions are handled correctly.
+    assertAlterPartition(
+      topLevelError = Errors.UNKNOWN_SERVER_ERROR,
+      leaderRecoveryState = 25, // Invalid recovery state.
+    )
   }
 
-  def captureAlterIsrError(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr]): CompletableFuture[Errors] = {
-    val future = new CompletableFuture[Errors]()
+  @Test
+  def testAlterPartitionErrorsAfterUncleanElection(): Unit = {
+    // - Start 3 brokers with unclean election enabled
+    // - Create a topic with two non-controller replicas: A and B
+    // - Shutdown A to bring ISR to [B]
+    // - Shutdown B to make partition offline
+    // - Restart A to force unclean election with ISR [A]
+    // - Verify AlterPartition handling in this state
+
+    servers = makeServers(numConfigs = 3, uncleanLeaderElectionEnable = true)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val controller = getController().kafkaController
-    val callback: AlterPartitionCallback = {
-      case Left(_: Map[TopicPartition, Either[Errors, LeaderAndIsr]]) =>
-        future.completeExceptionally(new AssertionError(s"Should have seen top-level error"))
-      case Right(error: Errors) =>
-        future.complete(error)
+
+    val tp = new TopicPartition("t", 0)
+    val replicas = servers.map(_.config.nodeId).filter(_ != controllerId).take(2).toList
+    val assignment = Map(tp.partition -> replicas)
+
+    val replica1 :: replica2 :: Nil = replicas
+
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    val topicIdOpt = controller.controllerContext.topicIds.get(tp.topic)
+
+    servers(replica1).shutdown()
+    servers(replica1).awaitShutdown()
+
+    val partitionStateAfterFirstShutdown = controller.controllerContext.partitionLeadershipInfo(tp).get
+    assertEquals(replica2, partitionStateAfterFirstShutdown.leaderAndIsr.leader)
+    assertEquals(Set(replica2), partitionStateAfterFirstShutdown.leaderAndIsr.isr.toSet)
+
+    servers(replica2).shutdown()
+    servers(replica2).awaitShutdown()
+
+    val partitionStateAfterSecondShutdown = controller.controllerContext.partitionLeadershipInfo(tp).get
+    assertEquals(-1, partitionStateAfterSecondShutdown.leaderAndIsr.leader)
+    assertEquals(Set(replica2), partitionStateAfterSecondShutdown.leaderAndIsr.isr.toSet)
+
+    servers(replica1).startup()
+    TestUtils.waitUntilLeaderIsKnown(servers, tp)
+
+    val partitionStateAfterRestart = controller.controllerContext.partitionLeadershipInfo(tp).get
+    assertEquals(replica1, partitionStateAfterRestart.leaderAndIsr.leader)
+    assertEquals(Set(replica1), partitionStateAfterRestart.leaderAndIsr.isr.toSet)
+    assertEquals(LeaderRecoveryState.RECOVERING, partitionStateAfterRestart.leaderAndIsr.leaderRecoveryState)
+
+    val leaderId = replica1
+    val leaderBrokerEpoch = servers(replica1).kafkaController.brokerEpoch
+    val leaderEpoch = partitionStateAfterRestart.leaderAndIsr.leaderEpoch
+    val partitionEpoch = partitionStateAfterRestart.leaderAndIsr.partitionEpoch
+
+    def assertAlterPartition(
+      topLevelError: Errors = Errors.NONE,
+      partitionError: Errors = Errors.NONE,
+      leaderId: Int = leaderId,
+      brokerEpoch: Long = leaderBrokerEpoch,
+      leaderEpoch: Int = leaderEpoch,
+      partitionEpoch: Int = partitionEpoch,
+      leaderRecoveryState: Byte = LeaderRecoveryState.RECOVERED.value
+    ): Unit = {
+      assertAlterPartitionError(
+        topicPartition = tp,
+        topicIdOpt = topicIdOpt,
+        leaderId = leaderId,
+        brokerEpoch = brokerEpoch,
+        leaderEpoch = leaderEpoch,
+        partitionEpoch = partitionEpoch,
+        isr = replicas.toSet,
+        leaderRecoveryState = leaderRecoveryState,
+        topLevelError = topLevelError,
+        partitionError = partitionError
+      )
     }
-    controller.eventManager.put(AlterPartitionReceived(brokerId, brokerEpoch, isrsToAlter, callback))
-    future
+
+    assertAlterPartition(
+      topLevelError = Errors.STALE_BROKER_EPOCH,
+      brokerEpoch = leaderBrokerEpoch - 1
+    )
+
+    assertAlterPartition(
+      topLevelError = Errors.STALE_BROKER_EPOCH,
+      leaderId = 99
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.INVALID_UPDATE_VERSION,
+      partitionEpoch = partitionEpoch - 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.NOT_CONTROLLER,
+      partitionEpoch = partitionEpoch + 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.FENCED_LEADER_EPOCH,
+      leaderEpoch = leaderEpoch - 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.NOT_CONTROLLER,
+      leaderEpoch = leaderEpoch + 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.INVALID_REQUEST,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value
+    )
+
+    // Version/epoch errors take precedence over other validations since
+    // the leader may be working with outdated state.
+
+    assertAlterPartition(
+      partitionError = Errors.INVALID_UPDATE_VERSION,
+      partitionEpoch = partitionEpoch - 1,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.NOT_CONTROLLER,
+      partitionEpoch = partitionEpoch + 1,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.FENCED_LEADER_EPOCH,
+      leaderEpoch = leaderEpoch - 1,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.NOT_CONTROLLER,
+      leaderEpoch = leaderEpoch + 1,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value
+    )
   }
 
-  def captureAlterIsrPartitionError(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr], tp: TopicPartition): CompletableFuture[Errors] = {
-    val future = new CompletableFuture[Errors]()
-    val controller = getController().kafkaController
-    val callback: AlterPartitionCallback = {
-      case Left(partitionResults: Map[TopicPartition, Either[Errors, LeaderAndIsr]]) =>
-        partitionResults.get(tp) match {
-          case Some(Left(error: Errors)) => future.complete(error)
-          case Some(Right(_: LeaderAndIsr)) => future.completeExceptionally(new AssertionError(s"Should have seen an error for $tp in result"))
-          case None => future.completeExceptionally(new AssertionError(s"Should have seen $tp in result"))
-        }
-      case Right(_: Errors) =>
-        future.completeExceptionally(new AssertionError(s"Should not seen top-level error"))
+  def assertAlterPartitionError(
+    topicPartition: TopicPartition,
+    topicIdOpt: Option[Uuid],
+    leaderId: Int,
+    brokerEpoch: Long,
+    leaderEpoch: Int,
+    partitionEpoch: Int,
+    isr: Set[Int],
+    leaderRecoveryState: Byte,
+    topLevelError: Errors,
+    partitionError: Errors,
+  ): Unit = {
+    val topicName = if (topicIdOpt.isEmpty) topicPartition.topic else ""
+    val topicId = topicIdOpt.getOrElse(Uuid.ZERO_UUID)
+
+    val alterPartitionRequest = new AlterPartitionRequestData()
+      .setBrokerId(leaderId)
+      .setBrokerEpoch(brokerEpoch)
+      .setTopics(Seq(new AlterPartitionRequestData.TopicData()
+        .setTopicId(topicId)
+        .setTopicName(topicName)
+        .setPartitions(Seq(new AlterPartitionRequestData.PartitionData()
+          .setPartitionIndex(topicPartition.partition)
+          .setLeaderEpoch(leaderEpoch)
+          .setPartitionEpoch(partitionEpoch)
+          .setNewIsr(isr.toList.map(Int.box).asJava)
+          .setLeaderRecoveryState(leaderRecoveryState)).asJava)).asJava)
+
+    val future = alterPartitionFuture(alterPartitionRequest, if (topicIdOpt.isDefined) AlterPartitionRequestData.HIGHEST_SUPPORTED_VERSION else 1)
+
+    val expectedAlterPartitionResponse = if (topLevelError != Errors.NONE) {
+      new AlterPartitionResponseData().setErrorCode(topLevelError.code)
+    } else {
+      new AlterPartitionResponseData()
+        .setTopics(Seq(new AlterPartitionResponseData.TopicData()
+          .setTopicId(topicId)
+          .setTopicName(topicName)
+          .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
+            .setPartitionIndex(topicPartition.partition)
+            .setErrorCode(partitionError.code)).asJava)).asJava)
     }
-    controller.eventManager.put(AlterPartitionReceived(brokerId, brokerEpoch, isrsToAlter, callback))
-    future
+
+    assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
   }
 
   @Test
@@ -966,7 +1518,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.createTopic(zkClient, tp1.topic(), assignment1, servers)
 
     // Test that the first topic has its ID added correctly
-    waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     assertNotEquals(None, controller.controllerContext.topicIds.get("t1"))
     val topicId1 = controller.controllerContext.topicIds("t1")
@@ -977,7 +1529,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.createTopic(zkClient, tp2.topic(), assignment2, servers)
 
     // Test that the second topic has its ID added correctly
-    waitForPartitionState(tp2, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp2, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     assertNotEquals(None, controller.controllerContext.topicIds.get("t2"))
     val topicId2 = controller.controllerContext.topicIds("t2")
@@ -990,7 +1542,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testTopicIdsAreNotAdded(): Unit = {
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     TestUtils.waitUntilControllerElected(zkClient)
     val controller = getController().kafkaController
     val tp1 = new TopicPartition("t1", 0)
@@ -1002,7 +1554,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.createTopic(zkClient, tp1.topic(), assignment1, servers)
 
     // Test that the first topic has no topic ID added.
-    waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     assertEquals(None, controller.controllerContext.topicIds.get("t1"))
 
@@ -1011,7 +1563,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.createTopic(zkClient, tp2.topic(), assignment2, servers)
 
     // Test that the second topic has no topic ID added.
-    waitForPartitionState(tp2, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp2, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     assertEquals(None, controller.controllerContext.topicIds.get("t2"))
 
@@ -1028,15 +1580,15 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
     servers = makeServers(1)
     adminZkClient.createTopic(tp.topic, 1, 1)
-    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    val (topicIdAfterCreate, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertTrue(topicIdAfterCreate.isDefined)
     assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
       "correct topic ID cannot be found in the controller context")
 
     adminZkClient.addPartitions(tp.topic, assignment, adminZkClient.getBrokerMetadatas(), 2)
-    val topicIdAfterAddition = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    val (topicIdAfterAddition, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertEquals(topicIdAfterCreate, topicIdAfterAddition)
     assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
       "topic ID changed after partition additions")
@@ -1052,17 +1604,17 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val assignment = Map(tp.partition -> ReplicaAssignment(Seq(0), List(), List()))
     val adminZkClient = new AdminZkClient(zkClient)
 
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     adminZkClient.createTopic(tp.topic, 1, 1)
-    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    val (topicIdAfterCreate, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertEquals(None, topicIdAfterCreate)
     assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
       "incorrect topic ID can be found in the controller context")
 
     adminZkClient.addPartitions(tp.topic, assignment, adminZkClient.getBrokerMetadatas(), 2)
-    val topicIdAfterAddition = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    val (topicIdAfterAddition, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertEquals(topicIdAfterCreate, topicIdAfterAddition)
     assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
       "topic ID changed after partition additions")
@@ -1080,7 +1632,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     val topicId = controller.controllerContext.topicIds.get("t").get
 
@@ -1093,13 +1645,13 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testNoTopicIdPersistsThroughControllerReelection(): Unit = {
-    servers = makeServers(2, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(2, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val controller = getController().kafkaController
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     val emptyTopicId = controller.controllerContext.topicIds.get("t")
     assertEquals(None, emptyTopicId)
@@ -1119,7 +1671,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     val topicId = controller.controllerContext.topicIds.get("t").get
 
@@ -1133,13 +1685,13 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
   @Test
   def testTopicIdCreatedOnUpgrade(): Unit = {
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val controller = getController().kafkaController
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     assertEquals(None, zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))
     assertEquals(None, controller.controllerContext.topicIds.get(tp.topic))
@@ -1170,20 +1722,20 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   @Test
   def testTopicIdCreatedOnUpgradeMultiBrokerScenario(): Unit = {
     // Simulate an upgrade scenario where the controller is still on a pre-topic ID IBP, but the other two brokers are upgraded.
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(MetadataVersion.IBP_2_7_IV0))
     servers = servers ++ makeServers(3, startingIdNumber = 1)
     val originalControllerId = TestUtils.waitUntilControllerElected(zkClient)
     assertEquals(0, originalControllerId)
     val controller = getController().kafkaController
-    assertEquals(KAFKA_2_7_IV0, servers(originalControllerId).config.interBrokerProtocolVersion)
+    assertEquals(IBP_2_7_IV0, servers(originalControllerId).config.interBrokerProtocolVersion)
     val remainingBrokers = servers.filter(_.config.brokerId != originalControllerId)
     val tp = new TopicPartition("t", 0)
     // Only the remaining brokers will have the replicas for the partition
     val assignment = Map(tp.partition -> remainingBrokers.map(_.config.brokerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, remainingBrokers(0).config.brokerId, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, remainingBrokers(0).config.brokerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    val (topicIdAfterCreate, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertEquals(None, topicIdAfterCreate)
     val emptyTopicId = controller.controllerContext.topicIds.get("t")
     assertEquals(None, emptyTopicId)
@@ -1229,10 +1781,10 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val adminZkClient = new AdminZkClient(zkClient)
 
     // start server with old IBP
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
     // use create topic with ZK client directly, without topic ID
     adminZkClient.createTopic(tp.topic, 1, 1)
-    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
     val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
     val id = servers.head.kafkaController.controllerContext.topicIds.get(tp.topic)
@@ -1244,41 +1796,41 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     servers(0).shutdown()
     servers(0).awaitShutdown()
     servers = makeServers(1)
-    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
-      "failed to get expected partition state upon controller restart")
-    val topicIdAfterUpgrade = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
-    assertEquals(topicIdAfterUpgrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
-      "expected same topic ID but it can not be found")
-    assertEquals(tp.topic(), servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
-      "correct topic name expected but cannot be found in the controller context")
+
+    def awaitTopicId(): Uuid = {
+      // Wait for consistent controller context (Note that `topicIds` is updated before `topicNames`)
+      val (topicIdOpt, isDefined) = TestUtils.computeUntilTrue {
+        val topicIdOpt = servers.head.kafkaController.controllerContext.topicIds.get(tp.topic)
+        topicIdOpt.flatMap { topicId =>
+          val topicNameOpt = servers.head.kafkaController.controllerContext.topicNames.get(topicId)
+          if (topicNameOpt.contains(tp.topic)) {
+            Some(topicId)
+          } else {
+            None
+          }
+        }
+      }(_.isDefined)
+
+      assertTrue(isDefined, "Timed out waiting for a consistent topicId in controller context")
+      assertEquals(topicIdOpt, zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))
+      topicIdOpt.get
+    }
+
+    val topicId = awaitTopicId()
 
     // Downgrade back to 2.7
     servers(0).shutdown()
     servers(0).awaitShutdown()
-    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
-    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+    servers = makeServers(1, interBrokerProtocolVersion = Some(IBP_2_7_IV0))
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    val topicIdAfterDowngrade = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
-    assertTrue(topicIdAfterDowngrade.isDefined)
-    assertEquals(topicIdAfterUpgrade, topicIdAfterDowngrade,
-      "expected same topic ID but it can not be found after downgrade")
-    assertEquals(topicIdAfterDowngrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
-      "expected same topic ID in controller context but it is no longer found after downgrade")
-    assertEquals(tp.topic(), servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
-      "correct topic name expected but cannot be found in the controller context")
+    assertEquals(topicId, awaitTopicId())
 
     // Reassign partitions
     servers(0).kafkaController.eventManager.put(ApiPartitionReassignment(reassignment, _ => ()))
     waitForPartitionState(tp, 3, 0, 1,
       "failed to get expected partition state upon controller restart")
-    val topicIdAfterReassignment = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
-    assertTrue(topicIdAfterReassignment.isDefined)
-    assertEquals(topicIdAfterUpgrade, topicIdAfterReassignment,
-      "expected same topic ID but it can not be found after reassignment")
-    assertEquals(topicIdAfterUpgrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
-      "expected same topic ID in controller context but is no longer found after reassignment")
-    assertEquals(tp.topic(), servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
-      "correct topic name expected but cannot be found in the controller context")
+    assertEquals(topicId, awaitTopicId())
 
     // Upgrade back to 2.8
     servers(0).shutdown()
@@ -1286,18 +1838,13 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     servers = makeServers(1)
     waitForPartitionState(tp, 3, 0, 1,
       "failed to get expected partition state upon controller restart")
-    val topicIdAfterReUpgrade = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
-    assertEquals(topicIdAfterUpgrade, topicIdAfterReUpgrade,
-      "expected same topic ID but it can not be found after re-upgrade")
-    assertEquals(topicIdAfterReUpgrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
-      "topic ID can not be found in controller context after re-upgrading IBP")
-    assertEquals(tp.topic(), servers.head.kafkaController.controllerContext.topicNames(topicIdAfterReUpgrade.get),
-      "correct topic name expected but cannot be found in the controller context")
+    assertEquals(topicId, awaitTopicId())
 
     adminZkClient.deleteTopic(tp.topic)
-    TestUtils.waitUntilTrue(() => servers.head.kafkaController.controllerContext.topicIds.get(tp.topic).isEmpty,
-      "topic ID for topic should have been removed from controller context after deletion")
-    assertTrue(servers.head.kafkaController.controllerContext.topicNames.get(topicIdAfterUpgrade.get).isEmpty)
+    // Verify removal from controller context (Note that `topicIds` is updated before `topicNames`)
+    TestUtils.waitUntilTrue(() => !servers.head.kafkaController.controllerContext.topicNames.contains(topicId),
+      "Timed out waiting for removal of topicId from controller context")
+    assertEquals(None, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic))
   }
 
   private def testControllerMove(fun: () => Unit): Unit = {
@@ -1388,7 +1935,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
                           listeners : Option[String] = None,
                           listenerSecurityProtocolMap : Option[String] = None,
                           controlPlaneListenerName : Option[String] = None,
-                          interBrokerProtocolVersion: Option[ApiVersion] = None,
+                          interBrokerProtocolVersion: Option[MetadataVersion] = None,
                           logDirCount: Int = 1,
                           startingIdNumber: Int = 0): Seq[KafkaServer] = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount, startingIdNumber = startingIdNumber)
@@ -1413,6 +1960,17 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   private def getController(): KafkaServer = {
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     servers.filter(s => s.config.brokerId == controllerId).head
+  }
+
+  private def alterPartitionFuture(alterPartitionRequest: AlterPartitionRequestData,
+                                   alterPartitionVersion: Short): CompletableFuture[AlterPartitionResponseData] = {
+    val future = new CompletableFuture[AlterPartitionResponseData]()
+    getController().kafkaController.eventManager.put(AlterPartitionReceived(
+      alterPartitionRequest,
+      alterPartitionVersion,
+      future.complete
+    ))
+    future
   }
 
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
@@ -27,23 +28,27 @@ import java.util.List;
 import java.util.Collections;
 
 /** Emits heartbeats to Kafka.
+ *
+ *  @see MirrorHeartbeatConfig for supported config properties.
  */
 public class MirrorHeartbeatConnector extends SourceConnector {
-    private MirrorConnectorConfig config;
+    private MirrorHeartbeatConfig config;
     private Scheduler scheduler;
-    
+    private Admin targetAdminClient;
+
     public MirrorHeartbeatConnector() {
         // nop
     }
 
     // visible for testing
-    MirrorHeartbeatConnector(MirrorConnectorConfig config) {
+    MirrorHeartbeatConnector(MirrorHeartbeatConfig config) {
         this.config = config;
     }
 
     @Override
     public void start(Map<String, String> props) {
-        config = new MirrorConnectorConfig(props);
+        config = new MirrorHeartbeatConfig(props);
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
         scheduler = new Scheduler(MirrorHeartbeatConnector.class, config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
     }
@@ -51,6 +56,7 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     @Override
     public void stop() {
         Utils.closeQuietly(scheduler, "scheduler");
+        Utils.closeQuietly(targetAdminClient, "target admin client");
     }
 
     @Override
@@ -71,7 +77,7 @@ public class MirrorHeartbeatConnector extends SourceConnector {
 
     @Override
     public ConfigDef config() {
-        return MirrorConnectorConfig.CONNECTOR_CONFIG_DEF;
+        return MirrorHeartbeatConfig.CONNECTOR_CONFIG_DEF;
     }
 
     @Override
@@ -80,7 +86,10 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     }
 
     private void createInternalTopics() {
-        MirrorUtils.createSinglePartitionCompactedTopic(config.heartbeatsTopic(),
-            config.heartbeatsTopicReplicationFactor(), config.targetAdminConfig());
+        MirrorUtils.createSinglePartitionCompactedTopic(
+                config.heartbeatsTopic(),
+                config.heartbeatsTopicReplicationFactor(),
+                targetAdminClient
+        );
     }
 }

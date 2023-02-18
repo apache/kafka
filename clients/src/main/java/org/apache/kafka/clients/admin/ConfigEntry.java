@@ -61,8 +61,14 @@ public class ConfigEntry {
      * @param isReadOnly whether the config is read-only and cannot be updated
      * @param synonyms Synonym configs in order of precedence
      */
-    ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean isReadOnly,
-                List<ConfigSynonym> synonyms, ConfigType type, String documentation) {
+    public ConfigEntry(String name,
+            String value,
+            ConfigSource source,
+            boolean isSensitive,
+            boolean isReadOnly,
+            List<ConfigSynonym> synonyms,
+            ConfigType type,
+            String documentation) {
         Objects.requireNonNull(name, "name should not be null");
         this.name = name;
         this.value = value;

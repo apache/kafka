@@ -19,14 +19,13 @@ package kafka.network
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-
 import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
 import kafka.network
 import kafka.network.RequestConvertToJson.requestHeaderNode
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
-import org.apache.kafka.common.protocol.{ApiKeys, MessageUtil}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -59,6 +58,33 @@ class RequestConvertToJsonTest {
       }
     }}
     assertEquals(ArrayBuffer.empty, unhandledKeys, "Unhandled request keys")
+  }
+
+  @Test
+  def testAllApiVersionsResponseHandled(): Unit = {
+
+    ApiKeys.values().foreach { key => {
+      val unhandledVersions = ArrayBuffer[java.lang.Short]()
+      key.allVersions().forEach { version => {
+        val message = key match {
+          // Specify top-level error handling for verifying compatibility across versions
+          case ApiKeys.DESCRIBE_LOG_DIRS =>
+            ApiMessageType.fromApiKey(key.id).newResponse().asInstanceOf[DescribeLogDirsResponseData]
+              .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())
+          case _ =>
+            ApiMessageType.fromApiKey(key.id).newResponse()
+        }
+
+        val bytes = MessageUtil.toByteBuffer(message, version)
+        val response = AbstractResponse.parseResponse(key, bytes, version)
+        try {
+          RequestConvertToJson.response(response, version)
+        } catch {
+          case _ : IllegalStateException => unhandledVersions += version
+        }}
+      }
+      assertEquals(ArrayBuffer.empty, unhandledVersions, s"API: ${key.toString} - Unhandled request versions")
+    }}
   }
 
   @Test

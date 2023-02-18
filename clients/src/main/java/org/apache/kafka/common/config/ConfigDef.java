@@ -1243,15 +1243,16 @@ public class ConfigDef {
                 break;
             }
         }
+        String resultFormat = " (" + value + " %s" + (value == 1 ? ")" : "s)");
         switch (i) {
             case 1:
-                return " (" + value + " kibibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "kibibyte");
             case 2:
-                return " (" + value + " mebibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "mebibyte");
             case 3:
-                return " (" + value + " gibibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "gibibyte");
             case 4:
-                return " (" + value + " tebibyte" + (value == 1 ? ")" : "s)");
+                return String.format(resultFormat, "tebibyte");
             default:
                 return "";
         }

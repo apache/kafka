@@ -31,7 +31,13 @@ public enum Type {
     KRAFT {
         @Override
         public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf()));
+            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf(), false));
+        }
+    },
+    CO_KRAFT {
+        @Override
+        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf(), true));
         }
     },
     ZK {
@@ -40,10 +46,11 @@ public enum Type {
             invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
         }
     },
-    BOTH {
+    ALL {
         @Override
         public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf()));
+            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf(), false));
+            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf(), true));
             invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
         }
     },

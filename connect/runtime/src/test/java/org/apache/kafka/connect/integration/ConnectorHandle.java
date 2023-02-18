@@ -113,6 +113,14 @@ public class ConnectorHandle {
     }
 
     /**
+     * Delete all task handles for this connector.
+     */
+    public void clearTasks() {
+        log.info("Clearing {} existing task handles for connector {}", taskHandles.size(), connectorName);
+        taskHandles.clear();
+    }
+
+    /**
      * Set the number of expected records for this connector.
      *
      * @param expected number of records

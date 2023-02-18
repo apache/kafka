@@ -17,8 +17,9 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.utils.Utils;
@@ -27,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +45,8 @@ public class NodeApiVersions {
 
     // List of APIs which the broker supports, but which are unknown to the client
     private final List<ApiVersion> unknownApis = new ArrayList<>();
+
+    private final Map<String, SupportedVersionRange> supportedFeatures;
 
     /**
      * Create a NodeApiVersions object with the current ApiVersions.
@@ -72,7 +76,7 @@ public class NodeApiVersions {
             }
             if (!exists) apiVersions.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
-        return new NodeApiVersions(apiVersions);
+        return new NodeApiVersions(apiVersions, Collections.emptyList());
     }
 
 
@@ -91,7 +95,7 @@ public class NodeApiVersions {
                 .setMaxVersion(maxVersion)));
     }
 
-    public NodeApiVersions(ApiVersionCollection nodeApiVersions) {
+    public NodeApiVersions(Collection<ApiVersion> nodeApiVersions, Collection<SupportedFeatureKey> nodeSupportedFeatures) {
         for (ApiVersion nodeApiVersion : nodeApiVersions) {
             if (ApiKeys.hasId(nodeApiVersion.apiKey())) {
                 ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey());
@@ -101,18 +105,13 @@ public class NodeApiVersions {
                 unknownApis.add(nodeApiVersion);
             }
         }
-    }
 
-    public NodeApiVersions(Collection<ApiVersion> nodeApiVersions) {
-        for (ApiVersion nodeApiVersion : nodeApiVersions) {
-            if (ApiKeys.hasId(nodeApiVersion.apiKey())) {
-                ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey());
-                supportedVersions.put(nodeApiKey, nodeApiVersion);
-            } else {
-                // Newer brokers may support ApiKeys we don't know about
-                unknownApis.add(nodeApiVersion);
-            }
+        Map<String, SupportedVersionRange> supportedFeaturesBuilder = new HashMap<>();
+        for (SupportedFeatureKey supportedFeature : nodeSupportedFeatures) {
+            supportedFeaturesBuilder.put(supportedFeature.name(),
+                    new SupportedVersionRange(supportedFeature.minVersion(), supportedFeature.maxVersion()));
         }
+        this.supportedFeatures = Collections.unmodifiableMap(supportedFeaturesBuilder);
     }
 
     /**
@@ -232,5 +231,9 @@ public class NodeApiVersions {
 
     public Map<ApiKeys, ApiVersion> allSupportedApiVersions() {
         return supportedVersions;
+    }
+
+    public Map<String, SupportedVersionRange> supportedFeatures() {
+        return supportedFeatures;
     }
 }

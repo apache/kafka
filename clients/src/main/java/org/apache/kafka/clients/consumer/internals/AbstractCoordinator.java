@@ -187,11 +187,12 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Invoked prior to each group join or rejoin. This is typically used to perform any
      * cleanup from the previous generation (such as committing offsets for the consumer)
+     * @param timer Timer bounding how long this method can block
      * @param generation The previous generation or -1 if there was none
      * @param memberId The identifier of this member in the previous group or "" if there was none
      * @return true If onJoinPrepare async commit succeeded, false otherwise
      */
-    protected abstract boolean onJoinPrepare(int generation, String memberId);
+    protected abstract boolean onJoinPrepare(Timer timer, int generation, String memberId);
 
     /**
      * Invoked when the leader is elected. This is used by the leader to perform the assignment
@@ -230,14 +231,27 @@ public abstract class AbstractCoordinator implements Closeable {
     protected void onLeavePrepare() {}
 
     /**
-     * Visible for testing.
-     *
      * Ensure that the coordinator is ready to receive requests.
      *
      * @param timer Timer bounding how long this method can block
      * @return true If coordinator discovery and initial connection succeeded, false otherwise
      */
     protected synchronized boolean ensureCoordinatorReady(final Timer timer) {
+        return ensureCoordinatorReady(timer, false);
+    }
+
+    /**
+     * Ensure that the coordinator is ready to receive requests. This will return
+     * immediately without blocking. It is intended to be called in an asynchronous
+     * context when wakeups are not expected.
+     *
+     * @return true If coordinator discovery and initial connection succeeded, false otherwise
+     */
+    protected synchronized boolean ensureCoordinatorReadyAsync() {
+        return ensureCoordinatorReady(time.timer(0), true);
+    }
+
+    private synchronized boolean ensureCoordinatorReady(final Timer timer, boolean disableWakeup) {
         if (!coordinatorUnknown())
             return true;
 
@@ -248,7 +262,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 throw fatalException;
             }
             final RequestFuture<Void> future = lookupCoordinator();
-            client.poll(future, timer);
+            client.poll(future, timer, disableWakeup);
 
             if (!future.isDone()) {
                 // ran out of time
@@ -426,7 +440,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // exception, in which case upon retry we should not retry onJoinPrepare either.
                 needsJoinPrepare = false;
                 // return false when onJoinPrepare is waiting for committing offset
-                if (!onJoinPrepare(generation.generationId, generation.memberId)) {
+                if (!onJoinPrepare(timer, generation.generationId, generation.memberId)) {
                     needsJoinPrepare = true;
                     //should not initiateJoinGroup if needsJoinPrepare still is true
                     return false;
@@ -478,8 +492,12 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 resetJoinGroupFuture();
                 synchronized (AbstractCoordinator.this) {
-                    rejoinReason = String.format("rebalance failed due to '%s' (%s)", exception.getMessage(), exception.getClass().getSimpleName());
-                    rejoinNeeded = true;
+                    final String simpleName = exception.getClass().getSimpleName();
+                    final String shortReason = String.format("rebalance failed due to %s", simpleName);
+                    final String fullReason = String.format("rebalance failed due to '%s' (%s)",
+                        exception.getMessage(),
+                        simpleName);
+                    requestRejoin(shortReason, fullReason);
                 }
 
                 if (exception instanceof UnknownMemberIdException ||
@@ -555,7 +573,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setProtocolType(protocolType())
                         .setProtocols(metadata())
                         .setRebalanceTimeoutMs(this.rebalanceConfig.rebalanceTimeoutMs)
-                        .setReason(this.rejoinReason)
+                        .setReason(JoinGroupRequest.maybeTruncateReason(this.rejoinReason))
         );
 
         log.debug("Sending JoinGroup ({}) to coordinator {}", requestBuilder, this.coordinator);
@@ -838,12 +856,11 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Discover the current coordinator for the group. Sends a GroupMetadata request to
-     * one of the brokers. The returned future should be polled to get the result of the request.
+     * Discover the current coordinator for the group. Sends a FindCoordinator request to
+     * the given broker node. The returned future should be polled to get the result of the request.
      * @return A request future which indicates the completion of the metadata request
      */
     private RequestFuture<Void> sendFindCoordinatorRequest(Node node) {
-        // initiate the group metadata request
         log.debug("Sending FindCoordinator request to broker {}", node);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(CoordinatorType.GROUP.id())
@@ -939,7 +956,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     protected synchronized void markCoordinatorUnknown(boolean isDisconnected, String cause) {
         if (this.coordinator != null) {
-            log.info("Group coordinator {} is unavailable or invalid due to cause: {}."
+            log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
                     + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator,
                     cause, isDisconnected);
             Node oldCoordinator = this.coordinator;
@@ -1022,15 +1039,28 @@ public abstract class AbstractCoordinator implements Closeable {
         resetStateAndRejoin("consumer pro-actively leaving the group", true);
     }
 
-    public synchronized void requestRejoinIfNecessary(final String reason) {
+    public synchronized void requestRejoinIfNecessary(final String shortReason,
+                                                      final String fullReason) {
         if (!this.rejoinNeeded) {
-            requestRejoin(reason);
+            requestRejoin(shortReason, fullReason);
         }
     }
 
-    public synchronized void requestRejoin(final String reason) {
-        log.info("Request joining group due to: {}", reason);
-        this.rejoinReason = reason;
+    public synchronized void requestRejoin(final String shortReason) {
+        requestRejoin(shortReason, shortReason);
+    }
+
+    /**
+     * Request to rejoin the group.
+     *
+     * @param shortReason This is the reason passed up to the group coordinator. It must be
+     *                    reasonably small.
+     * @param fullReason This is the reason logged locally.
+     */
+    public synchronized void requestRejoin(final String shortReason,
+                                           final String fullReason) {
+        log.info("Request joining group due to: {}", fullReason);
+        this.rejoinReason = shortReason;
         this.rejoinNeeded = true;
     }
 
@@ -1094,7 +1124,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 generation.memberId, coordinator, leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
-                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(leaveReason))
+                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(JoinGroupRequest.maybeTruncateReason(leaveReason)))
             );
 
             future = client.send(coordinator, request).compose(new LeaveGroupResponseHandler(generation));
@@ -1425,12 +1455,11 @@ public abstract class AbstractCoordinator implements Closeable {
                                 // clear the future so that after the backoff, if the hb still sees coordinator unknown in
                                 // the next iteration it will try to re-discover the coordinator in case the main thread cannot
                                 clearFindCoordinatorFuture();
-
-                                // backoff properly
-                                AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
                             } else {
                                 lookupCoordinator();
                             }
+                            // backoff properly
+                            AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             // the session timeout has expired without seeing a successful heartbeat, so we should
                             // probably make sure the coordinator is still healthy.

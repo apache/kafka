@@ -17,15 +17,17 @@
 package org.apache.kafka.common.utils;
 
 /**
- * Internal class that should be used instead of `Exit.exit()` and `Runtime.getRuntime().halt()` so that tests can
+ * Internal class that should be used instead of `System.exit()` and `Runtime.getRuntime().halt()` so that tests can
  * easily change the behaviour.
  */
 public class Exit {
 
+    @FunctionalInterface
     public interface Procedure {
         void execute(int statusCode, String message);
     }
 
+    @FunctionalInterface
     public interface ShutdownHookAdder {
         void addShutdownHook(String name, Runnable runnable);
     }

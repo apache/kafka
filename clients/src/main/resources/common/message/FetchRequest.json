@@ -48,7 +48,9 @@
   // the `LastFetchedEpoch` field
   //
   // Version 13 replaces topic names with topic IDs (KIP-516). May return UNKNOWN_TOPIC_ID error code.
-  "validVersions": "0-13",
+  //
+  // Version 14 is the same as version 13 but it also receives a new error called OffsetMovedToTieredStorageException(KIP-405)
+  "validVersions": "0-14",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
@@ -92,7 +94,7 @@
     { "name": "ForgottenTopicsData", "type": "[]ForgottenTopic", "versions": "7+", "ignorable": false,
       "about": "In an incremental fetch request, the partitions to remove.", "fields": [
       { "name": "Topic", "type": "string", "versions": "7-12", "entityType": "topicName", "ignorable": true,
-        "about": "The partition name." },
+        "about": "The topic name." },
       { "name": "TopicId", "type": "uuid", "versions": "13+", "ignorable": true, "about": "The unique topic ID"},
       { "name": "Partitions", "type": "[]int32", "versions": "7+",
         "about": "The partitions indexes to forget." }

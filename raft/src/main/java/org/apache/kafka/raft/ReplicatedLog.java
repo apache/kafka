@@ -88,8 +88,8 @@ public interface ReplicatedLog extends AutoCloseable {
         Optional<OffsetAndEpoch> earliestSnapshotId = earliestSnapshotId();
         if (earliestSnapshotId.isPresent() &&
             ((offset < startOffset()) ||
-             (offset == startOffset() && epoch != earliestSnapshotId.get().epoch) ||
-             (epoch < earliestSnapshotId.get().epoch))
+             (offset == startOffset() && epoch != earliestSnapshotId.get().epoch()) ||
+             (epoch < earliestSnapshotId.get().epoch()))
         ) {
             /* Send a snapshot if the leader has a snapshot at the log start offset and
              * 1. the fetch offset is less than the log start offset or
@@ -108,7 +108,7 @@ public interface ReplicatedLog extends AutoCloseable {
         } else {
             OffsetAndEpoch endOffsetAndEpoch = endOffsetForEpoch(epoch);
 
-            if (endOffsetAndEpoch.epoch != epoch || endOffsetAndEpoch.offset < offset) {
+            if (endOffsetAndEpoch.epoch() != epoch || endOffsetAndEpoch.offset() < offset) {
                 return ValidOffsetAndEpoch.diverging(endOffsetAndEpoch);
             } else {
                 return ValidOffsetAndEpoch.valid(new OffsetAndEpoch(offset, epoch));
@@ -217,15 +217,15 @@ public interface ReplicatedLog extends AutoCloseable {
      */
     default long truncateToEndOffset(OffsetAndEpoch endOffset) {
         final long truncationOffset;
-        int leaderEpoch = endOffset.epoch;
+        int leaderEpoch = endOffset.epoch();
         if (leaderEpoch == 0) {
-            truncationOffset = Math.min(endOffset.offset, endOffset().offset);
+            truncationOffset = Math.min(endOffset.offset(), endOffset().offset);
         } else {
             OffsetAndEpoch localEndOffset = endOffsetForEpoch(leaderEpoch);
-            if (localEndOffset.epoch == leaderEpoch) {
-                truncationOffset = Math.min(localEndOffset.offset, endOffset.offset);
+            if (localEndOffset.epoch() == leaderEpoch) {
+                truncationOffset = Math.min(localEndOffset.offset(), endOffset.offset());
             } else {
-                truncationOffset = localEndOffset.offset;
+                truncationOffset = localEndOffset.offset();
             }
         }
 

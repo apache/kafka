@@ -70,6 +70,20 @@ public class JoinGroupRequest extends AbstractRequest {
         });
     }
 
+    /**
+     * Ensures that the provided {@code reason} remains within a range of 255 chars.
+     * @param reason This is the reason that is sent to the broker over the wire
+     *               as a part of {@code JoinGroupRequest} or {@code LeaveGroupRequest} messages.
+     * @return a provided reason as is or truncated reason if it exceeds the 255 chars threshold.
+     */
+    public static String maybeTruncateReason(final String reason) {
+        if (reason.length() > 255) {
+            return reason.substring(0, 255);
+        } else {
+            return reason;
+        }
+    }
+
     public JoinGroupRequest(JoinGroupRequestData data, short version) {
         super(ApiKeys.JOIN_GROUP, version);
         this.data = data;
@@ -105,7 +119,7 @@ public class JoinGroupRequest extends AbstractRequest {
         else
             data.setProtocolName(UNKNOWN_PROTOCOL_NAME);
 
-        return new JoinGroupResponse(data);
+        return new JoinGroupResponse(data, version());
     }
 
     public static JoinGroupRequest parse(ByteBuffer buffer, short version) {

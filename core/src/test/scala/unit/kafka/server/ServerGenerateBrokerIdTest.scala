@@ -29,10 +29,10 @@ import java.io.File
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
 class ServerGenerateBrokerIdTest extends QuorumTestHarness {
-  var props1: Properties = null
-  var config1: KafkaConfig = null
-  var props2: Properties = null
-  var config2: KafkaConfig = null
+  var props1: Properties = _
+  var config1: KafkaConfig = _
+  var props2: Properties = _
+  var config2: KafkaConfig = _
   val brokerMetaPropsFile = "meta.properties"
   var servers: Seq[KafkaServer] = Seq()
 

@@ -384,7 +384,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def currentState: GroupState = state
 
-  def notYetRejoinedMembers: Map[String, MemberMetadata] = members.filter(!_._2.isAwaitingJoin).toMap
+  def notYetRejoinedMembers: Map[String, MemberMetadata] = members.filterNot(_._2.isAwaitingJoin).toMap
 
   def hasAllMembersJoined: Boolean = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
 
@@ -526,10 +526,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def updateMember(member: MemberMetadata,
                    protocols: List[(String, Array[Byte])],
+                   rebalanceTimeoutMs: Int,
+                   sessionTimeoutMs: Int,
                    callback: JoinCallback): Unit = {
     decSupportedProtocols(member)
     member.supportedProtocols = protocols
     incSupportedProtocols(member)
+    member.rebalanceTimeoutMs = rebalanceTimeoutMs
+    member.sessionTimeoutMs = sessionTimeoutMs
 
     if (callback != null && !member.isAwaitingJoin) {
       numMembersAwaitingJoin += 1
@@ -542,9 +546,16 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def maybeInvokeJoinCallback(member: MemberMetadata,
                               joinGroupResult: JoinGroupResult): Unit = {
     if (member.isAwaitingJoin) {
-      member.awaitingJoinCallback(joinGroupResult)
-      member.awaitingJoinCallback = null
-      numMembersAwaitingJoin -= 1
+      try {
+        member.awaitingJoinCallback(joinGroupResult)
+      } catch {
+        case t: Throwable =>
+          error(s"Failed to invoke join callback for $member due to ${t.getMessage}.", t)
+          member.awaitingJoinCallback(JoinGroupResult(member.memberId, Errors.UNKNOWN_SERVER_ERROR))
+      } finally {
+        member.awaitingJoinCallback = null
+        numMembersAwaitingJoin -= 1
+      }
     }
   }
 
@@ -554,8 +565,15 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def maybeInvokeSyncCallback(member: MemberMetadata,
                               syncGroupResult: SyncGroupResult): Boolean = {
     if (member.isAwaitingSync) {
-      member.awaitingSyncCallback(syncGroupResult)
-      member.awaitingSyncCallback = null
+      try {
+        member.awaitingSyncCallback(syncGroupResult)
+      } catch {
+        case t: Throwable =>
+          error(s"Failed to invoke sync callback for $member due to ${t.getMessage}.", t)
+          member.awaitingSyncCallback(SyncGroupResult(Errors.UNKNOWN_SERVER_ERROR))
+      } finally {
+        member.awaitingSyncCallback = null
+      }
       true
     } else {
       false

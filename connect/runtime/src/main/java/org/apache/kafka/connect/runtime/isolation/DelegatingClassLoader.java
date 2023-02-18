@@ -179,7 +179,8 @@ public class DelegatingClassLoader extends URLClassLoader {
      * @param name The fully qualified class name of the plugin
      * @return the PluginClassLoader that should be used to load this, or null if the plugin is not isolated.
      */
-    public PluginClassLoader pluginClassLoader(String name) {
+    // VisibleForTesting
+    PluginClassLoader pluginClassLoader(String name) {
         if (!PluginUtils.shouldLoadInIsolation(name)) {
             return null;
         }
@@ -193,11 +194,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                : null;
     }
 
-    public ClassLoader connectorLoader(Connector connector) {
-        return connectorLoader(connector.getClass().getName());
-    }
-
-    public ClassLoader connectorLoader(String connectorClassOrAlias) {
+    ClassLoader connectorLoader(String connectorClassOrAlias) {
         String fullName = aliases.getOrDefault(connectorClassOrAlias, connectorClassOrAlias);
         ClassLoader classLoader = pluginClassLoader(fullName);
         if (classLoader == null) classLoader = this;
@@ -209,7 +206,8 @@ public class DelegatingClassLoader extends URLClassLoader {
         return classLoader;
     }
 
-    protected PluginClassLoader newPluginClassLoader(
+    // VisibleForTesting
+    PluginClassLoader newPluginClassLoader(
             final URL pluginLocation,
             final URL[] urls,
             final ClassLoader parent
@@ -521,7 +519,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         if (serviceLoaderManifestForPlugin(name)) {
             // Default implementation of getResources searches the parent class loader and also its own URL paths. This will enable the
             // PluginClassLoader to limit its resource search to only its own URL paths.
-            return null;
+            return Collections.emptyEnumeration();
         } else {
             return super.getResources(name);
         }

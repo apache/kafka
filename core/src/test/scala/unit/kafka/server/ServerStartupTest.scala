@@ -18,8 +18,6 @@
 package kafka.server
 
 import kafka.utils.TestUtils
-import kafka.server.QuorumTestHarness
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.metadata.BrokerState
 import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.junit.jupiter.api.Assertions._
@@ -27,7 +25,7 @@ import org.junit.jupiter.api.{AfterEach, Test}
 
 class ServerStartupTest extends QuorumTestHarness {
 
-  private var server: KafkaServer = null
+  private var server: KafkaServer = _
 
   @AfterEach
   override def tearDown(): Unit = {
@@ -60,7 +58,7 @@ class ServerStartupTest extends QuorumTestHarness {
     // Create a second broker with same port
     val brokerId2 = 1
     val props2 = TestUtils.createBrokerConfig(brokerId2, zkConnect, port = port)
-    assertThrows(classOf[KafkaException], () => TestUtils.createServer(KafkaConfig.fromProps(props2)))
+    assertThrows(classOf[IllegalArgumentException], () => TestUtils.createServer(KafkaConfig.fromProps(props2)))
   }
 
   @Test

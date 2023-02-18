@@ -1024,16 +1024,16 @@ public class RaftEventSimulationTest {
                 log.earliestSnapshotId().ifPresent(earliestSnapshotId  -> {
                     long logStartOffset = log.startOffset();
                     ValidOffsetAndEpoch validateOffsetAndEpoch = log.validateOffsetAndEpoch(
-                        earliestSnapshotId.offset,
-                        earliestSnapshotId.epoch
+                        earliestSnapshotId.offset(),
+                        earliestSnapshotId.epoch()
                     );
 
                     assertTrue(
-                        logStartOffset <= earliestSnapshotId.offset,
+                        logStartOffset <= earliestSnapshotId.offset(),
                         () -> String.format(
                             "invalid log start offset (%s) and snapshotId offset (%s): nodeId = %s",
                             logStartOffset,
-                            earliestSnapshotId.offset,
+                            earliestSnapshotId.offset(),
                             nodeId
                         )
                     );
@@ -1046,7 +1046,7 @@ public class RaftEventSimulationTest {
                     if (logStartOffset > 0) {
                         assertEquals(
                             logStartOffset,
-                            earliestSnapshotId.offset,
+                            earliestSnapshotId.offset(),
                             () -> String.format("mising snapshot at log start offset: nodeId = %s", nodeId)
                         );
                     }
@@ -1108,11 +1108,11 @@ public class RaftEventSimulationTest {
 
             AtomicLong startOffset = new AtomicLong(0);
             log.earliestSnapshotId().ifPresent(snapshotId -> {
-                assertTrue(snapshotId.offset <= highWatermark.getAsLong());
-                startOffset.set(snapshotId.offset);
+                assertTrue(snapshotId.offset() <= highWatermark.getAsLong());
+                startOffset.set(snapshotId.offset());
 
                 try (SnapshotReader<Integer> snapshot =
-                        RecordsSnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE)) {
+                        RecordsSnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE, true)) {
                     // Expect only one batch with only one record
                     assertTrue(snapshot.hasNext());
                     Batch<Integer> batch = snapshot.next();
@@ -1120,7 +1120,7 @@ public class RaftEventSimulationTest {
                     assertEquals(1, batch.records().size());
 
                     // The snapshotId offset is an "end offset"
-                    long offset = snapshotId.offset - 1;
+                    long offset = snapshotId.offset() - 1;
                     int sequence = batch.records().get(0);
                     committedSequenceNumbers.putIfAbsent(offset, sequence);
 

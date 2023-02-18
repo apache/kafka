@@ -45,7 +45,6 @@ public class ThreadMetrics {
     private static final String PUNCTUATE = "punctuate";
     private static final String CREATE_TASK = "task-created";
     private static final String CLOSE_TASK = "task-closed";
-    private static final String SKIP_RECORD = "skipped-records";
     private static final String BLOCKED_TIME = "blocked-time-ns-total";
     private static final String THREAD_START_TIME = "thread-start-time";
 
@@ -79,9 +78,6 @@ public class ThreadMetrics {
     private static final String PUNCTUATE_RATE_DESCRIPTION = RATE_DESCRIPTION + PUNCTUATE_DESCRIPTION;
     private static final String PUNCTUATE_AVG_LATENCY_DESCRIPTION = "The average punctuate latency";
     private static final String PUNCTUATE_MAX_LATENCY_DESCRIPTION = "The maximum punctuate latency";
-    private static final String SKIP_RECORDS_DESCRIPTION = "skipped records";
-    private static final String SKIP_RECORD_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + SKIP_RECORDS_DESCRIPTION;
-    private static final String SKIP_RECORD_RATE_DESCRIPTION = RATE_DESCRIPTION + SKIP_RECORDS_DESCRIPTION;
     private static final String COMMIT_OVER_TASKS_DESCRIPTION =
         "calls to commit over all tasks assigned to one stream thread";
     private static final String COMMIT_OVER_TASKS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + COMMIT_OVER_TASKS_DESCRIPTION;
@@ -118,18 +114,6 @@ public class ThreadMetrics {
             CLOSE_TASK,
             CLOSE_TASK_RATE_DESCRIPTION,
             CLOSE_TASK_TOTAL_DESCRIPTION,
-            RecordingLevel.INFO,
-            streamsMetrics
-        );
-    }
-
-    public static Sensor skipRecordSensor(final String threadId,
-                                          final StreamsMetricsImpl streamsMetrics) {
-        return invocationRateAndCountSensor(
-            threadId,
-            SKIP_RECORD,
-            SKIP_RECORD_RATE_DESCRIPTION,
-            SKIP_RECORD_TOTAL_DESCRIPTION,
             RecordingLevel.INFO,
             streamsMetrics
         );

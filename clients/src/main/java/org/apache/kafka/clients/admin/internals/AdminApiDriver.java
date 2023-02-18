@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
+import org.apache.kafka.common.requests.OffsetFetchRequest.NoBatchedOffsetFetchRequestException;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -253,7 +254,7 @@ public class AdminApiDriver<K, V> {
                 .collect(Collectors.toSet());
             retryLookup(keysToUnmap);
 
-        } else if (t instanceof NoBatchedFindCoordinatorsException) {
+        } else if (t instanceof NoBatchedFindCoordinatorsException || t instanceof NoBatchedOffsetFetchRequestException) {
             ((CoordinatorStrategy) handler.lookupStrategy()).disableBatch();
             Set<K> keysToUnmap = spec.keys.stream()
                 .filter(future.lookupKeys()::contains)

@@ -26,6 +26,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.config.provider.MockVaultConfigProvider;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
+import org.apache.kafka.test.MockConsumerInterceptor;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -256,6 +257,30 @@ public class AbstractConfigTest {
             fail("Expected a config exception due to invalid props :" + props);
         } catch (KafkaException e) {
             // this is good
+        }
+    }
+
+    @Test
+    public void testConfiguredInstancesClosedOnFailure() {
+
+        try {
+            Map<String, String> props = new HashMap<>();
+            String threeConsumerInterceptors = MockConsumerInterceptor.class.getName() + ", "
+                    + MockConsumerInterceptor.class.getName() + ", "
+                    + MockConsumerInterceptor.class.getName();
+            props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, threeConsumerInterceptors);
+            props.put("client.id", "test");
+            TestConfig testConfig = new TestConfig(props);
+
+            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(3);
+            assertThrows(
+                    Exception.class,
+                    () -> testConfig.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, Object.class)
+            );
+            assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
+            assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
+        } finally {
+            MockConsumerInterceptor.resetCounters();
         }
     }
 
@@ -585,7 +610,6 @@ public class AbstractConfigTest {
 
         public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
         private static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters.";
-
         static {
             CONFIG = new ConfigDef().define(METRIC_REPORTER_CLASSES_CONFIG,
                                             Type.LIST,

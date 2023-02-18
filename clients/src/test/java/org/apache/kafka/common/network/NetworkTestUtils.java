@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.kafka.common.config.AbstractConfig;
@@ -87,13 +88,23 @@ public class NetworkTestUtils {
         }
     }
 
+    public static void waitForChannelConnected(Selector selector, String node) throws IOException {
+        int secondsLeft = 30;
+        while (selector.channel(node) != null
+                && !selector.channel(node).isConnected() && secondsLeft-- > 0) {
+            selector.poll(1000L);
+        }
+        assertNotNull(selector.channel(node));
+        assertTrue(selector.channel(node).isConnected(), String.format("Channel %s was not connected after 30 seconds", node));
+    }
+
     public static void waitForChannelReady(Selector selector, String node) throws IOException {
         // wait for handshake to finish
         int secondsLeft = 30;
         while (!selector.isChannelReady(node) && secondsLeft-- > 0) {
             selector.poll(1000L);
         }
-        assertTrue(selector.isChannelReady(node));
+        assertTrue(selector.isChannelReady(node), String.format("Channel %s was not ready after 30 seconds", node));
     }
 
     public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState) throws IOException {

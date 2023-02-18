@@ -47,6 +47,17 @@ public interface ChangelogReader extends ChangelogRegister {
     Set<TopicPartition> completedChangelogs();
 
     /**
+     * Returns whether all changelog partitions were completely read.
+     *
+     * Since changelog partitions for standby tasks are never completely read, this method will always return
+     * {@code false} if the changelog reader registered changelog partitions for standby tasks.
+     *
+     * @return {@code true} if all changelog partitions were completely read and no standby changelog partitions are read,
+     *         {@code false} otherwise
+     */
+    boolean allChangelogsCompleted();
+
+    /**
      * Clear all partitions
      */
     void clear();

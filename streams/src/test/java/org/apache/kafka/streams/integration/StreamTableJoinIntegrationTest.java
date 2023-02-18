@@ -23,8 +23,10 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -38,6 +40,8 @@ import java.util.List;
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
 public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private KStream<Long, String> leftStream;
     private KTable<Long, String> rightTable;
 

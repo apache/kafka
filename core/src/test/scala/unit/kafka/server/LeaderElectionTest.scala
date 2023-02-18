@@ -138,9 +138,14 @@ class LeaderElectionTest extends QuorumTestHarness {
     val controllerContext = new ControllerContext
     controllerContext.setLiveBrokers(brokerAndEpochs)
     val metrics = new Metrics
-    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
-      metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
-    controllerChannelManager.startup()
+    val controllerChannelManager = new ControllerChannelManager(
+      () => controllerContext.epoch,
+      controllerConfig,
+      Time.SYSTEM,
+      metrics,
+      new StateChangeLogger(controllerId, inControllerContext = true, None)
+    )
+    controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
     try {
       val staleControllerEpoch = 0
       val partitionStates = Seq(
@@ -149,9 +154,9 @@ class LeaderElectionTest extends QuorumTestHarness {
           .setPartitionIndex(partitionId)
           .setControllerEpoch(2)
           .setLeader(brokerId2)
-          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch)
+          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch)
           .setIsr(Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava)
-          .setZkVersion(LeaderAndIsr.initialZKVersion)
+          .setPartitionEpoch(LeaderAndIsr.InitialPartitionEpoch)
           .setReplicas(Seq(0, 1).map(Integer.valueOf).asJava)
           .setIsNew(false)
       )

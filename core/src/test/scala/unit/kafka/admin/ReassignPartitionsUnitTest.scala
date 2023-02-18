@@ -66,7 +66,7 @@ class ReassignPartitionsUnitTest {
     assertEquals(Seq(
       "Status of partition reassignment:",
       "Reassignment of partition bar-0 is still in progress.",
-      "Reassignment of partition foo-0 is complete.",
+      "Reassignment of partition foo-0 is completed.",
       "Reassignment of partition foo-1 is still in progress.").
         mkString(System.lineSeparator()),
       partitionReassignmentStatesToString(Map(

@@ -22,6 +22,7 @@ import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Sanitizer;
 
 import java.util.Iterator;
@@ -57,7 +58,7 @@ public class KafkaYammerMetrics implements Reconfigurable {
 
     private KafkaYammerMetrics() {
         jmxReporter.start();
-        Runtime.getRuntime().addShutdownHook(new Thread(jmxReporter::shutdown));
+        Exit.addShutdownHook("kafka-jmx-shutdown-hook", jmxReporter::shutdown);
     }
 
     @Override

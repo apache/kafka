@@ -56,7 +56,7 @@ case object Both extends SaslSetupMode
 trait SaslSetup {
   private val workDir = TestUtils.tempDir()
   private val kdcConf = MiniKdc.createConfig
-  private var kdc: MiniKdc = null
+  private var kdc: MiniKdc = _
   private var serverKeytabFile: Option[File] = None
   private var clientKeytabFile: Option[File] = None
 
@@ -152,6 +152,13 @@ trait SaslSetup {
       JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile, serviceName.get)
     else
       JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile)
+  }
+
+  def jaasAdminLoginModule(clientSaslMechanism: String, serviceName: Option[String] = None): String = {
+    if (serviceName.isDefined)
+      JaasTestUtils.adminLoginModule(clientSaslMechanism, serverKeytabFile, serviceName.get)
+    else
+      JaasTestUtils.adminLoginModule(clientSaslMechanism, serverKeytabFile)
   }
 
   def jaasScramClientLoginModule(clientSaslScramMechanism: String, scramUser: String, scramPassword: String): String = {

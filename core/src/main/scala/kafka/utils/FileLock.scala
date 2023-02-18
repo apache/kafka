@@ -29,7 +29,7 @@ class FileLock(val file: File) extends Logging {
 
   private val channel = FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.READ,
     StandardOpenOption.WRITE)
-  private var flock: java.nio.channels.FileLock = null
+  private var flock: java.nio.channels.FileLock = _
 
   /**
    * Lock the file or throw an exception if the lock is already held
@@ -73,7 +73,7 @@ class FileLock(val file: File) extends Logging {
   /**
    * Destroy this lock, closing the associated FileChannel
    */
-  def destroy() = {
+  def destroy(): Unit = {
     this synchronized {
       unlock()
       channel.close()

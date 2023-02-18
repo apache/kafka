@@ -165,7 +165,7 @@ public class TaggedFields extends DocumentedType {
             }
             return objects;
         } catch (ClassCastException e) {
-            throw new SchemaException("Not a NavigableMap.");
+            throw new SchemaException("Not a NavigableMap. Found class " + item.getClass().getSimpleName());
         }
     }
 
@@ -177,5 +177,12 @@ public class TaggedFields extends DocumentedType {
     @Override
     public String documentation() {
         return "Represents a series of tagged fields.";
+    }
+
+    /**
+     * The number of tagged fields
+     */
+    public int numFields() {
+        return this.fields.size();
     }
 }

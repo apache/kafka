@@ -62,19 +62,22 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {
+      val allRemovedPartitionsMap = mutable.Map[TopicPartition, InitialFetchState]()
       fetcherThreadMap.forKeyValue { (id, thread) =>
-        val partitionStates = removeFetcherForPartitions(thread.partitions)
+        val partitionStates = thread.removeAllPartitions()
         if (id.fetcherId >= newSize)
           thread.shutdown()
-        val fetchStates = partitionStates.map { case (topicPartition, currentFetchState) =>
-          val initialFetchState = InitialFetchState(currentFetchState.topicId, thread.sourceBroker,
-            currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
-            initOffset = currentFetchState.fetchOffset)
-          topicPartition -> initialFetchState
+        partitionStates.forKeyValue { (topicPartition, currentFetchState) =>
+            val initialFetchState = InitialFetchState(currentFetchState.topicId, thread.leader.brokerEndPoint(),
+              currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
+              initOffset = currentFetchState.fetchOffset)
+            allRemovedPartitionsMap += topicPartition -> initialFetchState
         }
-        addFetcherForPartitions(fetchStates)
       }
+      // failed partitions are removed when adding partitions to fetcher
+      addFetcherForPartitions(allRemovedPartitionsMap)
     }
+
     lock synchronized {
       val currentSize = numFetchersPerBroker
       info(s"Resizing fetcher thread pool size from $currentSize to $newSize")
@@ -136,7 +139,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
       for ((brokerAndFetcherId, initialFetchOffsets) <- partitionsPerFetcher) {
         val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerAndFetcherId.broker.id, brokerAndFetcherId.fetcherId)
         val fetcherThread = fetcherThreadMap.get(brokerIdAndFetcherId) match {
-          case Some(currentFetcherThread) if currentFetcherThread.sourceBroker == brokerAndFetcherId.broker =>
+          case Some(currentFetcherThread) if currentFetcherThread.leader.brokerEndPoint() == brokerAndFetcherId.broker =>
             // reuse the fetcher thread
             currentFetcherThread
           case Some(f) =>
@@ -145,7 +148,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
           case None =>
             addAndStartFetcherThread(brokerAndFetcherId, brokerIdAndFetcherId)
         }
-
+        // failed partitions are removed when added partitions to thread
         addPartitionsToFetcherThread(fetcherThread, initialFetchOffsets)
       }
     }
@@ -160,7 +163,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   protected def addPartitionsToFetcherThread(fetcherThread: T,
                                              initialOffsetAndEpochs: collection.Map[TopicPartition, InitialFetchState]): Unit = {
     fetcherThread.addPartitions(initialOffsetAndEpochs)
-    info(s"Added fetcher to broker ${fetcherThread.sourceBroker.id} for partitions $initialOffsetAndEpochs")
+    info(s"Added fetcher to broker ${fetcherThread.leader.brokerEndPoint().id} for partitions $initialOffsetAndEpochs")
   }
 
   /**
@@ -250,6 +253,10 @@ class FailedPartitions {
 
   def contains(topicPartition: TopicPartition): Boolean = synchronized {
     failedPartitionsSet.contains(topicPartition)
+  }
+
+  def partitions(): Set[TopicPartition] = synchronized {
+    failedPartitionsSet.toSet
   }
 }
 

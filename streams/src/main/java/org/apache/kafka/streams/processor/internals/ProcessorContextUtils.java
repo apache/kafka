@@ -35,14 +35,6 @@ public final class ProcessorContextUtils {
     private ProcessorContextUtils() {}
 
     /**
-     * Note that KIP-622 would move currentSystemTimeMs to ProcessorContext,
-     * removing the need for this method.
-     */
-    public static long currentSystemTime(final ProcessorContext context) {
-        return context.currentSystemTimeMs();
-    }
-
-    /**
      * Should be removed as part of KAFKA-10217
      */
     public static StreamsMetricsImpl getMetricsImpl(final ProcessorContext context) {
@@ -56,21 +48,29 @@ public final class ProcessorContextUtils {
         return (StreamsMetricsImpl) context.metrics();
     }
 
-    public static String changelogFor(final ProcessorContext context, final String storeName) {
+    public static String changelogFor(final ProcessorContext context, final String storeName, final Boolean newChangelogTopic) {
         final String prefix = getPrefix(context.appConfigs(), context.applicationId());
-        return context instanceof InternalProcessorContext
-            ? ((InternalProcessorContext) context).changelogFor(storeName)
-            : ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
+        if (context instanceof InternalProcessorContext && !newChangelogTopic) {
+            final String changelogTopic = ((InternalProcessorContext) context).changelogFor(storeName);
+            if (changelogTopic != null)
+                return changelogTopic;
+
+        }
+        return ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
     }
 
-    public static String changelogFor(final StateStoreContext context, final String storeName) {
+    public static String changelogFor(final StateStoreContext context, final String storeName, final Boolean newChangelogTopic) {
         final String prefix = getPrefix(context.appConfigs(), context.applicationId());
-        return context instanceof InternalProcessorContext
-            ? ((InternalProcessorContext) context).changelogFor(storeName)
-            : ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
+        if (context instanceof InternalProcessorContext && !newChangelogTopic) {
+            final String changelogTopic = ((InternalProcessorContext) context).changelogFor(storeName);
+            if (changelogTopic != null)
+                return changelogTopic;
+
+        }
+        return ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
     }
 
-    private static String getPrefix(final Map<String, Object> configs, final String applicationId) {
+    public static String getPrefix(final Map<String, Object> configs, final String applicationId) {
         if (configs == null) {
             return applicationId;
         } else {

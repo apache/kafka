@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.PolicyViolationException;
@@ -24,15 +25,15 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.server.config.ConfigSynonym;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
-import org.apache.kafka.timeline.SnapshotRegistry;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -53,6 +54,8 @@ import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SUBTRACT;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
+import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
+import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -69,10 +72,19 @@ public class ConfigurationControlManagerTest {
         CONFIGS.put(TOPIC, new ConfigDef().
             define("abc", ConfigDef.Type.LIST, ConfigDef.Importance.HIGH, "abc").
             define("def", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "def").
-            define("ghi", ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.HIGH, "ghi"));
+            define("ghi", ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.HIGH, "ghi").
+            define("quuux", ConfigDef.Type.LONG, ConfigDef.Importance.HIGH, "quux"));
     }
 
-    static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS);
+    public static final Map<String, List<ConfigSynonym>> SYNONYMS = new HashMap<>();
+
+    static {
+        SYNONYMS.put("abc", Arrays.asList(new ConfigSynonym("foo.bar")));
+        SYNONYMS.put("def", Arrays.asList(new ConfigSynonym("baz")));
+        SYNONYMS.put("quuux", Arrays.asList(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
+    }
+
+    static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS, SYNONYMS);
 
     static final ConfigResource BROKER0 = new ConfigResource(BROKER, "0");
     static final ConfigResource MYTOPIC = new ConfigResource(TOPIC, "mytopic");
@@ -101,26 +113,11 @@ public class ConfigurationControlManagerTest {
         return new SimpleImmutableEntry<>(a, b);
     }
 
-    static ConfigurationControlManager newConfigurationControlManager() {
-        return newConfigurationControlManager(Optional.empty());
-    }
-
-    static ConfigurationControlManager newConfigurationControlManager(
-        Optional<AlterConfigPolicy> alterConfigPolicy
-    ) {
-        LogContext logContext = new LogContext();
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        return new ConfigurationControlManager(logContext,
-                snapshotRegistry,
-                SCHEMA,
-                TestExistenceChecker.INSTANCE,
-                alterConfigPolicy,
-                ConfigurationValidator.NO_OP);
-    }
-
     @Test
     public void testReplay() throws Exception {
-        ConfigurationControlManager manager = newConfigurationControlManager();
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA).
+            build();
         assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
@@ -139,19 +136,13 @@ public class ConfigurationControlManagerTest {
             setName("def").setValue("blah"));
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
             manager.getConfigs(MYTOPIC));
-        RecordTestUtils.assertBatchIteratorContains(asList(
-            asList(new ApiMessageAndVersion(new ConfigRecord().
-                    setResourceType(TOPIC.id()).setResourceName("mytopic").
-                    setName("abc").setValue("x,y,z"), (short) 0),
-                new ApiMessageAndVersion(new ConfigRecord().
-                    setResourceType(TOPIC.id()).setResourceName("mytopic").
-                    setName("def").setValue("blah"), (short) 0))),
-            manager.iterator(Long.MAX_VALUE));
     }
 
     @Test
     public void testIncrementalAlterConfigs() {
-        ConfigurationControlManager manager = newConfigurationControlManager();
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA).
+            build();
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
             incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
@@ -162,7 +153,7 @@ public class ConfigurationControlManagerTest {
 
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
-                    setName("abc").setValue("123"), (short) 0)),
+                    setName("abc").setValue("123"), CONFIG_RECORD.highestSupportedVersion())),
                 toMap(entry(BROKER0, new ApiError(Errors.INVALID_CONFIG,
                             "Can't SUBTRACT to key baz because its type is not LIST.")),
                     entry(MYTOPIC, ApiError.NONE))), result);
@@ -171,7 +162,7 @@ public class ConfigurationControlManagerTest {
 
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
-                    setName("abc").setValue(null), (short) 0)),
+                    setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
                 toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry("abc", entry(DELETE, "xyz"))))),
@@ -179,8 +170,81 @@ public class ConfigurationControlManagerTest {
     }
 
     @Test
+    public void testIncrementalAlterConfig() {
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA).
+            build();
+        Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps = toMap(entry("abc", entry(APPEND, "123")));
+
+        ControllerResult<ApiError> result = manager.
+            incrementalAlterConfig(MYTOPIC, keyToOps, true);
+
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                    setName("abc").setValue("123"), CONFIG_RECORD.highestSupportedVersion())),
+            ApiError.NONE), result);
+
+        RecordTestUtils.replayAll(manager, result.records());
+
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+                    new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                        setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
+                ApiError.NONE),
+            manager.incrementalAlterConfig(MYTOPIC, toMap(entry("abc", entry(DELETE, "xyz"))), true));
+    }
+
+    @Test
+    public void testIncrementalAlterMultipleConfigValues() {
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA).
+            build();
+
+        ControllerResult<Map<ConfigResource, ApiError>> result = manager.
+            incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456,789"))))), true);
+
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                    setName("abc").setValue("123,456,789"), CONFIG_RECORD.highestSupportedVersion())),
+                toMap(entry(MYTOPIC, ApiError.NONE))), result);
+
+        RecordTestUtils.replayAll(manager, result.records());
+
+        // It's ok for the appended value to be already present
+        result = manager
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456"))))), true);
+        assertEquals(
+            ControllerResult.atomicOf(Collections.emptyList(), toMap(entry(MYTOPIC, ApiError.NONE))),
+            result
+        );
+        RecordTestUtils.replayAll(manager, result.records());
+
+        result = manager
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true);
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                    setName("abc").setValue("789"), CONFIG_RECORD.highestSupportedVersion())),
+                toMap(entry(MYTOPIC, ApiError.NONE))),
+                result);
+        RecordTestUtils.replayAll(manager, result.records());
+
+        // It's ok for the deleted value not to be present
+        result = manager
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123456"))))), true);
+        assertEquals(
+            ControllerResult.atomicOf(Collections.emptyList(), toMap(entry(MYTOPIC, ApiError.NONE))),
+            result
+        );
+        RecordTestUtils.replayAll(manager, result.records());
+
+        assertEquals("789", manager.getConfigs(MYTOPIC).get("abc"));
+    }
+
+    @Test
     public void testIncrementalAlterConfigsWithoutExistence() {
-        ConfigurationControlManager manager = newConfigurationControlManager();
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA).
+            setExistenceChecker(TestExistenceChecker.INSTANCE).
+            build();
         ConfigResource existingTopic = new ConfigResource(TOPIC, "ExistingTopic");
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
@@ -191,7 +255,7 @@ public class ConfigurationControlManagerTest {
 
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("ExistingTopic").
-                    setName("def").setValue("newVal"), (short) 0)),
+                    setName("def").setValue("newVal"), CONFIG_RECORD.highestSupportedVersion())),
             toMap(entry(BROKER0, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION,
                     "Unknown resource.")),
                 entry(existingTopic, ApiError.NONE))), result);
@@ -234,17 +298,30 @@ public class ConfigurationControlManagerTest {
     public void testIncrementalAlterConfigsWithPolicy() {
         MockAlterConfigsPolicy policy = new MockAlterConfigsPolicy(asList(
             new RequestMetadata(MYTOPIC, Collections.emptyMap()),
-            new RequestMetadata(BROKER0, toMap(entry("foo.bar", "123"),
-                entry("quux", "456")))));
-
-        ConfigurationControlManager manager = newConfigurationControlManager(Optional.of(policy));
-
+            new RequestMetadata(BROKER0, toMap(
+                entry("foo.bar", "123"),
+                entry("quux", "456"),
+                entry("broker.config.to.remove", null)))));
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA).
+            setAlterConfigPolicy(Optional.of(policy)).
+            build();
+        // Existing configs should not be passed to the policy
+        manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                setName("broker.config").setValue("123"));
+        manager.replay(new ConfigRecord().setResourceType(TOPIC.id()).setResourceName(MYTOPIC.name()).
+                setName("topic.config").setValue("123"));
+        manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                setName("broker.config.to.remove").setValue("123"));
         assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("foo.bar").setValue("123"), (short) 0), new ApiMessageAndVersion(
+                    setName("foo.bar").setValue("123"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("quux").setValue("456"), (short) 0)),
-            toMap(entry(MYTOPIC, new ApiError(Errors.POLICY_VIOLATION,
+                    setName("quux").setValue("456"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
+                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                    setName("broker.config.to.remove").setValue(null), CONFIG_RECORD.highestSupportedVersion())
+                ),
+                toMap(entry(MYTOPIC, new ApiError(Errors.POLICY_VIOLATION,
                     "Expected: AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
                     "type=TOPIC, name='mytopic'), configs={}). Got: " +
                     "AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
@@ -253,21 +330,47 @@ public class ConfigurationControlManagerTest {
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry("foo.bar", entry(SET, "123")))),
                 entry(BROKER0, toMap(
-                entry("foo.bar", entry(SET, "123")),
-                entry("quux", entry(SET, "456"))))),
+                        entry("foo.bar", entry(SET, "123")),
+                        entry("quux", entry(SET, "456")),
+                        entry("broker.config.to.remove", entry(DELETE, null))
+                ))),
                 true));
+    }
+
+    private static class CheckForNullValuesPolicy implements AlterConfigPolicy {
+        @Override
+        public void validate(RequestMetadata actual) throws PolicyViolationException {
+            actual.configs().forEach((key, value) -> {
+                if (value == null) {
+                    throw new PolicyViolationException("Legacy Alter Configs should not see null values");
+                }
+            });
+        }
+
+        @Override
+        public void close() throws Exception {
+            // empty
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // empty
+        }
     }
 
     @Test
     public void testLegacyAlterConfigs() {
-        ConfigurationControlManager manager = newConfigurationControlManager();
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA).
+            setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
+            build();
         List<ApiMessageAndVersion> expectedRecords1 = asList(
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
-                setName("abc").setValue("456"), (short) 0),
+                setName("abc").setValue("456"), CONFIG_RECORD.highestSupportedVersion()),
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
-                setName("def").setValue("901"), (short) 0));
+                setName("def").setValue("901"), CONFIG_RECORD.highestSupportedVersion()));
         assertEquals(ControllerResult.atomicOf(
                 expectedRecords1, toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(
@@ -283,7 +386,7 @@ public class ConfigurationControlManagerTest {
                     .setResourceName("mytopic")
                     .setName("abc")
                     .setValue(null),
-                (short) 0)),
+                CONFIG_RECORD.highestSupportedVersion())),
             toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))),
                 true));

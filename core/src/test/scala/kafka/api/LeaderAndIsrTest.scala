@@ -31,4 +31,45 @@ final class LeaderAndIsrTest {
     assertEquals(List(3), recoveringLeaderAndIsr.isr)
     assertEquals(LeaderRecoveryState.RECOVERING, recoveringLeaderAndIsr.leaderRecoveryState)
   }
+
+  @Test
+  def testNewLeaderAndIsr(): Unit = {
+    val leaderAndIsr = LeaderAndIsr(1, List(1, 2))
+    val newLeaderAndIsr = leaderAndIsr.newLeaderAndIsr(2, List(1, 2))
+
+    assertEquals(2, newLeaderAndIsr.leader)
+    assertEquals(List(1, 2), newLeaderAndIsr.isr)
+    assertEquals(LeaderRecoveryState.RECOVERED, newLeaderAndIsr.leaderRecoveryState)
+  }
+
+  @Test
+  def testNewLeader(): Unit = {
+    val leaderAndIsr = LeaderAndIsr(2, List(1, 2, 3))
+
+    assertEquals(2, leaderAndIsr.leader)
+    assertEquals(List(1, 2, 3), leaderAndIsr.isr)
+
+    val newLeaderAndIsr = leaderAndIsr.newLeader(3)
+
+    assertEquals(3, newLeaderAndIsr.leader)
+    assertEquals(List(1, 2, 3), newLeaderAndIsr.isr)
+  }
+
+  @Test
+  def testNewEpoch() : Unit = {
+    val leaderAndIsr = LeaderAndIsr(3, List(1, 2, 3))
+
+    assertEquals(0, leaderAndIsr.leaderEpoch)
+
+    val leaderWithNewEpoch = leaderAndIsr.newEpoch
+
+    assertEquals(1, leaderWithNewEpoch.leaderEpoch)
+  }
+
+  @Test
+  def testLeaderOpt() : Unit = {
+    val leaderAndIsr = LeaderAndIsr(2, List(1, 2, 3))
+
+    assertEquals(2, leaderAndIsr.leaderOpt.get)
+  }
 }
