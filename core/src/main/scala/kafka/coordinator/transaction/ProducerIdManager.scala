@@ -154,12 +154,8 @@ class ZkProducerIdManager(brokerId: Int, zkClient: KafkaZkClient) extends Produc
 }
 
 /**
- * RPCProducerIdManager allocates producer id blocks asynchronously. generateProducerId() will return an
- * error for the producer to retry if the manager is waiting for a new block. Any failure while processing
- * AllocateProducerIdsResponse will be logged in the broker.
- *
- * We return COORDINATOR_LOAD_IN_PROGRESS rather than REQUEST_TIMED_OUT since older clients treat timeout as fatal
- * when it should be retriable like COORDINATOR_LOAD_IN_PROGRESS.
+ * RPCProducerIdManager allocates producer id blocks asynchronously and will immediately fail requests
+ * for producers to retry if it does not have an available producer id and is waiting on a new block.
  */
 class RPCProducerIdManager(brokerId: Int,
                            time: Time,
@@ -185,7 +181,8 @@ class RPCProducerIdManager(brokerId: Int,
         // Check the next block if current block is full
         val block = nextProducerIdBlock.getAndSet(null)
         if (block == null) {
-          // Next block is unavailable. Return immediately
+          // Return COORDINATOR_LOAD_IN_PROGRESS rather than REQUEST_TIMED_OUT since older clients treat the error as fatal
+          // when it should be retriable like COORDINATOR_LOAD_IN_PROGRESS.
           maybeRequestNextBlock(currentBlockCount)
           Failure(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block"))
         } else {
