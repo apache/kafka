@@ -22,24 +22,32 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import joptsimple.OptionSpec;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DeleteRecordsResult;
+import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
+import org.apache.kafka.server.util.CoreUtils;
 
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.StringJoiner;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 /**
  * A command for delete records of the given partitions down to the specified offset.
  */
 public class DeleteRecordsCommand {
-    private static final int EarliestVersion = 1;
+    private static final int EARLIEST_VERSION = 1;
 
     public static void main(String[] args) throws Exception {
         execute(args, System.out);
@@ -51,7 +59,7 @@ public class DeleteRecordsCommand {
 
             JsonNode js = mapper.readTree(jsonData);
 
-            int version = EarliestVersion;
+            int version = EARLIEST_VERSION;
 
             if (js.has("version"))
                 version = js.get("version").asInt();
@@ -60,7 +68,6 @@ public class DeleteRecordsCommand {
         } catch (JsonProcessingException e) {
             throw new AdminOperationException("The input string is not a valid JSON");
         }
-
     }
 
     private static Collection<Tuple<TopicPartition, Long>> parseJsonData(int version, JsonNode js) {
@@ -93,10 +100,34 @@ public class DeleteRecordsCommand {
         String offsetJsonString = Utils.readFileAsString(offsetJsonFile);
         Collection<Tuple<TopicPartition, Long>> offsetSeq = parseOffsetJsonStringWithoutDedup(offsetJsonString);
 
-        Iterable<TopicPartition> duplicatePartitions = null; // TODO: CoreUtils.duplicates(offsetSeq.map { case (tp, _) => tp })
+        Iterable<TopicPartition> duplicatePartitions =
+            CoreUtils.duplicates(offsetSeq.stream().map(Tuple::v1).collect(Collectors.toSet()));
 
-        if (duplicatePartitions.iterator().hasNext())
-            throw new AdminCommandFailedException("Offset json file contains duplicate topic partitions: %s".format(duplicatePartitions.mkString(",")))
+        if (duplicatePartitions.iterator().hasNext()) {
+            StringJoiner duplicates = new StringJoiner(",");
+            duplicatePartitions.forEach(tp -> duplicates.add(tp.toString()));
+            throw new AdminCommandFailedException(
+                String.format("Offset json file contains duplicate topic partitions: %s", duplicates)
+            );
+        }
+
+        Map<TopicPartition, RecordsToDelete> recordsToDelete = offsetSeq.stream()
+            .map(tuple -> new Tuple<>(tuple.v1, RecordsToDelete.beforeOffset(tuple.v2)))
+            .collect(Collectors.toMap(Tuple::v1, Tuple::v2));
+
+        out.println("Executing records delete operation");
+        DeleteRecordsResult deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
+        out.println("Records delete operation completed:");
+
+        deleteRecordsResult.lowWatermarks().forEach((tp, partitionResult) -> {
+            try {
+                out.printf("partition: %s\tlow_watermark: %s%n", tp, partitionResult.get().lowWatermark());
+            } catch (InterruptedException | ExecutionException e) {
+                out.printf("partition: %s\terror: %s%n", tp, e.getMessage());
+            }
+        });
+
+        adminClient.close();
     }
 
     private static Admin createAdminClient(DeleteRecordsCommandOptions opts) throws IOException {
