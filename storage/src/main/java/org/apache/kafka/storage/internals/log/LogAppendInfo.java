@@ -38,21 +38,22 @@ public class LogAppendInfo {
 
     private Optional<LogOffsetMetadata> firstOffset;
     private long lastOffset;
-    private OptionalInt lastLeaderEpoch;
     private long maxTimestamp;
     private long offsetOfMaxTimestamp;
     private long logAppendTime;
     private long logStartOffset;
     private RecordConversionStats recordConversionStats;
-    private CompressionType sourceCompression;
-    private CompressionType targetCompression;
-    private int shallowCount;
-    private int validBytes;
-    private boolean offsetsMonotonic;
-    private long lastOffsetOfFirstBatch;
-    private List<RecordError> recordErrors;
-    private String errorMessage;
-    private LeaderHwChange leaderHwChange;
+
+    private final OptionalInt lastLeaderEpoch;
+    private final CompressionType sourceCompression;
+    private final CompressionType targetCompression;
+    private final int shallowCount;
+    private final int validBytes;
+    private final boolean offsetsMonotonic;
+    private final long lastOffsetOfFirstBatch;
+    private final List<RecordError> recordErrors;
+    private final String errorMessage;
+    private final LeaderHwChange leaderHwChange;
 
     /**
      * Creates an instance with the given params.
