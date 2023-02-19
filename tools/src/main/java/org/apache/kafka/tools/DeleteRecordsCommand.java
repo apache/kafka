@@ -17,17 +17,23 @@
 package org.apache.kafka.tools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import joptsimple.OptionSpec;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
+import java.io.IOException;
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Objects;
+import java.util.Properties;
 
 /**
  * A command for delete records of the given partitions down to the specified offset.
@@ -35,31 +41,78 @@ import java.util.Objects;
 public class DeleteRecordsCommand {
     private static final int EarliestVersion = 1;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         execute(args, System.out);
     }
 
-    private Collection<Tuple<TopicPartition, Long>> parseOffsetJsonStringWithoutDedup(String jsonData) {
+    private static Collection<Tuple<TopicPartition, Long>> parseOffsetJsonStringWithoutDedup(String jsonData) {
         try {
             ObjectMapper mapper = new ObjectMapper();
 
             JsonNode js = mapper.readTree(jsonData);
-        } catch (JsonMappingException | JsonProcessingException e) {
-            throw new AdminOperationException("The input string is not a valid JSON")
+
+            int version = EarliestVersion;
+
+            if (js.has("version"))
+                version = js.get("version").asInt();
+
+            return parseJsonData(version, js);
+        } catch (JsonProcessingException e) {
+            throw new AdminOperationException("The input string is not a valid JSON");
         }
 
     }
 
-    public static void execute(String[] args, PrintStream out) {
+    private static Collection<Tuple<TopicPartition, Long>> parseJsonData(int version, JsonNode js) {
+        if (version == 1) {
+            JsonNode partitions = js.get("partitions");
 
+            if (partitions == null || !partitions.isArray())
+                throw new AdminOperationException("Missing partitions field");
+
+            Collection<Tuple<TopicPartition, Long>> res = new ArrayList<>();
+
+            partitions.elements().forEachRemaining(partitionJs -> {
+                String topic = partitionJs.get("topic").asText();
+                int partition = partitionJs.get("partition").asInt();
+                Long offset = partitionJs.get("offset").asLong();
+
+                res.add(new Tuple<>(new TopicPartition(topic, partition), offset));
+            });
+
+            return res;
+        }
+
+        throw new AdminOperationException("Not supported version field value " + version);
     }
 
-    private static class JmxToolOptions extends CommandDefaultOptions {
-        private final OptionSpec<?> bootstrapServerOpt;
-        private final OptionSpec<?> offsetJsonFileOpt;
-        private final OptionSpec<?> commandConfigOpt;
+    public static void execute(String[] args, PrintStream out) throws IOException {
+        DeleteRecordsCommandOptions opts = new DeleteRecordsCommandOptions(args);
+        Admin adminClient = createAdminClient(opts);
+        String offsetJsonFile = opts.options.valueOf(opts.offsetJsonFileOpt);
+        String offsetJsonString = Utils.readFileAsString(offsetJsonFile);
+        Collection<Tuple<TopicPartition, Long>> offsetSeq = parseOffsetJsonStringWithoutDedup(offsetJsonString);
 
-        public JmxToolOptions(String[] args) {
+        Iterable<TopicPartition> duplicatePartitions = null; // TODO: CoreUtils.duplicates(offsetSeq.map { case (tp, _) => tp })
+
+        if (duplicatePartitions.iterator().hasNext())
+            throw new AdminCommandFailedException("Offset json file contains duplicate topic partitions: %s".format(duplicatePartitions.mkString(",")))
+    }
+
+    private static Admin createAdminClient(DeleteRecordsCommandOptions opts) throws IOException {
+        Properties props = opts.options.has(opts.commandConfigOpt)
+            ? Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
+            : new Properties();
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
+        return Admin.create(props);
+    }
+
+    private static class DeleteRecordsCommandOptions extends CommandDefaultOptions {
+        private final OptionSpec<String> bootstrapServerOpt;
+        private final OptionSpec<String> offsetJsonFileOpt;
+        private final OptionSpec<String> commandConfigOpt;
+
+        public DeleteRecordsCommandOptions(String[] args) {
             super(args);
 
             bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server to connect to.")
