@@ -151,13 +151,6 @@ public class OffsetStorageWriter {
     }
 
     /**
-     * @return whether there's anything to flush right now.
-     */
-    public synchronized boolean willFlush() {
-        return !data.isEmpty();
-    }
-
-    /**
      * Flush the current offsets and clear them from this writer. This is non-blocking: it
      * moves the current set of offsets out of the way, serializes the data, and asynchronously
      * writes the data to the backing store. If no offsets need to be written, the callback is

@@ -68,6 +68,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -265,7 +266,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         final RawAndDeserializedValue<String> valueWithBinary = metered.getWithBinary(KEY);
         assertEquals(valueWithBinary.value, VALUE_AND_TIMESTAMP);
-        assertEquals(valueWithBinary.serializedValue, VALUE_AND_TIMESTAMP_BYTES);
+        assertArrayEquals(valueWithBinary.serializedValue, VALUE_AND_TIMESTAMP_BYTES);
     }
 
     @SuppressWarnings("resource")

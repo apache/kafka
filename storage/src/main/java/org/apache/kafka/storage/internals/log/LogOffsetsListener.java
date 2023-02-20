@@ -14,24 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.rest.entities;
+package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
-import org.junit.Test;
+/**
+ * Listener receive notification from the Log.
+ *
+ * Note that the callbacks are executed in the thread that triggers the change
+ * AND that locks may be held during their execution. They are meant to be used
+ * as notification mechanism only.
+ */
+public interface LogOffsetsListener {
+    /**
+     * A default no op offsets listener.
+     */
+    LogOffsetsListener NO_OP_OFFSETS_LISTENER = new LogOffsetsListener() { };
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-public class PluginInfoTest {
-
-    @Test
-    public void testNoVersionFilter() {
-        PluginInfo.NoVersionFilter filter = new PluginInfo.NoVersionFilter();
-        // We intentionally refrain from using assertEquals and assertNotEquals
-        // here to ensure that the filter's equals() method is used
-        assertFalse(filter.equals("1.0"));
-        assertFalse(filter.equals(new Object()));
-        assertFalse(filter.equals(null));
-        assertTrue(filter.equals(DelegatingClassLoader.UNDEFINED_VERSION));
-    }
+    /**
+     * Called when the Log increments its high watermark.
+     */
+    default void onHighWatermarkUpdated(long offset) {}
 }

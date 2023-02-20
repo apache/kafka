@@ -16,15 +16,17 @@
  */
 package kafka.common
 
+import kafka.utils.Logging
+
 import java.util.Map.Entry
 import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
-import kafka.utils.ShutdownableThread
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, KafkaClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.{AuthenticationException, DisconnectException}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.jdk.CollectionConverters._
 
@@ -37,7 +39,9 @@ abstract class InterBrokerSendThread(
   requestTimeoutMs: Int,
   time: Time,
   isInterruptible: Boolean = true
-) extends ShutdownableThread(name, isInterruptible) {
+) extends ShutdownableThread(name, isInterruptible) with Logging {
+
+  this.logIdent = logPrefix
 
   private val unsentRequests = new UnsentRequests
 
