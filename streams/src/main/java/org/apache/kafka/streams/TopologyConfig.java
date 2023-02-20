@@ -69,10 +69,10 @@ public class TopologyConfig extends AbstractConfig {
                 Importance.LOW,
                 BUFFERED_RECORDS_PER_PARTITION_DOC)
             .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                    Type.LONG,
-                    null,
-                    Importance.MEDIUM,
-                    CACHE_MAX_BYTES_BUFFERING_DOC)
+                Type.LONG,
+                null,
+                Importance.MEDIUM,
+                CACHE_MAX_BYTES_BUFFERING_DOC)
             .define(STATESTORE_CACHE_MAX_BYTES_CONFIG,
                 Type.LONG,
                 null,
@@ -138,7 +138,10 @@ public class TopologyConfig extends AbstractConfig {
             maxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
             log.info("Topology {} is overriding {} to {}", topologyName, BUFFERED_RECORDS_PER_PARTITION_CONFIG, maxBufferedSize);
         } else {
-            maxBufferedSize = globalAppConfigs.getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+            // If the user hasn't explicitly set the buffered.records.per.partition config, then leave it unbounded
+            // and rely on the input.buffer.max.bytes instead to keep the memory usage under control
+            maxBufferedSize = globalAppConfigs.originals().containsKey(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG)
+                    ? globalAppConfigs.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG) : -1;
         }
 
         final boolean stateStoreCacheMaxBytesOverridden = isTopologyOverride(STATESTORE_CACHE_MAX_BYTES_CONFIG, topologyOverrides);

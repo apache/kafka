@@ -416,13 +416,37 @@ public class AdjustStreamThreadCountTest {
 
                 for (final String log : appender.getMessages()) {
                     // all 10 bytes should be available for remaining thread
-                    if (log.endsWith("Resizing thread cache due to thread removal, new cache size per thread is 10")) {
+                    if (log.contains("Resizing thread cache/max buffer size due to removal of thread ") && log.contains(", new cache size/max buffer size per thread is 10/536870912")) {
                         return;
                     }
                 }
             }
         }
         fail();
+    }
+
+    @Test
+    public void shouldResizeMaxBufferAfterThreadRemovalTimesOut() throws InterruptedException {
+        final long maxBufferBytes = 10L;
+        final Properties props = new Properties();
+        props.putAll(properties);
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        props.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, maxBufferBytes);
+
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
+            addStreamStateChangeListener(kafkaStreams);
+            startStreamsAndWaitForRunning(kafkaStreams);
+
+            try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class)) {
+                assertThrows(TimeoutException.class, () -> kafkaStreams.removeStreamThread(Duration.ofSeconds(0)));
+                for (final String log : appender.getMessages()) {
+                    // all 10 bytes should be available for remaining thread
+                    if (log.contains("Resizing thread cache/max buffer size due to removal of thread ") && log.contains(", new cache size/max buffer size per thread is 10485760/10")) {
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     @Test
@@ -472,8 +496,8 @@ public class AdjustStreamThreadCountTest {
                 waitForTransitionFromRebalancingToRunning();
 
                 for (final String log : appender.getMessages()) {
-                    // after we replace the thread there should be two remaining threads with 5 bytes each
-                    if (log.endsWith("Adding StreamThread-3, there will now be 2 live threads and the new cache size per thread is 5")) {
+                    // after we replace the thread there should be two remaining threads with 5 bytes of cache size each
+                    if (log.endsWith("Adding StreamThread-3, there are now 2 threads with cache size/max buffer size values as 5/50 per thread.")) {
                         return;
                     }
                 }

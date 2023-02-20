@@ -323,6 +323,7 @@ public class StreamThread extends Thread {
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
+    private final AtomicLong maxBufferSizeBytes = new AtomicLong(-1L);
     private final boolean eosEnabled;
     private final boolean stateUpdaterEnabled;
 
@@ -336,6 +337,7 @@ public class StreamThread extends Thread {
                                       final Time time,
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
+                                      final long maxBufferSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx,
@@ -441,7 +443,8 @@ public class StreamThread extends Thread {
             referenceContainer.nonFatalExceptionsToHandle,
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
-            cache::resize
+            cache::resize,
+            maxBufferSizeBytes
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
@@ -482,7 +485,8 @@ public class StreamThread extends Thread {
                         final Queue<StreamsException> nonFatalExceptionsToHandle,
                         final Runnable shutdownErrorHook,
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
-                        final java.util.function.Consumer<Long> cacheResizer) {
+                        final java.util.function.Consumer<Long> cacheResizer,
+                        final long maxBufferSizeBytes) {
         super(threadId);
         this.stateLock = new Object();
         this.adminClient = adminClient;
@@ -551,6 +555,7 @@ public class StreamThread extends Thread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
+        this.maxBufferSizeBytes.set(maxBufferSizeBytes);
         this.stateUpdaterEnabled = InternalConfig.getBoolean(config.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
     }
 
@@ -736,8 +741,17 @@ public class StreamThread extends Thread {
         }
     }
 
-    public void resizeCache(final long size) {
-        cacheResizeSize.set(size);
+    public void resizeCacheAndBufferMemory(final long cacheSize, final long maxBufferSize) {
+        cacheResizeSize.set(cacheSize);
+        maxBufferSizeBytes.set(maxBufferSize);
+    }
+
+    public long getCacheSize() {
+        return cacheResizeSize.get();
+    }
+
+    public long getMaxBufferSize() {
+        return maxBufferSizeBytes.get();
     }
 
     /**
@@ -820,6 +834,13 @@ public class StreamThread extends Thread {
 
                     totalProcessed += processed;
                     totalRecordsProcessedSinceLastSummary += processed;
+                    final long bufferSize = taskManager.getInputBufferSizeInBytes();
+                    if (bufferSize <= maxBufferSizeBytes.get() && !mainConsumer.paused().isEmpty()) {
+                        final Set<TopicPartition> pausedPartitions = mainConsumer.paused();
+                        log.info("Buffered records size {} bytes falls below {}. Resuming all the paused partitions {} in the consumer",
+                                bufferSize, maxBufferSizeBytes.get(), pausedPartitions);
+                        mainConsumer.resume(pausedPartitions);
+                    }
                 }
 
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
@@ -944,7 +965,8 @@ public class StreamThread extends Thread {
         }
     }
 
-    private long pollPhase() {
+    // Visible for testing
+    long pollPhase() {
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 
@@ -990,6 +1012,19 @@ public class StreamThread extends Thread {
         if (!records.isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
+            // Check buffer size after adding records to tasks
+            final long bufferSize = taskManager.getInputBufferSizeInBytes();
+            // Pausing partitions as the buffer size now exceeds max buffer size
+            if (bufferSize > maxBufferSizeBytes.get()) {
+                final Set<TopicPartition> nonEmptyPartitions = taskManager.nonEmptyPartitions();
+                log.info("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
+                        bufferSize, maxBufferSizeBytes.get(), nonEmptyPartitions);
+                // Only non-empty partitions are paused here. Reason is that, if a task has multiple partitions with
+                // some of them empty, then in that case pausing even empty partitions would sacrifice ordered processing
+                // and even lead to temporal deadlock. More explanation can be found here:
+                // https://issues.apache.org/jira/browse/KAFKA-13152
+                mainConsumer.pause(nonEmptyPartitions);
+            }
         }
 
         while (!nonFatalExceptionsToHandle.isEmpty()) {

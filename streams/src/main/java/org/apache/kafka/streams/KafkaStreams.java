@@ -86,7 +86,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -169,6 +168,7 @@ public class KafkaStreams implements AutoCloseable {
     protected final Admin adminClient;
     private final StreamsMetricsImpl streamsMetrics;
     private final long totalCacheSize;
+    private final long inputBufferMaxBytes;
     private final StreamStateListener streamStateListener;
     private final StateRestoreListener delegatingStateRestoreListener;
     private final Map<Long, StreamThread.State> threadState;
@@ -930,6 +930,7 @@ public class KafkaStreams implements AutoCloseable {
         delegatingStateRestoreListener = new DelegatingStateRestoreListener();
 
         totalCacheSize = getTotalCacheSize(applicationConfigs);
+        inputBufferMaxBytes = applicationConfigs.getLong(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG);
         final int numStreamThreads = topologyMetadata.getNumStreamThreads(applicationConfigs);
         final long cacheSizePerThread = getCacheSizePerThread(numStreamThreads);
 
@@ -941,7 +942,7 @@ public class KafkaStreams implements AutoCloseable {
                 applicationConfigs,
                 clientSupplier.getGlobalConsumer(applicationConfigs.getGlobalConsumerConfigs(clientId)),
                 stateDirectory,
-                cacheSizePerThread,
+                0L,
                 streamsMetrics,
                 time,
                 globalThreadId,
@@ -962,14 +963,20 @@ public class KafkaStreams implements AutoCloseable {
 
         queryableStoreProvider = new QueryableStoreProvider(globalStateStoreProvider);
         for (int i = 1; i <= numStreamThreads; i++) {
-            createAndAddStreamThread(cacheSizePerThread, i);
+            createAndAddStreamThread(0L, 0L, i);
+            // Initially, all Stream Threads are created with 0 cache size and max buffer size and then resized here.
+            resizeThreadCacheAndBufferMemory(numStreamThreads);
+            if (numStreamThreads > 0) {
+                log.info("Initializing {} StreamThread with cache size/max buffer size values as {} per thread.",
+                        numStreamThreads, getThreadCacheAndBufferMemoryString());
+            }
         }
 
         stateDirCleaner = setupStateDirCleaner();
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, applicationConfigs);
     }
 
-    private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final int threadIdx) {
+    private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final long maxBufferSizePerThread, final int threadIdx) {
         final StreamThread streamThread = StreamThread.create(
             topologyMetadata,
             applicationConfigs,
@@ -980,6 +987,7 @@ public class KafkaStreams implements AutoCloseable {
             streamsMetrics,
             time,
             streamsMetadataState,
+            maxBufferSizePerThread,
             cacheSizePerThread,
             stateDirectory,
             delegatingStateRestoreListener,
@@ -1024,14 +1032,15 @@ public class KafkaStreams implements AutoCloseable {
             final StreamThread streamThread;
             synchronized (changeThreadCount) {
                 final int threadIdx = getNextThreadIndex();
-                final int numLiveThreads = getNumLiveStreamThreads();
-                final long cacheSizePerThread = getCacheSizePerThread(numLiveThreads + 1);
-                log.info("Adding StreamThread-{}, there will now be {} live threads and the new cache size per thread is {}",
-                         threadIdx, numLiveThreads + 1, cacheSizePerThread);
-                resizeThreadCache(cacheSizePerThread);
                 // Creating thread should hold the lock in order to avoid duplicate thread index.
                 // If the duplicate index happen, the metadata of thread may be duplicate too.
-                streamThread = createAndAddStreamThread(cacheSizePerThread, threadIdx);
+                // Also, we create the new thread with initial values of cache size and max buffer size as 0
+                // and then resize them later
+                streamThread = createAndAddStreamThread(0L, 0L, threadIdx);
+                final int numLiveThreads = getNumLiveStreamThreads();
+                resizeThreadCacheAndBufferMemory(numLiveThreads);
+                log.info("Adding StreamThread-{}, there are now {} threads with cache size/max buffer size values as {} per thread.",
+                        threadIdx, numLiveThreads, getThreadCacheAndBufferMemoryString());
             }
 
             synchronized (stateLock) {
@@ -1042,9 +1051,9 @@ public class KafkaStreams implements AutoCloseable {
                     log.warn("Terminating the new thread because the Kafka Streams client is in state {}", state);
                     streamThread.shutdown();
                     threads.remove(streamThread);
-                    final long cacheSizePerThread = getCacheSizePerThread(getNumLiveStreamThreads());
-                    log.info("Resizing thread cache due to terminating added thread, new cache size per thread is {}", cacheSizePerThread);
-                    resizeThreadCache(cacheSizePerThread);
+                    resizeThreadCacheAndBufferMemory(getNumLiveStreamThreads());
+                    log.info("Resizing thread cache and max buffer size per thread since new thread can not be " +
+                            "started, cache size/max buffer size per thread is {}", getThreadCacheAndBufferMemoryString());
                     return Optional.empty();
                 }
             }
@@ -1122,9 +1131,9 @@ public class KafkaStreams implements AutoCloseable {
                                 + "for it to complete shutdown as this will result in deadlock.", streamThread.getName());
                         }
 
-                        final long cacheSizePerThread = getCacheSizePerThread(getNumLiveStreamThreads());
-                        log.info("Resizing thread cache due to thread removal, new cache size per thread is {}", cacheSizePerThread);
-                        resizeThreadCache(cacheSizePerThread);
+                        resizeThreadCacheAndBufferMemory(getNumLiveStreamThreads());
+                        log.info("Resizing thread cache/max buffer size due to removal of thread {}, " +
+                                "new cache size/max buffer size per thread is {}", streamThread.getName(), getThreadCacheAndBufferMemoryString());
                         if (groupInstanceID.isPresent() && callingThreadIsNotCurrentStreamThread) {
                             final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceID.get());
                             final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
@@ -1227,6 +1236,11 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
+    private String getThreadCacheAndBufferMemoryString() {
+        final StreamThread streamThread = threads.get(0);
+        return streamThread.getCacheSize() + "/" + streamThread.getMaxBufferSize();
+    }
+
     private long getCacheSizePerThread(final int numStreamThreads) {
         if (numStreamThreads == 0) {
             return totalCacheSize;
@@ -1234,11 +1248,17 @@ public class KafkaStreams implements AutoCloseable {
         return totalCacheSize / (numStreamThreads + (topologyMetadata.hasGlobalTopology() ? 1 : 0));
     }
 
-    private void resizeThreadCache(final long cacheSizePerThread) {
-        processStreamThread(thread -> thread.resizeCache(cacheSizePerThread));
-        if (globalStreamThread != null) {
-            globalStreamThread.resize(cacheSizePerThread);
+    private void resizeThreadCacheAndBufferMemory(final int numStreamThreads) {
+        final long cacheSizePerThread;
+        final long inputBufferMaxBytesPerThread;
+        if (numStreamThreads == 0) {
+            cacheSizePerThread = totalCacheSize;
+            inputBufferMaxBytesPerThread = inputBufferMaxBytes;
+        } else {
+            cacheSizePerThread = totalCacheSize / (numStreamThreads + (topologyMetadata.hasGlobalTopology() ? 1 : 0));
+            inputBufferMaxBytesPerThread = inputBufferMaxBytes / (numStreamThreads + (topologyMetadata.hasGlobalTopology() ? 1 : 0));
         }
+        processStreamThread(thread -> thread.resizeCacheAndBufferMemory(cacheSizePerThread, inputBufferMaxBytesPerThread));
     }
 
     private ScheduledExecutorService setupStateDirCleaner() {
