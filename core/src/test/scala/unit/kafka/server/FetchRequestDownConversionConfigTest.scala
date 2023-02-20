@@ -157,7 +157,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
    * Tests that "message.downconversion.enable" has no effect on fetch requests from replicas.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft"))
+  @ValueSource(strings = Array("zk", "kraft"))
   def testV1FetchFromReplica(quorum: String): Unit = {
     testV1Fetch(isFollowerFetch = true)
   }
