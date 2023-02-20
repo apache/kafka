@@ -615,8 +615,8 @@ abstract class AbstractFetcherThread(name: String,
       // less than or equal to the requested epoch.
       endOffsetForEpoch(tp, leaderEpochOffset.leaderEpoch) match {
         case Some(offsetAndEpoch) =>
-          val followerEndOffset = offsetAndEpoch.offset()
-          val followerEpoch = offsetAndEpoch.leaderEpoch()
+          val followerEndOffset = offsetAndEpoch.offset
+          val followerEpoch = offsetAndEpoch.leaderEpoch
           if (followerEpoch != leaderEpochOffset.leaderEpoch) {
             // the follower does not know about the epoch that leader replied with
             // we truncate to the end offset of the largest epoch that is smaller than the

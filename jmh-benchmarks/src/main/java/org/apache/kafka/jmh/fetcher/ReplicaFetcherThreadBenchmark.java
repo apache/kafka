@@ -99,7 +99,6 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import scala.Option;
-import scala.Tuple2;
 import scala.collection.Iterator;
 import scala.collection.Map;
 
