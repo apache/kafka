@@ -3159,7 +3159,7 @@ public class StreamThreadTest {
     }
 
     StreamTask activeTask(final TaskManager taskManager, final TopicPartition partition) {
-        final Stream<Task> standbys = taskManager.allOwnedTasks().values().stream().filter(Task::isActive);
+        final Stream<Task> standbys = taskManager.allTasks().values().stream().filter(Task::isActive);
         for (final Task task : (Iterable<Task>) standbys::iterator) {
             if (task.inputPartitions().contains(partition)) {
                 return (StreamTask) task;
@@ -3168,7 +3168,7 @@ public class StreamThreadTest {
         return null;
     }
     StandbyTask standbyTask(final TaskManager taskManager, final TopicPartition partition) {
-        final Stream<Task> standbys = taskManager.allOwnedTasks().values().stream().filter(t -> !t.isActive());
+        final Stream<Task> standbys = taskManager.allTasks().values().stream().filter(t -> !t.isActive());
         for (final Task task : (Iterable<Task>) standbys::iterator) {
             if (task.inputPartitions().contains(partition)) {
                 return (StandbyTask) task;

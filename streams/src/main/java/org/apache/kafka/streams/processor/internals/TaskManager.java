@@ -1561,9 +1561,15 @@ public class TaskManager {
     }
 
     Set<Task> readOnlyAllTasks() {
-        // need to make sure the returned set is unmodifiable as it could be accessed
-        // by other thread than the StreamThread owning this task manager;
-        return Collections.unmodifiableSet(tasks.allTasks());
+        // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
+        // if any outside code modifies the map or the tasks, it would be a severe transgression.
+        if (stateUpdater != null) {
+            final HashSet<Task> ret = new HashSet<>(stateUpdater.getTasks());
+            ret.addAll(tasks.allTasks());
+            return Collections.unmodifiableSet(ret);
+        } else {
+            return Collections.unmodifiableSet(tasks.allTasks());
+        }
     }
 
     Map<TaskId, Task> notPausedTasks() {
