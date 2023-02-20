@@ -43,14 +43,15 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 /**
- * This class records the average end to end latency for a single message to travel through Kafka
+ * This class records the average end to end latency for a single message to travel through Kafka.
+ * Following are the required arguments
+ * <p> broker_list = location of the bootstrap broker for both the producer and the consumer </p>
+ * <p> topic = topic name used by both the producer and the consumer to send/receive messages </p>
+ * <p> num_messages = # messages to send </p>
+ * <p> producer_acks = See ProducerConfig.ACKS_DOC </p>
+ * <p> message_size_bytes = size of each message in bytes </p>
  *
- * broker_list = location of the bootstrap broker for both the producer and the consumer
- * num_messages = # messages to send
- * producer_acks = See ProducerConfig.ACKS_DOC
- * message_size_bytes = size of each message in bytes
- *
- * e.g. [localhost:9092 test 10000 1 20]
+ * <p> e.g. [localhost:9092 test 10000 1 20] </p>
  */
 public class EndToEndLatency {
     private final static long POLL_TIMEOUT_MS = 60000;
@@ -87,7 +88,7 @@ public class EndToEndLatency {
         int numMessages = Integer.parseInt(args[2]);
         String acks = args[3];
         int messageSizeBytes = Integer.parseInt(args[4]);
-        Optional<String> propertiesFile = args.length > 5 ? (Utils.isBlank(args[5]) ? Optional.empty() : Optional.of(args[5])) : Optional.empty();
+        Optional<String> propertiesFile = (args.length > 5 && !Utils.isBlank(args[5])) ? Optional.of(args[5]) : Optional.empty();
 
         if (!Arrays.asList("1", "all").contains(acks)) {
             throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all");
