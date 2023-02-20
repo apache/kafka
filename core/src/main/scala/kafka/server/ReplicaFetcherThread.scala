@@ -26,6 +26,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.common.CheckpointFile.CheckpointReadBuffer
+import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile

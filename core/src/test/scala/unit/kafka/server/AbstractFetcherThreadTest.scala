@@ -30,6 +30,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogOffsetMetadata}
@@ -1268,19 +1269,19 @@ class AbstractFetcherThreadTest {
     override def fetchEarliestOffset(topicPartition: TopicPartition, leaderEpoch: Int): OffsetAndEpoch = {
       val leaderState = leaderPartitionState(topicPartition)
       checkLeaderEpochAndThrow(leaderEpoch, leaderState)
-      OffsetAndEpoch(leaderState.logStartOffset, leaderState.leaderEpoch)
+      new OffsetAndEpoch(leaderState.logStartOffset, leaderState.leaderEpoch)
     }
 
     override def fetchLatestOffset(topicPartition: TopicPartition, leaderEpoch: Int): OffsetAndEpoch = {
       val leaderState = leaderPartitionState(topicPartition)
       checkLeaderEpochAndThrow(leaderEpoch, leaderState)
-      OffsetAndEpoch(leaderState.logEndOffset, leaderState.leaderEpoch)
+      new OffsetAndEpoch(leaderState.logEndOffset, leaderState.leaderEpoch)
     }
 
     override def fetchEarliestLocalOffset(topicPartition: TopicPartition, leaderEpoch: Int): OffsetAndEpoch = {
       val leaderState = leaderPartitionState(topicPartition)
       checkLeaderEpochAndThrow(leaderEpoch, leaderState)
-      OffsetAndEpoch(leaderState.localLogStartOffset, leaderState.leaderEpoch)
+      new OffsetAndEpoch(leaderState.localLogStartOffset, leaderState.leaderEpoch)
     }
 
     override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
@@ -1542,7 +1543,7 @@ class AbstractFetcherThreadTest {
       if (result.endOffset == UNDEFINED_EPOCH_OFFSET)
         None
       else
-        Some(OffsetAndEpoch(result.endOffset, result.leaderEpoch))
+        Some(new OffsetAndEpoch(result.endOffset, result.leaderEpoch))
     }
 
     def verifyLastFetchedEpoch(partition: TopicPartition, expectedEpoch: Option[Int]): Unit = {

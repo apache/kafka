@@ -31,7 +31,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetFo
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV2
 
 import scala.jdk.CollectionConverters._
@@ -126,9 +126,9 @@ class RemoteLeaderEndPoint(logPrefix: String,
     Errors.forCode(responsePartition.errorCode) match {
       case Errors.NONE =>
         if (metadataVersion.isAtLeast(IBP_0_10_1_IV2))
-          OffsetAndEpoch(responsePartition.offset, responsePartition.leaderEpoch)
+          new OffsetAndEpoch(responsePartition.offset, responsePartition.leaderEpoch)
         else
-          OffsetAndEpoch(responsePartition.oldStyleOffsets.get(0), responsePartition.leaderEpoch)
+          new OffsetAndEpoch(responsePartition.oldStyleOffsets.get(0), responsePartition.leaderEpoch)
       case error => throw error.exception
     }
   }
