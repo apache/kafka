@@ -344,14 +344,10 @@ public class RangeAssignorTest {
         Map<String, Integer> topics = mkMap(mkEntry("t1", 6), mkEntry("t2", 7), mkEntry("t3", 2));
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, allTopics);
-        List<String> nonRackAwareAssignment = asList(
-                "t1-0, t1-1, t2-0, t2-1, t2-2, t3-0",
-                "t1-2, t1-3, t2-3, t2-4, t3-1",
-                "t1-4, t1-5, t2-5, t2-6"
-        );
 
         // Verify combinations where rack-aware logic is not used.
-        verifyNonRackAwareAssignment(topics, consumerTopics, nonRackAwareAssignment);
+        verifyNonRackAwareAssignment(topics, consumerTopics,
+                asList("t1-0, t1-1, t2-0, t2-1, t2-2, t3-0", "t1-2, t1-3, t2-3, t2-4, t3-1", "t1-4, t1-5, t2-5, t2-6"));
 
         // Verify best-effort rack-aware assignment for lower replication factor where racks have a subset of partitions.
         verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics,
@@ -369,14 +365,10 @@ public class RangeAssignorTest {
         Map<String, Integer> topics = mkMap(mkEntry("t1", 6), mkEntry("t2", 7), mkEntry("t3", 2));
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, asList("t1", "t3"));
-        List<String> nonRackAwareAssignment = asList(
-            "t1-0, t1-1, t2-0, t2-1, t2-2, t2-3, t3-0",
-            "t1-2, t1-3, t2-4, t2-5, t2-6, t3-1",
-            "t1-4, t1-5"
-        );
 
         // Verify combinations where rack-aware logic is not used.
-        verifyNonRackAwareAssignment(topics, consumerTopics, nonRackAwareAssignment);
+        verifyNonRackAwareAssignment(topics, consumerTopics,
+                asList("t1-0, t1-1, t2-0, t2-1, t2-2, t2-3, t3-0", "t1-2, t1-3, t2-4, t2-5, t2-6, t3-1", "t1-4, t1-5"));
 
         // Verify best-effort rack-aware assignment for lower replication factor where racks have a subset of partitions.
         verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics,
@@ -414,13 +406,10 @@ public class RangeAssignorTest {
         Map<String, Integer> topics = mkMap(mkEntry("t1", 5), mkEntry("t2", 5), mkEntry("t3", 5));
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, asList("t1", "t3"));
-        List<String> nonRackAwareAssignment = asList(
-                "t1-0, t1-1, t2-0, t2-1, t2-2, t3-0, t3-1",
-                "t1-2, t1-3, t2-3, t2-4, t3-2, t3-3",
-                "t1-4, t3-4"
-        );
+
         // Verify combinations where rack-aware logic is not used.
-        verifyNonRackAwareAssignment(topics, consumerTopics, nonRackAwareAssignment);
+        verifyNonRackAwareAssignment(topics, consumerTopics,
+                asList("t1-0, t1-1, t2-0, t2-1, t2-2, t3-0, t3-1", "t1-2, t1-3, t2-3, t2-4, t3-2, t3-3", "t1-4, t3-4"));
 
         // Verify that co-partitioning is prioritized over rack-alignment for topics with equal subscriptions
         verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics,

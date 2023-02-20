@@ -28,6 +28,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -80,10 +81,10 @@ import java.util.stream.Collectors;
  * Rack-aware assignment is used if both consumer and partition replica racks are available and
  * some partitions have replicas only on a subset of racks. We attempt to match consumer racks with
  * partition replica racks on a best-effort basis, prioritizing balanced assignment over rack alignment.
- * Topics with equal partition count and same set of subscribers prioritize co-partitioning guarantee
- * over rack alignment. In this case, aligning partition replicas of these topics on the same racks
- * will improve locality for consumers. For example, if partitions 0 of all topics have a replica on
- * rack 'a', partition 1 on rack 'b' etc., partition 0 of all topics can be assigned to a consumer
+ * Topics with equal partition count and same set of subscribers guarantee co-partitioning by prioritizing
+ * co-partitioning over rack alignment. In this case, aligning partition replicas of these topics on the
+ * same racks will improve locality for consumers. For example, if partitions 0 of all topics have a replica
+ * on rack 'a', partition 1 on rack 'b' etc., partition 0 of all topics can be assigned to a consumer
  * on rack 'a', partition 1 to a consumer on rack 'b' and so on.
  */
 public class RangeAssignor extends AbstractPartitionAssignor {
@@ -97,29 +98,32 @@ public class RangeAssignor extends AbstractPartitionAssignor {
 
     private Map<String, List<MemberInfo>> consumersPerTopic(Map<String, Subscription> consumerMetadata) {
         Map<String, List<MemberInfo>> topicToConsumers = new HashMap<>();
-        for (Map.Entry<String, Subscription> subscriptionEntry : consumerMetadata.entrySet()) {
-            String consumerId = subscriptionEntry.getKey();
-            Subscription subscription = subscriptionEntry.getValue();
+        consumerMetadata.forEach((consumerId, subscription) -> {
             MemberInfo memberInfo = new MemberInfo(consumerId, subscription.groupInstanceId(), subscription.rackId());
-            for (String topic : subscription.topics()) {
-                put(topicToConsumers, topic, memberInfo);
-            }
-        }
+            subscription.topics().forEach(topic -> put(topicToConsumers, topic, memberInfo));
+        });
         return topicToConsumers;
     }
 
+    /**
+     * Performs range assignment of the specified partitions for the consumers with the provided subscriptions.
+     * If rack-awareness is enabled for one or more consumers, we perform rack-aware assignment first to assign
+     * the subset of partitions that can be aligned on racks, while retaining the same co-partitioning and
+     * per-topic balancing guarantees as non-rack-aware range assignment. The remaining partitions are assigned
+     * using standard non-rack-aware range assignment logic, which may result in mis-aligned racks.
+     */
     @Override
     public Map<String, List<TopicPartition>> assignPartitions(Map<String, List<PartitionInfo>> partitionsPerTopic,
                                                               Map<String, Subscription> subscriptions) {
         Map<String, List<MemberInfo>> consumersPerTopic = consumersPerTopic(subscriptions);
+        Map<String, String> consumerRacks = consumerRacks(subscriptions);
         List<TopicAssignmentState> topicAssignmentStates = partitionsPerTopic.entrySet().stream()
                 .filter(e -> !e.getValue().isEmpty())
-                .map(e -> new TopicAssignmentState(e.getKey(), e.getValue(), consumersPerTopic.get(e.getKey())))
+                .map(e -> new TopicAssignmentState(e.getKey(), e.getValue(), consumersPerTopic.get(e.getKey()), consumerRacks))
                 .collect(Collectors.toList());
 
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
-        for (String memberId : subscriptions.keySet())
-            assignment.put(memberId, new ArrayList<>());
+        subscriptions.keySet().forEach(memberId -> assignment.put(memberId, new ArrayList<>()));
 
         boolean useRackAware = topicAssignmentStates.stream().anyMatch(t -> t.needsRackAwareAssignment);
         if (useRackAware)
@@ -142,7 +146,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
     private void assignRanges(TopicAssignmentState assignmentState,
                               BiFunction<String, TopicPartition, Boolean> mayAssign,
                               Map<String, List<TopicPartition>> assignment) {
-        for (String consumer : assignmentState.consumers) {
+        for (String consumer : assignmentState.consumers.keySet()) {
             if (assignmentState.unassignedPartitions.isEmpty())
                 break;
             List<TopicPartition> assignablePartitions = assignmentState.unassignedPartitions.stream()
@@ -173,12 +177,12 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         });
     }
 
-    private void assignCoPartitionedWithRackMatching(List<String> consumers,
+    private void assignCoPartitionedWithRackMatching(LinkedHashMap<String, Optional<String>> consumers,
                                                      int numPartitions,
                                                      Collection<TopicAssignmentState> assignmentStates,
                                                      Map<String, List<TopicPartition>> assignment) {
 
-        List<String> remainingConsumers = new LinkedList<>(consumers);
+        List<String> remainingConsumers = new LinkedList<>(consumers.keySet());
         for (int i = 0; i < numPartitions; i++) {
             int p = i;
 
@@ -203,38 +207,42 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         assignmentState.onAssigned(consumer, partitions);
     }
 
+    private Map<String, String> consumerRacks(Map<String, Subscription> subscriptions) {
+        Map<String, String> consumerRacks = new HashMap<>(subscriptions.size());
+        subscriptions.forEach((memberId, subscription) ->
+                subscription.rackId().filter(r -> !r.isEmpty()).ifPresent(rackId -> consumerRacks.put(memberId, rackId)));
+        return consumerRacks;
+    }
+
     private class TopicAssignmentState {
         private final String topic;
-        private final List<String> consumers;
+        private final LinkedHashMap<String, Optional<String>> consumers;
         private final boolean needsRackAwareAssignment;
         private final Map<TopicPartition, Set<String>> partitionRacks;
-        private final Map<String, String> consumerRacks;
 
         private final List<TopicPartition> unassignedPartitions;
         private final Map<String, Integer> numAssignedByConsumer;
         private final int numPartitionsPerConsumer;
         private int remainingConsumersWithExtraPartition;
 
-        public TopicAssignmentState(String topic, List<PartitionInfo> partitionInfos, List<MemberInfo> membersOrNull) {
+        public TopicAssignmentState(String topic, List<PartitionInfo> partitionInfos, List<MemberInfo> membersOrNull, Map<String, String> consumerRacks) {
             this.topic = topic;
             List<MemberInfo> members = membersOrNull == null ? Collections.emptyList() : membersOrNull;
             Collections.sort(members);
-            consumers = members.stream().map(c -> c.memberId).collect(Collectors.toList());
+            consumers = members.stream().map(c -> c.memberId)
+                    .collect(Collectors.toMap(Function.identity(), c -> Optional.ofNullable(consumerRacks.get(c)), (a, b) -> a, LinkedHashMap::new));
 
             this.unassignedPartitions = partitionInfos.stream().map(p -> new TopicPartition(p.topic(), p.partition()))
                     .collect(Collectors.toCollection(LinkedList::new));
-            this.numAssignedByConsumer = consumers.stream().collect(Collectors.toMap(Function.identity(), c -> 0));
+            this.numAssignedByConsumer = consumers.keySet().stream().collect(Collectors.toMap(Function.identity(), c -> 0));
             numPartitionsPerConsumer = consumers.isEmpty() ? 0 : partitionInfos.size() / consumers.size();
             remainingConsumersWithExtraPartition = consumers.isEmpty() ? 0 : partitionInfos.size() % consumers.size();
 
             Set<String> allConsumerRacks = new HashSet<>();
             Set<String> allPartitionRacks = new HashSet<>();
-            consumerRacks = new HashMap<>(consumers.size());
-            members.forEach(consumer -> consumer.rackId.filter(r -> !r.isEmpty()).ifPresent(rackId -> {
-                consumerRacks.put(consumer.memberId, consumer.rackId.get());
-                allConsumerRacks.add(rackId);
-            }));
-            if (!consumerRacks.isEmpty()) {
+            members.stream().map(m -> m.memberId).filter(consumerRacks::containsKey)
+                    .forEach(memberId -> allConsumerRacks.add(consumerRacks.get(memberId)));
+            if (!allConsumerRacks.isEmpty()) {
                 partitionRacks = new HashMap<>(partitionInfos.size());
                 partitionInfos.forEach(p -> {
                     TopicPartition tp = new TopicPartition(p.topic(), p.partition());
@@ -253,9 +261,9 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         }
 
         boolean racksMatch(String consumer, TopicPartition tp) {
-            String consumerRack = consumerRacks.get(consumer);
+            Optional<String> consumerRack = consumers.get(consumer);
             Set<String> replicaRacks = partitionRacks.get(tp);
-            return consumerRack == null || (replicaRacks != null && replicaRacks.contains(consumerRack));
+            return !consumerRack.isPresent() || (replicaRacks != null && replicaRacks.contains(consumerRack.get()));
         }
 
         int maxAssignable(String consumer) {
@@ -274,7 +282,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         public String toString() {
             return "TopicAssignmentState(" +
                     "topic=" + topic +
-                    ", consumerRacks=" + consumerRacks +
+                    ", consumers=" + consumers +
                     ", partitionRacks=" + partitionRacks +
                     ", unassignedPartitions=" + unassignedPartitions +
                     ")";

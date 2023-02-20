@@ -47,7 +47,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   override def modifyConfigs(props: collection.Seq[Properties]): Unit = {
     super.modifyConfigs(props)
-    props.zipWithIndex.foreach{ case (p, i) => p.setProperty(KafkaConfig.RackProp, i.toString) }
+    props.zipWithIndex.foreach { case (p, i) => p.setProperty(KafkaConfig.RackProp, i.toString) }
   }
 
   @Test
