@@ -402,6 +402,8 @@ public class AbstractWorkerSourceTaskTest {
         workerTask.sendRecords();
 
         verifySendRecord(2);
+        // Make sure we didn't try to create the topic after finding out it already existed
+        verifyNoMoreInteractions(admin);
     }
 
     @Test
