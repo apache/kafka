@@ -1052,7 +1052,7 @@ public class TransactionManager {
         pendingPartitionsInTransaction.addAll(newPartitionsInTransaction);
         newPartitionsInTransaction.clear();
         AddPartitionsToTxnRequest.Builder builder =
-            new AddPartitionsToTxnRequest.Builder(transactionalId,
+            AddPartitionsToTxnRequest.Builder.forClient(transactionalId,
                 producerIdAndEpoch.producerId,
                 producerIdAndEpoch.epoch,
                 new ArrayList<>(pendingPartitionsInTransaction));

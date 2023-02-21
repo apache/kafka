@@ -57,17 +57,17 @@ public class AddPartitionsToTxnRequestTest {
             partitions.add(tp0);
             partitions.add(tp1);
 
-            AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactionalId1, producerId, producerEpoch, partitions);
+            AddPartitionsToTxnRequest.Builder builder = AddPartitionsToTxnRequest.Builder.forClient(transactionalId1, producerId, producerEpoch, partitions);
             request = builder.build(version);
 
-            assertEquals(transactionalId1, request.data().transactionalId());
-            assertEquals(producerId, request.data().producerId());
-            assertEquals(producerEpoch, request.data().producerEpoch());
+            assertEquals(transactionalId1, request.data().v3AndBelowTransactionalId());
+            assertEquals(producerId, request.data().v3AndBelowProducerId());
+            assertEquals(producerEpoch, request.data().v3AndBelowProducerEpoch());
             assertEquals(partitions, request.partitions());
         } else {
             AddPartitionsToTxnTransactionCollection transactions = createTwoTransactionCollection();
 
-            AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactions);
+            AddPartitionsToTxnRequest.Builder builder = AddPartitionsToTxnRequest.Builder.forBroker(transactions);
             request = builder.build(version);
             
             AddPartitionsToTxnTransaction reqTxn1 = request.data().transactions().find(transactionalId1);
@@ -87,7 +87,7 @@ public class AddPartitionsToTxnRequestTest {
         AddPartitionsToTxnTransactionCollection transactions = createTwoTransactionCollection();
         boolean verifyOnly = true;
 
-        AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactions);
+        AddPartitionsToTxnRequest.Builder builder = AddPartitionsToTxnRequest.Builder.forBroker(transactions);
         AddPartitionsToTxnRequest request = builder.build(ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion());
         
         Map<String, List<TopicPartition>> expectedMap = new HashMap<>();
@@ -115,7 +115,7 @@ public class AddPartitionsToTxnRequestTest {
         partitions.add(tp0);
         partitions.add(tp1);
 
-        AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactionalId1, producerId, producerEpoch, partitions);
+        AddPartitionsToTxnRequest.Builder builder = AddPartitionsToTxnRequest.Builder.forClient(transactionalId1, producerId, producerEpoch, partitions);
         AddPartitionsToTxnRequest request = builder.build((short) 3);
 
         AddPartitionsToTxnRequest singleton = request.normalizeRequest();

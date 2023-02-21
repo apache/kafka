@@ -37,6 +37,10 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransaction;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData;
@@ -2554,8 +2558,21 @@ public class RequestResponseTest {
     }
 
     private AddPartitionsToTxnRequest createAddPartitionsToTxnRequest(short version) {
-        return new AddPartitionsToTxnRequest.Builder("tid", 21L, (short) 42,
-            singletonList(new TopicPartition("topic", 73))).build(version);
+        if (version < 3) {
+            return AddPartitionsToTxnRequest.Builder.forClient("tid", 21L, (short) 42,
+                    singletonList(new TopicPartition("topic", 73))).build(version);
+        } else {
+            AddPartitionsToTxnTransactionCollection transactions = new AddPartitionsToTxnTransactionCollection();
+            AddPartitionsToTxnTopicCollection topics = new AddPartitionsToTxnTopicCollection();
+            topics.add(new AddPartitionsToTxnTopic().setName("topic").setPartitions(Collections.singletonList(73)));
+            transactions.add(new AddPartitionsToTxnTransaction()
+                    .setTransactionalId("tid")
+                    .setProducerId(21L)
+                    .setProducerEpoch((short) 42)
+                    .setVerifyOnly(false)
+                    .setTopics(topics));
+            return AddPartitionsToTxnRequest.Builder.forBroker(transactions).build(version);  
+        }
     }
 
     private AddPartitionsToTxnResponse createAddPartitionsToTxnResponse() {

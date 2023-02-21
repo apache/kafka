@@ -41,13 +41,13 @@
       { "name": "Topics", "type": "[]AddPartitionsToTxnTopic", "versions": "4+",
         "about": "The partitions to add to the transaction." }
     ]},
-    { "name": "TransactionalId", "type": "string", "versions": "0-3", "entityType": "transactionalId",
+    { "name": "V3AndBelowTransactionalId", "type": "string", "versions": "0-3", "entityType": "transactionalId",
       "about": "The transactional id corresponding to the transaction." },
-    { "name": "ProducerId", "type": "int64", "versions": "0-3", "entityType": "producerId",
+    { "name": "V3AndBelowProducerId", "type": "int64", "versions": "0-3", "entityType": "producerId",
       "about": "Current producer id in use by the transactional id." },
-    { "name": "ProducerEpoch", "type": "int16", "versions": "0-3",
+    { "name": "V3AndBelowProducerEpoch", "type": "int16", "versions": "0-3",
       "about": "Current epoch associated with the producer id." },
-    { "name": "Topics", "type": "[]AddPartitionsToTxnTopic", "versions": "0-3",
+    { "name": "V3AndBelowTopics", "type": "[]AddPartitionsToTxnTopic", "versions": "0-3",
       "about": "The partitions to add to the transaction." }
   ],
   "commonStructs": [

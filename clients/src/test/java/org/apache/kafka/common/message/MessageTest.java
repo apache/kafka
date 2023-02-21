@@ -97,10 +97,10 @@ public final class MessageTest {
     @Test
     public void testAddPartitionsToTxnVersions() throws Exception {
         testAllMessageRoundTrips(new AddPartitionsToTxnRequestData().
-                setTransactionalId("blah").
-                setProducerId(0xbadcafebadcafeL).
-                setProducerEpoch((short) 30000).
-                setTopics(new AddPartitionsToTxnTopicCollection(singletonList(
+                setV3AndBelowTransactionalId("blah").
+                setV3AndBelowProducerId(0xbadcafebadcafeL).
+                setV3AndBelowProducerEpoch((short) 30000).
+                setV3AndBelowTopics(new AddPartitionsToTxnTopicCollection(singletonList(
                         new AddPartitionsToTxnTopic().
                                 setName("Topic").
                                 setPartitions(singletonList(1))).iterator())));

@@ -3536,10 +3536,10 @@ public class TransactionManagerTest {
                                                                   final short epoch, final long producerId) {
         return body -> {
             AddPartitionsToTxnRequest addPartitionsToTxnRequest = (AddPartitionsToTxnRequest) body;
-            assertEquals(producerId, addPartitionsToTxnRequest.data().producerId());
-            assertEquals(epoch, addPartitionsToTxnRequest.data().producerEpoch());
+            assertEquals(producerId, addPartitionsToTxnRequest.data().v3AndBelowProducerId());
+            assertEquals(epoch, addPartitionsToTxnRequest.data().v3AndBelowProducerEpoch());
             assertEquals(singletonList(topicPartition), addPartitionsToTxnRequest.partitions());
-            assertEquals(transactionalId, addPartitionsToTxnRequest.data().transactionalId());
+            assertEquals(transactionalId, addPartitionsToTxnRequest.data().v3AndBelowTransactionalId());
             return true;
         };
     }

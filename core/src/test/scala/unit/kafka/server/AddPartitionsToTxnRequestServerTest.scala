@@ -65,7 +65,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
 
     val request =
       if (version < 4) {
-        new AddPartitionsToTxnRequest.Builder(
+        AddPartitionsToTxnRequest.Builder.forClient(
           transactionalId,
           producerId,
           producerEpoch,
@@ -87,7 +87,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
           .setProducerEpoch(producerEpoch)
           .setVerifyOnly(false)
           .setTopics(topics))
-        new AddPartitionsToTxnRequest.Builder(transactions).build()
+        AddPartitionsToTxnRequest.Builder.forBroker(transactions).build()
       }
 
     val leaderId = brokers.head.config.brokerId
@@ -151,7 +151,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
       .setVerifyOnly(false)
       .setTopics(txn2Topics))
     
-    val request = new AddPartitionsToTxnRequest.Builder(transactions).build()
+    val request = AddPartitionsToTxnRequest.Builder.forBroker(transactions).build()
 
     val response = connectAndReceive[AddPartitionsToTxnResponse](request, brokerSocketServer(coordinatorId))
     

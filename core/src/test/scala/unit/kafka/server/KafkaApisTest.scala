@@ -2003,7 +2003,7 @@ class KafkaApisTest {
       val partition = 1
       val topicPartition = new TopicPartition(topic, partition)
 
-      val addPartitionsToTxnRequest = new AddPartitionsToTxnRequest.Builder(
+      val addPartitionsToTxnRequest = AddPartitionsToTxnRequest.Builder.forClient(
         transactionalId,
         producerId,
         epoch,
@@ -2153,7 +2153,7 @@ class KafkaApisTest {
       reset(replicaManager, clientRequestQuotaManager, requestChannel)
 
       val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
-      val addPartitionsToTxnRequest = new AddPartitionsToTxnRequest.Builder(
+      val addPartitionsToTxnRequest = AddPartitionsToTxnRequest.Builder.forClient(
         "txnlId", 15L, 0.toShort, List(invalidTopicPartition).asJava
       ).build()
       val request = buildRequest(addPartitionsToTxnRequest)
