@@ -79,11 +79,11 @@ public class AddPartitionsToTxnResponseTest {
         topicResult.setName(topicOne);
 
         topicResult.results().add(new AddPartitionsToTxnPartitionResult()
-                                      .setErrorCode(errorOne.code())
+                                      .setPartitionErrorCode(errorOne.code())
                                       .setPartitionIndex(partitionOne));
 
         topicResult.results().add(new AddPartitionsToTxnPartitionResult()
-                                      .setErrorCode(errorTwo.code())
+                                      .setPartitionErrorCode(errorTwo.code())
                                       .setPartitionIndex(partitionTwo));
 
         topicCollection.add(topicResult);
@@ -92,7 +92,7 @@ public class AddPartitionsToTxnResponseTest {
             
             if (version < 4) {
                 AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
-                        .setResults(topicCollection)
+                        .setResultsByTopicV3AndBelow(topicCollection)
                         .setThrottleTimeMs(throttleTimeMs);
                 AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
 

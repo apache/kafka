@@ -66,7 +66,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
 
         this.data = new AddPartitionsToTxnResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
-                .setResults(topicCollectionForErrors(errors));
+                .setResultsByTopicV3AndBelow(topicCollectionForErrors(errors));
     }
     
     private static AddPartitionsToTxnTopicResultCollection topicCollectionForErrors(Map<TopicPartition, Errors> errors) {
@@ -78,7 +78,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
 
             AddPartitionsToTxnPartitionResult partitionResult =
                     new AddPartitionsToTxnPartitionResult()
-                            .setErrorCode(entry.getValue().code())
+                            .setPartitionErrorCode(entry.getValue().code())
                             .setPartitionIndex(topicPartition.partition());
 
             AddPartitionsToTxnPartitionResultCollection partitionResultCollection = resultMap.getOrDefault(
@@ -120,11 +120,11 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
 
         cachedErrorsMap = new HashMap<>();
 
-        for (AddPartitionsToTxnTopicResult topicResult : this.data.results()) {
+        for (AddPartitionsToTxnTopicResult topicResult : this.data.resultsByTopicV3AndBelow()) {
             for (AddPartitionsToTxnPartitionResult partitionResult : topicResult.results()) {
                 cachedErrorsMap.put(new TopicPartition(
                         topicResult.name(), partitionResult.partitionIndex()),
-                    Errors.forCode(partitionResult.errorCode()));
+                    Errors.forCode(partitionResult.partitionErrorCode()));
             }
         }
         return cachedErrorsMap;
@@ -140,7 +140,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
             for (AddPartitionsToTxnTopicResult topicResult : data().resultsByTransaction().find(txnId).topicResults()) {
                 for (AddPartitionsToTxnPartitionResult partitionResult : topicResult.results()) {
                     topicResults.put(
-                        new TopicPartition(topicResult.name(), partitionResult.partitionIndex()), Errors.forCode(partitionResult.errorCode()));
+                        new TopicPartition(topicResult.name(), partitionResult.partitionIndex()), Errors.forCode(partitionResult.partitionErrorCode()));
                 }
             } 
             return topicResults;

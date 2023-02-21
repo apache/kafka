@@ -66,15 +66,13 @@ public class AddPartitionsToTxnRequestTest {
             assertEquals(partitions, request.partitions());
         } else {
             AddPartitionsToTxnTransactionCollection transactions = createTwoTransactionCollection();
-            boolean verifyOnly = true;
 
-            AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactions, verifyOnly);
+            AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactions);
             request = builder.build(version);
             
             AddPartitionsToTxnTransaction reqTxn1 = request.data().transactions().find(transactionalId1);
             AddPartitionsToTxnTransaction reqTxn2 = request.data().transactions().find(transactionalId2);
 
-            assertEquals(verifyOnly, request.data().verifyOnly());
             assertEquals(transactions.find(transactionalId1), reqTxn1);
             assertEquals(transactions.find(transactionalId2), reqTxn2);
         }
@@ -89,7 +87,7 @@ public class AddPartitionsToTxnRequestTest {
         AddPartitionsToTxnTransactionCollection transactions = createTwoTransactionCollection();
         boolean verifyOnly = true;
 
-        AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactions, verifyOnly);
+        AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactions);
         AddPartitionsToTxnRequest request = builder.build(ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion());
         
         Map<String, List<TopicPartition>> expectedMap = new HashMap<>();
@@ -143,11 +141,13 @@ public class AddPartitionsToTxnRequestTest {
                 .setTransactionalId(transactionalId1)
                 .setProducerId(producerId)
                 .setProducerEpoch(producerEpoch)
+                .setVerifyOnly(true)
                 .setTopics(topics0));
         transactions.add(new AddPartitionsToTxnTransaction()
                 .setTransactionalId(transactionalId2)
                 .setProducerId(producerId + 1)
                 .setProducerEpoch((short) (producerEpoch + 1))
+                .setVerifyOnly(false)
                 .setTopics(topics1));
         return transactions;
     }

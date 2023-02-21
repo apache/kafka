@@ -2402,7 +2402,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // There will only be one response in data. Add it to the response data object.
         val data = new AddPartitionsToTxnResponseData()
         responses.forEach(result => {
-          data.setResults(result.topicResults())
+          data.setResultsByTopicV3AndBelow(result.topicResults())
           data.setThrottleTimeMs(requestThrottleMs)
         })
         new AddPartitionsToTxnResponse(data)
@@ -2473,7 +2473,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             transaction.producerId,
             transaction.producerEpoch,
             authorizedPartitions,
-            addPartitionsToTxnRequest.data.verifyOnly,
+            transaction.verifyOnly,
             sendResponseCallback,
             requestLocal)
         }

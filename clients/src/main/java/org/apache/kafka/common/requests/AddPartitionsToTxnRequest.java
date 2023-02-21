@@ -70,14 +70,12 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
                     .setTopics(topics);
         }
 
-        public Builder(AddPartitionsToTxnTransactionCollection transactions,
-                       boolean verifyOnly) {
+        public Builder(AddPartitionsToTxnTransactionCollection transactions) {
             super(ApiKeys.ADD_PARTITIONS_TO_TXN);
             this.isClientRequest = false;
 
             this.data = new AddPartitionsToTxnRequestData()
-                    .setTransactions(transactions)
-                    .setVerifyOnly(verifyOnly);
+                    .setTransactions(transactions);
         }
 
         private AddPartitionsToTxnTopicCollection compileTopics(final List<TopicPartition> partitions) {
@@ -221,7 +219,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
             for (Integer partition : topic.partitions()) {
                 partitionResult.add(new AddPartitionsToTxnPartitionResult()
                         .setPartitionIndex(partition)
-                        .setErrorCode(e.code()));
+                        .setPartitionErrorCode(e.code()));
             }
             topicResult.setResults(partitionResult);
             topicResults.add(topicResult);
