@@ -159,7 +159,22 @@ class LocalLeaderEndPointTest {
 
     assertEquals(expected, result)
 
-    // Check missing epoch
+    // Check missing epoch: 3, we expect the API to return (leader_epoch=0, end_offset=3).
+    result = endPoint.fetchEpochEndOffsets(Map(
+      topicPartition -> new OffsetForLeaderPartition()
+        .setPartition(topicPartition.partition)
+        .setLeaderEpoch(3)))
+
+    expected = Map(
+      topicPartition -> new EpochEndOffset()
+        .setPartition(topicPartition.partition)
+        .setErrorCode(Errors.NONE.code)
+        .setLeaderEpoch(0)
+        .setEndOffset(3L))
+
+    assertEquals(expected, result)
+
+    // Check missing epoch: 5, we expect the API to return (leader_epoch=-1, end_offset=-1)
     result = endPoint.fetchEpochEndOffsets(Map(
       topicPartition -> new OffsetForLeaderPartition()
         .setPartition(topicPartition.partition)
