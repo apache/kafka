@@ -22,6 +22,8 @@ import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG;
 
 public class StreamsConfigUtils {
 
@@ -96,5 +98,51 @@ public class StreamsConfigUtils {
         }
         // only new or no config set. Use default or user specified value.
         return config.getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
+    }
+
+    @SuppressWarnings("deprecation")
+    public static int getBufferedRecordsPerPartition(final StreamsConfig config) {
+        // both deprecated and new config set. Warn and use the new one.
+        if (config.originals().containsKey(BUFFERED_RECORDS_PER_PARTITION_CONFIG) && config.originals().containsKey(INPUT_BUFFER_MAX_BYTES_CONFIG)) {
+            LOG.warn("Both deprecated config {} and the new config {} are set, hence {} is ignored and {} will be used instead to keep memory usage under control.",
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                    INPUT_BUFFER_MAX_BYTES_CONFIG,
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                    INPUT_BUFFER_MAX_BYTES_CONFIG);
+            return -1;
+        } else if (config.originals().containsKey(BUFFERED_RECORDS_PER_PARTITION_CONFIG)) {
+            // only deprecated config set.
+            LOG.warn("Deprecated config {} is set, and will be used; we suggest setting the new config {} to keep memory usage under control " +
+                    "instead as deprecated {} would be removed in the future.",
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                    INPUT_BUFFER_MAX_BYTES_CONFIG,
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+            return config.getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        }
+        // only new or no config set. Use default or user specified value.
+        return -1;
+    }
+
+    @SuppressWarnings("deprecation")
+    public static long getInputBufferMaxBytes(final StreamsConfig config) {
+        // both deprecated and new config set. Warn and use the new one.
+        if (config.originals().containsKey(BUFFERED_RECORDS_PER_PARTITION_CONFIG) && config.originals().containsKey(INPUT_BUFFER_MAX_BYTES_CONFIG)) {
+            LOG.warn("Both deprecated config {} and the new config {} are set, hence {} is ignored and {} will be used instead to keep memory usage under control.",
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                    INPUT_BUFFER_MAX_BYTES_CONFIG,
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                    INPUT_BUFFER_MAX_BYTES_CONFIG);
+            return config.getLong(INPUT_BUFFER_MAX_BYTES_CONFIG);
+        } else if (config.originals().containsKey(BUFFERED_RECORDS_PER_PARTITION_CONFIG)) {
+            // only deprecated config set.
+            LOG.warn("Deprecated config {} is set, and will be used; we suggest setting the new config {} to keep memory usage under control " +
+                            "instead as deprecated {} would be removed in the future.",
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                    INPUT_BUFFER_MAX_BYTES_CONFIG,
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+            return -1L;
+        }
+        // only new or no config set. Use default or user specified value.
+        return config.getLong(INPUT_BUFFER_MAX_BYTES_CONFIG);
     }
 }

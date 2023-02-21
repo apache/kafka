@@ -993,6 +993,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // increased beyond the threshold, we can then pause the consumption for this partition
         // We do this only if the deprecated config buffered.records.per.partition is set
         if (maxBufferedSize != -1 && newQueueSize > maxBufferedSize) {
+            log.info("Pausing partition {} as queue size {} exceeds maxBufferedSize: {}", partition, newQueueSize, maxBufferedSize);
             mainConsumer.pause(singleton(partition));
         }
     }

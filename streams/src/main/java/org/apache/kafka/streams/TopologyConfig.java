@@ -34,6 +34,7 @@ import java.util.function.Supplier;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
+import static org.apache.kafka.streams.StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_DOC;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
@@ -51,6 +52,7 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
 import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
 import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.getBufferedRecordsPerPartition;
 
 /**
  * Streams configs that apply at the topology level. The values in the {@link StreamsConfig} parameter of the
@@ -134,14 +136,13 @@ public class TopologyConfig extends AbstractConfig {
         this.applicationConfigs = globalAppConfigs;
         this.topologyOverrides = topologyOverrides;
 
-        if (isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides)) {
-            maxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-            log.info("Topology {} is overriding {} to {}", topologyName, BUFFERED_RECORDS_PER_PARTITION_CONFIG, maxBufferedSize);
+        final boolean bufferedRecordsPerPartitionOverridden = isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides);
+        final boolean inputBufferMaxBytesOverridden = isTopologyOverride(INPUT_BUFFER_MAX_BYTES_CONFIG, topologyOverrides);
+
+        if (!bufferedRecordsPerPartitionOverridden && !inputBufferMaxBytesOverridden) {
+            maxBufferedSize = getBufferedRecordsPerPartition(globalAppConfigs);
         } else {
-            // If the user hasn't explicitly set the buffered.records.per.partition config, then leave it unbounded
-            // and rely on the input.buffer.max.bytes instead to keep the memory usage under control
-            maxBufferedSize = globalAppConfigs.originals().containsKey(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG)
-                    ? globalAppConfigs.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG) : -1;
+            maxBufferedSize = setMaxBufferedRecordsPerPartition(bufferedRecordsPerPartitionOverridden, inputBufferMaxBytesOverridden);
         }
 
         final boolean stateStoreCacheMaxBytesOverridden = isTopologyOverride(STATESTORE_CACHE_MAX_BYTES_CONFIG, topologyOverrides);
@@ -217,6 +218,25 @@ public class TopologyConfig extends AbstractConfig {
         } else {
             storeType = globalAppConfigs.getString(DEFAULT_DSL_STORE_CONFIG);
         }
+    }
+
+    private int setMaxBufferedRecordsPerPartition(final boolean bufferedRecordsPerPartitionOverridden, final boolean inputBufferMaxBytesOverridden) {
+        int maxBufferedSize = -1;
+        if (bufferedRecordsPerPartitionOverridden && inputBufferMaxBytesOverridden) {
+            log.info("Both deprecated config {} and the new config {} are set, hence {} is ignored and {} will be used instead to keep memory usage under control.",
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                    INPUT_BUFFER_MAX_BYTES_CONFIG,
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                    INPUT_BUFFER_MAX_BYTES_CONFIG);
+        } else if (bufferedRecordsPerPartitionOverridden) {
+            log.warn("Deprecated config {} is set, and will be used; we suggest setting the new config {} to keep memory usage under control " +
+                            "instead as deprecated {} would be removed in the future.",
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                    INPUT_BUFFER_MAX_BYTES_CONFIG,
+                    BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+            maxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        }
+        return maxBufferedSize;
     }
 
     public Materialized.StoreType parseStoreType() {

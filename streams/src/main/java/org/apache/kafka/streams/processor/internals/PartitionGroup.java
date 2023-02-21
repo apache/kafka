@@ -278,7 +278,7 @@ public class PartitionGroup {
 
             if (record != null) {
                 --totalBuffered;
-                totalBytesBuffered -= (queue.getTotalBytesBuffered() - oldBufferSize);
+                totalBytesBuffered -= oldBufferSize - queue.getTotalBytesBuffered();
                 totalInputBufferBytesSensor.record(totalBytesBuffered);
 
                 if (queue.isEmpty()) {

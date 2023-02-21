@@ -1015,7 +1015,7 @@ public class StreamThread extends Thread {
             // Check buffer size after adding records to tasks
             final long bufferSize = taskManager.getInputBufferSizeInBytes();
             // Pausing partitions as the buffer size now exceeds max buffer size
-            if (bufferSize > maxBufferSizeBytes.get()) {
+            if (maxBufferSizeBytes.get() != -1 && bufferSize > maxBufferSizeBytes.get()) {
                 final Set<TopicPartition> nonEmptyPartitions = taskManager.nonEmptyPartitions();
                 log.info("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
                         bufferSize, maxBufferSizeBytes.get(), nonEmptyPartitions);
