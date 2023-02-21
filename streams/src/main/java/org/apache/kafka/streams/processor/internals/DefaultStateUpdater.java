@@ -467,11 +467,13 @@ public class DefaultStateUpdater implements StateUpdater {
                         elapsedMsSinceLastCommit, commitIntervalMs);
                 }
 
-                for (final Task task : updatingTasks.values()) {
-                    log.debug("Try to checkpoint current restoring progress for task {}", task.id());
-                    // do not enforce checkpointing during restoration if its position has not advanced much
-                    measureCheckpointLatency(() -> task.maybeCheckpoint(false));
-                }
+                measureCheckpointLatency(() -> {
+                    for (final Task task : updatingTasks.values()) {
+                        log.debug("Try to checkpoint current restoring progress for task {}", task.id());
+                        // do not enforce checkpointing during restoration if its position has not advanced much
+                        task.maybeCheckpoint(false);
+                    }
+                });
 
                 lastCommitMs = now;
             }
