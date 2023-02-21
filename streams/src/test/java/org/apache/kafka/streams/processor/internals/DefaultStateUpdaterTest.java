@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -26,6 +28,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTasks;
 import org.apache.kafka.streams.processor.internals.Task.State;
+import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -35,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -51,6 +55,9 @@ import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.apache.kafka.test.StreamsTestUtils.TopologyMetadataBuilder.unnamedTopology;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -88,10 +95,12 @@ class DefaultStateUpdaterTest {
 
     // need an auto-tick timer to work for draining with timeout
     private final Time time = new MockTime(1L);
+    private final Metrics metrics = new Metrics(time);
     private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
-    private DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", config, changelogReader, topologyMetadata, time);
+    private DefaultStateUpdater stateUpdater =
+        new DefaultStateUpdater("test-state-updater", metrics, config, changelogReader, topologyMetadata, time);
 
     @AfterEach
     public void tearDown() {
@@ -149,7 +158,7 @@ class DefaultStateUpdaterTest {
     @Test
     public void shouldRemoveUpdatingTasksOnShutdown() throws Exception {
         stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        stateUpdater = new DefaultStateUpdater("test-state-updater", new StreamsConfig(configProps(Integer.MAX_VALUE)), changelogReader, topologyMetadata, time);
+        stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, new StreamsConfig(configProps(Integer.MAX_VALUE)), changelogReader, topologyMetadata, time);
         final StreamTask activeTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
@@ -643,7 +652,7 @@ class DefaultStateUpdaterTest {
             mkEntry(activeTask2.id(), activeTask2),
             mkEntry(standbyTask.id(), standbyTask)
         );
-        doThrow(taskCorruptedException).doNothing().when(changelogReader).restore(updatingTasks1);
+        doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks1);
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
         stateUpdater.start();
 
@@ -670,7 +679,7 @@ class DefaultStateUpdaterTest {
         final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(mkSet(task1.id()));
         final ExceptionAndTasks expectedExceptionAndTasks = new ExceptionAndTasks(mkSet(task1), taskCorruptedException);
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
-        doThrow(taskCorruptedException).doNothing().when(changelogReader).restore(updatingTasks);
+        doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks);
 
         stateUpdater.start();
         stateUpdater.add(task1);
@@ -828,7 +837,7 @@ class DefaultStateUpdaterTest {
             mkEntry(controlTask.id(), controlTask)
         );
         doThrow(streamsException)
-            .doNothing()
+            .doReturn(0L)
             .when(changelogReader).restore(updatingTasks);
         stateUpdater.start();
 
@@ -970,7 +979,7 @@ class DefaultStateUpdaterTest {
             mkEntry(controlTask.id(), controlTask)
         );
         doThrow(streamsException)
-            .doNothing()
+            .doReturn(0L)
             .when(changelogReader).restore(updatingTasks);
         stateUpdater.start();
 
@@ -1133,7 +1142,7 @@ class DefaultStateUpdaterTest {
                 mkEntry(controlTask.id(), controlTask)
         );
         doThrow(streamsException)
-                .doNothing()
+                .doReturn(0L)
                 .when(changelogReader).restore(updatingTasks);
         stateUpdater.start();
 
@@ -1248,7 +1257,7 @@ class DefaultStateUpdaterTest {
             mkEntry(task2.id(), task2),
             mkEntry(task3.id(), task3)
         );
-        doNothing().doThrow(taskCorruptedException).doNothing().when(changelogReader).restore(updatingTasks);
+        doNothing().doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks);
         stateUpdater.start();
 
         stateUpdater.add(task1);
@@ -1362,7 +1371,7 @@ class DefaultStateUpdaterTest {
     public void shouldNotAutoCheckpointTasksIfIntervalNotElapsed() {
         // we need to use a non auto-ticking timer here to control how much time elapsed exactly
         final Time time = new MockTime();
-        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", config, changelogReader, topologyMetadata, time);
+        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, config, changelogReader, topologyMetadata, time);
         try {
             final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
             final StreamTask task2 = statefulTask(TASK_0_2, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
@@ -1466,11 +1475,11 @@ class DefaultStateUpdaterTest {
             mkEntry(standbyTask1.id(), standbyTask1),
             mkEntry(standbyTask2.id(), standbyTask2)
         );
-        doNothing().doThrow(taskCorruptedException).doNothing().when(changelogReader).restore(updatingTasks1);
+        doNothing().doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks1);
         final Map<TaskId, Task> updatingTasks2 = mkMap(
             mkEntry(activeTask1.id(), activeTask1)
         );
-        doNothing().doThrow(streamsException).doNothing().when(changelogReader).restore(updatingTasks2);
+        doNothing().doThrow(streamsException).doReturn(0L).when(changelogReader).restore(updatingTasks2);
         stateUpdater.start();
         stateUpdater.add(standbyTask1);
         stateUpdater.add(activeTask1);
@@ -1524,6 +1533,118 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks(activeTask, standbyTask);
 
         verifyGetTasks(mkSet(activeTask), mkSet(standbyTask));
+    }
+
+    @Test
+    public void shouldRecordMetrics() throws Exception {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_2, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        final StandbyTask standbyTask3 = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).inState(State.RUNNING).build();
+        final StandbyTask standbyTask4 = standbyTask(TASK_1_1, mkSet(TOPIC_PARTITION_D_0)).inState(State.RUNNING).build();
+        final Map<TaskId, Task> tasks1234 = mkMap(
+            mkEntry(activeTask1.id(), activeTask1),
+            mkEntry(activeTask2.id(), activeTask2),
+            mkEntry(standbyTask3.id(), standbyTask3),
+            mkEntry(standbyTask4.id(), standbyTask4)
+        );
+        final Map<TaskId, Task> tasks134 = mkMap(
+            mkEntry(activeTask1.id(), activeTask1),
+            mkEntry(standbyTask3.id(), standbyTask3),
+            mkEntry(standbyTask4.id(), standbyTask4)
+        );
+        final Map<TaskId, Task> tasks13 = mkMap(
+            mkEntry(activeTask1.id(), activeTask1),
+            mkEntry(standbyTask3.id(), standbyTask3)
+        );
+
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        when(changelogReader.restore(tasks1234)).thenReturn(1L);
+        when(changelogReader.restore(tasks134)).thenReturn(1L);
+        when(changelogReader.restore(tasks13)).thenReturn(1L);
+        stateUpdater.start();
+        stateUpdater.add(activeTask1);
+        stateUpdater.add(activeTask2);
+        stateUpdater.add(standbyTask3);
+        stateUpdater.add(standbyTask4);
+
+        verifyPausedTasks(activeTask2, standbyTask4);
+        assertThat(metrics.metrics().size(), is(11));
+
+        final Map<String, String> tagMap = new LinkedHashMap<>();
+        tagMap.put("thread-id", "state-updater");
+
+        MetricName metricName = new MetricName("restoring-active-tasks",
+            "stream-state-metrics",
+            "The number of active tasks currently undergoing restoration",
+            tagMap);
+        verifyMetric(metrics, metricName, is(1.0));
+
+        metricName = new MetricName("restoring-standby-tasks",
+            "stream-state-metrics",
+            "The number of active tasks currently undergoing restoration",
+            tagMap);
+        verifyMetric(metrics, metricName, is(1.0));
+
+        metricName = new MetricName("paused-active-tasks",
+            "stream-state-metrics",
+            "The number of active tasks paused restoring",
+            tagMap);
+        verifyMetric(metrics, metricName, is(1.0));
+
+        metricName = new MetricName("paused-standby-tasks",
+            "stream-state-metrics",
+            "The number of standby tasks paused restoring",
+            tagMap);
+        verifyMetric(metrics, metricName, is(1.0));
+
+        metricName = new MetricName("idle-ratio",
+            "stream-state-metrics",
+            "The fraction of time the thread spent on being idle",
+            tagMap);
+        verifyMetric(metrics, metricName, not(0.0d));
+
+        metricName = new MetricName("restore-ratio",
+            "stream-state-metrics",
+            "The fraction of time the thread spent on restoring tasks",
+            tagMap);
+        verifyMetric(metrics, metricName, not(0.0d));
+
+        metricName = new MetricName("checkpoint-ratio",
+            "stream-state-metrics",
+            "The fraction of time the thread spent on checkpointing tasks restored progress",
+            tagMap);
+        verifyMetric(metrics, metricName, not(0.0d));
+
+        metricName = new MetricName("restore-records-total",
+            "stream-state-metrics",
+            "The total number of records restored",
+            tagMap);
+        verifyMetric(metrics, metricName, not(0.0d));
+
+        metricName = new MetricName("restore-records-rate",
+            "stream-state-metrics",
+            "The average per-second number of records restored",
+            tagMap);
+        verifyMetric(metrics, metricName, not(0.0d));
+
+        metricName = new MetricName("restore-call-rate",
+            "stream-state-metrics",
+            "The average per-second number of restore calls triggered",
+            tagMap);
+        verifyMetric(metrics, metricName, not(0.0d));
+
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+        assertThat(metrics.metrics().size(), is(1));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> void verifyMetric(final Metrics metrics,
+                                         final MetricName metricName,
+                                         final Matcher<T> matcher) {
+        assertThat(metrics.metrics().get(metricName).metricName().description(), is(metricName.description()));
+        assertThat(metrics.metrics().get(metricName).metricName().tags(), is(metricName.tags()));
+        assertThat((T) metrics.metrics().get(metricName).metricValue(), matcher);
     }
 
     private void verifyGetTasks(final Set<StreamTask> expectedActiveTasks,
