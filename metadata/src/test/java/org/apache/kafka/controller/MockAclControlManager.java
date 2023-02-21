@@ -31,21 +31,20 @@ import java.util.List;
 import java.util.Optional;
 
 public class MockAclControlManager extends AclControlManager {
-  public MockAclControlManager(LogContext logContext,
-                        Optional<ClusterMetadataAuthorizer> authorizer) {
-    super(new SnapshotRegistry(logContext), authorizer);
-  }
+    public MockAclControlManager(LogContext logContext,
+                                 Optional<ClusterMetadataAuthorizer> authorizer) {
+        super(new SnapshotRegistry(logContext), authorizer);
+    }
 
-  public List<AclCreateResult> createAndReplayAcls(List<AclBinding> acls) {
-    ControllerResult<List<AclCreateResult>> createResults = createAcls(acls);
-    createResults.records().forEach(record -> replay((AccessControlEntryRecord) record.message(), Optional.empty()));
-    return createResults.response();
-  }
+    public List<AclCreateResult> createAndReplayAcls(List<AclBinding> acls) {
+        ControllerResult<List<AclCreateResult>> createResults = createAcls(acls);
+        createResults.records().forEach(record -> replay((AccessControlEntryRecord) record.message(), Optional.empty()));
+        return createResults.response();
+    }
 
-  public List<AclDeleteResult> deleteAndReplayAcls(List<AclBindingFilter> filters) {
-    ControllerResult<List<AclDeleteResult>> deleteResults = deleteAcls(filters);
-    deleteResults.records().forEach(record -> replay((RemoveAccessControlEntryRecord) record.message(), Optional.empty()));
-    return deleteResults.response();
-  }
-
+    public List<AclDeleteResult> deleteAndReplayAcls(List<AclBindingFilter> filters) {
+        ControllerResult<List<AclDeleteResult>> deleteResults = deleteAcls(filters);
+        deleteResults.records().forEach(record -> replay((RemoveAccessControlEntryRecord) record.message(), Optional.empty()));
+        return deleteResults.response();
+    }
 }

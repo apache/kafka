@@ -29,34 +29,34 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 public class MockAclMutator implements AclMutator {
-  MockAclControlManager aclControlManager;
+    MockAclControlManager aclControlManager;
 
-  public MockAclMutator(StandardAuthorizer authorizer) {
-    aclControlManager = createAclControlManager(authorizer);
-  }
+    public MockAclMutator(StandardAuthorizer authorizer) {
+        aclControlManager = createAclControlManager(authorizer);
+    }
 
-  private MockAclControlManager createAclControlManager(StandardAuthorizer standardAuthorizer) {
-    LogContext logContext = new LogContext();
-    return new MockAclControlManager(logContext, Optional.of(standardAuthorizer));
-  }
+    private MockAclControlManager createAclControlManager(StandardAuthorizer standardAuthorizer) {
+        LogContext logContext = new LogContext();
+        return new MockAclControlManager(logContext, Optional.of(standardAuthorizer));
+    }
 
-  @Override
-  public CompletableFuture<List<AclCreateResult>> createAcls(
-      ControllerRequestContext context,
-      List<AclBinding> aclBindings
-  ) {
-    CompletableFuture<List<AclCreateResult>> future = new CompletableFuture<>();
-    future.complete(aclControlManager.createAndReplayAcls(aclBindings));
-    return future;
-  }
+    @Override
+    public CompletableFuture<List<AclCreateResult>> createAcls(
+        ControllerRequestContext context,
+        List<AclBinding> aclBindings
+    ) {
+        CompletableFuture<List<AclCreateResult>> future = new CompletableFuture<>();
+        future.complete(aclControlManager.createAndReplayAcls(aclBindings));
+        return future;
+    }
 
-  @Override
-  public CompletableFuture<List<AclDeleteResult>> deleteAcls(
-      ControllerRequestContext context,
-      List<AclBindingFilter> aclBindingFilters
-  ) {
-    CompletableFuture<List<AclDeleteResult>> future = new CompletableFuture<>();
-    future.complete(aclControlManager.deleteAndReplayAcls(aclBindingFilters));
-    return future;
-  }
+    @Override
+    public CompletableFuture<List<AclDeleteResult>> deleteAcls(
+        ControllerRequestContext context,
+        List<AclBindingFilter> aclBindingFilters
+    ) {
+        CompletableFuture<List<AclDeleteResult>> future = new CompletableFuture<>();
+        future.complete(aclControlManager.deleteAndReplayAcls(aclBindingFilters));
+        return future;
+    }
 }
