@@ -102,10 +102,13 @@ public class MirrorCheckpointTask extends SourceTask {
         idleConsumerGroupsOffset = new HashMap<>();
         checkpointsPerConsumerGroup = new HashMap<>();
         scheduler = new Scheduler(MirrorCheckpointTask.class, config.adminTimeout());
-        scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
-                                    "refreshing idle consumers group offsets at target cluster");
-        scheduler.scheduleRepeatingDelayed(this::syncGroupOffset, config.syncGroupOffsetsInterval(),
-                                          "sync idle consumer group offset from source to target");
+        scheduler.execute(() -> {
+            offsetSyncStore.start();
+            scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
+                    "refreshing idle consumers group offsets at target cluster");
+            scheduler.scheduleRepeatingDelayed(this::syncGroupOffset, config.syncGroupOffsetsInterval(),
+                    "sync idle consumer group offset from source to target");
+        }, "starting offset sync store");
     }
 
     @Override
@@ -136,7 +139,11 @@ public class MirrorCheckpointTask extends SourceTask {
         try {
             long deadline = System.currentTimeMillis() + interval.toMillis();
             while (!stopping && System.currentTimeMillis() < deadline) {
-                offsetSyncStore.update(pollTimeout);
+                Thread.sleep(pollTimeout.toMillis());
+            }
+            if (stopping) {
+                // we are stopping, return early.
+                return null;
             }
             List<SourceRecord> records = new ArrayList<>();
             for (String group : consumerGroups) {

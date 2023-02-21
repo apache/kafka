@@ -627,8 +627,12 @@ public class KafkaStreams implements AutoCloseable {
          * If all threads are up, including the global thread, set to RUNNING
          */
         private void maybeSetRunning() {
-            // state can be transferred to RUNNING if all threads are either RUNNING or DEAD
+            // state can be transferred to RUNNING if
+            // 1) all threads are either RUNNING or DEAD
+            // 2) thread is pending-shutdown and there are still other threads running
+            final boolean hasRunningThread = threadState.values().stream().anyMatch(s -> s == StreamThread.State.RUNNING);
             for (final StreamThread.State state : threadState.values()) {
+                if (state == StreamThread.State.PENDING_SHUTDOWN && hasRunningThread) continue;
                 if (state != StreamThread.State.RUNNING && state != StreamThread.State.DEAD) {
                     return;
                 }
@@ -1826,7 +1830,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {
         final List<Task> allTasks = new ArrayList<>();
-        processStreamThread(thread -> allTasks.addAll(thread.allTasks().values()));
+        processStreamThread(thread -> allTasks.addAll(thread.readyOnlyAllTasks()));
         return allLocalStorePartitionLags(allTasks);
     }
 
@@ -1917,21 +1921,19 @@ public class KafkaStreams implements AutoCloseable {
             );
         } else {
             for (final StreamThread thread : threads) {
-                final Map<TaskId, Task> tasks = thread.allTasks();
-                for (final Entry<TaskId, Task> entry : tasks.entrySet()) {
+                final Set<Task> tasks = thread.readyOnlyAllTasks();
+                for (final Task task : tasks) {
 
-                    final TaskId taskId = entry.getKey();
+                    final TaskId taskId = task.id();
                     final int partition = taskId.partition();
-                    if (request.isAllPartitions()
-                        || request.getPartitions().contains(partition)) {
-                        final Task task = entry.getValue();
+                    if (request.isAllPartitions() || request.getPartitions().contains(partition)) {
                         final StateStore store = task.getStore(storeName);
                         if (store != null) {
                             final StreamThread.State state = thread.state();
                             final boolean active = task.isActive();
                             if (request.isRequireActive()
-                                && (state != StreamThread.State.RUNNING
-                                || !active)) {
+                                && (state != StreamThread.State.RUNNING || !active)) {
+
                                 result.addResult(
                                     partition,
                                     QueryResult.forFailure(

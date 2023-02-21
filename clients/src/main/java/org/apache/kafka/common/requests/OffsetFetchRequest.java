@@ -227,6 +227,24 @@ public class OffsetFetchRequest extends AbstractRequest {
         return data.requireStable();
     }
 
+    public List<OffsetFetchRequestData.OffsetFetchRequestGroup> groups() {
+        if (version() >= 8) {
+            return data.groups();
+        } else {
+            OffsetFetchRequestData.OffsetFetchRequestGroup group =
+                new OffsetFetchRequestData.OffsetFetchRequestGroup().setGroupId(data.groupId());
+
+            data.topics().forEach(topic -> {
+                group.topics().add(new OffsetFetchRequestTopics()
+                    .setName(topic.name())
+                    .setPartitionIndexes(topic.partitionIndexes())
+                );
+            });
+
+            return Collections.singletonList(group);
+        }
+    }
+
     public Map<String, List<TopicPartition>> groupIdsToPartitions() {
         Map<String, List<TopicPartition>> groupIdsToPartitions = new HashMap<>();
         for (OffsetFetchRequestGroup group : data.groups()) {

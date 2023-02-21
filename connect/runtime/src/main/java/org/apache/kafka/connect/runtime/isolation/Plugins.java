@@ -123,6 +123,10 @@ public class Plugins {
         );
     }
 
+    public Class<?> pluginClass(String classOrAlias) throws ClassNotFoundException {
+        return pluginClass(delegatingLoader, classOrAlias, Object.class);
+    }
+
     public static ClassLoader compareAndSwapLoaders(ClassLoader loader) {
         ClassLoader current = Thread.currentThread().getContextClassLoader();
         if (!current.equals(loader)) {

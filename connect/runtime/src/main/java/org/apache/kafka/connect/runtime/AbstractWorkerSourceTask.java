@@ -69,7 +69,8 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
- * WorkerTask that contains shared logic for running source tasks with either standard or exactly-once delivery guarantees.
+ * WorkerTask that contains shared logic for running source tasks with either standard semantics
+ * (i.e., either at-least-once or at-most-once) or exactly-once semantics.
  */
 public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(AbstractWorkerSourceTask.class);
@@ -352,8 +353,10 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                         recordPollReturned(toSend.size(), time.milliseconds() - start);
                     }
                 }
-                if (toSend == null)
+                if (toSend == null) {
+                    batchDispatched();
                     continue;
+                }
                 log.trace("{} About to send {} records to Kafka", this, toSend.size());
                 if (sendRecords()) {
                     batchDispatched();
@@ -364,6 +367,10 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         } catch (InterruptedException e) {
             // Ignore and allow to exit.
         } catch (RuntimeException e) {
+            if (isCancelled()) {
+                log.debug("Skipping final offset commit as task has been cancelled");
+                throw e;
+            }
             try {
                 finalOffsetCommit(true);
             } catch (Exception offsetException) {

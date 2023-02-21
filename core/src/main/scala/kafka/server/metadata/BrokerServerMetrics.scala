@@ -93,7 +93,7 @@ final class BrokerServerMetrics private (
   )
 
   addMetric(metrics, lastAppliedRecordOffsetName) { _ =>
-    lastAppliedImageProvenance.get.offset()
+    lastAppliedImageProvenance.get.lastContainedOffset()
   }
 
   addMetric(metrics, lastAppliedRecordTimestampName) { _ =>
@@ -132,7 +132,7 @@ final class BrokerServerMetrics private (
   override def updateLastAppliedImageProvenance(provenance: MetadataProvenance): Unit =
     lastAppliedImageProvenance.set(provenance)
 
-  override def lastAppliedOffset(): Long = lastAppliedImageProvenance.get().offset()
+  override def lastAppliedOffset(): Long = lastAppliedImageProvenance.get().lastContainedOffset()
 
   def lastAppliedTimestamp(): Long = lastAppliedImageProvenance.get().lastContainedLogTimeMs()
 }

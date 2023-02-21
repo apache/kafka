@@ -110,7 +110,7 @@ class BrokerRegistrationRequestTest {
       .setBrokerId(brokerId)
       .setClusterId(clusterId)
       .setIncarnationId(Uuid.randomUuid())
-      .setMigratingZkBrokerEpoch(zkEpoch.getOrElse(-1L))
+      .setIsMigratingZkBroker(zkEpoch.isDefined)
       .setFeatures(features)
 
     Errors.forCode(sendAndRecieve(channelManager, req).errorCode())

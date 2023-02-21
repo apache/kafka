@@ -39,12 +39,12 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV1;
@@ -154,13 +154,11 @@ public class MetadataLoaderTest {
             MetadataProvenance provenance,
             List<List<ApiMessageAndVersion>> lists
         ) {
-            List<Batch<ApiMessageAndVersion>> batches = new ArrayList<>();
-            lists.forEach(records -> batches.add(Batch.data(
-                provenance.offset(),
-                provenance.epoch(),
-                provenance.lastContainedLogTimeMs(),
-                0,
-                records)));
+            List<Batch<ApiMessageAndVersion>> batches = lists
+                .stream()
+                .map(records -> Batch.data(0, 0, 0, 0, records))
+                .collect(Collectors.toList());
+
             return new MockSnapshotReader(provenance, batches);
         }
 
@@ -179,17 +177,17 @@ public class MetadataLoaderTest {
 
         @Override
         public OffsetAndEpoch snapshotId() {
-            return provenance.offsetAndEpoch();
+            return provenance.snapshotId();
         }
 
         @Override
         public long lastContainedLogOffset() {
-            return provenance.offset();
+            return provenance.lastContainedOffset();
         }
 
         @Override
         public int lastContainedLogEpoch() {
-            return provenance.epoch();
+            return provenance.lastContainedEpoch();
         }
 
         @Override

@@ -21,13 +21,13 @@ import java.util.Locale
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent._
 import java.util.{List => JList}
-
 import com.yammer.metrics.core.MetricName
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
-import kafka.utils.{KafkaScheduler, Logging}
+import kafka.utils.Logging
 import kafka.zookeeper.ZooKeeperClient._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.AsyncCallback.{Children2Callback, DataCallback, StatCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
@@ -72,7 +72,7 @@ class ZooKeeperClient(connectString: String,
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
-  private[zookeeper] val reinitializeScheduler = new KafkaScheduler(threads = 1, s"zk-client-${threadPrefix}reinit-")
+  private[zookeeper] val reinitializeScheduler = new KafkaScheduler(1, true, s"zk-client-${threadPrefix}reinit-")
   private var isFirstConnectionEstablished = false
 
   private val metricNames = Set[String]()
@@ -413,10 +413,10 @@ class ZooKeeperClient(connectString: String,
 
   // Visibility for testing
   private[zookeeper] def scheduleReinitialize(name: String, message: String, delayMs: Long): Unit = {
-    reinitializeScheduler.schedule(name, () => {
+    reinitializeScheduler.scheduleOnce(name, () => {
       info(message)
       reinitialize()
-    }, delayMs, period = -1L, unit = TimeUnit.MILLISECONDS)
+    }, delayMs)
   }
 
   private def threadPrefix: String = name.replaceAll("\\s", "") + "-"

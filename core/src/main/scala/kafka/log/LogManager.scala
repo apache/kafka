@@ -41,8 +41,9 @@ import org.apache.kafka.common.config.TopicConfig
 
 import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig, LogDirFailureChannel}
-import org.apache.kafka.server.log.internals.LogConfig.MessageFormatVersion
+import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
+import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 
 import scala.annotation.nowarn
 
@@ -79,7 +80,6 @@ class LogManager(logDirs: Seq[File],
 
   import LogManager._
 
-  val LockFile = ".lock"
   val InitialTaskDelayMs = 30 * 1000
 
   private val logCreationOrDeletionLock = new Object
@@ -241,7 +241,7 @@ class LogManager(logDirs: Seq[File],
   private def lockLogDirs(dirs: Seq[File]): Seq[FileLock] = {
     dirs.flatMap { dir =>
       try {
-        val lock = new FileLock(new File(dir, LockFile))
+        val lock = new FileLock(new File(dir, LockFileName))
         if (!lock.tryLock())
           throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParent +
             ". A Kafka instance in another process or thread is using this directory.")
@@ -354,6 +354,7 @@ class LogManager(logDirs: Seq[File],
       error(s"Error while loading log dir $logDirAbsolutePath", e)
     }
 
+    val uncleanLogDirs = mutable.Buffer.empty[String]
     for (dir <- liveLogDirs) {
       val logDirAbsolutePath = dir.getAbsolutePath
       var hadCleanShutdown: Boolean = false
@@ -364,14 +365,10 @@ class LogManager(logDirs: Seq[File],
 
         val cleanShutdownFile = new File(dir, LogLoader.CleanShutdownFile)
         if (cleanShutdownFile.exists) {
-          info(s"Skipping recovery for all logs in $logDirAbsolutePath since clean shutdown file was found")
           // Cache the clean shutdown status and use that for rest of log loading workflow. Delete the CleanShutdownFile
           // so that if broker crashes while loading the log, it is considered hard shutdown during the next boot up. KAFKA-10471
           Files.deleteIfExists(cleanShutdownFile.toPath)
           hadCleanShutdown = true
-        } else {
-          // log recovery itself is being performed by `Log` class during initialization
-          info(s"Attempting recovery for all logs in $logDirAbsolutePath since no clean shutdown file was found")
         }
 
         var recoveryPoints = Map[TopicPartition, Long]()
@@ -400,6 +397,17 @@ class LogManager(logDirs: Seq[File],
             UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
         numTotalLogs += logsToLoad.length
         numRemainingLogs.put(dir.getAbsolutePath, logsToLoad.length)
+
+        if (logsToLoad.isEmpty) {
+          info(s"No logs found to be loaded in $logDirAbsolutePath")
+        } else if (hadCleanShutdown) {
+          info(s"Skipping recovery of ${logsToLoad.length} logs from $logDirAbsolutePath since " +
+            "clean shutdown file was found")
+        } else {
+          info(s"Recovering ${logsToLoad.length} logs from $logDirAbsolutePath since no " +
+            "clean shutdown file was found")
+          uncleanLogDirs.append(logDirAbsolutePath)
+        }
 
         val jobsForDir = logsToLoad.map { logDir =>
           val runnable: Runnable = () => {
@@ -454,7 +462,9 @@ class LogManager(logDirs: Seq[File],
       threadPools.foreach(_.shutdown())
     }
 
-    info(s"Loaded $numTotalLogs logs in ${time.hiResClockMs() - startMs}ms.")
+    val elapsedMs = time.hiResClockMs() - startMs
+    val printedUncleanLogDirs = if (uncleanLogDirs.isEmpty) "" else s" (unclean log dirs = $uncleanLogDirs)"
+    info(s"Loaded $numTotalLogs logs in ${elapsedMs}ms$printedUncleanLogDirs")
   }
 
   private[log] def addLogRecoveryMetrics(numRemainingLogs: ConcurrentMap[String, Int],
@@ -533,30 +543,25 @@ class LogManager(logDirs: Seq[File],
     if (scheduler != null) {
       info("Starting log cleanup with a period of %d ms.".format(retentionCheckMs))
       scheduler.schedule("kafka-log-retention",
-                         cleanupLogs _,
-                         delay = InitialTaskDelayMs,
-                         period = retentionCheckMs,
-                         TimeUnit.MILLISECONDS)
+                         () => cleanupLogs(),
+                         InitialTaskDelayMs,
+                         retentionCheckMs)
       info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
       scheduler.schedule("kafka-log-flusher",
-                         flushDirtyLogs _,
-                         delay = InitialTaskDelayMs,
-                         period = flushCheckMs,
-                         TimeUnit.MILLISECONDS)
+                         () => flushDirtyLogs(),
+                         InitialTaskDelayMs,
+                         flushCheckMs)
       scheduler.schedule("kafka-recovery-point-checkpoint",
-                         checkpointLogRecoveryOffsets _,
-                         delay = InitialTaskDelayMs,
-                         period = flushRecoveryOffsetCheckpointMs,
-                         TimeUnit.MILLISECONDS)
+                         () => checkpointLogRecoveryOffsets(),
+                         InitialTaskDelayMs,
+                         flushRecoveryOffsetCheckpointMs)
       scheduler.schedule("kafka-log-start-offset-checkpoint",
-                         checkpointLogStartOffsets _,
-                         delay = InitialTaskDelayMs,
-                         period = flushStartOffsetCheckpointMs,
-                         TimeUnit.MILLISECONDS)
-      scheduler.schedule("kafka-delete-logs", // will be rescheduled after each delete logs with a dynamic period
-                         deleteLogs _,
-                         delay = InitialTaskDelayMs,
-                         unit = TimeUnit.MILLISECONDS)
+                         () => checkpointLogStartOffsets(),
+                         InitialTaskDelayMs,
+                         flushStartOffsetCheckpointMs)
+      scheduler.scheduleOnce("kafka-delete-logs", // will be rescheduled after each delete logs with a dynamic period
+                         () => deleteLogs(),
+                         InitialTaskDelayMs)
     }
     if (cleanerConfig.enableCleaner) {
       _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
@@ -1049,16 +1054,13 @@ class LogManager(logDirs: Seq[File],
         error(s"Exception in kafka-delete-logs thread.", e)
     } finally {
       try {
-        scheduler.schedule("kafka-delete-logs",
-          deleteLogs _,
-          delay = nextDelayMs,
-          unit = TimeUnit.MILLISECONDS)
+        scheduler.scheduleOnce("kafka-delete-logs",
+          () => deleteLogs(),
+          nextDelayMs)
       } catch {
         case e: Throwable =>
-          if (scheduler.isStarted) {
-            // No errors should occur unless scheduler has been shutdown
-            error(s"Failed to schedule next delete in kafka-delete-logs thread", e)
-          }
+          // No errors should occur unless scheduler has been shutdown
+          error(s"Failed to schedule next delete in kafka-delete-logs thread", e)
       }
     }
   }
@@ -1341,6 +1343,7 @@ class LogManager(logDirs: Seq[File],
 }
 
 object LogManager {
+  val LockFileName = ".lock"
 
   /**
    * Wait all jobs to complete
@@ -1363,7 +1366,7 @@ object LogManager {
   def apply(config: KafkaConfig,
             initialOfflineDirs: Seq[String],
             configRepository: ConfigRepository,
-            kafkaScheduler: KafkaScheduler,
+            kafkaScheduler: Scheduler,
             time: Time,
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel,

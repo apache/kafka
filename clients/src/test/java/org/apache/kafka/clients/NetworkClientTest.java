@@ -913,7 +913,7 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testCallDisconnect() throws Exception {
+    public void testCallDisconnect() {
         awaitReady(client, node);
         assertTrue(client.isReady(node, time.milliseconds()),
             "Expected NetworkClient to be ready to send to node " + node.idString());

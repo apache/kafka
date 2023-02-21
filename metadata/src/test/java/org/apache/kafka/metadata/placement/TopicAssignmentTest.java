@@ -33,7 +33,7 @@ public class TopicAssignmentTest {
         List<Integer> replicasP1 = Arrays.asList(1, 2, 0);
         List<PartitionAssignment> partitionAssignments = Arrays.asList(
             new PartitionAssignment(replicasP0),
-             new PartitionAssignment(replicasP1)
+            new PartitionAssignment(replicasP1)
         );
         assertEquals(partitionAssignments, new TopicAssignment(partitionAssignments).assignments());
     }
@@ -53,7 +53,7 @@ public class TopicAssignmentTest {
                     new PartitionAssignment(
                         Arrays.asList(1, 2, 0)
                     )
-                 )
+                )
             )
         );
 
@@ -69,5 +69,15 @@ public class TopicAssignmentTest {
                 }
             }
         }
+    }
+
+    @Test
+    public void testToString() {
+        List<Integer> replicas = Arrays.asList(0, 1, 2);
+        List<PartitionAssignment> partitionAssignments = Arrays.asList(
+            new PartitionAssignment(replicas)
+        );
+        TopicAssignment topicAssignment = new TopicAssignment(partitionAssignments);
+        assertEquals("TopicAssignment(assignments=[PartitionAssignment(replicas=[0, 1, 2])])", topicAssignment.toString());
     }
 }

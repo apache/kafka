@@ -32,8 +32,9 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
-import org.apache.kafka.server.log.internals.{CorruptSnapshotException, OffsetIndex, TimeIndex, TransactionIndex}
 import org.apache.kafka.snapshot.Snapshots
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.storage.internals.log.{CorruptSnapshotException, LogFileUtils, OffsetIndex, ProducerStateManager, TimeIndex, TransactionIndex}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -46,7 +47,7 @@ object DumpLogSegments {
 
   def main(args: Array[String]): Unit = {
     val opts = new DumpLogSegmentsOptions(args)
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
+    CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
     opts.checkArgs()
 
     val misMatchesForIndexFilesMap = mutable.Map[String, List[(Long, Long)]]()
@@ -67,7 +68,7 @@ object DumpLogSegments {
           dumpIndex(file, opts.indexSanityOnly, opts.verifyOnly, misMatchesForIndexFilesMap, opts.maxMessageSize)
         case UnifiedLog.TimeIndexFileSuffix =>
           dumpTimeIndex(file, opts.indexSanityOnly, opts.verifyOnly, timeIndexDumpErrors)
-        case UnifiedLog.ProducerSnapshotFileSuffix =>
+        case LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX =>
           dumpProducerIdSnapshot(file)
         case UnifiedLog.TxnIndexFileSuffix =>
           dumpTxnIndex(file)
@@ -103,7 +104,7 @@ object DumpLogSegments {
 
   private def dumpProducerIdSnapshot(file: File): Unit = {
     try {
-      ProducerStateManager.readSnapshot(file).foreach { entry =>
+      ProducerStateManager.readSnapshot(file).forEach { entry =>
         print(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} " +
           s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset} " +
           s"lastTimestamp: ${entry.lastTimestamp} ")

@@ -33,6 +33,7 @@ import static org.apache.kafka.metalog.MockMetaLogManagerListener.COMMIT;
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.LAST_COMMITTED_OFFSET;
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.SHUTDOWN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 
 @Timeout(value = 40)
@@ -45,10 +46,10 @@ public class LocalLogManagerTest {
     public void testCreateAndClose() throws Exception {
         try (
             LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(1).
-                buildWithMockListeners();
+                buildWithMockListeners()
         ) {
             env.close();
-            assertEquals(null, env.firstError.get());
+            assertNull(env.firstError.get());
         }
     }
 
@@ -59,11 +60,11 @@ public class LocalLogManagerTest {
     public void testClaimsLeadership() throws Exception {
         try (
             LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(1).
-                    buildWithMockListeners();
+                    buildWithMockListeners()
         ) {
             assertEquals(new LeaderAndEpoch(OptionalInt.of(0), 1), env.waitForLeader());
             env.close();
-            assertEquals(null, env.firstError.get());
+            assertNull(env.firstError.get());
         }
     }
 
@@ -74,7 +75,7 @@ public class LocalLogManagerTest {
     public void testPassLeadership() throws Exception {
         try (
             LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(3).
-                    buildWithMockListeners();
+                    buildWithMockListeners()
         ) {
             LeaderAndEpoch first = env.waitForLeader();
             LeaderAndEpoch cur = first;
@@ -95,7 +96,7 @@ public class LocalLogManagerTest {
                 cur = next;
             } while (cur.leaderId().equals(first.leaderId()));
             env.close();
-            assertEquals(null, env.firstError.get());
+            assertNull(env.firstError.get());
         }
     }
 
@@ -130,7 +131,7 @@ public class LocalLogManagerTest {
     public void testCommits() throws Exception {
         try (
             LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(3).
-                    buildWithMockListeners();
+                    buildWithMockListeners()
         ) {
             LeaderAndEpoch leaderInfo = env.waitForLeader();
             int leaderId = leaderInfo.leaderId().orElseThrow(() ->

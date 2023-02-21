@@ -22,7 +22,6 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Properties}
 
 import kafka.controller.KafkaController
-import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
@@ -34,6 +33,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, 
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
+import org.apache.kafka.coordinator.group.GroupCoordinator
 
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -237,7 +237,7 @@ class DefaultAutoTopicCreationManager(
           .setName(topic)
           .setNumPartitions(config.offsetsTopicPartitions)
           .setReplicationFactor(config.offsetsTopicReplicationFactor)
-          .setConfigs(convertToTopicConfigCollections(groupCoordinator.offsetsTopicConfigs))
+          .setConfigs(convertToTopicConfigCollections(groupCoordinator.groupMetadataTopicConfigs))
       case TRANSACTION_STATE_TOPIC_NAME =>
         new CreatableTopic()
           .setName(topic)

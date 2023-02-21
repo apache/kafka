@@ -43,7 +43,6 @@ import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.server.metadata.ZkMetadataCache;
-import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Pool;
 import kafka.utils.TestUtils;
@@ -69,9 +68,10 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.log.internals.CleanerConfig;
-import org.apache.kafka.server.log.internals.LogConfig;
-import org.apache.kafka.server.log.internals.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.server.util.KafkaScheduler;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -116,7 +116,7 @@ public class ReplicaFetcherThreadBenchmark {
     private ReplicaFetcherBenchThread fetcher;
     private LogManager logManager;
     private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, "scheduler", true);
+    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
     private Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
     private Metrics metrics = new Metrics();
     private ReplicaManager replicaManager;
@@ -259,7 +259,7 @@ public class ReplicaFetcherThreadBenchmark {
     }
 
     @TearDown(Level.Trial)
-    public void tearDown() throws IOException {
+    public void tearDown() throws IOException, InterruptedException {
         metrics.close();
         replicaManager.shutdown(false);
         logManager.shutdown();
