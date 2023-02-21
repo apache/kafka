@@ -82,7 +82,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
@@ -181,6 +180,7 @@ public class FetcherTest {
     private ApiVersions apiVersions = new ApiVersions();
     private ConsumerNetworkClient consumerClient;
     private Fetcher<?, ?> fetcher;
+    private FetchState<?, ?> fetchState;
     private OffsetFetcher offsetFetcher;
 
     private MemoryRecords records;
@@ -286,7 +286,7 @@ public class FetcherTest {
         fetcher.close();
         fetcher.close();
 
-        verify(fetcher, times(1)).maybeCloseFetchSessions(any(Timer.class));
+        verify(fetchState, times(1)).close();
     }
 
     @Test
@@ -2822,6 +2822,7 @@ public class FetcherTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testFetcherConcurrency() throws Exception {
         int numPartitions = 20;
         Set<TopicPartition> topicPartitions = new HashSet<>();
@@ -2843,31 +2844,24 @@ public class FetcherTest {
                 isolationLevel,
                 apiVersions);
 
-        fetcher = new Fetcher<byte[], byte[]>(
-                new LogContext(),
-                consumerClient,
-                minBytes,
+        FetchConfig<byte[], byte[]> fetchConfig = new FetchConfig<>(minBytes,
                 maxBytes,
                 maxWaitMs,
                 fetchSize,
                 2 * numPartitions,
-                true,
+                true, // check crc
                 "",
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(),
-                metadata,
-                subscriptions,
-                metrics,
-                metricsRegistry,
-                time,
-                isolationLevel) {
+                isolationLevel);
+        fetchState = new FetchState<byte[], byte[]>(logContext) {
             @Override
-            protected FetchSessionHandler sessionHandler(int id) {
-                final FetchSessionHandler handler = super.sessionHandler(id);
+            public FetchSessionHandler sessionHandler(Node node) {
+                final FetchSessionHandler handler = super.sessionHandler(node);
                 if (handler == null)
                     return null;
                 else {
-                    return new FetchSessionHandler(new LogContext(), id) {
+                    return new FetchSessionHandler(logContext, node.id()) {
                         @Override
                         public Builder newBuilder() {
                             verifySessionPartitions();
@@ -2906,6 +2900,16 @@ public class FetcherTest {
                 }
             }
         };
+
+        fetcher = new Fetcher<>(
+                consumerClient,
+                metadata,
+                subscriptions,
+                fetchConfig,
+                (FetchState<byte[], byte[]>) fetchState,
+                metrics,
+                metricsRegistry,
+                time);
 
         MetadataResponse initialMetadataResponse = RequestTestUtils.metadataUpdateWithIds(1,
                 singletonMap(topicName, numPartitions), tp -> validLeaderEpoch, topicIds);
@@ -3636,6 +3640,7 @@ public class FetcherTest {
                 subscriptionState, logContext);
     }
 
+    @SuppressWarnings("unchecked")
     private <K, V> void buildFetcher(MetricConfig metricConfig,
                                      Deserializer<K> keyDeserializer,
                                      Deserializer<V> valueDeserializer,
@@ -3645,10 +3650,7 @@ public class FetcherTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        fetcher = spy(new Fetcher<>(
-                new LogContext(),
-                consumerClient,
-                minBytes,
+        FetchConfig<K, V> fetchConfig = new FetchConfig<>(minBytes,
                 maxBytes,
                 maxWaitMs,
                 fetchSize,
@@ -3657,16 +3659,21 @@ public class FetcherTest {
                 "",
                 keyDeserializer,
                 valueDeserializer,
+                isolationLevel);
+        fetchState = spy(new FetchState<>(logContext));
+        fetcher = spy(new Fetcher<>(
+                consumerClient,
                 metadata,
-                subscriptions,
+                subscriptionState,
+                fetchConfig,
+                (FetchState<K, V>) fetchState,
                 metrics,
                 metricsRegistry,
-                time,
-                isolationLevel));
+                time));
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerClient,
                 metadata,
-                subscriptions,
+                subscriptionState,
                 time,
                 retryBackoffMs,
                 requestTimeoutMs,

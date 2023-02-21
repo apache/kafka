@@ -27,6 +27,8 @@ import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.Fetch;
+import org.apache.kafka.clients.consumer.internals.FetchConfig;
+import org.apache.kafka.clients.consumer.internals.FetchState;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
@@ -797,34 +799,29 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         config.getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
                         config.getString(ConsumerConfig.CLIENT_RACK_CONFIG));
             }
+            FetchConfig<K, V> fetchConfig = new FetchConfig<>(config, keyDeserializer, valueDeserializer, isolationLevel);
+            FetchState<K, V> fetchState = new FetchState<>(logContext);
             this.fetcher = new Fetcher<>(
-                    logContext,
                     this.client,
-                    config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
-                    config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG),
-                    config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG),
-                    config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
-                    config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG),
-                    config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG),
-                    config.getString(ConsumerConfig.CLIENT_RACK_CONFIG),
-                    this.keyDeserializer,
-                    this.valueDeserializer,
                     this.metadata,
                     this.subscriptions,
+                    fetchConfig,
+                    fetchState,
                     metrics,
                     metricsRegistry,
-                    this.time,
-                    isolationLevel);
+                    this.time);
             this.offsetFetcher = new OffsetFetcher(logContext,
-                    client,
-                    metadata,
-                    subscriptions,
+                    this.client,
+                    this.metadata,
+                    this.subscriptions,
                     time,
                     retryBackoffMs,
                     requestTimeoutMs,
                     isolationLevel,
                     apiVersions);
-            this.topicMetadataFetcher = new TopicMetadataFetcher(logContext, client, retryBackoffMs);
+            this.topicMetadataFetcher = new TopicMetadataFetcher(logContext,
+                    this.client,
+                    this.retryBackoffMs);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, metricGrpPrefix);
 

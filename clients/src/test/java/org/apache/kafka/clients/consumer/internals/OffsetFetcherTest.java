@@ -1245,10 +1245,7 @@ public class OffsetFetcherTest {
         buildFetcher(metricConfig, isolationLevel, metadataExpireMs, subscriptionState, logContext);
 
         FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry(metricConfig.tags().keySet(), "consumertest-group");
-        Fetcher<byte[], byte[]> fetcher = new Fetcher<>(
-                logContext,
-                consumerClient,
-                minBytes,
+        FetchConfig<byte[], byte[]> fetchConfig = new FetchConfig<>(minBytes,
                 maxBytes,
                 maxWaitMs,
                 fetchSize,
@@ -1257,12 +1254,17 @@ public class OffsetFetcherTest {
                 "",
                 new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(),
+                isolationLevel);
+        FetchState<byte[], byte[]> fetchState = new FetchState<>(logContext);
+        Fetcher<byte[], byte[]> fetcher = new Fetcher<>(
+                consumerClient,
                 metadata,
                 subscriptions,
+                fetchConfig,
+                fetchState,
                 metrics,
                 metricsRegistry,
-                time,
-                isolationLevel);
+                time);
 
         assignFromUser(singleton(tp0));
 

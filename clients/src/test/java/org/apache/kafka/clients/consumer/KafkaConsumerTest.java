@@ -28,6 +28,8 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.FetchConfig;
+import org.apache.kafka.clients.consumer.internals.FetchState;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcher;
@@ -2656,10 +2658,7 @@ public class KafkaConsumerTest {
                 null);
         }
         IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
-        Fetcher<String, String> fetcher = new Fetcher<>(
-                loggerFactory,
-                consumerClient,
-                minBytes,
+        FetchConfig<String, String> fetchConfig = new FetchConfig<>(minBytes,
                 maxBytes,
                 maxWaitMs,
                 fetchSize,
@@ -2668,12 +2667,17 @@ public class KafkaConsumerTest {
                 "",
                 keyDeserializer,
                 deserializer,
+                isolationLevel);
+        FetchState<String, String> fetchState = new FetchState<>(loggerFactory);
+        Fetcher<String, String> fetcher = new Fetcher<>(
+                consumerClient,
                 metadata,
                 subscription,
+                fetchConfig,
+                fetchState,
                 metrics,
                 metricsRegistry.fetcherMetrics,
-                time,
-                isolationLevel);
+                time);
         OffsetFetcher offsetFetcher = new OffsetFetcher(loggerFactory,
                 consumerClient,
                 metadata,

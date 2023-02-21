@@ -76,6 +76,10 @@ public class FetchSessionHandler {
         return nextMetadata.sessionId();
     }
 
+    public int node() {
+        return node;
+    }
+
     /**
      * All of the partitions which exist in the fetch request session.
      */
