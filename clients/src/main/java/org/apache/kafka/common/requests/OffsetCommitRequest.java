@@ -64,11 +64,8 @@ public class OffsetCommitRequest extends AbstractRequest {
                         version + " does not support usage of config group.instance.id.");
             }
 
-            // Copy since we can mutate it.
-            OffsetCommitRequestData requestData = data.duplicate();
-
             if (version >= 9) {
-                requestData.topics().forEach(topic -> {
+                data.topics().forEach(topic -> {
                     // Set the topic name to null if a topic ID for the topic is present. If no topic ID is
                     // provided (i.e. its value is ZERO_UUID), the client should provide a topic name as a
                     // fallback. This allows the OffsetCommit API to support both topic IDs and topic names
@@ -84,7 +81,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                     }
                 });
             } else {
-                requestData.topics().forEach(topic -> {
+                data.topics().forEach(topic -> {
                     // Topic must be set to default for version < 9.
                     if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
                         topic.setTopicId(Uuid.ZERO_UUID);
@@ -92,7 +89,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                     // Topic name must not be null. Validity will be checked at serialization time.
                 });
             }
-            return new OffsetCommitRequest(requestData, version);
+            return new OffsetCommitRequest(data, version);
         }
 
         @Override

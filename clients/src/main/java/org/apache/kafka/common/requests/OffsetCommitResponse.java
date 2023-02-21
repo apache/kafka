@@ -197,18 +197,15 @@ public class OffsetCommitResponse extends AbstractResponse {
         }
 
         public OffsetCommitResponse build(short version) {
-            // Copy since we can mutate it.
-            OffsetCommitResponseData responseData = data.duplicate();
-
             if (version >= 9) {
-                responseData.topics().forEach(topic -> {
+                data.topics().forEach(topic -> {
                     // Set the topic name to null if a topic ID for the topic is present.
                     if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
                         topic.setName(null);
                     }
                 });
             } else {
-                responseData.topics().forEach(topic -> {
+                data.topics().forEach(topic -> {
                     // Topic must be set to default for version < 9.
                     if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
                         topic.setTopicId(Uuid.ZERO_UUID);
@@ -216,7 +213,7 @@ public class OffsetCommitResponse extends AbstractResponse {
                     // Topic name must not be null. Validity will be checked at serialization time.
                 });
             }
-            return new OffsetCommitResponse(responseData);
+            return new OffsetCommitResponse(data);
         }
     }
 }
