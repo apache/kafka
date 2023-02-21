@@ -17,8 +17,6 @@
 
 package kafka.network
 
-import com.yammer.metrics.core.Gauge
-
 import java.io.IOException
 import java.net._
 import java.nio.ByteBuffer
