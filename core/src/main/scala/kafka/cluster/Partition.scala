@@ -18,7 +18,7 @@ package kafka.cluster
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
 import kafka.api.LeaderAndIsr
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
@@ -44,10 +44,40 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LogOffsetMetadata, LogOffsetsListener}
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
+
+/**
+ * Listener receives notification from an Online Partition.
+ *
+ * A listener can be (re-)registered to an Online partition only. The listener
+ * is notified as long as the partition remains Online. When the partition fails
+ * or is deleted, respectively `onFailed` or `onDeleted` are called once. No further
+ * notifications are sent after this point on.
+ *
+ * Note that the callbacks are executed in the thread that triggers the change
+ * AND that locks may be held during their execution. They are meant to be used
+ * as notification mechanism only.
+ */
+trait PartitionListener {
+  /**
+   * Called when the Log increments its high watermark.
+   */
+  def onHighWatermarkUpdated(partition: TopicPartition, offset: Long): Unit = {}
+
+  /**
+   * Called when the Partition (or replica) on this broker has a failure (e.g. goes offline).
+   */
+  def onFailed(partition: TopicPartition): Unit = {}
+
+  /**
+   * Called when the Partition (or replica) on this broker is deleted. Note that it does not mean
+   * that the partition was deleted but only that this broker does not host a replica of it any more.
+   */
+  def onDeleted(partition: TopicPartition): Unit = {}
+}
 
 trait AlterPartitionListener {
   def markIsrExpand(): Unit
@@ -285,6 +315,17 @@ class Partition(val topicPartition: TopicPartition,
   // If ReplicaAlterLogDir command is in progress, this is future location of the log
   @volatile var futureLog: Option[UnifiedLog] = None
 
+  // Partition listeners
+  private val listeners = new CopyOnWriteArrayList[PartitionListener]()
+
+  private val logOffsetsListener = new LogOffsetsListener {
+    override def onHighWatermarkUpdated(offset: Long): Unit = {
+      listeners.forEach { listener =>
+        listener.onHighWatermarkUpdated(topicPartition, offset)
+      }
+    }
+  }
+
   /* Epoch of the controller that last changed the leader. This needs to be initialized correctly upon broker startup.
    * One way of doing that is through the controller's start replica state change command. When a new broker starts up
    * the controller sends it a start replica command containing the leader for each partition that the broker hosts.
@@ -317,6 +358,24 @@ class Partition(val topicPartition: TopicPartition,
   def isAddingReplica(replicaId: Int): Boolean = assignmentState.isAddingReplica(replicaId)
 
   def inSyncReplicaIds: Set[Int] = partitionState.isr
+
+  def maybeAddListener(listener: PartitionListener): Boolean = {
+    inReadLock(leaderIsrUpdateLock) {
+      // `log` is set to `None` when the partition is failed or deleted.
+      log match {
+        case Some(_) =>
+          listeners.add(listener)
+          true
+
+        case None =>
+          false
+      }
+    }
+  }
+
+  def removeListener(listener: PartitionListener): Unit = {
+    listeners.remove(listener)
+  }
 
   /**
     * Create the future replica if 1) the current replica is not in the given log directory and 2) the future replica
@@ -387,6 +446,7 @@ class Partition(val topicPartition: TopicPartition,
     var maybeLog: Option[UnifiedLog] = None
     try {
       val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId)
+      if (!isFutureReplica) log.setLogOffsetsListener(logOffsetsListener)
       maybeLog = Some(log)
       updateHighWatermark(log)
       log
@@ -469,10 +529,12 @@ class Partition(val topicPartition: TopicPartition,
 
   // Visible for testing -- Used by unit tests to set log for this partition
   def setLog(log: UnifiedLog, isFutureLog: Boolean): Unit = {
-    if (isFutureLog)
+    if (isFutureLog) {
       futureLog = Some(log)
-    else
+    } else {
+      log.setLogOffsetsListener(logOffsetsListener)
       this.log = Some(log)
+    }
   }
 
   /**
@@ -517,6 +579,7 @@ class Partition(val topicPartition: TopicPartition,
             case Some(futurePartitionLog) =>
               if (log.exists(_.logEndOffset == futurePartitionLog.logEndOffset)) {
                 logManager.replaceCurrentWithFutureLog(topicPartition)
+                futurePartitionLog.setLogOffsetsListener(logOffsetsListener)
                 log = futureLog
                 removeFutureLocalReplica(false)
                 true
@@ -540,15 +603,39 @@ class Partition(val topicPartition: TopicPartition,
   def delete(): Unit = {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
-      remoteReplicasMap.clear()
-      assignmentState = SimpleAssignmentState(Seq.empty)
-      log = None
-      futureLog = None
-      partitionState = CommittedPartitionState(Set.empty, LeaderRecoveryState.RECOVERED)
-      leaderReplicaIdOpt = None
-      leaderEpochStartOffsetOpt = None
-      Partition.removeMetrics(topicPartition)
+      clear()
+
+      listeners.forEach { listener =>
+        listener.onDeleted(topicPartition)
+      }
+      listeners.clear()
     }
+  }
+
+  /**
+   * Fail the partition. This is called by the ReplicaManager when the partition
+   * transitions to Offline.
+   */
+  def markOffline(): Unit = {
+    inWriteLock(leaderIsrUpdateLock) {
+      clear()
+
+      listeners.forEach { listener =>
+        listener.onFailed(topicPartition)
+      }
+      listeners.clear()
+    }
+  }
+
+  private def clear(): Unit = {
+    remoteReplicasMap.clear()
+    assignmentState = SimpleAssignmentState(Seq.empty)
+    log = None
+    futureLog = None
+    partitionState = CommittedPartitionState(Set.empty, LeaderRecoveryState.RECOVERED)
+    leaderReplicaIdOpt = None
+    leaderEpochStartOffsetOpt = None
+    Partition.removeMetrics(topicPartition)
   }
 
   def getLeaderEpoch: Int = this.leaderEpoch

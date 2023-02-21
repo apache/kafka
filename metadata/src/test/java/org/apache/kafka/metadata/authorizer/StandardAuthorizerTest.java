@@ -104,10 +104,10 @@ public class StandardAuthorizerTest {
         "127.0.0.1",
         9020);
 
-    static class AuthorizerTestServerInfo implements AuthorizerServerInfo {
+    public static class AuthorizerTestServerInfo implements AuthorizerServerInfo {
         private final Collection<Endpoint> endpoints;
 
-        AuthorizerTestServerInfo(Collection<Endpoint> endpoints) {
+        public AuthorizerTestServerInfo(Collection<Endpoint> endpoints) {
             assertFalse(endpoints.isEmpty());
             this.endpoints = endpoints;
         }
