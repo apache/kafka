@@ -3404,6 +3404,8 @@ public abstract class ConsumerCoordinatorTest {
 
             assertFalse(res);
 
+            res = coordinator.joinGroupIfNeeded(time.timer(1));
+
             // should have retried sending a join group request already
             assertFalse(client.hasPendingResponses());
             assertEquals(1, client.inFlightRequestCount());
