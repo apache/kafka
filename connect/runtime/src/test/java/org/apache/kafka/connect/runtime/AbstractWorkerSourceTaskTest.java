@@ -450,18 +450,10 @@ public class AbstractWorkerSourceTaskTest {
 
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class)))
-            .thenAnswer(new Answer<TopicAdmin.TopicCreationResponse>() {
-                boolean firstCall = true;
-
-                @Override
-                public TopicAdmin.TopicCreationResponse answer(InvocationOnMock invocation) {
-                    if (firstCall) {
-                        firstCall = false;
-                        throw new RetriableException(new TimeoutException("timeout"));
-                    }
-                    return createdTopic(TOPIC);
-                }
-            });
+                // First call to create the topic times out
+                .thenThrow(new RetriableException(new TimeoutException("timeout")))
+                // Next attempt succeeds
+                .thenReturn(createdTopic(TOPIC));
 
         workerTask.toSend = Arrays.asList(record1, record2);
         workerTask.sendRecords();
