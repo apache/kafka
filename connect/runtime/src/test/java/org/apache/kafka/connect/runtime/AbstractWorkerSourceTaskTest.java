@@ -60,7 +60,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
@@ -93,6 +92,7 @@ import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -254,6 +254,7 @@ public class AbstractWorkerSourceTaskTest {
         assertArrayEquals(SERIALIZED_RECORD, sent.getValue().value());
         
         verifyTaskGetTopic();
+        verifyTopicCreation();
     }
 
     @Test
@@ -273,6 +274,7 @@ public class AbstractWorkerSourceTaskTest {
         assertEquals(timestamp, sent.getValue().timestamp());
 
         verifyTaskGetTopic();
+        verifyTopicCreation();
     }
 
     @Test
@@ -281,7 +283,6 @@ public class AbstractWorkerSourceTaskTest {
         createWorkerTask();
 
         expectSendRecord(emptyHeaders());
-        expectTopicCreation(TOPIC);
 
         workerTask.toSend = Collections.singletonList(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
@@ -391,7 +392,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
+        expectPreliminaryCalls(TOPIC);
 
         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
         TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
@@ -403,6 +404,7 @@ public class AbstractWorkerSourceTaskTest {
         workerTask.sendRecords();
 
         verifySendRecord(2);
+        verify(admin, never()).createOrFindTopics(any(NewTopic.class));
         // Make sure we didn't try to create the topic after finding out it already existed
         verifyNoMoreInteractions(admin);
     }
@@ -414,30 +416,24 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
-        expectTopicCreation(TOPIC);
+        expectPreliminaryCalls(TOPIC);
 
         when(admin.describeTopics(TOPIC))
-            .thenAnswer(new Answer<Map<String, TopicDescription>>() {
-                boolean firstCall = true;
-
-                @Override
-                public Map<String, TopicDescription> answer(InvocationOnMock invocation) {
-                    if (firstCall) {
-                        firstCall = false;
-                        throw new RetriableException(new TimeoutException("timeout"));
-                    }
-                    return Collections.emptyMap();
-                }
-            });
+                .thenThrow(new RetriableException(new TimeoutException("timeout")))
+                .thenReturn(Collections.emptyMap());
 
         workerTask.toSend = Arrays.asList(record1, record2);
         workerTask.sendRecords();
         assertEquals(Arrays.asList(record1, record2), workerTask.toSend);
+        verify(admin, never()).createOrFindTopics(any(NewTopic.class));
+        verifyNoMoreInteractions(admin);
 
-        // Next they all succeed
+        // Second round - calls to describe and create succeed
+        expectTopicCreation(TOPIC);
         workerTask.sendRecords();
         assertNull(workerTask.toSend);
+
+        verifyTopicCreation();
     }
 
     @Test
@@ -447,7 +443,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
+        expectPreliminaryCalls(TOPIC);
 
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class)))
@@ -474,21 +470,13 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, OTHER_TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
+        expectPreliminaryCalls(TOPIC);
+        expectPreliminaryCalls(OTHER_TOPIC);
 
-        when(admin.describeTopics(anyString())).thenAnswer(new Answer<Map<String, TopicDescription>>() {
-            int counter = 0;
-
-            @Override
-            public Map<String, TopicDescription> answer(InvocationOnMock invocation) {
-                counter++;
-                if (counter == 2) {
-                    throw new RetriableException(new TimeoutException("timeout"));
-                }
-
-                return Collections.emptyMap();
-            }
-        });
+        when(admin.describeTopics(anyString()))
+                .thenReturn(Collections.emptyMap())
+                .thenThrow(new RetriableException(new TimeoutException("timeout")))
+                .thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenAnswer(
             (Answer<TopicAdmin.TopicCreationResponse>) invocation -> {
                 NewTopic newTopic = invocation.getArgument(0);
@@ -524,40 +512,26 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, OTHER_TOPIC, 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
+        expectPreliminaryCalls(TOPIC);
+        expectPreliminaryCalls(OTHER_TOPIC);
 
         when(admin.describeTopics(anyString())).thenReturn(Collections.emptyMap());
-        when(admin.createOrFindTopics(any(NewTopic.class))).thenAnswer(new Answer<TopicAdmin.TopicCreationResponse>() {
-            int counter = 0;
-
-            @Override
-            public TopicAdmin.TopicCreationResponse answer(InvocationOnMock invocation) {
-                counter++;
-                if (counter == 2) {
-                    throw new RetriableException(new TimeoutException("timeout"));
-                }
-                NewTopic newTopic = invocation.getArgument(0);
-                return createdTopic(newTopic.name());
-            }
-        });
+        when(admin.createOrFindTopics(any(NewTopic.class)))
+                .thenReturn(createdTopic(TOPIC))
+                .thenThrow(new RetriableException(new TimeoutException("timeout")))
+                .thenReturn(createdTopic(OTHER_TOPIC));
 
         // Try to send 3, make first pass, second fail. Should save last two
         workerTask.toSend = Arrays.asList(record1, record2, record3);
         workerTask.sendRecords();
         assertEquals(Collections.singletonList(record3), workerTask.toSend);
+        verifyTopicCreation(2,  TOPIC, OTHER_TOPIC); // Second call to createOrFindTopics will throw
 
         // Next they all succeed
         workerTask.sendRecords();
         assertNull(workerTask.toSend);
 
-        verify(admin, times(3)).describeTopics(anyString());
-        ArgumentCaptor<NewTopic> newTopicCaptor = ArgumentCaptor.forClass(NewTopic.class);
-        verify(admin, times(3)).createOrFindTopics(newTopicCaptor.capture());
-
-        assertEquals(Arrays.asList(TOPIC, OTHER_TOPIC, OTHER_TOPIC), newTopicCaptor.getAllValues()
-            .stream()
-            .map(NewTopic::name)
-            .collect(Collectors.toList()));
+        verifyTopicCreation(3,  TOPIC, OTHER_TOPIC, OTHER_TOPIC);
     }
 
     @Test
@@ -567,7 +541,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
+        expectPreliminaryCalls(TOPIC);
         when(admin.describeTopics(TOPIC)).thenThrow(
             new ConnectException(new TopicAuthorizationException("unauthorized"))
         );
@@ -583,7 +557,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
+        expectPreliminaryCalls(TOPIC);
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenThrow(
             new ConnectException(new TopicAuthorizationException("unauthorized"))
@@ -601,7 +575,7 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectPreliminaryCalls();
+        expectPreliminaryCalls(TOPIC);
 
         when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(TopicAdmin.EMPTY_CREATION);
@@ -655,7 +629,7 @@ public class AbstractWorkerSourceTaskTest {
 
     private void expectSendRecord(Headers headers) {
         if (headers != null)
-            expectConvertHeadersAndKeyValue(headers);
+            expectConvertHeadersAndKeyValue(headers, TOPIC);
 
         expectApplyTransformationChain();
 
@@ -690,20 +664,28 @@ public class AbstractWorkerSourceTaskTest {
     private void verifyTaskGetTopic() {
         ArgumentCaptor<String> connectorCapture = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> topicCapture = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<NewTopic> newTopicCapture = ArgumentCaptor.forClass(NewTopic.class);
         verify(statusBackingStore).getTopic(connectorCapture.capture(), topicCapture.capture());
 
         assertEquals("job", connectorCapture.getValue());
         assertEquals(TOPIC, topicCapture.getValue());
-
-        verify(admin).createOrFindTopics(newTopicCapture.capture());
-        assertEquals(TOPIC, newTopicCapture.getValue().name());
     }
 
     @SuppressWarnings("SameParameterValue")
     private void expectTopicCreation(String topic) {
-        when(admin.describeTopics(topic)).thenReturn(Collections.emptyMap());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(topic));
+    }
+
+    private void verifyTopicCreation() {
+        verifyTopicCreation(1, TOPIC);
+    }
+    private void verifyTopicCreation(int times, String... topics) {
+        ArgumentCaptor<NewTopic> newTopicCapture = ArgumentCaptor.forClass(NewTopic.class);
+
+        verify(admin, times(times)).createOrFindTopics(newTopicCapture.capture());
+        assertArrayEquals(topics, newTopicCapture.getAllValues()
+                .stream()
+                .map(NewTopic::name)
+                .toArray(String[]::new));
     }
 
     @SuppressWarnings("SameParameterValue")
@@ -720,12 +702,12 @@ public class AbstractWorkerSourceTaskTest {
         return new TopicAdmin.TopicCreationResponse(created, existing);
     }
 
-    private void expectPreliminaryCalls() {
-        expectConvertHeadersAndKeyValue(emptyHeaders());
+    private void expectPreliminaryCalls(String topic) {
+        expectConvertHeadersAndKeyValue(emptyHeaders(), topic);
         expectApplyTransformationChain();
     }
 
-    private void expectConvertHeadersAndKeyValue(Headers headers) {
+    private void expectConvertHeadersAndKeyValue(Headers headers, String topic) {
         if (headers.iterator().hasNext()) {
             when(headerConverter.fromConnectHeader(anyString(), anyString(), eq(Schema.STRING_SCHEMA),
                     anyString()))
@@ -735,9 +717,9 @@ public class AbstractWorkerSourceTaskTest {
                     });
         }
 
-        when(keyConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
+        when(keyConverter.fromConnectData(eq(topic), any(Headers.class), eq(KEY_SCHEMA), eq(KEY)))
                 .thenReturn(SERIALIZED_KEY);
-        when(valueConverter.fromConnectData(eq(TOPIC), any(Headers.class), eq(RECORD_SCHEMA),
+        when(valueConverter.fromConnectData(eq(topic), any(Headers.class), eq(RECORD_SCHEMA),
                 eq(RECORD)))
                 .thenReturn(SERIALIZED_RECORD);
     }
