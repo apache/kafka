@@ -31,7 +31,7 @@ import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.storage.internals.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.{any, anyBoolean}

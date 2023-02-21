@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit;
  * Handles processing for an individual task. This interface only provides the basic methods
  * used by {@link Worker} to manage the tasks. Implementations combine a user-specified Task with
  * Kafka to create a data flow.
- *
+ * <p>
  * Note on locking: since the task runs in its own thread, special care must be taken to ensure
  * that state transitions are reported correctly, in particular since some state transitions are
  * asynchronous (e.g. pause/resume). For example, changing the state to paused could cause a race
@@ -120,7 +120,7 @@ abstract class WorkerTask implements Runnable {
 
     /**
      * Stop this task from processing messages. This method does not block, it only triggers
-     * shutdown. Use #{@link #awaitStop} to block until completion.
+     * shutdown. Use {@link #awaitStop} to block until completion.
      */
     public void stop() {
         triggerStop();

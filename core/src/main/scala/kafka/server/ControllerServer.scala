@@ -44,6 +44,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
+import org.apache.kafka.server.util.{Deadline, FutureUtils}
 
 import java.util.OptionalLong
 import java.util.concurrent.locks.ReentrantLock
@@ -128,6 +129,7 @@ class ControllerServer(
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
+    val startupDeadline = Deadline.fromDelay(time, config.serverMaxStartupTimeMs, TimeUnit.MILLISECONDS)
     try {
       info("Starting controller")
       config.dynamicConfig.initialize(zkClientOpt = None)
@@ -168,7 +170,10 @@ class ControllerServer(
           }.toMap
       }
 
-      val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER)
+      val apiVersionManager = new SimpleApiVersionManager(
+        ListenerType.CONTROLLER,
+        config.unstableApiVersionsEnabled
+      )
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
@@ -192,7 +197,11 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(sharedServer.controllerQuorumVotersFuture.get())
+      val voterConnections = FutureUtils.waitWithLogging(logger.underlying,
+        "controller quorum voters future",
+        sharedServer.controllerQuorumVotersFuture,
+        startupDeadline, time)
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections)
       val quorumFeatures = QuorumFeatures.create(config.nodeId,
         sharedServer.raftManager.apiVersions,
         QuorumFeatures.defaultFeatureMap(),
@@ -290,7 +299,16 @@ class ControllerServer(
        * metadata log. See @link{QuorumController#maybeCompleteAuthorizerInitialLoad}
        * and KIP-801 for details.
        */
-      socketServer.enableRequestProcessing(authorizerFutures)
+      val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
+
+      // Block here until all the authorizer futures are complete
+      FutureUtils.waitWithLogging(logger.underlying, "all of the authorizer futures to be completed",
+        CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
+
+      // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
+      FutureUtils.waitWithLogging(logger.underlying, "all of the SocketServer Acceptors to be started",
+        socketServerFuture, startupDeadline, time)
+
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)

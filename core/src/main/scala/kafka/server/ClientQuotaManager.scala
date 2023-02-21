@@ -23,7 +23,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
-import kafka.utils.{Logging, QuotaUtils, ShutdownableThread}
+import kafka.utils.{Logging, QuotaUtils}
 import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.Metrics
@@ -31,6 +31,7 @@ import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
+import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.jdk.CollectionConverters._
 

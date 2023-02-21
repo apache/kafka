@@ -23,7 +23,7 @@ import java.util.TimeZone;
 
 /**
  * <p>
- *     A date representing a calendar day with no time of day or timezone. The corresponding Java type is a java.util.Date
+ *     A date representing a calendar day with no time of day or timezone. The corresponding Java type is a {@link java.util.Date}
  *     with hours, minutes, seconds, milliseconds set to 0. The underlying representation is an integer representing the
  *     number of standardized days (based on a number of milliseconds with 24 hours/day, 60 minutes/hour, 60 seconds/minute,
  *     1000 milliseconds/second with n) since Unix epoch.
@@ -50,7 +50,7 @@ public class Date {
     public static final Schema SCHEMA = builder().schema();
 
     /**
-     * Convert a value from its logical format (Date) to it's encoded format.
+     * Convert a value from its logical format ({@link java.util.Date}) to its encoded format (int).
      * @param value the logical value
      * @return the encoded value
      */
@@ -67,6 +67,11 @@ public class Date {
         return (int) (unixMillis / MILLIS_PER_DAY);
     }
 
+    /**
+     * Convert a value from its encoded format (int) to its logical format ({@link java.util.Date}).
+     * @param value the encoded value
+     * @return the logical value
+     */
     public static java.util.Date toLogical(Schema schema, int value) {
         if (!(LOGICAL_NAME.equals(schema.name())))
             throw new DataException("Requested conversion of Date object but the schema does not match.");

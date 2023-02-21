@@ -28,6 +28,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 import java.io.Closeable;
 import java.io.DataOutput;
@@ -997,16 +998,39 @@ public final class Utils {
         if (exception != null)
             throw exception;
     }
+    public static void swallow(final Logger log, final Level level, final String what, final Runnable code) {
+        swallow(log, level, what, code, null);
+    }
 
-    public static void swallow(
-        Logger log,
-        String what,
-        Runnable runnable
-    ) {
-        try {
-            runnable.run();
-        } catch (Throwable e) {
-            log.warn("{} error", what, e);
+    /**
+     * Run the supplied code. If an exception is thrown, it is swallowed and registered to the firstException parameter.
+     */
+    public static void swallow(final Logger log, final Level level, final String what, final Runnable code,
+                               final AtomicReference<Throwable> firstException) {
+        if (code != null) {
+            try {
+                code.run();
+            } catch (Throwable t) {
+                switch (level) {
+                    case INFO:
+                        log.info(what, t);
+                        break;
+                    case DEBUG:
+                        log.debug(what, t);
+                        break;
+                    case ERROR:
+                        log.error(what, t);
+                        break;
+                    case TRACE:
+                        log.trace(what, t);
+                        break;
+                    case WARN:
+                    default:
+                        log.warn(what, t);
+                }
+                if (firstException != null)
+                    firstException.compareAndSet(null, t);
+            }
         }
     }
 
@@ -1496,4 +1520,42 @@ public final class Utils {
             throw new IllegalArgumentException("Expected string to end with " + oldSuffix + " but string is " + str);
         return str.substring(0, str.length() - oldSuffix.length()) + newSuffix;
     }
+
+    /**
+     * Find all key/value pairs whose keys begin with the given prefix, and remove that prefix from all
+     * resulting keys.
+     * @param map the map to filter key/value pairs from
+     * @param prefix the prefix to search keys for
+     * @return a {@link Map} containing a key/value pair for every key/value pair in the {@code map}
+     * parameter whose key begins with the given {@code prefix} and whose corresponding keys have
+     * the prefix stripped from them; may be empty, but never null
+     * @param <V> the type of values stored in the map
+     */
+    public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix) {
+        return entriesWithPrefix(map, prefix, true);
+    }
+
+    /**
+     * Find all key/value pairs whose keys begin with the given prefix, optionally removing that prefix
+     * from all resulting keys.
+     * @param map the map to filter key/value pairs from
+     * @param prefix the prefix to search keys for
+     * @param strip whether the keys of the returned map should not include the prefix
+     * @return a {@link Map} containing a key/value pair for every key/value pair in the {@code map}
+     * parameter whose key begins with the given {@code prefix}; may be empty, but never null
+     * @param <V> the type of values stored in the map
+     */
+    public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix, boolean strip) {
+        Map<String, V> result = new HashMap<>();
+        for (Map.Entry<String, V> entry : map.entrySet()) {
+            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
+                if (strip)
+                    result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+                else
+                    result.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return result;
+    }
+
 }

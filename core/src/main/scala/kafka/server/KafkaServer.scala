@@ -55,10 +55,11 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion._
+import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.collection.{Map, Seq}
@@ -394,7 +395,8 @@ class KafkaServer(
             time,
             metrics,
             threadNamePrefix,
-            controllerQuorumVotersFuture
+            controllerQuorumVotersFuture,
+            fatalFaultHandler = new ProcessTerminatingFaultHandler.Builder().build()
           )
           val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
@@ -568,6 +570,13 @@ class KafkaServer(
           }
         }
         socketServer.enableRequestProcessing(authorizerFutures)
+        // Block here until all the authorizer futures are complete
+        try {
+          CompletableFuture.allOf(authorizerFutures.values.toSeq: _*).join()
+        } catch {
+          case t: Throwable => throw new RuntimeException("Received a fatal error while " +
+            "waiting for all of the authorizer futures to be completed.", t)
+        }
 
         _brokerState = BrokerState.RUNNING
         shutdownLatch = new CountDownLatch(1)

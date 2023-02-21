@@ -140,7 +140,7 @@ public class ClusterConfigState {
     }
 
     /**
-     * Get the configuration for a connector.  The configuration will have been transformed by
+     * Get the configuration for a connector. The configuration will have been transformed by
      * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
      * references replaced with the current values from external instances of
      * {@link ConfigProvider}, and may include secrets.
@@ -169,7 +169,7 @@ public class ClusterConfigState {
     }
 
     /**
-     * Get the configuration for a task.  The configuration will have been transformed by
+     * Get the configuration for a task. The configuration will have been transformed by
      * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
      * references replaced with the current values from external instances of
      * {@link ConfigProvider}, and may include secrets.
@@ -189,7 +189,7 @@ public class ClusterConfigState {
     }
 
     /**
-     * Get all task configs for a connector.  The configurations will have been transformed by
+     * Get all task configs for a connector. The configurations will have been transformed by
      * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
      * references replaced with the current values from external instances of
      * {@link ConfigProvider}, and may include secrets.
@@ -211,7 +211,7 @@ public class ClusterConfigState {
     }
 
     /**
-     * Get the number of tasks assigned for the given connector.
+     * Get the number of tasks for a given connector.
      * @param connectorName name of the connector to look up tasks for
      * @return the number of tasks
      */
@@ -274,10 +274,10 @@ public class ClusterConfigState {
     /**
      * Get the set of connectors which have inconsistent data in this snapshot. These inconsistencies can occur due to
      * partially completed writes combined with log compaction.
-     *
+     * <p>
      * Connectors in this set will appear in the output of {@link #connectors()} since their connector configuration is
-     * available, but not in the output of {@link #taskConfig(ConnectorTaskId)} since the task configs are incomplete.
-     *
+     * available, but not in the output of {@link #tasks(String)} since the task configs are incomplete.
+     * <p>
      * When a worker detects a connector in this state, it should request that the connector regenerate its task
      * configurations.
      *

@@ -64,10 +64,12 @@ public class ProducerIdControlManager {
     }
 
     void replay(ProducerIdsRecord record) {
-        long currentNextProducerId = nextProducerBlock.get().firstProducerId();
-        if (record.nextProducerId() <= currentNextProducerId) {
+        // During a migration, we may be calling replay() without ever having called generateNextProducerId(),
+        // so the next producer block could be EMPTY
+        ProducerIdsBlock nextBlock = nextProducerBlock.get();
+        if (nextBlock != ProducerIdsBlock.EMPTY && record.nextProducerId() <= nextBlock.firstProducerId()) {
             throw new RuntimeException("Next Producer ID from replayed record (" + record.nextProducerId() + ")" +
-                " is not greater than current next Producer ID (" + currentNextProducerId + ")");
+                " is not greater than current next Producer ID (" + nextBlock.firstProducerId() + ")");
         } else {
             nextProducerBlock.set(new ProducerIdsBlock(record.brokerId(), record.nextProducerId(), ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE));
             brokerEpoch.set(record.brokerEpoch());

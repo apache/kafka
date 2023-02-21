@@ -20,10 +20,10 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.ArrayList;
@@ -92,7 +92,7 @@ public class MetricsTest {
     @Test
     public void testMetricName() {
         MetricName n1 = metrics.metricName("name", "group", "description", "key1", "value1", "key2", "value2");
-        Map<String, String> tags = new HashMap<String, String>();
+        Map<String, String> tags = new HashMap<>();
         tags.put("key1", "value1");
         tags.put("key2", "value2");
         MetricName n2 = metrics.metricName("name", "group", "description", tags);
@@ -107,7 +107,7 @@ public class MetricsTest {
     }
 
     @Test
-    public void testSimpleStats() throws Exception {
+    public void testSimpleStats() {
         verifyStats(m -> (double) m.metricValue());
     }
 
@@ -451,11 +451,11 @@ public class MetricsTest {
         final Quota quota1 = Quota.upperBound(10.5);
         final Quota quota2 = Quota.lowerBound(10.5);
 
-        assertFalse(quota1.equals(quota2), "Quota with different upper values shouldn't be equal");
+        assertNotEquals(quota1, quota2, "Quota with different upper values shouldn't be equal");
 
         final Quota quota3 = Quota.lowerBound(10.5);
 
-        assertTrue(quota2.equals(quota3), "Quota with same upper and bound values should be equal");
+        assertEquals(quota2, quota3, "Quota with same upper and bound values should be equal");
     }
 
     @Test
@@ -582,7 +582,7 @@ public class MetricsTest {
     }
 
     @Test
-    public void testRateWindowing() throws Exception {
+    public void testRateWindowing() {
         // Use the default time window. Set 3 samples
         MetricConfig cfg = new MetricConfig().samples(3);
         Sensor s = metrics.sensor("test.sensor", cfg);
@@ -700,7 +700,7 @@ public class MetricsTest {
     @Test
     public void testMetricInstances() {
         MetricName n1 = metrics.metricInstance(SampleMetrics.METRIC1, "key1", "value1", "key2", "value2");
-        Map<String, String> tags = new HashMap<String, String>();
+        Map<String, String> tags = new HashMap<>();
         tags.put("key1", "value1");
         tags.put("key2", "value2");
         MetricName n2 = metrics.metricInstance(SampleMetrics.METRIC2, tags);
@@ -752,7 +752,7 @@ public class MetricsTest {
      * in errors or deadlock.
      */
     @Test
-    public void testConcurrentReadUpdate() throws Exception {
+    public void testConcurrentReadUpdate() {
         final Random random = new Random();
         final Deque<Sensor> sensors = new ConcurrentLinkedDeque<>();
         metrics = new Metrics(new MockTime(10));
@@ -784,7 +784,7 @@ public class MetricsTest {
      * that synchronizes on every reporter method doesn't result in errors or deadlock.
      */
     @Test
-    public void testConcurrentReadUpdateReport() throws Exception {
+    public void testConcurrentReadUpdateReport() {
 
         class LockingReporter implements MetricsReporter {
             Map<MetricName, KafkaMetric> activeMetrics = new HashMap<>();

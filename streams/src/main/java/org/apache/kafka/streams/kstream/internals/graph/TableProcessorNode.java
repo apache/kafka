@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -56,6 +57,7 @@ public class TableProcessorNode<K, V> extends GraphNode {
             "} " + super.toString();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String processorName = processorParameters.processorName();
@@ -65,8 +67,10 @@ public class TableProcessorNode<K, V> extends GraphNode {
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
         }
 
-        if (processorParameters.kTableSourceSupplier() != null) {
-            if (processorParameters.kTableSourceSupplier().materialized()) {
+        final KTableSource<K, V> tableSource =  processorParameters.processorSupplier() instanceof KTableSource ?
+                (KTableSource<K, V>) processorParameters.processorSupplier() : null;
+        if (tableSource != null) {
+            if (tableSource.materialized()) {
                 topologyBuilder.addStateStore(Objects.requireNonNull(storeBuilder, "storeBuilder was null"),
                                               processorName);
             }

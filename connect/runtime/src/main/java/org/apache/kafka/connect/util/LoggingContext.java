@@ -39,7 +39,7 @@ import java.util.Objects;
  *
  * <p>Compare this approach to {@link org.apache.kafka.common.utils.LogContext}, which must be
  * used to create a new {@link org.slf4j.Logger} instance pre-configured with the desired prefix.
- * Currently LogContext does not allow the prefix to be changed, and it requires that all
+ * Currently, LogContext does not allow the prefix to be changed, and it requires that all
  * components use the LogContext to create their Logger instance.
  */
 public final class LoggingContext implements AutoCloseable {
@@ -183,7 +183,7 @@ public final class LoggingContext implements AutoCloseable {
      * @param taskNumber the 0-based task number; may be null if there is no associated task
      * @return the prefix; never null
      */
-    protected static String prefixFor(String connectorName, Scope scope, Integer taskNumber) {
+    static String prefixFor(String connectorName, Scope scope, Integer taskNumber) {
         StringBuilder sb = new StringBuilder();
         sb.append("[");
         sb.append(connectorName);

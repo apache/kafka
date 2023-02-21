@@ -23,7 +23,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
-import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
+import kafka.utils.{DelayedItem, Logging, Pool}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -33,6 +33,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
+import org.apache.kafka.server.util.ShutdownableThread
 
 import java.nio.ByteBuffer
 import java.util
@@ -55,7 +56,9 @@ abstract class AbstractFetcherThread(name: String,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true,
                                      val brokerTopicStats: BrokerTopicStats) //BrokerTopicStats's lifecycle managed by ReplicaManager
-  extends ShutdownableThread(name, isInterruptible) {
+  extends ShutdownableThread(name, isInterruptible) with Logging {
+
+  this.logIdent = this.logPrefix
 
   type FetchData = FetchResponseData.PartitionData
   type EpochData = OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
@@ -348,33 +351,39 @@ abstract class AbstractFetcherThread(name: String,
               Errors.forCode(partitionData.errorCode) match {
                 case Errors.NONE =>
                   try {
-                    // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
-                    val logAppendInfoOpt = processPartitionData(topicPartition, currentFetchState.fetchOffset,
-                      partitionData)
+                    if (leader.isTruncationOnFetchSupported && FetchResponse.isDivergingEpoch(partitionData)) {
+                      // If a diverging epoch is present, we truncate the log of the replica
+                      // but we don't process the partition data in order to not update the
+                      // low/high watermarks until the truncation is actually done. Those will
+                      // be updated by the next fetch.
+                      divergingEndOffsets += topicPartition -> new EpochEndOffset()
+                        .setPartition(topicPartition.partition)
+                        .setErrorCode(Errors.NONE.code)
+                        .setLeaderEpoch(partitionData.divergingEpoch.epoch)
+                        .setEndOffset(partitionData.divergingEpoch.endOffset)
+                    } else {
+                      // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
+                      val logAppendInfoOpt = processPartitionData(
+                        topicPartition,
+                        currentFetchState.fetchOffset,
+                        partitionData
+                      )
 
-                    logAppendInfoOpt.foreach { logAppendInfo =>
-                      val validBytes = logAppendInfo.validBytes
-                      val nextOffset = if (validBytes > 0) logAppendInfo.lastOffset + 1 else currentFetchState.fetchOffset
-                      val lag = Math.max(0L, partitionData.highWatermark - nextOffset)
-                      fetcherLagStats.getAndMaybePut(topicPartition).lag = lag
+                      logAppendInfoOpt.foreach { logAppendInfo =>
+                        val validBytes = logAppendInfo.validBytes
+                        val nextOffset = if (validBytes > 0) logAppendInfo.lastOffset + 1 else currentFetchState.fetchOffset
+                        val lag = Math.max(0L, partitionData.highWatermark - nextOffset)
+                        fetcherLagStats.getAndMaybePut(topicPartition).lag = lag
 
-                      // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
-                      if (validBytes > 0 && partitionStates.contains(topicPartition)) {
-                        // Update partitionStates only if there is no exception during processPartitionData
-                        val newFetchState = PartitionFetchState(currentFetchState.topicId, nextOffset, Some(lag),
-                          currentFetchState.currentLeaderEpoch, state = Fetching,
-                          logAppendInfo.lastLeaderEpoch)
-                        partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
-                        fetcherStats.byteRate.mark(validBytes)
-                      }
-                    }
-                    if (leader.isTruncationOnFetchSupported) {
-                      FetchResponse.divergingEpoch(partitionData).ifPresent { divergingEpoch =>
-                        divergingEndOffsets += topicPartition -> new EpochEndOffset()
-                          .setPartition(topicPartition.partition)
-                          .setErrorCode(Errors.NONE.code)
-                          .setLeaderEpoch(divergingEpoch.epoch)
-                          .setEndOffset(divergingEpoch.endOffset)
+                        // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
+                        if (validBytes > 0 && partitionStates.contains(topicPartition)) {
+                          // Update partitionStates only if there is no exception during processPartitionData
+                          val newFetchState = PartitionFetchState(currentFetchState.topicId, nextOffset, Some(lag),
+                            currentFetchState.currentLeaderEpoch, state = Fetching,
+                            logAppendInfo.lastLeaderEpoch)
+                          partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
+                          fetcherStats.byteRate.mark(validBytes)
+                        }
                       }
                     }
                   } catch {

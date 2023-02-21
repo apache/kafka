@@ -32,11 +32,11 @@ public class RequestStateTest {
 
         // ensure not permitting consecutive requests
         assertTrue(state.canSendRequest(0));
-        state.updateLastSend(0);
+        state.onSendAttempt(0);
         assertFalse(state.canSendRequest(0));
-        state.updateLastFailedAttempt(35);
+        state.onFailedAttempt(35);
         assertTrue(state.canSendRequest(135));
-        state.updateLastFailedAttempt(140);
+        state.onFailedAttempt(140);
         assertFalse(state.canSendRequest(200));
         // exponential backoff
         assertTrue(state.canSendRequest(340));
