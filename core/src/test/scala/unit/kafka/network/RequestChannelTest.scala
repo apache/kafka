@@ -359,10 +359,10 @@ class RequestChannelTest {
   }
   @Test
   def testHistogram(): Unit = {
-    var props = new Properties()
+    val props = new Properties()
     props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
     props.put(KafkaConfig.RequestMetricsTotalTimeBucketsProp, "0, 10, 30, 300")
-    var config = KafkaConfig.fromProps(props)
+    val config = KafkaConfig.fromProps(props)
     val requestMetrics = new RequestMetrics("RequestMetrics", config)
     val boundaries = Array(0, 10, 30, 300)
     val histogram = new requestMetrics.Histogram("TotalTime", "Ms", boundaries)
