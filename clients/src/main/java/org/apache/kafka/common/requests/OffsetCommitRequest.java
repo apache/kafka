@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -76,7 +77,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                         // Fail-fast the entire request. This means that a single invalid topic in a multi-topic
                         // request will make it fail. We may want to relax the constraint to allow the request
                         // with valid topics (i.e. for which a valid ID or name was provided) exist in the request.
-                        throw new UnknownTopicOrPartitionException(
+                        throw new InvalidRequestException(
                                 "A topic name must be provided when no topic ID is specified.");
                     }
                 });
