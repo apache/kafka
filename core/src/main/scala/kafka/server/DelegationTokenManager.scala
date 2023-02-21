@@ -416,12 +416,12 @@ class DelegationTokenManager(val config: KafkaConfig,
 
             if (!allowedToRenew(principal, tokenInfo)) {
               expireResponseCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
-            } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
-              expireResponseCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
             } else if (expireLifeTimeMs < 0) { //expire immediately
               removeToken(tokenInfo.tokenId)
               info(s"Token expired for token: ${tokenInfo.tokenId} for owner: ${tokenInfo.owner}")
               expireResponseCallback(Errors.NONE, now)
+            } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
+              expireResponseCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
             } else {
               //set expiry time stamp
               val expiryTimeStamp = Math.min(tokenInfo.maxTimestamp, now + expireLifeTimeMs)
