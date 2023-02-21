@@ -22,12 +22,10 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -113,28 +111,8 @@ public class ConsumerPartitionAssignorTest {
     public static class TestConsumerPartitionAssignor implements ConsumerPartitionAssignor {
 
         @Override
-        public ByteBuffer subscriptionUserData(Set<String> topics) {
-            return ConsumerPartitionAssignor.super.subscriptionUserData(topics);
-        }
-
-        @Override
         public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription) {
             return null;
-        }
-
-        @Override
-        public void onAssignment(Assignment assignment, ConsumerGroupMetadata metadata) {
-            ConsumerPartitionAssignor.super.onAssignment(assignment, metadata);
-        }
-
-        @Override
-        public List<RebalanceProtocol> supportedProtocols() {
-            return ConsumerPartitionAssignor.super.supportedProtocols();
-        }
-
-        @Override
-        public short version() {
-            return ConsumerPartitionAssignor.super.version();
         }
 
         @Override

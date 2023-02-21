@@ -37,6 +37,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
+import org.apache.kafka.server.util.ShutdownableThread
 
 import java.net.SocketTimeoutException
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
@@ -222,9 +223,10 @@ class RequestSendThread(val controllerId: Int,
                         val requestRateAndQueueTimeMetrics: Timer,
                         val stateChangeLogger: StateChangeLogger,
                         name: String)
-  extends ShutdownableThread(name = name) {
+  extends ShutdownableThread(name, true, s"[RequestSendThread controllerId=$controllerId] ")
+    with Logging {
 
-  logIdent = s"[RequestSendThread controllerId=$controllerId] "
+  logIdent = logPrefix
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 
