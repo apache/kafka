@@ -3400,11 +3400,10 @@ public abstract class ConsumerCoordinatorTest {
             client.respond(syncGroupResponse(partitions, Errors.NONE));
 
             // Join future should succeed but generation already cleared so result of join is false.
-            res = coordinator.joinGroupIfNeeded(time.timer(1));
+            coordinator.joinGroupIfNeeded(time.timer(0));
+            res = coordinator.joinGroupIfNeeded(time.timer(0));
 
             assertFalse(res);
-
-            res = coordinator.joinGroupIfNeeded(time.timer(1));
 
             // should have retried sending a join group request already
             assertFalse(client.hasPendingResponses());
