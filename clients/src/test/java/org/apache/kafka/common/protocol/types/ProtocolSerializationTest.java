@@ -238,7 +238,7 @@ public class ProtocolSerializationTest {
 
         // should throw SchemaException while reading the buffer, instead of OOM
         Throwable e = assertThrows(SchemaException.class, () -> type.read(buffer));
-        assertEquals("Error reading array of size " + Integer.MAX_VALUE + ", only " + expectedRemaining + " bytes available",
+        assertEquals("Error reading field of size " + Integer.MAX_VALUE + ", only " + expectedRemaining + " bytes available",
             e.getMessage());
     }
 
