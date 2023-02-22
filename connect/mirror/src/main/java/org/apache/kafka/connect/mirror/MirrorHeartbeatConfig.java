@@ -83,6 +83,7 @@ public class MirrorHeartbeatConfig extends MirrorConnectorConfig {
                     HEARTBEATS_TOPIC_REPLICATION_FACTOR_DOC);
 
     public static void main(String[] args) {
-        System.out.println(CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_heartbeat_" + config));
+        // System.out.println(CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_heartbeat_" + config));
+        System.out.println(CONNECTOR_CONFIG_DEF.toJson());
     }
 }

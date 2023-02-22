@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.config;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -40,9 +44,9 @@ import java.util.stream.Collectors;
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
  * the name, the type, the default value, the documentation, the group information, the order in the group,
  * the width of the configuration value and the name suitable for display in the UI.
- *
+ * <p>
  * You can provide special validation logic used for single configuration validation by overriding {@link Validator}.
- *
+ * <p>
  * Moreover, you can specify the dependents of a configuration. The valid values and visibility of a configuration
  * may change according to the values of other configurations. You can override {@link Recommender} to get valid
  * values and set visibility of a configuration given the current configuration values.
@@ -1537,6 +1541,34 @@ public class ConfigDef {
                 return base.visible(unprefixed(name), unprefixed(parsedConfig));
             }
         };
+    }
+
+    public String toJson() {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            ArrayNode array = mapper.createArrayNode();
+            for (ConfigKey key : sortedConfigs()) {
+                if (key.internalConfig) {
+                    continue;
+                }
+                ObjectNode node = mapper.createObjectNode();
+                node.put("name", key.name);
+                if (key.documentation != null) {
+                    node.put("documentation", key.documentation.replaceAll("\n", "<br>"));
+                }
+
+                ObjectNode headers = mapper.createObjectNode();
+                for (String detail : headers()) {
+                    if (detail.equals("Name") || detail.equals("Description")) continue;
+                    headers.put(detail, getConfigValue(key, detail));
+                }
+                node.set("headers", headers);
+                array.add(node);
+            }
+            return mapper.writeValueAsString(array);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public String toHtml() {

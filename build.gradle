@@ -1017,35 +1017,35 @@ project(':core') {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.admin.AdminClientConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "admin_client_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "admin_client_config.json").newOutputStream()
   }
 
   task genProducerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.producer.ProducerConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "producer_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "producer_config.json").newOutputStream()
   }
 
   task genConsumerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.consumer.ConsumerConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "consumer_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "consumer_config.json").newOutputStream()
   }
 
   task genKafkaConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'kafka.server.KafkaConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "kafka_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "kafka_config.json").newOutputStream()
   }
 
   task genTopicConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.server.log.internals.LogConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "topic_config.json").newOutputStream()
   }
 
   task genConsumerMetricsDocs(type: JavaExec) {
@@ -2013,7 +2013,7 @@ project(':streams') {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.streams.StreamsConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "streams_config.json").newOutputStream()
   }
 
   task testAll(
@@ -2692,21 +2692,21 @@ project(':connect:runtime') {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "connect_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "connect_config.json").newOutputStream()
   }
 
   task genSinkConnectorConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.SinkConnectorConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "sink_connector_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "sink_connector_config.json").newOutputStream()
   }
 
   task genSourceConnectorConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.SourceConnectorConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "source_connector_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "source_connector_config.json").newOutputStream()
   }
 
   task genConnectTransformationDocs(type: JavaExec) {
@@ -2875,21 +2875,21 @@ project(':connect:mirror') {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.mirror.MirrorSourceConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "mirror_source_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "mirror_source_config.json").newOutputStream()
   }
 
   task genMirrorCheckpointConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.mirror.MirrorCheckpointConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "mirror_checkpoint_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "mirror_checkpoint_config.json").newOutputStream()
   }
 
   task genMirrorHeartbeatConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.mirror.MirrorHeartbeatConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "mirror_heartbeat_config.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "mirror_heartbeat_config.json").newOutputStream()
   }
 
   jar {
