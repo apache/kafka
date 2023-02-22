@@ -63,7 +63,6 @@ import java.util.stream.Stream;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 
 public class DefaultStateUpdater implements StateUpdater {
 
@@ -104,19 +103,36 @@ public class DefaultStateUpdater implements StateUpdater {
                 .collect(Collectors.toList());
         }
 
-        public Collection<StreamTask> getUpdatingActiveTasks() {
-            return updatingTasks.values().stream()
-                .filter(Task::isActive)
-                .map(t -> (StreamTask) t)
-                .collect(Collectors.toList());
-        }
-
         private boolean onlyStandbyTasksUpdating() {
             return !updatingTasks.isEmpty() && updatingTasks.values().stream().noneMatch(Task::isActive);
         }
 
         public Collection<Task> getPausedTasks() {
             return pausedTasks.values();
+        }
+
+        public long getNumUpdatingStandbyTasks() {
+            return updatingTasks.values().stream()
+                .filter(t -> !t.isActive())
+                .count();
+        }
+
+        public long getNumRestoringActiveTasks() {
+            return updatingTasks.values().stream()
+                .filter(Task::isActive)
+                .count();
+        }
+
+        public long getNumPausedStandbyTasks() {
+            return pausedTasks.values().stream()
+                .filter(t -> !t.isActive())
+                .count();
+        }
+
+        public long getNumPausedActiveTasks() {
+            return pausedTasks.values().stream()
+                .filter(Task::isActive)
+                .count();
         }
 
         @Override
@@ -463,13 +479,12 @@ public class DefaultStateUpdater implements StateUpdater {
             final long elapsedMsSinceLastCommit = now - lastCommitMs;
             if (elapsedMsSinceLastCommit > commitIntervalMs) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Checking all restoring task states since {}ms has elapsed (commit interval is {}ms)",
+                    log.debug("Checkpointing state of all restoring tasks since {}ms has elapsed (commit interval is {}ms)",
                         elapsedMsSinceLastCommit, commitIntervalMs);
                 }
 
                 measureCheckpointLatency(() -> {
                     for (final Task task : updatingTasks.values()) {
-                        log.debug("Try to checkpoint current restoring progress for task {}", task.id());
                         // do not enforce checkpointing during restoration if its position has not advanced much
                         task.maybeCheckpoint(false);
                     }
@@ -685,12 +700,6 @@ public class DefaultStateUpdater implements StateUpdater {
             : Collections.emptySet();
     }
 
-    public Set<StreamTask> getUpdatingActiveTasks() {
-        return stateUpdaterThread != null
-            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getUpdatingActiveTasks()))
-            : Collections.emptySet();
-    }
-
     @Override
     public Set<Task> getUpdatingTasks() {
         return stateUpdaterThread != null
@@ -713,20 +722,6 @@ public class DefaultStateUpdater implements StateUpdater {
 
     public Set<Task> getRemovedTasks() {
         return Collections.unmodifiableSet(new HashSet<>(removedTasks));
-    }
-
-    public Set<StandbyTask> getPausedStandbyTasks() {
-        return Collections.unmodifiableSet(getPausedTasks().stream()
-            .filter(t -> !t.isActive())
-            .map(t -> (StandbyTask) t)
-            .collect(Collectors.toSet()));
-    }
-
-    public Set<StreamTask> getPausedActiveTasks() {
-        return Collections.unmodifiableSet(getPausedTasks().stream()
-            .filter(Task::isActive)
-            .map(t -> (StreamTask) t)
-            .collect(Collectors.toSet()));
     }
 
     public Set<Task> getPausedTasks() {
@@ -801,7 +796,6 @@ public class DefaultStateUpdater implements StateUpdater {
         private static final String RESTORE_RATIO_DESCRIPTION = RATIO_DESCRIPTION + "restoring active tasks";
         private static final String UPDATE_RATIO_DESCRIPTION = RATIO_DESCRIPTION + "updating standby tasks";
         private static final String CHECKPOINT_RATIO_DESCRIPTION = RATIO_DESCRIPTION + "checkpointing tasks restored progress";
-        private static final String RESTORE_RECORDS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + "records restored";
         private static final String RESTORE_RECORDS_RATE_DESCRIPTION = RATE_DESCRIPTION + "records restored";
         private static final String RESTORE_RATE_DESCRIPTION = RATE_DESCRIPTION + "restore calls triggered";
 
@@ -822,28 +816,32 @@ public class DefaultStateUpdater implements StateUpdater {
                 STATE_LEVEL_GROUP,
                 "The number of active tasks currently undergoing restoration",
                 threadLevelTags);
-            metrics.addMetric(metricName, (config, now) -> getUpdatingActiveTasks().size());
+            metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
+                stateUpdaterThread.getNumRestoringActiveTasks() : 0);
             allMetricNames.push(metricName);
 
             metricName = metrics.metricName("standby-updating-tasks",
                 STATE_LEVEL_GROUP,
                 "The number of standby tasks currently undergoing state update",
                 threadLevelTags);
-            metrics.addMetric(metricName, (config, now) -> getUpdatingStandbyTasks().size());
+            metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
+                stateUpdaterThread.getNumUpdatingStandbyTasks() : 0);
             allMetricNames.push(metricName);
 
             metricName = metrics.metricName("active-paused-tasks",
                 STATE_LEVEL_GROUP,
                 "The number of active tasks paused restoring",
                 threadLevelTags);
-            metrics.addMetric(metricName, (config, now) -> getPausedActiveTasks().size());
+            metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
+                stateUpdaterThread.getNumPausedActiveTasks() : 0);
             allMetricNames.push(metricName);
 
             metricName = metrics.metricName("standby-paused-tasks",
                 STATE_LEVEL_GROUP,
                 "The number of standby tasks paused state update",
                 threadLevelTags);
-            metrics.addMetric(metricName, (config, now) -> getPausedStandbyTasks().size());
+            metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
+                stateUpdaterThread.getNumPausedStandbyTasks() : 0);
             allMetricNames.push(metricName);
 
             this.idleRatioSensor = metrics.sensor("idle-ratio", RecordingLevel.INFO);

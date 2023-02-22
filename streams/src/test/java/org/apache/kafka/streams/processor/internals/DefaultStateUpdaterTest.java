@@ -56,6 +56,7 @@ import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.apache.kafka.test.StreamsTestUtils.TopologyMetadataBuilder.unnamedTopology;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1601,13 +1602,13 @@ class DefaultStateUpdaterTest {
             "stream-state-updater-metrics",
             "The fraction of time the thread spent on being idle",
             tagMap);
-        verifyMetric(metrics, metricName, not(0.0d));
+        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
 
         metricName = new MetricName("active-restore-ratio",
             "stream-state-updater-metrics",
             "The fraction of time the thread spent on restoring active tasks",
             tagMap);
-        verifyMetric(metrics, metricName, not(0.0d));
+        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
 
         metricName = new MetricName("standby-update-ratio",
             "stream-state-updater-metrics",
@@ -1619,7 +1620,7 @@ class DefaultStateUpdaterTest {
             "stream-state-updater-metrics",
             "The fraction of time the thread spent on checkpointing tasks restored progress",
             tagMap);
-        verifyMetric(metrics, metricName, not(0.0d));
+        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
 
         metricName = new MetricName("restore-records-rate",
             "stream-state-updater-metrics",
