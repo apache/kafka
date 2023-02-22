@@ -20,7 +20,7 @@ package kafka.server;
 import java.util.Optional;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.requests.FetchRequest.PartitionData;
+import org.apache.kafka.common.message.FetchResponseData.PartitionData;
 
 /**
  * This interface defines the APIs needed to handle any state transitions related to tiering

@@ -22,9 +22,9 @@ import kafka.log.LogAppendInfo
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
+import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics

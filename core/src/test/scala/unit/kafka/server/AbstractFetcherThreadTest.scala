@@ -707,7 +707,7 @@ class AbstractFetcherThreadTest {
     var isErrorHandled = false
     val mockLeaderEndpoint = new MockLeaderEndPoint
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint) {
-      override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: FetchRequest.PartitionData): PartitionFetchState = {
+      override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
         isErrorHandled = true
         throw new FencedLeaderEpochException(s"Epoch ${currentFetchState.currentLeaderEpoch} is fenced")
       }
@@ -1158,7 +1158,9 @@ class AbstractFetcherThreadTest {
 
     var truncateCalls = 0
     var processPartitionDataCalls = 0
-    val fetcher = new MockFetcherThread(new MockLeaderEndPoint) {
+    val mockLeaderEndpoint = new MockLeaderEndPoint
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
       override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
         processPartitionDataCalls += 1
         super.processPartitionData(topicPartition, fetchOffset, partitionData)
@@ -1474,7 +1476,7 @@ class AbstractFetcherThreadTest {
 
     override def start(topicPartition: TopicPartition,
                        currentFetchState: PartitionFetchState,
-                       fetchPartitionData: FetchRequest.PartitionData): PartitionFetchState = {
+                       fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
       startCallback.apply(topicPartition, fetchPartitionData.logStartOffset)
       val leaderEndOffset = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch)._2
       val offsetToFetch = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.currentLeaderEpoch)._2

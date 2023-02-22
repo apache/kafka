@@ -27,10 +27,11 @@ import kafka.utils.{DelayedItem, Logging, Pool}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
-import org.apache.kafka.common.requests.FetchRequest.PartitionData
+//import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
@@ -408,7 +409,7 @@ abstract class AbstractFetcherThread(name: String,
                 case Errors.OFFSET_MOVED_TO_TIERED_STORAGE =>
                   debug(s"Received error ${Errors.OFFSET_MOVED_TO_TIERED_STORAGE}, " +
                     s"at fetch offset: ${currentFetchState.fetchOffset}, " + s"topic-partition: $topicPartition")
-                  if (!handleOffsetsMovedToTieredStorage(topicPartition, currentFetchState, fetchPartitionData)) {
+                  if (!handleOffsetsMovedToTieredStorage(topicPartition, currentFetchState, fetchPartitionData.currentLeaderEpoch, partitionData)) {
                     partitionsWithError += topicPartition
                   }
 
@@ -664,9 +665,9 @@ abstract class AbstractFetcherThread(name: String,
        * produced to the new leader. While the old leader is trying to handle the OffsetOutOfRangeException and query
        * the log end offset of the new leader, the new leader's log end offset becomes higher than the follower's log end offset.
        *
-       * In the first case, the follower's current log end offset is smaller than the leader's log start offset. So the
+       * In the first case, if the follower's current log end offset is smaller than the leader's log start offset, the
        * follower should truncate all its logs, roll out a new segment and start to fetch from the current leader's log
-       * start offset.
+       * start offset since the data are all stale.
        * In the second case, the follower should just keep the current log segments and retry the fetch. In the second
        * case, there will be some inconsistency of data between old and new leader. We are not solving it here.
        * If users want to have strong consistency guarantees, appropriate configurations needs to be set for both
@@ -745,8 +746,8 @@ abstract class AbstractFetcherThread(name: String,
    */
   private def handleOffsetsMovedToTieredStorage(topicPartition: TopicPartition,
                                                 fetchState: PartitionFetchState,
+                                                leaderEpochInRequest: Optional[Integer],
                                                 fetchPartitionData: PartitionData): Boolean = {
-    val leaderEpochInRequest = fetchPartitionData.currentLeaderEpoch
     try {
       val newFetchState = fetchTierStateMachine.start(topicPartition, fetchState, fetchPartitionData);
 

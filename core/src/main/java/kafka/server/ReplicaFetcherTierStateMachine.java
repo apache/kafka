@@ -17,18 +17,6 @@
 
 package kafka.server;
 
-import kafka.cluster.Partition;
-import kafka.log.LeaderOffsetIncremented$;
-import kafka.log.UnifiedLog;
-import kafka.log.remote.RemoteLogManager;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
-import org.apache.kafka.storage.internals.log.EpochEntry;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -42,15 +30,27 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.apache.kafka.common.requests.FetchRequest.PartitionData;
+import kafka.cluster.Partition;
+import kafka.log.LeaderOffsetIncremented$;
+import kafka.log.UnifiedLog;
+import kafka.log.remote.RemoteLogManager;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.FetchResponseData.PartitionData;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
+import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import scala.Option;
 import scala.Tuple2;
 import scala.jdk.CollectionConverters;
@@ -98,7 +98,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
         int epoch = (int) epochAndLeaderLocalStartOffset._1;
         long leaderLocalStartOffset = (long) epochAndLeaderLocalStartOffset._2;
 
-        long offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset);
+        long offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset());
 
         Tuple2<Object, Object> fetchLatestOffsetResult = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch());
         long leaderEndOffset = (long) fetchLatestOffsetResult._2;
