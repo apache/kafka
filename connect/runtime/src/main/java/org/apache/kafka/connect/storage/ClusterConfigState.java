@@ -189,28 +189,6 @@ public class ClusterConfigState {
     }
 
     /**
-     * Get all task configs for a connector. The configurations will have been transformed by
-     * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
-     * references replaced with the current values from external instances of
-     * {@link ConfigProvider}, and may include secrets.
-     * @param connector name of the connector
-     * @return a list of task configurations
-     */
-    public List<Map<String, String>> allTaskConfigs(String connector) {
-        Map<Integer, Map<String, String>> taskConfigs = new TreeMap<>();
-        for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : this.taskConfigs.entrySet()) {
-            if (taskConfigEntry.getKey().connector().equals(connector)) {
-                Map<String, String> configs = taskConfigEntry.getValue();
-                if (configTransformer != null) {
-                    configs = configTransformer.transform(connector, configs);
-                }
-                taskConfigs.put(taskConfigEntry.getKey().task(), configs);
-            }
-        }
-        return Collections.unmodifiableList(new ArrayList<>(taskConfigs.values()));
-    }
-
-    /**
      * Get the number of tasks for a given connector.
      * @param connectorName name of the connector to look up tasks for
      * @return the number of tasks
