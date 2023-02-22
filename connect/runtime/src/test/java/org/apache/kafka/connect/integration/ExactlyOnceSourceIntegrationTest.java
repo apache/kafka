@@ -81,6 +81,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.CUSTOM_TRANSACTION_BOUNDARIES_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.MESSAGES_PER_POLL_CONFIG;
+import static org.apache.kafka.connect.integration.MonitorableSourceConnector.THROUGHPUT_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX;
@@ -266,6 +267,7 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(NAME_CONFIG, CONNECTOR_NAME);
         props.put(TRANSACTION_BOUNDARY_CONFIG, POLL.toString());
         props.put(MESSAGES_PER_POLL_CONFIG, Integer.toString(recordsProduced));
+        props.put(THROUGHPUT_CONFIG, Integer.toString(recordsProduced));
 
         // expect all records to be consumed and committed by the connector
         connectorHandle.expectedRecords(recordsProduced);
@@ -326,6 +328,7 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(TRANSACTION_BOUNDARY_CONFIG, INTERVAL.toString());
         props.put(TRANSACTION_BOUNDARY_INTERVAL_CONFIG, "10000");
         props.put(MESSAGES_PER_POLL_CONFIG, Integer.toString(recordsProduced));
+        props.put(THROUGHPUT_CONFIG, Integer.toString(recordsProduced));
 
         // expect all records to be consumed and committed by the connector
         connectorHandle.expectedRecords(recordsProduced);
@@ -387,6 +390,7 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(TRANSACTION_BOUNDARY_CONFIG, CONNECTOR.toString());
         props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, MonitorableSourceConnector.TRANSACTION_BOUNDARIES_SUPPORTED);
         props.put(MESSAGES_PER_POLL_CONFIG, Integer.toString(recordsProduced));
+        props.put(THROUGHPUT_CONFIG, Integer.toString(recordsProduced));
 
         // expect all records to be consumed and committed by the connector
         connectorHandle.expectedRecords(recordsProduced);
@@ -485,6 +489,7 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(NAME_CONFIG, CONNECTOR_NAME);
         props.put(TRANSACTION_BOUNDARY_CONFIG, POLL.toString());
         props.put(MESSAGES_PER_POLL_CONFIG, Integer.toString(recordsProduced));
+        props.put(THROUGHPUT_CONFIG, Integer.toString(recordsProduced));
 
         // expect all records to be consumed and committed by the connector
         connectorHandle.expectedRecords(recordsProduced);
@@ -554,6 +559,7 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(NAME_CONFIG, CONNECTOR_NAME);
         props.put(MESSAGES_PER_POLL_CONFIG, Integer.toString(recordsProduced));
+        props.put(THROUGHPUT_CONFIG, Integer.toString(recordsProduced));
 
         // expect all records to be consumed and committed by the connector
         connectorHandle.expectedRecords(recordsProduced);
@@ -754,6 +760,7 @@ public class ExactlyOnceSourceIntegrationTest {
             props.put(NAME_CONFIG, CONNECTOR_NAME);
             props.put(TRANSACTION_BOUNDARY_CONFIG, POLL.toString());
             props.put(MESSAGES_PER_POLL_CONFIG, Integer.toString(recordsProduced));
+            props.put(THROUGHPUT_CONFIG, Integer.toString(recordsProduced));
             props.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, connectorTargetedCluster.bootstrapServers());
             props.put(CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, connectorTargetedCluster.bootstrapServers());
             props.put(CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, connectorTargetedCluster.bootstrapServers());
@@ -906,6 +913,7 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(NAME_CONFIG, CONNECTOR_NAME);
         props.put(TRANSACTION_BOUNDARY_CONFIG, INTERVAL.toString());
         props.put(MESSAGES_PER_POLL_CONFIG, Integer.toString(recordsProduced));
+        props.put(THROUGHPUT_CONFIG, Integer.toString(recordsProduced));
         props.put(OFFSETS_TOPIC_CONFIG, "whoops");
 
         // start a source connector
