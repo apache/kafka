@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
@@ -36,6 +37,8 @@ import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
@@ -901,7 +904,33 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void shouldAddInternalTopicConfigForNonWindowStores() {
+    public void shouldAddInternalTopicConfigForVersionedStores() {
+        builder.setApplicationId("appId");
+        builder.addSource(null, "source", null, null, null, "topic");
+        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
+        builder.addStateStore(
+            new VersionedKeyValueStoreBuilder<>(
+                new RocksDbVersionedKeyValueBytesStoreSupplier("vstore", 60_000L),
+                Serdes.String(),
+                Serdes.String(),
+                new MockTime()
+            ),
+            "processor"
+        );
+        builder.buildTopology();
+        final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.subtopologyToTopicsInfo();
+        final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
+        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-vstore-changelog");
+        final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 10000);
+        assertEquals(3, properties.size());
+        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals(Long.toString(60_000L + 24 * 60 * 60 * 1000L), properties.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG));
+        assertEquals("appId-vstore-changelog", topicConfig.name());
+        assertTrue(topicConfig instanceof VersionedChangelogTopicConfig);
+    }
+
+    @Test
+    public void shouldAddInternalTopicConfigForNonWindowNonVersionedStores() {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");

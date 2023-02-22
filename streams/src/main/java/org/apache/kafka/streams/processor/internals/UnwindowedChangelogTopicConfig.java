@@ -25,7 +25,7 @@ import java.util.Objects;
 
 /**
  * UnwindowedChangelogTopicConfig captures the properties required for configuring
- * the un-windowed store changelog topics.
+ * the un-windowed, un-versioned store changelog topics.
  */
 public class UnwindowedChangelogTopicConfig extends InternalTopicConfig {
     private static final Map<String, String> UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
