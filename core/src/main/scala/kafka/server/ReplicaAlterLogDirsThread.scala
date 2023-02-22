@@ -17,9 +17,10 @@
 
 package kafka.server
 
-import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
+import kafka.log.LeaderOffsetIncremented
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchResponse
+import org.apache.kafka.storage.internals.log.LogAppendInfo
 
 import scala.collection.{Map, Set}
 

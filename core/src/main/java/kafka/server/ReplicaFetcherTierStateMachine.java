@@ -53,7 +53,7 @@ import org.slf4j.LoggerFactory;
 
 import scala.Option;
 import scala.Tuple2;
-import scala.jdk.CollectionConverters;
+import scala.collection.JavaConverters;
 
 /**
  The replica fetcher tier state machine follows a state machine progression.
@@ -132,8 +132,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
         // Find the end-offset for the epoch earlier to the given epoch from the leader
         Map<TopicPartition, OffsetForLeaderPartition> partitionsWithEpochs = new HashMap<>();
         partitionsWithEpochs.put(partition, new OffsetForLeaderPartition().setPartition(partition.partition()).setCurrentLeaderEpoch(currentLeaderEpoch).setLeaderEpoch(previousEpoch));
-
-        Option<EpochEndOffset> maybeEpochEndOffset = leader.fetchEpochEndOffsets(CollectionConverters.MapHasAsScala(partitionsWithEpochs).asScala()).get(partition);
+        Option<EpochEndOffset> maybeEpochEndOffset = leader.fetchEpochEndOffsets(JavaConverters.mapAsScalaMap(partitionsWithEpochs)).get(partition);
         if (maybeEpochEndOffset.isEmpty()) {
             throw new KafkaException("No response received for partition: " + partition);
         }
