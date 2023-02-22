@@ -24,8 +24,10 @@ import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResp
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -75,8 +77,9 @@ public class OffsetCommitResponseTest {
         assertEquals(throttleTimeMs, response.throttleTimeMs());
     }
 
-    @Test
-    public void testParse() {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testParse(short version) {
         OffsetCommitResponseData data = new OffsetCommitResponseData()
             .setTopics(Arrays.asList(
                 new OffsetCommitResponseTopic().setPartitions(
@@ -90,31 +93,31 @@ public class OffsetCommitResponseTest {
             ))
             .setThrottleTimeMs(throttleTimeMs);
 
-        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
-            ByteBuffer buffer = MessageUtil.toByteBuffer(data, version);
-            OffsetCommitResponse response = OffsetCommitResponse.parse(buffer, version);
-            assertEquals(expectedErrorCounts, response.errorCounts());
+        ByteBuffer buffer = MessageUtil.toByteBuffer(data, version);
+        OffsetCommitResponse response = OffsetCommitResponse.parse(buffer, version);
+        assertEquals(expectedErrorCounts, response.errorCounts());
 
-            if (version >= 3) {
-                assertEquals(throttleTimeMs, response.throttleTimeMs());
-            } else {
-                assertEquals(DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
-            }
-
-            assertEquals(version >= 4, response.shouldClientThrottle(version));
+        if (version >= 3) {
+            assertEquals(throttleTimeMs, response.throttleTimeMs());
+        } else {
+            assertEquals(DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
         }
+
+        assertEquals(version >= 4, response.shouldClientThrottle(version));
     }
-    @Test
-    public void testHandlingOfTopicIdAndTopicNameInAllVersionsViaAddPartition() {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testHandlingOfTopicIdAndTopicNameInAllVersionsViaAddPartition(short version) {
         OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder()
             .addPartition(topicOne, topicIdOne, partitionOne, Errors.NONE)
             .addPartition(topicTwo, Uuid.ZERO_UUID, partitionOne, Errors.NONE);
 
-        validateHandlingOfTopicIdAndTopicNameInAllVersions(builder);
+        validateHandlingOfTopicIdAndTopicName(builder.build(version), version);
     }
 
-    @Test
-    public void testHandlingOfTopicIdAndTopicNameInAllVersionsViaAddPartitions() {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testHandlingOfTopicIdAndTopicNameInAllVersionsViaAddPartitions(short version) {
         OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder()
             .addPartitions(
                 topicOne,
@@ -130,34 +133,32 @@ public class OffsetCommitResponseTest {
                 Errors.NONE
             );
 
-        validateHandlingOfTopicIdAndTopicNameInAllVersions(builder);
+        validateHandlingOfTopicIdAndTopicName(builder.build(version), version);
     }
 
-    private void validateHandlingOfTopicIdAndTopicNameInAllVersions(OffsetCommitResponse.Builder builder) {
-        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
-            OffsetCommitResponse response = builder.build(version);
-            List<OffsetCommitResponseTopic> topics = response.data().topics();
+    // Note: need to create a new builder for each version since
+    private void validateHandlingOfTopicIdAndTopicName(OffsetCommitResponse response, short version) {
+        List<OffsetCommitResponseTopic> topics = response.data().topics();
 
-            if (version >= 9) {
-                // Version >= 9:
-                //   Topic ID may be present or not. Both are valid cases. If no topic ID is provided (null or
-                //   set to ZERO_UUID), a topic name must be provided and will be used. If a topic ID is provided,
-                //   the name will be nullified.
-                assertNull(topics.get(0).name());
-                assertEquals(topicIdOne, topics.get(0).topicId());
+        if (version >= 9) {
+            // Version >= 9:
+            //   Topic ID may be present or not. Both are valid cases. If no topic ID is provided (null or
+            //   set to ZERO_UUID), a topic name must be provided and will be used. If a topic ID is provided,
+            //   the name will be nullified.
+            assertNull(topics.get(0).name());
+            assertEquals(topicIdOne, topics.get(0).topicId());
 
-                assertEquals(topicTwo, topics.get(1).name());
-                assertEquals(Uuid.ZERO_UUID, topics.get(1).topicId());
-            } else {
-                // Version < 9:
-                //   Topic ID may be present or not. They are set to ZERO_UUID in the finalized response. Any other
-                //   value would make serialization of the response fail.
-                assertEquals(topicOne, topics.get(0).name());
-                assertEquals(Uuid.ZERO_UUID, topics.get(0).topicId());
+            assertEquals(topicTwo, topics.get(1).name());
+            assertEquals(Uuid.ZERO_UUID, topics.get(1).topicId());
+        } else {
+            // Version < 9:
+            //   Topic ID may be present or not. They are set to ZERO_UUID in the finalized response. Any other
+            //   value would make serialization of the response fail.
+            assertEquals(topicOne, topics.get(0).name());
+            assertEquals(Uuid.ZERO_UUID, topics.get(0).topicId());
 
-                assertEquals(topicTwo, topics.get(1).name());
-                assertEquals(Uuid.ZERO_UUID, topics.get(1).topicId());
-            }
+            assertEquals(topicTwo, topics.get(1).name());
+            assertEquals(Uuid.ZERO_UUID, topics.get(1).topicId());
         }
     }
 }

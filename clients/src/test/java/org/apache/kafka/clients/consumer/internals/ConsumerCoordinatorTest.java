@@ -73,6 +73,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.OffsetCommitRequestTest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
@@ -4151,7 +4152,7 @@ public abstract class ConsumerCoordinatorTest {
             Consumer<OffsetCommitRequestTopic> topicConsumer) {
         return body -> {
             OffsetCommitRequest req = (OffsetCommitRequest) body;
-            Map<TopicPartition, Long> offsets = req.offsets(topicResolver);
+            Map<TopicPartition, Long> offsets = OffsetCommitRequestTest.offsets(req, topicResolver);
             if (offsets.size() != expectedOffsets.size())
                 return false;
 

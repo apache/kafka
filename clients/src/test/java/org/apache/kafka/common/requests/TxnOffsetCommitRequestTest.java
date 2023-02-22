@@ -22,8 +22,9 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommi
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -80,10 +81,10 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
         );
     }
 
-    @Test
     @Override
-    public void testConstructor() {
-
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+    public void testConstructor(short version) {
         Map<TopicPartition, Errors> errorsMap = new HashMap<>();
         errorsMap.put(new TopicPartition(topicOne, partitionOne), Errors.NOT_COORDINATOR);
         errorsMap.put(new TopicPartition(topicTwo, partitionTwo), Errors.NOT_COORDINATOR);
@@ -109,22 +110,20 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
                 ))
         );
 
-        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
-            final TxnOffsetCommitRequest request;
-            if (version < 3) {
-                request = builder.build(version);
-            } else {
-                request = builderWithGroupMetadata.build(version);
-            }
-            assertEquals(offsets, request.offsets());
-            assertEquals(expectedTopics, TxnOffsetCommitRequest.getTopics(request.offsets()));
-
-            TxnOffsetCommitResponse response =
-                request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());
-
-            assertEquals(errorsMap, response.errors());
-            assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 2), response.errorCounts());
-            assertEquals(throttleTimeMs, response.throttleTimeMs());
+        final TxnOffsetCommitRequest request;
+        if (version < 3) {
+            request = builder.build(version);
+        } else {
+            request = builderWithGroupMetadata.build(version);
         }
+        assertEquals(offsets, request.offsets());
+        assertEquals(expectedTopics, TxnOffsetCommitRequest.getTopics(request.offsets()));
+
+        TxnOffsetCommitResponse response =
+            request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());
+
+        assertEquals(errorsMap, response.errors());
+        assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 2), response.errorCounts());
+        assertEquals(throttleTimeMs, response.throttleTimeMs());
     }
 }

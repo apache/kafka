@@ -90,6 +90,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.OffsetCommitRequestTest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
@@ -2454,7 +2455,7 @@ public class KafkaConsumerTest {
 
         client.prepareResponseFrom(body -> {
             OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
-            Map<TopicPartition, Long> commitErrors = commitRequest.offsets(topicResolver);
+            Map<TopicPartition, Long> commitErrors = OffsetCommitRequestTest.offsets(commitRequest, topicResolver);
 
             for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
                 // verify that the expected offset has been committed

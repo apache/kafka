@@ -16,12 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicResolver;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.UnknownTopicIdException;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
@@ -34,9 +30,7 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class OffsetCommitRequest extends AbstractRequest {
     // default values for the current version
@@ -107,24 +101,6 @@ public class OffsetCommitRequest extends AbstractRequest {
     @Override
     public OffsetCommitRequestData data() {
         return data;
-    }
-
-    public Map<TopicPartition, Long> offsets(TopicResolver topicResolver) {
-        Map<TopicPartition, Long> offsets = new HashMap<>();
-        for (OffsetCommitRequestTopic topic : data.topics()) {
-            String topicName = topic.name();
-
-            if (version() >= 9 && topicName == null) {
-                topicName = topicResolver.getTopicName(topic.topicId()).orElseThrow(
-                        () -> new UnknownTopicIdException("Topic with ID " + topic.topicId() + " not found."));
-            }
-
-            for (OffsetCommitRequestData.OffsetCommitRequestPartition partition : topic.partitions()) {
-                offsets.put(new TopicPartition(topicName, partition.partitionIndex()),
-                        partition.committedOffset());
-            }
-        }
-        return offsets;
     }
 
     public static List<OffsetCommitResponseTopic> getErrorResponseTopics(
