@@ -86,6 +86,13 @@ import java.util.stream.Collectors;
  * same racks will improve locality for consumers. For example, if partitions 0 of all topics have a replica
  * on rack 'a', partition 1 on rack 'b' etc., partition 0 of all topics can be assigned to a consumer
  * on rack 'a', partition 1 to a consumer on rack 'b' and so on.
+ * <p>
+ * Note that rack-aware assignment currently takes all replicas into account, including any offline replicas
+ * and replicas that are not in the ISR. This is based on the assumption that these replicas are likely
+ * to join the ISR relatively soon. Since consumers don't rebalance on ISR change, this avoids unnecessary
+ * cross-rack traffic for long durations after replicas rejoin the ISR. In the future, we may consider
+ * rebalancing when replicas are added or removed to improve consumer rack alignment.
+ * </p>
  */
 public class RangeAssignor extends AbstractPartitionAssignor {
     public static final String RANGE_ASSIGNOR_NAME = "range";
