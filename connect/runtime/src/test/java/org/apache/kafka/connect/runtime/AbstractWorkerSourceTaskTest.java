@@ -58,6 +58,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -726,7 +727,7 @@ public class AbstractWorkerSourceTaskTest {
 
     private void expectApplyTransformationChain() {
         when(transformationChain.apply(any(SourceRecord.class)))
-                .thenAnswer((Answer<SourceRecord>) invocation -> invocation.getArgument(0));
+                .thenAnswer(AdditionalAnswers.returnsFirstArg());
     }
 
     private RecordHeaders emptyHeaders() {
