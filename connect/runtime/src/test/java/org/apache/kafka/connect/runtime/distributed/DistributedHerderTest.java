@@ -3595,8 +3595,8 @@ public class DistributedHerderTest {
                 Collections.singletonMap(CONN1, CONN1_CONFIG),
                 Collections.singletonMap(CONN1, TargetState.STARTED),
                 TASK_CONFIGS_MAP,
-                taskConfigGenerations,
                 Collections.emptyMap(),
+                taskConfigGenerations,
                 Collections.emptySet(),
                 Collections.emptySet());
 
