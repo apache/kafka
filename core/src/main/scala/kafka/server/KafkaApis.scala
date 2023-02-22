@@ -2386,8 +2386,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
   def handleAddPartitionsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     ensureInterBrokerVersion(IBP_0_11_0_IV0)
-    val lock = new Object
-    val addPartitionsToTxnRequest = if (request.context.apiVersion() < 4) request.body[AddPartitionsToTxnRequest].normalizeRequest() else request.body[AddPartitionsToTxnRequest]
+    val addPartitionsToTxnRequest =
+      if (request.context.apiVersion() < 4) 
+        request.body[AddPartitionsToTxnRequest].normalizeRequest() 
+      else 
+        request.body[AddPartitionsToTxnRequest]
     val version = addPartitionsToTxnRequest.version
     val responses = new AddPartitionsToTxnResultCollection()
     val partitionsByTransaction = addPartitionsToTxnRequest.partitionsByTransaction()
@@ -2413,15 +2416,19 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val txns = addPartitionsToTxnRequest.data.transactions
     def maybeSendResponse(): Unit = {
-      lock synchronized {
+      var canSend = false
+      responses.synchronized {
         if (responses.size() == txns.size()) {
-          requestHelper.sendResponseMaybeThrottle(request, createResponse)
+          canSend = true
         }
+      }
+      if (canSend) {
+        requestHelper.sendResponseMaybeThrottle(request, createResponse)
       }
     }
 
     txns.forEach( transaction => {
-      val transactionalId = transaction.transactionalId()
+      val transactionalId = transaction.transactionalId
       val partitionsToAdd = partitionsByTransaction.get(transactionalId).asScala
       
       // Versions < 4 come from clients and must be authorized to write for the given transaction and for the given topics.
@@ -2463,7 +2470,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 error
               }
             }
-            lock synchronized {
+            responses.synchronized {
               responses.add(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, finalError))
             }
             maybeSendResponse()

@@ -25,8 +25,10 @@ import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartiti
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -62,67 +64,56 @@ public class AddPartitionsToTxnResponseTest {
         errorsMap.put(tp2, errorTwo);
     }
 
-    @Test
-    public void testConstructorWithErrorResponse() {
-        // This test only applies to versions 0-3.
-        AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(throttleTimeMs, errorsMap);
-
-        assertEquals(expectedErrorCounts, response.errorCounts());
-        assertEquals(throttleTimeMs, response.throttleTimeMs());
-    }
-
-    @Test
-    public void testParse() {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.ADD_PARTITIONS_TO_TXN)
+    public void testParse(short version) {
         AddPartitionsToTxnTopicResultCollection topicCollection = new AddPartitionsToTxnTopicResultCollection();
 
         AddPartitionsToTxnTopicResult topicResult = new AddPartitionsToTxnTopicResult();
         topicResult.setName(topicOne);
 
-        topicResult.results().add(new AddPartitionsToTxnPartitionResult()
+        topicResult.resultsByPartition().add(new AddPartitionsToTxnPartitionResult()
                                       .setPartitionErrorCode(errorOne.code())
                                       .setPartitionIndex(partitionOne));
 
-        topicResult.results().add(new AddPartitionsToTxnPartitionResult()
+        topicResult.resultsByPartition().add(new AddPartitionsToTxnPartitionResult()
                                       .setPartitionErrorCode(errorTwo.code())
                                       .setPartitionIndex(partitionTwo));
 
         topicCollection.add(topicResult);
-
-        for (short version : ApiKeys.ADD_PARTITIONS_TO_TXN.allVersions()) {
             
-            if (version < 4) {
-                AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
-                        .setResultsByTopicV3AndBelow(topicCollection)
-                        .setThrottleTimeMs(throttleTimeMs);
-                AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
+        if (version < 4) {
+            AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
+                    .setResultsByTopicV3AndBelow(topicCollection)
+                    .setThrottleTimeMs(throttleTimeMs);
+            AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
 
-                AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
-                assertEquals(expectedErrorCounts, parsedResponse.errorCounts());
-                assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
-                assertEquals(version >= 1, parsedResponse.shouldClientThrottle(version));
-            } else {
-                AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResultCollection();
-                results.add(new AddPartitionsToTxnResult().setTransactionalId("txn1").setTopicResults(topicCollection));
-                
-                // Create another transaction with new name and errorOne for a single partition.
-                Map<TopicPartition, Errors> txnTwoExpectedErrors = Collections.singletonMap(tp2, errorOne);
-                results.add(AddPartitionsToTxnResponse.resultForTransaction("txn2", txnTwoExpectedErrors));
+            AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
+            assertEquals(expectedErrorCounts, parsedResponse.errorCounts());
+            assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
+            assertEquals(version >= 1, parsedResponse.shouldClientThrottle(version));
+        } else {
+            AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResultCollection();
+            results.add(new AddPartitionsToTxnResult().setTransactionalId("txn1").setTopicResults(topicCollection));
+            
+            // Create another transaction with new name and errorOne for a single partition.
+            Map<TopicPartition, Errors> txnTwoExpectedErrors = Collections.singletonMap(tp2, errorOne);
+            results.add(AddPartitionsToTxnResponse.resultForTransaction("txn2", txnTwoExpectedErrors));
 
-                AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
-                        .setResultsByTransaction(results)
-                        .setThrottleTimeMs(throttleTimeMs);
-                AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
+            AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
+                    .setResultsByTransaction(results)
+                    .setThrottleTimeMs(throttleTimeMs);
+            AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
 
-                Map<Errors, Integer> newExpectedErrorCounts = new HashMap<>();
-                newExpectedErrorCounts.put(errorOne, 2);
-                newExpectedErrorCounts.put(errorTwo, 1);
-                
-                AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
-                assertEquals(txnTwoExpectedErrors, parsedResponse.errorsPerTransaction("txn2"));
-                assertEquals(newExpectedErrorCounts, parsedResponse.errorCounts());
-                assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
-                assertTrue(parsedResponse.shouldClientThrottle(version));
-            }
+            Map<Errors, Integer> newExpectedErrorCounts = new HashMap<>();
+            newExpectedErrorCounts.put(errorOne, 2);
+            newExpectedErrorCounts.put(errorTwo, 1);
+            
+            AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
+            assertEquals(txnTwoExpectedErrors, parsedResponse.errorsForTransaction(response.getTransactionTopicResults("txn2")));
+            assertEquals(newExpectedErrorCounts, parsedResponse.errorCounts());
+            assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
+            assertTrue(parsedResponse.shouldClientThrottle(version));
         }
     }
     
@@ -140,7 +131,7 @@ public class AddPartitionsToTxnResponseTest {
         
         AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData().setResultsByTransaction(results));
         
-        assertEquals(txn1Errors, response.errorsPerTransaction("txn1"));
-        assertEquals(txn2Errors, response.errorsPerTransaction("txn2"));
+        assertEquals(txn1Errors, response.errorsForTransaction(response.getTransactionTopicResults("txn1")));
+        assertEquals(txn2Errors, response.errorsForTransaction(response.getTransactionTopicResults("txn2")));
     }
 }

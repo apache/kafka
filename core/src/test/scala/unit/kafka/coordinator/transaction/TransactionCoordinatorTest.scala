@@ -302,7 +302,7 @@ class TransactionCoordinatorTest {
       any()
     )
   }
-  
+
   @Test
   def shouldRespondWithErrorsNoneOnAddPartitionWhenNoErrorsAndPartitionsTheSame(): Unit = {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))

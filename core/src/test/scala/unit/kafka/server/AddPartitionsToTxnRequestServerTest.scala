@@ -93,7 +93,11 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     val leaderId = brokers.head.config.brokerId
     val response = connectAndReceive[AddPartitionsToTxnResponse](request, brokerSocketServer(leaderId))
     
-    val errors = if (version < 4) response.errors else response.errorsPerTransaction(transactionalId)
+    val errors = 
+      if (version < 4) 
+        response.errors.get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID) 
+      else 
+        response.errorsForTransaction(response.getTransactionTopicResults(transactionalId))
     
     assertEquals(2, errors.size)
 
@@ -155,7 +159,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
 
     val response = connectAndReceive[AddPartitionsToTxnResponse](request, brokerSocketServer(coordinatorId))
     
-    val errors = response.allErrors()
+    val errors = response.errors()
 
     assertTrue(errors.containsKey(transactionalId1))
     assertTrue(errors.get(transactionalId1).containsKey(tp0))

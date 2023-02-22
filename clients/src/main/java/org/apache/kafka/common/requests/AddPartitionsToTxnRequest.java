@@ -43,10 +43,6 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     private final AddPartitionsToTxnRequestData data;
 
-    private List<TopicPartition> cachedPartitions = null;
-    
-    private Map<String, List<TopicPartition>> cachedPartitionsByTransaction = null;
-
     private final short version;
 
     public static class Builder extends AbstractRequest.Builder<AddPartitionsToTxnRequest> {
@@ -69,10 +65,9 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         }
         
         public static Builder forBroker(AddPartitionsToTxnTransactionCollection transactions) {
-            return new Builder((short) 4,
-                    ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion(),
-                    new AddPartitionsToTxnRequestData()
-                        .setTransactions(transactions));
+            return new Builder((short) 4, ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion(),
+                new AddPartitionsToTxnRequestData()
+                    .setTransactions(transactions));
         }
         
         public Builder(short minVersion, short maxVersion, AddPartitionsToTxnRequestData data) {
@@ -98,8 +93,8 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
             AddPartitionsToTxnTopicCollection topics = new AddPartitionsToTxnTopicCollection();
             for (Map.Entry<String, List<Integer>> partitionEntry : partitionMap.entrySet()) {
                 topics.add(new AddPartitionsToTxnTopic()
-                        .setName(partitionEntry.getKey())
-                        .setPartitions(partitionEntry.getValue()));
+                    .setName(partitionEntry.getKey())
+                    .setPartitions(partitionEntry.getValue()));
             }
             return topics;
         }
@@ -120,71 +115,6 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         this.data = data;
         this.version = version;
     }
-    
-    // Only used for versions < 4
-    public List<TopicPartition> partitions() {
-        if (cachedPartitions != null) {
-            return cachedPartitions;
-        }
-        cachedPartitions = getPartitions(data);
-        return cachedPartitions;
-    }
-
-    // Only used for versions < 4
-    static List<TopicPartition> getPartitions(AddPartitionsToTxnRequestData data) {
-        List<TopicPartition> partitions = new ArrayList<>();
-
-        for (AddPartitionsToTxnTopic topicCollection : data.v3AndBelowTopics()) {
-            for (Integer partition : topicCollection.partitions()) {
-                partitions.add(new TopicPartition(topicCollection.name(), partition));
-            }
-        }
-        return partitions;
-    }
-    
-    private List<TopicPartition> partitionsForTransaction(String transaction) {
-        if (cachedPartitionsByTransaction == null) {
-            cachedPartitionsByTransaction = new HashMap<>();
-        }
-        
-        return cachedPartitionsByTransaction.computeIfAbsent(transaction, txn -> {
-            List<TopicPartition> partitions = new ArrayList<>();
-            for (AddPartitionsToTxnTopic topicCollection : data.transactions().find(txn).topics()) {
-                for (Integer partition : topicCollection.partitions()) {
-                    partitions.add(new TopicPartition(topicCollection.name(), partition));
-                }
-            }
-            return partitions;
-        });
-    }
-    
-    public Map<String, List<TopicPartition>> partitionsByTransaction() {
-        if (cachedPartitionsByTransaction != null && cachedPartitionsByTransaction.size() == data.transactions().size()) {
-            return cachedPartitionsByTransaction;
-        }
-        
-        for (AddPartitionsToTxnTransaction transaction : data.transactions()) {
-            if (cachedPartitionsByTransaction == null || !cachedPartitionsByTransaction.containsKey(transaction.transactionalId())) {
-                partitionsForTransaction(transaction.transactionalId());
-            }
-        }
-        return cachedPartitionsByTransaction;
-    }
-    
-    // Takes a version 3 or below request and returns a v4+ singleton (one transaction ID) request.
-    public AddPartitionsToTxnRequest normalizeRequest() {
-        return new AddPartitionsToTxnRequest(new AddPartitionsToTxnRequestData().setTransactions(singletonTransaction()), version);
-    }
-    
-    private AddPartitionsToTxnTransactionCollection singletonTransaction() {
-        AddPartitionsToTxnTransactionCollection singleTxn = new AddPartitionsToTxnTransactionCollection();
-        singleTxn.add(new AddPartitionsToTxnTransaction()
-                .setTransactionalId(data.v3AndBelowTransactionalId())
-                .setProducerId(data.v3AndBelowProducerId())
-                .setProducerEpoch(data.v3AndBelowProducerEpoch())
-                .setTopics(data.v3AndBelowTopics()));
-        return singleTxn;
-    }
 
     @Override
     public AddPartitionsToTxnRequestData data() {
@@ -194,40 +124,77 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     @Override
     public AddPartitionsToTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
+        AddPartitionsToTxnResponseData response = new AddPartitionsToTxnResponseData();
         if (version < 4) {
-            final HashMap<TopicPartition, Errors> errors = new HashMap<>();
-            for (TopicPartition partition : partitions()) {
-                errors.put(partition, error);
-            }
-            return new AddPartitionsToTxnResponse(throttleTimeMs, errors);
+            response.setResultsByTopicV3AndBelow(errorResponseForTopics(data.v3AndBelowTopics(), error));
         } else {
-            AddPartitionsToTxnResponseData response = new AddPartitionsToTxnResponseData();
             AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResultCollection();
             for (AddPartitionsToTxnTransaction transaction : data().transactions()) {
                 results.add(errorResponseForTransaction(transaction.transactionalId(), error));
             }
             response.setResultsByTransaction(results);
-            response.setThrottleTimeMs(throttleTimeMs);
-            return new AddPartitionsToTxnResponse(response);
+            response.setErrorCode(error.code());
         }
+        response.setThrottleTimeMs(throttleTimeMs);
+        return new AddPartitionsToTxnResponse(response);
+    }
+
+    public static List<TopicPartition> getPartitions(AddPartitionsToTxnTopicCollection topics) {
+        List<TopicPartition> partitions = new ArrayList<>();
+
+        for (AddPartitionsToTxnTopic topicCollection : topics) {
+            for (Integer partition : topicCollection.partitions()) {
+                partitions.add(new TopicPartition(topicCollection.name(), partition));
+            }
+        }
+        return partitions;
+    }
+
+    public Map<String, List<TopicPartition>> partitionsByTransaction() {
+        Map<String, List<TopicPartition>> partitionsByTransaction = new HashMap<>();
+        for (AddPartitionsToTxnTransaction transaction : data.transactions()) {
+            List<TopicPartition> partitions = getPartitions(transaction.topics());
+            partitionsByTransaction.put(transaction.transactionalId(), partitions);
+        }
+        return partitionsByTransaction;
+    }
+
+    // Takes a version 3 or below request and returns a v4+ singleton (one transaction ID) request.
+    public AddPartitionsToTxnRequest normalizeRequest() {
+        return new AddPartitionsToTxnRequest(new AddPartitionsToTxnRequestData().setTransactions(singletonTransaction()), version);
+    }
+
+    private AddPartitionsToTxnTransactionCollection singletonTransaction() {
+        AddPartitionsToTxnTransactionCollection singleTxn = new AddPartitionsToTxnTransactionCollection();
+        singleTxn.add(new AddPartitionsToTxnTransaction()
+            .setTransactionalId(data.v3AndBelowTransactionalId())
+            .setProducerId(data.v3AndBelowProducerId())
+            .setProducerEpoch(data.v3AndBelowProducerEpoch())
+            .setTopics(data.v3AndBelowTopics()));
+        return singleTxn;
     }
     
     public AddPartitionsToTxnResult errorResponseForTransaction(String transactionalId, Errors e) {
         AddPartitionsToTxnResult txnResult = new AddPartitionsToTxnResult().setTransactionalId(transactionalId);
+        AddPartitionsToTxnTopicResultCollection topicResults = errorResponseForTopics(data.transactions().find(transactionalId).topics(), e);
+        txnResult.setTopicResults(topicResults);
+        return txnResult;
+    }
+    
+    private AddPartitionsToTxnTopicResultCollection errorResponseForTopics(AddPartitionsToTxnTopicCollection topics, Errors e) {
         AddPartitionsToTxnTopicResultCollection topicResults = new AddPartitionsToTxnTopicResultCollection();
-        for (AddPartitionsToTxnTopic topic : data.transactions().find(transactionalId).topics()) {
+        for (AddPartitionsToTxnTopic topic : topics) {
             AddPartitionsToTxnTopicResult topicResult = new AddPartitionsToTxnTopicResult().setName(topic.name());
             AddPartitionsToTxnPartitionResultCollection partitionResult = new AddPartitionsToTxnPartitionResultCollection();
             for (Integer partition : topic.partitions()) {
                 partitionResult.add(new AddPartitionsToTxnPartitionResult()
-                        .setPartitionIndex(partition)
-                        .setPartitionErrorCode(e.code()));
+                    .setPartitionIndex(partition)
+                    .setPartitionErrorCode(e.code()));
             }
-            topicResult.setResults(partitionResult);
+            topicResult.setResultsByPartition(partitionResult);
             topicResults.add(topicResult);
         }
-        txnResult.setTopicResults(topicResults);
-        return txnResult;
+        return topicResults;
     }
 
     public static AddPartitionsToTxnRequest parse(ByteBuffer buffer, short version) {

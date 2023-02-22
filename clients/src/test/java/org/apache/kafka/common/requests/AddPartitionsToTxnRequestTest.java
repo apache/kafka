@@ -63,7 +63,7 @@ public class AddPartitionsToTxnRequestTest {
             assertEquals(transactionalId1, request.data().v3AndBelowTransactionalId());
             assertEquals(producerId, request.data().v3AndBelowProducerId());
             assertEquals(producerEpoch, request.data().v3AndBelowProducerEpoch());
-            assertEquals(partitions, request.partitions());
+            assertEquals(partitions, AddPartitionsToTxnRequest.getPartitions(request.data().v3AndBelowTopics()));
         } else {
             AddPartitionsToTxnTransactionCollection transactions = createTwoTransactionCollection();
 
@@ -80,12 +80,15 @@ public class AddPartitionsToTxnRequestTest {
 
         assertEquals(Collections.singletonMap(Errors.UNKNOWN_TOPIC_OR_PARTITION, 2), response.errorCounts());
         assertEquals(throttleTimeMs, response.throttleTimeMs());
+        
+        if (version >= 4) {
+            assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), response.data().errorCode());
+        }
     }
     
     @Test
     public void testBatchedRequests() {
         AddPartitionsToTxnTransactionCollection transactions = createTwoTransactionCollection();
-        boolean verifyOnly = true;
 
         AddPartitionsToTxnRequest.Builder builder = AddPartitionsToTxnRequest.Builder.forBroker(transactions);
         AddPartitionsToTxnRequest request = builder.build(ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion());
@@ -105,8 +108,8 @@ public class AddPartitionsToTxnRequestTest {
                 .setResultsByTransaction(results)
                 .setThrottleTimeMs(throttleTimeMs));
         
-        assertEquals(Collections.singletonMap(tp0, Errors.UNKNOWN_TOPIC_OR_PARTITION), response.errorsPerTransaction(transactionalId1));
-        assertEquals(Collections.singletonMap(tp1, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED), response.errorsPerTransaction(transactionalId2));
+        assertEquals(Collections.singletonMap(tp0, Errors.UNKNOWN_TOPIC_OR_PARTITION), response.errorsForTransaction(response.getTransactionTopicResults(transactionalId1)));
+        assertEquals(Collections.singletonMap(tp1, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED), response.errorsForTransaction(response.getTransactionTopicResults(transactionalId2)));
     }
     
     @Test

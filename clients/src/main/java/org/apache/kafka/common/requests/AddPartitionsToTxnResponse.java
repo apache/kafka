@@ -50,56 +50,12 @@ import java.util.Map;
 public class AddPartitionsToTxnResponse extends AbstractResponse {
 
     private final AddPartitionsToTxnResponseData data;
-
-    private Map<TopicPartition, Errors> cachedErrorsMap = null;
     
-    private Map<String, Map<TopicPartition, Errors>> cachedAllErrorsMap = null;
+    public static final String V3_AND_BELOW_TXN_ID = "";
 
     public AddPartitionsToTxnResponse(AddPartitionsToTxnResponseData data) {
         super(ApiKeys.ADD_PARTITIONS_TO_TXN);
         this.data = data;
-    }
-
-    // Only used for versions < 4
-    public AddPartitionsToTxnResponse(int throttleTimeMs, Map<TopicPartition, Errors> errors) {
-        super(ApiKeys.ADD_PARTITIONS_TO_TXN);
-
-        this.data = new AddPartitionsToTxnResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setResultsByTopicV3AndBelow(topicCollectionForErrors(errors));
-    }
-    
-    private static AddPartitionsToTxnTopicResultCollection topicCollectionForErrors(Map<TopicPartition, Errors> errors) {
-        Map<String, AddPartitionsToTxnPartitionResultCollection> resultMap = new HashMap<>();
-        
-        for (Map.Entry<TopicPartition, Errors> entry : errors.entrySet()) {
-            TopicPartition topicPartition = entry.getKey();
-            String topicName = topicPartition.topic();
-
-            AddPartitionsToTxnPartitionResult partitionResult =
-                    new AddPartitionsToTxnPartitionResult()
-                            .setPartitionErrorCode(entry.getValue().code())
-                            .setPartitionIndex(topicPartition.partition());
-
-            AddPartitionsToTxnPartitionResultCollection partitionResultCollection = resultMap.getOrDefault(
-                    topicName, new AddPartitionsToTxnPartitionResultCollection()
-            );
-
-            partitionResultCollection.add(partitionResult);
-            resultMap.put(topicName, partitionResultCollection);
-        }
-
-        AddPartitionsToTxnTopicResultCollection topicCollection = new AddPartitionsToTxnTopicResultCollection();
-        for (Map.Entry<String, AddPartitionsToTxnPartitionResultCollection> entry : resultMap.entrySet()) {
-            topicCollection.add(new AddPartitionsToTxnTopicResult()
-                    .setName(entry.getKey())
-                    .setResults(entry.getValue()));
-        }
-        return topicCollection;
-    }
-
-    public static AddPartitionsToTxnResult resultForTransaction(String transactionalId, Map<TopicPartition, Errors> errors) {
-        return new AddPartitionsToTxnResult().setTransactionalId(transactionalId).setTopicResults(topicCollectionForErrors(errors));
     }
 
     @Override
@@ -112,64 +68,74 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    // Only used for versions < 4
-    public Map<TopicPartition, Errors> errors() {
-        if (cachedErrorsMap != null) {
-            return cachedErrorsMap;
-        }
+    public Map<String, Map<TopicPartition, Errors>> errors() {
+        Map<String, Map<TopicPartition, Errors>> errorsMap = new HashMap<>();
 
-        cachedErrorsMap = new HashMap<>();
-
-        for (AddPartitionsToTxnTopicResult topicResult : this.data.resultsByTopicV3AndBelow()) {
-            for (AddPartitionsToTxnPartitionResult partitionResult : topicResult.results()) {
-                cachedErrorsMap.put(new TopicPartition(
-                        topicResult.name(), partitionResult.partitionIndex()),
-                    Errors.forCode(partitionResult.partitionErrorCode()));
-            }
-        }
-        return cachedErrorsMap;
-    }
-    
-    public Map<TopicPartition, Errors> errorsPerTransaction(String transactionalId) {
-        if (cachedAllErrorsMap == null) {
-            cachedAllErrorsMap = new HashMap<>();
-        }
-        
-        return cachedAllErrorsMap.computeIfAbsent(transactionalId, txnId -> {
-            Map<TopicPartition, Errors> topicResults = new HashMap<>();
-            for (AddPartitionsToTxnTopicResult topicResult : data().resultsByTransaction().find(txnId).topicResults()) {
-                for (AddPartitionsToTxnPartitionResult partitionResult : topicResult.results()) {
-                    topicResults.put(
-                        new TopicPartition(topicResult.name(), partitionResult.partitionIndex()), Errors.forCode(partitionResult.partitionErrorCode()));
-                }
-            } 
-            return topicResults;
-        });
-    }
-    
-    public Map<String, Map<TopicPartition, Errors>> allErrors() {
-        if (cachedAllErrorsMap != null && cachedAllErrorsMap.size() == data.resultsByTransaction().size()) {
-            return cachedAllErrorsMap;
-        }
+        errorsMap.put(V3_AND_BELOW_TXN_ID, errorsForTransaction(this.data.resultsByTopicV3AndBelow()));
 
         for (AddPartitionsToTxnResult result : this.data.resultsByTransaction()) {
-            if (cachedAllErrorsMap == null || !cachedAllErrorsMap.containsKey(result.transactionalId())) {
-                errorsPerTransaction(result.transactionalId());
+            String transactionalId = result.transactionalId();
+            errorsMap.put(transactionalId, errorsForTransaction(data().resultsByTransaction().find(transactionalId).topicResults()));
+        }
+        
+        return errorsMap;
+    }
+
+    private static AddPartitionsToTxnTopicResultCollection topicCollectionForErrors(Map<TopicPartition, Errors> errors) {
+        Map<String, AddPartitionsToTxnPartitionResultCollection> resultMap = new HashMap<>();
+
+        for (Map.Entry<TopicPartition, Errors> entry : errors.entrySet()) {
+            TopicPartition topicPartition = entry.getKey();
+            String topicName = topicPartition.topic();
+
+            AddPartitionsToTxnPartitionResult partitionResult =
+                    new AddPartitionsToTxnPartitionResult()
+                        .setPartitionErrorCode(entry.getValue().code())
+                        .setPartitionIndex(topicPartition.partition());
+
+            AddPartitionsToTxnPartitionResultCollection partitionResultCollection = resultMap.getOrDefault(
+                    topicName, new AddPartitionsToTxnPartitionResultCollection()
+            );
+
+            partitionResultCollection.add(partitionResult);
+            resultMap.put(topicName, partitionResultCollection);
+        }
+
+        AddPartitionsToTxnTopicResultCollection topicCollection = new AddPartitionsToTxnTopicResultCollection();
+        for (Map.Entry<String, AddPartitionsToTxnPartitionResultCollection> entry : resultMap.entrySet()) {
+            topicCollection.add(new AddPartitionsToTxnTopicResult()
+                .setName(entry.getKey())
+                .setResultsByPartition(entry.getValue()));
+        }
+        return topicCollection;
+    }
+
+    public static AddPartitionsToTxnResult resultForTransaction(String transactionalId, Map<TopicPartition, Errors> errors) {
+        return new AddPartitionsToTxnResult().setTransactionalId(transactionalId).setTopicResults(topicCollectionForErrors(errors));
+    }
+
+    public AddPartitionsToTxnTopicResultCollection getTransactionTopicResults(String transactionalId) {
+        return data.resultsByTransaction().find(transactionalId).topicResults();
+    }
+
+    public Map<TopicPartition, Errors> errorsForTransaction(AddPartitionsToTxnTopicResultCollection topicCollection) {
+        Map<TopicPartition, Errors> topicResults = new HashMap<>();
+        for (AddPartitionsToTxnTopicResult topicResult : topicCollection) {
+            for (AddPartitionsToTxnPartitionResult partitionResult : topicResult.resultsByPartition()) {
+                topicResults.put(
+                    new TopicPartition(topicResult.name(), partitionResult.partitionIndex()), Errors.forCode(partitionResult.partitionErrorCode()));
             }
         }
-        return cachedAllErrorsMap;
+        return topicResults;
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        if (data.resultsByTransaction().size() > 0) {
-            List<Errors> allErrors = new ArrayList<>();
-            allErrors().forEach((txnId, errors) -> 
-                allErrors.addAll(errors.values())
-            );
-            return errorCounts(allErrors);
-        }
-        return errorCounts(errors().values());
+        List<Errors> allErrors = new ArrayList<>();
+        errors().forEach((txnId, errors) -> 
+            allErrors.addAll(errors.values())
+        );
+        return errorCounts(allErrors);
     }
 
     @Override

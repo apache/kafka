@@ -45,7 +45,7 @@
     { "name": "AddPartitionsToTxnTopicResult", "versions": "0+", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "Results", "type": "[]AddPartitionsToTxnPartitionResult", "versions": "0+",
+      { "name": "ResultsByPartition", "type": "[]AddPartitionsToTxnPartitionResult", "versions": "0+",
         "about": "The results for each partition" }
     ]},
     { "name": "AddPartitionsToTxnPartitionResult", "versions": "0+", "fields": [
