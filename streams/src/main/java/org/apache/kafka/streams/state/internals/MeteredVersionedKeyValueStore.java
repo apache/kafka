@@ -66,16 +66,22 @@ public class MeteredVersionedKeyValueStore<K, V>
     }
 
     /**
-     * Private helper class which represents the functionality of a {@link VersionedKeyValueStore}
-     * as a {@link TimestampedKeyValueStore} so that the bulk of the metering logic may be
-     * inherited from {@link MeteredKeyValueStore}. As a result, the implementation of
-     * {@link MeteredVersionedKeyValueStore} is a simple wrapper to translate from this
-     * {@link TimestampedKeyValueStore} representation of a versioned key-value store into the
-     * {@link VersionedKeyValueStore} interface itself.
+     * Conceptually, {@link MeteredVersionedKeyValueStore} should {@code extend}
+     * {@link MeteredKeyValueStore}, but due to type conflicts, we cannot do this. (Specifically,
+     * the first needs to be {@link VersionedKeyValueStore} while the second is {@link KeyValueStore}
+     * and the two interfaces conflict.) Thus, we use an internal <it>instance</it> of
+     * {@code MeteredKeyValueStore} to mimic inheritance instead.
+     * <p>
+     * It's not ideal because it requires an extra step to translate between the APIs of
+     * {@link VersionedKeyValueStore} in {@link MeteredVersionedKeyValueStore} and
+     * the APIs of {@link TimestampedKeyValueStore} in {@link MeteredVersionedKeyValueStoreInternal}.
+     * This extra step is all that the methods of {@code MeteredVersionedKeyValueStoreInternal} do.
+     * <p>
+     * Note that the addition of {@link #get(Object, long)} and {@link #delete(Object, long)} in
+     * this class are to match the interface of {@link VersionedKeyValueStore}.
      */
     private class MeteredVersionedKeyValueStoreInternal
-        extends MeteredKeyValueStore<K, ValueAndTimestamp<V>>
-        implements TimestampedKeyValueStore<K, V> {
+        extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> {
 
         private final VersionedBytesStore inner;
 
@@ -90,13 +96,10 @@ public class MeteredVersionedKeyValueStore<K, V>
 
         @Override
         public void put(final K key, final ValueAndTimestamp<V> value) {
-            super.put(
-                key,
-                // versioned stores require a timestamp associated with all puts, including tombstones/deletes
-                value == null
-                    ? ValueAndTimestamp.makeAllowNullable(null, context.timestamp())
-                    : value
-            );
+            if (value == null) {
+                throw new IllegalStateException("Versioned store requires timestamp associated with all puts, including tombstones/deletes");
+            }
+            super.put(key, value);
         }
 
         public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
