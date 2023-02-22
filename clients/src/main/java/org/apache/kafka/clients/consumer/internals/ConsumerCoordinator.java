@@ -1342,15 +1342,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.trace("Sending OffsetCommit request with {} to coordinator {}", offsets, coordinator);
 
         return client.send(coordinator, builder)
-                .compose(new OffsetCommitResponseHandler(offsets, generation));
+                .compose(new OffsetCommitResponseHandler(offsets, generation, topicResolver));
     }
 
     private class OffsetCommitResponseHandler extends CoordinatorResponseHandler<OffsetCommitResponse, Void> {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
+        private final TopicResolver topicResolver;
 
-        private OffsetCommitResponseHandler(Map<TopicPartition, OffsetAndMetadata> offsets, Generation generation) {
+        private OffsetCommitResponseHandler(
+                Map<TopicPartition, OffsetAndMetadata> offsets, Generation generation, TopicResolver topicResolver) {
             super(generation);
             this.offsets = offsets;
+            this.topicResolver = topicResolver;
         }
 
         @Override
@@ -1360,7 +1363,24 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
                 for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
-                    TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                    String topicName = topic.name();
+                    if (Utils.isBlank(topicName)) {
+                        // The topic name can only be null/empty if OffsetCommit version >= 9 is used and the request
+                        // referenced that topic by its ID instead.
+                        topicName = topicResolver.getTopicName(topic.topicId()).orElse(null);
+
+                        if (topicName == null) {
+                            // The topic ID returned by the broker must have been sent by this client with the
+                            // OffsetCommit request. This ID must still be known by the topic resolver. Unlike the
+                            // cases where a topic ID is unknown because metadata on the client have not yet been
+                            // refreshed, here there is no reason to retry as the problem cannot be attributed to
+                            // metadata convergence.
+                            future.raise(new KafkaException("Invalid topic ID: " + topic.topicId()));
+                            return;
+                        }
+                    }
+
+                    TopicPartition tp = new TopicPartition(topicName, partition.partitionIndex());
                     OffsetAndMetadata offsetAndMetadata = this.offsets.get(tp);
 
                     long offset = offsetAndMetadata.offset();
@@ -1381,13 +1401,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                             unauthorizedTopics.add(tp.topic());
                         } else if (error == Errors.OFFSET_METADATA_TOO_LARGE
-                                || error == Errors.INVALID_COMMIT_OFFSET_SIZE
-                                || error == Errors.UNKNOWN_TOPIC_ID) {
+                                || error == Errors.INVALID_COMMIT_OFFSET_SIZE) {
                             // raise the error to the user
                             future.raise(error);
                             return;
                         } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS
-                                || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                                || error == Errors.UNKNOWN_TOPIC_OR_PARTITION
+                                || error == Errors.UNKNOWN_TOPIC_ID) {
                             // just retry
                             future.raise(error);
                             return;
