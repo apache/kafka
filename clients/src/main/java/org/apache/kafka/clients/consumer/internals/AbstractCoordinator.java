@@ -500,6 +500,10 @@ public abstract class AbstractCoordinator implements Closeable {
                     requestRejoin(shortReason, fullReason);
                 }
 
+                if (timer.isExpired()) {
+                    return false;
+                }
+
                 if (exception instanceof UnknownMemberIdException ||
                     exception instanceof IllegalGenerationException ||
                     exception instanceof RebalanceInProgressException ||

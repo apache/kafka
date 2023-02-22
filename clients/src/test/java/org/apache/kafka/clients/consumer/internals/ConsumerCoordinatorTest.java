@@ -1485,6 +1485,7 @@ public abstract class ConsumerCoordinatorTest {
         client.respond(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NOT_COORDINATOR));
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.poll(time.timer(0));
+        coordinator.poll(time.timer(0));
         assertTrue(coordinator.rejoinNeededOrPending());
 
         client.respond(request -> {
@@ -3398,6 +3399,7 @@ public abstract class ConsumerCoordinatorTest {
             client.respond(syncGroupResponse(partitions, Errors.NONE));
 
             // Join future should succeed but generation already cleared so result of join is false.
+            coordinator.joinGroupIfNeeded(time.timer(0));
             res = coordinator.joinGroupIfNeeded(time.timer(1));
 
             assertFalse(res);
