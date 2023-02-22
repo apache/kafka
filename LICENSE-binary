@@ -263,8 +263,8 @@ swagger-core-2.2.0
 swagger-integration-2.2.0
 swagger-jaxrs2-2.2.0
 swagger-models-2.2.0
-zookeeper-3.6.3
-zookeeper-jute-3.6.3
+zookeeper-3.6.4
+zookeeper-jute-3.6.4
 
 ===============================================================================
 This product bundles various third-party components under other open source

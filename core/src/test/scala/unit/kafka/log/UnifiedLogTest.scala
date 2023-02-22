@@ -36,7 +36,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetsListener, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -3588,6 +3588,85 @@ class UnifiedLogTest {
       assertEquals(log.logStartOffset, log.localLogStartOffset())
     }
 
+  private class MockLogOffsetsListener extends LogOffsetsListener {
+    private var highWatermark: Long = -1L
+
+    override def onHighWatermarkUpdated(offset: Long): Unit = {
+      highWatermark = offset
+    }
+
+    private def clear(): Unit = {
+      highWatermark = -1L
+    }
+
+    /**
+     * Verifies the callbacks that have been triggered since the last
+     * verification. Values different than `-1` are the ones that have
+     * been updated.
+     */
+    def verify(expectedHighWatermark: Long = -1L): Unit = {
+      assertEquals(expectedHighWatermark, highWatermark,
+        "Unexpected high watermark")
+      clear()
+    }
+  }
+
+  @Test
+  def testLogOffsetsListener(): Unit = {
+    def records(offset: Long): MemoryRecords = TestUtils.records(List(
+      new SimpleRecord(mockTime.milliseconds, "a".getBytes, "value".getBytes),
+      new SimpleRecord(mockTime.milliseconds, "b".getBytes, "value".getBytes),
+      new SimpleRecord(mockTime.milliseconds, "c".getBytes, "value".getBytes)
+    ), baseOffset = offset, partitionLeaderEpoch = 0)
+
+    val listener = new MockLogOffsetsListener()
+    listener.verify()
+
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig, logOffsetsListener = listener)
+
+    listener.verify(expectedHighWatermark = 0)
+
+    log.appendAsLeader(records(0), 0)
+    log.appendAsLeader(records(0), 0)
+
+    log.maybeIncrementHighWatermark(new LogOffsetMetadata(4))
+    listener.verify(expectedHighWatermark = 4)
+
+    log.truncateTo(3)
+    listener.verify(expectedHighWatermark = 3)
+
+    log.appendAsLeader(records(0), 0)
+    log.truncateFullyAndStartAt(4)
+    listener.verify(expectedHighWatermark = 4)
+  }
+
+  @Test
+  def testUpdateLogOffsetsListener(): Unit = {
+    def records(offset: Long): MemoryRecords = TestUtils.records(List(
+      new SimpleRecord(mockTime.milliseconds, "a".getBytes, "value".getBytes),
+      new SimpleRecord(mockTime.milliseconds, "b".getBytes, "value".getBytes),
+      new SimpleRecord(mockTime.milliseconds, "c".getBytes, "value".getBytes)
+    ), baseOffset = offset, partitionLeaderEpoch = 0)
+
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+
+    log.appendAsLeader(records(0), 0)
+    log.maybeIncrementHighWatermark(new LogOffsetMetadata(2))
+    log.maybeIncrementLogStartOffset(1, SegmentDeletion)
+
+    val listener = new MockLogOffsetsListener()
+    listener.verify()
+
+    log.setLogOffsetsListener(listener)
+    listener.verify() // it is still empty because we don't call the listener when it is set.
+
+    log.appendAsLeader(records(0), 0)
+    log.maybeIncrementHighWatermark(new LogOffsetMetadata(4))
+    listener.verify(expectedHighWatermark = 4)
+  }
+
   private def appendTransactionalToBuffer(buffer: ByteBuffer,
                                           producerId: Long,
                                           producerEpoch: Short,
@@ -3644,11 +3723,12 @@ class UnifiedLogTest {
                         topicId: Option[Uuid] = None,
                         keepPartitionMetadataFile: Boolean = true,
                         remoteStorageSystemEnable: Boolean = false,
-                        remoteLogManager: Option[RemoteLogManager] = None): UnifiedLog = {
+                        remoteLogManager: Option[RemoteLogManager] = None,
+                        logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
     LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
       maxTransactionTimeoutMs, producerStateManagerConfig, producerIdExpirationCheckIntervalMs,
       lastShutdownClean, topicId, keepPartitionMetadataFile, new ConcurrentHashMap[String, Int],
-      remoteStorageSystemEnable, remoteLogManager)
+      remoteStorageSystemEnable, remoteLogManager, logOffsetsListener)
   }
 
   private def createLogWithOffsetOverflow(logConfig: LogConfig): (UnifiedLog, LogSegment) = {

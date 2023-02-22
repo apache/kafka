@@ -1096,6 +1096,11 @@ public class StreamThread extends Thread {
         return isAlive();
     }
 
+    // Call method when a topology is resumed
+    public void signalResume() {
+        taskManager.signalResume();
+    }
+
     /**
      * Try to commit all active tasks owned by this thread.
      *
@@ -1113,7 +1118,7 @@ public class StreamThread extends Thread {
             }
 
             committed = taskManager.commit(
-                taskManager.allTasks()
+                taskManager.allOwnedTasks()
                     .values()
                     .stream()
                     .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
