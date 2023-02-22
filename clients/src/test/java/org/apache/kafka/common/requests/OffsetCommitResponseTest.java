@@ -133,6 +133,7 @@ public class OffsetCommitResponseTest {
 
         assertEquals(version >= 4, response.shouldClientThrottle(version));
     }
+
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testOffsetCommitResponseBuilder(short version) {
@@ -162,6 +163,7 @@ public class OffsetCommitResponseTest {
         if (version >= 9) {
             // Undefined topic names are only supported from version 9 when a topic ID is provided.
             builder.addPartitions(null, topic7Id, asList(p13, p14), identity(), UNKNOWN_TOPIC_ID)
+            // Add another topic to confirm topic 7 is not overwritten.
                 .addPartitions(null, topic8Id, asList(p15, p16), identity(), UNKNOWN_TOPIC_OR_PARTITION);
         }
 
