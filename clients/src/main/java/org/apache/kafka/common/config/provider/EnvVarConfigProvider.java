@@ -25,9 +25,14 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.config.provider.EnvVarConfigProviderConfig.ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG;
 
 public class EnvVarConfigProvider implements ConfigProvider {
     private final Map<String, String> envVarMap;
+    private Pattern envVarPattern;
 
     public EnvVarConfigProvider() {
         envVarMap = getEnvVars();
@@ -41,6 +46,14 @@ public class EnvVarConfigProvider implements ConfigProvider {
 
     @Override
     public void configure(Map<String, ?> configs) {
+        if (configs.keySet().contains(ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG)) {
+            envVarPattern = Pattern.compile(
+                    String.valueOf(configs.get(ENV_VAR_CONFIG_PROVIDER_PATTERN_CONFIG))
+            );
+        } else {
+            envVarPattern = Pattern.compile(".*");
+            log.info("No pattern for environment variables provided. Using default pattern '(.*)'.");
+        }
     }
 
     @Override
@@ -73,11 +86,18 @@ public class EnvVarConfigProvider implements ConfigProvider {
             return new ConfigData(new HashMap<>());
         }
 
+        Map<String, String> filteredEnvVarMap = envVarMap;
+
+        filteredEnvVarMap = envVarMap.entrySet().stream()
+                .filter(envVar -> envVarPattern.asPredicate().test(envVar.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)
+                );
+
         if (keys == null) {
-            return new ConfigData(envVarMap);
+            return new ConfigData(filteredEnvVarMap);
         }
 
-        HashMap<String, String> filteredData = new HashMap<>(envVarMap);
+        HashMap<String, String> filteredData = new HashMap<>(filteredEnvVarMap);
         filteredData.keySet().retainAll(keys);
 
         return new ConfigData(filteredData);
