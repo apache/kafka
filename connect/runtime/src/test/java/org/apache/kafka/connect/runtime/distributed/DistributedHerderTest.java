@@ -3587,7 +3587,7 @@ public class DistributedHerderTest {
 
     @Test
     public void testVerifyTaskGeneration() {
-        Map<String, Long> taskConfigGenerations = new HashMap<>();
+        Map<String, Integer> taskConfigGenerations = new HashMap<>();
         herder.configState = new ClusterConfigState(
                 1,
                 null,
