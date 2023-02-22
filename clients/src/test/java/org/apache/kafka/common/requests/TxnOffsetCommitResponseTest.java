@@ -48,11 +48,11 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
             .setTopics(Arrays.asList(
                 new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setPartitions(
                     Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
-                        .setPartitionIndex(partitionOne)
+                        .setPartitionIndex(p1)
                         .setErrorCode(errorOne.code()))),
                     new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setPartitions(
                         Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
-                            .setPartitionIndex(partitionTwo)
+                            .setPartitionIndex(p2)
                             .setErrorCode(errorTwo.code())))
                 ));
 

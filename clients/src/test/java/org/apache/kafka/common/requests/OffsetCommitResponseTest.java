@@ -39,6 +39,8 @@ import java.util.Map;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static java.util.function.Function.identity;
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -47,40 +49,40 @@ public class OffsetCommitResponseTest {
 
     protected final int throttleTimeMs = 10;
 
-    protected final String topicOne = "topic1";
-    protected final Uuid topicOneId = Uuid.randomUuid();
-    protected final int partitionOne = 1;
-    protected final int partitionTwo = 2;
+    protected final String topic1 = "topic1";
+    protected final Uuid topic1Id = Uuid.randomUuid();
+    protected final int p1 = 1;
+    protected final int p2 = 2;
     protected final Errors errorOne = Errors.COORDINATOR_NOT_AVAILABLE;
     protected final Errors errorTwo = Errors.NOT_COORDINATOR;
-    protected final String topicTwo = "topic2";
-    protected final int partitionThree = 3;
-    protected final int partitionFour = 4;
-    protected final String topicThree = "topic3";
-    protected final Uuid topicThreeId = Uuid.randomUuid();
-    protected final int partitionFive = 5;
-    protected final int partitionSix = 6;
-    protected final String topicFour = "topic4";
-    protected final Uuid topicFourId = Uuid.randomUuid();
-    protected final int partitionSeven = 7;
-    protected final int partitionEight = 8;
-    protected final String topicFive = "topic5";
-    protected final Uuid topicFiveId = Uuid.randomUuid();
-    protected final int partitionNine = 9;
-    protected final int partitionTen = 10;
-    protected final String topicSix = "topic6";
-    protected final Uuid topicSixId = Uuid.randomUuid();
-    protected final int partitionEleven = 11;
-    protected final int partitionTwelve = 12;
-    protected final Uuid topicSevenId = Uuid.randomUuid();
-    protected final int partitionThirteen = 13;
-    protected final int partitionFourteen = 14;
-    protected final Uuid topicEightId = Uuid.randomUuid();
-    protected final int partitionFifteen = 15;
-    protected final int partitionSixteen = 16;
+    protected final String topic2 = "topic2";
+    protected final int p3 = 3;
+    protected final int p4 = 4;
+    protected final String topic3 = "topic3";
+    protected final Uuid topic3Id = Uuid.randomUuid();
+    protected final int p5 = 5;
+    protected final int p6 = 6;
+    protected final String topic4 = "topic4";
+    protected final Uuid topic4Id = Uuid.randomUuid();
+    protected final int p7 = 7;
+    protected final int p8 = 8;
+    protected final String topic5 = "topic5";
+    protected final Uuid topic5Id = Uuid.randomUuid();
+    protected final int p9 = 9;
+    protected final int p10 = 10;
+    protected final String topic6 = "topic6";
+    protected final Uuid topic6Id = Uuid.randomUuid();
+    protected final int p11 = 11;
+    protected final int p12 = 12;
+    protected final Uuid topic7Id = Uuid.randomUuid();
+    protected final int p13 = 13;
+    protected final int p14 = 14;
+    protected final Uuid topic8Id = Uuid.randomUuid();
+    protected final int p15 = 15;
+    protected final int p16 = 16;
 
-    protected TopicPartition tp1 = new TopicPartition(topicOne, partitionOne);
-    protected TopicPartition tp2 = new TopicPartition(topicTwo, partitionTwo);
+    protected TopicPartition tp1 = new TopicPartition(topic1, p1);
+    protected TopicPartition tp2 = new TopicPartition(topic2, p2);
     protected Map<Errors, Integer> expectedErrorCounts;
     protected Map<TopicPartition, Errors> errorsMap;
 
@@ -110,11 +112,11 @@ public class OffsetCommitResponseTest {
             .setTopics(asList(
                 new OffsetCommitResponseTopic().setPartitions(
                     singletonList(new OffsetCommitResponsePartition()
-                        .setPartitionIndex(partitionOne)
+                        .setPartitionIndex(p1)
                         .setErrorCode(errorOne.code()))),
                 new OffsetCommitResponseTopic().setPartitions(
                     singletonList(new OffsetCommitResponsePartition()
-                        .setPartitionIndex(partitionTwo)
+                        .setPartitionIndex(p2)
                         .setErrorCode(errorTwo.code())))
             ))
             .setThrottleTimeMs(throttleTimeMs);
@@ -136,127 +138,47 @@ public class OffsetCommitResponseTest {
     public void testOffsetCommitResponseBuilder(short version) {
         OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder()
             // Both topic name and id are defined.
-            .addPartition(topicOne, topicOneId, partitionOne, Errors.NONE)
-            .addPartition(topicOne, topicOneId, partitionTwo, Errors.NONE)
+            .addPartition(topic1, topic1Id, p1, Errors.NONE)
+            .addPartition(topic1, topic1Id, p2, Errors.NONE)
 
             // Only topic name is defined.
-            .addPartition(topicTwo, Uuid.ZERO_UUID, partitionThree, Errors.NONE)
-            .addPartition(topicTwo, Uuid.ZERO_UUID, partitionFour, Errors.NONE)
+            .addPartition(topic2, Uuid.ZERO_UUID, p3, Errors.NONE)
+            .addPartition(topic2, Uuid.ZERO_UUID, p4, Errors.NONE)
 
             // Topic name is defined, topic id is defined on the second method call.
-            .addPartition(topicThree, Uuid.ZERO_UUID, partitionFive, Errors.NONE)
-            .addPartition(topicThree, topicThreeId, partitionSix, Errors.NONE)
+            .addPartition(topic3, Uuid.ZERO_UUID, p5, Errors.NONE)
+            .addPartition(topic3, topic3Id, p6, Errors.NONE)
 
             // Topic name is defined, topic id is defined on the second method call.
-            .addPartition(topicFour, topicFourId, partitionSeven, Errors.NONE)
-            .addPartition(topicFour, Uuid.ZERO_UUID, partitionEight, Errors.NONE)
+            .addPartition(topic4, topic4Id, p7, Errors.NONE)
+            .addPartition(topic4, Uuid.ZERO_UUID, p8, Errors.NONE)
 
             // Topic name and id are both defined.
-            .addPartitions(topicFive, topicFiveId, asList(partitionNine, partitionTen), identity(), Errors.NONE)
+            .addPartitions(topic5, topic5Id, asList(p9, p10), identity(), Errors.NONE)
 
             // Only topic name is defined.
-            .addPartitions(topicSix, topicSixId, asList(partitionEleven, partitionTwelve), identity(), Errors.NONE);
+            .addPartitions(topic6, topic6Id, asList(p11, p12), identity(), Errors.NONE);
 
         if (version >= 9) {
             // Undefined topic names are only supported from version 9 when a topic ID is provided.
-            builder.addPartitions(
-                null,
-                topicSevenId,
-                asList(partitionThirteen, partitionFourteen),
-                identity(),
-                Errors.UNKNOWN_TOPIC_ID);
-
-            // Another undefined topic name. Adding it here to validate it is not overwriting topicSeven.
-            builder.addPartitions(
-                null,
-                topicEightId,
-                asList(partitionFifteen, partitionSixteen),
-                identity(),
-                Errors.UNKNOWN_TOPIC_OR_PARTITION);
+            builder.addPartitions(null, topic7Id, asList(p13, p14), identity(), UNKNOWN_TOPIC_ID)
+                .addPartitions(null, topic8Id, asList(p15, p16), identity(), UNKNOWN_TOPIC_OR_PARTITION);
         }
 
-        OffsetCommitResponseTopic responseTopicOne = new OffsetCommitResponseTopic()
-            .setTopicId(version >= 9 ? topicOneId : Uuid.ZERO_UUID)
-            .setName(version >= 9 ? null : topicOne)
-            .setPartitions(asList(
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionOne),
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionTwo))
-            );
-
-        OffsetCommitResponseTopic responseTopicTwo = new OffsetCommitResponseTopic()
-            .setTopicId(Uuid.ZERO_UUID)
-            .setName(topicTwo)
-            .setPartitions(asList(
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionThree),
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionFour))
-            );
-
-        OffsetCommitResponseTopic responseTopicThree = new OffsetCommitResponseTopic()
-            .setTopicId(version >= 9 ? topicThreeId : Uuid.ZERO_UUID)
-            .setName(version >= 9 ? null : topicThree)
-            .setPartitions(asList(
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionFive),
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionSix))
-            );
-
-        OffsetCommitResponseTopic responseTopicFour = new OffsetCommitResponseTopic()
-            .setTopicId(version >= 9 ? topicFourId : Uuid.ZERO_UUID)
-            .setName(version >= 9 ? null : topicFour)
-            .setPartitions(asList(
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionSeven),
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionEight))
-            );
-
-        OffsetCommitResponseTopic responseTopicFive = new OffsetCommitResponseTopic()
-            .setTopicId(version >= 9 ? topicFiveId : Uuid.ZERO_UUID)
-            .setName(version >= 9 ? null : topicFive)
-            .setPartitions(asList(
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionNine),
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionTen))
-            );
-
-        OffsetCommitResponseTopic responseTopicSix = new OffsetCommitResponseTopic()
-            .setTopicId(version >= 9 ? topicSixId : Uuid.ZERO_UUID)
-            .setName(version >= 9 ? null : topicSix)
-            .setPartitions(asList(
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionEleven),
-                new OffsetCommitResponsePartition().setPartitionIndex(partitionTwelve))
-            );
-
-        OffsetCommitResponseTopic responseTopicSeven = new OffsetCommitResponseTopic()
-            .setTopicId(topicSevenId)
-            .setName(null)
-            .setPartitions(asList(
-                new OffsetCommitResponsePartition()
-                    .setPartitionIndex(partitionThirteen)
-                    .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()),
-                new OffsetCommitResponsePartition()
-                    .setPartitionIndex(partitionFourteen)
-                    .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))
-            );
-
-        OffsetCommitResponseTopic responseTopicEight = new OffsetCommitResponseTopic()
-            .setTopicId(topicEightId)
-            .setName(null)
-            .setPartitions(asList(
-                new OffsetCommitResponsePartition()
-                    .setPartitionIndex(partitionFifteen)
-                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()),
-                new OffsetCommitResponsePartition()
-                    .setPartitionIndex(partitionSixteen)
-                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()))
-            );
-
         List<OffsetCommitResponseTopic> expectedTopics = new ArrayList<>(asList(
-            responseTopicOne,
-            responseTopicTwo,
-            responseTopicThree,
-            responseTopicFour,
-            responseTopicFive,
-            responseTopicSix));
+            createResponseTopic(version, topic1, topic1Id, p1, p2, Errors.NONE),
+            createResponseTopic(version, topic2, Uuid.ZERO_UUID, p3, p4, Errors.NONE),
+            createResponseTopic(version, topic3, topic3Id, p5, p6, Errors.NONE),
+            createResponseTopic(version, topic4, topic4Id, p7, p8, Errors.NONE),
+            createResponseTopic(version, topic5, topic5Id, p9, p10, Errors.NONE),
+            createResponseTopic(version, topic6, topic6Id, p11, p12, Errors.NONE)
+        ));
 
         if (version >= 9) {
-            expectedTopics.addAll(asList(responseTopicSeven, responseTopicEight));
+            expectedTopics.addAll(asList(
+                createResponseTopic(version, null, topic7Id, p13, p14, UNKNOWN_TOPIC_ID),
+                createResponseTopic(version, null, topic8Id, p15, p16, UNKNOWN_TOPIC_OR_PARTITION)
+            ));
         }
 
         assertEquals(new OffsetCommitResponseData().setTopics(expectedTopics), builder.build(version).data());
@@ -265,39 +187,50 @@ public class OffsetCommitResponseTest {
     @Test
     public void testExceptionIsThrownIfInconsistentIdIsProvided() {
         OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder()
-            .addPartition(topicOne, topicOneId, partitionOne, Errors.NONE);
+            .addPartition(topic1, topic1Id, p1, Errors.NONE);
 
         assertThrows(IllegalArgumentException.class,
-                () -> builder.addPartition(topicOne, topicThreeId, partitionTwo, Errors.NONE));
+            () -> builder.addPartition(topic1, topic3Id, p2, Errors.NONE));
     }
 
     @Test
     public void testExceptionIsThrownIfAddPartitionIsCalledWithATopicName() {
         assertThrows(IllegalArgumentException.class,
-                () -> new OffsetCommitResponse.Builder().addPartition(null, topicOneId, partitionOne, Errors.NONE));
+            () -> new OffsetCommitResponse.Builder().addPartition(null, topic1Id, p1, Errors.NONE));
     }
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testExceptionIsThrownIfTopicNameIsNullPriorVersion9(short version) {
         OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder()
-            .addPartitions(null, topicOneId, asList(partitionOne, partitionTwo), identity(), Errors.NONE);
+            .addPartitions(null, topic1Id, asList(p1, p2), identity(), Errors.NONE);
 
         if (version < 9) {
             assertThrows(InvalidRequestException.class, () -> builder.build(version));
 
         } else {
             OffsetCommitResponseTopic responseTopic = new OffsetCommitResponseTopic()
-                .setTopicId(topicOneId)
+                .setTopicId(topic1Id)
                 .setName(null)
                 .setPartitions(asList(
-                        new OffsetCommitResponsePartition().setPartitionIndex(partitionOne),
-                        new OffsetCommitResponsePartition().setPartitionIndex(partitionTwo))
+                    new OffsetCommitResponsePartition().setPartitionIndex(p1),
+                    new OffsetCommitResponsePartition().setPartitionIndex(p2))
                 );
 
             assertEquals(
                 new OffsetCommitResponseData().setTopics(singletonList(responseTopic)),
                 builder.build(version).data());
         }
+    }
+
+    private static OffsetCommitResponseTopic createResponseTopic(
+            short version, String topicName, Uuid topicId, int firstPartition, int secondPartition, Errors error) {
+        return new OffsetCommitResponseTopic()
+            .setTopicId(version >= 9 ? topicId : Uuid.ZERO_UUID)
+            .setName(version >= 9 && !topicId.equals(Uuid.ZERO_UUID) ? null : topicName)
+            .setPartitions(asList(
+                new OffsetCommitResponsePartition().setPartitionIndex(firstPartition).setErrorCode(error.code()),
+                new OffsetCommitResponsePartition().setPartitionIndex(secondPartition).setErrorCode(error.code()))
+            );
     }
 }
