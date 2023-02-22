@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
-import kafka.log.LogAppendInfo
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.Implicits.MapExtensionMethods
@@ -33,13 +32,13 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.storage.internals.log.LogOffsetMetadata
+import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.{BeforeEach, Test}
 
 import java.nio.ByteBuffer
-import java.util.Optional
+import java.util.{Optional, OptionalInt}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Set, mutable}
@@ -1472,7 +1471,7 @@ class AbstractFetcherThreadTest {
       var maxTimestamp = RecordBatch.NO_TIMESTAMP
       var offsetOfMaxTimestamp = -1L
       var lastOffset = state.logEndOffset
-      var lastEpoch: Option[Int] = None
+      var lastEpoch: OptionalInt = OptionalInt.empty()
 
       for (batch <- batches) {
         batch.ensureValid()
@@ -1483,26 +1482,26 @@ class AbstractFetcherThreadTest {
         state.log.append(batch)
         state.logEndOffset = batch.nextOffset
         lastOffset = batch.lastOffset
-        lastEpoch = Some(batch.partitionLeaderEpoch)
+        lastEpoch = OptionalInt.of(batch.partitionLeaderEpoch)
       }
 
       state.logStartOffset = partitionData.logStartOffset
       state.highWatermark = partitionData.highWatermark
 
-      Some(LogAppendInfo(firstOffset = Some(new LogOffsetMetadata(fetchOffset)),
-        lastOffset = lastOffset,
-        lastLeaderEpoch = lastEpoch,
-        maxTimestamp = maxTimestamp,
-        offsetOfMaxTimestamp = offsetOfMaxTimestamp,
-        logAppendTime = Time.SYSTEM.milliseconds(),
-        logStartOffset = state.logStartOffset,
-        recordConversionStats = RecordConversionStats.EMPTY,
-        sourceCompression = CompressionType.NONE,
-        targetCompression = CompressionType.NONE,
-        shallowCount = batches.size,
-        validBytes = FetchResponse.recordsSize(partitionData),
-        offsetsMonotonic = true,
-        lastOffsetOfFirstBatch = batches.headOption.map(_.lastOffset).getOrElse(-1)))
+      Some(new LogAppendInfo(Optional.of(new LogOffsetMetadata(fetchOffset)),
+        lastOffset,
+        lastEpoch,
+        maxTimestamp,
+        offsetOfMaxTimestamp,
+        Time.SYSTEM.milliseconds(),
+        state.logStartOffset,
+        RecordConversionStats.EMPTY,
+        CompressionType.NONE,
+        CompressionType.NONE,
+        batches.size,
+        FetchResponse.recordsSize(partitionData),
+        true,
+        batches.headOption.map(_.lastOffset).getOrElse(-1)))
     }
 
     override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {

@@ -95,13 +95,11 @@ final class KafkaMetadataLog private (
     handleAndConvertLogAppendInfo(log.appendAsFollower(records.asInstanceOf[MemoryRecords]))
   }
 
-  private def handleAndConvertLogAppendInfo(appendInfo: kafka.log.LogAppendInfo): LogAppendInfo = {
-    appendInfo.firstOffset match {
-      case Some(firstOffset) =>
-        new LogAppendInfo(firstOffset.messageOffset, appendInfo.lastOffset)
-      case None =>
-        throw new KafkaException(s"Append failed unexpectedly: ${appendInfo.errorMessage}")
-    }
+  private def handleAndConvertLogAppendInfo(appendInfo: internals.log.LogAppendInfo): LogAppendInfo = {
+    if (appendInfo.firstOffset.isPresent())
+      new LogAppendInfo(appendInfo.firstOffset.get().messageOffset, appendInfo.lastOffset)
+    else
+      throw new KafkaException(s"Append failed unexpectedly: ${appendInfo.errorMessage}")
   }
 
   override def lastFetchedEpoch: Int = {

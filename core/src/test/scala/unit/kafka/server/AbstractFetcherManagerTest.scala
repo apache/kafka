@@ -18,7 +18,6 @@ package kafka.server
 
 import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
-import kafka.log.LogAppendInfo
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
@@ -27,6 +26,7 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.Mockito.{mock, verify, when}

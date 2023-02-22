@@ -33,7 +33,7 @@ import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, FetchIsolation, LazyIndex, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, FetchIsolation, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex}
 
 import scala.jdk.CollectionConverters._
 
