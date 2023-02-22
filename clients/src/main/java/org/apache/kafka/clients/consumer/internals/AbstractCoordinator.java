@@ -511,10 +511,8 @@ public abstract class AbstractCoordinator implements Closeable {
                         exception instanceof RebalanceInProgressException ||
                         exception instanceof MemberIdRequiredException)
                     continue;
-
-                if (!future.isRetriable()) {
+                else if (!future.isRetriable())
                     throw exception;
-                }
 
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
