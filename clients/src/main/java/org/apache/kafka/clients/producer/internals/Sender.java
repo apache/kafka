@@ -847,6 +847,13 @@ public class Sender implements Runnable {
     }
 
     /**
+     * Send record error as error metric to sensor
+     */
+    public void sendError(String topic, int count) {
+        this.sensors.recordErrors(topic, count);
+    }
+
+    /**
      * Wake up the selector associated with this send thread
      */
     public void wakeup() {
