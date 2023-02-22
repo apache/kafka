@@ -18,12 +18,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -133,16 +135,42 @@ public class OffsetCommitResponse extends AbstractResponse {
                 topic = new OffsetCommitResponseTopic().setName(topicName).setTopicId(topicId);
                 data.topics().add(topic);
                 byTopicName.put(topicName, topic);
+
+            } else {
+                boolean idDefinedInArg = topicId != null && !Uuid.ZERO_UUID.equals(topicId);
+                boolean idDefinedInCache = topic.topicId() != null && !Uuid.ZERO_UUID.equals(topic.topicId());
+
+                if (idDefinedInArg && idDefinedInCache) {
+                    if (!topicId.equals(topic.topicId())) {
+                        throw new IllegalArgumentException("Topic " + topicName + " with ID " + topicId + " has " +
+                                "already been registered with a different topic ID: " + topic.topicId());
+                    }
+                } else if (idDefinedInArg) {
+                    topic.setTopicId(topicId);
+                }
             }
             return topic;
         }
 
+        /**
+         * Adds the given partition to the {@link OffsetCommitResponseTopic} corresponding to the given topic
+         * name and ID. A valid topic name must be provided when calling this method. If the topic ID argument
+         * is defined, and the {@link OffsetCommitResponseTopic} for the given name already present in the
+         * builder, and has a valid topic ID, a consistency check is performed to ensure both topic IDs are
+         * equal. If a valid topic ID is provided with the arguments but not defined in the pre-existing
+         * {@link OffsetCommitResponseTopic}, the ID is added to it to be used with responses version >= 9.
+         */
         public Builder addPartition(
             String topicName,
             Uuid topicId,
             int partitionIndex,
             Errors error
         ) {
+            if (Utils.isBlank(topicName)) {
+                throw new IllegalArgumentException("Topic name must be provided when calling addPartition(). " +
+                        "Use the method addPartitions() for undefined topics.");
+            }
+
             final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName, topicId);
 
             topicResponse.partitions().add(new OffsetCommitResponsePartition()
@@ -152,6 +180,20 @@ public class OffsetCommitResponse extends AbstractResponse {
             return this;
         }
 
+        /**
+         * Creates a new {@link OffsetCommitResponseTopic} object, populates it with the partitions resolved via
+         * the {@code partitionIndex} function applied to the {@code partitions} list of user-defined objects.
+         * <p></p>
+         * This method does not validate that the provided topic name and ID are defined. It does not validate
+         * that an {@link OffsetCommitResponseTopic} is already defined in the builder for either the topic name,
+         * the topic ID, or both. Similarly, the topic name and ID provided will not be used in future calls
+         * to the method {@link Builder#addPartition(String, Uuid, int, Errors)} to look-up and avoid duplication
+         * of {@link OffsetCommitResponseTopic} entries in the builder.
+         *
+         * @return This builder.
+         * @param <P> The type of the user-defined objects in the list of partitions. The index of the partition
+         *           corresponding to each object is resolved via the function provided as argument.
+         */
         public <P> Builder addPartitions(
             String topicName,
             Uuid topicId,
@@ -159,7 +201,11 @@ public class OffsetCommitResponse extends AbstractResponse {
             Function<P, Integer> partitionIndex,
             Errors error
         ) {
-            final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName, topicId);
+            OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic()
+                 .setName(topicName)
+                 .setTopicId(topicId);
+
+            data.topics().add(topicResponse);
 
             partitions.forEach(partition -> {
                 topicResponse.partitions().add(new OffsetCommitResponsePartition()
@@ -210,7 +256,9 @@ public class OffsetCommitResponse extends AbstractResponse {
                     if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
                         topic.setTopicId(Uuid.ZERO_UUID);
                     }
-                    // Topic name must not be null. Validity will be checked at serialization time.
+                    if (Utils.isBlank(topic.name())) {
+                        throw new InvalidRequestException("Topic name must be provided for response version < 9.");
+                    }
                 });
             }
             return new OffsetCommitResponse(data);

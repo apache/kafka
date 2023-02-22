@@ -81,7 +81,6 @@ public class OffsetCommitRequest extends AbstractRequest {
                     if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
                         topic.setTopicId(Uuid.ZERO_UUID);
                     }
-                    // Topic name must not be null. Validity will be checked at serialization time.
                 });
             }
             return new OffsetCommitRequest(data, version);

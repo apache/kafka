@@ -19,7 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -38,9 +40,9 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
         assertEquals(throttleTimeMs, response.throttleTimeMs());
     }
 
-    @Test
-    @Override
-    public void testParse() {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+    public void testParse(short version) {
         TxnOffsetCommitResponseData data = new TxnOffsetCommitResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setTopics(Arrays.asList(
@@ -54,13 +56,11 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
                             .setErrorCode(errorTwo.code())))
                 ));
 
-        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
-            TxnOffsetCommitResponse response = TxnOffsetCommitResponse.parse(
-                MessageUtil.toByteBuffer(data, version), version);
-            assertEquals(expectedErrorCounts, response.errorCounts());
-            assertEquals(throttleTimeMs, response.throttleTimeMs());
-            assertEquals(version >= 1, response.shouldClientThrottle(version));
-        }
+        TxnOffsetCommitResponse response = TxnOffsetCommitResponse.parse(
+            MessageUtil.toByteBuffer(data, version), version);
+        assertEquals(expectedErrorCounts, response.errorCounts());
+        assertEquals(throttleTimeMs, response.throttleTimeMs());
+        assertEquals(version >= 1, response.shouldClientThrottle(version));
     }
 
 }
