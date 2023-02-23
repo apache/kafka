@@ -4351,7 +4351,7 @@ public abstract class ConsumerCoordinatorTest {
         assertEquals(expectedTopicPartitionCount, actualTopicPartitionCount,
             "The number of topic-partitions defined in the request does not match");
 
-        // Also checks that topic id is not defined when a topic name is provided as per KIP 848.
+        // The predicate also checks that topic id is not defined when a topic name is provided as per KIP 848.
         Predicate<OffsetCommitRequestTopic> isDefinedByName = topic -> {
             boolean nameDefined = !Utils.isBlank(topic.name());
             if (nameDefined)
@@ -4359,7 +4359,7 @@ public abstract class ConsumerCoordinatorTest {
             return nameDefined;
         };
 
-        // Also checks that topic name is not defined when a topic id is provided as per KIP 848.
+        // The predicate also checks that topic name is not defined when a topic id is provided as per KIP 848.
         Predicate<OffsetCommitRequestTopic> isDefinedById = topic -> {
             boolean idDefined = topic.topicId() != null && !Uuid.ZERO_UUID.equals(topic.topicId());
             if (idDefined)
