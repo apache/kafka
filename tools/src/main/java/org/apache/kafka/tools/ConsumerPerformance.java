@@ -53,18 +53,17 @@ public class ConsumerPerformance {
         try {
             ConsumerPerfOptions options = new ConsumerPerfOptions(args);
             AtomicLong totalMessagesRead = new AtomicLong(0), totalBytesRead = new AtomicLong(0),
-                joinGroupTimeMs = new AtomicLong(0);
+                joinTimeMs = new AtomicLong(0), joinTimeMsInSingleRound = new AtomicLong(0);
 
             if (!options.hideHeader())
                 printHeader(options.showDetailedStats());
 
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(options.props());
-            long bytesRead = 0L, messagesRead = 0L, lastBytesRead = 0L, lastMessagesRead = 0L,
-                joinTimeMsInSingleRound = 0L;
+            long bytesRead = 0L, messagesRead = 0L, lastBytesRead = 0L, lastMessagesRead = 0L;
             long currentTimeMs = System.currentTimeMillis();
             long joinStartMs = currentTimeMs;
             long startMs = currentTimeMs;
-            consume(consumer, options, totalMessagesRead, totalBytesRead, joinGroupTimeMs,
+            consume(consumer, options, totalMessagesRead, totalBytesRead, joinTimeMs,
                 bytesRead, messagesRead, lastBytesRead, lastMessagesRead,
                 joinStartMs, joinTimeMsInSingleRound);
             long endMs = System.currentTimeMillis();
@@ -76,7 +75,7 @@ public class ConsumerPerformance {
 
             // print final stats
             double elapsedSec = (endMs - startMs) / 1_000.0;
-            long fetchTimeInMs = (endMs - startMs) - joinGroupTimeMs.get();
+            long fetchTimeInMs = (endMs - startMs) - joinTimeMs.get();
             if (!options.showDetailedStats()) {
                 double totalMbRead = (totalBytesRead.get() * 1.0) / (1024 * 1024);
                 System.out.printf("%s, %s, %.4f, %.4f, %d, %.4f, %d, %d, %.4f, %.4f%n",
@@ -86,7 +85,7 @@ public class ConsumerPerformance {
                     totalMbRead / elapsedSec,
                     totalMessagesRead.get(),
                     totalMessagesRead.get() / elapsedSec,
-                    joinGroupTimeMs.get(),
+                    joinTimeMs.get(),
                     fetchTimeInMs,
                     totalMbRead / (fetchTimeInMs / 1000.0),
                     totalMessagesRead.get() / (fetchTimeInMs / 1000.0)
@@ -110,25 +109,24 @@ public class ConsumerPerformance {
             System.out.printf("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec%s%n", newFieldsInHeader);
     }
 
-    @SuppressWarnings("unchecked")
     private static void consume(KafkaConsumer<byte[], byte[]> consumer,
                                 ConsumerPerfOptions options,
                                 AtomicLong totalMessagesRead,
                                 AtomicLong totalBytesRead,
-                                AtomicLong joinGroupTimeMs,
+                                AtomicLong joinTimeMs,
                                 long bytesRead,
                                 long messagesRead,
                                 long lastBytesRead,
                                 long lastMessagesRead,
                                 long joinStartMs,
-                                long joinTimeMsInSingleRound) {
+                                AtomicLong joinTimeMsInSingleRound) {
         long numMessages = options.numMessages();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         long reportingIntervalMs = options.reportingIntervalMs();
         boolean showDetailedStats = options.showDetailedStats();
         SimpleDateFormat dateFormat = options.dateFormat();
         consumer.subscribe(options.topic(),
-            new ConsumerPerfRebListener(joinGroupTimeMs, joinStartMs, joinTimeMsInSingleRound));
+            new ConsumerPerfRebListener(joinTimeMs, joinStartMs, joinTimeMsInSingleRound));
 
         // now start the benchmark
         long currentTimeMs = System.currentTimeMillis();
@@ -149,8 +147,8 @@ public class ConsumerPerformance {
                 if (currentTimeMs - lastReportTimeMs >= reportingIntervalMs) {
                     if (showDetailedStats)
                         printConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
-                            lastReportTimeMs, currentTimeMs, dateFormat, joinTimeMsInSingleRound);
-                    joinTimeMsInSingleRound = 0L;
+                            lastReportTimeMs, currentTimeMs, dateFormat, joinTimeMsInSingleRound.get());
+                    joinTimeMsInSingleRound = new AtomicLong(0);
                     lastReportTimeMs = currentTimeMs;
                     lastMessagesRead = messagesRead;
                     lastBytesRead = bytesRead;
@@ -173,9 +171,9 @@ public class ConsumerPerformance {
                                                 long startMs,
                                                 long endMs,
                                                 SimpleDateFormat dateFormat,
-                                                long periodicJoinTimeInMs) {
+                                                long joinTimeMsInSingleRound) {
         printBasicProgress(id, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, dateFormat);
-        printExtendedProgress(bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, periodicJoinTimeInMs);
+        printExtendedProgress(bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, joinTimeMsInSingleRound);
         System.out.println();
     }
 
@@ -202,36 +200,36 @@ public class ConsumerPerformance {
                                               long lastMessagesRead,
                                               long startMs,
                                               long endMs,
-                                              long periodicJoinTimeInMs) {
-        long fetchTimeMs = endMs - startMs - periodicJoinTimeInMs;
+                                              long joinTimeMsInSingleRound) {
+        long fetchTimeMs = endMs - startMs - joinTimeMsInSingleRound;
         double intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024);
         long intervalMessagesRead = messagesRead - lastMessagesRead;
         double intervalMbPerSec = (fetchTimeMs <= 0) ? 0.0 : 1000.0 * intervalMbRead / fetchTimeMs;
         double intervalMessagesPerSec = (fetchTimeMs <= 0) ? 0.0 : 1000.0 * intervalMessagesRead / fetchTimeMs;
-        System.out.printf(", %d, %d, %.4f, %.4f", periodicJoinTimeInMs,
+        System.out.printf(", %d, %d, %.4f, %.4f", joinTimeMsInSingleRound,
             fetchTimeMs, intervalMbPerSec, intervalMessagesPerSec);
     }
 
     public static class ConsumerPerfRebListener implements ConsumerRebalanceListener {
-        private AtomicLong joinGroupTimeMs;
-        private long joinStartMs, joinTimeMsInSingleRound;
+        private AtomicLong joinTimeMs, joinTimeMsInSingleRound;
+        private long joinStartMs;
 
-        public ConsumerPerfRebListener(AtomicLong joinGroupTimeMs, long joinStartMs, long joinTimeMsInSingleRound) {
-            this.joinGroupTimeMs = joinGroupTimeMs;
+        public ConsumerPerfRebListener(AtomicLong joinTimeMs, long joinStartMs, AtomicLong joinTimeMsInSingleRound) {
+            this.joinTimeMs = joinTimeMs;
             this.joinStartMs = joinStartMs;
             this.joinTimeMsInSingleRound = joinTimeMsInSingleRound;
         }
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            long elapsedMs = System.currentTimeMillis() - joinStartMs;
-            joinGroupTimeMs.addAndGet(elapsedMs);
-            joinTimeMsInSingleRound += elapsedMs;
+            joinStartMs = System.currentTimeMillis();
         }
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            joinStartMs = System.currentTimeMillis();
+            long elapsedMs = System.currentTimeMillis() - joinStartMs;
+            joinTimeMs.addAndGet(elapsedMs);
+            joinTimeMsInSingleRound.addAndGet(elapsedMs);
         }
     }
 
