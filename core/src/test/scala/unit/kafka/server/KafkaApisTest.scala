@@ -1352,8 +1352,9 @@ class KafkaApisTest {
   }
 
   @Test
-  def testHandleOffsetCommitRequestTopicsAndPartitionsValidation(): Unit = {
-    val (bazId, quxId) = (Uuid.randomUuid(), Uuid.randomUuid())
+  def testHandleOffsetCommitRequestTopicsAndPartitionsValidation(version: Short): Unit = {
+    // baz is resolvable, qux and quux aren't.
+    val (bazId, quxId, quuxId) = (Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid())
 
     addTopicToMetadataCache("foo", numPartitions = 2)
     addTopicToMetadataCache("bar", numPartitions = 2)
@@ -1412,10 +1413,16 @@ class KafkaApisTest {
           .setPartitions(List(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
-              .setCommittedOffset(10)).asJava)
+              .setCommittedOffset(10)).asJava),
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setTopicId(quuxId)
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(314159265)).asJava)
       ).asJava)
 
-    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build(version))
 
     // This is the request expected by the group coordinator.
     val expectedOffsetCommitRequest = new OffsetCommitRequestData()
@@ -1527,6 +1534,13 @@ class KafkaApisTest {
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
           .setName(null)
           .setTopicId(quxId)
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)).asJava),
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName(null)
+          .setTopicId(quuxId)
           .setPartitions(List(
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(0)
