@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.processor.internals;
-
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -58,16 +57,17 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -303,6 +303,35 @@ public class InternalTopicManagerTest {
                     " The last errors seen per topic are:" +
                     " {" + topic1 + "=org.apache.kafka.common.errors.TopicExistsException: Topic test_topic exists already.}")
         );
+    }
+
+    @Test
+    public void shouldThrowTimeoutExceptionIfGetNumPartitionsHasTopicDescriptionTimeout() {
+        mockAdminClient.timeoutNextRequest(1);
+
+        final InternalTopicManager internalTopicManager =
+                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+        try {
+            final Set<String> topic1set = new HashSet<String>(Arrays.asList(topic1));
+            final Set<String> topic2set = new HashSet<String>(Arrays.asList(topic2));
+
+            internalTopicManager.getNumPartitions(topic1set, topic2set);
+
+        } catch (final TimeoutException expected) {
+            assertEquals(TimeoutException.class, expected.getCause().getClass());
+        }
+
+        mockAdminClient.timeoutNextRequest(1);
+
+        try {
+            final Set<String> topic1set = new HashSet<String>(Arrays.asList(topic1));
+            final Set<String> topic2set = new HashSet<String>(Arrays.asList(topic2));
+
+            internalTopicManager.getNumPartitions(topic1set, topic2set);
+
+        } catch (final TimeoutException expected) {
+            assertEquals(TimeoutException.class, expected.getCause().getClass());
+        }
     }
 
     @Test
@@ -764,18 +793,24 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldExhaustRetriesOnTimeoutExceptionForMakeReady() {
-        mockAdminClient.timeoutNextRequest(1);
+        mockAdminClient.timeoutNextRequest(5);
+
+        final InternalTopicManager topicManager = new InternalTopicManager(
+                new AutoAdvanceMockTime(time),
+                mockAdminClient,
+                new StreamsConfig(config)
+        );
 
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
         try {
-            internalTopicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig));
-            fail("Should have thrown StreamsException.");
-        } catch (final StreamsException expected) {
-            assertEquals(TimeoutException.class, expected.getCause().getClass());
+            topicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig));
+            fail("Should have thrown TimeoutException.");
+        } catch (final TimeoutException expected) {
+            assertThat(expected.getMessage(), is("Could not create topics within 50 milliseconds. " +
+                    "This can happen if the Kafka cluster is temporarily not available."));
         }
     }
-
     @Test
     public void shouldLogWhenTopicNotFoundAndNotThrowException() {
         mockAdminClient.addTopic(
@@ -1731,6 +1766,21 @@ public class InternalTopicManagerTest {
         return internalTopicConfig;
     }
 
+    private static class AutoAdvanceMockTime extends MockTime {
+        private final MockTime time;
+
+        private AutoAdvanceMockTime(final MockTime time) {
+            this.time = time;
+        }
+
+        @Override
+        public long milliseconds() {
+            final long ms = time.milliseconds();
+            time.sleep(10L);
+            return ms;
+        }
+    }
+
     private static class MockCreateTopicsResult extends CreateTopicsResult {
         MockCreateTopicsResult(final Map<String, KafkaFuture<TopicMetadataAndConfig>> futures) {
             super(futures);
@@ -1754,4 +1804,6 @@ public class InternalTopicManagerTest {
             super(futures);
         }
     }
+
+
 }
