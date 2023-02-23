@@ -124,9 +124,9 @@ public class HerderRequestHandler {
         return completeOrForwardRequest(cb, path, method, headers, body, resultType, new IdentityTranslator<>(), forward);
     }
 
-    public <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers,
-                                                 Object body, Boolean forward) throws Throwable {
-        return completeOrForwardRequest(cb, path, method, headers, body, null, new IdentityTranslator<>(), forward);
+    public void completeOrForwardRequest(FutureCallback<Void> cb, String path, String method, HttpHeaders headers, Object body,
+                                          Boolean forward) throws Throwable {
+        completeOrForwardRequest(cb, path, method, headers, body, new TypeReference<Void>() { }, new IdentityTranslator<>(), forward);
     }
 
     public interface Translator<T, U> {

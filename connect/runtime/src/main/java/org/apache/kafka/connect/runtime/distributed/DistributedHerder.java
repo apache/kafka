@@ -1179,7 +1179,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     log.trace("Forwarding zombie fencing request for connector {} to leader at {}", id.connector(), fenceUrl);
                     forwardRequestExecutor.execute(() -> {
                         try {
-                            restClient.httpRequest(fenceUrl, "PUT", null, null, null, sessionKey, requestSignatureAlgorithm);
+                            restClient.httpRequest(fenceUrl, "PUT", null, null, sessionKey, requestSignatureAlgorithm);
                             callback.onCompletion(null, null);
                         } catch (Throwable t) {
                             callback.onCompletion(t, null);
@@ -1972,7 +1972,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                     .build()
                                     .toString();
                             log.trace("Forwarding task configurations for connector {} to leader", connName);
-                            restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, sessionKey, requestSignatureAlgorithm);
+                            restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, sessionKey, requestSignatureAlgorithm);
                             cb.onCompletion(null, null);
                             log.trace("Request to leader to reconfigure connector tasks succeeded");
                         } catch (ConnectException e) {

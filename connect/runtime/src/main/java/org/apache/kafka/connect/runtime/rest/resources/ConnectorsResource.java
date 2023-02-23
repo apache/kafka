@@ -161,7 +161,7 @@ public class ConnectorsResource implements ConnectResource {
                                       final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
         herder.connectorInfo(connector, cb);
-        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "GET", headers, null, forward);
+        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "GET", headers, null, new TypeReference<ConnectorInfo>() { }, forward);
     }
 
     @GET
@@ -172,7 +172,7 @@ public class ConnectorsResource implements ConnectResource {
                                                   final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Map<String, String>> cb = new FutureCallback<>();
         herder.connectorConfig(connector, cb);
-        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", headers, null, forward);
+        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", headers, null, new TypeReference<Map<String, String>>() { }, forward);
     }
 
     @GET
@@ -184,7 +184,7 @@ public class ConnectorsResource implements ConnectResource {
             final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Map<ConnectorTaskId, Map<String, String>>> cb = new FutureCallback<>();
         herder.tasksConfig(connector, cb);
-        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks-config", "GET", headers, null, forward);
+        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks-config", "GET", headers, null, new TypeReference<Map<ConnectorTaskId, Map<String, String>>>() { }, forward);
     }
 
     @GET
@@ -322,7 +322,7 @@ public class ConnectorsResource implements ConnectResource {
         FutureCallback<Void> cb = new FutureCallback<>();
         ConnectorTaskId taskId = new ConnectorTaskId(connector, task);
         herder.restartTask(taskId, cb);
-        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", headers, null, forward);
+        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", headers, null, new TypeReference<Void>() { }, forward);
     }
 
     @DELETE
@@ -333,7 +333,7 @@ public class ConnectorsResource implements ConnectResource {
                                  final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.deleteConnectorConfig(connector, cb);
-        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, forward);
+        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, new TypeReference<Herder.Created<ConnectorInfo>>() { }, forward);
     }
 
     // Check whether the connector name from the url matches the one (if there is one) provided in the connectorConfig

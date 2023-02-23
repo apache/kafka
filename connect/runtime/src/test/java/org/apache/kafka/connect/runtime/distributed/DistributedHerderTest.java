@@ -3058,13 +3058,12 @@ public class DistributedHerderTest {
 
         member.wakeup();
         EasyMock.expectLastCall();
-
-        org.easymock.IExpectationSetters<RestClient.HttpResponse<Object>> expectRequest = EasyMock.expect(
-                restClient.httpRequest(
-                        anyObject(), EasyMock.eq("PUT"), EasyMock.isNull(), EasyMock.isNull(), EasyMock.isNull(), anyObject(), anyObject()
-                ));
+        restClient.httpRequest(
+                anyObject(), EasyMock.eq("PUT"), EasyMock.isNull(), EasyMock.isNull(), anyObject(), anyObject()
+        );
+        org.easymock.IExpectationSetters<Object> expectRequest = PowerMock.expectLastCall();
         if (succeed) {
-            expectRequest.andReturn(null);
+            expectRequest.andVoid();
         } else {
             expectRequest.andThrow(new ConnectRestException(409, "Rebalance :("));
         }
