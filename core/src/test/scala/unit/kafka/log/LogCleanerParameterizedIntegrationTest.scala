@@ -171,7 +171,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
       val appendInfo = log.appendAsLeader(largeMessageSet, leaderEpoch = 0)
       // move LSO forward to increase compaction bound
       log.updateHighWatermark(log.logEndOffset)
-      val largeMessageOffset = appendInfo.firstOffset.map(_.messageOffset).get
+      val largeMessageOffset = appendInfo.firstOffset.map[Long](_.messageOffset).get
 
       // also add some messages with version 1 and version 2 to check that we handle mixed format versions correctly
       props.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, IBP_0_11_0_IV0.version)

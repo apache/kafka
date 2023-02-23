@@ -2734,7 +2734,7 @@ public class StreamThreadTest {
         expect(task3.state()).andReturn(Task.State.CREATED).anyTimes();
         expect(task3.id()).andReturn(taskId3).anyTimes();
 
-        expect(taskManager.allTasks()).andReturn(mkMap(
+        expect(taskManager.allOwnedTasks()).andReturn(mkMap(
             mkEntry(taskId1, task1),
             mkEntry(taskId2, task2),
             mkEntry(taskId3, task3)
@@ -3084,7 +3084,7 @@ public class StreamThreadTest {
 
         expect(runningTask.state()).andStubReturn(Task.State.RUNNING);
         expect(runningTask.id()).andStubReturn(taskId);
-        expect(taskManager.allTasks()).andStubReturn(Collections.singletonMap(taskId, runningTask));
+        expect(taskManager.allOwnedTasks()).andStubReturn(Collections.singletonMap(taskId, runningTask));
         expect(taskManager.commit(Collections.singleton(runningTask))).andStubReturn(1);
         return taskManager;
     }

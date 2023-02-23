@@ -30,7 +30,9 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.OffsetFetcher;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.TopicMetadataFetcher;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -2653,6 +2655,7 @@ public class KafkaConsumerTest {
                 throwOnStableOffsetNotSupported,
                 null);
         }
+        IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,
                 consumerClient,
@@ -2670,10 +2673,17 @@ public class KafkaConsumerTest {
                 metrics,
                 metricsRegistry.fetcherMetrics,
                 time,
+                isolationLevel);
+        OffsetFetcher offsetFetcher = new OffsetFetcher(loggerFactory,
+                consumerClient,
+                metadata,
+                subscription,
+                time,
                 retryBackoffMs,
                 requestTimeoutMs,
-                IsolationLevel.READ_UNCOMMITTED,
+                isolationLevel,
                 new ApiVersions());
+        TopicMetadataFetcher topicMetadataFetcher = new TopicMetadataFetcher(loggerFactory, consumerClient, requestTimeoutMs);
 
         return new KafkaConsumer<>(
                 loggerFactory,
@@ -2682,6 +2692,8 @@ public class KafkaConsumerTest {
                 keyDeserializer,
                 deserializer,
                 fetcher,
+                offsetFetcher,
+                topicMetadataFetcher,
                 interceptors,
                 time,
                 consumerClient,

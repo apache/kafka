@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.cluster.{BrokerEndPoint, Partition}
-import kafka.log.{LogAppendInfo, LogManager, UnifiedLog}
+import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.epoch.util.MockBlockingSender
@@ -36,6 +36,7 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMeta
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
+import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest

@@ -21,7 +21,7 @@ import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
-import kafka.log.LogAppendInfo;
+import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerFeatures;

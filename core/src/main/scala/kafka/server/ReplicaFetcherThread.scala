@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.log.remote.RemoteLogManager
-import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
+import kafka.log.LeaderOffsetIncremented
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
@@ -29,7 +29,7 @@ import org.apache.kafka.server.common.CheckpointFile.CheckpointReadBuffer
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
-import org.apache.kafka.storage.internals.log.{EpochEntry, LogFileUtils}
+import org.apache.kafka.storage.internals.log.{EpochEntry, LogAppendInfo, LogFileUtils}
 
 import java.io.{BufferedReader, File, InputStreamReader}
 import java.nio.charset.StandardCharsets

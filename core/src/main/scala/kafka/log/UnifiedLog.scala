@@ -18,11 +18,6 @@
 package kafka.log
 
 import com.yammer.metrics.core.MetricName
-
-import java.io.{File, IOException}
-import java.nio.file.Files
-import java.util.{Optional, OptionalLong}
-import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsGroup
@@ -35,7 +30,6 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
-import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
@@ -45,101 +39,17 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetsListener, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetsListener, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
 
+import java.io.{File, IOException}
+import java.nio.file.Files
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
+import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
-
-object LogAppendInfo {
-  val UnknownLogAppendInfo = LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
-    RecordConversionStats.EMPTY, CompressionType.NONE, CompressionType.NONE, -1, -1, offsetsMonotonic = false, -1L)
-
-  def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
-    LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, CompressionType.NONE, CompressionType.NONE, -1, -1,
-      offsetsMonotonic = false, -1L)
-
-  /**
-   * In ProduceResponse V8+, we add two new fields record_errors and error_message (see KIP-467).
-   * For any record failures with InvalidTimestamp or InvalidRecordException, we construct a LogAppendInfo object like the one
-   * in unknownLogAppendInfoWithLogStartOffset, but with additional fields recordErrors and errorMessage
-   */
-  def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, recordErrors: Seq[RecordError], errorMessage: String): LogAppendInfo =
-    LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, CompressionType.NONE, CompressionType.NONE, -1, -1,
-      offsetsMonotonic = false, -1L, recordErrors, errorMessage)
-}
-
-sealed trait LeaderHwChange
-object LeaderHwChange {
-  case object Increased extends LeaderHwChange
-  case object Same extends LeaderHwChange
-  case object None extends LeaderHwChange
-}
-
-/**
- * Struct to hold various quantities we compute about each message set before appending to the log
- *
- * @param firstOffset The first offset in the message set unless the message format is less than V2 and we are appending
- *                    to the follower. If the message is a duplicate message the segment base offset and relative position
- *                    in segment will be unknown.
- * @param lastOffset The last offset in the message set
- * @param lastLeaderEpoch The partition leader epoch corresponding to the last offset, if available.
- * @param maxTimestamp The maximum timestamp of the message set.
- * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
- * @param logAppendTime The log append time (if used) of the message set, otherwise Message.NoTimestamp
- * @param logStartOffset The start offset of the log at the time of this append.
- * @param recordConversionStats Statistics collected during record processing, `null` if `assignOffsets` is `false`
- * @param sourceCompression The source codec used in the message set (send by the producer)
- * @param targetCompression The target codec of the message set(after applying the broker compression configuration if any)
- * @param shallowCount The number of shallow messages
- * @param validBytes The number of valid bytes
- * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
- * @param lastOffsetOfFirstBatch The last offset of the first batch
- * @param leaderHwChange Incremental if the high watermark needs to be increased after appending record.
- *                       Same if high watermark is not changed. None is the default value and it means append failed
- *
- */
-case class LogAppendInfo(var firstOffset: Option[LogOffsetMetadata],
-                         var lastOffset: Long,
-                         var lastLeaderEpoch: Option[Int],
-                         var maxTimestamp: Long,
-                         var offsetOfMaxTimestamp: Long,
-                         var logAppendTime: Long,
-                         var logStartOffset: Long,
-                         var recordConversionStats: RecordConversionStats,
-                         sourceCompression: CompressionType,
-                         targetCompression: CompressionType,
-                         shallowCount: Int,
-                         validBytes: Int,
-                         offsetsMonotonic: Boolean,
-                         lastOffsetOfFirstBatch: Long,
-                         recordErrors: Seq[RecordError] = List(),
-                         errorMessage: String = null,
-                         leaderHwChange: LeaderHwChange = LeaderHwChange.None) {
-  /**
-   * Get the first offset if it exists, else get the last offset of the first batch
-   * For magic versions 2 and newer, this method will return first offset. For magic versions
-   * older than 2, we use the last offset of the first batch as an approximation of the first
-   * offset to avoid decompressing the data.
-   */
-  def firstOrLastOffsetOfFirstBatch: Long = firstOffset.map(_.messageOffset).getOrElse(lastOffsetOfFirstBatch)
-
-  /**
-   * Get the (maximum) number of messages described by LogAppendInfo
-   * @return Maximum possible number of messages described by LogAppendInfo
-   */
-  def numMessages: Long = {
-    firstOffset match {
-      case Some(firstOffsetVal) if (firstOffsetVal.messageOffset >= 0 && lastOffset >= 0) =>
-        (lastOffset - firstOffsetVal.messageOffset + 1)
-      case _ => 0
-    }
-  }
-}
 
 /**
  * Container class which represents a snapshot of the significant offsets for a partition. This allows fetching
@@ -160,26 +70,6 @@ case class LogReadInfo(fetchedData: FetchDataInfo,
                        logStartOffset: Long,
                        logEndOffset: Long,
                        lastStableOffset: Long)
-
-/**
- * A class used to hold params required to decide to rotate a log segment or not.
- */
-case class RollParams(maxSegmentMs: Long,
-                      maxSegmentBytes: Int,
-                      maxTimestampInMessages: Long,
-                      maxOffsetInMessages: Long,
-                      messagesSize: Int,
-                      now: Long)
-
-object RollParams {
-  def apply(config: LogConfig, appendInfo: LogAppendInfo, messagesSize: Int, now: Long): RollParams = {
-   new RollParams(config.maxSegmentMs,
-     config.segmentSize,
-     appendInfo.maxTimestamp,
-     appendInfo.lastOffset,
-     messagesSize, now)
-  }
-}
 
 sealed trait LogStartOffsetIncrementReason
 case object ClientRecordDeletion extends LogStartOffsetIncrementReason {
@@ -855,7 +745,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           if (validateAndAssignOffsets) {
             // assign offsets to the message set
             val offset = PrimitiveRef.ofLong(localLog.logEndOffset)
-            appendInfo.firstOffset = Some(new LogOffsetMetadata(offset.value))
+            appendInfo.setFirstOffset(Optional.of(new LogOffsetMetadata(offset.value)))
             val validateAndOffsetAssignResult = try {
               val validator = new LogValidator(validRecords,
                 topicPartition,
@@ -882,12 +772,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             }
 
             validRecords = validateAndOffsetAssignResult.validatedRecords
-            appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestampMs
-            appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.shallowOffsetOfMaxTimestampMs
-            appendInfo.lastOffset = offset.value - 1
-            appendInfo.recordConversionStats = validateAndOffsetAssignResult.recordConversionStats
+            appendInfo.setMaxTimestamp(validateAndOffsetAssignResult.maxTimestampMs)
+            appendInfo.setOffsetOfMaxTimestamp(validateAndOffsetAssignResult.shallowOffsetOfMaxTimestampMs)
+            appendInfo.setLastOffset(offset.value - 1)
+            appendInfo.setRecordConversionStats(validateAndOffsetAssignResult.recordConversionStats)
             if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
-              appendInfo.logAppendTime = validateAndOffsetAssignResult.logAppendTimeMs
+              appendInfo.setLogAppendTime(validateAndOffsetAssignResult.logAppendTimeMs)
 
             // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
             // format conversion)
@@ -913,12 +803,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               // we may still be able to recover if the log is empty
               // one example: fetching from log start offset on the leader which is not batch aligned,
               // which may happen as a result of AdminClient#deleteRecords()
-              val firstOffset = appendInfo.firstOffset match {
-                case Some(offsetMetadata) => offsetMetadata.messageOffset
-                case None => records.batches.asScala.head.baseOffset()
-              }
+              val firstOffset = appendInfo.firstOffset.map[Long](x => x.messageOffset)
+                .orElse(records.batches.iterator().next().baseOffset())
 
-              val firstOrLast = if (appendInfo.firstOffset.isDefined) "First offset" else "Last offset of the first batch"
+              val firstOrLast = if (appendInfo.firstOffset.isPresent) "First offset" else "Last offset of the first batch"
               throw new UnexpectedAppendOffsetException(
                 s"Unexpected offset in append to $topicPartition. $firstOrLast " +
                   s"${appendInfo.firstOrLastOffsetOfFirstBatch} is less than the next offset ${localLog.logEndOffset}. " +
@@ -964,15 +852,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
           maybeDuplicate match {
             case Some(duplicate) =>
-              appendInfo.firstOffset = Some(new LogOffsetMetadata(duplicate.firstOffset))
-              appendInfo.lastOffset = duplicate.lastOffset
-              appendInfo.logAppendTime = duplicate.timestamp
-              appendInfo.logStartOffset = logStartOffset
+              appendInfo.setFirstOffset(Optional.of(new LogOffsetMetadata(duplicate.firstOffset)))
+              appendInfo.setLastOffset(duplicate.lastOffset)
+              appendInfo.setLogAppendTime(duplicate.timestamp)
+              appendInfo.setLogStartOffset(logStartOffset)
             case None =>
               // Before appending update the first offset metadata to include segment information
-              appendInfo.firstOffset = appendInfo.firstOffset.map { offsetMetadata =>
+              appendInfo.setFirstOffset(appendInfo.firstOffset.map { offsetMetadata =>
                 new LogOffsetMetadata(offsetMetadata.messageOffset, segment.baseOffset, segment.size)
-              }
+              })
 
               // Append the records, and increment the local log end offset immediately after the append because a
               // write to the transaction index below may fail and we want to ensure that the offsets
@@ -1147,7 +1035,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                                         leaderEpoch: Int): LogAppendInfo = {
     var shallowMessageCount = 0
     var validBytesCount = 0
-    var firstOffset: Option[LogOffsetMetadata] = None
+    var firstOffset: Optional[LogOffsetMetadata] = Optional.empty()
     var lastOffset = -1L
     var lastLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH
     var sourceCompression = CompressionType.NONE
@@ -1174,7 +1062,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       // Also indicate whether we have the accurate first offset or not
       if (!readFirstMessage) {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          firstOffset = Some(new LogOffsetMetadata(batch.baseOffset))
+          firstOffset = Optional.of(new LogOffsetMetadata(batch.baseOffset))
         lastOffsetOfFirstBatch = batch.lastOffset
         readFirstMessage = true
       }
@@ -1217,12 +1105,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
     // Apply broker-side compression if any
     val targetCompression = BrokerCompressionType.forName(config.compressionType).targetCompressionType(sourceCompression)
-    val lastLeaderEpochOpt: Option[Int] = if (lastLeaderEpoch != RecordBatch.NO_PARTITION_LEADER_EPOCH)
-      Some(lastLeaderEpoch)
+    val lastLeaderEpochOpt: OptionalInt = if (lastLeaderEpoch != RecordBatch.NO_PARTITION_LEADER_EPOCH)
+      OptionalInt.of(lastLeaderEpoch)
     else
-      None
-    LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, sourceCompression, targetCompression, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
+      OptionalInt.empty()
+
+    new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp,
+      RecordBatch.NO_TIMESTAMP, logStartOffset, RecordConversionStats.EMPTY, sourceCompression, targetCompression,
+      shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
   }
 
   /**
@@ -1576,7 +1466,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val maxTimestampInMessages = appendInfo.maxTimestamp
     val maxOffsetInMessages = appendInfo.lastOffset
 
-    if (segment.shouldRoll(RollParams(config, appendInfo, messagesSize, now))) {
+    if (segment.shouldRoll(new RollParams(config.maxSegmentMs, config.segmentSize, appendInfo.maxTimestamp, appendInfo.lastOffset, messagesSize, now))) {
       debug(s"Rolling new log segment (log_size = ${segment.size}/${config.segmentSize}}, " +
         s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
         s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
@@ -1596,8 +1486,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       */
       val rollOffset = appendInfo
         .firstOffset
-        .map(_.messageOffset)
-        .getOrElse(maxOffsetInMessages - Integer.MAX_VALUE)
+        .map[Long](_.messageOffset)
+        .orElse(maxOffsetInMessages - Integer.MAX_VALUE)
 
       roll(Some(rollOffset))
     } else {

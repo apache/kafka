@@ -1047,6 +1047,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks();
 
         when(topologyMetadata.isPaused(null)).thenReturn(false);
+        stateUpdater.signalResume();
 
         verifyPausedTasks();
         verifyUpdatingTasks(task);
