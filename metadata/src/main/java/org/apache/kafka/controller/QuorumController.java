@@ -1821,7 +1821,7 @@ public final class QuorumController implements Controller {
         if (ids.isEmpty())
             return CompletableFuture.completedFuture(Collections.emptyMap());
         return appendWriteEvent("deleteTopics", context.deadlineNs(),
-            () -> replicationControl.deleteTopics(ids));
+            () -> replicationControl.deleteTopics(context, ids));
     }
 
     @Override

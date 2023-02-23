@@ -709,21 +709,20 @@ public class ReplicationControlManager {
                 topic.name(), numPartitions, replicationFactor, null, creationConfigs));
             if (error.isFailure()) return error;
         }
+        int numPartitions = newParts.size();
+        try {
+            context.record(numPartitions); // check controller mutation quota
+        } catch (ThrottlingQuotaExceededException e) {
+            log.debug("Topic creation of {} partitions not allowed because quota is violated. Delay time: {}",
+                numPartitions, e.throttleTimeMs());
+            return ApiError.fromThrowable(e);
+        }
         Uuid topicId = Uuid.randomUuid();
         CreatableTopicResult result = new CreatableTopicResult().
-            setName(topic.name()).
-            setTopicId(topicId).
-            setErrorCode(NONE.code()).
-            setErrorMessage(null);
-        int numPartitions = newParts.size();
-        if (!validateOnly) {
-            try {
-                context.record(numPartitions); // check controller mutation quota
-            } catch (ThrottlingQuotaExceededException e) {
-                log.debug("Topic creation not allowed because quota is violated. Delay time: {}", e.throttleTimeMs());
-                return ApiError.fromThrowable(e);
-            }
-        }
+                setName(topic.name()).
+                setTopicId(topicId).
+                setErrorCode(NONE.code()).
+                setErrorMessage(null);
         if (authorizedToReturnConfigs) {
             Map<String, ConfigEntry> effectiveConfig = configurationControl.
                 computeEffectiveTopicConfigs(creationConfigs);
@@ -861,12 +860,12 @@ public class ReplicationControlManager {
         return results;
     }
 
-    ControllerResult<Map<Uuid, ApiError>> deleteTopics(Collection<Uuid> ids) {
+    ControllerResult<Map<Uuid, ApiError>> deleteTopics(ControllerRequestContext context, Collection<Uuid> ids) {
         Map<Uuid, ApiError> results = new HashMap<>(ids.size());
         List<ApiMessageAndVersion> records = new ArrayList<>(ids.size());
         for (Uuid id : ids) {
             try {
-                deleteTopic(id, records);
+                deleteTopic(context, id, records);
                 results.put(id, ApiError.NONE);
             } catch (ApiException e) {
                 results.put(id, ApiError.fromThrowable(e));
@@ -878,10 +877,19 @@ public class ReplicationControlManager {
         return ControllerResult.atomicOf(records, results);
     }
 
-    void deleteTopic(Uuid id, List<ApiMessageAndVersion> records) {
+    void deleteTopic(ControllerRequestContext context, Uuid id, List<ApiMessageAndVersion> records) {
         TopicControlInfo topic = topics.get(id);
         if (topic == null) {
             throw new UnknownTopicIdException(UNKNOWN_TOPIC_ID.message());
+        }
+        int numPartitions = topic.parts.size();
+        try {
+            context.record(numPartitions); // check controller mutation quota
+        } catch (ThrottlingQuotaExceededException e) {
+            // log a message and rethrow the exception
+            log.debug("Topic deletion of {} partitions not allowed because quota is violated. Delay time: {}",
+                numPartitions, e.throttleTimeMs());
+            throw e;
         }
         records.add(new ApiMessageAndVersion(new RemoveTopicRecord().
             setTopicId(id), (short) 0));

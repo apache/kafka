@@ -273,8 +273,8 @@ public class ReplicationControlManagerTest {
             return topicResult;
         }
 
-        void deleteTopic(Uuid topicId) throws Exception {
-            ControllerResult<Map<Uuid, ApiError>> result = replicationControl.deleteTopics(Collections.singleton(topicId));
+        void deleteTopic(ControllerRequestContext context, Uuid topicId) throws Exception {
+            ControllerResult<Map<Uuid, ApiError>> result = replicationControl.deleteTopics(context, Collections.singleton(topicId));
             assertEquals(Collections.singleton(topicId), result.response().keySet());
             assertEquals(NONE, result.response().get(topicId).error());
             assertEquals(1, result.records().size());
@@ -712,7 +712,11 @@ public class ReplicationControlManagerTest {
             ctx.replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
         assertEquals(0, result.records().size());
         CreatableTopicResult topicResult = result.response().topics().find("foo");
-        assertEquals((short) 0, topicResult.errorCode());
+        if (mutationQuotaExceeded) {
+            assertEquals(THROTTLING_QUOTA_EXCEEDED.code(), topicResult.errorCode());
+        } else {
+            assertEquals(NONE.code(), topicResult.errorCode());
+        }
     }
 
     @Test
@@ -768,7 +772,9 @@ public class ReplicationControlManagerTest {
 
         CreatableTopicResult initialTopic = ctx.createTestTopic("foo.bar", 2, (short) 2, NONE.code());
         assertEquals(2, ctx.replicationControl.getTopic(initialTopic.topicId()).numPartitions(Long.MAX_VALUE));
-        ctx.deleteTopic(initialTopic.topicId());
+        ControllerRequestContext requestContext =
+            anonymousContextFor(ApiKeys.DELETE_TOPICS);
+        ctx.deleteTopic(requestContext, initialTopic.topicId());
 
         CreatableTopicResult recreatedTopic = ctx.createTestTopic("foo.bar", 4, (short) 2, NONE.code());
         assertNotEquals(initialTopic.topicId(), recreatedTopic.topicId());
@@ -1090,10 +1096,10 @@ public class ReplicationControlManagerTest {
             setConfigs(requestConfigs));
         ctx.registerBrokers(0, 1);
         ctx.unfenceBrokers(0, 1);
-        ControllerRequestContext requestContext =
+        ControllerRequestContext createTopicsRequestContext =
                 anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createResult =
-            replicationControl.createTopics(requestContext, request, Collections.singleton("foo"));
+            replicationControl.createTopics(createTopicsRequestContext, request, Collections.singleton("foo"));
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         Uuid topicId = createResult.response().topics().find("foo").topicId();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
@@ -1124,13 +1130,15 @@ public class ReplicationControlManagerTest {
             new ResultOrError<>(new ApiError(UNKNOWN_TOPIC_OR_PARTITION))),
                 replicationControl.findTopicIds(Long.MAX_VALUE, Collections.singleton("bar")));
 
+        ControllerRequestContext deleteTopicsRequestContext =
+            anonymousContextFor(ApiKeys.DELETE_TOPICS);
         ControllerResult<Map<Uuid, ApiError>> invalidDeleteResult = replicationControl.
-            deleteTopics(Collections.singletonList(invalidId));
+            deleteTopics(deleteTopicsRequestContext, Collections.singletonList(invalidId));
         assertEquals(0, invalidDeleteResult.records().size());
         assertEquals(singletonMap(invalidId, new ApiError(UNKNOWN_TOPIC_ID, null)),
             invalidDeleteResult.response());
         ControllerResult<Map<Uuid, ApiError>> deleteResult = replicationControl.
-            deleteTopics(Collections.singletonList(topicId));
+            deleteTopics(deleteTopicsRequestContext, Collections.singletonList(topicId));
         assertTrue(deleteResult.isAtomic());
         assertEquals(singletonMap(topicId, new ApiError(NONE, null)),
             deleteResult.response());
@@ -1147,6 +1155,33 @@ public class ReplicationControlManagerTest {
             new ApiError(UNKNOWN_TOPIC_OR_PARTITION))), replicationControl.findTopicIds(
                 Long.MAX_VALUE, Collections.singleton("foo")));
         assertEmptyTopicConfigs(ctx, "foo");
+    }
+
+    @Test
+    public void testDeleteTopicsWithMutationQuotaExceeded() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(3).setReplicationFactor((short) 2));
+        ctx.registerBrokers(0, 1);
+        ctx.unfenceBrokers(0, 1);
+        ControllerRequestContext createTopicsRequestContext =
+            anonymousContextFor(ApiKeys.CREATE_TOPICS);
+        ControllerResult<CreateTopicsResponseData> createResult =
+            replicationControl.createTopics(createTopicsRequestContext, request, Collections.singleton("foo"));
+        CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
+        CreatableTopicResult createdTopic = createResult.response().topics().find("foo");
+        assertEquals(NONE.code(), createdTopic.errorCode());
+        ctx.replay(createResult.records());
+        ControllerRequestContext deleteTopicsRequestContext =
+            anonymousContextWithMutationQuotaExceededFor(ApiKeys.DELETE_TOPICS);
+        Uuid topicId = createdTopic.topicId();
+        ControllerResult<Map<Uuid, ApiError>> deleteResult = replicationControl.
+            deleteTopics(deleteTopicsRequestContext, Collections.singletonList(topicId));
+        assertEquals(singletonMap(topicId, new ApiError(THROTTLING_QUOTA_EXCEEDED, "Quota exceeded in test")),
+            deleteResult.response());
+        assertEquals(0, deleteResult.records().size());
     }
 
     @Test
