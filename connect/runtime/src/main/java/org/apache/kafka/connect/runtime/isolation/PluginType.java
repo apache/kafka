@@ -59,6 +59,10 @@ public enum PluginType {
         return klass.getSimpleName();
     }
 
+    public String typeName() {
+        return klass.getName();
+    }
+
     @Override
     public String toString() {
         return super.toString().toLowerCase(Locale.ROOT);

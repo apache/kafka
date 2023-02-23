@@ -20,6 +20,7 @@ import org.reflections.util.ClasspathHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
@@ -196,7 +197,7 @@ public class PluginUtils {
         return path.toString().toLowerCase(Locale.ROOT).endsWith(".class");
     }
 
-    public static List<Path> pluginLocations(String pluginPath) {
+    public static List<Path> pluginLocations(String pluginPath, boolean failFast) {
         if (pluginPath == null) {
             return Collections.emptyList();
         }
@@ -205,6 +206,9 @@ public class PluginUtils {
         for (String path : pluginPathElements) {
             try {
                 Path pluginPathElement = Paths.get(path).toAbsolutePath();
+                if (!Files.exists(pluginPathElement)) {
+                    throw new FileNotFoundException(pluginPathElement.toString());
+                }
                 // Currently 'plugin.paths' property is a list of top-level directories
                 // containing plugins
                 if (Files.isDirectory(pluginPathElement)) {
@@ -213,6 +217,9 @@ public class PluginUtils {
                     pluginLocations.add(pluginPathElement);
                 }
             } catch (InvalidPathException | IOException e) {
+                if (failFast) {
+                    throw new RuntimeException(e);
+                }
                 log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
             }
         }
