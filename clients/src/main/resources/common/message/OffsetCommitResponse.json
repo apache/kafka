@@ -29,7 +29,8 @@
   //
   // Version 8 is the first flexible version.
   //
-  // Version 9 adds TopicId field (KIP-848).
+  // Version 9 adds TopicId field and can return STALE_MEMBER_EPOCH, UNKNOWN_MEMBER_ID
+  // and UNKNOWN_TOPIC_ID errors (KIP-848).
   "validVersions": "0-9",
   "flexibleVersions": "8+",
   "fields": [

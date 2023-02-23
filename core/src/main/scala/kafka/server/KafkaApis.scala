@@ -437,7 +437,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       offsetCommitRequest.data.topics.forEach { topic =>
         var topicName = topic.name()
         if (topicName != null && topic.topicId() != null && !Uuid.ZERO_UUID.equals(topic.topicId())) {
-          // Both topic name and id cannot be provided for the same topic. Per KIP 848, returns an invalid request.
+          // Both topic name and id cannot be provided for the same topic. Per KIP 848, return an invalid request.
           requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
           return CompletableFuture.completedFuture[Unit](())
         }

@@ -2862,12 +2862,12 @@ public abstract class ConsumerCoordinatorTest {
 
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p, new OffsetAndMetadata(100L, "m"));
 
-        // Valid topic definition
+        // The following offset commit responses are valid and the authorization failure results in failing the
+        // offset commit invocation.
         client.prepareResponse(offsetCommitResponse(t1p.topic(), Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED));
         assertThrows(GroupAuthorizationException.class,
             () -> coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
 
-        // Valid topic definition
         client.prepareResponse(offsetCommitResponse(null, topic1Id, Errors.GROUP_AUTHORIZATION_FAILED));
         assertThrows(GroupAuthorizationException.class,
             () -> coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
@@ -2894,7 +2894,7 @@ public abstract class ConsumerCoordinatorTest {
         offsets.put(t2p, new OffsetAndMetadata(200L, "metadata2"));
         offsets.put(t3p, new OffsetAndMetadata(300L, "metadata3"));
 
-        // Valid response base.
+        // Response data which makes the common part of the responses exercised in the use cases below.
         OffsetCommitResponseData commonData = new OffsetCommitResponseData()
             .setTopics(Arrays.asList(
                 new OffsetCommitResponseTopic()
@@ -2925,6 +2925,8 @@ public abstract class ConsumerCoordinatorTest {
             assertTrue(callbackInvoked.get());
         };
 
+        // The following offset commit responses are valid and the authorization failure results in failing the
+        // offset commit invocation.
         asserter.accept(
             offsetCommitResponse(null, topic1Id, Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
             GroupAuthorizationException.class);
