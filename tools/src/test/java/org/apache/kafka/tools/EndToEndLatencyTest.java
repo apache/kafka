@@ -27,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -81,6 +82,19 @@ public class EndToEndLatencyTest {
         when(record.value()).thenReturn("kafkaa".getBytes(StandardCharsets.UTF_8));
         when(records.count()).thenReturn(2);
         assertThrows(RuntimeException.class, () -> EndToEndLatency.validate(consumer, "kafkaa".getBytes(StandardCharsets.UTF_8), records));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldPassInValidation() {
+        Iterator<ConsumerRecord<byte[], byte[]>> iterator = mock(Iterator.class);
+        ConsumerRecord<byte[], byte[]> record = mock(ConsumerRecord.class);
+        when(records.isEmpty()).thenReturn(false);
+        when(records.iterator()).thenReturn(iterator);
+        when(iterator.next()).thenReturn(record);
+        when(record.value()).thenReturn("kafkaa".getBytes(StandardCharsets.UTF_8));
+        when(records.count()).thenReturn(1);
+        assertDoesNotThrow(() -> EndToEndLatency.validate(consumer, "kafkaa".getBytes(StandardCharsets.UTF_8), records));
     }
 
 }
