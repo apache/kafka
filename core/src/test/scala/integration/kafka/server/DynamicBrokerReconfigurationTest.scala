@@ -730,7 +730,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   @Test
-  @Disabled // TODO: To be re-enabled once we can make it less flaky: KAFKA-8280
   def testUncleanLeaderElectionEnable(): Unit = {
     val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get
     val controllerId = controller.config.brokerId
