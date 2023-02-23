@@ -2826,14 +2826,57 @@ public abstract class ConsumerCoordinatorTest {
         offsets.put(t2p, new OffsetAndMetadata(200L, "metadata2"));
         offsets.put(t3p, new OffsetAndMetadata(300L, "metadata3"));
 
-        coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE));
-
+        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
         assertTrue(captor.isRequestCaptured());
 
         // The consumer does not provide a guarantee on the order of occurrence of topics and partitions in the
         // OffsetCommit request, since a map of offsets is provided to the consumer API. Here, both requests
         // are asserted to be identical irrespective of the order in which topic and partitions appear in the requests.
         assertEqualsUnordered(expectedRequestData, captor.requestData());
+    }
+
+    @Test
+    public void testInvalidTopicIdReturnedByBrokerWhenCommittingOffset() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        BiFunction<String, Uuid, OffsetCommitResponse> responseBuilder = (topicName, topicId) -> {
+            OffsetCommitResponseData data = new OffsetCommitResponseData()
+                .setTopics(singletonList(new OffsetCommitResponseTopic()
+                    .setName(topicName)
+                    .setTopicId(topicId)
+                    .setPartitions(singletonList(new OffsetCommitResponsePartition()
+                        .setPartitionIndex(0)
+                        .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code()))))
+                );
+            return new OffsetCommitResponse(data);
+        };
+
+        Map<TopicPartition, OffsetAndMetadata> offsets =
+            singletonMap(t1p, new OffsetAndMetadata(100L, "metadata"));
+
+        // Verify that invalid topic definition (invalid id, missing name and id, or definition of both
+        // id and name) is ignored by the consumer. Because the results of the OffsetCommit request is not
+        // propagated to the user, this is indirectly testing by confirming the OffsetCommit invocation on
+        // the consumer is successful while an authorization exception would have been expected in the case
+        // of a valid topic definition.
+
+        client.prepareResponse(responseBuilder.apply(t1p.topic(), Uuid.ZERO_UUID));
+        assertThrows(GroupAuthorizationException.class,
+            () -> coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+
+        client.prepareResponse(responseBuilder.apply(null, topic1Id));
+        assertThrows(GroupAuthorizationException.class,
+            () -> coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+
+        client.prepareResponse(responseBuilder.apply(null, Uuid.randomUuid()));
+        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+
+        client.prepareResponse(responseBuilder.apply(null, Uuid.ZERO_UUID));
+        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+
+        client.prepareResponse(responseBuilder.apply(t1p.topic(), topic1Id));
+        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
     }
 
     @Test
@@ -4217,6 +4260,13 @@ public abstract class ConsumerCoordinatorTest {
         assertEquals(expected.memberId(), actual.memberId(), "Member id mismatch");
         assertEquals(expected.retentionTimeMs(), actual.retentionTimeMs(), "Retention time mismatch");
 
+        long expectedTopicPartitionCount = expected.topics().stream().flatMap(t -> t.partitions().stream()).count();
+        long actualTopicPartitionCount = actual.topics().stream().flatMap(t -> t.partitions().stream()).count();
+
+        assertEquals(expectedTopicPartitionCount, actualTopicPartitionCount,
+            "The number of topic-partitions defined in the request does not match");
+
+        // Also checks that topic id is not defined when a topic name is provided as per KIP 848.
         Predicate<OffsetCommitRequestTopic> isDefinedByName = topic -> {
             boolean nameDefined = !Utils.isBlank(topic.name());
             if (nameDefined)
@@ -4224,6 +4274,7 @@ public abstract class ConsumerCoordinatorTest {
             return nameDefined;
         };
 
+        // Also checks that topic name is not defined when a topic id is provided as per KIP 848.
         Predicate<OffsetCommitRequestTopic> isDefinedById = topic -> {
             boolean idDefined = topic.topicId() != null && !Uuid.ZERO_UUID.equals(topic.topicId());
             if (idDefined)
@@ -4237,15 +4288,27 @@ public abstract class ConsumerCoordinatorTest {
         BiFunction<OffsetCommitRequestTopic, OffsetCommitRequestPartition, TopicIdPartition> idMapper =
             (topic, partition) -> new TopicIdPartition(topic.topicId(), partition.partitionIndex(), topic.name());
 
+        Map<TopicPartition, OffsetCommitRequestPartition> byTopicName =
+            offsetCommitRequestPartitions(actual, isDefinedByName, nameMapper);
+
+        Map<TopicIdPartition, OffsetCommitRequestPartition> byTopicId =
+            offsetCommitRequestPartitions(actual, isDefinedById, idMapper);
+
         assertEquals(
             offsetCommitRequestPartitions(expected, isDefinedByName, nameMapper),
-            offsetCommitRequestPartitions(actual, isDefinedByName, nameMapper)
+            byTopicName
         );
 
         assertEquals(
             offsetCommitRequestPartitions(expected, isDefinedById, idMapper),
-            offsetCommitRequestPartitions(actual, isDefinedById, idMapper)
+            byTopicId
         );
+
+        assertEquals(
+            expectedTopicPartitionCount,
+            byTopicName.keySet().size() + byTopicId.keySet().size(),
+            "The number of topic-partitions identified by name or id does not correspond to the number " +
+                    "of topic-partition defined in the request");
     }
 
     /**

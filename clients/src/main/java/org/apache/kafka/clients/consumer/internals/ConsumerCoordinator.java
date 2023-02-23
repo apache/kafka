@@ -39,6 +39,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicResolver;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -1362,24 +1363,41 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             Set<String> unauthorizedTopics = new HashSet<>();
 
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
-                for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
-                    String topicName = topic.name();
-                    if (Utils.isBlank(topicName)) {
-                        // The topic name can only be null/empty if OffsetCommit version >= 9 is used and the request
-                        // referenced that topic by its ID instead.
-                        topicName = topicResolver.getTopicName(topic.topicId()).orElse(null);
+                String topicName = topic.name();
+                Uuid topicId = topic.topicId();
+                boolean topicNameDefined = !Utils.isBlank(topicName);
+                boolean topicIdDefined = topicId != null && !ZERO_UUID.equals(topicId);
 
-                        if (topicName == null) {
-                            // The topic ID returned by the broker must have been sent by this client with the
-                            // OffsetCommit request. This ID must still be known by the topic resolver. Unlike the
-                            // cases where a topic ID is unknown because metadata on the client have not yet been
-                            // refreshed, here there is no reason to retry as the problem cannot be attributed to
-                            // metadata convergence.
-                            future.raise(new KafkaException("Invalid topic ID: " + topic.topicId()));
-                            return;
-                        }
+                if (!topicNameDefined && !topicIdDefined) {
+                    // Should not happen, but defensive check.
+                    log.warn("No topic id or name defined in OffsetCommit response, ignoring");
+                    continue;
+                }
+
+                if (topicNameDefined && topicIdDefined) {
+                    log.warn("Topic id and name should not be defined at the same time in the OffsetCommit " +
+                        "response, ignoring topic " + topicName + " with id " + topicId);
+                    continue;
+                }
+
+                if (!topicNameDefined) {
+                    // The topic name can only be null/empty if OffsetCommit version >= 9 is used and the request
+                    // referenced that topic by its ID instead.
+                    topicName = topicResolver.getTopicName(topic.topicId()).orElse(null);
+
+                    if (topicName == null) {
+                        // The topic ID returned by the broker must have been sent by this client with the
+                        // OffsetCommit request. This ID must still be known by the topic resolver. Unlike the
+                        // cases where a topic ID is unknown because metadata on the client have not yet been
+                        // refreshed, here there is no reason to retry as the problem cannot be attributed to
+                        // metadata convergence. Do not fail the entire consumer offset commit request,
+                        // but warn and ignore the invalid topic ID.
+                        log.warn("Ignoring invalid topic ID found in OffsetCommit response: " + topicId);
+                        continue;
                     }
+                }
 
+                for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
                     TopicPartition tp = new TopicPartition(topicName, partition.partitionIndex());
                     OffsetAndMetadata offsetAndMetadata = this.offsets.get(tp);
 
