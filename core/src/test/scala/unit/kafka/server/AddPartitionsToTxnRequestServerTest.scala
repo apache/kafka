@@ -110,55 +110,32 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
   
   @Test
   def testOneSuccessOneErrorInBatchedRequest(): Unit = {
+    val tp0 = new TopicPartition(topic1, 0)
     val transactionalId1 = "foobar"
-    
-    val findCoordinatorRequest = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData().setKey(transactionalId1).setKeyType(CoordinatorType.TRANSACTION.id)).build()
-    // First find coordinator request creates the state topic, then wait for transactional topics to be created.
-    connectAndReceive[FindCoordinatorResponse](findCoordinatorRequest, brokerSocketServer(brokers.head.config.brokerId))
-    TestUtils.waitForAllPartitionsMetadata(brokers, "__transaction_state", 50)
-    val findCoordinatorResponse = connectAndReceive[FindCoordinatorResponse](findCoordinatorRequest, brokerSocketServer(brokers.head.config.brokerId))
-    val coordinatorId = findCoordinatorResponse.data().coordinators().get(0).nodeId()
-    
-    val initPidRequest = new InitProducerIdRequest.Builder(new InitProducerIdRequestData().setTransactionalId(transactionalId1).setTransactionTimeoutMs(10000)).build()
-    val initPidResponse = connectAndReceive[InitProducerIdResponse](initPidRequest, brokerSocketServer(coordinatorId))
-    
-    val producerId1 = initPidResponse.data().producerId()
-    val producerEpoch1 = initPidResponse.data().producerEpoch()
-    
     val transactionalId2 = "barfoo" // "barfoo" maps to the same transaction coordinator
     val producerId2 = 1000L
     val producerEpoch2: Short = 0
     
-    val tp0 = new TopicPartition(topic1, 0)
-    
-    val txn1Topics = new AddPartitionsToTxnTopicCollection()
-    txn1Topics.add(new AddPartitionsToTxnTopic()
-      .setName(tp0.topic())
-      .setPartitions(Collections.singletonList(tp0.partition())))
-    
-    val txn2Topics  = new AddPartitionsToTxnTopicCollection()
+    val txn2Topics = new AddPartitionsToTxnTopicCollection()
     txn2Topics.add(new AddPartitionsToTxnTopic()
       .setName(tp0.topic())
       .setPartitions(Collections.singletonList(tp0.partition())))
 
+    val (coordinatorId, txn1) = setUpTransactions(transactionalId1, false, Set(tp0))
+
     val transactions = new AddPartitionsToTxnTransactionCollection()
-    transactions.add(new AddPartitionsToTxnTransaction()
-      .setTransactionalId(transactionalId1)
-      .setProducerId(producerId1)
-      .setProducerEpoch(producerEpoch1)
-      .setVerifyOnly(false)
-      .setTopics(txn1Topics))
+    transactions.add(txn1)
     transactions.add(new AddPartitionsToTxnTransaction()
       .setTransactionalId(transactionalId2)
       .setProducerId(producerId2)
       .setProducerEpoch(producerEpoch2)
       .setVerifyOnly(false)
       .setTopics(txn2Topics))
-    
+
     val request = AddPartitionsToTxnRequest.Builder.forBroker(transactions).build()
 
     val response = connectAndReceive[AddPartitionsToTxnResponse](request, brokerSocketServer(coordinatorId))
-    
+
     val errors = response.errors()
 
     assertTrue(errors.containsKey(transactionalId1))
@@ -168,6 +145,56 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     assertTrue(errors.containsKey(transactionalId2))
     assertTrue(errors.get(transactionalId1).containsKey(tp0))
     assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, errors.get(transactionalId2).get(tp0))
+  }
+
+  @Test
+  def testVerifyOnly(): Unit = {
+    val tp0 = new TopicPartition(topic1, 0)
+
+    val transactionalId = "foobar"
+    val (coordinatorId, txn) = setUpTransactions(transactionalId, true, Set(tp0))
+
+    val transactions = new AddPartitionsToTxnTransactionCollection()
+    transactions.add(txn)
+    
+    val verifyRequest = AddPartitionsToTxnRequest.Builder.forBroker(transactions).build()
+
+    val verifyResponse = connectAndReceive[AddPartitionsToTxnResponse](verifyRequest, brokerSocketServer(coordinatorId))
+
+    val verifyErrors = verifyResponse.errors()
+
+    assertTrue(verifyErrors.containsKey(transactionalId))
+    assertTrue(verifyErrors.get(transactionalId).containsKey(tp0))
+    assertEquals(Errors.INVALID_TXN_STATE, verifyErrors.get(transactionalId).get(tp0))
+  }
+  
+  private def setUpTransactions(transactionalId: String, verifyOnly: Boolean, partitions: Set[TopicPartition]): (Int, AddPartitionsToTxnTransaction) = {
+    val findCoordinatorRequest = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData().setKey(transactionalId).setKeyType(CoordinatorType.TRANSACTION.id)).build()
+    // First find coordinator request creates the state topic, then wait for transactional topics to be created.
+    connectAndReceive[FindCoordinatorResponse](findCoordinatorRequest, brokerSocketServer(brokers.head.config.brokerId))
+    TestUtils.waitForAllPartitionsMetadata(brokers, "__transaction_state", 50)
+    val findCoordinatorResponse = connectAndReceive[FindCoordinatorResponse](findCoordinatorRequest, brokerSocketServer(brokers.head.config.brokerId))
+    val coordinatorId = findCoordinatorResponse.data().coordinators().get(0).nodeId()
+
+    val initPidRequest = new InitProducerIdRequest.Builder(new InitProducerIdRequestData().setTransactionalId(transactionalId).setTransactionTimeoutMs(10000)).build()
+    val initPidResponse = connectAndReceive[InitProducerIdResponse](initPidRequest, brokerSocketServer(coordinatorId))
+
+    val producerId1 = initPidResponse.data().producerId()
+    val producerEpoch1 = initPidResponse.data().producerEpoch()
+
+    val txn1Topics = new AddPartitionsToTxnTopicCollection()
+    partitions.foreach(tp => 
+    txn1Topics.add(new AddPartitionsToTxnTopic()
+      .setName(tp.topic())
+      .setPartitions(Collections.singletonList(tp.partition())))
+    )
+
+    (coordinatorId, new AddPartitionsToTxnTransaction()
+      .setTransactionalId(transactionalId)
+      .setProducerId(producerId1)
+      .setProducerEpoch(producerEpoch1)
+      .setVerifyOnly(verifyOnly)
+      .setTopics(txn1Topics))
   }
 }
 

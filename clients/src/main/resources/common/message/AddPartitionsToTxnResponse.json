@@ -23,7 +23,7 @@
   //
   // Version 3 enables flexible versions.
   //
-  // Version 4 adds support to batch multiple transactions.
+  // Version 4 adds support to batch multiple transactions and a top level error code.
   "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [

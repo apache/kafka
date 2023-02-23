@@ -50,7 +50,7 @@ import java.util.Map;
 public class AddPartitionsToTxnResponse extends AbstractResponse {
 
     private final AddPartitionsToTxnResponseData data;
-    
+
     public static final String V3_AND_BELOW_TXN_ID = "";
 
     public AddPartitionsToTxnResponse(AddPartitionsToTxnResponseData data) {

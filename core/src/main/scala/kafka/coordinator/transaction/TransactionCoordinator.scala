@@ -30,6 +30,8 @@ import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
 import org.apache.kafka.server.util.Scheduler
 
+import scala.collection.mutable
+
 object TransactionCoordinator {
 
   def apply(config: KafkaConfig,
@@ -92,6 +94,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
   type InitProducerIdCallback = InitProducerIdResult => Unit
   type AddPartitionsCallback = Errors => Unit
+  type VerifyPartitionsCallback = Map[TopicPartition, Errors] => Unit
   type EndTxnCallback = Errors => Unit
   type ApiResult[T] = Either[Errors, T]
 
@@ -318,12 +321,24 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     }
   }
 
+  def verifyAddPartitionsToTransaction(partitions: collection.Set[TopicPartition],
+                                       txnMetadataPartitions: Set[TopicPartition],
+                                       responseCallback: VerifyPartitionsCallback): Unit = {
+    val addedPartitions = partitions.intersect(txnMetadataPartitions)
+    val nonAddedPartitions = partitions.diff(txnMetadataPartitions)
+    val errors = mutable.Map[TopicPartition, Errors]()
+    addedPartitions.foreach(errors.put(_, Errors.NONE))
+    nonAddedPartitions.foreach(errors.put(_, Errors.INVALID_TXN_STATE))
+    responseCallback(errors.toMap)
+  }
+
   def handleAddPartitionsToTransaction(transactionalId: String,
                                        producerId: Long,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
                                        verifyOnly: Boolean,
                                        responseCallback: AddPartitionsCallback,
+                                       verifyCallback: VerifyPartitionsCallback,
                                        requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
       debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
@@ -355,10 +370,9 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             } else {
               // If verifyOnly, we should have returned in the step above. If we didn't the partitions are not present in the transaction.
               if (verifyOnly) {
-                Left(Errors.INVALID_TXN_STATE)
-              } else {
-                Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.milliseconds()))
-              }
+                verifyAddPartitionsToTransaction(partitions, txnMetadata.topicPartitions.toSet, verifyCallback)
+              } 
+              Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.milliseconds()))
             }
           }
       }
@@ -368,9 +382,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           debug(s"Returning $err error code to client for $transactionalId's AddPartitions request")
           responseCallback(err)
 
-        case Right((coordinatorEpoch, newMetadata)) =>
+        case Right((coordinatorEpoch, newMetadata)) if !verifyOnly =>
           txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
             responseCallback, requestLocal = requestLocal)
+
+        case _ =>
+          // We only hit this case if verifyOnly and some partitions were not present. If so, we already handled the response.
       }
     }
   }

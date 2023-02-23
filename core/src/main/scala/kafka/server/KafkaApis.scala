@@ -2475,6 +2475,13 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
             maybeSendResponse()
           }
+          
+          def sendVerifyResponseCallback(errors: Map[TopicPartition, Errors]): Unit = {
+            responses.synchronized {
+              responses.add(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, errors.asJava))
+            }
+            maybeSendResponse()
+          }
 
           txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
             transaction.producerId,
@@ -2482,6 +2489,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             authorizedPartitions,
             transaction.verifyOnly,
             sendResponseCallback,
+            sendVerifyResponseCallback,
             requestLocal)
         }
       }
@@ -2535,6 +2543,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         Set(offsetTopicPartition),
         false,
         sendResponseCallback,
+        null,
         requestLocal)
     }
   }
