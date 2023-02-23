@@ -408,9 +408,8 @@ abstract class AbstractFetcherThread(name: String,
                 case Errors.OFFSET_MOVED_TO_TIERED_STORAGE =>
                   debug(s"Received error ${Errors.OFFSET_MOVED_TO_TIERED_STORAGE}, " +
                     s"at fetch offset: ${currentFetchState.fetchOffset}, " + s"topic-partition: $topicPartition")
-                  if (!handleOffsetsMovedToTieredStorage(topicPartition, currentFetchState, fetchPartitionData.currentLeaderEpoch, partitionData)) {
+                  if (!handleOffsetsMovedToTieredStorage(topicPartition, currentFetchState, fetchPartitionData.currentLeaderEpoch, partitionData))
                     partitionsWithError += topicPartition
-                  }
 
                 case Errors.NOT_LEADER_OR_FOLLOWER =>
                   debug(s"Remote broker is not the leader for partition $topicPartition, which could indicate " +
@@ -740,8 +739,9 @@ abstract class AbstractFetcherThread(name: String,
    * Returns false if there was a retriable error.
    *
    * @param topicPartition topic partition
-   * @param fetchState current partition fetch state.
-   * @param fetchPartitionData the fetch request data for this topic partition
+   * @param fetchState current partition fetch state
+   * @param leaderEpochInRequest current leader epoch sent in the fetch request
+   * @param fetchPartitionData the fetch response data for this topic partition
    */
   private def handleOffsetsMovedToTieredStorage(topicPartition: TopicPartition,
                                                 fetchState: PartitionFetchState,
