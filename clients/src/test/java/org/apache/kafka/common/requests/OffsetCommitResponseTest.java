@@ -32,6 +32,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,8 +53,8 @@ public class OffsetCommitResponseTest {
 
     protected final String topic1 = "topic1";
     protected final Uuid topic1Id = Uuid.randomUuid();
-    protected final int p1 = 1;
-    protected final int p2 = 2;
+    protected final int partitionOne = 1;
+    protected final int partitionTwo = 2;
     protected final Errors errorOne = Errors.COORDINATOR_NOT_AVAILABLE;
     protected final Errors errorTwo = Errors.NOT_COORDINATOR;
     protected final String topic2 = "topic2";
@@ -81,8 +83,8 @@ public class OffsetCommitResponseTest {
     protected final int p15 = 15;
     protected final int p16 = 16;
 
-    protected TopicPartition tp1 = new TopicPartition(topic1, p1);
-    protected TopicPartition tp2 = new TopicPartition(topic2, p2);
+    protected TopicPartition tp1 = new TopicPartition(topic1, partitionOne);
+    protected TopicPartition tp2 = new TopicPartition(topic2, partitionTwo);
     protected Map<Errors, Integer> expectedErrorCounts;
     protected Map<TopicPartition, Errors> errorsMap;
 
@@ -109,14 +111,14 @@ public class OffsetCommitResponseTest {
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testParse(short version) {
         OffsetCommitResponseData data = new OffsetCommitResponseData()
-            .setTopics(asList(
+            .setTopics(Arrays.asList(
                 new OffsetCommitResponseTopic().setPartitions(
-                    singletonList(new OffsetCommitResponsePartition()
-                        .setPartitionIndex(p1)
+                    Collections.singletonList(new OffsetCommitResponsePartition()
+                        .setPartitionIndex(partitionOne)
                         .setErrorCode(errorOne.code()))),
                 new OffsetCommitResponseTopic().setPartitions(
-                    singletonList(new OffsetCommitResponsePartition()
-                        .setPartitionIndex(p2)
+                    Collections.singletonList(new OffsetCommitResponsePartition()
+                        .setPartitionIndex(partitionTwo)
                         .setErrorCode(errorTwo.code())))
             ))
             .setThrottleTimeMs(throttleTimeMs);
@@ -139,8 +141,8 @@ public class OffsetCommitResponseTest {
     public void testOffsetCommitResponseBuilder(short version) {
         OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder()
             // Both topic name and id are defined.
-            .addPartition(topic1, topic1Id, p1, Errors.NONE)
-            .addPartition(topic1, topic1Id, p2, Errors.NONE)
+            .addPartition(topic1, topic1Id, partitionOne, Errors.NONE)
+            .addPartition(topic1, topic1Id, partitionTwo, Errors.NONE)
 
             // Only topic name is defined.
             .addPartition(topic2, Uuid.ZERO_UUID, p3, Errors.NONE)
@@ -168,7 +170,7 @@ public class OffsetCommitResponseTest {
         }
 
         List<OffsetCommitResponseTopic> expectedTopics = new ArrayList<>(asList(
-            createResponseTopic(version, topic1, topic1Id, p1, p2, Errors.NONE),
+            createResponseTopic(version, topic1, topic1Id, partitionOne, partitionTwo, Errors.NONE),
             createResponseTopic(version, topic2, Uuid.ZERO_UUID, p3, p4, Errors.NONE),
             createResponseTopic(version, topic3, topic3Id, p5, p6, Errors.NONE),
             createResponseTopic(version, topic4, topic4Id, p7, p8, Errors.NONE),
@@ -189,23 +191,23 @@ public class OffsetCommitResponseTest {
     @Test
     public void testExceptionIsThrownIfInconsistentIdIsProvided() {
         OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder()
-            .addPartition(topic1, topic1Id, p1, Errors.NONE);
+            .addPartition(topic1, topic1Id, partitionOne, Errors.NONE);
 
         assertThrows(IllegalArgumentException.class,
-            () -> builder.addPartition(topic1, topic3Id, p2, Errors.NONE));
+            () -> builder.addPartition(topic1, topic3Id, partitionTwo, Errors.NONE));
     }
 
     @Test
     public void testExceptionIsThrownIfAddPartitionIsCalledWithATopicName() {
         assertThrows(IllegalArgumentException.class,
-            () -> new OffsetCommitResponse.Builder().addPartition(null, topic1Id, p1, Errors.NONE));
+            () -> new OffsetCommitResponse.Builder().addPartition(null, topic1Id, partitionOne, Errors.NONE));
     }
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testExceptionIsThrownIfTopicNameIsNullPriorVersion9(short version) {
         OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder()
-            .addPartitions(null, topic1Id, asList(p1, p2), identity(), Errors.NONE);
+            .addPartitions(null, topic1Id, asList(partitionOne, partitionTwo), identity(), Errors.NONE);
 
         if (version < 9) {
             assertThrows(InvalidRequestException.class, () -> builder.build(version));
@@ -215,8 +217,8 @@ public class OffsetCommitResponseTest {
                 .setTopicId(topic1Id)
                 .setName(null)
                 .setPartitions(asList(
-                    new OffsetCommitResponsePartition().setPartitionIndex(p1),
-                    new OffsetCommitResponsePartition().setPartitionIndex(p2))
+                    new OffsetCommitResponsePartition().setPartitionIndex(partitionOne),
+                    new OffsetCommitResponsePartition().setPartitionIndex(partitionTwo))
                 );
 
             assertEquals(
