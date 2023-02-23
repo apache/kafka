@@ -272,14 +272,15 @@ subprojects {
     options.compilerArgs << "-Werror"
 
     // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
-    // set --source and --target via `sourceCompatibility` and `targetCompatibility`.
-    if (JavaVersion.current().isJava9Compatible()) {
+    // set --source and --target via `sourceCompatibility` and `targetCompatibility` a couple of lines below
+    if (JavaVersion.current().isJava9Compatible())
       options.release = minJavaVersion
-    } else {
-      sourceCompatibility = minJavaVersion
-      targetCompatibility = minJavaVersion
-    }
   }
+  
+  // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
+  // `-target` incorrectly if this is unset
+  sourceCompatibility = minJavaVersion
+  targetCompatibility = minJavaVersion
 
   if (shouldPublish) {
 
