@@ -37,7 +37,7 @@
   <allow pkg="javax.security" />
   <allow pkg="org.ietf.jgss" />
   <allow pkg="net.jqwik.api" />
-  <allow pkg="org.organicdesign.fp" />
+  <allow pkg="io.vavr" />
 
   <!-- no one depends on the server -->
   <disallow pkg="kafka" />

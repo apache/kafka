@@ -25,13 +25,11 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.organicdesign.fp.collections.ImMap;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 
 
@@ -127,17 +125,17 @@ public final class TopicsDelta {
     }
 
     public TopicsImage apply() {
-        ImMap<Uuid, TopicImage> newTopicsById = image.topicsById;
-        ImMap<String, TopicImage> newTopicsByName = image.topicsByName;
+        io.vavr.collection.Map<Uuid, TopicImage> newTopicsById = image.topicsById;
+        io.vavr.collection.Map<String, TopicImage> newTopicsByName = image.topicsByName;
         // apply all the deletes
         for (Uuid topicId: deletedTopicIds) {
             // it was deleted, so we have to remove it from the maps
-            TopicImage originalTopicToBeDeleted = image.topicsById.get(topicId);
+            TopicImage originalTopicToBeDeleted = image.topicsById.get(topicId).getOrNull();
             if (originalTopicToBeDeleted == null) {
                 throw new IllegalStateException("Missing topic id " + topicId);
             } else {
-                newTopicsById = newTopicsById.without(topicId);
-                newTopicsByName = newTopicsByName.without(originalTopicToBeDeleted.name());
+                newTopicsById = newTopicsById.remove(topicId);
+                newTopicsByName = newTopicsByName.remove(originalTopicToBeDeleted.name());
             }
         }
         // apply all the updates/additions
@@ -146,8 +144,8 @@ public final class TopicsDelta {
             TopicImage newTopicToBeAddedOrUpdated = entry.getValue().apply();
             // put new information into the maps
             String topicName = newTopicToBeAddedOrUpdated.name();
-            newTopicsById = newTopicsById.assoc(topicId, newTopicToBeAddedOrUpdated);
-            newTopicsByName = newTopicsByName.assoc(topicName, newTopicToBeAddedOrUpdated);
+            newTopicsById = newTopicsById.put(topicId, newTopicToBeAddedOrUpdated);
+            newTopicsByName = newTopicsByName.put(topicName, newTopicToBeAddedOrUpdated);
         }
         return new TopicsImage(newTopicsById, newTopicsByName);
     }

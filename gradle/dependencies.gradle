@@ -108,7 +108,6 @@ versions += [
   metrics: "2.2.0",
   mockito: "4.9.0",
   netty: "4.1.86.Final",
-  paguro: "3.10.3",
   powermock: "2.0.9",
   reflections: "0.9.12",
   reload4j: "1.2.19",
@@ -125,6 +124,7 @@ versions += [
   spotbugs: "4.7.3",
   swaggerAnnotations: "2.2.8",
   swaggerJaxrs2: "2.2.8",
+  vavr: "0.10.4",
   zinc: "1.8.0",
   zookeeper: "3.6.4",
   zstd: "1.5.2-1"
@@ -199,7 +199,6 @@ libs += [
   mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$versions.mockito",
   nettyHandler: "io.netty:netty-handler:$versions.netty",
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
-  paguro: "org.organicdesign:Paguro:$versions.paguro",
   powermockJunit4: "org.powermock:powermock-module-junit4:$versions.powermock",
   powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
   reflections: "org.reflections:reflections:$versions.reflections",
@@ -217,6 +216,7 @@ libs += [
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
+  vavr: "io.vavr:vavr:$versions.vavr",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
   httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
 ]

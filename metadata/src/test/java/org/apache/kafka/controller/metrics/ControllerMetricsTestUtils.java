@@ -23,7 +23,6 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.organicdesign.fp.collections.ImMap;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -31,7 +30,6 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.organicdesign.fp.StaticImports.map;
 
 public class ControllerMetricsTestUtils {
     public static void assertMetricsForTypeEqual(
@@ -101,11 +99,11 @@ public class ControllerMetricsTestUtils {
     public static TopicsImage fakeTopicsImage(
         TopicImage... topics
     ) {
-        ImMap<Uuid, TopicImage> topicsById = map();
-        ImMap<String, TopicImage> topicsByName = map();
+        io.vavr.collection.Map<Uuid, TopicImage> topicsById = io.vavr.collection.HashMap.empty();
+        io.vavr.collection.Map<String, TopicImage> topicsByName = io.vavr.collection.HashMap.empty();
         for (TopicImage topic : topics) {
-            topicsById = topicsById.assoc(topic.id(), topic);
-            topicsByName = topicsByName.assoc(topic.name(), topic);
+            topicsById = topicsById.put(topic.id(), topic);
+            topicsByName = topicsByName.put(topic.name(), topic);
         }
         return new TopicsImage(topicsById, topicsByName);
     }

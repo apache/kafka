@@ -32,7 +32,6 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.organicdesign.fp.collections.ImMap;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,7 +51,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.organicdesign.fp.StaticImports.map;
 
 
 @Timeout(value = 40)
@@ -76,18 +74,18 @@ public class TopicsImageTest {
         return new TopicImage(name, id, partitionMap);
     }
 
-    private static ImMap<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
-        ImMap<Uuid, TopicImage> map = map();
+    private static io.vavr.collection.Map<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
+        io.vavr.collection.Map<Uuid, TopicImage> map = io.vavr.collection.HashMap.empty();
         for (TopicImage topic : topics) {
-            map = map.assoc(topic.id(), topic);
+            map = map.put(topic.id(), topic);
         }
         return map;
     }
 
-    private static ImMap<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
-        ImMap<String, TopicImage> map = map();
+    private static io.vavr.collection.Map<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
+        io.vavr.collection.Map<String, TopicImage> map = io.vavr.collection.HashMap.empty();
         for (TopicImage topic : topics) {
-            map = map.assoc(topic.name(), topic);
+            map = map.put(topic.name(), topic);
         }
         return map;
     }
