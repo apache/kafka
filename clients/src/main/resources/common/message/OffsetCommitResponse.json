@@ -40,7 +40,7 @@
       { "name": "Name", "type": "string", "versions": "0+", "nullableVersions": "9+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "TopicId", "type": "uuid", "versions": "9+",
-        "about": "The unique topic ID" },
+        "about": "The unique topic ID." },
       { "name": "Partitions", "type": "[]OffsetCommitResponsePartition", "versions": "0+",
         "about": "The responses for each partition in the topic.",  "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",

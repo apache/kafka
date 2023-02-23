@@ -2872,6 +2872,8 @@ public abstract class ConsumerCoordinatorTest {
         assertThrows(GroupAuthorizationException.class,
             () -> coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
 
+        // The following offset commit responses define a topic incorrectly. The coordinator ignores the topic,
+        // and the group authorization failure is therefore not propagated.
         client.prepareResponse(offsetCommitResponse(null, Uuid.randomUuid(), Errors.GROUP_AUTHORIZATION_FAILED));
         assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
 
@@ -2931,6 +2933,8 @@ public abstract class ConsumerCoordinatorTest {
             offsetCommitResponse(topic1, Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
             GroupAuthorizationException.class);
 
+        // The following offset commit responses define a topic incorrectly. The coordinator ignores the topic,
+        // and the group authorization failure is therefore not propagated.
         asserter.accept(
             offsetCommitResponse(topic1, topic1Id, Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
             null);
