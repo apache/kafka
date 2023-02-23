@@ -2099,6 +2099,12 @@ object TestUtils extends Logging {
       .count
   }
 
+  def metersCount(metricName: String): Long = {
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => k.getMBeanName.endsWith(metricName)}
+      .values.map(_.asInstanceOf[Meter].count()).sum
+  }
+
   def clearYammerMetrics(): Unit = {
     for (metricName <- KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala)
       KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
