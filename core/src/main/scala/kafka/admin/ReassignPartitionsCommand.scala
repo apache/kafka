@@ -606,6 +606,10 @@ object ReassignPartitionsCommand extends Logging {
     val proposedAssignments = mutable.Map[TopicPartition, Seq[Int]]()
     groupedByTopic.forKeyValue { (topic, assignment) =>
       val (_, replicas) = assignment.head
+      // TODO:
+      //  This is for `./kafka-reassign-partitions.sh --generate` an "external operation" code path that we don't use in LI.
+      //  If in the future, we want to use it and make it compliant with our new rackIdMapperForBrokerAssignment,
+      //  will need to be modified to and repackaged to generate a new kafka-utils package to support passing it in.
       val assignedReplicas = AdminUtils.
         assignReplicasToBrokers(brokerMetadatas, assignment.size, replicas.size)
       proposedAssignments ++= assignedReplicas.map { case (partition, replicas) =>

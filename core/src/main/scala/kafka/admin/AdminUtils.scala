@@ -104,7 +104,8 @@ object AdminUtils extends Logging {
                               nPartitions: Int,
                               replicationFactor: Int,
                               fixedStartIndex: Int = -1,
-                              startPartitionId: Int = -1): Map[Int, Seq[Int]] = {
+                              startPartitionId: Int = -1,
+                              rackIdMapperForBrokerAssignment: RackAwareReplicaAssignmentRackIdMapper = identity): Map[Int, Seq[Int]] = {
     if (nPartitions <= 0)
       throw new InvalidPartitionsException("Number of partitions must be larger than 0.")
     if (replicationFactor <= 0)
@@ -118,7 +119,7 @@ object AdminUtils extends Logging {
       if (brokerMetadatas.exists(_.rack.isEmpty))
         throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment.")
       assignReplicasToBrokersRackAware(nPartitions, replicationFactor, brokerMetadatas, fixedStartIndex,
-        startPartitionId)
+        startPartitionId, rackIdMapperForBrokerAssignment)
     }
   }
 
@@ -149,9 +150,10 @@ object AdminUtils extends Logging {
                                                replicationFactor: Int,
                                                brokerMetadatas: Iterable[BrokerMetadata],
                                                fixedStartIndex: Int,
-                                               startPartitionId: Int): Map[Int, Seq[Int]] = {
+                                               startPartitionId: Int,
+                                               rackIdMapperForBrokerAssignment: RackAwareReplicaAssignmentRackIdMapper): Map[Int, Seq[Int]] = {
     val brokerRackMap = brokerMetadatas.collect { case BrokerMetadata(id, Some(rack)) =>
-      id -> rack
+      id -> rackIdMapperForBrokerAssignment.apply(rack)
     }.toMap
     val numRacks = brokerRackMap.values.toSet.size
     val arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap)

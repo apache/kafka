@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.admin.IgnorePrefixRackIdMapper
 import kafka.api.{ApiVersion, KAFKA_0_8_2, KAFKA_3_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.log.LogConfig
@@ -1276,5 +1277,19 @@ class KafkaConfigTest {
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, String.valueOf(true))
     props.put(KafkaConfig.LogDirsProp, "/tmp/a")
     KafkaConfig.fromProps(props)
+  }
+
+  @Test
+  def testRackAwareReplicaAssignmentRackIdMapperGeneratedFromClassName(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.LiRackIdMapperClassNameForRackAwareReplicaAssignmentProp, classOf[IgnorePrefixRackIdMapper].getCanonicalName)
+    assertTrue(KafkaConfig.fromProps(props).rackIdMapperForRackAwareReplicaAssignment.isInstanceOf[IgnorePrefixRackIdMapper])
+  }
+
+  @Test
+  def testRackAwareReplicaAssignmentRackIdMapperDefaultsToIdentityIfNotProvided(): Unit = {
+    val testRackId = "A::123"
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    assertEquals(testRackId, KafkaConfig.fromProps(props).rackIdMapperForRackAwareReplicaAssignment(testRackId))
   }
 }

@@ -1268,7 +1268,9 @@ class KafkaController(val config: KafkaConfig,
             val numReplica = partitionMap.head._2.replicas.size
             val brokers = controllerContext.liveOrShuttingDownBrokers.map { b => kafka.admin.BrokerMetadata(b.id, b.rack) }.toSeq
 
-            val replicaAssignment = adminZkClient.assignReplicasToAvailableBrokers(brokers, noNewPartitionBrokerIds.toSet, numPartitions, numReplica)
+            val replicaAssignment =
+              adminZkClient.assignReplicasToAvailableBrokers(brokers, noNewPartitionBrokerIds.toSet, numPartitions, numReplica,
+                                                             rackIdMapperForRackAwareReplicaAssignment = config.rackIdMapperForRackAwareReplicaAssignment)
             adminZkClient.writeTopicPartitionAssignment(topic, replicaAssignment.mapValues(ReplicaAssignment(_)).toMap, true)
             info(s"Rearrange partition and replica assignment for topic [$topic]")
         }
@@ -3001,8 +3003,10 @@ class KafkaController(val config: KafkaConfig,
       val topicId = topicsIdReplicaAssignment.topicId
       val numPartitions = topicsIdReplicaAssignment.assignment.size
       val assignment =
-        adminZkClient.assignReplicasToAvailableBrokers(brokers, noNewPartitionBrokerIds, numPartitions, replicationFactor)
-          .map { case(partition, replicas) => (new TopicPartition(topic, partition), ReplicaAssignment(replicas))}
+        adminZkClient
+          .assignReplicasToAvailableBrokers(brokers, noNewPartitionBrokerIds, numPartitions, replicationFactor,
+                                            rackIdMapperForRackAwareReplicaAssignment = config.rackIdMapperForRackAwareReplicaAssignment)
+          .map { case(partition, replicas) => (new TopicPartition(topic, partition), ReplicaAssignment(replicas)) }
       zkClient.setTopicAssignment(topic, topicId, assignment, controllerContext.epochZkVersion)
       info(s"Updated topic [$topic] with $assignment for replica assignment")
     }

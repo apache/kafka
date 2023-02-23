@@ -178,7 +178,8 @@ class ZkAdminManager(val config: KafkaConfig,
         val assignments = if (topic.assignments.isEmpty) {
           adminZkClient.assignReplicasToAvailableBrokers(
             brokers, controller.partitionUnassignableBrokerIds.toSet,
-            resolvedNumPartitions, resolvedReplicationFactor
+            resolvedNumPartitions, resolvedReplicationFactor,
+            rackIdMapperForRackAwareReplicaAssignment = config.rackIdMapperForRackAwareReplicaAssignment
           )
         } else {
           val assignments = new mutable.HashMap[Int, Seq[Int]]
@@ -352,7 +353,9 @@ class ZkAdminManager(val config: KafkaConfig,
 
         val assignmentForNewPartitions = adminZkClient.createNewPartitionsAssignment(
           topic, existingAssignment, allBrokers, newPartition.count, newPartitionsAssignment,
-          noNewPartitionBrokerIds = controller.partitionUnassignableBrokerIds.toSet)
+          noNewPartitionBrokerIds = controller.partitionUnassignableBrokerIds.toSet,
+          config.rackIdMapperForRackAwareReplicaAssignment
+        )
 
         if (validateOnly) {
           CreatePartitionsMetadata(topic, (existingAssignment ++ assignmentForNewPartitions).keySet)
