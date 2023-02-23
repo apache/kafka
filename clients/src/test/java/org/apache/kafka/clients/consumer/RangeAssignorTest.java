@@ -340,6 +340,52 @@ public class RangeAssignorTest {
     }
 
     @Test
+    public void testRackAwareStaticMemberRangeAssignmentPersistentAfterMemberIdChanges() {
+        initializeRacks(RackConfig.BROKER_AND_CONSUMER_RACK);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        int replicationFactor = 2;
+        int numBrokerRacks = 3;
+        partitionsPerTopic.put(topic1, AbstractPartitionAssignorTest.partitionInfos(topic1, 5, replicationFactor, numBrokerRacks, 0));
+        partitionsPerTopic.put(topic2,  AbstractPartitionAssignorTest.partitionInfos(topic2, 5, replicationFactor, numBrokerRacks, 0));
+        List<MemberInfo> staticMemberInfos = new ArrayList<>();
+        staticMemberInfos.add(new MemberInfo(consumer1, Optional.of(instance1), Optional.of(ALL_RACKS[0])));
+        staticMemberInfos.add(new MemberInfo(consumer2, Optional.of(instance2), Optional.of(ALL_RACKS[1])));
+        staticMemberInfos.add(new MemberInfo(consumer3, Optional.of(instance3), Optional.of(ALL_RACKS[2])));
+
+        Map<String, Subscription> consumers = new HashMap<>();
+        int consumerIndex = 0;
+        for (MemberInfo m : staticMemberInfos) {
+            Subscription subscription = subscription(topics(topic1, topic2), consumerIndex++);
+            subscription.setGroupInstanceId(m.groupInstanceId);
+            consumers.put(m.memberId, subscription);
+        }
+        Map<String, List<TopicPartition>> expectedInstanceAssignment = new HashMap<>();
+        expectedInstanceAssignment.put(instance1,
+                partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 0), tp(topic2, 2)));
+        expectedInstanceAssignment.put(instance2,
+                partitions(tp(topic1, 1), tp(topic1, 3), tp(topic2, 1), tp(topic2, 3)));
+        expectedInstanceAssignment.put(instance3,
+                partitions(tp(topic1, 4), tp(topic2, 4)));
+
+        Map<String, List<TopicPartition>> staticAssignment =
+                checkStaticAssignment(assignor, partitionsPerTopic, consumers);
+        assertEquals(expectedInstanceAssignment, staticAssignment);
+
+        // Now switch the member.id fields for each member info, the assignment should
+        // stay the same as last time.
+        String consumer4 = "consumer4";
+        String consumer5 = "consumer5";
+        consumers.put(consumer4, consumers.get(consumer3));
+        consumers.remove(consumer3);
+        consumers.put(consumer5, consumers.get(consumer2));
+        consumers.remove(consumer2);
+
+        Map<String, List<TopicPartition>> newStaticAssignment =
+                checkStaticAssignment(assignor, partitionsPerTopic, consumers);
+        assertEquals(staticAssignment, newStaticAssignment);
+    }
+
+    @Test
     public void testRackAwareAssignmentWithUniformSubscription() {
         Map<String, Integer> topics = mkMap(mkEntry("t1", 6), mkEntry("t2", 7), mkEntry("t3", 2));
         List<String> allTopics = asList("t1", "t2", "t3");
