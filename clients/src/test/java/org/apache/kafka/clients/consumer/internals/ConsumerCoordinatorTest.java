@@ -53,6 +53,7 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestPartition;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
@@ -76,6 +77,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.OffsetCommitRequest.Builder;
 import org.apache.kafka.common.requests.OffsetCommitRequestTest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -116,8 +118,10 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -127,6 +131,7 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toMap;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE;
@@ -203,11 +208,11 @@ public abstract class ConsumerCoordinatorTest {
     public ConsumerCoordinatorTest(final ConsumerPartitionAssignor.RebalanceProtocol protocol) {
         this.protocol = protocol;
 
-        this.partitionAssignor = new MockPartitionAssignor(Collections.singletonList(protocol));
-        this.throwOnAssignmentAssignor = new ThrowOnAssignmentAssignor(Collections.singletonList(protocol),
+        this.partitionAssignor = new MockPartitionAssignor(singletonList(protocol));
+        this.throwOnAssignmentAssignor = new ThrowOnAssignmentAssignor(singletonList(protocol),
             new KafkaException("Kaboom for assignment!"),
             "throw-on-assignment-assignor");
-        this.throwFatalErrorOnAssignmentAssignor = new ThrowOnAssignmentAssignor(Collections.singletonList(protocol),
+        this.throwFatalErrorOnAssignmentAssignor = new ThrowOnAssignmentAssignor(singletonList(protocol),
             new IllegalStateException("Illegal state for assignment!"),
             "throw-fatal-error-on-assignment-assignor");
         this.assignors = Arrays.asList(partitionAssignor, throwOnAssignmentAssignor, throwFatalErrorOnAssignmentAssignor);
@@ -434,7 +439,7 @@ public abstract class ConsumerCoordinatorTest {
         ConsumerPartitionAssignor assignor = Mockito.mock(ConsumerPartitionAssignor.class);
         String assignorName = "mock-assignor";
         Mockito.when(assignor.name()).thenReturn(assignorName);
-        Mockito.when(assignor.supportedProtocols()).thenReturn(Collections.singletonList(protocol));
+        Mockito.when(assignor.supportedProtocols()).thenReturn(singletonList(protocol));
 
         Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, singletonList(topic1));
 
@@ -447,7 +452,7 @@ public abstract class ConsumerCoordinatorTest {
                 .setMetadata(buf.array()));
         }
 
-        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), Collections.singletonList(assignor), false, mockSubscriptionState)) {
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), singletonList(assignor), false, mockSubscriptionState)) {
             assertEquals(Collections.emptyMap(), coordinator.onLeaderElected("1", assignorName, metadata, true));
             assertTrue(coordinator.isLeader());
         }
@@ -462,7 +467,7 @@ public abstract class ConsumerCoordinatorTest {
 
         List<ConsumerPartitionAssignor> assignorsWithCooperativeStickyAssignor = new ArrayList<>(assignors);
         // create a mockPartitionAssignor with the same name as cooperative sticky assignor
-        MockPartitionAssignor mockCooperativeStickyAssignor = new MockPartitionAssignor(Collections.singletonList(protocol)) {
+        MockPartitionAssignor mockCooperativeStickyAssignor = new MockPartitionAssignor(singletonList(protocol)) {
             @Override
             public String name() {
                 return COOPERATIVE_STICKY_ASSIGNOR_NAME;
@@ -485,8 +490,8 @@ public abstract class ConsumerCoordinatorTest {
     @Test
     public void testSelectRebalanceProtcol() {
         List<ConsumerPartitionAssignor> assignors = new ArrayList<>();
-        assignors.add(new MockPartitionAssignor(Collections.singletonList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER)));
-        assignors.add(new MockPartitionAssignor(Collections.singletonList(COOPERATIVE)));
+        assignors.add(new MockPartitionAssignor(singletonList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER)));
+        assignors.add(new MockPartitionAssignor(singletonList(COOPERATIVE)));
 
         // no commonly supported protocols
         assertThrows(IllegalArgumentException.class, () -> buildCoordinator(rebalanceConfig, new Metrics(), assignors, false, subscriptions));
@@ -663,11 +668,11 @@ public abstract class ConsumerCoordinatorTest {
 
         OffsetCommitRequestData offsetCommitRequestData = new OffsetCommitRequestData()
                 .setGroupId(groupId)
-                .setTopics(Collections.singletonList(new
+                .setTopics(singletonList(new
                         OffsetCommitRequestTopic()
                                 .setName("foo")
-                                .setPartitions(Collections.singletonList(
-                                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                .setPartitions(singletonList(
+                                        new OffsetCommitRequestPartition()
                                                 .setPartitionIndex(0)
                                                 .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
                                                 .setCommittedMetadata("")
@@ -677,7 +682,7 @@ public abstract class ConsumerCoordinatorTest {
                         )
                 );
 
-        consumerClient.send(coordinator.checkAndGetCoordinator(), new OffsetCommitRequest.Builder(offsetCommitRequestData))
+        consumerClient.send(coordinator.checkAndGetCoordinator(), new Builder(offsetCommitRequestData))
                 .compose(new RequestFutureAdapter<ClientResponse, Object>() {
                     @Override
                     public void onSuccess(ClientResponse value, RequestFuture<Object> future) {}
@@ -723,7 +728,7 @@ public abstract class ConsumerCoordinatorTest {
 
         // illegal_generation will cause re-partition
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
-        subscriptions.assignFromSubscribed(Collections.singletonList(t1p));
+        subscriptions.assignFromSubscribed(singletonList(t1p));
 
         time.sleep(sessionTimeoutMs);
         RequestFuture<Void> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
@@ -752,7 +757,7 @@ public abstract class ConsumerCoordinatorTest {
 
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
         ByteBuffer buffer = ConsumerProtocol.serializeAssignment(
-            new ConsumerPartitionAssignor.Assignment(Collections.singletonList(t1p), ByteBuffer.wrap(new byte[0])));
+            new ConsumerPartitionAssignor.Assignment(singletonList(t1p), ByteBuffer.wrap(new byte[0])));
         coordinator.onJoinComplete(1, "memberId", partitionAssignor.name(), buffer);
 
         coordinator.onLeavePrepare();
@@ -867,7 +872,7 @@ public abstract class ConsumerCoordinatorTest {
 
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
         ByteBuffer buffer = ConsumerProtocol.serializeAssignment(
-            new ConsumerPartitionAssignor.Assignment(Collections.singletonList(t1p), ByteBuffer.wrap(new byte[0])));
+            new ConsumerPartitionAssignor.Assignment(singletonList(t1p), ByteBuffer.wrap(new byte[0])));
         subscriptions.assignFromSubscribed(singleton(t2p));
 
         if (exceptionMessage != null) {
@@ -893,7 +898,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
-        subscriptions.assignFromSubscribed(Collections.singletonList(t1p));
+        subscriptions.assignFromSubscribed(singletonList(t1p));
 
         coordinator.onLeavePrepare();
         assertEquals(1, rebalanceListener.lostCount);
@@ -907,7 +912,7 @@ public abstract class ConsumerCoordinatorTest {
 
         // illegal_generation will cause re-partition
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
-        subscriptions.assignFromSubscribed(Collections.singletonList(t1p));
+        subscriptions.assignFromSubscribed(singletonList(t1p));
 
         time.sleep(sessionTimeoutMs);
         RequestFuture<Void> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
@@ -1066,9 +1071,9 @@ public abstract class ConsumerCoordinatorTest {
     public void testMetadataTopicsDuringSubscriptionChange() {
         final String consumerId = "subscription_change";
         final List<String> oldSubscription = singletonList(topic1);
-        final List<TopicPartition> oldAssignment = Collections.singletonList(t1p);
+        final List<TopicPartition> oldAssignment = singletonList(t1p);
         final List<String> newSubscription = singletonList(topic2);
-        final List<TopicPartition> newAssignment = Collections.singletonList(t2p);
+        final List<TopicPartition> newAssignment = singletonList(t2p);
 
         subscriptions.subscribe(toSet(oldSubscription), rebalanceListener);
         assertEquals(toSet(oldSubscription), subscriptions.metadataTopics());
@@ -2060,7 +2065,7 @@ public abstract class ConsumerCoordinatorTest {
                 return true;
             }
             return false;
-        }, syncGroupResponse(Collections.singletonList(tp1), Errors.NONE));
+        }, syncGroupResponse(singletonList(tp1), Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
         // the metadata update should trigger a second rebalance
@@ -2136,10 +2141,10 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // prepare initial rebalance
-        partitionAssignor.prepare(singletonMap(consumerId, Collections.singletonList(partition)));
+        partitionAssignor.prepare(singletonMap(consumerId, singletonList(partition)));
 
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
-        client.prepareResponse(syncGroupResponse(Collections.singletonList(partition), Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(partition), Errors.NONE));
 
         // The first call to poll should raise the exception from the rebalance listener
         try {
@@ -2781,37 +2786,54 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
-        Set<Uuid> topicsReferencedById = new HashSet<>();
-        Set<String> topicsReferencedByName = new HashSet<>();
-
-        Consumer<OffsetCommitRequestTopic> topicConsumer = topic -> {
-            if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
-                assertNotNull(topic.topicId());
-                assertNull(topic.name());
-                topicsReferencedById.add(topic.topicId());
-
-            } else {
-                assertNotNull(topic.name());
-                topicsReferencedByName.add(topic.name());
-            }
-        };
+        OffsetCommitRequestData expectedRequestData = new OffsetCommitRequestData()
+            .setGroupId(rebalanceConfig.groupId)
+            .setGenerationId(OffsetCommitRequest.DEFAULT_GENERATION_ID)
+            .setTopics(Arrays.asList(
+                new OffsetCommitRequestTopic()
+                    .setTopicId(topic1Id)
+                    .setName(null)
+                    .setPartitions(singletonList(new OffsetCommitRequestPartition()
+                        .setPartitionIndex(t1p.partition())
+                        .setCommittedOffset(100L)
+                        .setCommittedMetadata("metadata1"))),
+                new OffsetCommitRequestTopic()
+                    .setTopicId(topic2Id)
+                    .setName(null)
+                    .setPartitions(singletonList(new OffsetCommitRequestPartition()
+                        .setPartitionIndex(t2p.partition())
+                        .setCommittedOffset(200L)
+                        .setCommittedMetadata("metadata2"))),
+                new OffsetCommitRequestTopic()
+                    .setTopicId(Uuid.ZERO_UUID)
+                    .setName(t3p.topic())
+                    .setPartitions(singletonList(new OffsetCommitRequestPartition()
+                        .setPartitionIndex(t3p.partition())
+                        .setCommittedOffset(300L)
+                        .setCommittedMetadata("metadata3")))
+            ));
 
         Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1p, 100L);
         expectedOffsets.put(t2p, 200L);
         expectedOffsets.put(t3p, 300L);
 
-        prepareOffsetCommitRequest(expectedOffsets, Collections.emptyMap(), Errors.NONE, false, topicConsumer);
+        OffsetCommitRequestCaptor captor = new OffsetCommitRequestCaptor();
+        prepareOffsetCommitRequest(expectedOffsets, Collections.emptyMap(), Errors.NONE, false, captor);
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(t1p, new OffsetAndMetadata(100L, "metadata"));
-        offsets.put(t2p, new OffsetAndMetadata(200L, "metadata"));
-        offsets.put(t3p, new OffsetAndMetadata(300L, "metadata"));
+        offsets.put(t1p, new OffsetAndMetadata(100L, "metadata1"));
+        offsets.put(t2p, new OffsetAndMetadata(200L, "metadata2"));
+        offsets.put(t3p, new OffsetAndMetadata(300L, "metadata3"));
 
         coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE));
 
-        assertEquals(new HashSet<>(topicIds.values()), topicsReferencedById);
-        assertEquals(Collections.singleton(topic3), topicsReferencedByName);
+        assertTrue(captor.isRequestCaptured());
+
+        // The consumer does not provide a guarantee on the order of occurrence of topics and partitions in the
+        // OffsetCommit request, since a map of offsets is provided to the consumer API. Here, both requests
+        // are asserted to be identical irrespective of the order in which topic and partitions appear in the requests.
+        assertEqualsUnordered(expectedRequestData, captor.requestData());
     }
 
     @Test
@@ -3554,7 +3576,7 @@ public abstract class ConsumerCoordinatorTest {
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
         {
             ByteBuffer buffer = ConsumerProtocol.serializeAssignment(
-                new ConsumerPartitionAssignor.Assignment(Collections.singletonList(t1p), ByteBuffer.wrap(new byte[0])));
+                new ConsumerPartitionAssignor.Assignment(singletonList(t1p), ByteBuffer.wrap(new byte[0])));
             coordinator.onJoinComplete(1, "memberId", partitionAssignor.name(), buffer);
         }
 
@@ -3700,8 +3722,14 @@ public abstract class ConsumerCoordinatorTest {
     public void testSubscriptionRackId() {
 
         String rackId = "rack-a";
+
+        metrics = new Metrics(time);
         RackAwareAssignor assignor = new RackAwareAssignor(protocol);
         createRackAwareCoordinator(rackId, assignor);
+
+        coordinator = new ConsumerCoordinator(rebalanceConfig, new LogContext(), consumerClient,
+                singletonList(assignor), metadata, subscriptions,
+                metrics, consumerId + groupId, time, false, autoCommitIntervalMs, null, false, rackId);
 
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
         client.updateMetadata(metadataResponse);
@@ -4023,6 +4051,15 @@ public abstract class ConsumerCoordinatorTest {
         return offsetCommitResponse(errors, Collections.emptyMap());
     }
 
+    /**
+     * Builds an {@link OffsetCommitResponse} using either a topic name or id for the partitions
+     * provided. This method does not verify that a given topic-partition is only defined once
+     * in the maps, so that mis-constructed {@link OffsetCommitResponse} can be returned if input
+     * are incorrect. Use the {@link OffsetCommitResponse.Builder} to build a validated
+     * {@link OffsetCommitResponse}.
+     * <p></p>
+     * The order of the {@link OffsetCommitResponseTopic} in the response is not specified.
+     */
     private OffsetCommitResponse offsetCommitResponse(
         Map<TopicPartition, Errors> byTopicName, Map<TopicIdPartition, Errors> byTopicId) {
 
@@ -4047,9 +4084,27 @@ public abstract class ConsumerCoordinatorTest {
         return new OffsetCommitResponse(data);
     }
 
-    private <U, V> List<OffsetCommitResponseTopic> offsetCommitTopics(
+    /**
+     * Creates a list of {@link OffsetCommitResponseTopic} assigning the provided errors to the partitions
+     * resolved from the {@code errors} map keys via the partition indexing function. The classifier is used
+     * internally to group the (partition, error) tuples by topic (topic, (partition, error)). In practice,
+     * the classifier is either a topic name or topic ID. The topic builder function creates a new
+     * {@link OffsetCommitResponseTopic} from the classifying key.
+     *
+     * @param errors The map of elements of U to their assigned errors where U refers to a topic-partition.
+     * @param partitionIndexer The function to resolve the partition index of an element U.
+     * @param classifier The function to resolve the topic characterization of an element U. Can be a topic
+     *                   name or ID.
+     * @param topicBuilder The function which creates a new {@link OffsetCommitResponseTopic} from a topic
+     *                     name or ID.
+     * @param <U> The type of the elements which represent a topic-partition. Intends to be {@link TopicPartition}
+     *            or {@link TopicIdPartition}.
+     * @param <V> The type of the attribute used to group a set of topic-partition. Intends to be a topic name
+     *            or id.
+     */
+    private static <U, V> List<OffsetCommitResponseTopic> offsetCommitTopics(
             Map<U, Errors> errors,
-            Function<U, Integer> partitioner,
+            Function<U, Integer> partitionIndexer,
             Function<U, V> classifier,
             Function<V, OffsetCommitResponseTopic> topicBuilder) {
 
@@ -4064,7 +4119,7 @@ public abstract class ConsumerCoordinatorTest {
 
             partitions.forEach((partition, error) ->
                 responseTopic.partitions().add(new OffsetCommitResponsePartition()
-                    .setPartitionIndex(partitioner.apply(partition))
+                    .setPartitionIndex(partitionIndexer.apply(partition))
                     .setErrorCode(error.code()))
             );
         });
@@ -4122,7 +4177,7 @@ public abstract class ConsumerCoordinatorTest {
             Map<TopicIdPartition, Long> offsetsByTopicId,
             Errors error,
             boolean disconnected,
-            Consumer<OffsetCommitRequestTopic> topicConsumer) {
+            Consumer<OffsetCommitRequest> requestCaptor) {
 
         Map<TopicPartition, Errors> errorsByTopicName = offsetsByTopicName.keySet().stream()
             .map(tp -> new SimpleEntry<>(tp, error))
@@ -4139,7 +4194,7 @@ public abstract class ConsumerCoordinatorTest {
             .collect(toMap(Map.Entry::getKey, Map.Entry::getValue)));
 
         client.prepareResponse(
-            offsetCommitRequestMatcher(expectedOffsets, topicConsumer),
+            offsetCommitRequestMatcher(expectedOffsets, requestCaptor),
             offsetCommitResponse(errorsByTopicName, errorsByTopicId),
             disconnected);
     }
@@ -4149,6 +4204,69 @@ public abstract class ConsumerCoordinatorTest {
             .map(tp -> new SimpleEntry<>(tp, error))
             .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
         client.respond(offsetCommitRequestMatcher(expectedOffsets, __ -> { }), offsetCommitResponse(errors));
+    }
+
+    /**
+     * Compares the two {@link OffsetCommitRequestData} independently of the order in which the
+     * {@link OffsetCommitRequestTopic} and {@link OffsetCommitRequestPartition} are defined in the response.
+     */
+    private static void assertEqualsUnordered(OffsetCommitRequestData expected, OffsetCommitRequestData actual) {
+        assertEquals(expected.groupId(), actual.groupId(), "Group id mismatch");
+        assertEquals(expected.groupInstanceId(), actual.groupInstanceId(), "Group instance id mismatch");
+        assertEquals(expected.generationId(), actual.generationId(), "Generation id mismatch");
+        assertEquals(expected.memberId(), actual.memberId(), "Member id mismatch");
+        assertEquals(expected.retentionTimeMs(), actual.retentionTimeMs(), "Retention time mismatch");
+
+        Predicate<OffsetCommitRequestTopic> isDefinedByName = topic -> {
+            boolean nameDefined = !Utils.isBlank(topic.name());
+            if (nameDefined)
+                assertEquals(Uuid.ZERO_UUID, topic.topicId());
+            return nameDefined;
+        };
+
+        Predicate<OffsetCommitRequestTopic> isDefinedById = topic -> {
+            boolean idDefined = topic.topicId() != null && !Uuid.ZERO_UUID.equals(topic.topicId());
+            if (idDefined)
+                assertNull(topic.name());
+            return idDefined;
+        };
+
+        BiFunction<OffsetCommitRequestTopic, OffsetCommitRequestPartition, TopicPartition> nameMapper =
+            (topic, partition) -> new TopicPartition(topic.name(), partition.partitionIndex());
+
+        BiFunction<OffsetCommitRequestTopic, OffsetCommitRequestPartition, TopicIdPartition> idMapper =
+            (topic, partition) -> new TopicIdPartition(topic.topicId(), partition.partitionIndex(), topic.name());
+
+        assertEquals(
+            offsetCommitRequestPartitions(expected, isDefinedByName, nameMapper),
+            offsetCommitRequestPartitions(actual, isDefinedByName, nameMapper)
+        );
+
+        assertEquals(
+            offsetCommitRequestPartitions(expected, isDefinedById, idMapper),
+            offsetCommitRequestPartitions(actual, isDefinedById, idMapper)
+        );
+    }
+
+    /**
+     * Returns all the {@link OffsetCommitRequestPartition} contained in the response for which the
+     * {@link OffsetCommitRequestTopic} satisfies the filter. The partition objects are keyed using the
+     * provided keyMapper, which intends to generate a {@link TopicPartition} or {@link TopicIdPartition}
+     * depending on how the topic-partition is referenced to from the {@link OffsetCommitRequest}
+     * (that is, by topic id or topic name).
+     */
+    private static <U> Map<U, OffsetCommitRequestPartition> offsetCommitRequestPartitions(
+            OffsetCommitRequestData request,
+            Predicate<OffsetCommitRequestTopic> filter,
+            BiFunction<OffsetCommitRequestTopic, OffsetCommitRequestPartition, U> keyMapper) {
+
+        return request.topics().stream()
+            .filter(filter)
+            .flatMap(topic -> topic.partitions().stream()
+                .collect(Collectors.toMap(p -> keyMapper.apply(topic, p), identity()))
+                .entrySet()
+                .stream())
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private void prepareJoinAndSyncResponse(String consumerId, int generation, List<String> subscription, List<TopicPartition> assignment) {
@@ -4166,7 +4284,7 @@ public abstract class ConsumerCoordinatorTest {
 
     private MockClient.RequestMatcher offsetCommitRequestMatcher(
             Map<TopicPartition, Long> expectedOffsets,
-            Consumer<OffsetCommitRequestTopic> topicConsumer) {
+            Consumer<OffsetCommitRequest> requestConsumer) {
         return body -> {
             OffsetCommitRequest req = (OffsetCommitRequest) body;
             Map<TopicPartition, Long> offsets = OffsetCommitRequestTest.offsets(req, topicResolver);
@@ -4184,10 +4302,8 @@ public abstract class ConsumerCoordinatorTest {
                 }
             }
 
-            if (topicConsumer != null) {
-                for (OffsetCommitRequestTopic topic: req.data().topics()) {
-                    topicConsumer.accept(topic);
-                }
+            if (requestConsumer != null) {
+                requestConsumer.accept(req);
             }
             return true;
         };
@@ -4266,6 +4382,26 @@ public abstract class ConsumerCoordinatorTest {
                 rackIds.add(subscription.rackId().get());
             });
             return super.assign(partitionsPerTopic, subscriptions);
+        }
+    }
+
+    private static class OffsetCommitRequestCaptor implements Consumer<OffsetCommitRequest> {
+        private OffsetCommitRequestData requestData;
+
+        @Override
+        public synchronized void accept(OffsetCommitRequest offsetCommitRequest) {
+            if (requestData != null)
+                throw new AssertionError("Multiple OffsetCommitRequest capture is not supported.");
+
+            requestData = offsetCommitRequest.data();
+        }
+
+        public synchronized boolean isRequestCaptured() {
+            return requestData != null;
+        }
+
+        public synchronized OffsetCommitRequestData requestData() {
+            return requestData;
         }
     }
 }
