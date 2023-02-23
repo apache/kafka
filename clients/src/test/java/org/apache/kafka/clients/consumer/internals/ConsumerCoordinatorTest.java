@@ -77,7 +77,6 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
-import org.apache.kafka.common.requests.OffsetCommitRequest.Builder;
 import org.apache.kafka.common.requests.OffsetCommitRequestTest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -94,6 +93,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
@@ -118,6 +119,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -146,6 +148,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -2759,14 +2762,14 @@ public abstract class ConsumerCoordinatorTest {
         long timeoutMs = rebalanceConfig.retryBackoffMs * offsetCommitCalls;
 
         IntStream.range(0, offsetCommitCalls).forEach(__ ->
-                prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.UNKNOWN_TOPIC_ID));
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.UNKNOWN_TOPIC_ID));
 
         // UnknownTopicIdException is retriable, hence will be retried by the coordinator as long as
         // the timeout allows. Note that since topic ids are not part of the public API of the consumer,
         // we cannot throw an UnknownTopicId to the user. By design, a false boolean indicating the
         // offset commit failed is returned.
         assertFalse(coordinator.commitOffsetsSync(singletonMap(t1p,
-                new OffsetAndMetadata(100L, "metadata")), time.timer(timeoutMs)));
+            new OffsetAndMetadata(100L, "metadata")), time.timer(timeoutMs)));
     }
 
     @Test
@@ -2778,11 +2781,12 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
 
         assertTrue(coordinator.commitOffsetsSync(singletonMap(t1p,
-                new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE)));
+            new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE)));
     }
 
-    @Test
-    public void testTopicIdsArePopulatedByTheConsumerCoordinator() {
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testTopicIdsArePopulatedByTheConsumerCoordinator(boolean sync) {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
@@ -2793,21 +2797,21 @@ public abstract class ConsumerCoordinatorTest {
                 new OffsetCommitRequestTopic()
                     .setTopicId(topic1Id)
                     .setName(null)
-                    .setPartitions(Collections.singletonList(new OffsetCommitRequestPartition()
+                    .setPartitions(singletonList(new OffsetCommitRequestPartition()
                         .setPartitionIndex(t1p.partition())
                         .setCommittedOffset(100L)
                         .setCommittedMetadata("metadata1"))),
                 new OffsetCommitRequestTopic()
                     .setTopicId(topic2Id)
                     .setName(null)
-                    .setPartitions(Collections.singletonList(new OffsetCommitRequestPartition()
+                    .setPartitions(singletonList(new OffsetCommitRequestPartition()
                         .setPartitionIndex(t2p.partition())
                         .setCommittedOffset(200L)
                         .setCommittedMetadata("metadata2"))),
                 new OffsetCommitRequestTopic()
                     .setTopicId(Uuid.ZERO_UUID)
                     .setName(t3p.topic())
-                    .setPartitions(Collections.singletonList(new OffsetCommitRequestPartition()
+                    .setPartitions(singletonList(new OffsetCommitRequestPartition()
                         .setPartitionIndex(t3p.partition())
                         .setCommittedOffset(300L)
                         .setCommittedMetadata("metadata3")))
@@ -2826,57 +2830,118 @@ public abstract class ConsumerCoordinatorTest {
         offsets.put(t2p, new OffsetAndMetadata(200L, "metadata2"));
         offsets.put(t3p, new OffsetAndMetadata(300L, "metadata3"));
 
-        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
-        assertTrue(captor.isRequestCaptured());
+        if (sync) {
+            assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+
+        } else {
+            AtomicBoolean callbackInvoked = new AtomicBoolean();
+            coordinator.commitOffsetsAsync(offsets, (inputOffsets, exception) -> {
+                // Notes:
+                // 1) The offsets passed to the callback are the same object provided to the offset commit method.
+                //    The validation on the offsets is not required but defensive.
+                // 2) We validate that the commit was successful, which is the case if the exception is null.
+                // 3) We validate this callback was invoked, which is not necessary but defensive.
+                assertSame(inputOffsets, offsets);
+                assertNull(exception);
+                callbackInvoked.set(true);
+            });
+
+            coordinator.invokeCompletedOffsetCommitCallbacks();
+            assertTrue(callbackInvoked.get());
+        }
 
         // The consumer does not provide a guarantee on the order of occurrence of topics and partitions in the
         // OffsetCommit request, since a map of offsets is provided to the consumer API. Here, both requests
         // are asserted to be identical irrespective of the order in which topic and partitions appear in the requests.
         assertEqualsUnordered(expectedRequestData, captor.requestData());
     }
-
     @Test
-    public void testInvalidTopicIdReturnedByBrokerWhenCommittingOffset() {
+    public void testInvalidTopicIdReturnedByBrokerWhenCommittingOffsetSync() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
-        BiFunction<String, Uuid, OffsetCommitResponse> responseBuilder = (topicName, topicId) -> {
-            OffsetCommitResponseData data = new OffsetCommitResponseData()
-                .setTopics(Collections.singletonList(new OffsetCommitResponseTopic()
-                    .setName(topicName)
-                    .setTopicId(topicId)
-                    .setPartitions(Collections.singletonList(new OffsetCommitResponsePartition()
-                        .setPartitionIndex(0)
-                        .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code()))))
-                );
-            return new OffsetCommitResponse(data);
+        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p, new OffsetAndMetadata(100L, "m"));
+
+        // Valid topic definition
+        client.prepareResponse(offsetCommitResponse(t1p.topic(), Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED));
+        assertThrows(GroupAuthorizationException.class,
+            () -> coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+
+        // Valid topic definition
+        client.prepareResponse(offsetCommitResponse(null, topic1Id, Errors.GROUP_AUTHORIZATION_FAILED));
+        assertThrows(GroupAuthorizationException.class,
+            () -> coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+
+        client.prepareResponse(offsetCommitResponse(null, Uuid.randomUuid(), Errors.GROUP_AUTHORIZATION_FAILED));
+        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+
+        client.prepareResponse(offsetCommitResponse(null, Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED));
+        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+
+        client.prepareResponse(offsetCommitResponse(t1p.topic(), topic1Id, Errors.GROUP_AUTHORIZATION_FAILED));
+        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+    }
+
+    @Test
+    public void testInvalidTopicIdReturnedByBrokerWhenCommittingOffsetAsync() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(t1p, new OffsetAndMetadata(100L, "metadata1"));
+        offsets.put(t2p, new OffsetAndMetadata(200L, "metadata2"));
+        offsets.put(t3p, new OffsetAndMetadata(300L, "metadata3"));
+
+        // Valid response base.
+        OffsetCommitResponseData commonData = new OffsetCommitResponseData()
+            .setTopics(Arrays.asList(
+                new OffsetCommitResponseTopic()
+                    .setName(null)
+                    .setTopicId(topic2Id)
+                    .setPartitions(singletonList(new OffsetCommitResponsePartition().setPartitionIndex(0))),
+                new OffsetCommitResponseTopic()
+                    .setName(topic3)
+                    .setTopicId(Uuid.ZERO_UUID)
+                    .setPartitions(singletonList(new OffsetCommitResponsePartition().setPartitionIndex(0)))
+            ));
+
+        BiConsumer<OffsetCommitResponseTopic, Class<? extends Exception>> asserter = (topic, exceptionType) -> {
+            OffsetCommitResponseData data = commonData.duplicate();
+            data.topics().add(topic);
+            client.prepareResponse(new OffsetCommitResponse(data));
+
+            AtomicBoolean callbackInvoked = new AtomicBoolean();
+            coordinator.commitOffsetsAsync(offsets, (__, exception) -> {
+                if (exceptionType == null)
+                    assertNull(exception);
+                else
+                    assertEquals(exceptionType, exception.getClass());
+                callbackInvoked.set(true);
+            });
+
+            coordinator.invokeCompletedOffsetCommitCallbacks();
+            assertTrue(callbackInvoked.get());
         };
 
-        Map<TopicPartition, OffsetAndMetadata> offsets =
-            singletonMap(t1p, new OffsetAndMetadata(100L, "metadata"));
+        asserter.accept(
+            offsetCommitResponse(null, topic1Id, Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
+            GroupAuthorizationException.class);
 
-        // Verify that invalid topic definition (invalid id, missing name and id, or definition of both
-        // id and name) is ignored by the consumer. Because the results of the OffsetCommit request is not
-        // propagated to the user, this is indirectly testing by confirming the OffsetCommit invocation on
-        // the consumer is successful while an authorization exception would have been expected in the case
-        // of a valid topic definition.
+        asserter.accept(
+            offsetCommitResponse(topic1, Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
+            GroupAuthorizationException.class);
 
-        client.prepareResponse(responseBuilder.apply(t1p.topic(), Uuid.ZERO_UUID));
-        assertThrows(GroupAuthorizationException.class,
-            () -> coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+        asserter.accept(
+            offsetCommitResponse(topic1, topic1Id, Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
+            null);
 
-        client.prepareResponse(responseBuilder.apply(null, topic1Id));
-        assertThrows(GroupAuthorizationException.class,
-            () -> coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+        asserter.accept(
+            offsetCommitResponse(null, Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
+            null);
 
-        client.prepareResponse(responseBuilder.apply(null, Uuid.randomUuid()));
-        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
-
-        client.prepareResponse(responseBuilder.apply(null, Uuid.ZERO_UUID));
-        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
-
-        client.prepareResponse(responseBuilder.apply(t1p.topic(), topic1Id));
-        assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+        asserter.accept(
+            offsetCommitResponse(null, Uuid.randomUuid(), Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
+            null);
     }
 
     @Test
@@ -4095,6 +4160,22 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     /**
+     * Creates an {@link OffsetCommitResponse} for one topic and partition and the given error. No validation
+     * is performed on the topic name and id, so that the response can be built invalid (on purpose).
+     */
+    private static OffsetCommitResponse offsetCommitResponse(String topicName, Uuid topicId, Errors error) {
+        OffsetCommitResponseData data = new OffsetCommitResponseData()
+            .setTopics(singletonList(new OffsetCommitResponseTopic()
+                .setName(topicName)
+                .setTopicId(topicId)
+                .setPartitions(singletonList(new OffsetCommitResponsePartition()
+                    .setPartitionIndex(0)
+                    .setErrorCode(error.code()))))
+            );
+        return new OffsetCommitResponse(data);
+    }
+
+    /**
      * Builds an {@link OffsetCommitResponse} using either a topic name or id for the partitions
      * provided. This method does not verify that a given topic-partition is only defined once
      * in the maps, so that mis-constructed {@link OffsetCommitResponse} can be returned if input
@@ -4457,10 +4538,6 @@ public abstract class ConsumerCoordinatorTest {
                 throw new AssertionError("Multiple OffsetCommitRequest capture is not supported.");
 
             requestData = offsetCommitRequest.data();
-        }
-
-        public synchronized boolean isRequestCaptured() {
-            return requestData != null;
         }
 
         public synchronized OffsetCommitRequestData requestData() {
