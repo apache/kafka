@@ -456,4 +456,21 @@ public class ProtocolSerializationTest {
         SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
         assertTrue(e.getMessage().contains("Missing value for field 'field2' which has no default value"));
     }
+
+    @Test
+    public void testReadBytesBeyondItsSize() {
+        Type[] types = new Type[]{
+            Type.BYTES,
+            Type.COMPACT_BYTES,
+            Type.NULLABLE_BYTES,
+            Type.COMPACT_NULLABLE_BYTES
+        };
+        for (Type type : types) {
+            ByteBuffer buffer = ByteBuffer.allocate(20);
+            type.write(buffer, ByteBuffer.allocate(4));
+            buffer.rewind();
+            ByteBuffer bytes = (ByteBuffer) type.read(buffer);
+            assertThrows(IllegalArgumentException.class, () -> bytes.limit(bytes.limit() + 1));
+        }
+    }
 }
