@@ -28,7 +28,7 @@ import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
-import com.yammer.metrics.core.{Gauge, Meter}
+import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 
 import javax.net.ssl.X509TrustManager
 import kafka.api._
@@ -2122,6 +2122,16 @@ object TestUtils extends Logging {
       resource.close()
     }
   }
+
+  def metersCount(metricName: String): Long = {
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
+      .values.map {
+      case histogram if histogram.isInstanceOf[Histogram] => histogram.asInstanceOf[Histogram].count()
+      case meter => meter.asInstanceOf[Meter].count()
+    }.sum
+  }
+
 
   /**
    * Set broker replication quotas and enable throttling for a set of partitions. This
