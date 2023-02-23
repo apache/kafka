@@ -43,6 +43,7 @@ import org.apache.zookeeper.common.ZKConfig
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, OpResult, ZooKeeper}
 
+import java.lang.{Long => JLong}
 import scala.collection.{Map, Seq, mutable}
 
 sealed trait KRaftRegistrationResult
@@ -2176,12 +2177,12 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         // be deleted.
         case Code.OK if shouldReCreateEphemeralZNode(ephemeralOwnerId) =>
           info(s"Was not possible to create the ephemeral at $path, node already exists and owner " +
-            s"'$ephemeralOwnerId' does not match current session '${zooKeeperClient.sessionId}'" +
+            s"'0x${JLong.toHexString(ephemeralOwnerId)}' does not match current session '0x${JLong.toHexString(zooKeeperClient.sessionId)}'" +
             s", trying to delete and re-create it with the newest Zookeeper session")
           reCreate()
         case Code.OK if ephemeralOwnerId != zooKeeperClient.sessionId =>
           error(s"Error while creating ephemeral at $path, node already exists and owner " +
-            s"'$ephemeralOwnerId' does not match current session '${zooKeeperClient.sessionId}'")
+            s"'0x${JLong.toHexString(ephemeralOwnerId)}' does not match current session '0x${JLong.toHexString(zooKeeperClient.sessionId)}'")
           throw KeeperException.create(Code.NODEEXISTS)
         case Code.OK =>
           getDataResponse.stat
