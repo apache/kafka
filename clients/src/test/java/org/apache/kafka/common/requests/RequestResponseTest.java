@@ -931,7 +931,8 @@ public class RequestResponseTest {
     @Test
     public void testErrorCountsIncludesNone() {
         assertEquals(1, createAddOffsetsToTxnResponse().errorCounts().get(Errors.NONE));
-        assertEquals(1, createAddPartitionsToTxnResponse().errorCounts().get(Errors.NONE));
+        assertEquals(1, createAddPartitionsToTxnResponse((short) 3).errorCounts().get(Errors.NONE));
+        assertEquals(1, createAddPartitionsToTxnResponse((short) 4).errorCounts().get(Errors.NONE));
         assertEquals(1, createAlterClientQuotasResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createAlterConfigsResponse().errorCounts().get(Errors.NONE));
         assertEquals(2, createAlterPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
@@ -1085,7 +1086,7 @@ public class RequestResponseTest {
             case DELETE_RECORDS: return createDeleteRecordsResponse();
             case INIT_PRODUCER_ID: return createInitPidResponse();
             case OFFSET_FOR_LEADER_EPOCH: return createLeaderEpochResponse();
-            case ADD_PARTITIONS_TO_TXN: return createAddPartitionsToTxnResponse();
+            case ADD_PARTITIONS_TO_TXN: return createAddPartitionsToTxnResponse(version);
             case ADD_OFFSETS_TO_TXN: return createAddOffsetsToTxnResponse();
             case END_TXN: return createEndTxnResponse();
             case WRITE_TXN_MARKERS: return createWriteTxnMarkersResponse();
@@ -1616,7 +1617,7 @@ public class RequestResponseTest {
             serializedBytes.rewind();
             assertEquals(serializedBytes, serializedBytes2, "Response " + response + "failed equality test");
         } catch (Exception e) {
-            throw new RuntimeException("Failed to deserialize response " + response + " with type " + response.getClass(), e);
+            throw new RuntimeException("Failed to deserialize version " + version + " response " + response + " with type " + response.getClass(), e);
         }
     }
 
@@ -2603,27 +2604,36 @@ public class RequestResponseTest {
     }
 
     private AddPartitionsToTxnRequest createAddPartitionsToTxnRequest(short version) {
-        if (version < 3) {
+        if (version < 4) {
             return AddPartitionsToTxnRequest.Builder.forClient("tid", 21L, (short) 42,
                     singletonList(new TopicPartition("topic", 73))).build(version);
         } else {
-            AddPartitionsToTxnTransactionCollection transactions = new AddPartitionsToTxnTransactionCollection();
-            AddPartitionsToTxnTopicCollection topics = new AddPartitionsToTxnTopicCollection();
-            topics.add(new AddPartitionsToTxnTopic().setName("topic").setPartitions(Collections.singletonList(73)));
-            transactions.add(new AddPartitionsToTxnTransaction()
+            AddPartitionsToTxnTransactionCollection transactions = new AddPartitionsToTxnTransactionCollection(
+                    singletonList(new AddPartitionsToTxnTransaction()
                     .setTransactionalId("tid")
                     .setProducerId(21L)
                     .setProducerEpoch((short) 42)
                     .setVerifyOnly(false)
-                    .setTopics(topics));
+                    .setTopics(new AddPartitionsToTxnTopicCollection(
+                         singletonList(new AddPartitionsToTxnTopic()
+                            .setName("topic")
+                            .setPartitions(Collections.singletonList(73))).iterator())))
+                    .iterator());
             return AddPartitionsToTxnRequest.Builder.forBroker(transactions).build(version);  
         }
     }
 
-    private AddPartitionsToTxnResponse createAddPartitionsToTxnResponse() {
+    private AddPartitionsToTxnResponse createAddPartitionsToTxnResponse(short version) {
+        String txnId = version < 4 ? AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID : "tid";
         AddPartitionsToTxnResponseData.AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
-                AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, Collections.singletonMap(new TopicPartition("t", 0), Errors.NONE));
-        AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setResultsByTopicV3AndBelow(result.topicResults()).setThrottleTimeMs(0);
+                txnId, Collections.singletonMap(new TopicPartition("t", 0), Errors.NONE));
+        AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setThrottleTimeMs(0);
+        
+        if (version < 4) {
+            data.setResultsByTopicV3AndBelow(result.topicResults());
+        } else {
+            data.setResultsByTransaction(new AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection(singletonList(result).iterator()));
+        }
         return new AddPartitionsToTxnResponse(data);
     }
 
