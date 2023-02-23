@@ -123,20 +123,21 @@ public class MeteredVersionedKeyValueStore<K, V>
         }
 
         @Override
-        public <R> QueryResult<R> query(final Query<R> query,
-                                        final PositionBound positionBound,
-                                        final QueryConfig config) {
-            final long start = time.nanoseconds();
-            final QueryResult<R> result = wrapped().query(query, positionBound, config);
-            if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                    "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
-            }
-            // do not convert query or return types to/from inner bytes store to user-friendly types
-            // at this time, since we'll want a kip to align on what the types should be, and
-            // because we'll likely want to introduce a new return type which includes key,
-            // value, and timestamp for range queries
-            return result;
+        protected <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                                   final PositionBound positionBound,
+                                                   final QueryConfig config) {
+            // throw exception for now to reserve the ability to implement this in the future
+            // without clashing with users' custom implementations in the meantime
+            throw new UnsupportedOperationException("Versioned stores do not support RangeQuery queries at this time.");
+        }
+
+        @Override
+        protected <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                                 final PositionBound positionBound,
+                                                 final QueryConfig config) {
+            // throw exception for now to reserve the ability to implement this in the future
+            // without clashing with users' custom implementations in the meantime
+            throw new UnsupportedOperationException("Versioned stores do not support KeyQuery queries at this time.");
         }
 
         @SuppressWarnings("unchecked")

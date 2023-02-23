@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -50,6 +51,12 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.junit.Before;
@@ -263,6 +270,32 @@ public class MeteredVersionedKeyValueStoreTest {
     @Test
     public void shouldThrowNullPointerOnGetWithTimestampIfKeyIsNull() {
         assertThrows(NullPointerException.class, () -> store.get(null, TIMESTAMP));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowOnIQv2RangeQuery() {
+        assertThrows(UnsupportedOperationException.class, () -> store.query(mock(RangeQuery.class), null, null));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowOnIQv2KeyQuery() {
+        assertThrows(UnsupportedOperationException.class, () -> store.query(mock(KeyQuery.class), null, null));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldDelegateAndAddExecutionInfoOnCustomQuery() {
+        final Query query = mock(Query.class);
+        final PositionBound positionBound = mock(PositionBound.class);
+        final QueryConfig queryConfig = mock(QueryConfig.class);
+        final QueryResult result = mock(QueryResult.class);
+        when(inner.query(query, positionBound, queryConfig)).thenReturn(result);
+        when(queryConfig.isCollectExecutionInfo()).thenReturn(true);
+
+        assertThat(store.query(query, positionBound, queryConfig), is(result));
+        verify(result).addExecutionInfo(anyString());
     }
 
     private KafkaMetric getMetric(final String name) {
