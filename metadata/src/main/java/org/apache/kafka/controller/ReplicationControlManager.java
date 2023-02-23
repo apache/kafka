@@ -1488,7 +1488,7 @@ public class ReplicationControlManager {
         for (CreatePartitionsTopic topic : topics) {
             ApiError apiError = ApiError.NONE;
             try {
-                createPartitions(topic, records);
+                createPartitions(context, topic, records);
             } catch (ApiException e) {
                 apiError = ApiError.fromThrowable(e);
             } catch (Exception e) {
@@ -1503,7 +1503,8 @@ public class ReplicationControlManager {
         return ControllerResult.atomicOf(records, results);
     }
 
-    void createPartitions(CreatePartitionsTopic topic,
+    void createPartitions(ControllerRequestContext context,
+                          CreatePartitionsTopic topic,
                           List<ApiMessageAndVersion> records) {
         Uuid topicId = topicsByName.get(topic.name());
         if (topicId == null) {
@@ -1528,6 +1529,14 @@ public class ReplicationControlManager {
                     " additional partition(s), but only " + topic.assignments().size() +
                     " assignment(s) were specified.");
             }
+        }
+        try {
+            context.record(additional); // check controller mutation quota
+        } catch (ThrottlingQuotaExceededException e) {
+            // log a message and rethrow the exception
+            log.debug("Partition creation of {} partitions not allowed because quota is violated. Delay time: {}",
+                additional, e.throttleTimeMs());
+            throw e;
         }
         Iterator<PartitionRegistration> iterator = topicInfo.parts.values().iterator();
         if (!iterator.hasNext()) {

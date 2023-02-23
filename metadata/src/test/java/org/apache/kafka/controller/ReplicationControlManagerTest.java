@@ -1272,6 +1272,45 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testCreatePartitionsWithMutationQuotaExceeded() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(3).setReplicationFactor((short) 2));
+        ctx.registerBrokers(0, 1);
+        ctx.unfenceBrokers(0, 1);
+        ControllerRequestContext createTopicsRequestContext =
+            anonymousContextFor(ApiKeys.CREATE_TOPICS);
+        ControllerResult<CreateTopicsResponseData> createResult =
+            replicationControl.createTopics(createTopicsRequestContext, request, Collections.singleton("foo"));
+        CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
+        CreatableTopicResult createdTopic = createResult.response().topics().find("foo");
+        assertEquals(NONE.code(), createdTopic.errorCode());
+        ctx.replay(createResult.records());
+        List<CreatePartitionsTopic> topics = new ArrayList<>();
+        topics.add(new CreatePartitionsTopic().
+            setName("foo").setCount(5).setAssignments(null));
+        ControllerRequestContext createPartitionsRequestContext =
+            anonymousContextWithMutationQuotaExceededFor(ApiKeys.CREATE_PARTITIONS);
+        ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult =
+            replicationControl.createPartitions(createPartitionsRequestContext, topics);
+        List<CreatePartitionsTopicResult> expectedThrottled = singletonList(new CreatePartitionsTopicResult().
+            setName("foo").
+            setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
+            setErrorMessage("Quota exceeded in test"));
+        assertEquals(expectedThrottled, createPartitionsResult.response());
+        // now test the explicit assignment case
+        List<CreatePartitionsTopic> topics2 = new ArrayList<>();
+        topics2.add(new CreatePartitionsTopic().
+            setName("foo").setCount(4).setAssignments(asList(
+                new CreatePartitionsAssignment().setBrokerIds(asList(1, 0)))));
+        ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult2 =
+            replicationControl.createPartitions(createPartitionsRequestContext, topics2);
+        assertEquals(expectedThrottled, createPartitionsResult2.response());
+    }
+
+    @Test
     public void testCreatePartitionsFailsWhenAllBrokersAreFencedOrInControlledShutdown() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replicationControl = ctx.replicationControl;
