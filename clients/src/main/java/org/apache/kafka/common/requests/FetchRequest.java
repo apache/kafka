@@ -166,6 +166,11 @@ public class FetchRequest extends AbstractRequest {
             return this;
         }
 
+        // Visible for testing
+        public FetchMetadata metadata() {
+            return this.metadata;
+        }
+
         public Builder metadata(FetchMetadata metadata) {
             this.metadata = metadata;
             return this;

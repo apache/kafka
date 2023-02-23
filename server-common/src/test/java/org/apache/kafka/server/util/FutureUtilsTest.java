@@ -26,12 +26,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
@@ -89,5 +91,32 @@ public class FutureUtilsTest {
             }).getMessage());
         executorService.shutdown();
         executorService.awaitTermination(1, TimeUnit.MINUTES);
+    }
+
+    @Test
+    public void testChainFuture() throws Throwable {
+        CompletableFuture<Integer> sourceFuture = new CompletableFuture<>();
+        CompletableFuture<Number> destinationFuture = new CompletableFuture<>();
+        FutureUtils.chainFuture(sourceFuture, destinationFuture);
+        assertFalse(sourceFuture.isDone());
+        assertFalse(destinationFuture.isDone());
+        assertFalse(sourceFuture.isCancelled());
+        assertFalse(destinationFuture.isCancelled());
+        assertFalse(sourceFuture.isCompletedExceptionally());
+        assertFalse(destinationFuture.isCompletedExceptionally());
+        sourceFuture.complete(123);
+        assertEquals(Integer.valueOf(123), destinationFuture.get());
+    }
+
+    @Test
+    public void testChainFutureExceptionally() throws Throwable {
+        CompletableFuture<Integer> sourceFuture = new CompletableFuture<>();
+        CompletableFuture<Number> destinationFuture = new CompletableFuture<>();
+        FutureUtils.chainFuture(sourceFuture, destinationFuture);
+        sourceFuture.completeExceptionally(new RuntimeException("source failed"));
+        Throwable cause = assertThrows(ExecutionException.class,
+                () -> destinationFuture.get()).getCause();
+        assertEquals(RuntimeException.class, cause.getClass());
+        assertEquals("source failed", cause.getMessage());
     }
 }

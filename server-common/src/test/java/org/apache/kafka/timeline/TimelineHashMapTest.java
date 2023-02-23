@@ -31,6 +31,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -91,7 +93,7 @@ public class TimelineHashMapTest {
     public void testMapMethods() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashMap<Integer, String> map = new TimelineHashMap<>(registry, 1);
-        assertEquals(null, map.putIfAbsent(1, "xyz"));
+        assertNull(map.putIfAbsent(1, "xyz"));
         assertEquals("xyz", map.putIfAbsent(1, "123"));
         assertEquals("xyz", map.putIfAbsent(1, "ghi"));
         map.putAll(Collections.singletonMap(2, "b"));
@@ -104,12 +106,12 @@ public class TimelineHashMapTest {
     public void testMapEquals() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashMap<Integer, String> map1 = new TimelineHashMap<>(registry, 1);
-        assertEquals(null, map1.putIfAbsent(1, "xyz"));
-        assertEquals(null, map1.putIfAbsent(2, "abc"));
+        assertNull(map1.putIfAbsent(1, "xyz"));
+        assertNull(map1.putIfAbsent(2, "abc"));
         TimelineHashMap<Integer, String> map2 = new TimelineHashMap<>(registry, 1);
-        assertEquals(null, map2.putIfAbsent(1, "xyz"));
-        assertFalse(map1.equals(map2));
-        assertEquals(null, map2.putIfAbsent(2, "abc"));
+        assertNull(map2.putIfAbsent(1, "xyz"));
+        assertNotEquals(map1, map2);
+        assertNull(map2.putIfAbsent(2, "abc"));
         assertEquals(map1, map2);
     }
 }

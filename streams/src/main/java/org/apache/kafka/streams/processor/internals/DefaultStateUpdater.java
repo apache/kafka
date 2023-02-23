@@ -116,6 +116,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void runOnce() throws InterruptedException {
             performActionsOnTasks();
+            resumeTasks();
             restoreTasks();
             checkAllUpdatingTaskStates(time.milliseconds());
             waitIfAllChangelogsCompletelyRead();
@@ -137,6 +138,16 @@ public class DefaultStateUpdater implements StateUpdater {
                 }
             } finally {
                 tasksAndActionsLock.unlock();
+            }
+        }
+
+        private void resumeTasks() {
+            if (isTopologyResumed.compareAndSet(true, false)) {
+                for (final Task task : pausedTasks.values()) {
+                    if (!topologyMetadata.isPaused(task.id().topologyName())) {
+                        resumeTask(task);
+                    }
+                }
             }
         }
 
@@ -229,7 +240,7 @@ public class DefaultStateUpdater implements StateUpdater {
             if (isRunning.get() && changelogReader.allChangelogsCompleted()) {
                 tasksAndActionsLock.lock();
                 try {
-                    while (tasksAndActions.isEmpty()) {
+                    while (tasksAndActions.isEmpty() && !isTopologyResumed.get()) {
                         tasksAndActionsCondition.await();
                     }
                 } finally {
@@ -258,21 +269,39 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void addTask(final Task task) {
+            final TaskId taskId = task.id();
+
+            Task existingTask = pausedTasks.get(taskId);
+            if (existingTask != null) {
+                throw new IllegalStateException(
+                    (existingTask.isActive() ? "Active" : "Standby") + " task " + taskId + " already exist in paused tasks, " +
+                        "should not try to add another " + (task.isActive() ? "active" : "standby") + " task with the same id. "
+                        + BUG_ERROR_MESSAGE);
+            }
+            existingTask = updatingTasks.get(taskId);
+            if (existingTask != null) {
+                throw new IllegalStateException(
+                    (existingTask.isActive() ? "Active" : "Standby") + " task " + taskId + " already exist in updating tasks, " +
+                        "should not try to add another " + (task.isActive() ? "active" : "standby") + " task with the same id. "
+                        + BUG_ERROR_MESSAGE);
+            }
+
             if (isStateless(task)) {
                 addToRestoredTasks((StreamTask) task);
-                log.info("Stateless active task " + task.id() + " was added to the restored tasks of the state updater");
+                log.info("Stateless active task " + taskId + " was added to the restored tasks of the state updater");
+            } else if (topologyMetadata.isPaused(taskId.topologyName())) {
+                pausedTasks.put(taskId, task);
+                changelogReader.register(task.changelogPartitions(), task.stateManager());
+                log.debug((task.isActive() ? "Active" : "Standby")
+                    + " task " + taskId + " was directly added to the paused tasks.");
             } else {
-                final Task existingTask = updatingTasks.putIfAbsent(task.id(), task);
-                if (existingTask != null) {
-                    throw new IllegalStateException((existingTask.isActive() ? "Active" : "Standby") + " task " + task.id() + " already exist, " +
-                        "should not try to add another " + (task.isActive() ? "active" : "standby") + " task with the same id. " + BUG_ERROR_MESSAGE);
-                }
+                updatingTasks.put(taskId, task);
                 changelogReader.register(task.changelogPartitions(), task.stateManager());
                 if (task.isActive()) {
-                    log.info("Stateful active task " + task.id() + " was added to the state updater");
+                    log.info("Stateful active task " + taskId + " was added to the state updater");
                     changelogReader.enforceRestoreActive();
                 } else {
-                    log.info("Standby task " + task.id() + " was added to the state updater");
+                    log.info("Standby task " + taskId + " was added to the state updater");
                     if (updatingTasks.size() == 1) {
                         changelogReader.transitToUpdateStandby();
                     }
@@ -388,12 +417,6 @@ public class DefaultStateUpdater implements StateUpdater {
                     }
                 }
 
-                for (final Task task : pausedTasks.values()) {
-                    if (!topologyMetadata.isPaused(task.id().topologyName())) {
-                        resumeTask(task);
-                    }
-                }
-
                 lastCommitMs = now;
             }
         }
@@ -411,6 +434,7 @@ public class DefaultStateUpdater implements StateUpdater {
     private final Condition restoredActiveTasksCondition = restoredActiveTasksLock.newCondition();
     private final BlockingQueue<ExceptionAndTasks> exceptionsAndFailedTasks = new LinkedBlockingQueue<>();
     private final BlockingQueue<Task> removedTasks = new LinkedBlockingQueue<>();
+    private final AtomicBoolean isTopologyResumed = new AtomicBoolean(false);
 
     private final long commitIntervalMs;
     private long lastCommitMs;
@@ -500,6 +524,17 @@ public class DefaultStateUpdater implements StateUpdater {
         tasksAndActionsLock.lock();
         try {
             tasksAndActions.add(TaskAndAction.createRemoveTask(taskId));
+            tasksAndActionsCondition.signalAll();
+        } finally {
+            tasksAndActionsLock.unlock();
+        }
+    }
+
+    @Override
+    public void signalResume() {
+        tasksAndActionsLock.lock();
+        try {
+            isTopologyResumed.set(true);
             tasksAndActionsCondition.signalAll();
         } finally {
             tasksAndActionsLock.unlock();

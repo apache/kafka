@@ -40,10 +40,34 @@ class ApiVersionManagerTest {
       listenerType = apiScope,
       forwardingManager = None,
       features = brokerFeatures,
-      metadataCache = metadataCache
+      metadataCache = metadataCache,
+      enableUnstableLastVersion = true
     )
     assertEquals(ApiKeys.apisForListener(apiScope).asScala, versionManager.enabledApis)
-    assertTrue(ApiKeys.apisForListener(apiScope).asScala.forall(versionManager.isApiEnabled))
+    assertTrue(ApiKeys.apisForListener(apiScope).asScala.forall { apiKey =>
+      apiKey.allVersions.asScala.forall { version =>
+        versionManager.isApiEnabled(apiKey, version)
+      }
+    })
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[ListenerType])
+  def testDisabledApis(apiScope: ListenerType): Unit = {
+    val versionManager = new DefaultApiVersionManager(
+      listenerType = apiScope,
+      forwardingManager = None,
+      features = brokerFeatures,
+      metadataCache = metadataCache,
+      enableUnstableLastVersion = false
+    )
+
+    ApiKeys.apisForListener(apiScope).forEach { apiKey =>
+      if (apiKey.messageType.latestVersionUnstable()) {
+        assertFalse(versionManager.isApiEnabled(apiKey, apiKey.latestVersion),
+          s"$apiKey version ${apiKey.latestVersion} should be disabled.")
+      }
+    }
   }
 
   @Test
@@ -63,7 +87,8 @@ class ApiVersionManagerTest {
       listenerType = ListenerType.ZK_BROKER,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
-      metadataCache = metadataCache
+      metadataCache = metadataCache,
+      enableUnstableLastVersion = true
     )
 
     val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
@@ -83,9 +108,10 @@ class ApiVersionManagerTest {
         listenerType = ListenerType.BROKER,
         forwardingManager = forwardingManagerOpt,
         features = brokerFeatures,
-        metadataCache = metadataCache
+        metadataCache = metadataCache,
+        enableUnstableLastVersion = true
       )
-      assertFalse(versionManager.isApiEnabled(ApiKeys.ENVELOPE))
+      assertFalse(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
       assertFalse(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
 
       val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
@@ -104,9 +130,10 @@ class ApiVersionManagerTest {
       listenerType = ListenerType.ZK_BROKER,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
-      metadataCache = metadataCache
+      metadataCache = metadataCache,
+      enableUnstableLastVersion = true
     )
-    assertTrue(versionManager.isApiEnabled(ApiKeys.ENVELOPE))
+    assertTrue(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
     assertTrue(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
 
     val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
@@ -122,13 +149,13 @@ class ApiVersionManagerTest {
       listenerType = ListenerType.ZK_BROKER,
       forwardingManager = None,
       features = brokerFeatures,
-      metadataCache = metadataCache
+      metadataCache = metadataCache,
+      enableUnstableLastVersion = true
     )
-    assertTrue(versionManager.isApiEnabled(ApiKeys.ENVELOPE))
+    assertTrue(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
     assertTrue(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
 
     val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
     assertNotNull(apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id))
   }
-
 }

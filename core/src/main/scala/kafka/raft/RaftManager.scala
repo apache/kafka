@@ -30,7 +30,6 @@ import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.CoreUtils
 import kafka.utils.FileLock
 import kafka.utils.Logging
-import kafka.utils.ShutdownableThread
 import kafka.utils.timer.SystemTimer
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.KafkaException
@@ -46,7 +45,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.server.util.{KafkaScheduler, ShutdownableThread}
 import org.apache.kafka.server.fault.FaultHandler
 
 import scala.jdk.CollectionConverters._
@@ -56,10 +55,10 @@ object KafkaRaftManager {
     client: KafkaRaftClient[_],
     threadNamePrefix: String,
     fatalFaultHandler: FaultHandler
-  ) extends ShutdownableThread(
-    name = threadNamePrefix + "-io-thread",
-    isInterruptible = false
-  ) {
+  ) extends ShutdownableThread(threadNamePrefix + "-io-thread", false) with Logging {
+
+    this.logIdent = logPrefix
+
     override def doWork(): Unit = {
       try {
         client.poll()

@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.Mockito.mock
 
 import java.util
+import scala.jdk.CollectionConverters._
 
 class RemoteLeaderEndPointTest {
 
@@ -78,6 +80,23 @@ class RemoteLeaderEndPointTest {
         blockingSend.setListOffsetsDataForNextResponse(Map(topicPartition ->
           new ListOffsetsPartitionResponse().setLeaderEpoch(6).setOffset(localLogStartOffset)))
         assertEquals((6, localLogStartOffset), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch))
+    }
+
+    @Test
+    def testFetchEpochEndOffsets(): Unit = {
+        val expected = Map(
+            topicPartition -> new EpochEndOffset()
+              .setPartition(topicPartition.partition)
+              .setErrorCode(Errors.NONE.code)
+              .setLeaderEpoch(0)
+              .setEndOffset(logEndOffset))
+        blockingSend.setOffsetsForNextResponse(expected.asJava)
+        val result = endPoint.fetchEpochEndOffsets(Map(
+            topicPartition -> new OffsetForLeaderPartition()
+              .setPartition(topicPartition.partition)
+              .setLeaderEpoch(currentLeaderEpoch)))
+
+        assertEquals(expected, result)
     }
 
     @Test

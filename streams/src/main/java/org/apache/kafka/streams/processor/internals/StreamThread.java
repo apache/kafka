@@ -60,7 +60,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -191,6 +190,10 @@ public class StreamThread extends Thread {
      */
     public void setStateListener(final StreamThread.StateListener listener) {
         stateListener = listener;
+    }
+
+    public StreamThread.StateListener getStateListener() {
+        return stateListener;
     }
 
     /**
@@ -1093,6 +1096,11 @@ public class StreamThread extends Thread {
         return isAlive();
     }
 
+    // Call method when a topology is resumed
+    public void signalResume() {
+        taskManager.signalResume();
+    }
+
     /**
      * Try to commit all active tasks owned by this thread.
      *
@@ -1110,7 +1118,7 @@ public class StreamThread extends Thread {
             }
 
             committed = taskManager.commit(
-                taskManager.allTasks()
+                taskManager.allOwnedTasks()
                     .values()
                     .stream()
                     .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
@@ -1269,16 +1277,23 @@ public class StreamThread extends Thread {
         );
     }
 
-    public Map<TaskId, Task> activeTaskMap() {
-        return taskManager.activeTaskMap();
+    /**
+     * Getting the list of current active tasks of the thread;
+     * Note that the returned list may be used by other thread than the StreamThread itself,
+     * and hence need to be read-only
+     */
+    public Set<Task> readOnlyActiveTasks() {
+        return readyOnlyAllTasks().stream()
+            .filter(Task::isActive).collect(Collectors.toSet());
     }
 
-    public List<Task> activeTasks() {
-        return taskManager.activeTaskIterable();
-    }
-
-    public Map<TaskId, Task> allTasks() {
-        return taskManager.allTasks();
+    /**
+     * Getting the list of all owned tasks of the thread, including both active and standby;
+     * Note that the returned list may be used by other thread than the StreamThread itself,
+     * and hence need to be read-only
+     */
+    public Set<Task> readyOnlyAllTasks() {
+        return taskManager.readOnlyAllTasks();
     }
 
     /**

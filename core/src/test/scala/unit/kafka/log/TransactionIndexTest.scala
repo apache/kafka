@@ -18,7 +18,7 @@ package kafka.log
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.FetchResponseData
-import org.apache.kafka.server.log.internals.{AbortedTxn, CorruptIndexException, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, CorruptIndexException, TransactionIndex}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 

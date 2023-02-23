@@ -69,10 +69,10 @@ import org.mockito.junit.MockitoJUnitRunner;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -464,7 +464,7 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     private void mockThread(final boolean initialized) {
-        when(threadMock.activeTasks()).thenReturn(new ArrayList<>(tasks.values()));
+        when(threadMock.readOnlyActiveTasks()).thenReturn(new HashSet<>(tasks.values()));
         when(threadMock.state()).thenReturn(
             initialized ? StreamThread.State.RUNNING : StreamThread.State.PARTITIONS_ASSIGNED
         );

@@ -33,8 +33,8 @@ import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.server.log.internals.{LogConfig, ThrottledReplicaListValidator}
-import org.apache.kafka.server.log.internals.LogConfig.MessageFormatVersion
+import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
+import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._

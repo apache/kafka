@@ -44,11 +44,11 @@ import org.apache.kafka.raft
 import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.log.internals.LogDirFailureChannel
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
 import org.apache.kafka.snapshot.SnapshotWriter
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
 import java.net.InetAddress
 import java.util
@@ -476,7 +476,7 @@ class BrokerServer(
 
       // Enable inbound TCP connections. Each endpoint will be started only once its matching
       // authorizer future is completed.
-      socketServer.enableRequestProcessing(authorizerFutures)
+      val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
 
       // If we are using a ClusterMetadataAuthorizer which stores its ACLs in the metadata log,
       // notify it that the loading process is complete.
@@ -494,6 +494,10 @@ class BrokerServer(
       // Block here until all the authorizer futures are complete
       FutureUtils.waitWithLogging(logger.underlying, "all of the authorizer futures to be completed",
         CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
+
+      // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
+      FutureUtils.waitWithLogging(logger.underlying, "all of the SocketServer Acceptors to be started",
+        socketServerFuture, startupDeadline, time)
 
       maybeChangeStatus(STARTING, STARTED)
     } catch {

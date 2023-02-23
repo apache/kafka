@@ -34,7 +34,7 @@ import org.mockito.Mockito.{mock, when}
 import java.io.File
 import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.{CleanerConfig, LogConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 
 import scala.jdk.CollectionConverters._
 
