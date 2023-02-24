@@ -768,20 +768,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
-    public static void addInvocationRateAndCountToSensor(final Sensor sensor,
-                                                         final String group,
-                                                         final Map<String, String> tags,
-                                                         final String operation) {
-        addInvocationRateAndCountToSensor(
-            sensor,
-            group,
-            tags,
-            operation,
-            RATE_DESCRIPTION + operation,
-            TOTAL_DESCRIPTION + operation
-        );
-    }
-
     public static void addRateOfSumAndSumMetricsToSensor(final Sensor sensor,
                                                          final String group,
                                                          final Map<String, String> tags,

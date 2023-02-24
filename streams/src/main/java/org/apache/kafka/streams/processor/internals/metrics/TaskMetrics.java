@@ -28,6 +28,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addSumMetricToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
@@ -138,15 +139,9 @@ public class TaskMetrics {
                                                        final String taskId,
                                                        final StreamsMetricsImpl streamsMetrics) {
         final String name = RESTORE + REMAINING_RECORDS + TOTAL_SUFFIX;
+        final Map<String, String> tags = streamsMetrics.taskLevelTagMap(threadId, taskId);
         final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, Sensor.RecordingLevel.INFO);
-        addSumMetricToSensor(
-            sensor,
-            TASK_LEVEL_GROUP,
-            streamsMetrics.taskLevelTagMap(threadId, taskId),
-            name,
-            false,
-            REMAINING_RECORDS_DESCRIPTION
-        );
+        addSumMetricToSensor(sensor, TASK_LEVEL_GROUP, tags, name, false, REMAINING_RECORDS_DESCRIPTION);
         return sensor;
     }
 
@@ -216,7 +211,7 @@ public class TaskMetrics {
                                        final String taskId,
                                        final StreamsMetricsImpl streamsMetrics,
                                        final Sensor... parentSensor) {
-        return invocationRateAndCountSensor(
+        return invocationRateAndTotalSensor(
             threadId,
             taskId,
             RESTORE,
@@ -232,7 +227,7 @@ public class TaskMetrics {
                                       final String taskId,
                                       final StreamsMetricsImpl streamsMetrics,
                                       final Sensor... parentSensor) {
-        return invocationRateAndCountSensor(
+        return invocationRateAndTotalSensor(
             threadId,
             taskId,
             UPDATE,
@@ -277,7 +272,7 @@ public class TaskMetrics {
     public static Sensor droppedRecordsSensor(final String threadId,
                                               final String taskId,
                                               final StreamsMetricsImpl streamsMetrics) {
-        return invocationRateAndCountSensor(
+        return invocationRateAndTotalSensor(
             threadId,
             taskId,
             DROPPED_RECORDS,
@@ -305,6 +300,22 @@ public class TaskMetrics {
             descriptionOfRate,
             descriptionOfCount
         );
+        return sensor;
+    }
+
+    private static Sensor invocationRateAndTotalSensor(final String threadId,
+                                                       final String taskId,
+                                                       final String operation,
+                                                       final String descriptionOfRate,
+                                                       final String descriptionOfTotal,
+                                                       final RecordingLevel recordingLevel,
+                                                       final StreamsMetricsImpl streamsMetrics,
+                                                       final Sensor... parentSensors) {
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, operation, recordingLevel, parentSensors);
+        final Map<String, String> tags = streamsMetrics.taskLevelTagMap(threadId, taskId);
+
+        addInvocationRateToSensor(sensor, TASK_LEVEL_GROUP, tags, operation, descriptionOfRate);
+        addSumMetricToSensor(sensor, TASK_LEVEL_GROUP, tags, operation, true, descriptionOfTotal);
         return sensor;
     }
 
