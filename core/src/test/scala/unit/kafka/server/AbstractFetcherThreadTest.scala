@@ -658,18 +658,7 @@ class AbstractFetcherThreadTest {
     val replicaState = PartitionState(replicaLog, leaderEpoch = 5, highWatermark = 0L, rlmEnabled = true)
 
     val mockLeaderEndpoint = new MockLeaderEndPoint
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint) {
-      // override the start() of MockTierStateMachine to mimic truncateFullyAndStartAt and update the replicaState in the MockFetcherThread
-      override def start(topicPartition: TopicPartition,
-                         currentFetchState: PartitionFetchState,
-                         fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
-        replicaState.log.clear()
-        replicaState.localLogStartOffset = 5
-        replicaState.logEndOffset = 5
-        replicaState.highWatermark = 5
-        super.start(topicPartition, currentFetchState, fetchPartitionData)
-      }
-    }
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     fetcher.setReplicaState(partition, replicaState)
@@ -1477,12 +1466,15 @@ class AbstractFetcherThreadTest {
   }
 
   class MockTierStateMachine(leader: LeaderEndPoint) extends ReplicaFetcherTierStateMachine(leader, null) {
+
+    var fetcher : MockFetcherThread = null
     override def start(topicPartition: TopicPartition,
                        currentFetchState: PartitionFetchState,
                        fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
       val leaderEndOffset = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch)._2
       val offsetToFetch = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.currentLeaderEpoch)._2
       val initialLag = leaderEndOffset - offsetToFetch
+      fetcher.truncateFullyAndStartAt(topicPartition, offsetToFetch)
       PartitionFetchState(currentFetchState.topicId, offsetToFetch, Option.apply(initialLag), currentFetchState.currentLeaderEpoch,
         Fetching, Some(currentFetchState.currentLeaderEpoch))
     }
@@ -1490,6 +1482,10 @@ class AbstractFetcherThreadTest {
     override def maybeAdvanceState(topicPartition: TopicPartition,
                                    currentFetchState: PartitionFetchState): Optional[PartitionFetchState] = {
       Optional.of(currentFetchState)
+    }
+
+    def setFetcher(mockFetcherThread: MockFetcherThread): Unit = {
+      fetcher = mockFetcherThread
     }
   }
 
@@ -1528,6 +1524,8 @@ class AbstractFetcherThreadTest {
 
     private val replicaPartitionStates = mutable.Map[TopicPartition, PartitionState]()
     private var latestEpochDefault: Option[Int] = Some(0)
+
+    mockTierStateMachine.setFetcher(this)
 
     def setReplicaState(topicPartition: TopicPartition, state: PartitionState): Unit = {
       replicaPartitionStates.put(topicPartition, state)
