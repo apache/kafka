@@ -836,6 +836,7 @@ def connectPkgs = [
     'connect:file',
     'connect:json',
     'connect:runtime',
+    'connect:test-plugins',
     'connect:transforms',
     'connect:mirror',
     'connect:mirror-client'
@@ -2651,8 +2652,6 @@ project(':connect:runtime') {
     api project(':connect:json')
     api project(':connect:transforms')
 
-    implementation project(':tools')
-
     implementation libs.slf4jApi
     implementation libs.log4j
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
@@ -2678,6 +2677,8 @@ project(':connect:runtime') {
     testImplementation project(':core')
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':tools')
+    testImplementation project(':connect:test-plugins')
 
     testImplementation libs.easymock
     testImplementation libs.junitJupiterApi
@@ -2947,6 +2948,39 @@ project(':connect:mirror-client') {
 
   javadoc {
     enabled = true
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+      include('slf4j-log4j12*')
+      include('reload4j*jar')
+    }
+    from (configurations.runtimeClasspath) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+}
+
+project(':connect:test-plugins') {
+  archivesBaseName = "connect-test-plugins"
+
+  dependencies {
+    api project(':connect:api')
+
+    implementation project(':tools')
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
+
+    testImplementation libs.junitJupiter
+
+    testRuntimeOnly libs.slf4jlog4j
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
