@@ -2103,9 +2103,10 @@ object TestUtils extends Logging {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
       .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
       .values.map {
-      case histogram if histogram.isInstanceOf[Histogram] => histogram.asInstanceOf[Histogram].count()
-      case meter => meter.asInstanceOf[Meter].count()
-    }.sum
+        case histogram: Histogram => histogram.count()
+        case meter: Meter => meter.count()
+        case _ => 0
+      }.sum
   }
 
   def clearYammerMetrics(): Unit = {
