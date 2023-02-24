@@ -81,6 +81,9 @@ public class OffsetCommitRequest extends AbstractRequest {
                     if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
                         topic.setTopicId(Uuid.ZERO_UUID);
                     }
+                    if (topic.name() == null) {
+                        throw new InvalidRequestException("A topic name must be provided for OffsetCommit version < 9");
+                    }
                 });
             }
             return new OffsetCommitRequest(data, version);
@@ -104,7 +107,8 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     public static List<OffsetCommitResponseTopic> getErrorResponseTopics(
             List<OffsetCommitRequestTopic> requestTopics,
-            Errors e) {
+            Errors e,
+            short version) {
         List<OffsetCommitResponseTopic> responseTopicData = new ArrayList<>();
         for (OffsetCommitRequestTopic entry : requestTopics) {
             List<OffsetCommitResponsePartition> responsePartitions =
@@ -114,11 +118,13 @@ public class OffsetCommitRequest extends AbstractRequest {
                                            .setPartitionIndex(requestPartition.partitionIndex())
                                            .setErrorCode(e.code()));
             }
-            responseTopicData.add(new OffsetCommitResponseTopic()
-                    .setName(entry.name())
-                    .setTopicId(entry.topicId())
-                    .setPartitions(responsePartitions)
-            );
+            OffsetCommitResponseTopic responseTopic = new OffsetCommitResponseTopic();
+            if (version >= 9 && entry.topicId() != null && !Uuid.ZERO_UUID.equals(entry.topicId())) {
+                responseTopic.setTopicId(entry.topicId()).setName(null);
+            } else {
+                responseTopic.setName(entry.name());
+            }
+            responseTopicData.add(responseTopic.setPartitions(responsePartitions));
         }
         return responseTopicData;
     }
@@ -126,7 +132,7 @@ public class OffsetCommitRequest extends AbstractRequest {
     @Override
     public OffsetCommitResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<OffsetCommitResponseTopic>
-                responseTopicData = getErrorResponseTopics(data.topics(), Errors.forException(e));
+                responseTopicData = getErrorResponseTopics(data.topics(), Errors.forException(e), version());
         return new OffsetCommitResponse(new OffsetCommitResponseData()
                 .setTopics(responseTopicData)
                 .setThrottleTimeMs(throttleTimeMs));

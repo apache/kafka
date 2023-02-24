@@ -134,12 +134,13 @@ public class OffsetCommitRequestTest {
         assertEquals(throttleTimeMs, response.throttleTimeMs());
     }
 
-    @Test
-    public void testGetErrorResponseTopics() {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testGetErrorResponseTopics(short version) {
         List<OffsetCommitResponseTopic> expectedTopics = Arrays.asList(
             new OffsetCommitResponseTopic()
-                .setName(topicOne)
-                .setTopicId(topicOneId)
+                .setName(version < 9 ? topicOne : null)
+                .setTopicId(version < 9 ? Uuid.ZERO_UUID : topicOneId)
                 .setPartitions(Collections.singletonList(
                     new OffsetCommitResponsePartition()
                         .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
@@ -151,7 +152,7 @@ public class OffsetCommitRequestTest {
                         .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
                         .setPartitionIndex(partitionTwo)))
         );
-        assertEquals(expectedTopics, getErrorResponseTopics(topics, Errors.UNKNOWN_MEMBER_ID));
+        assertEquals(expectedTopics, getErrorResponseTopics(topics, Errors.UNKNOWN_MEMBER_ID, version));
     }
 
     @ParameterizedTest
