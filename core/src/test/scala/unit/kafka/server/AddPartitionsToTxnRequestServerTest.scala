@@ -42,8 +42,10 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
   private val topic1 = "topic1"
   val numPartitions = 1
 
-  override def brokerPropertyOverrides(properties: Properties): Unit =
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+  }
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
