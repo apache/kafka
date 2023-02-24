@@ -78,6 +78,8 @@ object RequestChannel extends Logging {
     }
   }
 
+  case class CallbackRequest(fun: () => Unit) extends BaseRequest
+
   class Request(val processor: Int,
                 val context: RequestContext,
                 val startTimeNanos: Long,
@@ -476,6 +478,15 @@ class RequestChannel(val queueSize: Int,
   }
 
   def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
+
+  // TODO: this is the most straightforward implementation, we may want to address fairness:
+  // The callback function is invoked as part of processing a request, so it already "stood in line"
+  // when the original request got accepted, so it may be unfair to make put to the end of the line.
+  // A simple solution would be to put it to the head of the line, but then multiple callbacks would
+  // be in LIFO order, which is weird.
+  // We may want to use a PriorityBlockingQueue or just have 2 queues and write customer wait / notify
+  // synchronization.
+  def sendCallbackRequest(request: CallbackRequest): Unit = requestQueue.put(request)
 
 }
 

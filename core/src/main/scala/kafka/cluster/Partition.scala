@@ -568,6 +568,13 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
+  def hasOngoingTransaction(producerId: Long): Boolean = {
+    leaderLogIfLocal match {
+      case Some(leaderLog) => leaderLog.hasOngoingTransaction(producerId)
+      case _ => false
+    }
+  }
+
   // Return true if the future replica exists and it has caught up with the current replica for this partition
   // Only ReplicaAlterDirThread will call this method and ReplicaAlterDirThread should remove the partition
   // from its partitionStates if this method returns true

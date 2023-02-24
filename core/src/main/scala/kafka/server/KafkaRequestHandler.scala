@@ -20,6 +20,7 @@ package kafka.server
 import kafka.network._
 import kafka.utils._
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.KafkaRequestHandler.threadRequestChannel
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
@@ -32,6 +33,34 @@ import scala.jdk.CollectionConverters._
 
 trait ApiRequestHandler {
   def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit
+}
+
+object KafkaRequestHandler {
+  // Support for scheduling callbacks on a request thread.
+  // TODO: we may want to pass more request context, e.g. processor id (see RequestChannel.Request)
+  private val threadRequestChannel = new ThreadLocal[RequestChannel]
+
+  /**
+   * Wrap callback to schedule it on a request thread.
+   * NOTE: this function must be called on a request thread.
+   * @param fun Callback function to execute
+   * @return Wrapped callback that would execute `fun` on a request thread
+   */
+  def  wrap[T](fun: T => Unit): T => Unit = {
+    val requestChannel = threadRequestChannel.get()
+    if (requestChannel == null) {
+      // This is a bug, do best effort in production.
+      assert(assertion = false, "Not on request thread!!!")
+      T => fun(T)
+    } else {
+      T => {
+        // The requestChannel is captured in this lambda, so when it's executed on the callback thread
+        // we can re-schedule the original callback on a request thread.
+        // TODO: we may want to pass more request context, e.g. time we put request in queue
+        requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T)))
+      }
+    }
+  }
 }
 
 /**
@@ -50,6 +79,8 @@ class KafkaRequestHandler(id: Int,
   @volatile private var stopped = false
 
   def run(): Unit = {
+    // TODO: if we need to set context of each request, we'd need to set it in poll.
+    threadRequestChannel.set(requestChannel)
     while (!stopped) {
       // We use a single meter for aggregate idle percentage for the thread pool.
       // Since meter is calculated as total_recorded_value / time_window and
@@ -67,6 +98,17 @@ class KafkaRequestHandler(id: Int,
           debug(s"Kafka request handler $id on broker $brokerId received shut down command")
           completeShutdown()
           return
+
+        case request: RequestChannel.CallbackRequest =>
+          try {
+            // TODO: maybe keep track of queue time or set some context from original request
+            request.fun() 
+          } catch {
+            case e: FatalExitError =>
+              shutdownComplete.countDown()
+              Exit.exit(e.statusCode)
+            case e: Throwable => error("Exception when handling request", e)
+          }
 
         case request: RequestChannel.Request =>
           try {

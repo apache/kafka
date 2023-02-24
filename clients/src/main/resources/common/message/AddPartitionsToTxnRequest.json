@@ -29,7 +29,7 @@
   // The AddPartitionsToTxnRequest version 4 API is added as part of KIP-890 and is still
   // under developement. Hence, the API is not exposed by default by brokers
   // unless explicitely enabled.
-  "latestVersionUnstable": true,
+  "latestVersionUnstable": false,
   "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
