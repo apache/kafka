@@ -1472,8 +1472,8 @@ class AbstractFetcherThreadTest {
     override def start(topicPartition: TopicPartition,
                        currentFetchState: PartitionFetchState,
                        fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
-      val leaderEndOffset = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch)._2
-      val offsetToFetch = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.currentLeaderEpoch)._2
+      val leaderEndOffset = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch).offset
+      val offsetToFetch = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.currentLeaderEpoch).offset
       val initialLag = leaderEndOffset - offsetToFetch
       fetcher.truncateFullyAndStartAt(topicPartition, offsetToFetch)
       PartitionFetchState(currentFetchState.topicId, offsetToFetch, Option.apply(initialLag), currentFetchState.currentLeaderEpoch,
