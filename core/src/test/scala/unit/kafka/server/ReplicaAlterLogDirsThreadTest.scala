@@ -30,7 +30,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
 import org.apache.kafka.storage.internals.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -477,7 +477,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(futureLogT1p0.latestEpoch).thenReturn(Some(leaderEpoch))
     when(futureLogT1p0.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     when(partitionT1p0.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
       .thenReturn(new EpochEndOffset()
         .setPartition(partitionT1p0Id)
@@ -487,7 +487,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(futureLogT1p1.latestEpoch).thenReturn(Some(leaderEpoch))
     when(futureLogT1p1.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     when(partitionT1p1.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
       .thenReturn(new EpochEndOffset()
         .setPartition(partitionT1p1Id)
@@ -568,7 +568,7 @@ class ReplicaAlterLogDirsThreadTest {
         .setEndOffset(replicaLEO))
     // but future replica does not know about this leader epoch, so returns a smaller leader epoch
     when(futureLog.endOffsetForEpoch(leaderEpoch - 1)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaLEO, leaderEpoch - 2)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch - 2)))
     // finally, the leader replica knows about the leader epoch and returns end offset
     when(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch - 2, fetchOnlyFromLeader = false))
       .thenReturn(new EpochEndOffset()
@@ -577,7 +577,7 @@ class ReplicaAlterLogDirsThreadTest {
         .setLeaderEpoch(leaderEpoch - 2)
         .setEndOffset(replicaEpochEndOffset))
     when(futureLog.endOffsetForEpoch(leaderEpoch - 2)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaEpochEndOffset, leaderEpoch - 2)))
+      Some(new OffsetAndEpoch(futureReplicaEpochEndOffset, leaderEpoch - 2)))
 
     when(replicaManager.logManager).thenReturn(logManager)
     stubWithFetchMessages(log, null, futureLog, partition, replicaManager, responseCallback)
@@ -693,7 +693,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
     when(futureLog.latestEpoch).thenReturn(Some(futureReplicaLeaderEpoch))
     when(futureLog.endOffsetForEpoch(futureReplicaLeaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaLEO, futureReplicaLeaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, futureReplicaLeaderEpoch)))
     when(replicaManager.localLog(t1p0)).thenReturn(Some(log))
 
     // this will cause fetchEpochsFromLeader return an error with undefined offset
@@ -786,7 +786,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(futureLog.latestEpoch).thenReturn(Some(leaderEpoch))
     when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
     when(futureLog.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     when(replicaManager.logManager).thenReturn(logManager)
     stubWithFetchMessages(log, null, futureLog, partition, replicaManager, responseCallback)
 

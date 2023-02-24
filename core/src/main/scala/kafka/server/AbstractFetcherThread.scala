@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
+import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 
@@ -613,7 +614,9 @@ abstract class AbstractFetcherThread(name: String,
       // get (leader epoch, end offset) pair that corresponds to the largest leader epoch
       // less than or equal to the requested epoch.
       endOffsetForEpoch(tp, leaderEpochOffset.leaderEpoch) match {
-        case Some(OffsetAndEpoch(followerEndOffset, followerEpoch)) =>
+        case Some(offsetAndEpoch) =>
+          val followerEndOffset = offsetAndEpoch.offset
+          val followerEpoch = offsetAndEpoch.leaderEpoch
           if (followerEpoch != leaderEpochOffset.leaderEpoch) {
             // the follower does not know about the epoch that leader replied with
             // we truncate to the end offset of the largest epoch that is smaller than the
@@ -658,7 +661,7 @@ abstract class AbstractFetcherThread(name: String,
   private def fetchOffsetAndApplyTruncateAndBuild(topicPartition: TopicPartition,
                                                   topicId: Option[Uuid],
                                                   currentLeaderEpoch: Int,
-                                                  truncateAndBuild: => (Int, Long) => Long,
+                                                  truncateAndBuild: => OffsetAndEpoch => Long,
                                                   fetchFromLocalLogStartOffset: Boolean = true): PartitionFetchState = {
     val replicaEndOffset = logEndOffset(topicPartition)
 
@@ -672,7 +675,8 @@ abstract class AbstractFetcherThread(name: String,
      *
      * There is a potential for a mismatch between the logs of the two replicas here. We don't fix this mismatch as of now.
      */
-    val (_, leaderEndOffset) = leader.fetchLatestOffset(topicPartition, currentLeaderEpoch)
+    val offsetAndEpoch = leader.fetchLatestOffset(topicPartition, currentLeaderEpoch)
+    val leaderEndOffset = offsetAndEpoch.offset
     if (leaderEndOffset < replicaEndOffset) {
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's latest offset $leaderEndOffset")
@@ -704,10 +708,10 @@ abstract class AbstractFetcherThread(name: String,
        * Putting the two cases together, the follower should fetch from the higher one of its replica log end offset
        * and the current leader's (local-log-start-offset or) log start offset.
        */
-      val (epoch, leaderStartOffset) = if (fetchFromLocalLogStartOffset)
+      val offsetAndEpoch = if (fetchFromLocalLogStartOffset)
         leader.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch) else
         leader.fetchEarliestOffset(topicPartition, currentLeaderEpoch)
-
+      val leaderStartOffset = offsetAndEpoch.offset
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's start offset $leaderStartOffset")
       val offsetToFetch =
@@ -715,7 +719,7 @@ abstract class AbstractFetcherThread(name: String,
           // Only truncate log when current leader's log start offset (local log start offset if >= 3.4 version incaseof
           // OffsetMovedToTieredStorage error) is greater than follower's log end offset.
           // truncateAndBuild returns offset value from which it needs to start fetching.
-          truncateAndBuild(epoch, leaderStartOffset)
+          truncateAndBuild(offsetAndEpoch)
         } else {
           replicaEndOffset
         }
@@ -732,7 +736,8 @@ abstract class AbstractFetcherThread(name: String,
    */
   private def fetchOffsetAndTruncate(topicPartition: TopicPartition, topicId: Option[Uuid], currentLeaderEpoch: Int): PartitionFetchState = {
     fetchOffsetAndApplyTruncateAndBuild(topicPartition, topicId, currentLeaderEpoch,
-      (_, leaderLogStartOffset) => {
+      offsetAndEpoch => {
+        val leaderLogStartOffset = offsetAndEpoch.offset
         truncateFullyAndStartAt(topicPartition, leaderLogStartOffset)
         leaderLogStartOffset
       },
@@ -803,7 +808,10 @@ abstract class AbstractFetcherThread(name: String,
                                                 leaderLogStartOffset: Long): Boolean = {
     try {
       val newFetchState = fetchOffsetAndApplyTruncateAndBuild(topicPartition, fetchState.topicId, fetchState.currentLeaderEpoch,
-        (offsetEpoch, leaderLocalLogStartOffset) => buildRemoteLogAuxState(topicPartition, fetchState.currentLeaderEpoch, leaderLocalLogStartOffset, offsetEpoch, leaderLogStartOffset))
+        offsetAndEpoch => {
+          val leaderLocalLogStartOffset = offsetAndEpoch.offset
+          buildRemoteLogAuxState(topicPartition, fetchState.currentLeaderEpoch, leaderLocalLogStartOffset, offsetAndEpoch.leaderEpoch(), leaderLogStartOffset)
+        })
 
       partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
       debug(s"Current offset ${fetchState.fetchOffset} for partition $topicPartition is " +
@@ -1024,10 +1032,4 @@ case class OffsetTruncationState(offset: Long, truncationCompleted: Boolean) {
   def this(offset: Long) = this(offset, true)
 
   override def toString: String = s"TruncationState(offset=$offset, completed=$truncationCompleted)"
-}
-
-case class OffsetAndEpoch(offset: Long, leaderEpoch: Int) {
-  override def toString: String = {
-    s"(offset=$offset, leaderEpoch=$leaderEpoch)"
-  }
 }

@@ -21,7 +21,7 @@ import com.yammer.metrics.core.MetricName
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, OffsetAndEpoch, PartitionMetadataFile, RequestLocal}
+import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, PartitionMetadataFile, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
@@ -917,7 +917,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       if (foundOffset == UNDEFINED_EPOCH_OFFSET)
         None
       else
-        Some(OffsetAndEpoch(foundOffset, foundEpoch))
+        Some(new OffsetAndEpoch(foundOffset, foundEpoch))
     }
   }
 
