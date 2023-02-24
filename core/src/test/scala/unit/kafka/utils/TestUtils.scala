@@ -2101,8 +2101,11 @@ object TestUtils extends Logging {
 
   def metersCount(metricName: String): Long = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filter { case (k, _) => k.getMBeanName.endsWith(metricName)}
-      .values.map(_.asInstanceOf[Meter].count()).sum
+      .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
+      .values.map {
+      case histogram if histogram.isInstanceOf[Histogram] => histogram.asInstanceOf[Histogram].count()
+      case meter => meter.asInstanceOf[Meter].count()
+    }.sum
   }
 
   def clearYammerMetrics(): Unit = {
@@ -2122,16 +2125,6 @@ object TestUtils extends Logging {
       resource.close()
     }
   }
-
-  def metersCount(metricName: String): Long = {
-    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
-      .values.map {
-      case histogram if histogram.isInstanceOf[Histogram] => histogram.asInstanceOf[Histogram].count()
-      case meter => meter.asInstanceOf[Meter].count()
-    }.sum
-  }
-
 
   /**
    * Set broker replication quotas and enable throttling for a set of partitions. This

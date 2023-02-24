@@ -18,11 +18,7 @@ package kafka.server
 
 import java.util
 import java.util.{Optional, Properties}
-<<<<<<< HEAD
-=======
-import kafka.log.LogConfig
 import kafka.network.RequestMetrics.MessageConversionsTimeMs
->>>>>>> be0bf8ae4c (KAFKA-14743: update request metrics after callback)
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
@@ -168,9 +164,9 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   }
 
   def testV1Fetch(isFollowerFetch: Boolean): Unit = {
-    val messageConversionsTimeMsMetricName = s"$MessageConversionsTimeMs,request=Fetch"
+    val fetchMessageConversionsTimeMsMetricName = s"$MessageConversionsTimeMs,request=Fetch"
     val initialFetchMessageConversionsPerSec = TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec)
-    val initialFetchMessageConversionsTimeMs = TestUtils.metersCount(messageConversionsTimeMsMetricName)
+    val initialFetchMessageConversionsTimeMs = TestUtils.metersCount(fetchMessageConversionsTimeMsMetricName)
     val topicWithDownConversionEnabled = "foo"
     val topicWithDownConversionDisabled = "bar"
     val replicaIds = brokers.map(_.config.brokerId)
@@ -230,11 +226,13 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
       assertEquals(Errors.UNSUPPORTED_VERSION, error(partitionWithDownConversionDisabled))
     }
 
-    TestUtils.waitUntilTrue(() => TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec) > initialFetchMessageConversionsPerSec &&
-      ,TestUtils.metersCount(messageConversionsTimeMsMetricName) > initialFetchMessageConversionsTimeMs,
-      s"The `FetchMessageConversionsPerSec` or `MessageConversionsTimeMs` in fetch request metric count is not incremented after 5 seconds. " +
-      s"FetchMessageConversionsPerSec: [init: $initialFetchMessageConversionsPerSec final: ${TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec)}], " +
-        s"MessageConversionsTimeMs,request=fetch:[init: $initialFetchMessageConversionsTimeMs final: ${TestUtils.metersCount(messageConversionsTimeMsMetricName)}]", 5000)
+    TestUtils.waitUntilTrue(() => TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec) > initialFetchMessageConversionsPerSec,
+      s"The `FetchMessageConversionsPerSec` metric count is not incremented after 5 seconds. " +
+      s"init: $initialFetchMessageConversionsPerSec final: ${TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec)}", 5000)
+
+    TestUtils.waitUntilTrue(() => TestUtils.metersCount(fetchMessageConversionsTimeMsMetricName) > initialFetchMessageConversionsTimeMs,
+      s"The `MessageConversionsTimeMs` in fetch request metric count is not incremented after 5 seconds. " +
+      s"init: $initialFetchMessageConversionsTimeMs final: ${TestUtils.metersCount(fetchMessageConversionsTimeMsMetricName)}", 5000)
   }
 
   private def sendFetch(
