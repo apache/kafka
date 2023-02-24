@@ -30,6 +30,7 @@ import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
@@ -48,6 +49,13 @@ import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 
+/**
+ * {@link CompletedFetch} represents a {@link RecordBatch batch} of {@link Record records} that was returned from the
+ * broker via a {@link FetchRequest}. It contains logic to maintain state between calls to {@link #fetchRecords(int)}.
+ *
+ * @param <K> Record key type
+ * @param <V> Record value type
+ */
 class CompletedFetch<K, V> {
 
     private final Logger log;
@@ -108,6 +116,16 @@ class CompletedFetch<K, V> {
         this.abortedTransactions = abortedTransactions(partitionData);
     }
 
+    /**
+     * Draining a {@link CompletedFetch} will signal that the data has been consumed and the underlying resources
+     * are closed.
+     *
+     * <p/>
+     *
+     * TODO: Is this the same as close()-ing the CompletedFetch?
+     * TODO: Is the fetch usable after it's consumed? Should there be some kind of error thrown if it's used after
+     *       it's been drained?
+     */
     void drain() {
         if (!isConsumed) {
             maybeCloseRecordStream();
@@ -212,6 +230,15 @@ class CompletedFetch<K, V> {
         }
     }
 
+    /**
+     * The {@link RecordBatch batch} of {@link Record records} is converted to a {@link List list} of
+     * {@link ConsumerRecord consumer records} and returned. {@link BufferSupplier Decompression} and
+     * {@link Deserializer deserialization} of the {@link Record record's} key and value are performed in
+     * this step.
+     *
+     * @param maxRecords The number of records to return; the number returned may be {@code 0 <= maxRecords}
+     * @return {@link ConsumerRecord Consumer records}
+     */
     List<ConsumerRecord<K, V>> fetchRecords(int maxRecords) {
         // Error when fetching the next record before deserialization.
         if (corruptLastRecord)
@@ -325,9 +352,5 @@ class CompletedFetch<K, V> {
 
         Record firstRecord = batchIterator.next();
         return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
-    }
-
-    boolean notInitialized() {
-        return !this.initialized;
     }
 }

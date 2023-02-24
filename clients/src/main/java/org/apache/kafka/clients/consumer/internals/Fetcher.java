@@ -331,7 +331,7 @@ public class Fetcher<K, V> implements Closeable {
                     CompletedFetch<K, V> records = completedFetches.peek();
                     if (records == null) break;
 
-                    if (records.notInitialized()) {
+                    if (!records.initialized) {
                         try {
                             nextInLineFetch = initializeCompletedFetch(records);
                         } catch (Exception e) {
