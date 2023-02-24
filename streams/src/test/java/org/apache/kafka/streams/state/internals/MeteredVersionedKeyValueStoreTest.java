@@ -52,6 +52,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -59,6 +60,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
+import org.apache.kafka.streams.state.VersionedRecord;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -197,25 +199,31 @@ public class MeteredVersionedKeyValueStoreTest {
 
     @Test
     public void shouldDelegateAndRecordMetricsOnDelete() {
-        store.delete(KEY, TIMESTAMP);
+        when(inner.delete(RAW_KEY, TIMESTAMP)).thenReturn(RAW_VALUE_AND_TIMESTAMP);
 
-        verify(inner).delete(RAW_KEY, TIMESTAMP);
+        final VersionedRecord<String> result = store.delete(KEY, TIMESTAMP);
+
+        assertThat(result, is(new VersionedRecord<>(VALUE, TIMESTAMP)));
         assertThat((Double) getMetric("delete-rate").metricValue(), greaterThan(0.0));
     }
 
     @Test
     public void shouldDelegateAndRecordMetricsOnGet() {
-        store.get(KEY);
+        when(inner.get(RAW_KEY)).thenReturn(RAW_VALUE_AND_TIMESTAMP);
 
-        verify(inner).get(RAW_KEY);
+        final VersionedRecord<String> result = store.get(KEY);
+
+        assertThat(result, is(new VersionedRecord<>(VALUE, TIMESTAMP)));
         assertThat((Double) getMetric("get-rate").metricValue(), greaterThan(0.0));
     }
 
     @Test
     public void shouldDelegateAndRecordMetricsOnGetWithTimestamp() {
-        store.get(KEY, TIMESTAMP);
+        when(inner.get(RAW_KEY, TIMESTAMP)).thenReturn(RAW_VALUE_AND_TIMESTAMP);
 
-        verify(inner).get(RAW_KEY, TIMESTAMP);
+        final VersionedRecord<String> result = store.get(KEY, TIMESTAMP);
+
+        assertThat(result, is(new VersionedRecord<>(VALUE, TIMESTAMP)));
         assertThat((Double) getMetric("get-rate").metricValue(), greaterThan(0.0));
     }
 
@@ -296,6 +304,43 @@ public class MeteredVersionedKeyValueStoreTest {
 
         assertThat(store.query(query, positionBound, queryConfig), is(result));
         verify(result).addExecutionInfo(anyString());
+    }
+
+    @Test
+    public void shouldDelegateName() {
+        when(inner.name()).thenReturn(STORE_NAME);
+
+        assertThat(store.name(), is(STORE_NAME));
+    }
+
+    @Test
+    public void shouldDelegatePersistent() {
+        // `persistent = true` case
+        when(inner.persistent()).thenReturn(true);
+        assertThat(store.persistent(), is(true));
+
+        // `persistent = false` case
+        when(inner.persistent()).thenReturn(false);
+        assertThat(store.persistent(), is(false));
+    }
+
+    @Test
+    public void shouldDelegateIsOpen() {
+        // `isOpen = true` case
+        when(inner.isOpen()).thenReturn(true);
+        assertThat(store.isOpen(), is(true));
+
+        // `isOpen = false` case
+        when(inner.isOpen()).thenReturn(false);
+        assertThat(store.isOpen(), is(false));
+    }
+
+    @Test
+    public void shouldDelegateGetPosition() {
+        final Position position = mock(Position.class);
+        when(inner.getPosition()).thenReturn(position);
+
+        assertThat(store.getPosition(), is(position));
     }
 
     private KafkaMetric getMetric(final String name) {
