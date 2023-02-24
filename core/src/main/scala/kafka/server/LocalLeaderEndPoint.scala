@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.storage.internals.log.{FetchIsolation, FetchParams, FetchPartitionData}
 
 import java.util
@@ -113,25 +114,25 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     partitionData.toMap
   }
 
-  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long) = {
+  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val logStartOffset = partition.localLogOrException.logStartOffset
     val epoch = partition.localLogOrException.leaderEpochCache.get.epochForOffset(logStartOffset)
-    (epoch.orElse(0), logStartOffset)
+    new OffsetAndEpoch(logStartOffset, epoch.orElse(0))
   }
 
-  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long) = {
+  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val logEndOffset = partition.localLogOrException.logEndOffset
     val epoch = partition.localLogOrException.leaderEpochCache.get.epochForOffset(logEndOffset)
-    (epoch.orElse(0), logEndOffset)
+    new OffsetAndEpoch(logEndOffset, epoch.orElse(0))
   }
 
-  override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long) = {
+  override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val localLogStartOffset = partition.localLogOrException.localLogStartOffset()
     val epoch = partition.localLogOrException.leaderEpochCache.get.epochForOffset(localLogStartOffset)
-    (epoch.orElse(0), localLogStartOffset)
+    new OffsetAndEpoch(localLogStartOffset, epoch.orElse(0))
   }
 
   override def fetchEpochEndOffsets(partitions: collection.Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {

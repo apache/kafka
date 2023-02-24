@@ -57,6 +57,7 @@ import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPar
 import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, MetadataProvenance, ProducerIdsImage, TopicsDelta, TopicsImage}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.util.MockScheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, ProducerStateManager, ProducerStateManagerConfig}
@@ -2059,7 +2060,7 @@ class ReplicaManagerTest {
       override def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
         assertEquals(leaderEpoch, leaderEpochFromLeader)
         localLogOffset.map { logOffset =>
-          Some(OffsetAndEpoch(logOffset, leaderEpochFromLeader))
+          Some(new OffsetAndEpoch(logOffset, leaderEpochFromLeader))
         }.getOrElse(super.endOffsetForEpoch(leaderEpoch))
       }
 

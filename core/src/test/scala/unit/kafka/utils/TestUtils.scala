@@ -900,10 +900,12 @@ object TestUtils extends Logging {
     partition: Int,
     timeoutMs: Long = 30000L,
     oldLeaderOpt: Option[Int] = None,
-    newLeaderOpt: Option[Int] = None
+    newLeaderOpt: Option[Int] = None,
+    ignoreNoLeader: Boolean = false
   ): Int = {
     def getPartitionLeader(topic: String, partition: Int): Option[Int] = {
       zkClient.getLeaderForPartition(new TopicPartition(topic, partition))
+        .filter(p => !ignoreNoLeader || p != LeaderAndIsr.NoLeader)
     }
     doWaitUntilLeaderIsElectedOrChanged(getPartitionLeader, topic, partition, timeoutMs, oldLeaderOpt, newLeaderOpt)
   }
@@ -2095,6 +2097,12 @@ object TestUtils extends Logging {
       .getOrElse(fail(s"Unable to find metric $metricName"))
       .asInstanceOf[Meter]
       .count
+  }
+
+  def metersCount(metricName: String): Long = {
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => k.getMBeanName.endsWith(metricName)}
+      .values.map(_.asInstanceOf[Meter].count()).sum
   }
 
   def clearYammerMetrics(): Unit = {

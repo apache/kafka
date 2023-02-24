@@ -30,7 +30,7 @@ buildscript {
 }
 
 plugins {
-  id 'com.diffplug.spotless' version '6.13.0'
+  id 'com.diffplug.spotless' version '6.13.0' // newer versions require Java 11, so we can't use them until Kafka 4.0
   id 'com.github.ben-manes.versions' version '0.44.0'
   id 'idea'
   id 'java-library'
@@ -54,7 +54,7 @@ spotless {
 
 ext {
   gradleVersion = versions.gradle
-  minJavaVersion = "8"
+  minJavaVersion = 8
   buildVersionFileName = "kafka-version.properties"
 
   defaultMaxHeapSize = "2g"
@@ -254,9 +254,6 @@ subprojects {
     fineTuneEclipseClasspathFile(eclipse, project)
   }
 
-  sourceCompatibility = minJavaVersion
-  targetCompatibility = minJavaVersion
-
   java {
     consistentResolution {
       // resolve the compileClasspath and then "inject" the result of resolution as strict constraints into the runtimeClasspath
@@ -273,12 +270,17 @@ subprojects {
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
     options.compilerArgs << "-Werror"
+
     // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
-    // set --source and --target via `sourceCompatibility` and `targetCompatibility`. If/when Gradle supports `--release`
-    // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
+    // set --source and --target via `sourceCompatibility` and `targetCompatibility` a couple of lines below
     if (JavaVersion.current().isJava9Compatible())
-      options.compilerArgs << "--release" << minJavaVersion
+      options.release = minJavaVersion
   }
+  
+  // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
+  // `-target` incorrectly if this is unset
+  sourceCompatibility = minJavaVersion
+  targetCompatibility = minJavaVersion
 
   if (shouldPublish) {
 
@@ -680,9 +682,12 @@ subprojects {
       ]
     }
 
-    // Scalac's `-release` requires Java 9 or higher
-    if (JavaVersion.current().isJava9Compatible())
-      scalaCompileOptions.additionalParameters += ["-release", minJavaVersion]
+    // Scalac 2.12 `-release` requires Java 9 or higher, but Scala 2.13 doesn't have that restriction
+    if (versions.baseScala == "2.13")
+      scalaCompileOptions.additionalParameters += ["-release:" + minJavaVersion] // Use `:` here to workaround Gradle bug (see https://github.com/gradle/gradle/issues/23962#issuecomment-1437348400)
+    else if (JavaVersion.current().isJava9Compatible())
+      scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)] // Don't use `:` here as it breaks compilation with Scala 2.12
+
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = defaultMaxHeapSize
@@ -2111,7 +2116,6 @@ project(':streams:streams-scala') {
     dependsOn 'copyDependantLibs'
   }
 
-  test.dependsOn(':spotlessScalaCheck')
 }
 
 project(':streams:test-utils') {

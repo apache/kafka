@@ -14,40 +14,42 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
+package org.apache.kafka.server.common;
 
-import java.io.IOException;
+public class OffsetAndEpoch {
+    private final long offset;
+    private final int leaderEpoch;
 
-public class NetworkSend implements Send {
-    private final String destinationId;
-    private final Send send;
-
-    public NetworkSend(String destinationId, Send send) {
-        this.destinationId = destinationId;
-        this.send = send;
+    public OffsetAndEpoch(long offset, int leaderEpoch) {
+        this.offset = offset;
+        this.leaderEpoch = leaderEpoch;
     }
 
-    public String destinationId() {
-        return destinationId;
+    public long offset() {
+        return offset;
     }
 
-    public Send send() {
-        return send;
-    }
-
-    @Override
-    public boolean completed() {
-        return send.completed();
+    public int leaderEpoch() {
+        return leaderEpoch;
     }
 
     @Override
-    public long writeTo(TransferableChannel channel) throws IOException {
-        return send.writeTo(channel);
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        OffsetAndEpoch that = (OffsetAndEpoch) o;
+        return offset == that.offset && leaderEpoch == that.leaderEpoch;
     }
 
     @Override
-    public long size() {
-        return send.size();
+    public int hashCode() {
+        int result = leaderEpoch;
+        result = 31 * result + Long.hashCode(offset);
+        return result;
     }
 
+    @Override
+    public String toString() {
+        return "(offset=" + offset + ", leaderEpoch=" + leaderEpoch + ")";
+    }
 }
