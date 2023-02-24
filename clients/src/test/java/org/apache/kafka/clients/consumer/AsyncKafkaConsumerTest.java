@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.PrototypeAsyncConsumer;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
@@ -55,7 +54,6 @@ public class AsyncKafkaConsumerTest {
         injectConsumerConfigs();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         ConsumerMetadata metadata = createMetadata(subscription);
-        MockClient client = new MockClient(time, metadata);
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
     }
 
