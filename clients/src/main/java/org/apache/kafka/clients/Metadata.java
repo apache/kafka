@@ -225,6 +225,11 @@ public class Metadata implements Closeable {
         return cache.topicIds();
     }
 
+    /**
+     * Returns a {@link TopicResolver} to resolve topic id from topic name, or topic name from topic id,
+     * based on the current topic ids cached in the metadata. Metadata updates, and changes in topic ids
+     * cached, are not reflected in the {@link TopicResolver} returned by this method.
+     */
     public TopicResolver topicResolver() {
         return TopicResolver.fromTopicIds(topicIds());
     }

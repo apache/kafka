@@ -1502,6 +1502,7 @@ class KafkaApisTest {
 
   // A topic name, id, or both.
   case class NameOrId(name: String = null, id: Uuid = Uuid.ZERO_UUID)
+
   def newOffsetCommitRequestData(groupId: String,
                                  memberId: String,
                                  topics: Seq[(NameOrId, Map[Int, Long])]): OffsetCommitRequestData = {

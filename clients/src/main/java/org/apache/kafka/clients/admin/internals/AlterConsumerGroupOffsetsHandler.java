@@ -93,6 +93,7 @@ public class AlterConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Co
         offsets.forEach((topicPartition, offsetAndMetadata) -> {
             OffsetCommitRequestTopic topic = offsetData.computeIfAbsent(
                 topicPartition.topic(),
+                // The admin client does not support topic IDs as of 2023/02/24.
                 key -> new OffsetCommitRequestTopic().setName(topicPartition.topic())
             );
 
