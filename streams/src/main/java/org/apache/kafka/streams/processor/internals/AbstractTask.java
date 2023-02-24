@@ -18,9 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -35,7 +33,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
@@ -202,44 +199,6 @@ public abstract class AbstractTask implements Task {
             );
         }
 
-    }
-
-    public static void maybeRecordSensor(final double value,
-                                         final Time time,
-                                         final Sensor sensor) {
-        if (sensor.shouldRecord() && sensor.hasMetrics()) {
-            sensor.record(value, time.milliseconds());
-        }
-    }
-
-    public static void maybeMeasureLatency(final Runnable actionToMeasure,
-                                           final Time time,
-                                           final Sensor sensor) {
-        if (sensor.shouldRecord() && sensor.hasMetrics()) {
-            final long startNs = time.nanoseconds();
-            try {
-                actionToMeasure.run();
-            } finally {
-                sensor.record(time.nanoseconds() - startNs);
-            }
-        } else {
-            actionToMeasure.run();
-        }
-    }
-
-    public static <T> T maybeMeasureLatency(final Supplier<T> actionToMeasure,
-                                            final Time time,
-                                            final Sensor sensor) {
-        if (sensor.shouldRecord() && sensor.hasMetrics()) {
-            final long startNs = time.nanoseconds();
-            try {
-                return actionToMeasure.get();
-            } finally {
-                sensor.record(time.nanoseconds() - startNs);
-            }
-        } else {
-            return actionToMeasure.get();
-        }
     }
 
     @Override

@@ -864,6 +864,44 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
+    public static void maybeRecordSensor(final double value,
+                                         final Time time,
+                                         final Sensor sensor) {
+        if (sensor.shouldRecord() && sensor.hasMetrics()) {
+            sensor.record(value, time.milliseconds());
+        }
+    }
+
+    public static void maybeMeasureLatency(final Runnable actionToMeasure,
+                                           final Time time,
+                                           final Sensor sensor) {
+        if (sensor.shouldRecord() && sensor.hasMetrics()) {
+            final long startNs = time.nanoseconds();
+            try {
+                actionToMeasure.run();
+            } finally {
+                sensor.record(time.nanoseconds() - startNs);
+            }
+        } else {
+            actionToMeasure.run();
+        }
+    }
+
+    public static <T> T maybeMeasureLatency(final Supplier<T> actionToMeasure,
+                                            final Time time,
+                                            final Sensor sensor) {
+        if (sensor.shouldRecord() && sensor.hasMetrics()) {
+            final long startNs = time.nanoseconds();
+            try {
+                return actionToMeasure.get();
+            } finally {
+                sensor.record(time.nanoseconds() - startNs);
+            }
+        } else {
+            return actionToMeasure.get();
+        }
+    }
+
     private Sensor getSensors(final Map<String, Deque<String>> sensors,
                               final String sensorSuffix,
                               final String sensorPrefix,

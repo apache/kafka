@@ -97,13 +97,6 @@ public class DefaultStateUpdater implements StateUpdater {
                 .collect(Collectors.toList());
         }
 
-        public Collection<StreamTask> getUpdatingActiveTasks() {
-            return updatingTasks.values().stream()
-                .filter(Task::isActive)
-                .map(t -> (StreamTask) t)
-                .collect(Collectors.toList());
-        }
-
         private boolean onlyStandbyTasksUpdating() {
             return !updatingTasks.isEmpty() && updatingTasks.values().stream().noneMatch(Task::isActive);
         }
@@ -486,7 +479,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 measureCheckpointLatency(() -> {
                     for (final Task task : updatingTasks.values()) {
                         // do not enforce checkpointing during restoration if its position has not advanced much
-                        measureCheckpointLatency(() -> task.maybeCheckpoint(false));
+                        task.maybeCheckpoint(false);
                     }
                 });
 
@@ -717,12 +710,6 @@ public class DefaultStateUpdater implements StateUpdater {
             : Collections.emptySet();
     }
 
-    public Set<StreamTask> getUpdatingActiveTasks() {
-        return stateUpdaterThread != null
-            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getUpdatingActiveTasks()))
-            : Collections.emptySet();
-    }
-
     @Override
     public Set<Task> getUpdatingTasks() {
         return stateUpdaterThread != null
@@ -745,20 +732,6 @@ public class DefaultStateUpdater implements StateUpdater {
 
     public Set<Task> getRemovedTasks() {
         return Collections.unmodifiableSet(new HashSet<>(removedTasks));
-    }
-
-    public Set<StandbyTask> getPausedStandbyTasks() {
-        return Collections.unmodifiableSet(getPausedTasks().stream()
-            .filter(t -> !t.isActive())
-            .map(t -> (StandbyTask) t)
-            .collect(Collectors.toSet()));
-    }
-
-    public Set<StreamTask> getPausedActiveTasks() {
-        return Collections.unmodifiableSet(getPausedTasks().stream()
-            .filter(Task::isActive)
-            .map(t -> (StreamTask) t)
-            .collect(Collectors.toSet()));
     }
 
     public Set<Task> getPausedTasks() {
