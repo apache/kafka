@@ -505,9 +505,9 @@ public abstract class AbstractCoordinator implements Closeable {
                         exception instanceof IllegalGenerationException ||
                         exception instanceof RebalanceInProgressException ||
                         exception instanceof MemberIdRequiredException) {
-                   if (timer.isExpired())
-                       return false;
-                   continue;
+                    if (timer.isExpired())
+                        return false;
+                    continue;
                 }
 
                 if (!future.isRetriable())
