@@ -21,6 +21,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
+import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.Mockito.{mock, verify, when}
 
+import java.util.Optional
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -235,7 +237,7 @@ class AbstractFetcherManagerTest {
     val failedTopicPartitions = makeTopicPartition(2, 5, "topic_failed")
     val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", currentFetcherSize) {
       override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-        new TestResizeFetcherThread(sourceBroker, failedPartitions)
+        new TestResizeFetcherThread(sourceBroker, failedPartitions, new MockResizeFetcherTierStateMachine)
       }
     }
     try {
@@ -311,12 +313,21 @@ class AbstractFetcherManagerTest {
     override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(1L, 0)
   }
 
-  private class TestResizeFetcherThread(sourceBroker: BrokerEndPoint, failedPartitions: FailedPartitions)
+  private class MockResizeFetcherTierStateMachine extends TierStateMachine {
+    override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: PartitionData): PartitionFetchState = {
+      throw new UnsupportedOperationException("Materializing tier state is not supported in this test.")
+    }
+
+    override def maybeAdvanceState(tp: TopicPartition, currentFetchState: PartitionFetchState): Optional[PartitionFetchState] = Optional.empty[PartitionFetchState]
+  }
+
+  private class TestResizeFetcherThread(sourceBroker: BrokerEndPoint, failedPartitions: FailedPartitions, fetchTierStateMachine: TierStateMachine)
     extends AbstractFetcherThread(
       name = "test-resize-fetcher",
       clientId = "mock-fetcher",
       leader = new MockLeaderEndPoint(sourceBroker),
       failedPartitions,
+      fetchTierStateMachine,
       fetchBackOffMs = 0,
       brokerTopicStats = new BrokerTopicStats) {
 
@@ -337,8 +348,6 @@ class AbstractFetcherManagerTest {
     override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = Some(new OffsetAndEpoch(1, 0))
 
     override protected val isOffsetForLeaderEpochSupported: Boolean = false
-
-    override protected def buildRemoteLogAuxState(partition: TopicPartition, currentLeaderEpoch: Int, fetchOffset: Long, epochForFetchOffset: Int, leaderLogStartOffset: Long): Long = 1
   }
 
 }

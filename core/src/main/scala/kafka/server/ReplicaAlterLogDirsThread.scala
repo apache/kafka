@@ -36,6 +36,7 @@ class ReplicaAlterLogDirsThread(name: String,
                                 clientId = name,
                                 leader = leader,
                                 failedPartitions,
+                                fetchTierStateMachine = new ReplicaAlterLogDirsTierStateMachine(),
                                 fetchBackOffMs = fetchBackOffMs,
                                 isInterruptible = false,
                                 brokerTopicStats) {
@@ -122,14 +123,4 @@ class ReplicaAlterLogDirsThread(name: String,
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.truncateFullyAndStartAt(offset, isFuture = true)
   }
-
-  override protected def buildRemoteLogAuxState(partition: TopicPartition,
-                                                currentLeaderEpoch: Int,
-                                                fetchOffset: Long,
-                                                epochForFetchOffset: Int,
-                                                leaderLogStartOffset: Long): Long = {
-    // JBOD is not supported with tiered storage.
-    throw new UnsupportedOperationException();
-  }
-
 }
