@@ -252,7 +252,7 @@ public class Fetcher<K, V> implements Closeable {
                                 }
                             }
 
-                            sensors.fetchLatency.record(resp.requestLatencyMs());
+                            sensors.recordLatency(resp.requestLatencyMs());
                         } finally {
                             nodesWithPendingFetchRequests.remove(fetchTarget.id());
                         }

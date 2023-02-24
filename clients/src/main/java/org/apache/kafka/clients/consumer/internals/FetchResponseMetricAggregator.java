@@ -59,8 +59,7 @@ class FetchResponseMetricAggregator {
 
         if (this.unrecordedPartitions.isEmpty()) {
             // once all expected partitions from the fetch have reported in, record the metrics
-            this.sensors.bytesFetched.record(this.fetchMetrics.fetchBytes);
-            this.sensors.recordsFetched.record(this.fetchMetrics.fetchRecords);
+            this.sensors.recordFetchMetrics(this.fetchMetrics.fetchBytes, this.fetchMetrics.fetchRecords);
 
             // also record per-topic metrics
             for (Map.Entry<String, FetchMetrics> entry: this.topicFetchMetrics.entrySet()) {

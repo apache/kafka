@@ -33,13 +33,18 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * The {@link FetchManagerMetrics} class provides wrapper methods to record lag, lead, latency, and fetch metrics.
+ * It keeps an internal ID of the assigned set of partitions which is updated to ensure the set of metrics it
+ * records matches up with the topic-partitions in use.
+ */
 class FetchManagerMetrics {
 
     private final Metrics metrics;
     private final FetcherMetricsRegistry metricsRegistry;
-    final Sensor bytesFetched;
-    final Sensor recordsFetched;
-    final Sensor fetchLatency;
+    private final Sensor bytesFetched;
+    private final Sensor recordsFetched;
+    private final Sensor fetchLatency;
     private final Sensor recordsFetchLag;
     private final Sensor recordsFetchLead;
 
@@ -72,6 +77,15 @@ class FetchManagerMetrics {
 
         this.recordsFetchLead = metrics.sensor("records-lead");
         this.recordsFetchLead.add(metrics.metricInstance(metricsRegistry.recordsLeadMin), new Min());
+    }
+
+    void recordLatency(long requestLatencyMs) {
+        fetchLatency.record(requestLatencyMs);
+    }
+
+    void recordFetchMetrics(int bytes, int records) {
+        bytesFetched.record(bytes);
+        recordsFetched.record(records);
     }
 
     void recordTopicFetchMetrics(String topic, int bytes, int records) {
@@ -107,8 +121,16 @@ class FetchManagerMetrics {
         recordsFetched.record(records);
     }
 
+    /**
+     * This method is called by the {@link Fetch fetch} logic before it requests fetches in order to update the
+     * internal set of metrics that are tracked.
+     *
+     * @param subscription {@link SubscriptionState} that contains the set of assigned partitions
+     * @see SubscriptionState#assignmentId()
+     */
     void maybeUpdateAssignment(SubscriptionState subscription) {
         int newAssignmentId = subscription.assignmentId();
+
         if (this.assignmentId != newAssignmentId) {
             Set<TopicPartition> newAssignedPartitions = subscription.assignedPartitions();
             for (TopicPartition tp : this.assignedPartitions) {
