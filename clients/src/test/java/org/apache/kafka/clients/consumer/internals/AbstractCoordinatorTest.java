@@ -1206,22 +1206,29 @@ public class AbstractCoordinatorTest {
                 throw e;
             return false;
         }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
+        coordinator.ensureActiveGroup();
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
 
-        int times = 0;
         try {
-            coordinator.ensureActiveGroup();
-            mockTime.sleep(HEARTBEAT_INTERVAL_MS);
             long startMs = System.currentTimeMillis();
             while (System.currentTimeMillis() - startMs < 1000) {
                 Thread.sleep(10);
-                if (Long.MAX_VALUE == coordinator.timeToNextHeartbeat(0))
-                    times++;
+                coordinator.timeToNextHeartbeat(0);
+            }
+            fail("Expected timeToNextHeartbeat to raise an error in 1 second");
+        } catch (RuntimeException exception) {
+            assertEquals(exception, e);
+        }
+
+        try {
+            long startMs = System.currentTimeMillis();
+            while (System.currentTimeMillis() - startMs < 1000) {
+                Thread.sleep(10);
                 coordinator.pollHeartbeat(mockTime.milliseconds());
             }
             fail("Expected pollHeartbeat to raise an error in 1 second");
         } catch (RuntimeException exception) {
             assertEquals(exception, e);
-            assertEquals(1, times);
         }
     }
 
