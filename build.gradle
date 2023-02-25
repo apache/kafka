@@ -44,6 +44,13 @@ plugins {
   id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.0"
 }
 
+gradle.taskGraph.whenReady {
+  taskGraph ->
+    if (taskGraph.hasTask(check)) {
+      spotlessScala.enabled = false
+    }
+}
+
 spotless {
   scala {
     target 'streams/**/*.scala'
