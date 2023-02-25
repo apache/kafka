@@ -74,7 +74,7 @@ public class RemoteIndexCache implements Closeable {
     }
 
     /**
-     * Created RemoteIndexCache with the given configs.
+     * Creates RemoteIndexCache with the given configs.
      *
      * @param maxSize              maximum number of segment index entries to be cached.
      * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
@@ -106,11 +106,11 @@ public class RemoteIndexCache implements Closeable {
         init();
 
         // Start cleaner thread that will clean the expired entries.
-        cleanerThread = createCLeanerThread();
+        cleanerThread = createCleanerThread();
         cleanerThread.start();
     }
 
-    private ShutdownableThread createCLeanerThread() {
+    private ShutdownableThread createCleanerThread() {
         ShutdownableThread thread = new ShutdownableThread("remote-log-index-cleaner") {
             public void doWork() {
                 while (!closed) {
@@ -393,15 +393,9 @@ public class RemoteIndexCache implements Closeable {
         }
 
         public void close() {
-            Arrays.asList(offsetIndex, timeIndex).forEach(index -> {
-                try {
-                    index.close();
-                } catch (Exception e) {
-                    // ignore exception.
-                }
-            });
-
-            Utils.closeQuietly(txnIndex, "Closing the transaction index.");
+            Utils.closeQuietly(offsetIndex, "OffsetIndex");
+            Utils.closeQuietly(timeIndex, "TimeIndex");
+            Utils.closeQuietly(txnIndex, "TransactionIndex");
         }
     }
 }
