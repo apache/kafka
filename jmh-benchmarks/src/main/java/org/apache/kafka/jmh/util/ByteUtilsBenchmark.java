@@ -17,7 +17,7 @@
 
 package org.apache.kafka.jmh.util;
 
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.utils.ByteUtils;
@@ -30,55 +30,62 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 @State(Scope.Benchmark)
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@OutputTimeUnit(TimeUnit.SECONDS)
 @Fork(3)
 @Warmup(iterations = 5, time = 1)
 @Measurement(iterations = 10, time = 1)
 public class ByteUtilsBenchmark {
-    private int inputInt;
-    private long inputLong;
+    static final int DATA_SET_SAMPLE_SIZE = 1024 * 1024;
+    int[] random_ints;
+    long[] random_longs;
+    Random random;
+
+    @Setup(Level.Trial)
+    public void setUpBenchmarkLevel() {
+        // Initialize the random number generator with a seed so that for each benchmark it produces the same sequence
+        // of random numbers. Note that it is important to initialize it again with the seed before every benchmark.
+        random = new Random(1337);
+    }
+
     @Setup(Level.Iteration)
     public void setUp() {
-        inputInt = ThreadLocalRandom.current().nextInt();
-        inputLong = ThreadLocalRandom.current().nextLong();
+        random_ints = random.ints(DATA_SET_SAMPLE_SIZE).toArray();
+        random_longs = random.longs(DATA_SET_SAMPLE_SIZE).toArray();
     }
 
     @Benchmark
-    public int testSizeOfUnsignedVarint() {
-        return ByteUtils.sizeOfUnsignedVarint(inputInt);
-    }
-
-    @Benchmark
-    public int testSizeOfUnsignedVarintSimple() {
-        int value = inputInt;
-        int bytes = 1;
-        while ((value & 0xffffff80) != 0L) {
-            bytes += 1;
-            value >>>= 7;
+    public void testSizeOfUnsignedVarint(Blackhole bk) {
+        for (int random_value : this.random_ints) {
+            bk.consume(ByteUtils.sizeOfUnsignedVarint(random_value));
         }
-        return bytes;
     }
 
     @Benchmark
-    public int testSizeOfVarlong() {
-        return ByteUtils.sizeOfVarlong(inputLong);
-    }
-
-    @Benchmark
-    public int testSizeOfVarlongSimple() {
-        long v = (inputLong << 1) ^ (inputLong >> 63);
-        int bytes = 1;
-        while ((v & 0xffffffffffffff80L) != 0L) {
-            bytes += 1;
-            v >>>= 7;
+    public void testSizeOfUnsignedVarintNew(Blackhole bk) {
+        for (int random_value : this.random_ints) {
+            bk.consume(ByteUtils.sizeOfUnsignedVarintNew(random_value));
         }
-        return bytes;
+    }
+
+    @Benchmark
+    public void testSizeOfVarlong(Blackhole bk) {
+        for (long random_value : this.random_longs) {
+            bk.consume(ByteUtils.sizeOfUnsignedVarlong(random_value));
+        }
+    }
+
+    @Benchmark
+    public void testSizeOfVarlongNew(Blackhole bk) {
+        for (long random_value : this.random_longs) {
+            bk.consume(ByteUtils.sizeOfUnsignedVarlongNew(random_value));
+        }
     }
 
     public static void main(String[] args) throws RunnerException {
