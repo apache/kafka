@@ -877,7 +877,6 @@ class DefaultStateUpdaterTest {
         verifyCheckpointTasks(true, task1);
         verifyRestoredActiveTasks();
         verifyRemovedTasks();
-        
         verifyUpdatingTasks(task2);
         verifyExceptionsAndFailedTasks();
         verify(changelogReader, times(1)).enforceRestoreActive();
