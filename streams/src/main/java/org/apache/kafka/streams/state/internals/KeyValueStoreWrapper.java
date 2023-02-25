@@ -39,166 +39,111 @@ import org.apache.kafka.streams.state.VersionedRecord;
  */
 public class KeyValueStoreWrapper<K, V> implements StateStore {
 
-    private TimestampedKeyValueStore<K, V> timestampedStore = null;
-    private VersionedKeyValueStore<K, V> versionedStore = null;
+    private final StateStore store;
+    private final StoreType storeType;
+
+    private enum StoreType {
+        TIMESTAMPED,
+        VERSIONED;
+    }
 
     public KeyValueStoreWrapper(final ProcessorContext<?, ?> context, final String storeName) {
-        try {
-            // first try timestamped store
-            timestampedStore = context.getStateStore(storeName);
-            return;
-        } catch (final ClassCastException e) {
-            // ignore since could be versioned store instead
-        }
+        store = context.getStateStore(storeName);
 
-        try {
-            // next try versioned store
-            versionedStore = context.getStateStore(storeName);
-        } catch (final ClassCastException e) {
-            throw new InvalidStateStoreException("KTable source state store must implement either TimestampedKeyValueStore or VersionedKeyValueStore.");
+        if (store instanceof TimestampedKeyValueStore) {
+            storeType = StoreType.TIMESTAMPED;
+        } else if (store instanceof VersionedKeyValueStore) {
+            storeType = StoreType.VERSIONED;
+        } else {
+            throw new InvalidStateStoreException("KTable source state store must implement either "
+                + "TimestampedKeyValueStore or VersionedKeyValueStore. Got: " + store.getClass().getName());
         }
     }
 
     public ValueAndTimestamp<V> get(final K key) {
-        if (timestampedStore != null) {
-            return timestampedStore.get(key);
+        switch (storeType) {
+            case TIMESTAMPED:
+                return getTimestampedStore().get(key);
+            case VERSIONED:
+                final VersionedRecord<V> versionedRecord = getVersionedStore().get(key);
+                return versionedRecord == null
+                    ? null
+                    : ValueAndTimestamp.make(versionedRecord.value(), versionedRecord.timestamp());
+            default:
+                throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
         }
-        if (versionedStore != null) {
-            final VersionedRecord<V> versionedRecord = versionedStore.get(key);
-            return versionedRecord == null
-                ? null
-                : ValueAndTimestamp.make(versionedRecord.value(), versionedRecord.timestamp());
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
     }
 
     public void put(final K key, final V value, final long timestamp) {
-        if (timestampedStore != null) {
-            timestampedStore.put(key, ValueAndTimestamp.make(value, timestamp));
-            return;
+        switch (storeType) {
+            case TIMESTAMPED:
+                getTimestampedStore().put(key, ValueAndTimestamp.make(value, timestamp));
+                return;
+            case VERSIONED:
+                getVersionedStore().put(key, value, timestamp);
+                return;
+            default:
+                throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
         }
-        if (versionedStore != null) {
-            versionedStore.put(key, value, timestamp);
-            return;
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
     }
 
     public StateStore getStore() {
-        if (timestampedStore != null) {
-            return timestampedStore;
-        }
-        if (versionedStore != null) {
-            return versionedStore;
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        return store;
     }
 
     @Override
     public String name() {
-        if (timestampedStore != null) {
-            return timestampedStore.name();
-        }
-        if (versionedStore != null) {
-            return versionedStore.name();
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        return store.name();
     }
 
     @Deprecated
     @Override
     public void init(final org.apache.kafka.streams.processor.ProcessorContext context, final StateStore root) {
-        if (timestampedStore != null) {
-            timestampedStore.init(context, root);
-            return;
-        }
-        if (versionedStore != null) {
-            versionedStore.init(context, root);
-            return;
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        store.init(context, root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        if (timestampedStore != null) {
-            timestampedStore.init(context, root);
-            return;
-        }
-        if (versionedStore != null) {
-            versionedStore.init(context, root);
-            return;
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        store.init(context, root);
     }
 
     @Override
     public void flush() {
-        if (timestampedStore != null) {
-            timestampedStore.flush();
-            return;
-        }
-        if (versionedStore != null) {
-            versionedStore.flush();
-            return;
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        store.flush();
     }
 
     @Override
     public void close() {
-        if (timestampedStore != null) {
-            timestampedStore.close();
-            return;
-        }
-        if (versionedStore != null) {
-            versionedStore.close();
-            return;
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        store.close();
     }
 
     @Override
     public boolean persistent() {
-        if (timestampedStore != null) {
-            return timestampedStore.persistent();
-        }
-        if (versionedStore != null) {
-            return versionedStore.persistent();
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        return store.persistent();
     }
 
     @Override
     public boolean isOpen() {
-        if (timestampedStore != null) {
-            return timestampedStore.isOpen();
-        }
-        if (versionedStore != null) {
-            return versionedStore.isOpen();
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        return store.isOpen();
     }
 
     @Override
     public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
-        if (timestampedStore != null) {
-            return timestampedStore.query(query, positionBound, config);
-        }
-        if (versionedStore != null) {
-            return versionedStore.query(query, positionBound, config);
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        return store.query(query, positionBound, config);
     }
 
     @Override
     public Position getPosition() {
-        if (timestampedStore != null) {
-            return timestampedStore.getPosition();
-        }
-        if (versionedStore != null) {
-            return versionedStore.getPosition();
-        }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        return store.getPosition();
+    }
+
+    @SuppressWarnings("unchecked")
+    private TimestampedKeyValueStore<K, V> getTimestampedStore() {
+        return (TimestampedKeyValueStore<K, V>) store;
+    }
+
+    @SuppressWarnings("unchecked")
+    private VersionedKeyValueStore<K, V> getVersionedStore() {
+        return (VersionedKeyValueStore<K, V>) store;
     }
 }
