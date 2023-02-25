@@ -1052,14 +1052,14 @@ project(':core') {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "consumer_metrics.json").newOutputStream()
   }
 
   task genProducerMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.producer.internals.ProducerMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "producer_metrics.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "producer_metrics.json").newOutputStream()
   }
 
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolTypesDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
@@ -2713,21 +2713,21 @@ project(':connect:runtime') {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.tools.TransformationDoc'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "connect_transforms.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "connect_transforms.json").newOutputStream()
   }
 
   task genConnectPredicateDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.tools.PredicateDoc'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "connect_predicates.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "connect_predicates.json").newOutputStream()
   }
 
   task genConnectMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.ConnectMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
-    standardOutput = new File(generatedDocsDir, "connect_metrics.html").newOutputStream()
+    standardOutput = new File(generatedDocsDir, "connect_metrics.json").newOutputStream()
   }
 
   task setVersionInOpenAPISpec(type: Copy) {

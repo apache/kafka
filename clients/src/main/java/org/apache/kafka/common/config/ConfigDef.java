@@ -17,6 +17,7 @@
 package org.apache.kafka.common.config;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -1543,32 +1544,36 @@ public class ConfigDef {
         };
     }
 
-    public String toJson() {
+    public String printJson() {
         try {
-            ObjectMapper mapper = new ObjectMapper();
-            ArrayNode array = mapper.createArrayNode();
-            for (ConfigKey key : sortedConfigs()) {
-                if (key.internalConfig) {
-                    continue;
-                }
-                ObjectNode node = mapper.createObjectNode();
-                node.put("name", key.name);
-                if (key.documentation != null) {
-                    node.put("documentation", key.documentation.replaceAll("\n", "<br>"));
-                }
-
-                ObjectNode headers = mapper.createObjectNode();
-                for (String detail : headers()) {
-                    if (detail.equals("Name") || detail.equals("Description")) continue;
-                    headers.put(detail, getConfigValue(key, detail));
-                }
-                node.set("headers", headers);
-                array.add(node);
-            }
-            return mapper.writeValueAsString(array);
+            return new ObjectMapper().writeValueAsString(toJson());
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public JsonNode toJson() {
+        ObjectMapper mapper = new ObjectMapper();
+        ArrayNode array = mapper.createArrayNode();
+        for (ConfigKey key : sortedConfigs()) {
+            if (key.internalConfig) {
+                continue;
+            }
+            ObjectNode node = mapper.createObjectNode();
+            node.put("name", key.name);
+            if (key.documentation != null) {
+                node.put("documentation", key.documentation.replaceAll("\n", "<br>"));
+            }
+
+            ObjectNode headers = mapper.createObjectNode();
+            for (String detail : headers()) {
+                if (detail.equals("Name") || detail.equals("Description")) continue;
+                headers.put(detail, getConfigValue(key, detail));
+            }
+            node.set("headers", headers);
+            array.add(node);
+        }
+        return array;
     }
 
     public String toHtml() {

@@ -254,7 +254,7 @@ public class AdminClientConfig extends AbstractConfig {
 
     public static void main(String[] args) {
         // System.out.println(CONFIG.toHtml(4, config -> "adminclientconfigs_" + config));
-        System.out.println(CONFIG.toJson());
+        System.out.println(CONFIG.printJson());
     }
 
 }

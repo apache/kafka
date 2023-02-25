@@ -308,6 +308,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
 
     public static void main(String[] args) {
         // System.out.println(CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_source_" + config));
-        System.out.println(CONNECTOR_CONFIG_DEF.toJson());
+        System.out.println(CONNECTOR_CONFIG_DEF.printJson());
     }
 }

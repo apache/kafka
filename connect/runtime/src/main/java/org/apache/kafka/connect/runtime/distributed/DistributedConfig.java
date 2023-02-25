@@ -565,7 +565,7 @@ public class DistributedConfig extends WorkerConfig {
 
     public static void main(String[] args) {
         // System.out.println(config(Crypto.SYSTEM).toHtml(4, config -> "connectconfigs_" + config));
-        System.out.println(config(Crypto.SYSTEM).toJson());
+        System.out.println(config(Crypto.SYSTEM).printJson());
     }
 
     public KeyGenerator getInternalRequestKeyGenerator() {
