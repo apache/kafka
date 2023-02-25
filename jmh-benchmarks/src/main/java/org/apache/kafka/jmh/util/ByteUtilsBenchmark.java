@@ -68,23 +68,35 @@ public class ByteUtilsBenchmark {
     }
 
     @Benchmark
-    public void testSizeOfUnsignedVarintNew(Blackhole bk) {
+    public void testSizeOfUnsignedVarintSimple(Blackhole bk) {
         for (int random_value : this.random_ints) {
-            bk.consume(ByteUtils.sizeOfUnsignedVarintNew(random_value));
+            int value = random_value;
+            int bytes = 1;
+            while ((value & 0xffffff80) != 0L) {
+                bytes += 1;
+                value >>>= 7;
+            }
+            bk.consume(bytes);
         }
     }
 
     @Benchmark
     public void testSizeOfVarlong(Blackhole bk) {
         for (long random_value : this.random_longs) {
-            bk.consume(ByteUtils.sizeOfUnsignedVarlong(random_value));
+            bk.consume(ByteUtils.sizeOfVarlong(random_value));
         }
     }
 
     @Benchmark
-    public void testSizeOfVarlongNew(Blackhole bk) {
+    public void testSizeOfVarlongSimple(Blackhole bk) {
         for (long random_value : this.random_longs) {
-            bk.consume(ByteUtils.sizeOfUnsignedVarlongNew(random_value));
+            long v = (random_value << 1) ^ (random_value >> 63);
+            int bytes = 1;
+            while ((v & 0xffffffffffffff80L) != 0L) {
+                bytes += 1;
+                v >>>= 7;
+            }
+            bk.consume(bytes);
         }
     }
 
