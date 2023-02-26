@@ -29,7 +29,6 @@ import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeEx
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.storage.internals.log.LogFileUtils.offsetFromFileName
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, OffsetPosition}
 
@@ -495,7 +494,7 @@ class LocalLog(@volatile private var _dir: File,
       val start = time.hiResClockMs()
       checkIfMemoryMappedBufferClosed()
       val newOffset = math.max(expectedNextOffset.getOrElse(0L), logEndOffset)
-      val logFile = LocalLog.logFile(dir, newOffset)
+      val logFile = LogFileUtils.logFile(dir, newOffset, "")
       val activeSegment = segments.activeSegment
       if (segments.contains(newOffset)) {
         // segment with the same base offset already exists and loaded
@@ -520,9 +519,9 @@ class LocalLog(@volatile private var _dir: File,
           s"Trying to roll a new log segment for topic partition $topicPartition with " +
             s"start offset $newOffset =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) lower than start offset of the active segment $activeSegment")
       } else {
-        val offsetIdxFile = offsetIndexFile(dir, newOffset)
-        val timeIdxFile = timeIndexFile(dir, newOffset)
-        val txnIdxFile = transactionIndexFile(dir, newOffset)
+        val offsetIdxFile = LogFileUtils.offsetIndexFile(dir, newOffset)
+        val timeIdxFile = LogFileUtils.timeIndexFile(dir, newOffset)
+        val txnIdxFile = LogFileUtils.transactionIndexFile(dir, newOffset)
 
         for (file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
           warn(s"Newly rolled segment file ${file.getAbsolutePath} already exists; deleting it first")
@@ -684,40 +683,6 @@ object LocalLog extends Logging {
    */
   private[log] def logDirName(topicPartition: TopicPartition): String = {
     s"${topicPartition.topic}-${topicPartition.partition}"
-  }
-
-  /**
-   * Construct an index file name in the given dir using the given base offset and the given suffix
-   *
-   * @param dir The directory in which the log will reside
-   * @param offset The base offset of the log file
-   * @param suffix The suffix to be appended to the file name ("", ".deleted", ".cleaned", ".swap", etc.)
-   */
-  private[log] def offsetIndexFile(dir: File, offset: Long, suffix: String = ""): File =
-    new File(dir, filenamePrefixFromOffset(offset) + IndexFileSuffix + suffix)
-
-  /**
-   * Construct a time index file name in the given dir using the given base offset and the given suffix
-   *
-   * @param dir The directory in which the log will reside
-   * @param offset The base offset of the log file
-   * @param suffix The suffix to be appended to the file name ("", ".deleted", ".cleaned", ".swap", etc.)
-   */
-  private[log] def timeIndexFile(dir: File, offset: Long, suffix: String = ""): File =
-    new File(dir, filenamePrefixFromOffset(offset) + TimeIndexFileSuffix + suffix)
-
-  /**
-   * Construct a transaction index file name in the given dir using the given base offset and the given suffix
-   *
-   * @param dir The directory in which the log will reside
-   * @param offset The base offset of the log file
-   * @param suffix The suffix to be appended to the file name ("", ".deleted", ".cleaned", ".swap", etc.)
-   */
-  private[log] def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File =
-    new File(dir, filenamePrefixFromOffset(offset) + TxnIndexFileSuffix + suffix)
-
-  private[log] def offsetFromFile(file: File): Long = {
-    offsetFromFileName(file.getName)
   }
 
   /**
