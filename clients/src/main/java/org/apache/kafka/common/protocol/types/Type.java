@@ -689,9 +689,12 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            int newPosition = buffer.position() + size;
+            buffer.limit(newPosition);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
-            buffer.position(buffer.position() + size);
+            buffer.limit(limit);
+            buffer.position(newPosition);
             return val;
         }
 
@@ -739,9 +742,12 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            int newPosition = buffer.position() + size;
+            buffer.limit(newPosition);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
-            buffer.position(buffer.position() + size);
+            buffer.limit(limit);
+            buffer.position(newPosition);
             return val;
         }
 
@@ -800,9 +806,12 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            int newPosition = buffer.position() + size;
+            buffer.limit(newPosition);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
-            buffer.position(buffer.position() + size);
+            buffer.limit(limit);
+            buffer.position(newPosition);
             return val;
         }
 
@@ -865,9 +874,12 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            int newPosition = buffer.position() + size;
+            buffer.limit(newPosition);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
-            buffer.position(buffer.position() + size);
+            buffer.limit(limit);
+            buffer.position(newPosition);
             return val;
         }
 

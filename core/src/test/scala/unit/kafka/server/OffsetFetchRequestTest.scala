@@ -29,7 +29,7 @@ import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import java.util
 import java.util.Collections.singletonList
 import scala.jdk.CollectionConverters._
-import java.util.{Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 
 class OffsetFetchRequestTest extends BaseRequestTest {
 
@@ -115,6 +115,56 @@ class OffsetFetchRequestTest extends BaseRequestTest {
           Map(groupId -> tpList).asJava, false, false)
           .build(version.asInstanceOf[Short])
         val response = connectAndReceive[OffsetFetchResponse](request)
+        val groupData = response.data().groups().get(0)
+        val topicData = groupData.topics().get(0)
+        val partitionData = topicData.partitions().get(0)
+        verifySingleGroupResponse(version.asInstanceOf[Short],
+          groupData.errorCode(), partitionData.errorCode(), topicData.name(),
+          partitionData.partitionIndex(), partitionData.committedOffset(),
+          partitionData.committedLeaderEpoch(), partitionData.metadata())
+      }
+    }
+  }
+
+  @Test
+  def testOffsetFetchRequestAllOffsetsSingleGroup(): Unit = {
+    createTopic(topic)
+
+    val tpList = singletonList(new TopicPartition(topic, 0))
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    commitOffsets(tpList)
+
+    // Testing from version 2 onward since version 0 and do not support
+    // fetching all offsets.
+    for (version <- 2 to ApiKeys.OFFSET_FETCH.latestVersion()) {
+      if (version < 8) {
+        val request = new OffsetFetchRequest.Builder(
+          groupId,
+          false,
+          null,
+          version >= 7
+        ).build(version.toShort)
+
+        val response = connectAndReceive[OffsetFetchResponse](request)
+        assertEquals(Errors.NONE, response.error())
+        val topicData = response.data.topics().get(0)
+        val partitionData = topicData.partitions().get(0)
+        if (version < 3) {
+          assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs())
+        }
+        verifySingleGroupResponse(version.asInstanceOf[Short],
+          response.error().code(), partitionData.errorCode(), topicData.name(),
+          partitionData.partitionIndex(), partitionData.committedOffset(),
+          partitionData.committedLeaderEpoch(), partitionData.metadata())
+      } else {
+        val request = new OffsetFetchRequest.Builder(
+          Collections.singletonMap(groupId, null),
+          false,
+          false
+        ).build(version.toShort)
+
+        val response = connectAndReceive[OffsetFetchResponse](request)
+        assertEquals(Errors.NONE, response.groupLevelError(groupId))
         val groupData = response.data().groups().get(0)
         val topicData = groupData.topics().get(0)
         val partitionData = topicData.partitions().get(0)

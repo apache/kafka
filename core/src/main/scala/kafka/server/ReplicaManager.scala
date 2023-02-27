@@ -16,36 +16,29 @@
  */
 package kafka.server
 
-import java.io.File
-import java.util.{Optional, OptionalInt, OptionalLong}
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.Lock
 import com.yammer.metrics.core.Meter
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition, PartitionListener}
 import kafka.controller.{KafkaController, StateChangeLogger}
-import kafka.log.{LeaderHwChange, LogAppendInfo, LogManager, LogReadInfo, UnifiedLog}
 import kafka.log.remote.RemoteLogManager
+import kafka.log.{LogManager, LogReadInfo, UnifiedLog}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.server.metadata.ZkMetadataCache
-import kafka.utils._
 import kafka.utils.Implicits._
+import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
-import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData, FetchResponseData, LeaderAndIsrResponseData}
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.{LeaderAndIsrPartitionError, LeaderAndIsrTopicError}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
+import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -58,17 +51,23 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, RecordValidationException}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, RecordValidationException}
 
+import java.io.File
 import java.nio.file.{Files, Paths}
 import java.util
-import scala.jdk.CollectionConverters._
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.Lock
+import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 /*
  * Result metadata of a log append operation on the log
@@ -624,10 +623,10 @@ class ReplicaManager(val config: KafkaConfig,
           result.info.lastOffset + 1, // required offset
           new PartitionResponse(
             result.error,
-            result.info.firstOffset.map(_.messageOffset).getOrElse(-1),
+            result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
             result.info.logAppendTime,
             result.info.logStartOffset,
-            result.info.recordErrors.asJava,
+            result.info.recordErrors,
             result.info.errorMessage
           )
         ) // response status
@@ -639,15 +638,15 @@ class ReplicaManager(val config: KafkaConfig,
             case (topicPartition, result) =>
               val requestKey = TopicPartitionOperationKey(topicPartition)
               result.info.leaderHwChange match {
-                case LeaderHwChange.Increased =>
+                case LeaderHwChange.INCREASED =>
                   // some delayed operations may be unblocked after HW changed
                   delayedProducePurgatory.checkAndComplete(requestKey)
                   delayedFetchPurgatory.checkAndComplete(requestKey)
                   delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-                case LeaderHwChange.Same =>
+                case LeaderHwChange.SAME =>
                   // probably unblock some follower fetch requests since log end offset has been updated
                   delayedFetchPurgatory.checkAndComplete(requestKey)
-                case LeaderHwChange.None =>
+                case LeaderHwChange.NONE =>
                   // nothing
               }
           }
@@ -679,9 +678,9 @@ class ReplicaManager(val config: KafkaConfig,
       val responseStatus = entriesPerPartition.map { case (topicPartition, _) =>
         topicPartition -> new PartitionResponse(
           Errors.INVALID_REQUIRED_ACKS,
-          LogAppendInfo.UnknownLogAppendInfo.firstOffset.map(_.messageOffset).getOrElse(-1),
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset.map[Long](_.messageOffset).orElse(-1L),
           RecordBatch.NO_TIMESTAMP,
-          LogAppendInfo.UnknownLogAppendInfo.logStartOffset
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.logStartOffset
         )
       }
       responseCallback(responseStatus)
@@ -965,7 +964,7 @@ class ReplicaManager(val config: KafkaConfig,
       // reject appending to internal topics if it is not allowed
       if (Topic.isInternal(topicPartition.topic) && !internalTopicsAllowed) {
         (topicPartition, LogAppendResult(
-          LogAppendInfo.UnknownLogAppendInfo,
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
           Some(new InvalidTopicException(s"Cannot append to internal topic ${topicPartition.topic}"))))
       } else {
         try {
@@ -981,7 +980,7 @@ class ReplicaManager(val config: KafkaConfig,
 
           if (traceEnabled)
             trace(s"${records.sizeInBytes} written to log $topicPartition beginning at offset " +
-              s"${info.firstOffset.getOrElse(-1)} and ending at offset ${info.lastOffset}")
+              s"${info.firstOffset.orElse(new LogOffsetMetadata(-1))} and ending at offset ${info.lastOffset}")
 
           (topicPartition, LogAppendResult(info))
         } catch {
@@ -993,12 +992,12 @@ class ReplicaManager(val config: KafkaConfig,
                    _: RecordBatchTooLargeException |
                    _: CorruptRecordException |
                    _: KafkaStorageException) =>
-            (topicPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(e)))
+            (topicPartition, LogAppendResult(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, Some(e)))
           case rve: RecordValidationException =>
             val logStartOffset = processFailedRecord(topicPartition, rve.invalidException)
             val recordErrors = rve.recordErrors
             (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(
-              logStartOffset, recordErrors.asScala, rve.invalidException.getMessage), Some(rve.invalidException)))
+              logStartOffset, recordErrors, rve.invalidException.getMessage), Some(rve.invalidException)))
           case t: Throwable =>
             val logStartOffset = processFailedRecord(topicPartition, t)
             (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset), Some(t)))

@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.cluster.{BrokerEndPoint, Partition}
-import kafka.log.{LogAppendInfo, LogManager, UnifiedLog}
+import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.epoch.util.MockBlockingSender
@@ -34,8 +34,9 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
+import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -153,7 +154,7 @@ class ReplicaFetcherThreadTest {
       .thenReturn(Some(leaderEpoch))
       .thenReturn(None)  // t2p1 doesn't support epochs
     when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(0, leaderEpoch)))
+      Some(new OffsetAndEpoch(0, leaderEpoch)))
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.logManager).thenReturn(logManager)
     when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
@@ -302,7 +303,7 @@ class ReplicaFetcherThreadTest {
     when(log.highWatermark).thenReturn(0)
     when(log.latestEpoch).thenReturn(Some(leaderEpoch))
     when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(0, leaderEpoch)))
+      Some(new OffsetAndEpoch(0, leaderEpoch)))
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.logManager).thenReturn(logManager)
     when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
@@ -366,7 +367,7 @@ class ReplicaFetcherThreadTest {
     when(log.highWatermark).thenReturn(initialLEO - 1)
     when(log.latestEpoch).thenReturn(Some(leaderEpoch))
     when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(initialLEO, leaderEpoch)))
+      Some(new OffsetAndEpoch(initialLEO, leaderEpoch)))
     when(log.logEndOffset).thenReturn(initialLEO)
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
@@ -487,9 +488,9 @@ class ReplicaFetcherThreadTest {
     when(log.highWatermark).thenReturn(initialLEO - 2)
     when(log.latestEpoch).thenReturn(Some(5))
     when(log.endOffsetForEpoch(4)).thenReturn(
-      Some(OffsetAndEpoch(120, 3)))
+      Some(new OffsetAndEpoch(120, 3)))
     when(log.endOffsetForEpoch(3)).thenReturn(
-      Some(OffsetAndEpoch(120, 3)))
+      Some(new OffsetAndEpoch(120, 3)))
     when(log.logEndOffset).thenReturn(initialLEO)
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
@@ -570,9 +571,9 @@ class ReplicaFetcherThreadTest {
     when(partition.localLogOrException).thenReturn(log)
     when(log.highWatermark).thenReturn(115)
     when(log.latestEpoch).thenAnswer(_ => latestLogEpoch)
-    when(log.endOffsetForEpoch(4)).thenReturn(Some(OffsetAndEpoch(149, 4)))
-    when(log.endOffsetForEpoch(3)).thenReturn(Some(OffsetAndEpoch(129, 2)))
-    when(log.endOffsetForEpoch(2)).thenReturn(Some(OffsetAndEpoch(119, 1)))
+    when(log.endOffsetForEpoch(4)).thenReturn(Some(new OffsetAndEpoch(149, 4)))
+    when(log.endOffsetForEpoch(3)).thenReturn(Some(new OffsetAndEpoch(129, 2)))
+    when(log.endOffsetForEpoch(2)).thenReturn(Some(new OffsetAndEpoch(119, 1)))
     when(log.logEndOffset).thenReturn(initialLEO)
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
@@ -673,7 +674,7 @@ class ReplicaFetcherThreadTest {
 
     when(log.highWatermark).thenReturn(highWatermark)
     when(log.latestEpoch).thenReturn(Some(5))
-    when(log.endOffsetForEpoch(4)).thenReturn(Some(OffsetAndEpoch(149, 4)))
+    when(log.endOffsetForEpoch(4)).thenReturn(Some(new OffsetAndEpoch(149, 4)))
     when(log.logEndOffset).thenReturn(logEndOffset)
 
     when(replicaManager.metadataCache).thenReturn(metadataCache)
@@ -765,9 +766,9 @@ class ReplicaFetcherThreadTest {
     when(log.highWatermark).thenReturn(initialLEO - 2)
     when(log.latestEpoch).thenReturn(Some(5))
     when(log.endOffsetForEpoch(4)).thenReturn(
-      Some(OffsetAndEpoch(120, 3)))
+      Some(new OffsetAndEpoch(120, 3)))
     when(log.endOffsetForEpoch(3)).thenReturn(
-      Some(OffsetAndEpoch(120, 3)))
+      Some(new OffsetAndEpoch(120, 3)))
     when(log.logEndOffset).thenReturn(initialLEO)
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
@@ -892,7 +893,7 @@ class ReplicaFetcherThreadTest {
     when(log.latestEpoch).thenReturn(Some(leaderEpoch))
     // this is for the last reply with EpochEndOffset(5, 156)
     when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(initialLeo, leaderEpoch)))
+      Some(new OffsetAndEpoch(initialLeo, leaderEpoch)))
     when(log.logEndOffset).thenReturn(initialLeo)
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
@@ -957,7 +958,7 @@ class ReplicaFetcherThreadTest {
     when(log.highWatermark).thenReturn(0)
     when(log.latestEpoch).thenReturn(Some(leaderEpoch))
     when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(0, leaderEpoch)))
+      Some(new OffsetAndEpoch(0, leaderEpoch)))
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.logManager).thenReturn(logManager)
     when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
@@ -1015,7 +1016,7 @@ class ReplicaFetcherThreadTest {
     when(partition.localLogOrException).thenReturn(log)
     when(log.highWatermark).thenReturn(initialLEO - 2)
     when(log.latestEpoch).thenReturn(Some(5))
-    when(log.endOffsetForEpoch(5)).thenReturn(Some(OffsetAndEpoch(initialLEO, 5)))
+    when(log.endOffsetForEpoch(5)).thenReturn(Some(new OffsetAndEpoch(initialLEO, 5)))
     when(log.logEndOffset).thenReturn(initialLEO)
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)

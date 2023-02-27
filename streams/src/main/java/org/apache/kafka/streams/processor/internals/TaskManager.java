@@ -1552,7 +1552,9 @@ public class TaskManager {
     /**
      * Returns tasks owned by the stream thread. With state updater disabled, these are all tasks. With
      * state updater enabled, this does not return any tasks currently owned by the state updater.
-     * @return
+     *
+     * TODO: after we complete switching to state updater, we could rename this function as allRunningTasks
+     *       to be differentiated from allTasks including running and restoring tasks
      */
     Map<TaskId, Task> allOwnedTasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but

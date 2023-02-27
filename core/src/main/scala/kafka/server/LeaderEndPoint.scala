@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
+import org.apache.kafka.server.common.OffsetAndEpoch
 
 import scala.collection.Map
 
@@ -71,9 +72,9 @@ trait LeaderEndPoint {
    * @param topicPartition The topic partition that we want to fetch from
    * @param currentLeaderEpoch An int representing the current leader epoch of the requester
    *
-   * @return A tuple representing the (epoch, earliest_offset) in the leader's topic partition.
+   * @return An OffsetAndEpoch object representing the earliest offset and epoch in the leader's topic partition.
    */
-  def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
+  def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch
 
   /**
    * Fetches the epoch and log end offset of the given topic partition from the leader.
@@ -81,9 +82,9 @@ trait LeaderEndPoint {
    * @param topicPartition The topic partition that we want to fetch from
    * @param currentLeaderEpoch An int representing the current leader epoch of the requester
    *
-   * @return A tuple representing the (epoch, latest_offset) in the leader's topic partition.
+   * @return An OffsetAndEpoch object representing the latest offset and epoch in the leader's topic partition.
    */
-  def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
+  def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch
 
   /**
    * Fetches offset for leader epoch from the leader for each given topic partition
@@ -100,9 +101,9 @@ trait LeaderEndPoint {
    * @param topicPartition  The topic partition that we want to fetch from
    * @param currentLeaderEpoch An int representing the current leader epoch of the requester
    *
-   * @return A tuple representing the (epoch, earliest_local_offset) in the leader's topic partition.
+   * @return An OffsetAndEpoch object representing the earliest local offset and epoch in the leader's topic partition.
    */
-  def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
+  def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch
 
   /**
    * Builds a fetch request, given a partition map.

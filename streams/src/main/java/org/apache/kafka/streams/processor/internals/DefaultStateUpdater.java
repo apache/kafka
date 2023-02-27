@@ -16,8 +16,15 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -32,7 +39,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +60,10 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_DESCRIPTION;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_DESCRIPTION;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
+
 public class DefaultStateUpdater implements StateUpdater {
 
     private final static String BUG_ERROR_MESSAGE = "This indicates a bug. " +
@@ -59,14 +72,20 @@ public class DefaultStateUpdater implements StateUpdater {
     private class StateUpdaterThread extends Thread {
 
         private final ChangelogReader changelogReader;
+        private final StateUpdaterMetrics updaterMetrics;
         private final AtomicBoolean isRunning = new AtomicBoolean(true);
         private final Map<TaskId, Task> updatingTasks = new ConcurrentHashMap<>();
         private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
         private final Logger log;
 
-        public StateUpdaterThread(final String name, final ChangelogReader changelogReader) {
+        private long totalCheckpointLatency = 0L;
+
+        public StateUpdaterThread(final String name,
+                                  final Metrics metrics,
+                                  final ChangelogReader changelogReader) {
             super(name);
             this.changelogReader = changelogReader;
+            this.updaterMetrics = new StateUpdaterMetrics(metrics, name);
 
             final String logPrefix = String.format("state-updater [%s] ", name);
             final LogContext logContext = new LogContext(logPrefix);
@@ -92,6 +111,30 @@ public class DefaultStateUpdater implements StateUpdater {
             return pausedTasks.values();
         }
 
+        public long getNumUpdatingStandbyTasks() {
+            return updatingTasks.values().stream()
+                .filter(t -> !t.isActive())
+                .count();
+        }
+
+        public long getNumRestoringActiveTasks() {
+            return updatingTasks.values().stream()
+                .filter(Task::isActive)
+                .count();
+        }
+
+        public long getNumPausedStandbyTasks() {
+            return pausedTasks.values().stream()
+                .filter(t -> !t.isActive())
+                .count();
+        }
+
+        public long getNumPausedActiveTasks() {
+            return pausedTasks.values().stream()
+                .filter(Task::isActive)
+                .count();
+        }
+
         @Override
         public void run() {
             log.info("State updater thread started");
@@ -109,17 +152,41 @@ public class DefaultStateUpdater implements StateUpdater {
                 Thread.interrupted(); // Clear the interrupted flag.
                 removeAddedTasksFromInputQueue();
                 removeUpdatingAndPausedTasks();
+                updaterMetrics.clear();
                 shutdownGate.countDown();
                 log.info("State updater thread shutdown");
             }
         }
 
+        // In each iteration:
+        //   1) check if updating tasks need to be paused
+        //   2) check if paused tasks need to be resumed
+        //   3) restore those updating tasks
+        //   4) checkpoint those updating task states
+        //   5) idle waiting if there is no more tasks to be restored
+        //
+        //   Note that, 1-3) are measured as restoring time, while 4) and 5) measured separately
+        //   as checkpointing time and idle time
         private void runOnce() throws InterruptedException {
+            final long totalStartTimeMs = time.milliseconds();
             performActionsOnTasks();
+
             resumeTasks();
-            restoreTasks();
-            checkAllUpdatingTaskStates(time.milliseconds());
+            pauseTasks();
+            restoreTasks(totalStartTimeMs);
+
+            final long checkpointStartTimeMs = time.milliseconds();
+            maybeCheckpointTasks(checkpointStartTimeMs);
+
+            final long waitStartTimeMs = time.milliseconds();
+
             waitIfAllChangelogsCompletelyRead();
+
+            final long endTimeMs = time.milliseconds();
+            final long totalWaitTime = Math.max(0L, endTimeMs - waitStartTimeMs);
+            final long totalTime = Math.max(0L, endTimeMs - totalStartTimeMs);
+
+            recordMetrics(endTimeMs, totalTime, totalWaitTime);
         }
 
         private void performActionsOnTasks() {
@@ -151,9 +218,18 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void restoreTasks() {
+        private void pauseTasks() {
+            for (final Task task : updatingTasks.values()) {
+                if (topologyMetadata.isPaused(task.id().topologyName())) {
+                    pauseTask(task);
+                }
+            }
+        }
+
+        private void restoreTasks(final long now) {
             try {
-                changelogReader.restore(updatingTasks);
+                final long restored = changelogReader.restore(updatingTasks);
+                updaterMetrics.restoreSensor.record(restored, now);
             } catch (final TaskCorruptedException taskCorruptedException) {
                 handleTaskCorruptedException(taskCorruptedException);
             } catch (final StreamsException streamsException) {
@@ -193,7 +269,7 @@ public class DefaultStateUpdater implements StateUpdater {
             task.markChangelogAsCorrupted(task.changelogPartitions());
 
             // we need to enforce a checkpoint that removes the corrupted partitions
-            task.maybeCheckpoint(true);
+            measureCheckpointLatency(() -> task.maybeCheckpoint(true));
         }
 
         private void handleStreamsException(final StreamsException streamsException) {
@@ -251,10 +327,10 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void removeUpdatingAndPausedTasks() {
             changelogReader.clear();
-            updatingTasks.forEach((id, task) -> {
+            measureCheckpointLatency(() -> updatingTasks.forEach((id, task) -> {
                 task.maybeCheckpoint(true);
                 removedTasks.add(task);
-            });
+            }));
             updatingTasks.clear();
             pausedTasks.forEach((id, task) -> {
                 removedTasks.add(task);
@@ -313,7 +389,7 @@ public class DefaultStateUpdater implements StateUpdater {
             final Task task;
             if (updatingTasks.containsKey(taskId)) {
                 task = updatingTasks.get(taskId);
-                task.maybeCheckpoint(true);
+                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
                 final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
                 changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
@@ -339,7 +415,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private void pauseTask(final Task task) {
             final TaskId taskId = task.id();
             // do not need to unregister changelog partitions for paused tasks
-            task.maybeCheckpoint(true);
+            measureCheckpointLatency(() -> task.maybeCheckpoint(true));
             pausedTasks.put(taskId, task);
             updatingTasks.remove(taskId);
             if (task.isActive()) {
@@ -373,7 +449,7 @@ public class DefaultStateUpdater implements StateUpdater {
                                               final Set<TopicPartition> restoredChangelogs) {
             final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
             if (restoredChangelogs.containsAll(changelogPartitions)) {
-                task.maybeCheckpoint(true);
+                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
                 changelogReader.unregister(changelogPartitions);
                 addToRestoredTasks(task);
                 updatingTasks.remove(task.id());
@@ -399,31 +475,55 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void checkAllUpdatingTaskStates(final long now) {
+        private void maybeCheckpointTasks(final long now) {
             final long elapsedMsSinceLastCommit = now - lastCommitMs;
             if (elapsedMsSinceLastCommit > commitIntervalMs) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Checking all restoring task states since {}ms has elapsed (commit interval is {}ms)",
+                    log.debug("Checkpointing state of all restoring tasks since {}ms has elapsed (commit interval is {}ms)",
                         elapsedMsSinceLastCommit, commitIntervalMs);
                 }
 
-                for (final Task task : updatingTasks.values()) {
-                    if (topologyMetadata.isPaused(task.id().topologyName())) {
-                        pauseTask(task);
-                    } else {
-                        log.debug("Try to checkpoint current restoring progress for task {}", task.id());
+                measureCheckpointLatency(() -> {
+                    for (final Task task : updatingTasks.values()) {
                         // do not enforce checkpointing during restoration if its position has not advanced much
                         task.maybeCheckpoint(false);
                     }
-                }
+                });
 
                 lastCommitMs = now;
             }
+        }
+
+        private void measureCheckpointLatency(final Runnable actionToMeasure) {
+            final long startMs = time.milliseconds();
+            try {
+                actionToMeasure.run();
+            } finally {
+                totalCheckpointLatency += Math.max(0L, time.milliseconds() - startMs);
+            }
+        }
+
+        private void recordMetrics(final long now, final long totalLatency, final long totalWaitLatency) {
+            final long totalRestoreLatency = Math.max(0L, totalLatency - totalWaitLatency - totalCheckpointLatency);
+
+            updaterMetrics.idleRatioSensor.record((double) totalWaitLatency / totalLatency, now);
+            updaterMetrics.checkpointRatioSensor.record((double) totalCheckpointLatency / totalLatency, now);
+
+            if (changelogReader.isRestoringActive()) {
+                updaterMetrics.activeRestoreRatioSensor.record((double) totalRestoreLatency / totalLatency, now);
+                updaterMetrics.standbyRestoreRatioSensor.record(0.0d, now);
+            } else {
+                updaterMetrics.standbyRestoreRatioSensor.record((double) totalRestoreLatency / totalLatency, now);
+                updaterMetrics.activeRestoreRatioSensor.record(0.0d, now);
+            }
+
+            totalCheckpointLatency = 0L;
         }
     }
 
     private final Time time;
     private final String name;
+    private final Metrics metrics;
     private final ChangelogReader changelogReader;
     private final TopologyMetadata topologyMetadata;
     private final Queue<TaskAndAction> tasksAndActions = new LinkedList<>();
@@ -443,12 +543,14 @@ public class DefaultStateUpdater implements StateUpdater {
     private CountDownLatch shutdownGate;
 
     public DefaultStateUpdater(final String name,
+                               final Metrics metrics,
                                final StreamsConfig config,
                                final ChangelogReader changelogReader,
                                final TopologyMetadata topologyMetadata,
                                final Time time) {
         this.time = time;
         this.name = name;
+        this.metrics = metrics;
         this.changelogReader = changelogReader;
         this.topologyMetadata = topologyMetadata;
         this.commitIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
@@ -456,7 +558,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
     public void start() {
         if (stateUpdaterThread == null) {
-            stateUpdaterThread = new StateUpdaterThread(name, changelogReader);
+            stateUpdaterThread = new StateUpdaterThread(name, metrics, changelogReader);
             stateUpdaterThread.start();
             shutdownGate = new CountDownLatch(1);
 
@@ -685,5 +787,93 @@ public class DefaultStateUpdater implements StateUpdater {
                         Stream.concat(
                             exceptionsAndFailedTasks.stream().flatMap(exceptionAndTasks -> exceptionAndTasks.getTasks().stream()),
                             removedTasks.stream()))));
+    }
+
+    private class StateUpdaterMetrics {
+        private static final String STATE_LEVEL_GROUP = "stream-state-updater-metrics";
+
+        private static final String IDLE_RATIO_DESCRIPTION = RATIO_DESCRIPTION + "being idle";
+        private static final String RESTORE_RATIO_DESCRIPTION = RATIO_DESCRIPTION + "restoring active tasks";
+        private static final String UPDATE_RATIO_DESCRIPTION = RATIO_DESCRIPTION + "updating standby tasks";
+        private static final String CHECKPOINT_RATIO_DESCRIPTION = RATIO_DESCRIPTION + "checkpointing tasks restored progress";
+        private static final String RESTORE_RECORDS_RATE_DESCRIPTION = RATE_DESCRIPTION + "records restored";
+        private static final String RESTORE_RATE_DESCRIPTION = RATE_DESCRIPTION + "restore calls triggered";
+
+        private final Sensor restoreSensor;
+        private final Sensor idleRatioSensor;
+        private final Sensor activeRestoreRatioSensor;
+        private final Sensor standbyRestoreRatioSensor;
+        private final Sensor checkpointRatioSensor;
+
+        private final Deque<String> allSensorNames = new LinkedList<>();
+        private final Deque<MetricName> allMetricNames = new LinkedList<>();
+
+        private StateUpdaterMetrics(final Metrics metrics, final String threadId) {
+            final Map<String, String> threadLevelTags = new LinkedHashMap<>();
+            threadLevelTags.put(THREAD_ID_TAG, threadId);
+
+            MetricName metricName = metrics.metricName("active-restoring-tasks",
+                STATE_LEVEL_GROUP,
+                "The number of active tasks currently undergoing restoration",
+                threadLevelTags);
+            metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
+                stateUpdaterThread.getNumRestoringActiveTasks() : 0);
+            allMetricNames.push(metricName);
+
+            metricName = metrics.metricName("standby-updating-tasks",
+                STATE_LEVEL_GROUP,
+                "The number of standby tasks currently undergoing state update",
+                threadLevelTags);
+            metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
+                stateUpdaterThread.getNumUpdatingStandbyTasks() : 0);
+            allMetricNames.push(metricName);
+
+            metricName = metrics.metricName("active-paused-tasks",
+                STATE_LEVEL_GROUP,
+                "The number of active tasks paused restoring",
+                threadLevelTags);
+            metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
+                stateUpdaterThread.getNumPausedActiveTasks() : 0);
+            allMetricNames.push(metricName);
+
+            metricName = metrics.metricName("standby-paused-tasks",
+                STATE_LEVEL_GROUP,
+                "The number of standby tasks paused state update",
+                threadLevelTags);
+            metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
+                stateUpdaterThread.getNumPausedStandbyTasks() : 0);
+            allMetricNames.push(metricName);
+
+            this.idleRatioSensor = metrics.sensor("idle-ratio", RecordingLevel.INFO);
+            this.idleRatioSensor.add(new MetricName("idle-ratio", STATE_LEVEL_GROUP, IDLE_RATIO_DESCRIPTION, threadLevelTags), new Avg());
+            allSensorNames.add("idle-ratio");
+
+            this.activeRestoreRatioSensor = metrics.sensor("active-restore-ratio", RecordingLevel.INFO);
+            this.activeRestoreRatioSensor.add(new MetricName("active-restore-ratio", STATE_LEVEL_GROUP, RESTORE_RATIO_DESCRIPTION, threadLevelTags), new Avg());
+            allSensorNames.add("active-restore-ratio");
+
+            this.standbyRestoreRatioSensor = metrics.sensor("standby-update-ratio", RecordingLevel.INFO);
+            this.standbyRestoreRatioSensor.add(new MetricName("standby-update-ratio", STATE_LEVEL_GROUP, UPDATE_RATIO_DESCRIPTION, threadLevelTags), new Avg());
+            allSensorNames.add("standby-update-ratio");
+
+            this.checkpointRatioSensor = metrics.sensor("checkpoint-ratio", RecordingLevel.INFO);
+            this.checkpointRatioSensor.add(new MetricName("checkpoint-ratio", STATE_LEVEL_GROUP, CHECKPOINT_RATIO_DESCRIPTION, threadLevelTags), new Avg());
+            allSensorNames.add("checkpoint-ratio");
+
+            this.restoreSensor = metrics.sensor("restore-records", RecordingLevel.INFO);
+            this.restoreSensor.add(new MetricName("restore-records-rate", STATE_LEVEL_GROUP, RESTORE_RECORDS_RATE_DESCRIPTION, threadLevelTags), new Rate());
+            this.restoreSensor.add(new MetricName("restore-call-rate", STATE_LEVEL_GROUP, RESTORE_RATE_DESCRIPTION, threadLevelTags), new Rate(new WindowedCount()));
+            allSensorNames.add("restore-records");
+        }
+
+        void clear() {
+            while (!allSensorNames.isEmpty()) {
+                metrics.removeSensor(allSensorNames.pop());
+            }
+
+            while (!allMetricNames.isEmpty()) {
+                metrics.removeMetric(allMetricNames.pop());
+            }
+        }
     }
 }
