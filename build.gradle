@@ -409,7 +409,7 @@ subprojects {
       "**/KafkaConfigBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/StandaloneHerderTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*"
+      "**/WorkerSourceTaskTest.*"
     ])
   }
 
