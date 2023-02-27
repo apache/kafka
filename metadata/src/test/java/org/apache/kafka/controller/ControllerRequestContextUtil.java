@@ -45,8 +45,8 @@ public class ControllerRequestContextUtil {
     }
 
     public static ControllerRequestContext anonymousContextFor(
-            ApiKeys apiKeys,
-            short version
+        ApiKeys apiKeys,
+        short version
     ) {
         return anonymousContextFor(apiKeys, version, Optional.empty());
     }

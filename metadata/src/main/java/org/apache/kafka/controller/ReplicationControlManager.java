@@ -719,10 +719,10 @@ public class ReplicationControlManager {
         }
         Uuid topicId = Uuid.randomUuid();
         CreatableTopicResult result = new CreatableTopicResult().
-                setName(topic.name()).
-                setTopicId(topicId).
-                setErrorCode(NONE.code()).
-                setErrorMessage(null);
+            setName(topic.name()).
+            setTopicId(topicId).
+            setErrorCode(NONE.code()).
+            setErrorMessage(null);
         if (authorizedToReturnConfigs) {
             Map<String, ConfigEntry> effectiveConfig = configurationControl.
                 computeEffectiveTopicConfigs(creationConfigs);
