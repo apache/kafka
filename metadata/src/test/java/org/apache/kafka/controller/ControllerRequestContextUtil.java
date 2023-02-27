@@ -32,6 +32,7 @@ public class ControllerRequestContextUtil {
             new RequestHeaderData(),
             KafkaPrincipal.ANONYMOUS,
             OptionalLong.empty());
+    public static final String QUOTA_EXCEEDED_IN_TEST_MSG = "Quota exceeded in test";
 
     public static ControllerRequestContext anonymousContextFor(ApiKeys apiKeys) {
         return anonymousContextFor(apiKeys, apiKeys.latestVersion(), Optional.empty());
@@ -39,7 +40,7 @@ public class ControllerRequestContextUtil {
 
     public static ControllerRequestContext anonymousContextWithMutationQuotaExceededFor(ApiKeys apiKeys) {
         return anonymousContextFor(apiKeys, apiKeys.latestVersion(), Optional.of(x -> {
-            throw new ThrottlingQuotaExceededException("Quota exceeded in test");
+            throw new ThrottlingQuotaExceededException(QUOTA_EXCEEDED_IN_TEST_MSG);
         }));
     }
 

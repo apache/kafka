@@ -131,6 +131,7 @@ import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAIL
 import static org.apache.kafka.common.protocol.Errors.THROTTLING_QUOTA_EXCEEDED;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
+import static org.apache.kafka.controller.ControllerRequestContextUtil.QUOTA_EXCEEDED_IN_TEST_MSG;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextWithMutationQuotaExceededFor;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -544,7 +545,7 @@ public class ReplicationControlManagerTest {
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
                 setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
-                setErrorMessage("Quota exceeded in test"));
+                setErrorMessage(QUOTA_EXCEEDED_IN_TEST_MSG));
         assertEquals(expectedResponse, result.response());
     }
 
@@ -1179,7 +1180,7 @@ public class ReplicationControlManagerTest {
         Uuid topicId = createdTopic.topicId();
         ControllerResult<Map<Uuid, ApiError>> deleteResult = replicationControl.
             deleteTopics(deleteTopicsRequestContext, Collections.singletonList(topicId));
-        assertEquals(singletonMap(topicId, new ApiError(THROTTLING_QUOTA_EXCEEDED, "Quota exceeded in test")),
+        assertEquals(singletonMap(topicId, new ApiError(THROTTLING_QUOTA_EXCEEDED, QUOTA_EXCEEDED_IN_TEST_MSG)),
             deleteResult.response());
         assertEquals(0, deleteResult.records().size());
     }
@@ -1298,7 +1299,7 @@ public class ReplicationControlManagerTest {
         List<CreatePartitionsTopicResult> expectedThrottled = singletonList(new CreatePartitionsTopicResult().
             setName("foo").
             setErrorCode(THROTTLING_QUOTA_EXCEEDED.code()).
-            setErrorMessage("Quota exceeded in test"));
+            setErrorMessage(QUOTA_EXCEEDED_IN_TEST_MSG));
         assertEquals(expectedThrottled, createPartitionsResult.response());
         // now test the explicit assignment case
         List<CreatePartitionsTopic> topics2 = new ArrayList<>();
