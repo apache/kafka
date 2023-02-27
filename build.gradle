@@ -14,6 +14,7 @@
 // limitations under the License.
 
 import org.ajoberstar.grgit.Grgit
+import org.gradle.api.JavaVersion
 
 import java.nio.charset.StandardCharsets
 
@@ -30,26 +31,18 @@ buildscript {
 }
 
 plugins {
-  id 'com.diffplug.spotless' version '6.13.0' // newer versions require Java 11, so we can't use them until Kafka 4.0
   id 'com.github.ben-manes.versions' version '0.44.0'
   id 'idea'
   id 'java-library'
   id 'org.owasp.dependencycheck' version '8.0.2'
   id 'org.nosphere.apache.rat' version "0.8.0"
+  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.0"
 
   id "com.github.spotbugs" version '5.0.13' apply false
   id 'org.gradle.test-retry' version '1.5.1' apply false
   id 'org.scoverage' version '7.0.1' apply false
   id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
-  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.0"
-}
-
-spotless {
-  scala {
-    target 'streams/**/*.scala'
-    scalafmt("$versions.scalafmt").configFile('checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
-    licenseHeaderFile 'checkstyle/java.header', 'package'
-  }
+  id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
 }
 
 ext {
@@ -2116,6 +2109,17 @@ project(':streams:streams-scala') {
     dependsOn 'copyDependantLibs'
   }
 
+  // spotless 6.14 requires Java 11 at runtime
+  if (JavaVersion.current().isJava11Compatible()) {
+    apply plugin: 'com.diffplug.spotless'
+    spotless {
+      scala {
+        target '**/*.scala'
+        scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
+        licenseHeaderFile '../../checkstyle/java.header', 'package'
+      }
+    }
+  }
 }
 
 project(':streams:test-utils') {
