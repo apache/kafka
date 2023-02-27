@@ -33,35 +33,35 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
     static final String PREDICATE_CONFIG = "predicate";
     static final String NEGATE_CONFIG = "negate";
     private final Predicate<R> predicate;
-    private final Transformation<R> delegate;
+    private final Transformation<R> transformation;
     private final boolean negate;
 
-    TransformationStage(Transformation<R> delegate) {
-        this(null, false, delegate);
+    TransformationStage(Transformation<R> transformation) {
+        this(null, false, transformation);
     }
 
-    TransformationStage(Predicate<R> predicate, boolean negate, Transformation<R> delegate) {
+    TransformationStage(Predicate<R> predicate, boolean negate, Transformation<R> transformation) {
         this.predicate = predicate;
         this.negate = negate;
-        this.delegate = delegate;
+        this.transformation = transformation;
     }
 
     public Class<? extends Transformation<R>> transformClass() {
         @SuppressWarnings("unchecked")
-        Class<? extends Transformation<R>> transformClass = (Class<? extends Transformation<R>>) delegate.getClass();
+        Class<? extends Transformation<R>> transformClass = (Class<? extends Transformation<R>>) transformation.getClass();
         return transformClass;
     }
 
     public R apply(R record) {
         if (predicate == null || negate ^ predicate.test(record)) {
-            return delegate.apply(record);
+            return transformation.apply(record);
         }
         return record;
     }
 
     @Override
     public void close() {
-        Utils.closeQuietly(delegate, "transformation");
+        Utils.closeQuietly(transformation, "transformation");
         Utils.closeQuietly(predicate, "predicate");
     }
 
@@ -69,7 +69,7 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
     public String toString() {
         return "TransformationStage{" +
                 "predicate=" + predicate +
-                ", delegate=" + delegate +
+                ", transformation=" + transformation +
                 ", negate=" + negate +
                 '}';
     }
