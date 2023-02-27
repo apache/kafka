@@ -268,7 +268,9 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     /**
-     * Returns the initialized list of {@link TransformationStage} which are specified in {@link #TRANSFORMS_CONFIG}.
+     * Returns the initialized list of {@link TransformationStage} which apply the
+     * {@link Transformation transformations} and {@link Predicate predicates}
+     * as they are specified in the {@link #TRANSFORMS_CONFIG} and {@link #PREDICATES_CONFIG}
      */
     public <R extends ConnectRecord<R>> List<TransformationStage<R>> transformationStages() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);

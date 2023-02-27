@@ -23,7 +23,7 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
 /**
- * Wrapper for a {@link Transformation} and corresponding optional {@link Predicate }
+ * Wrapper for a {@link Transformation} and corresponding optional {@link Predicate}
  * which applies the transformation when the {@link Predicate} is true (or false, according to {@code negate}).
  * If no {@link Predicate} is provided, the transformation will be unconditionally applied.
  * @param <R> The type of record (must be an implementation of {@link ConnectRecord})
