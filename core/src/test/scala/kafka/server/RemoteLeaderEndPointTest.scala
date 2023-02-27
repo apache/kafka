@@ -26,13 +26,15 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.Mockito.mock
 
 import java.util
+import scala.jdk.CollectionConverters._
 
 class RemoteLeaderEndPointTest {
 
@@ -63,21 +65,38 @@ class RemoteLeaderEndPointTest {
     def testFetchLatestOffset(): Unit = {
         blockingSend.setListOffsetsDataForNextResponse(Map(topicPartition ->
           new ListOffsetsPartitionResponse().setLeaderEpoch(7).setOffset(logEndOffset)))
-        assertEquals((7, logEndOffset), endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch))
+        assertEquals(new OffsetAndEpoch(logEndOffset, 7), endPoint.fetchLatestOffset(topicPartition, currentLeaderEpoch))
     }
 
     @Test
     def testFetchEarliestOffset(): Unit = {
         blockingSend.setListOffsetsDataForNextResponse(Map(topicPartition ->
           new ListOffsetsPartitionResponse().setLeaderEpoch(5).setOffset(logStartOffset)))
-        assertEquals((5, logStartOffset), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch))
+        assertEquals(new OffsetAndEpoch(logStartOffset, 5), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch))
     }
 
     @Test
     def testFetchEarliestLocalOffset(): Unit = {
         blockingSend.setListOffsetsDataForNextResponse(Map(topicPartition ->
           new ListOffsetsPartitionResponse().setLeaderEpoch(6).setOffset(localLogStartOffset)))
-        assertEquals((6, localLogStartOffset), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch))
+        assertEquals(new OffsetAndEpoch(localLogStartOffset, 6), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch))
+    }
+
+    @Test
+    def testFetchEpochEndOffsets(): Unit = {
+        val expected = Map(
+            topicPartition -> new EpochEndOffset()
+              .setPartition(topicPartition.partition)
+              .setErrorCode(Errors.NONE.code)
+              .setLeaderEpoch(0)
+              .setEndOffset(logEndOffset))
+        blockingSend.setOffsetsForNextResponse(expected.asJava)
+        val result = endPoint.fetchEpochEndOffsets(Map(
+            topicPartition -> new OffsetForLeaderPartition()
+              .setPartition(topicPartition.partition)
+              .setLeaderEpoch(currentLeaderEpoch)))
+
+        assertEquals(expected, result)
     }
 
     @Test

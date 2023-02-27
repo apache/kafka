@@ -1751,6 +1751,7 @@ public class KafkaStreams implements AutoCloseable {
         } else {
             topologyMetadata.resumeTopology(UNNAMED_TOPOLOGY);
         }
+        threads.forEach(StreamThread::signalResume);
     }
 
     /**
