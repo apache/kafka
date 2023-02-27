@@ -93,7 +93,7 @@ public final class LogFileUtils {
     }
 
     /**
-     * Construct a log file name in the given dir with the given base offset and the given suffix
+     * Construct a log file name in the given dir with the given base offset.
      *
      * @param dir    The directory in which the log will reside
      * @param offset The base offset of the log file
@@ -103,7 +103,7 @@ public final class LogFileUtils {
     }
 
     /**
-     * Construct a log file name in the given dir with the given base offset and the given suffix
+     * Construct a log file name in the given dir with the given base offset and the given suffix.
      *
      * @param dir    The directory in which the log will reside
      * @param offset The base offset of the log file
@@ -114,7 +114,7 @@ public final class LogFileUtils {
     }
 
     /**
-     * Construct an index file name in the given dir using the given base offset and the given suffix
+     * Construct an index file name in the given dir using the given base offset.
      *
      * @param dir    The directory in which the log will reside
      * @param offset The base offset of the log file
@@ -124,7 +124,7 @@ public final class LogFileUtils {
     }
 
     /**
-     * Construct an index file name in the given dir using the given base offset and the given suffix
+     * Construct an index file name in the given dir using the given base offset and the given suffix.
      *
      * @param dir    The directory in which the log will reside
      * @param offset The base offset of the log file
@@ -135,7 +135,7 @@ public final class LogFileUtils {
     }
 
     /**
-     * Construct a time index file name in the given dir using the given base offset and the given suffix
+     * Construct a time index file name in the given dir using the given base offset.
      *
      * @param dir    The directory in which the log will reside
      * @param offset The base offset of the log file
@@ -145,7 +145,7 @@ public final class LogFileUtils {
     }
 
     /**
-     * Construct a time index file name in the given dir using the given base offset and the given suffix
+     * Construct a time index file name in the given dir using the given base offset and the given suffix.
      *
      * @param dir    The directory in which the log will reside
      * @param offset The base offset of the log file
@@ -156,7 +156,7 @@ public final class LogFileUtils {
     }
 
     /**
-     * Construct a transaction index file name in the given dir using the given base offset and the given suffix
+     * Construct a transaction index file name in the given dir using the given base offset.
      *
      * @param dir    The directory in which the log will reside
      * @param offset The base offset of the log file
@@ -166,7 +166,7 @@ public final class LogFileUtils {
     }
 
     /**
-     * Construct a transaction index file name in the given dir using the given base offset and the given suffix
+     * Construct a transaction index file name in the given dir using the given base offset and the given suffix.
      *
      * @param dir    The directory in which the log will reside
      * @param offset The base offset of the log file
@@ -177,7 +177,7 @@ public final class LogFileUtils {
     }
 
     /**
-     * Returns the offset for the given file. The file name is of the form: {number}.{suffix}. This method extracts
+     * Returns the offset from the given file. The file name is of the form: {number}.{suffix}. This method extracts
      * the number from the given file's name.
      *
      * @param file file with the offset information as part of its name.
