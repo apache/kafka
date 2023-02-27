@@ -404,7 +404,7 @@ public class StreamThread extends Thread {
             topologyMetadata,
             adminClient,
             stateDirectory,
-            maybeCreateAndStartStateUpdater(stateUpdaterEnabled, config, changelogReader, topologyMetadata, time, clientId, threadIdx)
+            maybeCreateAndStartStateUpdater(stateUpdaterEnabled, streamsMetrics, config, changelogReader, topologyMetadata, time, clientId, threadIdx)
         );
         referenceContainer.taskManager = taskManager;
 
@@ -448,6 +448,7 @@ public class StreamThread extends Thread {
     }
 
     private static StateUpdater maybeCreateAndStartStateUpdater(final boolean stateUpdaterEnabled,
+                                                                final StreamsMetricsImpl streamsMetrics,
                                                                 final StreamsConfig streamsConfig,
                                                                 final ChangelogReader changelogReader,
                                                                 final TopologyMetadata topologyMetadata,
@@ -456,7 +457,7 @@ public class StreamThread extends Thread {
                                                                 final int threadIdx) {
         if (stateUpdaterEnabled) {
             final String name = clientId + "-StateUpdater-" + threadIdx;
-            final StateUpdater stateUpdater = new DefaultStateUpdater(name, streamsConfig, changelogReader, topologyMetadata, time);
+            final StateUpdater stateUpdater = new DefaultStateUpdater(name, streamsMetrics.metricsRegistry(), streamsConfig, changelogReader, topologyMetadata, time);
             stateUpdater.start();
             return stateUpdater;
         } else {
