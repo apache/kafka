@@ -159,16 +159,9 @@ def determineCommitId() {
   def takeFromHash = 16
   if (project.hasProperty('commitId')) {
     commitId.take(takeFromHash)
-  } else if (file("$rootDir/.git/HEAD").exists()) {
-    def headRef = file("$rootDir/.git/HEAD").text
-    if (headRef.contains('ref: ')) {
-      headRef = headRef.replaceAll('ref: ', '').trim()
-      if (file("$rootDir/.git/$headRef").exists()) {
-        file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
-      }
-    } else {
-      headRef.trim().take(takeFromHash)
-    }
+  } else if (file("$rootDir/.git").exists()) {
+    def repo = Grgit.open(currentDir: project.getRootDir())
+    repo.head().id.take(takeFromHash)
   } else {
     "unknown"
   }
