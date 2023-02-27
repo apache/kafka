@@ -23,15 +23,15 @@ public enum LogStartOffsetIncrementReason {
     ClientRecordDeletion("client delete records request"),
     SnapshotGenerated("snapshot generated");
 
-    private final String value;
+    private final String reason;
 
-    LogStartOffsetIncrementReason(String value) {
-        this.value = value;
+    LogStartOffsetIncrementReason(String reason) {
+        this.reason = reason;
     }
 
     @Override
     public String toString() {
-        return value;
+        return reason;
     }
 
 }

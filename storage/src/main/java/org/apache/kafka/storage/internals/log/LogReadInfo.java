@@ -21,7 +21,7 @@ import org.apache.kafka.common.message.FetchResponseData;
 import java.util.Optional;
 
 /**
- * Structure used for lower level reads using  [[kafka.cluster.Partition.fetchRecords()]].
+ * Structure used for lower level reads using {@link kafka.cluster.Partition#fetchRecords()}.
  */
 public class LogReadInfo {
 
