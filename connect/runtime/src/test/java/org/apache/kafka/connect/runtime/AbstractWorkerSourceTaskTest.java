@@ -290,6 +290,7 @@ public class AbstractWorkerSourceTaskTest {
         );
         assertThrows(InvalidRecordException.class, workerTask::sendRecords);
         verifyNoInteractions(producer);
+        verifyNoInteractions(admin);
     }
 
     @Test
@@ -307,6 +308,9 @@ public class AbstractWorkerSourceTaskTest {
 
         ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = verifySendRecord();
         assertNull(sent.getValue().timestamp());
+
+        verifyTaskGetTopic();
+        verifyTopicCreation();
     }
 
     @Test
@@ -333,6 +337,9 @@ public class AbstractWorkerSourceTaskTest {
         assertArrayEquals(SERIALIZED_KEY, sent.getValue().key());
         assertArrayEquals(SERIALIZED_RECORD, sent.getValue().value());
         assertEquals(headers, sent.getValue().headers());
+
+        verifyTaskGetTopic();
+        verifyTopicCreation();
     }
 
     @Test
@@ -384,6 +391,9 @@ public class AbstractWorkerSourceTaskTest {
             ByteBuffer.wrap(sentRecordB.value())
         );
         assertEquals(encodingB, new String(sentRecordB.headers().lastHeader("encoding").value()));
+
+        verifyTaskGetTopic(2);
+        verifyTopicCreation();
     }
 
     @Test
@@ -460,6 +470,9 @@ public class AbstractWorkerSourceTaskTest {
         // Next they all succeed
         workerTask.sendRecords();
         assertNull(workerTask.toSend);
+
+        // First attempt failed, second succeeded
+        verifyTopicCreation(2, TOPIC, TOPIC);
     }
 
     @Test
@@ -522,7 +535,7 @@ public class AbstractWorkerSourceTaskTest {
                 .thenThrow(new RetriableException(new TimeoutException("timeout")))
                 .thenReturn(createdTopic(OTHER_TOPIC));
 
-        // Try to send 3, make first pass, second fail. Should save last two
+        // Try to send 3, make first pass, second fail. Should save last record
         workerTask.toSend = Arrays.asList(record1, record2, record3);
         workerTask.sendRecords();
         assertEquals(Collections.singletonList(record3), workerTask.toSend);
@@ -567,6 +580,8 @@ public class AbstractWorkerSourceTaskTest {
         workerTask.toSend = Arrays.asList(record1, record2);
         assertThrows(ConnectException.class, workerTask::sendRecords);
         verify(admin).createOrFindTopics(any());
+
+        verifyTopicCreation();
     }
 
     @Test
@@ -584,6 +599,8 @@ public class AbstractWorkerSourceTaskTest {
         workerTask.toSend = Arrays.asList(record1, record2);
         assertThrows(ConnectException.class, workerTask::sendRecords);
         verify(admin).createOrFindTopics(any());
+
+        verifyTopicCreation();
     }
 
     @Test
@@ -605,6 +622,9 @@ public class AbstractWorkerSourceTaskTest {
 
         List<ProducerRecord<byte[], byte[]>> capturedValues = sent.getAllValues();
         assertEquals(2, capturedValues.size());
+
+        verifyTaskGetTopic(2);
+        verifyTopicCreation();
     }
 
     @Test
@@ -626,6 +646,9 @@ public class AbstractWorkerSourceTaskTest {
 
         List<ProducerRecord<byte[], byte[]>> capturedValues = sent.getAllValues();
         assertEquals(2, capturedValues.size());
+
+        verifyTaskGetTopic(2);
+        verifyTopicCreation();
     }
 
     private void expectSendRecord(Headers headers) {
@@ -663,9 +686,12 @@ public class AbstractWorkerSourceTaskTest {
     }
 
     private void verifyTaskGetTopic() {
+        verifyTaskGetTopic(1);
+    }
+    private void verifyTaskGetTopic(int times) {
         ArgumentCaptor<String> connectorCapture = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> topicCapture = ArgumentCaptor.forClass(String.class);
-        verify(statusBackingStore).getTopic(connectorCapture.capture(), topicCapture.capture());
+        verify(statusBackingStore, times(times)).getTopic(connectorCapture.capture(), topicCapture.capture());
 
         assertEquals("job", connectorCapture.getValue());
         assertEquals(TOPIC, topicCapture.getValue());
