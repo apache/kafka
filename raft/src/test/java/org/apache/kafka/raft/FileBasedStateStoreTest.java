@@ -23,7 +23,6 @@ import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -106,12 +105,14 @@ public class FileBasedStateStoreTest {
         // We initialized a state from the metadata log
         assertTrue(stateFile.exists());
 
-
-        String jsonString = "{\"clusterId\":\"abc\",\"leaderId\":0,\"leaderEpoch\":0,\"votedId\":-1,\"appliedOffset\":0,\"currentVoters\":[],\"data_version\":0}";
+        final int epoch = 2;
+        final int leaderId = 1;
+        Set<Integer> voters = Utils.mkSet(leaderId);
+        String jsonString = "{\"clusterId\":\"abc\",\"leaderId\":" + leaderId + ",\"leaderEpoch\":" + epoch + ",\"votedId\":-1,\"appliedOffset\":0,\"currentVoters\":[],\"data_version\":0}";
         writeToStateFile(stateFile, jsonString);
 
         // verify that we can read the state file that contains the removed "cluserId" field.
-        assertEquals(ElectionState.withElectedLeader(0, 0, Collections.emptySet()), stateStore.readElectionState());
+        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), stateStore.readElectionState());
 
         stateStore.clear();
         assertFalse(stateFile.exists());
