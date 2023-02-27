@@ -500,7 +500,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     requestRejoin(shortReason, fullReason);
                 }
 
-                // continue to retry as long as the timer isn't expired
+                // continue to retry as long as the timer hasn't expired
                 if (exception instanceof UnknownMemberIdException ||
                         exception instanceof IllegalGenerationException ||
                         exception instanceof RebalanceInProgressException ||
