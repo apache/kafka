@@ -122,8 +122,6 @@ public class ErrorHandlingTaskTest {
 
     @Mock
     Plugins plugins;
-    @Mock
-    TransformationStage<?> transformationStage;
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
 
@@ -296,7 +294,6 @@ public class ErrorHandlingTaskTest {
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.reporters(singletonList(reporter));
-        mockSinkTransform();
         createSinkTask(initialState, retryWithToleranceOperator);
 
 
@@ -349,7 +346,6 @@ public class ErrorHandlingTaskTest {
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.reporters(singletonList(reporter));
-        mockSourceTransform();
         createSourceTask(initialState, retryWithToleranceOperator);
 
         // valid json
@@ -411,7 +407,6 @@ public class ErrorHandlingTaskTest {
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.reporters(singletonList(reporter));
-        mockSourceTransform();
         createSourceTask(initialState, retryWithToleranceOperator, badConverter());
 
         // valid json
@@ -499,22 +494,15 @@ public class ErrorHandlingTaskTest {
         }
     }
 
-    private void mockSinkTransform() {
-        FaultyPassthrough<SinkRecord> faultyPassthrough = new FaultyPassthrough<>();
-        doReturn(FaultyPassthrough.class).when(transformationStage).transformClass();
-        when(transformationStage.apply(any())).thenAnswer(invocation -> faultyPassthrough.apply(invocation.getArgument(0)));
-    }
-
     private void createSinkTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
         oo.put("schemas.enable", "false");
         converter.configure(oo);
-        @SuppressWarnings("unchecked")
-        TransformationStage<SinkRecord> transform = (TransformationStage<SinkRecord>) transformationStage;
+
         TransformationChain<SinkRecord> sinkTransforms =
-                new TransformationChain<>(singletonList(transform), retryWithToleranceOperator);
+                new TransformationChain<>(singletonList(new TransformationStage<>(new FaultyPassthrough<SinkRecord>())), retryWithToleranceOperator);
 
         workerSinkTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig,
@@ -543,17 +531,8 @@ public class ErrorHandlingTaskTest {
         return converter;
     }
 
-    private void mockSourceTransform() {
-        FaultyPassthrough<SourceRecord> faultyPassthrough = new FaultyPassthrough<>();
-        doReturn(FaultyPassthrough.class).when(transformationStage).transformClass();
-        when(transformationStage.apply(any())).thenAnswer(invocation -> faultyPassthrough.apply(invocation.getArgument(0)));
-    }
-
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator, Converter converter) {
-        @SuppressWarnings("unchecked")
-        TransformationStage<SourceRecord> transform = (TransformationStage<SourceRecord>) transformationStage;
-        TransformationChain<SourceRecord> sourceTransforms =
-                new TransformationChain<>(singletonList(transform), retryWithToleranceOperator);
+        TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new TransformationStage<>(new FaultyPassthrough<SourceRecord>())), retryWithToleranceOperator);
 
         workerSourceTask = spy(new WorkerSourceTask(
             taskId, sourceTask, statusListener, initialState, converter,
