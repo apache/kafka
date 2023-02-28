@@ -508,7 +508,8 @@ public abstract class AbstractCoordinator implements Closeable {
                 else if (!future.isRetriable())
                     throw exception;
 
-                // Timer check upon retrying the RetriableExceptions
+                // We need to return upon expired timer, in case if the client.poll returns immediately and the time
+                // has elapsed.
                 if (timer.isExpired()) {
                     return false;
                 }
