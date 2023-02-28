@@ -919,7 +919,11 @@ public class TaskManager {
             } else if (tasks.removePendingTaskToCloseClean(task.id())) {
                 closeTaskClean(task, tasksToCloseDirty, taskExceptions);
             } else if (tasks.removePendingTaskToCloseDirty(task.id())) {
-                tasksToCloseDirty.add(task);
+                if (shouldCloseClean(task)) {
+                    closeTaskClean(task, tasksToCloseDirty, taskExceptions);
+                } else {
+                    tasksToCloseDirty.add(task);
+                }
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 transitRestoredTaskToRunning(task, now, offsetResetter);
