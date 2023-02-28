@@ -116,7 +116,7 @@ class SocketServer(val config: KafkaConfig,
 
   // Socket server metrics
   newGauge(s"${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => {
-    val dataPlaneProcessors = dataPlaneAcceptors.asScala.values.flatMap(a => a.processors).toSeq
+    val dataPlaneProcessors = synchronized { dataPlaneAcceptors.asScala.values.flatMap(a => a.processors).toSeq }
     val ioWaitRatioMetricNames = dataPlaneProcessors.map { p =>
       metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
     }
@@ -130,7 +130,7 @@ class SocketServer(val config: KafkaConfig,
   })
   if (config.requiresZookeeper) {
     newGauge(s"${ControlPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => {
-      val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
+      val controlPlaneProcessorOpt = synchronized { controlPlaneAcceptorOpt.map(a => a.processors(0)) }
       val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
         metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
       }
@@ -142,7 +142,7 @@ class SocketServer(val config: KafkaConfig,
   newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
   newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
   newGauge(s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => {
-    val dataPlaneProcessors = dataPlaneAcceptors.asScala.values.flatMap(a => a.processors)
+    val dataPlaneProcessors = synchronized { dataPlaneAcceptors.asScala.values.flatMap(a => a.processors).toSeq }
     val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.map { p =>
       metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
     }
@@ -152,7 +152,7 @@ class SocketServer(val config: KafkaConfig,
   })
   if (config.requiresZookeeper) {
     newGauge(s"${ControlPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => {
-      val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
+      val controlPlaneProcessorOpt = synchronized { controlPlaneAcceptorOpt.map(a => a.processors(0)) }
       val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
         metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
       }
