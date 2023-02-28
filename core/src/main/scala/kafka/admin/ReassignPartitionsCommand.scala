@@ -21,7 +21,6 @@ import java.util.Optional
 import java.util.concurrent.ExecutionException
 import kafka.common.AdminCommandFailedException
 import kafka.server.DynamicConfig
-import kafka.tools.{ActiveMoveState, CancelledMoveState, CompletedMoveState, LogDirMoveState, MissingLogDirMoveState, MissingReplicaMoveState, PartitionMove, PartitionReassignmentState, ReassignPartitionsCommandOptions, TerseReassignmentFailureException, VerifyAssignmentResult}
 import kafka.utils.{CoreUtils, Exit, Json, Logging}
 import kafka.utils.Implicits._
 import kafka.utils.json.JsonValue
@@ -30,8 +29,8 @@ import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, 
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ReplicaNotAvailableException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionReplica}
-import org.apache.kafka.server.util.CommandLineUtils
+import org.apache.kafka.common.{KafkaException, KafkaFuture, TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.jdk.CollectionConverters._
@@ -92,6 +91,104 @@ object ReassignPartitionsCommand extends Logging {
    * A map from topic names to partition movements.
    */
   type MoveMap = mutable.Map[String, mutable.Map[Int, PartitionMove]]
+
+  /**
+   * A partition movement.  The source and destination brokers may overlap.
+   *
+   * @param sources         The source brokers.
+   * @param destinations    The destination brokers.
+   */
+  sealed case class PartitionMove(sources: mutable.Set[Int],
+                                  destinations: mutable.Set[Int]) { }
+
+  /**
+   * The state of a partition reassignment.  The current replicas and target replicas
+   * may overlap.
+   *
+   * @param currentReplicas The current replicas.
+   * @param targetReplicas  The target replicas.
+   * @param done            True if the reassignment is done.
+   */
+  sealed case class PartitionReassignmentState(currentReplicas: Seq[Int],
+                                               targetReplicas: Seq[Int],
+                                               done: Boolean) {}
+
+  /**
+   * The state of a replica log directory movement.
+   */
+  sealed trait LogDirMoveState {
+    /**
+     * True if the move is done without errors.
+     */
+    def done: Boolean
+  }
+
+  /**
+   * A replica log directory move state where the source log directory is missing.
+   *
+   * @param targetLogDir        The log directory that we wanted the replica to move to.
+   */
+  sealed case class MissingReplicaMoveState(targetLogDir: String)
+      extends LogDirMoveState {
+    override def done = false
+  }
+
+  /**
+   * A replica log directory move state where the source replica is missing.
+   *
+   * @param targetLogDir        The log directory that we wanted the replica to move to.
+   */
+  sealed case class MissingLogDirMoveState(targetLogDir: String)
+      extends LogDirMoveState {
+    override def done = false
+  }
+
+  /**
+   * A replica log directory move state where the move is in progress.
+   *
+   * @param currentLogDir       The current log directory.
+   * @param futureLogDir        The log directory that the replica is moving to.
+   * @param targetLogDir        The log directory that we wanted the replica to move to.
+   */
+  sealed case class ActiveMoveState(currentLogDir: String,
+                                    targetLogDir: String,
+                                    futureLogDir: String)
+      extends LogDirMoveState {
+    override def done = false
+  }
+
+  /**
+   * A replica log directory move state where there is no move in progress, but we did not
+   * reach the target log directory.
+   *
+   * @param currentLogDir       The current log directory.
+   * @param targetLogDir        The log directory that we wanted the replica to move to.
+   */
+  sealed case class CancelledMoveState(currentLogDir: String,
+                                       targetLogDir: String)
+      extends LogDirMoveState {
+    override def done = true
+  }
+
+  /**
+   * The completed replica log directory move state.
+   *
+   * @param targetLogDir        The log directory that we wanted the replica to move to.
+   */
+  sealed case class CompletedMoveState(targetLogDir: String)
+      extends LogDirMoveState {
+    override def done = true
+  }
+
+  /**
+   * An exception thrown to indicate that the command has failed, but we don't want to
+   * print a stack trace.
+   *
+   * @param message     The message to print out before exiting.  A stack trace will not
+   *                    be printed.
+   */
+  class TerseReassignmentFailureException(message: String) extends KafkaException(message) {
+  }
 
   def main(args: Array[String]): Unit = {
     val opts = validateAndParseArgs(args)
@@ -157,6 +254,19 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   /**
+   * A result returned from verifyAssignment.
+   *
+   * @param partStates    A map from partitions to reassignment states.
+   * @param partsOngoing  True if there are any ongoing partition reassignments.
+   * @param moveStates    A map from log directories to movement states.
+   * @param movesOngoing  True if there are any ongoing moves that we know about.
+   */
+  case class VerifyAssignmentResult(partStates: Map[TopicPartition, PartitionReassignmentState],
+                                    partsOngoing: Boolean = false,
+                                    moveStates: Map[TopicPartitionReplica, LogDirMoveState] = Map.empty,
+                                    movesOngoing: Boolean = false)
+
+  /**
    * The entry point for the --verify command.
    *
    * @param adminClient           The AdminClient to use.
@@ -177,7 +287,7 @@ object ReassignPartitionsCommand extends Logging {
       // previous reassignments.
       clearAllThrottles(adminClient, targetParts)
     }
-    new VerifyAssignmentResult(partStates.asJava, partsOngoing, moveStates.asJava, movesOngoing)
+    VerifyAssignmentResult(partStates, partsOngoing, moveStates, movesOngoing)
   }
 
   /**
@@ -219,14 +329,14 @@ object ReassignPartitionsCommand extends Logging {
     bld.append("Status of partition reassignment:")
     states.keySet.toBuffer.sortWith(compareTopicPartitions).foreach { topicPartition =>
       val state = states(topicPartition)
-      if (state.done()) {
-        if (state.currentReplicas().equals(state.targetReplicas)) {
+      if (state.done) {
+        if (state.currentReplicas.equals(state.targetReplicas)) {
           bld.append("Reassignment of partition %s is completed.".
             format(topicPartition.toString))
         } else {
           bld.append(s"There is no active reassignment of partition ${topicPartition}, " +
-            s"but replica set is ${state.currentReplicas()} rather than " +
-            s"${state.targetReplicas}.")
+            s"but replica set is ${state.currentReplicas.mkString(",")} rather than " +
+            s"${state.targetReplicas.mkString(",")}.")
         }
       } else {
         bld.append("Reassignment of partition %s is still in progress.".format(topicPartition))
@@ -254,9 +364,10 @@ object ReassignPartitionsCommand extends Logging {
     }
     val foundResults = foundReassignments.map {
       case (part, targetReplicas) => (part,
-        new PartitionReassignmentState(
-          currentReassignments(part).replicas,
-          targetReplicas.map(i => i.asInstanceOf[Integer]).asJava,
+        PartitionReassignmentState(
+          currentReassignments(part).replicas.
+            asScala.map(i => i.asInstanceOf[Int]),
+          targetReplicas,
           false))
     }
     val topicNamesToLookUp = new mutable.HashSet[String]()
@@ -270,9 +381,9 @@ object ReassignPartitionsCommand extends Logging {
       case (part, targetReplicas) =>
         currentReassignments.get(part) match {
           case Some(reassignment) => (part,
-            new PartitionReassignmentState(
-              reassignment.replicas,
-              targetReplicas.map(i => i.asInstanceOf[Integer]).asJava,
+            PartitionReassignmentState(
+              reassignment.replicas.asScala.map(_.asInstanceOf[Int]),
+              targetReplicas,
               false))
           case None =>
             (part, topicDescriptionFutureToState(part.partition,
@@ -291,13 +402,13 @@ object ReassignPartitionsCommand extends Logging {
       if (topicDescription.partitions().size() < partition) {
         throw new ExecutionException("Too few partitions found", new UnknownTopicOrPartitionException())
       }
-      new PartitionReassignmentState(
-        topicDescription.partitions.get(partition).replicas.asScala.map(_.id.asInstanceOf[Integer]).asJava,
-        targetReplicas.map(i => i.asInstanceOf[Integer]).asJava,
+      PartitionReassignmentState(
+        topicDescription.partitions.get(partition).replicas.asScala.map(_.id),
+        targetReplicas,
         true)
     } catch {
       case t: ExecutionException if t.getCause.isInstanceOf[UnknownTopicOrPartitionException] =>
-        new PartitionReassignmentState(java.util.Collections.emptyList(), targetReplicas.map(i => i.asInstanceOf[Integer]).asJava, true)
+        PartitionReassignmentState(Seq(), targetReplicas, true)
     }
   }
 
@@ -340,17 +451,17 @@ object ReassignPartitionsCommand extends Logging {
       targetMoves.keySet.asJava).all().get().asScala
     targetMoves.map { case (replica, targetLogDir) =>
       val moveState = replicaLogDirInfos.get(replica) match {
-        case None => new MissingReplicaMoveState(targetLogDir)
+        case None => MissingReplicaMoveState(targetLogDir)
         case Some(info) => if (info.getCurrentReplicaLogDir == null) {
-            new MissingLogDirMoveState(targetLogDir)
+            MissingLogDirMoveState(targetLogDir)
           } else if (info.getFutureReplicaLogDir == null) {
             if (info.getCurrentReplicaLogDir.equals(targetLogDir)) {
-              new CompletedMoveState(targetLogDir)
+              CompletedMoveState(targetLogDir)
             } else {
-              new CancelledMoveState(info.getCurrentReplicaLogDir, targetLogDir)
+              CancelledMoveState(info.getCurrentReplicaLogDir, targetLogDir)
             }
           } else {
-            new ActiveMoveState(info.getCurrentReplicaLogDir(),
+            ActiveMoveState(info.getCurrentReplicaLogDir(),
               targetLogDir,
               info.getFutureReplicaLogDir)
           }
@@ -372,29 +483,27 @@ object ReassignPartitionsCommand extends Logging {
     states.keySet.toBuffer.sortWith(compareTopicPartitionReplicas).foreach { replica =>
       val state = states(replica)
       state match {
-        case _: MissingLogDirMoveState =>
+        case MissingLogDirMoveState(_) =>
           bld.append(s"Partition ${replica.topic}-${replica.partition} is not found " +
             s"in any live log dir on broker ${replica.brokerId}. There is likely an " +
             s"offline log directory on the broker.")
-        case _: MissingReplicaMoveState =>
+        case MissingReplicaMoveState(_) =>
           bld.append(s"Partition ${replica.topic}-${replica.partition} cannot be found " +
             s"in any live log directory on broker ${replica.brokerId}.")
-        case s: ActiveMoveState =>
-          if (s.targetLogDir.equals(s.futureLogDir)) {
+        case ActiveMoveState(_, targetLogDir, futureLogDir) =>
+          if (targetLogDir.equals(futureLogDir)) {
             bld.append(s"Reassignment of replica $replica is still in progress.")
           } else {
             bld.append(s"Partition ${replica.topic}-${replica.partition} on broker " +
-              s"${replica.brokerId} is being moved to log dir ${s.futureLogDir} " +
-              s"instead of ${s.targetLogDir}.")
+              s"${replica.brokerId} is being moved to log dir $futureLogDir " +
+              s"instead of $targetLogDir.")
           }
-        case s: CancelledMoveState =>
+        case CancelledMoveState(currentLogDir, targetLogDir) =>
           bld.append(s"Partition ${replica.topic}-${replica.partition} on broker " +
-            s"${replica.brokerId} is not being moved from log dir ${s.currentLogDir} to " +
-            s"${s.targetLogDir}.")
-        case _: CompletedMoveState =>
+            s"${replica.brokerId} is not being moved from log dir $currentLogDir to " +
+            s"$targetLogDir.")
+        case CompletedMoveState(_) =>
           bld.append(s"Reassignment of replica $replica completed successfully.")
-        case _ =>
-          throw new IllegalStateException(s"Unknown state $state")
       }
     }
     bld.mkString(System.lineSeparator())
@@ -853,7 +962,7 @@ object ReassignPartitionsCommand extends Logging {
       val destinations = mutable.Set[Int]() ++ addingReplicas
 
       val partMoves = moveMap.getOrElseUpdate(part.topic, new mutable.HashMap[Int, PartitionMove])
-      partMoves.put(part.partition, new PartitionMove(sources.map(i => i.asInstanceOf[Integer]).asJava, destinations.map(i => i.asInstanceOf[Integer]).asJava))
+      partMoves.put(part.partition, PartitionMove(sources, destinations))
     }
     moveMap
   }
@@ -880,14 +989,14 @@ object ReassignPartitionsCommand extends Logging {
       // If there is a reassignment in progress, use the sources from moveMap, otherwise
       // use the sources from currentParts
       val sources = mutable.Set[Int]() ++ (partMoves.get(part.partition) match {
-        case Some(move) => move.sources.asScala.toSeq
+        case Some(move) => move.sources.toSeq
         case None => currentParts.getOrElse(part,
           throw new RuntimeException(s"Trying to reassign a topic partition $part with 0 replicas"))
       })
       val destinations = mutable.Set[Int]() ++ replicas.diff(sources.toSeq)
 
       partMoves.put(part.partition,
-        new PartitionMove(sources.map(i => i.asInstanceOf[Integer]).asJava, destinations.map(i => i.asInstanceOf[Integer]).asJava))
+        PartitionMove(sources, destinations))
     }
     moveMap
   }
@@ -903,7 +1012,7 @@ object ReassignPartitionsCommand extends Logging {
       case (topicName, partMoveMap) => {
         val components = new mutable.TreeSet[String]
         partMoveMap.forKeyValue { (partId, move) =>
-          move.sources.forEach(source => components.add("%d:%d".format(partId, source)))
+          move.sources.foreach(source => components.add("%d:%d".format(partId, source)))
         }
         (topicName, components.mkString(","))
       }
@@ -921,7 +1030,7 @@ object ReassignPartitionsCommand extends Logging {
       case (topicName, partMoveMap) => {
         val components = new mutable.TreeSet[String]
         partMoveMap.forKeyValue { (partId, move) =>
-          move.destinations.forEach(destination =>
+          move.destinations.foreach(destination =>
             if (!move.sources.contains(destination)) {
               components.add("%d:%d".format(partId, destination))
             })
@@ -942,8 +1051,8 @@ object ReassignPartitionsCommand extends Logging {
     moveMap.values.foreach {
       _.values.foreach {
         partMove =>
-          partMove.sources.forEach(i => reassigningBrokers.add(i))
-          partMove.destinations.forEach(i => reassigningBrokers.add(i))
+          partMove.sources.foreach(reassigningBrokers.add)
+          partMove.destinations.foreach(reassigningBrokers.add)
       }
     }
     reassigningBrokers.toSet
@@ -1320,5 +1429,72 @@ object ReassignPartitionsCommand extends Logging {
         }
       }
     }.toSet
+  }
+
+  sealed class ReassignPartitionsCommandOptions(args: Array[String]) extends CommandDefaultOptions(args)  {
+    // Actions
+    val verifyOpt = parser.accepts("verify", "Verify if the reassignment completed as specified by the " +
+      "--reassignment-json-file option. If there is a throttle engaged for the replicas specified, and the rebalance has completed, the throttle will be removed")
+    val generateOpt = parser.accepts("generate", "Generate a candidate partition reassignment configuration." +
+      " Note that this only generates a candidate assignment, it does not execute it.")
+    val executeOpt = parser.accepts("execute", "Kick off the reassignment as specified by the --reassignment-json-file option.")
+    val cancelOpt = parser.accepts("cancel", "Cancel an active reassignment.")
+    val listOpt = parser.accepts("list", "List all active partition reassignments.")
+
+    // Arguments
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: the server(s) to use for bootstrapping.")
+                      .withRequiredArg
+                      .describedAs("Server(s) to use for bootstrapping")
+                      .ofType(classOf[String])
+
+    val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
+                      .withRequiredArg
+                      .describedAs("Admin client property file")
+                      .ofType(classOf[String])
+
+    val reassignmentJsonFileOpt = parser.accepts("reassignment-json-file", "The JSON file with the partition reassignment configuration" +
+                      "The format to use is - \n" +
+                      "{\"partitions\":\n\t[{\"topic\": \"foo\",\n\t  \"partition\": 1,\n\t  \"replicas\": [1,2,3],\n\t  \"log_dirs\": [\"dir1\",\"dir2\",\"dir3\"] }],\n\"version\":1\n}\n" +
+                      "Note that \"log_dirs\" is optional. When it is specified, its length must equal the length of the replicas list. The value in this list " +
+                      "can be either \"any\" or the absolution path of the log directory on the broker. If absolute log directory path is specified, the replica will be moved to the specified log directory on the broker.")
+                      .withRequiredArg
+                      .describedAs("manual assignment json file path")
+                      .ofType(classOf[String])
+    val topicsToMoveJsonFileOpt = parser.accepts("topics-to-move-json-file", "Generate a reassignment configuration to move the partitions" +
+                      " of the specified topics to the list of brokers specified by the --broker-list option. The format to use is - \n" +
+                      "{\"topics\":\n\t[{\"topic\": \"foo\"},{\"topic\": \"foo1\"}],\n\"version\":1\n}")
+                      .withRequiredArg
+                      .describedAs("topics to reassign json file path")
+                      .ofType(classOf[String])
+    val brokerListOpt = parser.accepts("broker-list", "The list of brokers to which the partitions need to be reassigned" +
+                      " in the form \"0,1,2\". This is required if --topics-to-move-json-file is used to generate reassignment configuration")
+                      .withRequiredArg
+                      .describedAs("brokerlist")
+                      .ofType(classOf[String])
+    val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
+    val interBrokerThrottleOpt = parser.accepts("throttle", "The movement of partitions between brokers will be throttled to this value (bytes/sec). " +
+      "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
+      "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
+      .withRequiredArg()
+      .describedAs("throttle")
+      .ofType(classOf[Long])
+      .defaultsTo(-1)
+    val replicaAlterLogDirsThrottleOpt = parser.accepts("replica-alter-log-dirs-throttle",
+      "The movement of replicas between log directories on the same broker will be throttled to this value (bytes/sec). " +
+        "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
+        "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
+      .withRequiredArg()
+      .describedAs("replicaAlterLogDirsThrottle")
+      .ofType(classOf[Long])
+      .defaultsTo(-1)
+    val timeoutOpt = parser.accepts("timeout", "The maximum time in ms to wait for log directory replica assignment to begin.")
+                      .withRequiredArg()
+                      .describedAs("timeout")
+                      .ofType(classOf[Long])
+                      .defaultsTo(10000)
+    val additionalOpt = parser.accepts("additional", "Execute this reassignment in addition to any " +
+      "other ongoing ones. This option can also be used to change the throttle of an ongoing reassignment.")
+    val preserveThrottlesOpt = parser.accepts("preserve-throttles", "Do not modify broker or topic throttles.")
+    options = parser.parse(args : _*)
   }
 }

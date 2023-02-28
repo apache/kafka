@@ -15,54 +15,49 @@
  * limitations under the License.
  */
 
-package kafka.tools;
+package org.apache.kafka.tools.reassign;
 
 import java.util.Objects;
-import java.util.Set;
 
 /**
- * A partition movement.  The source and destination brokers may overlap.
+ * A replica log directory move state where the source log directory is missing.
  */
-public final class PartitionMove {
-    private final Set<Integer> sources;
-
-    private final Set<Integer> destinations;
+public final class MissingReplicaMoveState implements LogDirMoveState {
+    private final String targetLogDir;
 
     /**
-     * @param sources         The source brokers.
-     * @param destinations    The destination brokers.
+     * @param targetLogDir        The log directory that we wanted the replica to move to.
      */
-    public PartitionMove(Set<Integer> sources, Set<Integer> destinations) {
-        this.sources = sources;
-        this.destinations = destinations;
+    public MissingReplicaMoveState(String targetLogDir) {
+        this.targetLogDir = targetLogDir;
     }
 
-    public Set<Integer> sources() {
-        return sources;
+    public String targetLogDir() {
+        return targetLogDir;
     }
 
-    public Set<Integer> destinations() {
-        return destinations;
+    @Override
+    public boolean done() {
+        return false;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        PartitionMove that = (PartitionMove) o;
-        return Objects.equals(sources, that.sources) && Objects.equals(destinations, that.destinations);
+        MissingReplicaMoveState that = (MissingReplicaMoveState) o;
+        return Objects.equals(targetLogDir, that.targetLogDir);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(sources, destinations);
+        return Objects.hash(targetLogDir);
     }
 
     @Override
     public String toString() {
-        return "PartitionMove{" +
-            "sources=" + sources +
-            ", destinations=" + destinations +
+        return "MissingReplicaMoveState{" +
+            "targetLogDir='" + targetLogDir + '\'' +
             '}';
     }
 }

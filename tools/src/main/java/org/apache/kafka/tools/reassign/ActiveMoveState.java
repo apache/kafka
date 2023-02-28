@@ -15,25 +15,41 @@
  * limitations under the License.
  */
 
-package kafka.tools;
+package org.apache.kafka.tools.reassign;
 
 import java.util.Objects;
 
 /**
- * A replica log directory move state where the source log directory is missing.
+ * A replica log directory move state where the move is in progress.
  */
-public final class MissingReplicaMoveState implements LogDirMoveState {
+public final class ActiveMoveState implements LogDirMoveState {
+    private final String currentLogDir;
+
     private final String targetLogDir;
 
+    private final String futureLogDir;
+
     /**
+     * @param currentLogDir       The current log directory.
+     * @param futureLogDir        The log directory that the replica is moving to.
      * @param targetLogDir        The log directory that we wanted the replica to move to.
      */
-    public MissingReplicaMoveState(String targetLogDir) {
+    public ActiveMoveState(String currentLogDir, String targetLogDir, String futureLogDir) {
+        this.currentLogDir = currentLogDir;
         this.targetLogDir = targetLogDir;
+        this.futureLogDir = futureLogDir;
+    }
+
+    public String currentLogDir() {
+        return currentLogDir;
     }
 
     public String targetLogDir() {
         return targetLogDir;
+    }
+
+    public String futureLogDir() {
+        return futureLogDir;
     }
 
     @Override
@@ -45,19 +61,21 @@ public final class MissingReplicaMoveState implements LogDirMoveState {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        MissingReplicaMoveState that = (MissingReplicaMoveState) o;
-        return Objects.equals(targetLogDir, that.targetLogDir);
+        ActiveMoveState that = (ActiveMoveState) o;
+        return Objects.equals(currentLogDir, that.currentLogDir) && Objects.equals(targetLogDir, that.targetLogDir) && Objects.equals(futureLogDir, that.futureLogDir);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(targetLogDir);
+        return Objects.hash(currentLogDir, targetLogDir, futureLogDir);
     }
 
     @Override
     public String toString() {
-        return "MissingReplicaMoveState{" +
-            "targetLogDir='" + targetLogDir + '\'' +
+        return "ActiveMoveState{" +
+            "currentLogDir='" + currentLogDir + '\'' +
+            ", targetLogDir='" + targetLogDir + '\'' +
+            ", futureLogDir='" + futureLogDir + '\'' +
             '}';
     }
 }

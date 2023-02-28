@@ -19,7 +19,6 @@ package kafka.admin
 
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.server._
-import kafka.tools.{ActiveMoveState, CompletedMoveState, LogDirMoveState, PartitionReassignmentState, VerifyAssignmentResult}
 import kafka.utils.Implicits._
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin._
@@ -34,7 +33,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.io.Closeable
-import java.util.{Arrays, Collections, HashMap, List}
+import java.util.{Collections, HashMap, List}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -114,18 +113,18 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
     // Check that the assignment has not yet been started yet.
     val initialAssignment = Map(
-      foo0 -> new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 1, 3), true),
-      bar0 -> new PartitionReassignmentState(Arrays.asList(3, 2, 1), Arrays.asList(3, 2, 0), true)
+      foo0 -> PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 1, 3), true),
+      bar0 -> PartitionReassignmentState(Seq(3, 2, 1), Seq(3, 2, 0), true)
     )
     waitForVerifyAssignment(cluster.adminClient, assignment, false,
-      new VerifyAssignmentResult(initialAssignment.asJava))
+      VerifyAssignmentResult(initialAssignment))
 
     // Execute the assignment
     runExecuteAssignment(cluster.adminClient, false, assignment, -1L, -1L)
     assertEquals(unthrottledBrokerConfigs, describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
     val finalAssignment = Map(
-      foo0 -> new PartitionReassignmentState(Arrays.asList(0, 1, 3), Arrays.asList(0, 1, 3), true),
-      bar0 -> new PartitionReassignmentState(Arrays.asList(3, 2, 0), Arrays.asList(3, 2, 0), true)
+      foo0 -> PartitionReassignmentState(Seq(0, 1, 3), Seq(0, 1, 3), true),
+      bar0 -> PartitionReassignmentState(Seq(3, 2, 0), Seq(3, 2, 0), true)
     )
 
     val verifyAssignmentResult = runVerifyAssignment(cluster.adminClient, assignment, false)
@@ -133,7 +132,7 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
     // Wait for the assignment to complete
     waitForVerifyAssignment(cluster.adminClient, assignment, false,
-      new VerifyAssignmentResult(finalAssignment.asJava))
+      VerifyAssignmentResult(finalAssignment))
 
     assertEquals(unthrottledBrokerConfigs,
       describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
@@ -159,11 +158,11 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     // Execute the assignment
     runExecuteAssignment(cluster.adminClient, false, assignment, -1L, -1L)
     val finalAssignment = Map(part ->
-      new PartitionReassignmentState(Arrays.asList(3, 1, 2), Arrays.asList(3, 1, 2), true))
+      PartitionReassignmentState(Seq(3, 1, 2), Seq(3, 1, 2), true))
 
     // Wait for the assignment to complete
     waitForVerifyAssignment(cluster.adminClient, assignment, false,
-      new VerifyAssignmentResult(finalAssignment.asJava))
+      VerifyAssignmentResult(finalAssignment))
 
     TestUtils.waitUntilTrue(() => {
       cluster.servers(3).replicaManager.onlinePartition(part).
@@ -197,13 +196,13 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
     val finalAssignment = Map(
       new TopicPartition("foo", 0) ->
-        new PartitionReassignmentState(Arrays.asList(0, 3, 2), Arrays.asList(0, 3, 2), true),
+        PartitionReassignmentState(Seq(0, 3, 2), Seq(0, 3, 2), true),
       new TopicPartition("baz", 2) ->
-        new PartitionReassignmentState(Arrays.asList(3, 2, 1), Arrays.asList(3, 2, 1), true))
+        PartitionReassignmentState(Seq(3, 2, 1), Seq(3, 2, 1), true))
 
     // Now remove the throttles.
     waitForVerifyAssignment(cluster.adminClient, assignment, false,
-      new VerifyAssignmentResult(finalAssignment.asJava))
+      VerifyAssignmentResult(finalAssignment))
     waitForBrokerLevelThrottles(unthrottledBrokerConfigs)
   }
 
@@ -225,10 +224,10 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     // Check that the assignment has not yet been started yet.
     val initialAssignment = Map(
       new TopicPartition("foo", 0) ->
-        new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 3, 2), true),
+        PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 3, 2), true),
       new TopicPartition("baz", 2) ->
-        new PartitionReassignmentState(Arrays.asList(0, 2, 1), Arrays.asList(3, 2, 1), true))
-    assertEquals(new VerifyAssignmentResult(initialAssignment.asJava), runVerifyAssignment(cluster.adminClient, assignment, false))
+        PartitionReassignmentState(Seq(0, 2, 1), Seq(3, 2, 1), true))
+    assertEquals(VerifyAssignmentResult(initialAssignment), runVerifyAssignment(cluster.adminClient, assignment, false))
     assertEquals(unthrottledBrokerConfigs, describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
 
     // Execute the assignment
@@ -238,9 +237,9 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
     val finalAssignment = Map(
       new TopicPartition("foo", 0) ->
-        new PartitionReassignmentState(Arrays.asList(0, 3, 2), Arrays.asList(0, 3, 2), true),
+        PartitionReassignmentState(Seq(0, 3, 2), Seq(0, 3, 2), true),
       new TopicPartition("baz", 2) ->
-        new PartitionReassignmentState(Arrays.asList(3, 2, 1), Arrays.asList(3, 2, 1), true))
+        PartitionReassignmentState(Seq(3, 2, 1), Seq(3, 2, 1), true))
 
     // Wait for the assignment to complete
     TestUtils.waitUntilTrue(
@@ -250,21 +249,21 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         if (!result.partsOngoing) {
           true
         } else {
-          //assertFalse(result.partStates.forall(_._2.done), s"Expected at least one partition reassignment to be ongoing when result = $result")
-          assertEquals(Arrays.asList(0, 3, 2), result.partStates().get(new TopicPartition("foo", 0)).targetReplicas)
-          assertEquals(Arrays.asList(3, 2, 1), result.partStates().get(new TopicPartition("baz", 2)).targetReplicas)
+          assertFalse(result.partStates.forall(_._2.done), s"Expected at least one partition reassignment to be ongoing when result = $result")
+          assertEquals(Seq(0, 3, 2), result.partStates(new TopicPartition("foo", 0)).targetReplicas)
+          assertEquals(Seq(3, 2, 1), result.partStates(new TopicPartition("baz", 2)).targetReplicas)
           logger.info(s"Current result: ${result}")
           waitForInterBrokerThrottle(Set(0, 1, 2, 3), interBrokerThrottle)
           false
         }
       }, "Expected reassignment to complete.")
     waitForVerifyAssignment(cluster.adminClient, assignment, true,
-      new VerifyAssignmentResult(finalAssignment.asJava))
+      VerifyAssignmentResult(finalAssignment))
     // The throttles should still have been preserved, since we ran with --preserve-throttles
     waitForInterBrokerThrottle(Set(0, 1, 2, 3), interBrokerThrottle)
     // Now remove the throttles.
     waitForVerifyAssignment(cluster.adminClient, assignment, false,
-      new VerifyAssignmentResult(finalAssignment.asJava))
+      VerifyAssignmentResult(finalAssignment))
     waitForBrokerLevelThrottles(unthrottledBrokerConfigs)
   }
 
@@ -289,9 +288,9 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     }
     TestUtils.removeReplicationThrottleForPartitions(cluster.adminClient, Seq(0,1,2,3), Set(part))
     val finalAssignment = Map(part ->
-      new PartitionReassignmentState(Arrays.asList(3, 2, 1), Arrays.asList(3, 2, 1), true))
+      PartitionReassignmentState(Seq(3, 2, 1), Seq(3, 2, 1), true))
     waitForVerifyAssignment(cluster.adminClient, assignment, false,
-      new VerifyAssignmentResult(finalAssignment.asJava))
+      VerifyAssignmentResult(finalAssignment))
   }
 
   /**
@@ -320,10 +319,10 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     // Verify that the reassignment is running.  The very low throttle should keep it
     // from completing before this runs.
     waitForVerifyAssignment(cluster.adminClient, assignment, true,
-      new VerifyAssignmentResult(Map(
-        foo0 -> new PartitionReassignmentState(Arrays.asList(0, 1, 3, 2), Arrays.asList(0, 1, 3), false),
-        baz1 -> new PartitionReassignmentState(Arrays.asList(0, 2, 3, 1), Arrays.asList(0, 2, 3), false)).asJava,
-        true, Collections.emptyMap(), false))
+      VerifyAssignmentResult(Map(
+        foo0 -> PartitionReassignmentState(Seq(0, 1, 3, 2), Seq(0, 1, 3), false),
+        baz1 -> PartitionReassignmentState(Seq(0, 2, 3, 1), Seq(0, 2, 3), false)),
+        true, Map(), false))
     // Cancel the reassignment.
     assertEquals((Set(foo0, baz1), Set()), runCancelAssignment(cluster.adminClient, assignment, true))
     // Broker throttles are still active because we passed --preserve-throttles
@@ -476,12 +475,12 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
     // Check the output of --verify
     waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
-      new VerifyAssignmentResult(Map(
-        topicPartition -> new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 1, 2), true)
-      ).asJava, false, Map[TopicPartitionReplica, LogDirMoveState](
+      VerifyAssignmentResult(Map(
+        topicPartition -> PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 1, 2), true)
+      ), false, Map(
         new TopicPartitionReplica(topicPartition.topic, topicPartition.partition, 0) ->
-          new ActiveMoveState(reassignment.currentDir, reassignment.targetDir, reassignment.targetDir)
-      ).asJava, true))
+          ActiveMoveState(reassignment.currentDir, reassignment.targetDir, reassignment.targetDir)
+      ), true))
     waitForLogDirThrottle(Set(0), logDirThrottle)
 
     // Remove the throttle
@@ -494,12 +493,12 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
     // Wait for the directory movement to complete.
     waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
-      new VerifyAssignmentResult(Map(
-        topicPartition -> new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 1, 2), true)
-      ).asJava, false, Map[TopicPartitionReplica, LogDirMoveState](
+      VerifyAssignmentResult(Map(
+        topicPartition -> PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 1, 2), true)
+      ), false, Map(
         new TopicPartitionReplica(topicPartition.topic, topicPartition.partition, 0) ->
-          new CompletedMoveState(reassignment.targetDir)
-      ).asJava, false))
+          CompletedMoveState(reassignment.targetDir)
+      ), false))
 
     val info1 = new BrokerDirs(cluster.adminClient.describeLogDirs(0.to(4).
       map(_.asInstanceOf[Integer]).asJavaCollection), 0)
@@ -532,12 +531,12 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     waitForLogDirThrottle(Set(0), updatedLogDirThrottle)
 
     waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
-      new VerifyAssignmentResult(Map(
-        topicPartition -> new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 1, 2), true)
-      ).asJava, false, Map[TopicPartitionReplica, LogDirMoveState](
+      VerifyAssignmentResult(Map(
+        topicPartition -> PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 1, 2), true)
+      ), false, Map(
         new TopicPartitionReplica(topicPartition.topic, topicPartition.partition, targetBrokerId) ->
-          new CompletedMoveState(reassignment.targetDir)
-      ).asJava, false))
+          CompletedMoveState(reassignment.targetDir)
+      ), false))
   }
 
   case class LogDirReassignment(json: String, currentDir: String, targetDir: String)

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.tools;
+package org.apache.kafka.tools.reassign;
 
 import joptsimple.ArgumentAcceptingOptionSpec;
 import joptsimple.OptionSpecBuilder;

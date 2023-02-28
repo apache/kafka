@@ -21,7 +21,6 @@ import java.util.concurrent.ExecutionException
 import java.util.{Arrays, Collections}
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.common.AdminCommandFailedException
-import kafka.tools.{ActiveMoveState, CancelledMoveState, CompletedMoveState, MissingLogDirMoveState, MissingReplicaMoveState, PartitionMove, PartitionReassignmentState}
 import kafka.utils.Exit
 import org.apache.kafka.clients.admin.{Config, MockAdminClient, PartitionReassignment}
 import org.apache.kafka.common.config.ConfigResource
@@ -72,11 +71,11 @@ class ReassignPartitionsUnitTest {
         mkString(System.lineSeparator()),
       partitionReassignmentStatesToString(Map(
         new TopicPartition("foo", 0) ->
-          new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 3), true),
+          PartitionReassignmentState(Seq(1, 2, 3), Seq(1, 2, 3), true),
         new TopicPartition("foo", 1) ->
-          new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 4), false),
+          PartitionReassignmentState(Seq(1, 2, 3), Seq(1, 2, 4), false),
         new TopicPartition("bar", 0) ->
-          new PartitionReassignmentState(Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 4), false),
+          PartitionReassignmentState(Seq(1, 2, 3), Seq(1, 2, 4), false),
       )))
   }
 
@@ -109,8 +108,8 @@ class ReassignPartitionsUnitTest {
       assertEquals(Map(new TopicPartition("quux", 0) -> classOf[UnknownTopicOrPartitionException]),
         reassignmentResult)
       assertEquals((Map(
-          new TopicPartition("foo", 0) -> new PartitionReassignmentState(Arrays.asList(0,1,2), Arrays.asList(0,1,3), false),
-          new TopicPartition("foo", 1) -> new PartitionReassignmentState(Arrays.asList(1,2,3), Arrays.asList(1,2,3), true)
+          new TopicPartition("foo", 0) -> PartitionReassignmentState(Seq(0,1,2), Seq(0,1,3), false),
+          new TopicPartition("foo", 1) -> PartitionReassignmentState(Seq(1,2,3), Seq(1,2,3), true)
         ), true),
         findPartitionReassignmentStates(adminClient, Seq(
           (new TopicPartition("foo", 0), Seq(0,1,3)),
@@ -124,8 +123,8 @@ class ReassignPartitionsUnitTest {
       assertEquals(Map(new TopicPartition("quux", 2) -> classOf[UnknownTopicOrPartitionException]),
         cancelResult)
       assertEquals((Map(
-          new TopicPartition("foo", 0) -> new PartitionReassignmentState(Arrays.asList(0,1,2), Arrays.asList(0,1,3), true),
-          new TopicPartition("foo", 1) -> new PartitionReassignmentState(Arrays.asList(1,2,3), Arrays.asList(1,2,3), true)
+          new TopicPartition("foo", 0) -> PartitionReassignmentState(Seq(0,1,2), Seq(0,1,3), true),
+          new TopicPartition("foo", 1) -> PartitionReassignmentState(Seq(1,2,3), Seq(1,2,3), true)
         ), false),
           findPartitionReassignmentStates(adminClient, Seq(
             (new TopicPartition("foo", 0), Seq(0,1,3)),
@@ -189,15 +188,15 @@ class ReassignPartitionsUnitTest {
       "Partition quux-2 is not found in any live log dir on broker 1. " +
           "There is likely an offline log directory on the broker.").mkString(System.lineSeparator()),
         replicaMoveStatesToString(Map(
-          new TopicPartitionReplica("bar", 0, 0) -> new CompletedMoveState("/tmp/kafka-logs0"),
-          new TopicPartitionReplica("foo", 0, 0) -> new ActiveMoveState("/tmp/kafka-logs0",
+          new TopicPartitionReplica("bar", 0, 0) -> CompletedMoveState("/tmp/kafka-logs0"),
+          new TopicPartitionReplica("foo", 0, 0) -> ActiveMoveState("/tmp/kafka-logs0",
             "/tmp/kafka-logs1", "/tmp/kafka-logs1"),
-          new TopicPartitionReplica("foo", 1, 0) -> new CancelledMoveState("/tmp/kafka-logs0",
+          new TopicPartitionReplica("foo", 1, 0) -> CancelledMoveState("/tmp/kafka-logs0",
             "/tmp/kafka-logs1"),
-          new TopicPartitionReplica("quux", 0, 0) -> new MissingReplicaMoveState("/tmp/kafka-logs1"),
-          new TopicPartitionReplica("quux", 1, 1) -> new ActiveMoveState("/tmp/kafka-logs0",
+          new TopicPartitionReplica("quux", 0, 0) -> MissingReplicaMoveState("/tmp/kafka-logs1"),
+          new TopicPartitionReplica("quux", 1, 1) -> ActiveMoveState("/tmp/kafka-logs0",
             "/tmp/kafka-logs1", "/tmp/kafka-logs2"),
-          new TopicPartitionReplica("quux", 2, 1) -> new MissingLogDirMoveState("/tmp/kafka-logs1")
+          new TopicPartitionReplica("quux", 2, 1) -> MissingLogDirMoveState("/tmp/kafka-logs1")
         )))
   }
 
@@ -420,14 +419,14 @@ class ReassignPartitionsUnitTest {
 
     assertEquals(
       mutable.Map("foo" -> mutable.Map(
-        0 -> new PartitionMove(Set[Integer](1,2,3).asJava, Set[Integer](5).asJava),
-        1 -> new PartitionMove(Set[Integer](4,5,6).asJava, Set[Integer](7,8).asJava),
-        2 -> new PartitionMove(Set[Integer](1,2).asJava, Set[Integer](3,4).asJava),
-        3 -> new PartitionMove(Set[Integer](1,2).asJava, Set[Integer](5,6).asJava),
-        4 -> new PartitionMove(Set[Integer](1,2).asJava, Set[Integer](3).asJava),
-        5 -> new PartitionMove(Set[Integer](1,2).asJava, Set[Integer](3,4,5,6).asJava)
+        0 -> PartitionMove(mutable.Set(1,2,3), mutable.Set(5)),
+        1 -> PartitionMove(mutable.Set(4,5,6), mutable.Set(7,8)),
+        2 -> PartitionMove(mutable.Set(1,2), mutable.Set(3,4)),
+        3 -> PartitionMove(mutable.Set(1,2), mutable.Set(5,6)),
+        4 -> PartitionMove(mutable.Set(1,2), mutable.Set(3)),
+        5 -> PartitionMove(mutable.Set(1,2), mutable.Set(3,4,5,6))
       ), "bar" -> mutable.Map(
-        0 -> new PartitionMove(Set[Integer](2,3,4).asJava, Set[Integer](1).asJava),
+        0 -> PartitionMove(mutable.Set(2,3,4), mutable.Set(1)),
       )), moveMap)
 
     assertEquals(Map(
