@@ -1436,7 +1436,7 @@ class Partition(val topicPartition: TopicPartition,
 
     new LogReadInfo(
       fetchedData,
-      Optional.empty[FetchResponseData.EpochEndOffset](),
+      Optional.empty(),
       initialHighWatermark,
       initialLogStartOffset,
       initialLogEndOffset,
