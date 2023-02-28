@@ -30,6 +30,11 @@ import org.apache.kafka.streams.processor.StateStore;
  * to return accurate results for calls to {@link #get(Object, long)} where the provided timestamp
  * bound is within history retention of the current observed stream time. (Queries with timestamp
  * bound older than the specified history retention are considered invalid.)
+ * <p>
+ * The store's "history retention" also doubles as its "grace period," which determines how far
+ * back in time writes to the store will be accepted. A versioned store will not accept writes
+ * (inserts, updates, or deletions) if the timestamp associated with the write is older than the
+ * current observed stream time by more than the grace period.
  *
  * @param <K> The key type
  * @param <V> The value type
@@ -38,6 +43,10 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
 
     /**
      * Add a new record version associated with the specified key and timestamp.
+     * <p>
+     * If the timestamp associated with the new record version is older than the store's
+     * grace period (i.e., history retention) relative to the current observed stream time,
+     * then the record will not be added.
      *
      * @param key       The key
      * @param value     The value, it can be {@code null}. {@code null} is interpreted as a delete.
@@ -52,6 +61,10 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
      * <p>
      * This operation is semantically equivalent to {@link #get(Object, long) #get(key, timestamp)}
      * followed by {@link #put(Object, Object, long) #put(key, null, timestamp)}.
+     * <p>
+     * If the timestamp associated with this deletion is older than the store's grace period
+     * (i.e., history retention) relative to the current observed stream time, then the deletion
+     * will not be performed.
      *
      * @param key       The key
      * @param timestamp The timestamp for this delete

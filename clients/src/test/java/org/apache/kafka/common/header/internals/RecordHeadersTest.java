@@ -21,9 +21,9 @@ import org.apache.kafka.common.header.Headers;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Iterator;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -230,7 +230,7 @@ public class RecordHeadersTest {
     
     static void assertHeader(String key, String value, Header actual) {
         assertEquals(key, actual.key());
-        assertTrue(Arrays.equals(value.getBytes(), actual.value()));
+        assertArrayEquals(value.getBytes(), actual.value());
     }
 
 }

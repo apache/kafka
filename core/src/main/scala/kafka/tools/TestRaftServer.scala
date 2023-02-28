@@ -24,7 +24,7 @@ import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
-import kafka.utils.{CoreUtils, Exit, Logging, ShutdownableThread}
+import kafka.utils.{CoreUtils, Exit, Logging}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
@@ -38,8 +38,8 @@ import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.fault.ProcessExitingFaultHandler
-import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, ShutdownableThread}
 import org.apache.kafka.snapshot.SnapshotReader
 
 import scala.jdk.CollectionConverters._
@@ -92,7 +92,7 @@ class TestRaftServer(
       metrics,
       Some(threadNamePrefix),
       CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
-      new ProcessExitingFaultHandler()
+      new ProcessTerminatingFaultHandler.Builder().build()
     )
 
     workloadGenerator = new RaftWorkloadGenerator(
@@ -147,7 +147,7 @@ class TestRaftServer(
     time: Time,
     recordsPerSec: Int,
     recordSize: Int
-  ) extends ShutdownableThread(name = "raft-workload-generator")
+  ) extends ShutdownableThread("raft-workload-generator")
     with RaftClient.Listener[Array[Byte]] {
 
     sealed trait RaftEvent

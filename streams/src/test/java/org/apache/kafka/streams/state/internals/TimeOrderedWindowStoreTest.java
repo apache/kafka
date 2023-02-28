@@ -244,9 +244,6 @@ public class TimeOrderedWindowStoreTest {
                     context.forward(record);
                 }
 
-                @Override
-                public void close() {
-                }
             }, "store-name");
 
         final Properties streamsConfiguration = new Properties();

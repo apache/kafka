@@ -121,7 +121,7 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
      */
     final public List<E> findAll(E key) {
         if (key == null || size() == 0) {
-            return Collections.<E>emptyList();
+            return Collections.emptyList();
         }
         ArrayList<E> results = new ArrayList<>();
         int slot = slot(elements, key);
