@@ -381,10 +381,6 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testListAllPlugins() {
-        Set<Class<?>> excludes = Stream.of(
-                        ConnectorPluginsResource.TRANSFORM_EXCLUDES
-                ).flatMap(Collection::stream)
-                .collect(Collectors.toSet());
         Set<PluginInfo> expectedConnectorPlugins = Stream.of(
                         SINK_CONNECTOR_PLUGINS,
                         SOURCE_CONNECTOR_PLUGINS,
@@ -393,7 +389,6 @@ public class ConnectorPluginsResourceTest {
                         TRANSFORMATION_PLUGINS,
                         PREDICATE_PLUGINS
                 ).flatMap(Collection::stream)
-                .filter(p -> !excludes.contains(p.pluginClass()))
                 .map(ConnectorPluginsResourceTest::newInfo)
                 .collect(Collectors.toSet());
         Set<PluginInfo> actualConnectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins(false));
