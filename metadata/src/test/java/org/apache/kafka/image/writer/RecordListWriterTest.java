@@ -37,8 +37,9 @@ public class RecordListWriterTest {
         RecordListWriter writer = new RecordListWriter();
         writer.write(testRecord(0));
         writer.write(testRecord(1));
-        writer.close(true);
+        writer.freeze();
         assertEquals(Arrays.asList(testRecord(0), testRecord(1)), writer.records());
+        writer.close();
     }
 
     @Test
@@ -52,10 +53,11 @@ public class RecordListWriterTest {
     @Test
     public void testWriteAfterClose() {
         RecordListWriter writer = new RecordListWriter();
-        writer.close(true);
+        writer.freeze();
         assertThrows(ImageWriterClosedException.class, () ->
                 writer.write(0, new TopicRecord().
                         setName("foo").
                         setTopicId(Uuid.fromString("3B134hrsQgKtz8Sp6QBIfg"))));
+        writer.close();
     }
 }

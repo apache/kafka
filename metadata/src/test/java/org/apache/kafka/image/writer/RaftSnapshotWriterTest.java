@@ -84,7 +84,8 @@ public class RaftSnapshotWriterTest {
         writer.write(testRecord(0));
         writer.write(testRecord(1));
         writer.write(testRecord(2));
-        writer.close(true);
+        writer.freeze();
+        writer.close();
         assertTrue(snapshotWriter.frozen);
         assertTrue(snapshotWriter.closed);
         assertEquals(Arrays.asList(

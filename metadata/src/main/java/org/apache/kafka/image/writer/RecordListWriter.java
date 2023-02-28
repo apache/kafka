@@ -41,11 +41,14 @@ public class RecordListWriter implements ImageWriter {
     }
 
     @Override
-    public void close(boolean complete) {
+    public void freeze() {
+        closed = true;
+    }
+
+    @Override
+    public void close() {
         if (closed) return;
         closed = true;
-        if (!complete) {
-            records.clear();
-        }
+        records.clear();
     }
 }
