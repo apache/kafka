@@ -3399,7 +3399,7 @@ public abstract class ConsumerCoordinatorTest {
             client.respond(syncGroupResponse(partitions, Errors.NONE));
 
             // Join future should succeed but generation already cleared so result of join is false.
-            res = coordinator.joinGroupIfNeeded(time.timer(3));
+            res = coordinator.joinGroupIfNeeded(time.timer(1));
 
             assertFalse(res);
 

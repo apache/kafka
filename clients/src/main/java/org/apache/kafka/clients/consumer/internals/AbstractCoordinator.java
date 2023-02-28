@@ -500,23 +500,18 @@ public abstract class AbstractCoordinator implements Closeable {
                     requestRejoin(shortReason, fullReason);
                 }
 
-                // 4 special non-retriable exceptions that we want to retry, as long as the timer hasn't expired.
                 if (exception instanceof UnknownMemberIdException ||
                         exception instanceof IllegalGenerationException ||
                         exception instanceof RebalanceInProgressException ||
-                        exception instanceof MemberIdRequiredException) {
-                    if (timer.isExpired())
-                        return false;
+                        exception instanceof MemberIdRequiredException)
                     continue;
-                }
-
-                // Non-retriable exception (except the 4 above) will be thrown
-                if (!future.isRetriable())
+                else if (!future.isRetriable())
                     throw exception;
 
                 // Timer check upon retrying the RetriableExceptions
-                if (timer.isExpired())
+                if (timer.isExpired()) {
                     return false;
+                }
 
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
