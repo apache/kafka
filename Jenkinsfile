@@ -66,7 +66,7 @@ def job = {
 
     stage("Check compilation compatibility with Scala 2.12") {
         sh """
-            ./retry_zinc ./gradlew clean assemble check -x test \
+            ./retry_zinc ./gradlew clean build -x test \
                 --no-daemon --stacktrace -PxmlSpotBugsReport=true -PscalaVersion=2.12
            """
     }
@@ -74,7 +74,7 @@ def job = {
 
     stage("Compile and validate") {
         sh """
-            ./retry_zinc ./gradlew clean assemble publishToMavenLocal check \
+            ./retry_zinc ./gradlew clean publishToMavenLocal build -x test \
                 --no-daemon --stacktrace -PxmlSpotBugsReport=true
            """
     }
