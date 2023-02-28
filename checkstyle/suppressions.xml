@@ -326,7 +326,7 @@
     <suppress checks="NPathComplexity"
               files="LogValidator.java"/>
     <suppress checks="ParameterNumber"
-              files="RemoteLogManagerConfig.java"/>
+              files="(LogAppendInfo|RemoteLogManagerConfig).java"/>
 
     <!-- benchmarks -->
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"

@@ -201,9 +201,15 @@ public class NetworkClientDelegate implements AutoCloseable {
         private Timer timer;
 
         public UnsentRequest(
-            final AbstractRequest.Builder<?> requestBuilder,
-            final Optional<Node> node
-        ) {
+                final AbstractRequest.Builder<?> requestBuilder,
+                final Optional<Node> node) {
+            this(requestBuilder, node, new FutureCompletionHandler());
+        }
+
+        public UnsentRequest(
+                final AbstractRequest.Builder<?> requestBuilder,
+                final Optional<Node> node,
+                final FutureCompletionHandler handler) {
             Objects.requireNonNull(requestBuilder);
             this.requestBuilder = requestBuilder;
             this.node = node;
@@ -241,6 +247,10 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         public void onFailure(final RuntimeException e) {
             future.completeExceptionally(e);
+        }
+
+        public CompletableFuture<ClientResponse> future() {
+            return future;
         }
 
         @Override
