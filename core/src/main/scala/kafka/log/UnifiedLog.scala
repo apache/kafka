@@ -1754,13 +1754,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 }
 
 object UnifiedLog extends Logging {
-  val LogFileSuffix = LocalLog.LogFileSuffix
+  val LogFileSuffix = LogFileUtils.LOG_FILE_SUFFIX
 
-  val IndexFileSuffix = LocalLog.IndexFileSuffix
+  val IndexFileSuffix = LogFileUtils.INDEX_FILE_SUFFIX
 
-  val TimeIndexFileSuffix = LocalLog.TimeIndexFileSuffix
+  val TimeIndexFileSuffix = LogFileUtils.TIME_INDEX_FILE_SUFFIX
 
-  val TxnIndexFileSuffix = LocalLog.TxnIndexFileSuffix
+  val TxnIndexFileSuffix = LogFileUtils.TXN_INDEX_FILE_SUFFIX
 
   val CleanedFileSuffix = LocalLog.CleanedFileSuffix
 

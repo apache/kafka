@@ -17,25 +17,24 @@
 
 package kafka.log
 
-import java.io.{File, IOException}
-import java.nio.file.Files
-import java.text.NumberFormat
-import java.util.concurrent.atomic.AtomicLong
-import java.util.regex.Pattern
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Logging
-import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, OffsetPosition}
 
+import java.io.{File, IOException}
+import java.nio.file.Files
+import java.util.concurrent.atomic.AtomicLong
+import java.util.regex.Pattern
 import java.util.{Collections, Optional}
-import scala.jdk.CollectionConverters._
-import scala.collection.{Seq, immutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.{Seq, immutable}
+import scala.jdk.CollectionConverters._
 
 /**
  * Holds the result of splitting a segment into one or more segments, see LocalLog.splitOverflowedSegment().
@@ -594,18 +593,6 @@ class LocalLog(@volatile private var _dir: File,
  */
 object LocalLog extends Logging {
 
-  /** a log file */
-  private[log] val LogFileSuffix = ".log"
-
-  /** an index file */
-  private[log] val IndexFileSuffix = ".index"
-
-  /** a time index file */
-  private[log] val TimeIndexFileSuffix = ".timeindex"
-
-  /** an (aborted) txn index */
-  private[log] val TxnIndexFileSuffix = ".txnindex"
-
   /** a file that is scheduled to be deleted */
   private[log] val DeletedFileSuffix = ".deleted"
 
@@ -625,31 +612,6 @@ object LocalLog extends Logging {
   private[log] val FutureDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$FutureDirSuffix")
 
   private[log] val UnknownOffset = -1L
-
-  /**
-   * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
-   * so that ls sorts the files numerically.
-   *
-   * @param offset The offset to use in the file name
-   * @return The filename
-   */
-  private[log] def filenamePrefixFromOffset(offset: Long): String = {
-    val nf = NumberFormat.getInstance()
-    nf.setMinimumIntegerDigits(20)
-    nf.setMaximumFractionDigits(0)
-    nf.setGroupingUsed(false)
-    nf.format(offset)
-  }
-
-  /**
-   * Construct a log file name in the given dir with the given base offset and the given suffix
-   *
-   * @param dir The directory in which the log will reside
-   * @param offset The base offset of the log file
-   * @param suffix The suffix to be appended to the file name (e.g. "", ".deleted", ".cleaned", ".swap", etc.)
-   */
-  private[log] def logFile(dir: File, offset: Long, suffix: String = ""): File =
-    new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix + suffix)
 
   /**
    * Return a directory name to rename the log directory to for async deletion.
@@ -723,12 +685,12 @@ object LocalLog extends Logging {
   }
 
   private[log] def isIndexFile(file: File): Boolean = {
-    val filename = file.getName
-    filename.endsWith(IndexFileSuffix) || filename.endsWith(TimeIndexFileSuffix) || filename.endsWith(TxnIndexFileSuffix)
+    val fileName = file.getName
+    fileName.endsWith(LogFileUtils.INDEX_FILE_SUFFIX) || fileName.endsWith(LogFileUtils.TIME_INDEX_FILE_SUFFIX) || fileName.endsWith(LogFileUtils.TXN_INDEX_FILE_SUFFIX)
   }
 
   private[log] def isLogFile(file: File): Boolean =
-    file.getPath.endsWith(LogFileSuffix)
+    file.getPath.endsWith(LogFileUtils.LOG_FILE_SUFFIX)
 
   /**
    * Invokes the provided function and handles any IOException raised by the function by marking the
