@@ -1927,7 +1927,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             final List<Map<String, String>> taskProps = worker.connectorTaskConfigs(connName, connConfig);
             if (taskConfigsChanged(configState, connName, taskProps)) {
                 List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
-                log.debug("Reconfiguring connector {}: writing new updated configurations for tasks", connName);
                 if (isLeader()) {
                     writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, rawTaskProps));
                     cb.onCompletion(null, null);
@@ -1966,8 +1965,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         }
                     });
                 }
-            } else {
-                log.debug("Skipping reconfiguration of connector {} as generated configs appear unchanged", connName);
             }
         } catch (Throwable t) {
             cb.onCompletion(t, null);

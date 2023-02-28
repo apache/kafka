@@ -787,19 +787,25 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     public boolean taskConfigsChanged(ClusterConfigState configState, String connName, List<Map<String, String>> taskProps) {
         int currentNumTasks = configState.taskCount(connName);
+        boolean result = false;
         if (taskProps.size() != currentNumTasks) {
             log.debug("Connector {} task count changed from {} to {}", connName, currentNumTasks, taskProps.size());
-            return true;
+            result = true;
         } else {
             for (int index = 0; index < currentNumTasks; index++) {
                 ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
                 if (!taskProps.get(index).equals(configState.taskConfig(taskId))) {
-                    log.debug("Connector {} has change in generated task configurations", connName);
-                    return true;
+                    log.debug("Connector {} has change in configuration for task {}-{}", connName, connName, index);
+                    result = true;
                 }
             }
         }
-        return false;
+        if (result) {
+            log.debug("Reconfiguring connector {}: writing new updated configurations for tasks", connName);
+        } else {
+            log.debug("Skipping reconfiguration of connector {} as generated configs appear unchanged", connName);
+        }
+        return result;
     }
 
     // Visible for testing
