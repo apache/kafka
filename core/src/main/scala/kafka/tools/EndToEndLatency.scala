@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.Utils
 import scala.jdk.CollectionConverters._
 import scala.util.Random
 
+import Numeric.Implicits._
 
 /**
  * This class records the average end to end latency for a single message to travel through Kafka
@@ -154,6 +155,19 @@ object EndToEndLatency {
 
     //Results
     println("Avg latency: %.4f ms\n".format(totalTime / numMessages / 1000.0 / 1000.0))
+
+    def mean[T: Numeric](xs: Iterable[T]): Double = xs.sum.toDouble / xs.size
+
+    def variance[T: Numeric](xs: Iterable[T]): Double = {
+      val avg = mean(xs)
+
+      xs.map(_.toDouble).map(a => math.pow(a - avg, 2)).sum / xs.size
+    }
+
+    def stdDev[T: Numeric](xs: Iterable[T]): Double = math.sqrt(variance(xs))
+
+    println("Standard Deviation: %.4f ms\n".format(stdDev(latencies) / 1000.0 / 1000.0))
+
     Arrays.sort(latencies)
     val p50 = latencies((latencies.length * 0.5).toInt)
     val p99 = latencies((latencies.length * 0.99).toInt)
