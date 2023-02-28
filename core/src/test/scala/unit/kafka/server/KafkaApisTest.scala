@@ -1269,8 +1269,10 @@ class KafkaApisTest {
     )
   }
 
-  @Test
-  def testHandleOffsetCommitRequest(): Unit = {
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+  def testHandleOffsetCommitRequest(version: Short): Unit = {
+    val fooId = Uuid.randomUuid()
     addTopicToMetadataCache("foo", numPartitions = 1)
 
     val offsetCommitRequest = new OffsetCommitRequestData()
@@ -1279,12 +1281,13 @@ class KafkaApisTest {
       .setTopics(List(
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
           .setName("foo")
+          .setTopicId(fooId)
           .setPartitions(List(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
               .setCommittedOffset(10)).asJava)).asJava)
 
-    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
+    val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build(version))
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
     when(groupCoordinator.commitOffsets(
@@ -1303,6 +1306,7 @@ class KafkaApisTest {
       .setTopics(List(
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
           .setName("foo")
+          .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
           .setPartitions(List(
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(0)
@@ -1358,28 +1362,27 @@ class KafkaApisTest {
 
   @Test
   def testHandleOffsetCommitRequestTopicsAndPartitionsValidation(): Unit = {
-    // baz is resolvable, qux and quux aren't.
-    val (bazId, quxId, quuxId) = (Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid())
+    val (fooId, barId, bazId, zarId, quxId) =
+      (Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid())
 
-    addTopicToMetadataCache("foo", numPartitions = 2)
-    addTopicToMetadataCache("bar", numPartitions = 2)
+    addTopicToMetadataCache("foo", numPartitions = 2, topicId = fooId)
+    addTopicToMetadataCache("bar", numPartitions = 2, topicId = barId)
     addTopicToMetadataCache("baz", numPartitions = 2, topicId = bazId)
 
     val offsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
-      (NameOrId("foo"), ListMap(0 -> 10, 1 -> 20, 2 -> 30)), // foo exists but only has 2 partitions.
-      (NameOrId("bar"), ListMap(0 -> 40, 1 -> 50)),          // bar exists.
-      (NameOrId("zar"), ListMap(0 -> 60, 1 -> 70)),          // zar does not exist.
-      (NameOrId(id = bazId), ListMap(0 -> 60, 1 -> 80)),     // baz is defined by its topic id.
-      (NameOrId(id = quxId), ListMap(0 -> 10)),              // the topic id for qux is not cached.
-      (NameOrId(id = quuxId), ListMap(0 -> 314159265))       // the topic id for quux is not cached.
+      (NameOrId(id = fooId), ListMap(0 -> 10, 1 -> 20, 2 -> 30)), // foo exists but only has 2 partitions.
+      (NameOrId(id = barId), ListMap(0 -> 40, 1 -> 50)),          // bar exists.
+      (NameOrId(id = zarId), ListMap(0 -> 60, 1 -> 70)),          // zar does not exist.
+      (NameOrId(id = bazId), ListMap(0 -> 60, 1 -> 80)),          // baz exists.
+      (NameOrId(id = quxId), ListMap(0 -> 10))                    // qux does not exist.
     ))
 
     val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
 
     // This is the request expected by the group coordinator.
     val expectedOffsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
-      (NameOrId("foo"), ListMap(0 -> 10, 1 -> 20)),
-      (NameOrId("bar"), ListMap(0 -> 40, 1 -> 50)),
+      (NameOrId("foo", fooId), ListMap(0 -> 10, 1 -> 20)),
+      (NameOrId("bar", barId), ListMap(0 -> 40, 1 -> 50)),
       (NameOrId("baz", bazId), ListMap(0 -> 60, 1 -> 80))
     ))
 
@@ -1397,26 +1400,23 @@ class KafkaApisTest {
 
     // This is the response returned by the group coordinator.
     val offsetCommitResponse = newOffsetCommitResponseData(Seq(
-      (NameOrId("foo"), ListMap(0 -> NONE, 1 -> NONE)),
-      (NameOrId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameOrId("foo", fooId), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameOrId("bar", barId), ListMap(0 -> NONE, 1 -> NONE)),
       (NameOrId("baz", bazId), ListMap(0 -> NONE, 1 -> NONE))
     ))
 
     val expectedOffsetCommitResponse = newOffsetCommitResponseData(Seq(
       // foo-2 is first because partitions failing the validation are put in the response first.
-      (NameOrId("foo"), ListMap(2 -> UNKNOWN_TOPIC_OR_PARTITION, 0 -> NONE, 1 -> NONE)),
+      (NameOrId(id = fooId), ListMap(2 -> UNKNOWN_TOPIC_OR_PARTITION, 0 -> NONE, 1 -> NONE)),
 
       // zar is before bar because topics failing the validation are put in the response first.
-      (NameOrId("zar"), ListMap(0 -> UNKNOWN_TOPIC_OR_PARTITION, 1 -> UNKNOWN_TOPIC_OR_PARTITION)),
+      (NameOrId(id = zarId), ListMap(0 -> UNKNOWN_TOPIC_ID, 1 -> UNKNOWN_TOPIC_ID)),
 
       // qux is before bar because topics failing the validation are put in the response first.
       (NameOrId(id = quxId), ListMap(0 -> UNKNOWN_TOPIC_ID)),
 
-      // quux is before bar because topics failing the validation are put in the response first.
-      (NameOrId(id = quuxId), ListMap(0 -> UNKNOWN_TOPIC_ID)),
-
       // Valid topics bar and baz.
-      (NameOrId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameOrId(id = barId), ListMap(0 -> NONE, 1 -> NONE)),
       (NameOrId(id = bazId), ListMap(0 -> NONE, 1 -> NONE))
     ))
 
@@ -1477,31 +1477,8 @@ class KafkaApisTest {
     assertEquals(expectedOffsetCommitResponse, response.data)
   }
 
-  @Test
-  def testInvalidOffsetCommitRequest(): Unit = {
-    val fooId = Uuid.randomUuid()
-    addTopicToMetadataCache("foo", numPartitions = 2)
-    addTopicToMetadataCache("bar", numPartitions = 2)
-
-    val offsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
-      (NameOrId("foo", fooId), ListMap(0 -> 10, 1 -> 20)),
-      (NameOrId("bar"), ListMap(0 -> 40, 1 -> 50))
-    ))
-
-    val offsetCommitResponse = newOffsetCommitResponseData(Seq(
-      (NameOrId(id = fooId), ListMap(0 -> INVALID_REQUEST, 1 -> INVALID_REQUEST)),
-      (NameOrId("bar"), ListMap(0 -> INVALID_REQUEST, 1 -> INVALID_REQUEST))
-    ))
-
-    val requestChannelRequest = buildRequest(new OffsetCommitRequest(offsetCommitRequest, 9))
-    createKafkaApis().handle(requestChannelRequest, RequestLocal.NoCaching)
-    val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
-
-    assertEquals(offsetCommitResponse, response.data)
-  }
-
   // A topic name, id, or both.
-  case class NameOrId(name: String = null, id: Uuid = Uuid.ZERO_UUID)
+  case class NameOrId(name: String = "", id: Uuid = Uuid.ZERO_UUID)
 
   def newOffsetCommitRequestData(groupId: String,
                                  memberId: String,
@@ -1550,10 +1527,11 @@ class KafkaApisTest {
     data
   }
 
-  @Test
-  def testOffsetCommitWithInvalidPartition(): Unit = {
-    val topic = "topic"
-    addTopicToMetadataCache(topic, numPartitions = 1)
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+  def testOffsetCommitWithInvalidPartition(version: Short): Unit = {
+    val (topic, topicId) = ("topic", Uuid.randomUuid())
+    addTopicToMetadataCache(topic, numPartitions = 1, topicId = topicId)
 
     def checkInvalidPartition(invalidPartitionId: Int): Unit = {
       reset(replicaManager, clientRequestQuotaManager, requestChannel)
@@ -1564,6 +1542,7 @@ class KafkaApisTest {
           .setTopics(Collections.singletonList(
             new OffsetCommitRequestData.OffsetCommitRequestTopic()
               .setName(topic)
+              .setTopicId(topicId)
               .setPartitions(Collections.singletonList(
                 new OffsetCommitRequestData.OffsetCommitRequestPartition()
                   .setPartitionIndex(invalidPartitionId)
@@ -1571,7 +1550,7 @@ class KafkaApisTest {
                   .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
                   .setCommittedMetadata(""))
               )
-          ))).build()
+          ))).build(version)
 
       val request = buildRequest(offsetCommitRequest)
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),

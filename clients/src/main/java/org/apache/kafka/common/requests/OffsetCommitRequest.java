@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
@@ -56,36 +55,22 @@ public class OffsetCommitRequest extends AbstractRequest {
         public OffsetCommitRequest build(short version) {
             if (data.groupInstanceId() != null && version < 7) {
                 throw new UnsupportedVersionException("The broker offset commit protocol version " +
-                        version + " does not support usage of config group.instance.id.");
+                    version + " does not support usage of config group.instance.id.");
             }
 
-            if (version >= 9) {
-                data.topics().forEach(topic -> {
-                    // Set the topic name to null if a topic ID for the topic is present. If no topic ID is
-                    // provided (i.e. its value is ZERO_UUID), the client should provide a topic name as a
-                    // fallback. This allows the OffsetCommit API to support both topic IDs and topic names
-                    // inside the same request or response.
-                    if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
-                        topic.setName(null);
-                    } else if (topic.name() == null || "".equals(topic.name())) {
-                        // Fail-fast the entire request. This means that a single invalid topic in a multi-topic
-                        // request will make it fail. We may want to relax the constraint to allow the request
-                        // with valid topics (i.e. for which a valid ID or name was provided) exist in the request.
-                        throw new InvalidRequestException(
-                                "A topic name must be provided when no topic ID is specified.");
-                    }
-                });
-            } else {
-                data.topics().forEach(topic -> {
-                    // Topic must be set to default for version < 9.
-                    if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
-                        topic.setTopicId(Uuid.ZERO_UUID);
-                    }
-                    if (topic.name() == null) {
-                        throw new InvalidRequestException("A topic name must be provided for OffsetCommit version < 9");
-                    }
-                });
-            }
+            data.topics().forEach(topic -> {
+                if (version < 9) {
+                    if (topic.name() == null)
+                        throw new UnsupportedVersionException("OffsetCommitRequest version " + version +
+                            " does not support null topic names.");
+
+                } else {
+                    if (Uuid.ZERO_UUID.equals(topic.topicId()))
+                        throw new UnsupportedVersionException("OffsetCommitRequest version " + version +
+                            " does not support zero topic IDs.");
+                }
+            });
+
             return new OffsetCommitRequest(data, version);
         }
 
@@ -118,12 +103,9 @@ public class OffsetCommitRequest extends AbstractRequest {
                                            .setPartitionIndex(requestPartition.partitionIndex())
                                            .setErrorCode(e.code()));
             }
-            OffsetCommitResponseTopic responseTopic = new OffsetCommitResponseTopic();
-            if (version >= 9 && entry.topicId() != null && !Uuid.ZERO_UUID.equals(entry.topicId())) {
-                responseTopic.setTopicId(entry.topicId()).setName(null);
-            } else {
-                responseTopic.setName(entry.name());
-            }
+            OffsetCommitResponseTopic responseTopic = new OffsetCommitResponseTopic()
+                .setTopicId(version >= 9 ? entry.topicId() : Uuid.ZERO_UUID)
+                .setName(version < 9 ? entry.name() : null);
             responseTopicData.add(responseTopic.setPartitions(responsePartitions));
         }
         return responseTopicData;

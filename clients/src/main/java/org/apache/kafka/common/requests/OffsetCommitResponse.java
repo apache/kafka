@@ -18,14 +18,13 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -122,56 +121,22 @@ public class OffsetCommitResponse extends AbstractResponse {
         return version >= 4;
     }
 
-    public static class Builder {
-        OffsetCommitResponseData data = new OffsetCommitResponseData();
-        HashMap<String, OffsetCommitResponseTopic> byTopicName = new HashMap<>();
+    public static Builder<?> newBuilder(short version) {
+        return version >= 9 ? new BuilderByTopicId(version) : new BuilderByTopicName(version);
+    }
 
-        private OffsetCommitResponseTopic getOrCreateTopic(
-            String topicName,
-            Uuid topicId
-        ) {
-            OffsetCommitResponseTopic topic = byTopicName.get(topicName);
-            if (topic == null) {
-                topic = new OffsetCommitResponseTopic().setName(topicName).setTopicId(topicId);
-                data.topics().add(topic);
-                byTopicName.put(topicName, topic);
+    public static abstract class Builder<T> {
+        private OffsetCommitResponseData data = new OffsetCommitResponseData();
+        private final Map<T, OffsetCommitResponseTopic> topics = new HashMap<>();
+        protected final short version;
 
-            } else {
-                boolean idDefinedInArg = topicId != null && !Uuid.ZERO_UUID.equals(topicId);
-                boolean idDefinedInCache = topic.topicId() != null && !Uuid.ZERO_UUID.equals(topic.topicId());
-
-                if (idDefinedInArg && idDefinedInCache) {
-                    if (!topicId.equals(topic.topicId())) {
-                        throw new IllegalArgumentException("Topic " + topicName + " with ID " + topicId + " has " +
-                                "already been registered with a different topic ID: " + topic.topicId());
-                    }
-                } else if (idDefinedInArg) {
-                    topic.setTopicId(topicId);
-                }
-            }
-            return topic;
+        protected Builder(short version) {
+            this.version = version;
         }
 
-        /**
-         * Adds the given partition to the {@link OffsetCommitResponseTopic} corresponding to the given topic
-         * name and ID. A valid topic name must be provided when calling this method. If the topic ID argument
-         * is defined, and the {@link OffsetCommitResponseTopic} for the given name already present in the
-         * builder, and has a valid topic ID, a consistency check is performed to ensure both topic IDs are
-         * equal. If a valid topic ID is provided with the arguments but not defined in the pre-existing
-         * {@link OffsetCommitResponseTopic}, the ID is added to it to be used with responses version >= 9.
-         */
-        public Builder addPartition(
-            String topicName,
-            Uuid topicId,
-            int partitionIndex,
-            Errors error
-        ) {
-            if (Utils.isBlank(topicName)) {
-                throw new IllegalArgumentException("Topic name must be provided when calling addPartition(). " +
-                        "Use the method addPartitions() for undefined topics.");
-            }
-
-            final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName, topicId);
+        public final Builder<T> addPartition(String topicName, Uuid topicId, int partitionIndex, Errors error) {
+            validate(topicName, topicId);
+            OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName, topicId);
 
             topicResponse.partitions().add(new OffsetCommitResponsePartition()
                 .setPartitionIndex(partitionIndex)
@@ -180,32 +145,15 @@ public class OffsetCommitResponse extends AbstractResponse {
             return this;
         }
 
-        /**
-         * Creates a new {@link OffsetCommitResponseTopic} object, populates it with the partitions resolved via
-         * the {@code partitionIndex} function applied to the {@code partitions} list of user-defined objects.
-         * <p></p>
-         * This method does not validate that the provided topic name and ID are defined. It does not validate
-         * that an {@link OffsetCommitResponseTopic} is already defined in the builder for either the topic name,
-         * the topic ID, or both. Similarly, the topic name and ID provided will not be used in future calls
-         * to the method {@link Builder#addPartition(String, Uuid, int, Errors)} to look-up and avoid duplication
-         * of {@link OffsetCommitResponseTopic} entries in the builder.
-         *
-         * @return This builder.
-         * @param <P> The type of the user-defined objects in the list of partitions. The index of the partition
-         *           corresponding to each object is resolved via the function provided as argument.
-         */
-        public <P> Builder addPartitions(
-            String topicName,
-            Uuid topicId,
-            List<P> partitions,
-            Function<P, Integer> partitionIndex,
-            Errors error
+        public final <P> Builder<T> addPartitions(
+                String topicName,
+                Uuid topicId,
+                List<P> partitions,
+                Function<P, Integer> partitionIndex,
+                Errors error
         ) {
-            OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic()
-                 .setName(topicName)
-                 .setTopicId(topicId);
-
-            data.topics().add(topicResponse);
+            validate(topicName, topicId);
+            OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName, topicId);
 
             partitions.forEach(partition -> {
                 topicResponse.partitions().add(new OffsetCommitResponsePartition()
@@ -216,20 +164,22 @@ public class OffsetCommitResponse extends AbstractResponse {
             return this;
         }
 
-        public Builder merge(
-            OffsetCommitResponseData newData
-        ) {
+        public final Builder<T> merge(OffsetCommitResponseData newData) {
             if (data.topics().isEmpty()) {
                 // If the current data is empty, we can discard it and use the new data.
                 data = newData;
             } else {
                 // Otherwise, we have to merge them together.
                 newData.topics().forEach(newTopic -> {
-                    OffsetCommitResponseTopic existingTopic = byTopicName.get(newTopic.name());
+                    validate(newTopic.name(), newTopic.topicId());
+
+                    T topicKey = classifer(newTopic.name(), newTopic.topicId());
+                    OffsetCommitResponseTopic existingTopic = topics.get(topicKey);
+
                     if (existingTopic == null) {
                         // If no topic exists, we can directly copy the new topic data.
                         data.topics().add(newTopic);
-                        byTopicName.put(newTopic.name(), newTopic);
+                        topics.put(topicKey, newTopic);
                     } else {
                         // Otherwise, we add the partitions to the existing one. Note we
                         // expect non-overlapping partitions here as we don't verify
@@ -238,30 +188,73 @@ public class OffsetCommitResponse extends AbstractResponse {
                     }
                 });
             }
-
             return this;
         }
 
-        public OffsetCommitResponse build(short version) {
-            if (version >= 9) {
-                data.topics().forEach(topic -> {
-                    // Set the topic name to null if a topic ID for the topic is present.
-                    if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
-                        topic.setName(null);
-                    }
-                });
-            } else {
-                data.topics().forEach(topic -> {
-                    // Topic must be set to default for version < 9.
-                    if (!Uuid.ZERO_UUID.equals(topic.topicId())) {
-                        topic.setTopicId(Uuid.ZERO_UUID);
-                    }
-                    if (Utils.isBlank(topic.name())) {
-                        throw new InvalidRequestException("Topic name must be provided for response version < 9.");
-                    }
-                });
-            }
+        public final OffsetCommitResponse build() {
             return new OffsetCommitResponse(data);
+        }
+
+        protected abstract void validate(String topicName, Uuid topicId);
+
+        protected abstract T classifer(String topicName, Uuid topicId);
+
+        protected abstract OffsetCommitResponseTopic newTopic(String topicName, Uuid topicId);
+        private OffsetCommitResponseTopic getOrCreateTopic(String topicName, Uuid topicId) {
+            T topicKey = classifer(topicName, topicId);
+            OffsetCommitResponseTopic topic = topics.get(topicKey);
+            if (topic == null) {
+                topic = newTopic(topicName, topicId);
+                data.topics().add(topic);
+                topics.put(topicKey, topic);
+            }
+            return topic;
+        }
+    }
+
+    public static final class BuilderByTopicId extends Builder<Uuid> {
+        protected BuilderByTopicId(short version) {
+            super(version);
+        }
+
+        @Override
+        protected void validate(String topicName, Uuid topicId) {
+            if (topicId == null || Uuid.ZERO_UUID.equals(topicId))
+                throw new UnsupportedVersionException("OffsetCommitResponse version " + version +
+                        " does not support zero topic IDs.");
+        }
+
+        @Override
+        protected Uuid classifer(String topicName, Uuid topicId) {
+            return topicId;
+        }
+
+        @Override
+        protected OffsetCommitResponseTopic newTopic(String topicName, Uuid topicId) {
+            return new OffsetCommitResponseTopic().setName(null).setTopicId(topicId);
+        }
+    }
+
+    public static final class BuilderByTopicName extends Builder<String> {
+        protected BuilderByTopicName(short version) {
+            super(version);
+        }
+
+        @Override
+        protected void validate(String topicName, Uuid topicId) {
+            if (topicName == null)
+                throw new UnsupportedVersionException("OffsetCommitResponse version " + version +
+                        " does not support null topic names.");
+        }
+
+        @Override
+        protected String classifer(String topicName, Uuid topicId) {
+            return topicName;
+        }
+
+        @Override
+        protected OffsetCommitResponseTopic newTopic(String topicName, Uuid topicId) {
+            return new OffsetCommitResponseTopic().setName(topicName);
         }
     }
 }

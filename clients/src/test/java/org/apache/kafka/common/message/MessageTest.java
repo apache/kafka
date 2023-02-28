@@ -448,17 +448,32 @@ public final class MessageTest {
         int partition = 2;
         int offset = 100;
 
-        testAllMessageRoundTrips(new OffsetCommitRequestData()
-                                     .setGroupId(groupId)
-                                     .setTopics(Collections.singletonList(
-                                         new OffsetCommitRequestTopic()
-                                             .setName(topicName)
-                                             .setPartitions(Collections.singletonList(
-                                                 new OffsetCommitRequestPartition()
-                                                     .setPartitionIndex(partition)
-                                                     .setCommittedMetadata(metadata)
-                                                     .setCommittedOffset(offset)
-                                             )))));
+        OffsetCommitRequestData byTopicName = new OffsetCommitRequestData()
+            .setGroupId(groupId)
+            .setTopics(Collections.singletonList(
+                new OffsetCommitRequestTopic()
+                    .setName(topicName)
+                    .setPartitions(Collections.singletonList(
+                        new OffsetCommitRequestPartition()
+                            .setPartitionIndex(partition)
+                            .setCommittedMetadata(metadata)
+                            .setCommittedOffset(offset)
+                    ))));
+
+        OffsetCommitRequestData byTopicId = new OffsetCommitRequestData()
+            .setGroupId(groupId)
+            .setTopics(Collections.singletonList(
+                new OffsetCommitRequestTopic()
+                    .setTopicId(Uuid.randomUuid())
+                    .setPartitions(Collections.singletonList(
+                        new OffsetCommitRequestPartition()
+                            .setPartitionIndex(partition)
+                            .setCommittedMetadata(metadata)
+                            .setCommittedOffset(offset)
+                    ))));
+
+        testAllMessageRoundTripsBeforeVersion((short) 9, byTopicName, byTopicName);
+        testAllMessageRoundTripsFromVersion((short) 9, byTopicId);
 
         Supplier<OffsetCommitRequestData> request =
             () -> new OffsetCommitRequestData()
@@ -505,7 +520,10 @@ public final class MessageTest {
                 testEquivalentMessageRoundTrip(version, requestData);
             } else if (version >= 2 && version <= 4) {
                 testAllMessageRoundTripsBetweenVersions(version, (short) 5, requestData, requestData);
+            } else if (version < 9) {
+                testAllMessageRoundTripsBetweenVersions(version, (short) 9, requestData, requestData);
             } else {
+                requestData.topics().get(0).setTopicId(Uuid.randomUuid()).setName("");
                 testAllMessageRoundTripsFromVersion(version, requestData);
             }
         }
@@ -533,7 +551,12 @@ public final class MessageTest {
             if (version < 3) {
                 responseData.setThrottleTimeMs(0);
             }
-            testAllMessageRoundTripsFromVersion(version, responseData);
+            if (version < 9) {
+                testAllMessageRoundTripsBetweenVersions(version, (short) 9, responseData, responseData);
+            } else {
+                responseData.topics().get(0).setTopicId(Uuid.randomUuid()).setName("");
+                testAllMessageRoundTripsFromVersion(version, responseData);
+            }
         }
     }
 

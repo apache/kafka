@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -42,7 +41,6 @@ import java.util.Map;
 
 import static org.apache.kafka.common.requests.OffsetCommitRequest.getErrorResponseTopics;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OffsetCommitRequestTest {
@@ -53,6 +51,7 @@ public class OffsetCommitRequestTest {
     protected static String topicOne = "topicOne";
     protected static Uuid topicOneId = Uuid.randomUuid();
     protected static String topicTwo = "topicTwo";
+    protected static Uuid topicTwoId = Uuid.randomUuid();
     protected static int partitionOne = 1;
     protected static int partitionTwo = 2;
     protected static long offset = 100L;
@@ -61,8 +60,8 @@ public class OffsetCommitRequestTest {
 
     protected static int throttleTimeMs = 10;
 
-    private static OffsetCommitRequestData data;
-    private static List<OffsetCommitRequestTopic> topics;
+    private static OffsetCommitRequestData dataWithTopicNames;
+    private static OffsetCommitRequestData dataWithTopicIds;
 
     private static OffsetCommitRequestPartition requestPartitionOne;
     private static OffsetCommitRequestPartition requestPartitionTwo;
@@ -81,18 +80,29 @@ public class OffsetCommitRequestTest {
             .setCommittedLeaderEpoch(leaderEpoch)
             .setCommittedMetadata(metadata);
 
-        topics = Arrays.asList(
-            new OffsetCommitRequestTopic()
-                .setName(topicOne)
-                .setTopicId(topicOneId)
-                .setPartitions(Collections.singletonList(requestPartitionOne)),
-            new OffsetCommitRequestTopic()
-                .setName(topicTwo)
-                .setPartitions(Collections.singletonList(requestPartitionTwo))
-        );
-        data = new OffsetCommitRequestData()
-                   .setGroupId(groupId)
-                   .setTopics(topics);
+        dataWithTopicNames = new OffsetCommitRequestData()
+           .setGroupId(groupId)
+           .setTopics(Arrays.asList(
+               new OffsetCommitRequestTopic()
+                   .setName(topicOne)
+                   .setPartitions(Collections.singletonList(requestPartitionOne)),
+               new OffsetCommitRequestTopic()
+                   .setName(topicTwo)
+                   .setPartitions(Collections.singletonList(requestPartitionTwo))
+           ));
+
+        dataWithTopicIds = new OffsetCommitRequestData()
+            .setGroupId(groupId)
+            .setTopics(Arrays.asList(
+                new OffsetCommitRequestTopic()
+                    .setTopicId(topicOneId)
+                    .setName(null)
+                    .setPartitions(Collections.singletonList(requestPartitionOne)),
+                new OffsetCommitRequestTopic()
+                    .setTopicId(topicTwoId)
+                    .setName(null)
+                    .setPartitions(Collections.singletonList(requestPartitionTwo))
+            ));
     }
 
     public static Map<TopicPartition, Long> offsets(OffsetCommitRequest request, TopicResolver topicResolver) {
@@ -102,12 +112,11 @@ public class OffsetCommitRequestTest {
 
             if (request.version() >= 9 && topicName == null) {
                 topicName = topicResolver.getTopicName(topic.topicId()).orElseThrow(
-                        () -> new UnknownTopicIdException("Topic with ID " + topic.topicId() + " not found."));
+                    () -> new UnknownTopicIdException("Topic with ID " + topic.topicId() + " not found."));
             }
 
             for (OffsetCommitRequestData.OffsetCommitRequestPartition partition : topic.partitions()) {
-                offsets.put(new TopicPartition(topicName, partition.partitionIndex()),
-                        partition.committedOffset());
+                offsets.put(new TopicPartition(topicName, partition.partitionIndex()), partition.committedOffset());
             }
         }
         return offsets;
@@ -116,27 +125,26 @@ public class OffsetCommitRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testConstructor(short version) {
-        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data.duplicate()).build(version);
+        OffsetCommitRequestData data = version >= 9 ? dataWithTopicIds : dataWithTopicNames;
+        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data).build(version);
         OffsetCommitResponse response = request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());
 
-        OffsetCommitRequestData expectedData = data.duplicate();
-        if (version < 9) {
-            expectedData.topics().forEach(t -> t.setTopicId(Uuid.ZERO_UUID));
-
-        } else {
-            expectedData.topics().stream()
-                    .filter(t -> !t.topicId().equals(Uuid.ZERO_UUID))
-                    .forEach(t -> t.setName(null));
-        }
-
-        assertEquals(expectedData, request.data());
+        assertEquals(data, request.data());
         assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 2), response.errorCounts());
         assertEquals(throttleTimeMs, response.throttleTimeMs());
     }
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testInvalidConstructor(short version) {
+        OffsetCommitRequestData data = version < 9 ? dataWithTopicIds : dataWithTopicNames;
+        assertThrows(UnsupportedVersionException.class, () -> new OffsetCommitRequest.Builder(data).build(version));
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testGetErrorResponseTopics(short version) {
+        OffsetCommitRequestData data = version >= 9 ? dataWithTopicIds : dataWithTopicNames;
         List<OffsetCommitResponseTopic> expectedTopics = Arrays.asList(
             new OffsetCommitResponseTopic()
                 .setName(version < 9 ? topicOne : null)
@@ -146,13 +154,14 @@ public class OffsetCommitRequestTest {
                         .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
                         .setPartitionIndex(partitionOne))),
             new OffsetCommitResponseTopic()
-                .setName(topicTwo)
+                .setName(version < 9 ? topicTwo : null)
+                .setTopicId(version < 9 ? Uuid.ZERO_UUID : topicTwoId)
                 .setPartitions(Collections.singletonList(
                     new OffsetCommitResponsePartition()
                         .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
                         .setPartitionIndex(partitionTwo)))
         );
-        assertEquals(expectedTopics, getErrorResponseTopics(topics, Errors.UNKNOWN_MEMBER_ID, version));
+        assertEquals(expectedTopics, getErrorResponseTopics(data.topics(), Errors.UNKNOWN_MEMBER_ID, version));
     }
 
     @ParameterizedTest
@@ -175,49 +184,9 @@ public class OffsetCommitRequestTest {
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
-    public void testHandlingOfTopicIdInAllVersions(short version) {
-        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data.duplicate()).build(version);
-        List<OffsetCommitRequestTopic> requestTopics = request.data().topics();
-
-        if (version >= 9) {
-            // Version >= 9:
-            //   Topic ID may be present or not. Both are valid cases. If no topic ID is provided (null or
-            //   set to ZERO_UUID), a topic name must be provided and will be used. If a topic ID is provided,
-            //   the name will be nullified.
-            assertNull(requestTopics.get(0).name());
-            assertEquals(topicOneId, requestTopics.get(0).topicId());
-
-            assertEquals(topicTwo, requestTopics.get(1).name());
-            assertEquals(Uuid.ZERO_UUID, requestTopics.get(1).topicId());
-
-        } else {
-            // Version < 9:
-            //   Topic ID may be present or not. They are set to ZERO_UUID in the finalized request. Any other
-            //   value would make serialization of the request fail.
-            assertEquals(topicOne, requestTopics.get(0).name());
-            assertEquals(Uuid.ZERO_UUID, requestTopics.get(0).topicId());
-
-            assertEquals(topicTwo, requestTopics.get(1).name());
-            assertEquals(Uuid.ZERO_UUID, requestTopics.get(1).topicId());
-        }
-    }
-
-    @Test
-    public void testTopicIdMustBeSetIfNoTopicNameIsProvided() {
-        OffsetCommitRequestTopic topic = new OffsetCommitRequestTopic()
-            .setPartitions(Collections.singletonList(requestPartitionOne));
-        OffsetCommitRequestData data = new OffsetCommitRequestData()
-            .setGroupId(groupId)
-            .setTopics(Collections.singletonList(topic));
-
-        assertThrows(InvalidRequestException.class,
-                () -> new OffsetCommitRequest.Builder(data.duplicate()).build((short) 9));
-    }
-
-    @ParameterizedTest
-    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testResolvesTopicNameIfRequiredWhenListingOffsets(short version) {
-        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data.duplicate()).build(version);
+        OffsetCommitRequestData data = version >= 9 ? dataWithTopicIds : dataWithTopicNames;
+        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data).build(version);
         List<OffsetCommitRequestTopic> topics = request.data().topics();
 
         assertEquals(2, topics.stream().flatMap(t -> t.partitions().stream()).count());
@@ -227,7 +196,7 @@ public class OffsetCommitRequestTest {
 
     @Test
     public void testUnresolvableTopicIdWhenListingOffset() {
-        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data.duplicate()).build((short) 9);
+        OffsetCommitRequest request = new OffsetCommitRequest.Builder(dataWithTopicIds.duplicate()).build((short) 9);
         assertThrows(UnknownTopicIdException.class,
                 () -> OffsetCommitRequestTest.offsets(request, TopicResolver.emptyResolver()));
     }

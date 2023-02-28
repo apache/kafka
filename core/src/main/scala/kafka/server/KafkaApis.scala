@@ -64,7 +64,7 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
-import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time, Utils}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.authorizer._
@@ -436,12 +436,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       val resolvedTopics = new ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
       offsetCommitRequest.data.topics.forEach { topic =>
         var topicName = topic.name()
-        if (topicName != null && topic.topicId() != null && !Uuid.ZERO_UUID.equals(topic.topicId())) {
-          // Both topic name and id cannot be provided for the same topic. Per KIP 848, return an invalid request.
-          requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
-          return CompletableFuture.completedFuture[Unit](())
-        }
-        if (topicName == null) {
+        if (Utils.isBlank(topicName)) {
+          // Expected for requests version >= 9 which rely on topic IDs exclusively.
           topicName = topicNames.get(topic.topicId())
         }
         if (topicName != null) {
@@ -457,10 +453,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         resolvedTopics
       )(_.name)
 
-      val responseBuilder = new OffsetCommitResponse.Builder()
+      val responseBuilder = OffsetCommitResponse.newBuilder(offsetCommitRequest.version())
       val authorizedTopicsRequest = new mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
       offsetCommitRequest.data.topics.forEach { topic =>
-        if (topic.name == null) {
+        if (Utils.isBlank(topic.name)) {
           // Topic name cannot be null for version < 9. From version >= 9, topicName is null iff it cannot
           // be resolved from the local topic IDs cache or topic ID was left to default but no fallback topic
           // name was provided.
@@ -498,7 +494,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       if (authorizedTopicsRequest.isEmpty) {
-        requestHelper.sendMaybeThrottle(request, responseBuilder.build(offsetCommitRequest.version()))
+        requestHelper.sendMaybeThrottle(request, responseBuilder.build())
         CompletableFuture.completedFuture(())
       } else if (request.header.apiVersion == 0) {
         // For version 0, always store offsets in ZK.
@@ -525,7 +521,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     request: RequestChannel.Request,
     offsetCommitRequest: OffsetCommitRequest,
     authorizedTopicsRequest: mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic],
-    responseBuilder: OffsetCommitResponse.Builder
+    responseBuilder: OffsetCommitResponse.Builder[_]
   ): CompletableFuture[Unit] = {
     val zkSupport = metadataSupport.requireZkOrThrow(
       KafkaApis.unsupported("Version 0 offset commit requests"))
@@ -552,7 +548,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    requestHelper.sendMaybeThrottle(request, responseBuilder.build(request.header.apiVersion))
+    requestHelper.sendMaybeThrottle(request, responseBuilder.build())
     CompletableFuture.completedFuture[Unit](())
   }
 
@@ -560,7 +556,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     request: RequestChannel.Request,
     offsetCommitRequest: OffsetCommitRequest,
     authorizedTopicsRequest: mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic],
-    responseBuilder: OffsetCommitResponse.Builder,
+    responseBuilder: OffsetCommitResponse.Builder[_],
     requestLocal: RequestLocal
   ): CompletableFuture[Unit] = {
     val offsetCommitRequestData = new OffsetCommitRequestData()
@@ -579,7 +575,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
       } else {
-        requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build(request.header.apiVersion))
+        requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build())
       }
     }
   }

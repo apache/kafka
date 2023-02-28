@@ -49,9 +49,9 @@
       "about": "The time period in ms to retain the offset." },
     { "name": "Topics", "type": "[]OffsetCommitRequestTopic", "versions": "0+",
       "about": "The topics to commit offsets for.",  "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "nullableVersions": "9+", "entityType": "topicName",
+      { "name": "Name", "type": "string", "versions": "0-8", "ignorable": true, "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "TopicId", "type": "uuid", "versions": "9+",
+      { "name": "TopicId", "type": "uuid", "versions": "9+", "ignorable": true,
         "about": "The unique topic ID." },
       { "name": "Partitions", "type": "[]OffsetCommitRequestPartition", "versions": "0+",
         "about": "Each partition to commit offsets for.", "fields": [

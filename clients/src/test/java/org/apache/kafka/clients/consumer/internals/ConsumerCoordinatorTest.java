@@ -120,10 +120,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -156,12 +154,10 @@ import static org.junit.jupiter.api.Assertions.fail;
 public abstract class ConsumerCoordinatorTest {
     private final String topic1 = "test1";
     private final String topic2 = "test2";
-    private final String topic3 = "test3";
     private final Uuid topic1Id = Uuid.randomUuid();
     private final TopicPartition t1p = new TopicPartition(topic1, 0);
     private final Uuid topic2Id = Uuid.randomUuid();
     private final TopicPartition t2p = new TopicPartition(topic2, 0);
-    private final TopicPartition t3p = new TopicPartition(topic3, 0);
     private final String groupId = "test-group";
     private final Optional<String> groupInstanceId = Optional.of("test-instance");
     private final int rebalanceTimeoutMs = 60000;
@@ -2796,31 +2792,23 @@ public abstract class ConsumerCoordinatorTest {
             .setTopics(Arrays.asList(
                 new OffsetCommitRequestTopic()
                     .setTopicId(topic1Id)
-                    .setName(null)
+                    .setName(topic1)
                     .setPartitions(singletonList(new OffsetCommitRequestPartition()
                         .setPartitionIndex(t1p.partition())
                         .setCommittedOffset(100L)
                         .setCommittedMetadata("metadata1"))),
                 new OffsetCommitRequestTopic()
                     .setTopicId(topic2Id)
-                    .setName(null)
+                    .setName(topic2)
                     .setPartitions(singletonList(new OffsetCommitRequestPartition()
                         .setPartitionIndex(t2p.partition())
                         .setCommittedOffset(200L)
-                        .setCommittedMetadata("metadata2"))),
-                new OffsetCommitRequestTopic()
-                    .setTopicId(Uuid.ZERO_UUID)
-                    .setName(t3p.topic())
-                    .setPartitions(singletonList(new OffsetCommitRequestPartition()
-                        .setPartitionIndex(t3p.partition())
-                        .setCommittedOffset(300L)
-                        .setCommittedMetadata("metadata3")))
+                        .setCommittedMetadata("metadata2")))
             ));
 
         Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1p, 100L);
         expectedOffsets.put(t2p, 200L);
-        expectedOffsets.put(t3p, 300L);
 
         OffsetCommitRequestCaptor captor = new OffsetCommitRequestCaptor();
         prepareOffsetCommitRequest(expectedOffsets, Collections.emptyMap(), Errors.NONE, false, captor);
@@ -2828,7 +2816,6 @@ public abstract class ConsumerCoordinatorTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(t1p, new OffsetAndMetadata(100L, "metadata1"));
         offsets.put(t2p, new OffsetAndMetadata(200L, "metadata2"));
-        offsets.put(t3p, new OffsetAndMetadata(300L, "metadata3"));
 
         if (sync) {
             assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
@@ -2892,7 +2879,6 @@ public abstract class ConsumerCoordinatorTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(t1p, new OffsetAndMetadata(100L, "metadata1"));
         offsets.put(t2p, new OffsetAndMetadata(200L, "metadata2"));
-        offsets.put(t3p, new OffsetAndMetadata(300L, "metadata3"));
 
         // Response data which makes the common part of the responses exercised in the use cases below.
         OffsetCommitResponseData commonData = new OffsetCommitResponseData()
@@ -2900,10 +2886,6 @@ public abstract class ConsumerCoordinatorTest {
                 new OffsetCommitResponseTopic()
                     .setName(null)
                     .setTopicId(topic2Id)
-                    .setPartitions(singletonList(new OffsetCommitResponsePartition().setPartitionIndex(0))),
-                new OffsetCommitResponseTopic()
-                    .setName(topic3)
-                    .setTopicId(Uuid.ZERO_UUID)
                     .setPartitions(singletonList(new OffsetCommitResponsePartition().setPartitionIndex(0)))
             ));
 
@@ -2929,10 +2911,6 @@ public abstract class ConsumerCoordinatorTest {
         // offset commit invocation.
         asserter.accept(
             offsetCommitResponse(null, topic1Id, Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
-            GroupAuthorizationException.class);
-
-        asserter.accept(
-            offsetCommitResponse(topic1, Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
             GroupAuthorizationException.class);
 
         // The following offset commit responses define a topic incorrectly. The coordinator ignores the topic,
@@ -4346,56 +4324,7 @@ public abstract class ConsumerCoordinatorTest {
         assertEquals(expected.generationId(), actual.generationId(), "Generation id mismatch");
         assertEquals(expected.memberId(), actual.memberId(), "Member id mismatch");
         assertEquals(expected.retentionTimeMs(), actual.retentionTimeMs(), "Retention time mismatch");
-
-        long expectedTopicPartitionCount = expected.topics().stream().flatMap(t -> t.partitions().stream()).count();
-        long actualTopicPartitionCount = actual.topics().stream().flatMap(t -> t.partitions().stream()).count();
-
-        assertEquals(expectedTopicPartitionCount, actualTopicPartitionCount,
-            "The number of topic-partitions defined in the request does not match");
-
-        // The predicate also checks that topic id is not defined when a topic name is provided as per KIP 848.
-        Predicate<OffsetCommitRequestTopic> isDefinedByName = topic -> {
-            boolean nameDefined = !Utils.isBlank(topic.name());
-            if (nameDefined)
-                assertEquals(Uuid.ZERO_UUID, topic.topicId());
-            return nameDefined;
-        };
-
-        // The predicate also checks that topic name is not defined when a topic id is provided as per KIP 848.
-        Predicate<OffsetCommitRequestTopic> isDefinedById = topic -> {
-            boolean idDefined = topic.topicId() != null && !Uuid.ZERO_UUID.equals(topic.topicId());
-            if (idDefined)
-                assertNull(topic.name());
-            return idDefined;
-        };
-
-        BiFunction<OffsetCommitRequestTopic, OffsetCommitRequestPartition, TopicPartition> nameMapper =
-            (topic, partition) -> new TopicPartition(topic.name(), partition.partitionIndex());
-
-        BiFunction<OffsetCommitRequestTopic, OffsetCommitRequestPartition, TopicIdPartition> idMapper =
-            (topic, partition) -> new TopicIdPartition(topic.topicId(), partition.partitionIndex(), topic.name());
-
-        Map<TopicPartition, OffsetCommitRequestPartition> byTopicName =
-            offsetCommitRequestPartitions(actual, isDefinedByName, nameMapper);
-
-        Map<TopicIdPartition, OffsetCommitRequestPartition> byTopicId =
-            offsetCommitRequestPartitions(actual, isDefinedById, idMapper);
-
-        assertEquals(
-            offsetCommitRequestPartitions(expected, isDefinedByName, nameMapper),
-            byTopicName
-        );
-
-        assertEquals(
-            offsetCommitRequestPartitions(expected, isDefinedById, idMapper),
-            byTopicId
-        );
-
-        assertEquals(
-            expectedTopicPartitionCount,
-            byTopicName.keySet().size() + byTopicId.keySet().size(),
-            "The number of topic-partitions identified by name or id does not correspond to the number " +
-                    "of topic-partition defined in the request");
+        assertEquals(offsetCommitRequestPartitions(expected), offsetCommitRequestPartitions(actual));
     }
 
     /**
@@ -4405,15 +4334,12 @@ public abstract class ConsumerCoordinatorTest {
      * depending on how the topic-partition is referenced to from the {@link OffsetCommitRequest}
      * (that is, by topic id or topic name).
      */
-    private static <U> Map<U, OffsetCommitRequestPartition> offsetCommitRequestPartitions(
-            OffsetCommitRequestData request,
-            Predicate<OffsetCommitRequestTopic> filter,
-            BiFunction<OffsetCommitRequestTopic, OffsetCommitRequestPartition, U> keyMapper) {
+    private static Map<TopicIdPartition, OffsetCommitRequestPartition> offsetCommitRequestPartitions(
+            OffsetCommitRequestData request) {
 
         return request.topics().stream()
-            .filter(filter)
             .flatMap(topic -> topic.partitions().stream()
-                .collect(Collectors.toMap(p -> keyMapper.apply(topic, p), identity()))
+                .collect(Collectors.toMap(p -> new TopicIdPartition(topic.topicId(), p.partitionIndex(), topic.name()), identity()))
                 .entrySet()
                 .stream())
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
