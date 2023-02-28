@@ -574,6 +574,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         private final int batchSize;
         private boolean completed = false;
         private int counter;
+        private int skipped; // Keeps track of filtered records
+
         public SourceRecordWriteCounter(int batchSize, SourceTaskMetricsGroup metricsGroup) {
             assert batchSize > 0;
             assert metricsGroup != null;
@@ -582,6 +584,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             this.metricsGroup = metricsGroup;
         }
         public void skipRecord() {
+            skipped += 1;
             if (counter > 0 && --counter == 0) {
                 finishedAllWrites();
             }
@@ -596,7 +599,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         }
         private void finishedAllWrites() {
             if (!completed) {
-                metricsGroup.recordWrite(batchSize - counter);
+                metricsGroup.recordWrite(batchSize - counter, skipped);
                 completed = true;
             }
         }
@@ -648,8 +651,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             sourceRecordActiveCount.record(activeRecordCount);
         }
 
-        void recordWrite(int recordCount) {
-            sourceRecordWrite.record(recordCount);
+        void recordWrite(int recordCount, int skippedCount) {
+            sourceRecordWrite.record(recordCount - skippedCount);
             activeRecordCount -= recordCount;
             activeRecordCount = Math.max(0, activeRecordCount);
             sourceRecordActiveCount.record(activeRecordCount);
