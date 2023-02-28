@@ -80,6 +80,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
 import javax.crypto.SecretKey;
+import javax.ws.rs.core.HttpHeaders;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -90,15 +91,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -216,8 +218,7 @@ public class DistributedHerderTest {
     @Mock private Callback<Herder.Created<ConnectorInfo>> putConnectorCallback;
     @Mock private Plugins plugins;
     @Mock private RestClient restClient;
-    private CountDownLatch shutdownCalled = new CountDownLatch(1);
-
+    private final CountDownLatch shutdownCalled = new CountDownLatch(1);
     private ConfigBackingStore.UpdateListener configUpdateListener;
     private WorkerRebalanceListener rebalanceListener;
     private ExecutorService herderExecutor;
@@ -244,7 +245,7 @@ public class DistributedHerderTest {
                 new String[]{"connectorType", "updateDeletedConnectorStatus", "updateDeletedTaskStatus", "validateConnectorConfig", "buildRestartPlan", "recordRestarting"},
                 new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, KAFKA_CLUSTER_ID,
                 statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time, noneConnectorClientConfigOverridePolicy,
-                Collections.emptyList(), new AutoCloseable[]{uponShutdown});
+                Collections.emptyList(), null, new AutoCloseable[]{uponShutdown});
 
         configUpdateListener = herder.new ConfigUpdateListener();
         rebalanceListener = herder.new RebalanceListener(time);
@@ -3694,6 +3695,113 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testTaskReconfigurationRetriesWithConnectorTaskConfigsException() {
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        // end of initial tick
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        member.wakeup();
+        PowerMock.expectLastCall().anyTimes();
+
+        member.ensureActive();
+        PowerMock.expectLastCall().anyTimes();
+
+        EasyMock.expect(worker.isRunning(CONN1)).andReturn(true).anyTimes();
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
+
+        SinkConnectorConfig sinkConnectorConfig = new SinkConnectorConfig(plugins, CONN1_CONFIG);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, sinkConnectorConfig))
+                .andThrow(new ConnectException("Failed to generate task configs")).times(2);
+
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, sinkConnectorConfig)).andReturn(TASK_CONFIGS);
+
+        expectAndVerifyTaskReconfigurationRetries();
+    }
+
+    @Test
+    public void testTaskReconfigurationRetriesWithLeaderRequestForwardingException() {
+        herder = PowerMock.createPartialMock(DistributedHerder.class,
+                new String[]{"connectorType", "updateDeletedConnectorStatus", "updateDeletedTaskStatus", "validateConnectorConfig", "buildRestartPlan", "recordRestarting"},
+                new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, KAFKA_CLUSTER_ID,
+                statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time, noneConnectorClientConfigOverridePolicy,
+                Collections.emptyList(), new MockSynchronousExecutor(), new AutoCloseable[]{});
+
+        rebalanceListener = herder.new RebalanceListener(time);
+
+        EasyMock.expect(member.memberId()).andStubReturn("member");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), false);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        // end of initial tick
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        member.wakeup();
+        PowerMock.expectLastCall().anyTimes();
+
+        member.ensureActive();
+        PowerMock.expectLastCall().anyTimes();
+
+        EasyMock.expect(worker.isRunning(CONN1)).andReturn(true).anyTimes();
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
+
+        SinkConnectorConfig sinkConnectorConfig = new SinkConnectorConfig(plugins, CONN1_CONFIG);
+
+        List<Map<String, String>> changedTaskConfigs = new ArrayList<>(TASK_CONFIGS);
+        changedTaskConfigs.add(TASK_CONFIG);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, sinkConnectorConfig)).andReturn(changedTaskConfigs).anyTimes();
+
+        EasyMock.expect(restClient.httpRequest(
+                EasyMock.anyString(), EasyMock.eq("POST"), EasyMock.anyObject(HttpHeaders.class),
+                EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(SecretKey.class), EasyMock.anyString())
+        ).andThrow(new ConnectException("Request to leader to reconfigure connector tasks failed")).times(2);
+
+        EasyMock.expect(restClient.httpRequest(
+                EasyMock.anyString(), EasyMock.eq("POST"), EasyMock.anyObject(HttpHeaders.class),
+                EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(SecretKey.class), EasyMock.anyString())
+        ).andReturn(null);
+
+        expectAndVerifyTaskReconfigurationRetries();
+    }
+
+    private void expectAndVerifyTaskReconfigurationRetries() {
+        // task reconfiguration herder request with initial retry backoff
+        member.poll(EasyMock.eq(250L));
+        PowerMock.expectLastCall();
+
+        // task reconfiguration herder request with double the initial retry backoff
+        member.poll(EasyMock.eq(500L));
+        PowerMock.expectLastCall();
+
+        // the third task reconfiguration request is expected to pass; so expect no more retries (a Long.MAX_VALUE poll
+        // timeout indicates that there is no herder request currently in the queue)
+        member.poll(EasyMock.eq(Long.MAX_VALUE));
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        // initial tick
+        herder.tick();
+        herder.requestTaskReconfiguration(CONN1);
+        // process the task reconfiguration request in this tick
+        herder.tick();
+        // advance the time by 250ms so that the task reconfiguration request with initial retry backoff is processed
+        time.sleep(250);
+        herder.tick();
+        // advance the time by 500ms so that the task reconfiguration request with double the initial retry backoff is processed
+        time.sleep(500);
+        herder.tick();
+
+        PowerMock.verifyAll();
+    }
+
     private void expectRebalance(final long offset,
                                  final List<String> assignedConnectors,
                                  final List<ConnectorTaskId> assignedTasks) {
@@ -4013,6 +4121,43 @@ public class DistributedHerderTest {
     private abstract class BogusSourceTask extends SourceTask {
     }
 
+    /**
+     * A mock {@link ExecutorService} that runs tasks synchronously on the same thread as the caller. This mock
+     * implementation can't be "shut down" and it is the responsibility of the caller to ensure that {@link Runnable}s
+     * submitted via {@link #execute(Runnable)} don't hang indefinitely.
+     */
+    private static class MockSynchronousExecutor extends AbstractExecutorService {
+        @Override
+        public void execute(Runnable command) {
+            command.run();
+        }
+
+        @Override
+        public void shutdown() {
+
+        }
+
+        @Override
+        public List<Runnable> shutdownNow() {
+            return null;
+        }
+
+        @Override
+        public boolean isShutdown() {
+            return false;
+        }
+
+        @Override
+        public boolean isTerminated() {
+            return false;
+        }
+
+        @Override
+        public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+            return false;
+        }
+    }
+
     private DistributedHerder exactlyOnceHerder() {
         Map<String, String> config = new HashMap<>(HERDER_CONFIG);
         config.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
@@ -4020,7 +4165,7 @@ public class DistributedHerderTest {
                 new String[]{"connectorType", "updateDeletedConnectorStatus", "updateDeletedTaskStatus", "validateConnectorConfig"},
                 new DistributedConfig(config), worker, WORKER_ID, KAFKA_CLUSTER_ID,
                 statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time, noneConnectorClientConfigOverridePolicy,
-                Collections.emptyList(), new AutoCloseable[0]);
+                Collections.emptyList(), null, new AutoCloseable[0]);
     }
 
 }
