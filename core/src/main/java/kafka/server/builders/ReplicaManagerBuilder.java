@@ -61,6 +61,7 @@ public class ReplicaManagerBuilder {
     private Optional<DelayedOperationPurgatory<DelayedDeleteRecords>> delayedDeleteRecordsPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedElectLeader>> delayedElectLeaderPurgatory = Optional.empty();
     private Optional<String> threadNamePrefix = Optional.empty();
+    private Long brokerEpoch = -1L;
 
     public ReplicaManagerBuilder setConfig(KafkaConfig config) {
         this.config = config;
@@ -152,6 +153,11 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
+    public ReplicaManagerBuilder setBrokerEpoch(long brokerEpoch) {
+        this.brokerEpoch = brokerEpoch;
+        return this;
+    }
+
     public ReplicaManager build() {
         if (config == null) config = new KafkaConfig(Collections.emptyMap());
         if (metrics == null) metrics = new Metrics();
@@ -160,22 +166,23 @@ public class ReplicaManagerBuilder {
         if (logDirFailureChannel == null) throw new RuntimeException("You must set logDirFailureChannel");
         if (alterPartitionManager == null) throw new RuntimeException("You must set alterIsrManager");
         return new ReplicaManager(config,
-                             metrics,
-                             time,
-                             scheduler,
-                             logManager,
-                             OptionConverters.toScala(remoteLogManager),
-                             quotaManagers,
-                             metadataCache,
-                             logDirFailureChannel,
-                             alterPartitionManager,
-                             brokerTopicStats,
-                             isShuttingDown,
-                             OptionConverters.toScala(zkClient),
-                             OptionConverters.toScala(delayedProducePurgatory),
-                             OptionConverters.toScala(delayedFetchPurgatory),
-                             OptionConverters.toScala(delayedDeleteRecordsPurgatory),
-                             OptionConverters.toScala(delayedElectLeaderPurgatory),
-                             OptionConverters.toScala(threadNamePrefix));
+                metrics,
+                time,
+                scheduler,
+                logManager,
+                OptionConverters.toScala(remoteLogManager),
+                quotaManagers,
+                metadataCache,
+                logDirFailureChannel,
+                alterPartitionManager,
+                brokerTopicStats,
+                isShuttingDown,
+                OptionConverters.toScala(zkClient),
+                OptionConverters.toScala(delayedProducePurgatory),
+                OptionConverters.toScala(delayedFetchPurgatory),
+                OptionConverters.toScala(delayedDeleteRecordsPurgatory),
+                OptionConverters.toScala(delayedElectLeaderPurgatory),
+                OptionConverters.toScala(threadNamePrefix),
+                () -> brokerEpoch);
     }
 }

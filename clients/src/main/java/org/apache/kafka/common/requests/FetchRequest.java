@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchRequestData.ForgottenTopic;
+import org.apache.kafka.common.message.FetchRequestData.ReplicaState;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -134,6 +135,7 @@ public class FetchRequest extends AbstractRequest {
         private final int maxWait;
         private final int minBytes;
         private final int replicaId;
+        private final long replicaEpoch;
         private final Map<TopicPartition, PartitionData> toFetch;
         private IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         private int maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
@@ -144,18 +146,28 @@ public class FetchRequest extends AbstractRequest {
 
         public static Builder forConsumer(short maxVersion, int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
             return new Builder(ApiKeys.FETCH.oldestVersion(), maxVersion,
-                CONSUMER_REPLICA_ID, maxWait, minBytes, fetchData);
+                CONSUMER_REPLICA_ID,  -1, maxWait, minBytes, fetchData);
         }
 
-        public static Builder forReplica(short allowedVersion, int replicaId, int maxWait, int minBytes,
+        public static Builder forReplica(short allowedVersion, int replicaId, long replicaEpoch, int maxWait, int minBytes,
                                          Map<TopicPartition, PartitionData> fetchData) {
-            return new Builder(allowedVersion, allowedVersion, replicaId, maxWait, minBytes, fetchData);
+            return new Builder(allowedVersion, allowedVersion, replicaId, replicaEpoch, maxWait, minBytes, fetchData);
         }
 
-        public Builder(short minVersion, short maxVersion, int replicaId, int maxWait, int minBytes,
+        public Builder(short minVersion, short maxVersion, int replicaId, long replicaEpoch, int maxWait, int minBytes,
                        Map<TopicPartition, PartitionData> fetchData) {
             super(ApiKeys.FETCH, minVersion, maxVersion);
             this.replicaId = replicaId;
+            this.replicaEpoch = replicaEpoch;
+            this.maxWait = maxWait;
+            this.minBytes = minBytes;
+            this.toFetch = fetchData;
+        }
+        public Builder(short minVersion, short maxVersion, int replicaId, int maxWait, int minBytes,
+                       Map<TopicPartition, PartitionData> fetchData, long replicaEpoch) {
+            super(ApiKeys.FETCH, minVersion, maxVersion);
+            this.replicaId = replicaId;
+            this.replicaEpoch = replicaEpoch;
             this.maxWait = maxWait;
             this.minBytes = minBytes;
             this.toFetch = fetchData;
@@ -228,12 +240,18 @@ public class FetchRequest extends AbstractRequest {
             }
 
             FetchRequestData fetchRequestData = new FetchRequestData();
-            fetchRequestData.setReplicaId(replicaId);
             fetchRequestData.setMaxWaitMs(maxWait);
             fetchRequestData.setMinBytes(minBytes);
             fetchRequestData.setMaxBytes(maxBytes);
             fetchRequestData.setIsolationLevel(isolationLevel.id());
             fetchRequestData.setForgottenTopicsData(new ArrayList<>());
+            if (version < 15) {
+                fetchRequestData.setReplicaId(replicaId);
+            } else {
+                fetchRequestData.setReplicaState(new ReplicaState()
+                        .setReplicaId(replicaId)
+                        .setReplicaEpoch(replicaEpoch));
+            }
 
             Map<String, FetchRequestData.ForgottenTopic> forgottenTopicMap = new LinkedHashMap<>();
             addToForgottenTopicMap(removed, forgottenTopicMap);
@@ -338,7 +356,14 @@ public class FetchRequest extends AbstractRequest {
     }
 
     public int replicaId() {
-        return data.replicaId();
+        if (version() < 15) {
+            return data.replicaId();
+        }
+        return data.replicaState().replicaId();
+    }
+
+    public long replicaEpoch() {
+        return data.replicaState().replicaEpoch();
     }
 
     public int maxWait() {

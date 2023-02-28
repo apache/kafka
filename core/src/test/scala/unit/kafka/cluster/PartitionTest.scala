@@ -108,6 +108,7 @@ object PartitionTest {
 
   def followerFetchParams(
     replicaId: Int,
+    brokerEpoch: Long = 1L,
     maxWaitMs: Long = 0L,
     minBytes: Int = 1,
     maxBytes: Int = Int.MaxValue
@@ -115,6 +116,7 @@ object PartitionTest {
     new FetchParams(
       ApiKeys.FETCH.latestVersion,
       replicaId,
+      brokerEpoch,
       maxWaitMs,
       minBytes,
       maxBytes,
@@ -133,6 +135,7 @@ object PartitionTest {
     new FetchParams(
       ApiKeys.FETCH.latestVersion,
       FetchRequest.CONSUMER_REPLICA_ID,
+      -1,
       maxWaitMs,
       minBytes,
       maxBytes,

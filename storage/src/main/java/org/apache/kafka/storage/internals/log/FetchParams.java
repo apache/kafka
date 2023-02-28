@@ -25,6 +25,7 @@ import java.util.Optional;
 public class FetchParams {
     public final short requestVersion;
     public final int replicaId;
+    public final long replicaEpoch;
     public final long maxWaitMs;
     public final int minBytes;
     public final int maxBytes;
@@ -33,6 +34,7 @@ public class FetchParams {
 
     public FetchParams(short requestVersion,
                        int replicaId,
+                       long replicaEpoch,
                        long maxWaitMs,
                        int minBytes,
                        int maxBytes,
@@ -42,6 +44,7 @@ public class FetchParams {
         Objects.requireNonNull(clientMetadata);
         this.requestVersion = requestVersion;
         this.replicaId = replicaId;
+        this.replicaEpoch = replicaEpoch;
         this.maxWaitMs = maxWaitMs;
         this.minBytes = minBytes;
         this.maxBytes = maxBytes;
@@ -72,6 +75,7 @@ public class FetchParams {
         FetchParams that = (FetchParams) o;
         return requestVersion == that.requestVersion
                 && replicaId == that.replicaId
+                && replicaEpoch == that.replicaEpoch
                 && maxWaitMs == that.maxWaitMs
                 && minBytes == that.minBytes
                 && maxBytes == that.maxBytes
@@ -83,6 +87,7 @@ public class FetchParams {
     public int hashCode() {
         int result = requestVersion;
         result = 31 * result + replicaId;
+        result = 31 * result + (int)replicaEpoch;
         result = 31 * result + Long.hashCode(32);
         result = 31 * result + minBytes;
         result = 31 * result + maxBytes;
@@ -96,6 +101,7 @@ public class FetchParams {
         return "FetchParams(" +
                 "requestVersion=" + requestVersion +
                 ", replicaId=" + replicaId +
+                ", replicaEpoch=" + replicaEpoch +
                 ", maxWaitMs=" + maxWaitMs +
                 ", minBytes=" + minBytes +
                 ", maxBytes=" + maxBytes +

@@ -54,7 +54,7 @@ public class FetchRequestTest {
         List<TopicIdPartition> toReplace = Collections.singletonList(tp);
 
         FetchRequest fetchRequest = FetchRequest.Builder
-                .forReplica(version, 0, 1, 1, partitionData)
+                .forReplica(version, 0, 1, 1, 1, partitionData)
                 .removed(Collections.emptyList())
                 .replaced(toReplace)
                 .metadata(FetchMetadata.newIncremental(123)).build(version);
@@ -97,11 +97,14 @@ public class FetchRequestTest {
         boolean fetchRequestUsesTopicIds = version >= 13;
 
         FetchRequest fetchRequest = FetchRequest.parse(FetchRequest.Builder
-                .forReplica(version, 0, 1, 1, partitionData)
+                .forReplica(version, 0, 1, 1, 1, partitionData)
                 .removed(Collections.emptyList())
                 .replaced(Collections.emptyList())
                 .metadata(FetchMetadata.newIncremental(123)).build(version).serialize(), version);
 
+        if (version >= 15) {
+            assertEquals(1, fetchRequest.data().replicaState().replicaEpoch());
+        }
         // For versions < 13, we will be provided a topic name and a zero UUID in FetchRequestData.
         // Versions 13+ will contain a valid topic ID but an empty topic name.
         List<TopicIdPartition> expectedData = new LinkedList<>();
@@ -156,7 +159,7 @@ public class FetchRequestTest {
             boolean fetchRequestUsesTopicIds = version >= 13;
 
             FetchRequest fetchRequest = FetchRequest.parse(FetchRequest.Builder
-                    .forReplica(version, 0, 1, 1, Collections.emptyMap())
+                    .forReplica(version, 0, 1, 1, 1, Collections.emptyMap())
                     .removed(toForgetTopics)
                     .replaced(Collections.emptyList())
                     .metadata(FetchMetadata.newIncremental(123)).build(version).serialize(), version);

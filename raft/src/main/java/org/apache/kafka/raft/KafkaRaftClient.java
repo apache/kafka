@@ -958,7 +958,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 Errors.INVALID_REQUEST, Optional.empty()));
         }
 
-        FetchResponseData response = tryCompleteFetchRequest(request.replicaId(), fetchPartition, currentTimeMs);
+        FetchResponseData response = tryCompleteFetchRequest(request.replicaState().replicaId(), fetchPartition, currentTimeMs);
         FetchResponseData.PartitionData partitionResponse =
             response.responses().get(0).partitions().get(0);
 
@@ -1791,7 +1791,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             .setMaxBytes(MAX_FETCH_SIZE_BYTES)
             .setMaxWaitMs(fetchMaxWaitMs)
             .setClusterId(clusterId)
-            .setReplicaId(quorum.localIdOrSentinel());
+            .setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(quorum.localIdOrSentinel()));
+//            .setReplicaId(quorum.localIdOrSentinel());
     }
 
     private long maybeSendAnyVoterFetch(long currentTimeMs) {

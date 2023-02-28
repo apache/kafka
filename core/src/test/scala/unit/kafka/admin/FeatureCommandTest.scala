@@ -26,7 +26,7 @@ import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType.{SAFE_DOWNGRADE,
 import org.apache.kafka.clients.admin.MockAdminClient
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion.{IBP_3_3_IV0, IBP_3_3_IV1, IBP_3_3_IV2, IBP_3_3_IV3, IBP_3_5_IV0}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_3_3_IV0, IBP_3_3_IV1, IBP_3_3_IV2, IBP_3_3_IV3, IBP_3_5_IV1}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -84,7 +84,7 @@ class FeatureCommandTest extends IntegrationTestHarness {
         Array("--bootstrap-server", bootstrapServers(), "describe"), env.out))
       assertEquals(String.format(
         "Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-          "SupportedMaxVersion: 3.5-IV0\tFinalizedVersionLevel: 3.3-IV1\t"),
+          "SupportedMaxVersion: 3.5-IV1\tFinalizedVersionLevel: 3.3-IV1\t"),
             env.outputWithoutEpoch())
     }
   }
@@ -145,7 +145,7 @@ class FeatureCommandTest extends IntegrationTestHarness {
       assertEquals(1, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
         "disable", "--feature", "metadata.version"), env.out))
       assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
-        "metadata.version. Local controller 1000 only supports versions 1-9", env.outputWithoutEpoch())
+        "metadata.version. Local controller 1000 only supports versions 1-10", env.outputWithoutEpoch())
     }
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
       assertEquals(1, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
@@ -173,8 +173,8 @@ class FeatureCommandUnitTest {
 
   @Test
   def testMetadataVersionsToString(): Unit = {
-    assertEquals("3.3-IV0, 3.3-IV1, 3.3-IV2, 3.3-IV3, 3.4-IV0, 3.5-IV0",
-      FeatureCommand.metadataVersionsToString(IBP_3_3_IV0, IBP_3_5_IV0))
+    assertEquals("3.3-IV0, 3.3-IV1, 3.3-IV2, 3.3-IV3, 3.4-IV0, 3.5-IV1",
+      FeatureCommand.metadataVersionsToString(IBP_3_3_IV0, IBP_3_5_IV1))
   }
 
   @Test

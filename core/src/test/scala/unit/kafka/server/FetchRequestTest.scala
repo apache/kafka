@@ -182,6 +182,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val fetchResponse = sendFetchRequest(nonReplicaId, fetchRequest)
     val partitionData = fetchResponse.responseData(topicNames, ApiKeys.FETCH.latestVersion).get(topicPartition)
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, partitionData.errorCode)
+    assertEquals(-1, fetchRequest.replicaId())
+    assertEquals(-1, fetchRequest.replicaEpoch())
 
     // Repeat with request that does not use topic IDs
     val oldFetchRequest = FetchRequest.Builder.forConsumer(12, Int.MaxValue, 0, createPartitionMap(1024,
@@ -627,7 +629,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     producer.close()
 
     // fetch request with version below v10: UNSUPPORTED_COMPRESSION_TYPE error occurs
-    val req0 = new FetchRequest.Builder(0, 9, -1, Int.MaxValue, 0,
+    val req0 = new FetchRequest.Builder(0, 9, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
 
@@ -636,7 +638,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE.code, data0.errorCode)
 
     // fetch request with version 10: works fine!
-    val req1= new FetchRequest.Builder(0, 10, -1, Int.MaxValue, 0,
+    val req1= new FetchRequest.Builder(0, 10, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
     val res1 = sendFetchRequest(leaderId, req1)
@@ -644,7 +646,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NONE.code, data1.errorCode)
     assertEquals(3, records(data1).size)
 
-    val req2 = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion(), ApiKeys.FETCH.latestVersion(), -1, Int.MaxValue, 0,
+    val req2 = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion(), ApiKeys.FETCH.latestVersion(), -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
     val res2 = sendFetchRequest(leaderId, req2)
@@ -683,7 +685,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     // fetch request with fetch version v1 (magic 0):
     // gzip compressed record is returned with down-conversion.
     // zstd compressed record raises UNSUPPORTED_COMPRESSION_TYPE error.
-    val req0 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
+    val req0 = new FetchRequest.Builder(0, 1, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800)
       .build()
@@ -693,7 +695,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NONE.code, data0.errorCode)
     assertEquals(1, records(data0).size)
 
-    val req1 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
+    val req1 = new FetchRequest.Builder(0, 1, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map(topicPartition -> 1L)))
       .setMaxBytes(800).build()
 
@@ -704,7 +706,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     // fetch request with fetch version v3 (magic 1):
     // gzip compressed record is returned with down-conversion.
     // zstd compressed record raises UNSUPPORTED_COMPRESSION_TYPE error.
-    val req2 = new FetchRequest.Builder(2, 3, -1, Int.MaxValue, 0,
+    val req2 = new FetchRequest.Builder(2, 3, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
 
@@ -713,7 +715,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NONE.code, data2.errorCode)
     assertEquals(1, records(data2).size)
 
-    val req3 = new FetchRequest.Builder(0, 1, -1, Int.MaxValue, 0,
+    val req3 = new FetchRequest.Builder(0, 1, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map(topicPartition -> 1L)))
       .setMaxBytes(800).build()
 
@@ -722,7 +724,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE.code, data3.errorCode)
 
     // fetch request with version 10: works fine!
-    val req4 = new FetchRequest.Builder(0, 10, -1, Int.MaxValue, 0,
+    val req4 = new FetchRequest.Builder(0, 10, -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
     val res4 = sendFetchRequest(leaderId, req4)
@@ -730,7 +732,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NONE.code, data4.errorCode)
     assertEquals(3, records(data4).size)
 
-    val req5 = new FetchRequest.Builder(0, ApiKeys.FETCH.latestVersion(), -1, Int.MaxValue, 0,
+    val req5 = new FetchRequest.Builder(0, ApiKeys.FETCH.latestVersion(), -1, -1, Int.MaxValue, 0,
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
     val res5 = sendFetchRequest(leaderId, req5)

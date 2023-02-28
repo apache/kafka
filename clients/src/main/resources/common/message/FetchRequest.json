@@ -50,14 +50,22 @@
   // Version 13 replaces topic names with topic IDs (KIP-516). May return UNKNOWN_TOPIC_ID error code.
   //
   // Version 14 is the same as version 13 but it also receives a new error called OffsetMovedToTieredStorageException(KIP-405)
-  "validVersions": "0-14",
+  //
+  // Version 15 adds the ReplicaState which includes new field ReplicaEpoch and the ReplicaId (KIP-903)
+  "validVersions": "0-15",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
       "taggedVersions": "12+", "tag": 0, "ignorable": true,
       "about": "The clusterId if known. This is used to validate metadata fetches prior to broker registration." },
-    { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+    { "name": "ReplicaId", "type": "int32", "versions": "0-14", "entityType": "brokerId",
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
+    { "name": "ReplicaState", "type": "ReplicaState", "taggedVersions":"15+", "tag": 1, "fields": [
+      { "name": "ReplicaId", "type": "int32", "versions": "15+", "default": "-1", "entityType": "brokerId",
+        "about": "The replica ID of the follower, or -1 if this request is from a consumer." },
+      { "name": "ReplicaEpoch", "type": "int64", "versions": "15+", "default": "-1",
+        "about": "The epoch of this follower, or -1 if not available." }
+    ]},
     { "name": "MaxWaitMs", "type": "int32", "versions": "0+",
       "about": "The maximum time in milliseconds to wait for the response." },
     { "name": "MinBytes", "type": "int32", "versions": "0+",
