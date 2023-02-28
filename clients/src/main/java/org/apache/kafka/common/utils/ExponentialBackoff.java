@@ -20,15 +20,12 @@ package org.apache.kafka.common.utils;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * A utility class for keeping the parameters and providing the value of exponential
+ * An utility class for keeping the parameters and providing the value of exponential
  * retry backoff, exponential reconnect backoff, exponential timeout, etc.
- * <p>
  * The formula is:
- * <pre>Backoff(attempts) = random(1 - jitter, 1 + jitter) * initialInterval * multiplier ^ attempts</pre>
- * If {@code initialInterval} is greater than or equal to {@code maxInterval}, a constant backoff of
- * {@code initialInterval} will be provided.
- * <p>
- * This class is thread-safe.
+ * Backoff(attempts) = random(1 - jitter, 1 + jitter) * initialInterval * multiplier ^ attempts
+ * If initialInterval is greater or equal than maxInterval, a constant backoff of will be provided
+ * This class is thread-safe
  */
 public class ExponentialBackoff {
     private final int multiplier;

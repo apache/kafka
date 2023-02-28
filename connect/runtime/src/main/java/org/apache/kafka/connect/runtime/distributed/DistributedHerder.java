@@ -253,7 +253,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                              List<String> restNamespace,
                              AutoCloseable... uponShutdown) {
         this(config, worker, worker.workerId(), kafkaClusterId, statusBackingStore, configBackingStore, null, restUrl, restClient, worker.metrics(),
-                time, connectorClientConfigOverridePolicy, restNamespace, uponShutdown);
+                time, connectorClientConfigOverridePolicy, restNamespace, null, uponShutdown);
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
@@ -271,6 +271,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       Time time,
                       ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                       List<String> restNamespace,
+                      ExecutorService forwardRequestExecutor,
                       AutoCloseable... uponShutdown) {
         super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
 
@@ -304,9 +305,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 ThreadUtils.createThreadFactory(
                         this.getClass().getSimpleName() + "-" + clientId + "-%d", false));
 
-        this.forwardRequestExecutor = Executors.newFixedThreadPool(1,
-                ThreadUtils.createThreadFactory(
-                        "ForwardRequestExecutor-" + clientId + "-%d", false));
+        this.forwardRequestExecutor = forwardRequestExecutor != null
+                ? forwardRequestExecutor
+                : Executors.newFixedThreadPool(
+                        1,
+                        ThreadUtils.createThreadFactory("ForwardRequestExecutor-" + clientId + "-%d", false)
+                );
         this.startAndStopExecutor = Executors.newFixedThreadPool(START_STOP_THREAD_POOL_SIZE,
                 ThreadUtils.createThreadFactory(
                         "StartAndStopExecutor-" + clientId + "-%d", false));
@@ -1909,7 +1913,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 if (isPossibleExpiredKeyException(initialRequestTime, error)) {
                     log.debug("Failed to reconfigure connector's tasks ({}), possibly due to expired session key. Retrying after backoff", connName);
                 } else {
-                    log.error("Failed to reconfigure connector's tasks ({}), retrying after backoff:", connName, error);
+                    log.error("Failed to reconfigure connector's tasks ({}), retrying after backoff.", connName, error);
                 }
                 addRequest(exponentialBackoff.backoff(attempts),
                     () -> {
