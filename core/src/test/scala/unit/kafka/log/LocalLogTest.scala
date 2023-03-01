@@ -29,7 +29,7 @@ import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Record, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -612,14 +612,14 @@ class LocalLogTest {
   def testOffsetFromFile(): Unit = {
     val offset = 23423423L
 
-    val logFile = LocalLog.logFile(tmpDir, offset)
-    assertEquals(offset, LocalLog.offsetFromFile(logFile))
+    val logFile = LogFileUtils.logFile(tmpDir, offset)
+    assertEquals(offset, LogFileUtils.offsetFromFile(logFile))
 
-    val offsetIndexFile = LocalLog.offsetIndexFile(tmpDir, offset)
-    assertEquals(offset, LocalLog.offsetFromFile(offsetIndexFile))
+    val offsetIndexFile = LogFileUtils.offsetIndexFile(tmpDir, offset)
+    assertEquals(offset, LogFileUtils.offsetFromFile(offsetIndexFile))
 
-    val timeIndexFile = LocalLog.timeIndexFile(tmpDir, offset)
-    assertEquals(offset, LocalLog.offsetFromFile(timeIndexFile))
+    val timeIndexFile = LogFileUtils.timeIndexFile(tmpDir, offset)
+    assertEquals(offset, LogFileUtils.offsetFromFile(timeIndexFile))
   }
 
   @Test

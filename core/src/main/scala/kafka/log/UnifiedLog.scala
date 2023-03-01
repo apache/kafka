@@ -32,14 +32,14 @@ import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetsListener, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetsListener, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
@@ -1754,13 +1754,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 }
 
 object UnifiedLog extends Logging {
-  val LogFileSuffix = LocalLog.LogFileSuffix
+  val LogFileSuffix = LogFileUtils.LOG_FILE_SUFFIX
 
-  val IndexFileSuffix = LocalLog.IndexFileSuffix
+  val IndexFileSuffix = LogFileUtils.INDEX_FILE_SUFFIX
 
-  val TimeIndexFileSuffix = LocalLog.TimeIndexFileSuffix
+  val TimeIndexFileSuffix = LogFileUtils.TIME_INDEX_FILE_SUFFIX
 
-  val TxnIndexFileSuffix = LocalLog.TxnIndexFileSuffix
+  val TxnIndexFileSuffix = LogFileUtils.TXN_INDEX_FILE_SUFFIX
 
   val CleanedFileSuffix = LocalLog.CleanedFileSuffix
 
@@ -1835,7 +1835,7 @@ object UnifiedLog extends Logging {
       logOffsetsListener)
   }
 
-  def logFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.logFile(dir, offset, suffix)
+  def logFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.logFile(dir, offset, suffix)
 
   def logDeleteDirName(topicPartition: TopicPartition): String = LocalLog.logDeleteDirName(topicPartition)
 
@@ -1843,16 +1843,16 @@ object UnifiedLog extends Logging {
 
   def logDirName(topicPartition: TopicPartition): String = LocalLog.logDirName(topicPartition)
 
-  def offsetIndexFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.offsetIndexFile(dir, offset, suffix)
+  def offsetIndexFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.offsetIndexFile(dir, offset, suffix)
 
-  def timeIndexFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.timeIndexFile(dir, offset, suffix)
+  def timeIndexFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.timeIndexFile(dir, offset, suffix)
 
   def deleteFileIfExists(file: File, suffix: String = ""): Unit =
     Files.deleteIfExists(new File(file.getPath + suffix).toPath)
 
-  def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.transactionIndexFile(dir, offset, suffix)
+  def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.transactionIndexFile(dir, offset, suffix)
 
-  def offsetFromFile(file: File): Long = LocalLog.offsetFromFile(file)
+  def offsetFromFile(file: File): Long = LogFileUtils.offsetFromFile(file)
 
   def sizeInBytes(segments: Iterable[LogSegment]): Long = LogSegments.sizeInBytes(segments)
 
