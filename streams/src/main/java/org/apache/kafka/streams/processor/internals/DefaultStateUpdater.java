@@ -421,7 +421,7 @@ public class DefaultStateUpdater implements StateUpdater {
             if (task.isActive()) {
                 transitToUpdateStandbysIfOnlyStandbysLeft();
             }
-            log.debug((task.isActive() ? "Active" : "Standby")
+            log.info((task.isActive() ? "Active" : "Standby")
                 + " task " + task.id() + " was paused from the updating tasks and added to the paused tasks.");
         }
 
@@ -431,10 +431,10 @@ public class DefaultStateUpdater implements StateUpdater {
             pausedTasks.remove(taskId);
 
             if (task.isActive()) {
-                log.debug("Stateful active task " + task.id() + " was resumed to the updating tasks of the state updater");
+                log.info("Stateful active task " + task.id() + " was resumed to the updating tasks of the state updater");
                 changelogReader.enforceRestoreActive();
             } else {
-                log.debug("Standby task " + task.id() + " was resumed to the updating tasks of the state updater");
+                log.info("Standby task " + task.id() + " was resumed to the updating tasks of the state updater");
                 if (updatingTasks.size() == 1) {
                     changelogReader.transitToUpdateStandby();
                 }
