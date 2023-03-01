@@ -379,6 +379,11 @@ public class MockProducer<K, V> implements Producer<K, V> {
         return this.cluster.partitionsForTopic(topic);
     }
 
+    @Override
+    public Cluster getCluster(String topic, long maxBlockTimeMs) {
+        return this.cluster;
+    }
+
     public Map<MetricName, Metric> metrics() {
         return mockMetrics;
     }
