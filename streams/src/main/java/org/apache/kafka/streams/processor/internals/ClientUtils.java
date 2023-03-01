@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -28,7 +29,10 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
@@ -40,6 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -141,6 +146,33 @@ public class ClientUtils {
         return adminClient.listOffsets(
             partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
         ).all();
+    }
+
+    public static ListOffsetsResult fetchEndOffsetsResult(final Collection<TopicPartition> partitions,
+                                                          final Admin adminClient) {
+        return adminClient.listOffsets(
+            partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
+        );
+    }
+
+    public static Map<TopicPartition, ListOffsetsResultInfo> getEndOffsets(final ListOffsetsResult resultFuture,
+                                                                           final Collection<TopicPartition> partitions) {
+        Map<TopicPartition, ListOffsetsResultInfo> result = new HashMap<>();
+        for (TopicPartition partition : partitions) {
+            try {
+                result.put(partition, resultFuture.partitionResult(partition).get());
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                String msg = String.format("Error while attempting to read end offsets for partition '%s'", partition.toString());
+                throw new StreamsException(msg, cause);
+            } catch (InterruptedException e) {
+                Thread.interrupted();
+                String msg = String.format("Interrupted while attempting to read end offsets for partition '%s'", partition.toString());
+                throw new StreamsException(msg, e);
+            }
+        }
+
+        return result;
     }
 
     /**
