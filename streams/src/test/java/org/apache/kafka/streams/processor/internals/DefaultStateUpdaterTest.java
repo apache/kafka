@@ -897,7 +897,7 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldPauseStandbyTaskAndNotTransitToUpdateStandbyAgain() throws Exception {
+    public void shouldPauseStandbyTaskAndNotTransitToRestoreActive() throws Exception {
         final StandbyTask task1 = standbyTask(TASK_A_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         final StandbyTask task2 = standbyTask(TASK_B_0_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
 
@@ -910,7 +910,7 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks(task1);
         verifyUpdatingTasks(task2);
         verifyCheckpointTasks(true, task1);
-        verify(changelogReader, times(1)).transitToUpdateStandby();
+        verify(changelogReader, never()).enforceRestoreActive();
     }
 
     private void shouldPauseStatefulTask(final Task task) throws Exception {
