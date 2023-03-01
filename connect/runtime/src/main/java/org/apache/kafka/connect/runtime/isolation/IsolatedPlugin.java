@@ -18,10 +18,6 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import java.util.Objects;
 import java.util.concurrent.Callable;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 public abstract class IsolatedPlugin<P> {
 
@@ -35,8 +31,7 @@ public abstract class IsolatedPlugin<P> {
         this.plugins = Objects.requireNonNull(plugins, "plugins must be non-null");
         this.delegate = Objects.requireNonNull(delegate, "delegate plugin must be non-null");
         this.pluginClass = delegate.getClass();
-        ClassLoader classLoader = pluginClass.getClassLoader();
-        this.classLoader = Objects.requireNonNull(classLoader, "delegate plugin must not be a boostrap class");
+        this.classLoader = plugins.pluginLoader(delegate);
         this.type = Objects.requireNonNull(type, "plugin type must be non-null");
     }
 
@@ -55,34 +50,11 @@ public abstract class IsolatedPlugin<P> {
         }
     }
 
-    protected void isolateV(ThrowingRunnable runnable) throws Exception {
-        try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
+    protected void isolate(ThrowingRunnable runnable) throws Exception {
+        isolate(() -> {
             runnable.run();
-        }
-    }
-
-    protected <T> void isolateV(Consumer<T> consumer, T t) throws Exception {
-        try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
-            consumer.accept(t);
-        }
-    }
-
-    protected <T, U> void isolateV(BiConsumer<T, U> consumer, T t, U u) throws Exception {
-        try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
-            consumer.accept(t, u);
-        }
-    }
-
-    protected <T, R> R isolate(Function<T, R> function, T t) throws Exception {
-        try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
-            return function.apply(t);
-        }
-    }
-
-    protected <T, U, R> R isolate(BiFunction<T, U, R> function, T t, U u) throws Exception {
-        try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
-            return function.apply(t, u);
-        }
+            return null;
+        });
     }
 
     public interface ThrowingRunnable {
@@ -91,11 +63,13 @@ public abstract class IsolatedPlugin<P> {
 
     @Override
     public int hashCode() {
-        try {
-            return isolate(delegate::hashCode);
-        } catch (Throwable e) {
-            throw new RuntimeException("unable to evaluate plugin hashCode", e);
-        }
+        return Objects.hash(
+            plugins,
+            pluginClass,
+            delegate,
+            classLoader,
+            type
+        );
     }
 
     @Override
@@ -104,11 +78,13 @@ public abstract class IsolatedPlugin<P> {
             return false;
         }
         IsolatedPlugin<?> other = (IsolatedPlugin<?>) obj;
-        try {
-            return isolate(delegate::equals, other.delegate);
-        } catch (Throwable e) {
-            throw new RuntimeException("unable to evaluate plugin equals", e);
-        }
+        return
+            this.plugins == other.plugins
+                && this.pluginClass == other.pluginClass
+                // use reference equality, as plugin implementations may mis-implement equals
+                && this.delegate == other.delegate
+                && this.classLoader == other.classLoader
+                && this.type == other.type;
     }
 
     @Override

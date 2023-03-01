@@ -191,6 +191,16 @@ public class Plugins {
         return delegatingLoader.connectorLoader(connectorClassOrAlias);
     }
 
+    public ClassLoader pluginLoader(Object delegate) {
+        ClassLoader classLoader = delegate.getClass().getClassLoader();
+        if (classLoader instanceof PluginClassLoader) {
+            return classLoader;
+        } else {
+            return delegatingLoader;
+        }
+    }
+
+
     public Set<PluginDesc<SinkConnector>> sinkConnectors() {
         return delegatingLoader.sinkConnectors();
     }
