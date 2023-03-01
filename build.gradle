@@ -982,6 +982,7 @@ project(':core') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   task genProtocolErrorDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
@@ -1213,6 +1214,7 @@ project(':metadata') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   sourceSets {
     main {
@@ -1287,6 +1289,7 @@ project(':group-coordinator') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 }
 
 project(':examples') {
@@ -1425,6 +1428,7 @@ project(':clients') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   compileTestJava.dependsOn 'processTestMessages'
 
@@ -1527,6 +1531,7 @@ project(':raft') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   jar {
     dependsOn createVersionFile
@@ -1749,6 +1754,7 @@ project(':storage') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   jar {
     dependsOn createVersionFile
@@ -1987,6 +1993,7 @@ project(':streams') {
   }
 
   compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   javadoc {
     include "**/org/apache/kafka/streams/**"
