@@ -49,16 +49,16 @@ public class OffsetCommitResponseTest {
 
     protected final int throttleTimeMs = 10;
 
-    protected final String topic1 = "topic1";
+    protected final String topicOne = "topic1";
     protected final Uuid topic1Id = Uuid.randomUuid();
     protected final int partitionOne = 1;
-    protected final int partitionTwo = 2;
     protected final Errors errorOne = Errors.COORDINATOR_NOT_AVAILABLE;
     protected final Errors errorTwo = Errors.NOT_COORDINATOR;
-    protected final String topic2 = "topic2";
+    protected final String topicTwo = "topic2";
+    protected final int partitionTwo = 2;
 
-    protected TopicPartition tp1 = new TopicPartition(topic1, partitionOne);
-    protected TopicPartition tp2 = new TopicPartition(topic2, partitionTwo);
+    protected TopicPartition tp1 = new TopicPartition(topicOne, partitionOne);
+    protected TopicPartition tp2 = new TopicPartition(topicTwo, partitionTwo);
     protected Map<Errors, Integer> expectedErrorCounts;
     protected Map<TopicPartition, Errors> errorsMap;
 
@@ -121,15 +121,15 @@ public class OffsetCommitResponseTest {
 
         OffsetCommitResponse.Builder<?> builder = OffsetCommitResponse.newBuilder(version)
             // Both topic name and id are defined.
-            .addPartition(topic1, topic1Id, partitionOne, Errors.NONE)
-            .addPartition(topic1, topic1Id, partitionTwo, Errors.NONE)
+            .addPartition(topicOne, topic1Id, partitionOne, Errors.NONE)
+            .addPartition(topicOne, topic1Id, partitionTwo, Errors.NONE)
             .addPartitions(topic6.name, topic6.id, asList(11, 12), identity(), Errors.NONE);
 
         List<OffsetCommitResponseTopic> expectedTopics = new ArrayList<>();
 
         if (version < 9) {
-            builder.addPartition(topic2, Uuid.ZERO_UUID, 3, Errors.NONE)
-                .addPartition(topic2, Uuid.ZERO_UUID, 4, Errors.NONE)
+            builder.addPartition(topicTwo, Uuid.ZERO_UUID, 3, Errors.NONE)
+                .addPartition(topicTwo, Uuid.ZERO_UUID, 4, Errors.NONE)
                 .addPartition(topic3.name, Uuid.ZERO_UUID, 5, Errors.NONE)
                 .addPartition(topic3.name, Uuid.ZERO_UUID, 6, Errors.NONE);
 
@@ -137,9 +137,9 @@ public class OffsetCommitResponseTest {
                 () -> builder.addPartition(null, topic4.id, 8, Errors.NONE));
 
             expectedTopics.addAll(asList(
-                createResponseTopic(topic1, topic1Id, partitionOne, partitionTwo, Errors.NONE),
+                createResponseTopic(topicOne, topic1Id, partitionOne, partitionTwo, Errors.NONE),
                 createResponseTopic(topic6.name, topic6.id, 11, 12, Errors.NONE),
-                createResponseTopic(topic2, Uuid.ZERO_UUID, 3, 4, Errors.NONE),
+                createResponseTopic(topicTwo, Uuid.ZERO_UUID, 3, 4, Errors.NONE),
                 createResponseTopic(topic3.name, Uuid.ZERO_UUID, 5, 6, Errors.NONE)
             ));
 
@@ -150,12 +150,12 @@ public class OffsetCommitResponseTest {
                 .addPartition("", topic5.id, 10, Errors.NONE);
 
             assertThrows(UnsupportedVersionException.class,
-                () -> builder.addPartition(topic2, Uuid.ZERO_UUID, 3, Errors.NONE));
+                () -> builder.addPartition(topicTwo, Uuid.ZERO_UUID, 3, Errors.NONE));
             assertThrows(UnsupportedVersionException.class,
                     () -> builder.addPartition(topic3.name, null, 5, Errors.NONE));
 
             expectedTopics.addAll(asList(
-                createResponseTopic(topic1, topic1Id, partitionOne, partitionTwo, Errors.NONE),
+                createResponseTopic(topicOne, topic1Id, partitionOne, partitionTwo, Errors.NONE),
                 createResponseTopic(topic6.name, topic6.id, 11, 12, Errors.NONE),
                 createResponseTopic(null, topic4.id, 7, 8, Errors.NONE),
                 createResponseTopic("", topic5.id, 9, 10, Errors.NONE)

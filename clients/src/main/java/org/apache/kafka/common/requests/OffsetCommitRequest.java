@@ -88,10 +88,11 @@ public class OffsetCommitRequest extends AbstractRequest {
                                            .setPartitionIndex(requestPartition.partitionIndex())
                                            .setErrorCode(e.code()));
             }
-            OffsetCommitResponseTopic responseTopic = new OffsetCommitResponseTopic()
-                .setTopicId(entry.topicId())
-                .setName(entry.name());
-            responseTopicData.add(responseTopic.setPartitions(responsePartitions));
+            responseTopicData.add(new OffsetCommitResponseTopic()
+                    .setName(entry.name())
+                    .setTopicId(entry.topicId())
+                    .setPartitions(responsePartitions)
+            );
         }
         return responseTopicData;
     }
