@@ -237,11 +237,12 @@ public class Plugins {
         } else if (connector instanceof SinkConnector) {
             return new IsolatedSinkConnector(this, (SinkConnector) connector);
         } else {
-            throw new IllegalArgumentException("taskClass must be either a SourceTask or a SinkTask");
+            throw new IllegalArgumentException(
+                "Unknown connector " + connector.getClass().getName() + " does not subclass any known connector type");
         }
     }
 
-    Connector newRawConnector(String connectorClassOrAlias) {
+    private Connector newRawConnector(String connectorClassOrAlias) {
         Class<? extends Connector> klass = connectorClass(connectorClassOrAlias);
         return newPlugin(klass);
     }

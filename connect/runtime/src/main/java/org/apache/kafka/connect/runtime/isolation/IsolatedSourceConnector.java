@@ -29,11 +29,11 @@ public class IsolatedSourceConnector extends IsolatedConnector<SourceConnector> 
     }
 
     public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> connectorConfig) throws Exception {
-        return isolate(delegate::exactlyOnceSupport, connectorConfig);
+        return isolate(() -> delegate.exactlyOnceSupport(connectorConfig));
     }
 
     public ConnectorTransactionBoundaries canDefineTransactionBoundaries(Map<String, String> connectorConfig) throws Exception {
-        return isolate(delegate::canDefineTransactionBoundaries, connectorConfig);
+        return isolate(() -> delegate.canDefineTransactionBoundaries(connectorConfig));
     }
 
 }

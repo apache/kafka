@@ -36,23 +36,23 @@ public abstract class IsolatedConnector<P extends Connector> extends IsolatedPlu
     }
 
     public void initialize(ConnectorContext ctx) throws Exception {
-        isolateV(delegate::initialize, ctx);
+        isolate(() -> delegate.initialize(ctx));
     }
 
     public void initialize(ConnectorContext ctx, List<Map<String, String>> taskConfigs) throws Exception {
-        isolateV(delegate::initialize, ctx, taskConfigs);
+        isolate(() -> delegate.initialize(ctx, taskConfigs));
     }
 
     public void reconfigure(Map<String, String> props) throws Exception {
-        isolateV(delegate::reconfigure, props);
+        isolate(() -> delegate.reconfigure(props));
     }
 
     public Config validate(Map<String, String> connectorConfigs) throws Exception {
-        return isolate(delegate::validate, connectorConfigs);
+        return isolate(() -> delegate.validate(connectorConfigs));
     }
 
     public void start(Map<String, String> props) throws Exception {
-        isolateV(delegate::start, props);
+        isolate(() -> delegate.start(props));
     }
 
     public Class<? extends Task> taskClass() throws Exception {
@@ -60,11 +60,11 @@ public abstract class IsolatedConnector<P extends Connector> extends IsolatedPlu
     }
 
     public List<Map<String, String>> taskConfigs(int maxTasks) throws Exception {
-        return isolate(delegate::taskConfigs, maxTasks);
+        return isolate(() -> delegate.taskConfigs(maxTasks));
     }
 
     public void stop() throws Exception {
-        isolateV(delegate::stop);
+        isolate(delegate::stop);
     }
 
     public ConfigDef config() throws Exception {

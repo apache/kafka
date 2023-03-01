@@ -449,7 +449,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             || SinkConnectorConfig.hasDlqTopicConfig(connProps);
     }
 
-    ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
+    ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) throws Exception {
         if (worker.configTransformer() != null) {
             connectorProps = worker.configTransformer().transform(connectorProps);
         }
@@ -488,18 +488,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             Set<String> allGroups = new LinkedHashSet<>(enrichedConfigDef.groups());
 
             // do custom connector-specific validation
-            ConfigDef configDef;
-            try {
-                configDef = connector.config();
-            } catch (Throwable e) {
-                throw new ConnectException(
-                        String.format(
-                                "unable to evaluate %s.config()",
-                                connector.pluginClass().getName()
-                        ),
-                        e
-                );
-            }
+            ConfigDef configDef = connector.config();
             if (null == configDef) {
                 throw new BadRequestException(
                         String.format(
@@ -508,18 +497,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                         )
                 );
             }
-            Config config;
-            try {
-                config = connector.validate(connectorProps);
-            } catch (Throwable e) {
-                throw new ConnectException(
-                        String.format(
-                                "unable to evaluate %s.validate()",
-                                connector.pluginClass().getName()
-                        ),
-                        e
-                );
-            }
+            Config config = connector.validate(connectorProps);
             if (null == config) {
                 throw new BadRequestException(
                         String.format(
