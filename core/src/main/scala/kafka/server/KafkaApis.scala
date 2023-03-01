@@ -34,6 +34,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
@@ -2405,10 +2406,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (version < 4) {
         // There will only be one response in data. Add it to the response data object.
         val data = new AddPartitionsToTxnResponseData()
-        responses.forEach(result => {
+        responses.forEach { result => 
           data.setResultsByTopicV3AndBelow(result.topicResults())
           data.setThrottleTimeMs(requestThrottleMs)
-        })
+        }
         new AddPartitionsToTxnResponse(data)
       } else {
         new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData().setThrottleTimeMs(requestThrottleMs).setResultsByTransaction(responses))
@@ -2416,33 +2417,34 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val txns = addPartitionsToTxnRequest.data.transactions
-    def maybeSendResponse(): Unit = {
-      var canSend = false
-      responses.synchronized {
-        if (responses.size() == txns.size()) {
-          canSend = true
-        }
+    def addResultAndMaybeSendResponse(result: AddPartitionsToTxnResult): Unit = {
+      val canSend = responses.synchronized {
+        responses.add(result)
+        responses.size() == txns.size()
       }
       if (canSend) {
         requestHelper.sendResponseMaybeThrottle(request, createResponse)
       }
     }
 
-    txns.forEach( transaction => {
+    txns.forEach { transaction => 
       val transactionalId = transaction.transactionalId
       val partitionsToAdd = partitionsByTransaction.get(transactionalId).asScala
-      
+
       // Versions < 4 come from clients and must be authorized to write for the given transaction and for the given topics.
       if (version < 4 && !authHelper.authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId)) {
-        responses.add(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
-        maybeSendResponse()
+        addResultAndMaybeSendResponse(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
       } else {
         val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
         val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
         val authorizedPartitions = mutable.Set[TopicPartition]()
 
-        val authorizedTopics = if (version < 4) authHelper.filterByAuthorized(request.context, WRITE, TOPIC,
-          partitionsToAdd.filterNot(tp => Topic.isInternal(tp.topic)))(_.topic) else partitionsToAdd.map(_.topic).toSet
+        // Only request versions less than 4 need write authorization since they come from clients.
+        val authorizedTopics = 
+          if (version < 4) 
+            authHelper.filterByAuthorized(request.context, WRITE, TOPIC, partitionsToAdd.filterNot(tp => Topic.isInternal(tp.topic)))(_.topic) 
+          else 
+            partitionsToAdd.map(_.topic).toSet
         for (topicPartition <- partitionsToAdd) {
           if (!authorizedTopics.contains(topicPartition.topic))
             unauthorizedTopicErrors += topicPartition -> Errors.TOPIC_AUTHORIZATION_FAILED
@@ -2458,30 +2460,25 @@ class KafkaApis(val requestChannel: RequestChannel,
           // the authorization check to indicate that they were not added to the transaction.
           val partitionErrors = unauthorizedTopicErrors ++ nonExistingTopicErrors ++
             authorizedPartitions.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)
-          responses.add(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitionErrors.asJava))
-          maybeSendResponse()
+          addResultAndMaybeSendResponse(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitionErrors.asJava))
         } else {
-          def sendResponseCallback(error: Errors): Unit = {
-            val finalError = {
-              if (version < 2 && error == Errors.PRODUCER_FENCED) {
-                // For older clients, they could not understand the new PRODUCER_FENCED error code,
-                // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
-                Errors.INVALID_PRODUCER_EPOCH
-              } else {
-                error
-              }
-            }
-            responses.synchronized {
-              responses.add(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, finalError))
-            }
-            maybeSendResponse()
-          }
           
-          def sendVerifyResponseCallback(errors: Map[TopicPartition, Errors]): Unit = {
-            responses.synchronized {
-              responses.add(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, errors.asJava))
+          def sendResponseCallback(error: Option[Errors], errors: Map[TopicPartition, Errors]): Unit = {
+            error match {
+              case Some(error) =>
+                val finalError = {
+                  if (version < 2 && error == Errors.PRODUCER_FENCED) {
+                    // For older clients, they could not understand the new PRODUCER_FENCED error code,
+                    // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
+                    Errors.INVALID_PRODUCER_EPOCH
+                  } else {
+                    error
+                  }
+                }
+                addResultAndMaybeSendResponse(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, finalError))
+              case None =>
+                addResultAndMaybeSendResponse(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, errors.asJava))
             }
-            maybeSendResponse()
           }
 
           txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
@@ -2490,11 +2487,10 @@ class KafkaApis(val requestChannel: RequestChannel,
             authorizedPartitions,
             transaction.verifyOnly,
             sendResponseCallback,
-            sendVerifyResponseCallback,
             requestLocal)
         }
       }
-    })
+    }
   }
 
   def handleAddOffsetsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
@@ -2516,15 +2512,16 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setThrottleTimeMs(requestThrottleMs))
       )
     else {
-      def sendResponseCallback(error: Errors): Unit = {
+      def sendResponseCallback(error: Option[Errors], errors: Map[TopicPartition, Errors]): Unit = {
+        // This will always have a single error, so error will always be defined.
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
           val finalError =
-            if (addOffsetsToTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
+            if (addOffsetsToTxnRequest.version < 2 && error.get == Errors.PRODUCER_FENCED) {
               // For older clients, they could not understand the new PRODUCER_FENCED error code,
               // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
               Errors.INVALID_PRODUCER_EPOCH
             } else {
-              error
+              error.get
             }
 
           val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(
@@ -2544,7 +2541,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         Set(offsetTopicPartition),
         false,
         sendResponseCallback,
-        null,
         requestLocal)
     }
   }

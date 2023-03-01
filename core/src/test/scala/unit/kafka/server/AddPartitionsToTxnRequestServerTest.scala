@@ -71,16 +71,16 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
           transactionalId,
           producerId,
           producerEpoch,
-          List(createdTopicPartition, nonExistentTopic).asJava)
-          .build()
+          List(createdTopicPartition, nonExistentTopic).asJava
+        ).build()
       } else {
         val topics = new AddPartitionsToTxnTopicCollection()
         topics.add(new AddPartitionsToTxnTopic()
-          .setName(createdTopicPartition.topic())
-          .setPartitions(Collections.singletonList(createdTopicPartition.partition())))
+          .setName(createdTopicPartition.topic)
+          .setPartitions(Collections.singletonList(createdTopicPartition.partition)))
         topics.add(new AddPartitionsToTxnTopic()
-          .setName(nonExistentTopic.topic())
-          .setPartitions(Collections.singletonList(nonExistentTopic.partition())))
+          .setName(nonExistentTopic.topic)
+          .setPartitions(Collections.singletonList(nonExistentTopic.partition)))
 
         val transactions = new AddPartitionsToTxnTransactionCollection()
         transactions.add(new AddPartitionsToTxnTransaction()
@@ -99,7 +99,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
       if (version < 4) 
         response.errors.get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID) 
       else 
-        response.errorsForTransaction(response.getTransactionTopicResults(transactionalId))
+        response.errors.get(transactionalId)
     
     assertEquals(2, errors.size)
 
@@ -120,8 +120,8 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     
     val txn2Topics = new AddPartitionsToTxnTopicCollection()
     txn2Topics.add(new AddPartitionsToTxnTopic()
-      .setName(tp0.topic())
-      .setPartitions(Collections.singletonList(tp0.partition())))
+      .setName(tp0.topic)
+      .setPartitions(Collections.singletonList(tp0.partition)))
 
     val (coordinatorId, txn1) = setUpTransactions(transactionalId1, false, Set(tp0))
 
@@ -139,14 +139,13 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     val response = connectAndReceive[AddPartitionsToTxnResponse](request, brokerSocketServer(coordinatorId))
 
     val errors = response.errors()
+    
+    val expectedErrors = Map(
+      transactionalId1 -> Collections.singletonMap(tp0, Errors.NONE),
+      transactionalId2 -> Collections.singletonMap(tp0, Errors.INVALID_PRODUCER_ID_MAPPING)
+    ).asJava
 
-    assertTrue(errors.containsKey(transactionalId1))
-    assertTrue(errors.get(transactionalId1).containsKey(tp0))
-    assertEquals(Errors.NONE, errors.get(transactionalId1).get(tp0))
-
-    assertTrue(errors.containsKey(transactionalId2))
-    assertTrue(errors.get(transactionalId1).containsKey(tp0))
-    assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, errors.get(transactionalId2).get(tp0))
+    assertEquals(expectedErrors, errors)
   }
 
   @Test
@@ -165,9 +164,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
 
     val verifyErrors = verifyResponse.errors()
 
-    assertTrue(verifyErrors.containsKey(transactionalId))
-    assertTrue(verifyErrors.get(transactionalId).containsKey(tp0))
-    assertEquals(Errors.INVALID_TXN_STATE, verifyErrors.get(transactionalId).get(tp0))
+    assertEquals(Collections.singletonMap(transactionalId, Collections.singletonMap(tp0, Errors.INVALID_TXN_STATE)), verifyErrors)
   }
   
   private def setUpTransactions(transactionalId: String, verifyOnly: Boolean, partitions: Set[TopicPartition]): (Int, AddPartitionsToTxnTransaction) = {
@@ -185,11 +182,11 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     val producerEpoch1 = initPidResponse.data().producerEpoch()
 
     val txn1Topics = new AddPartitionsToTxnTopicCollection()
-    partitions.foreach(tp => 
+    partitions.foreach { tp => 
     txn1Topics.add(new AddPartitionsToTxnTopic()
-      .setName(tp.topic())
-      .setPartitions(Collections.singletonList(tp.partition())))
-    )
+      .setName(tp.topic)
+      .setPartitions(Collections.singletonList(tp.partition)))
+    }
 
     (coordinatorId, new AddPartitionsToTxnTransaction()
       .setTransactionalId(transactionalId)
@@ -203,11 +200,11 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
 object AddPartitionsToTxnRequestServerTest {
    def parameters: JStream[Arguments] = {
     val arguments = mutable.ListBuffer[Arguments]()
-    ApiKeys.ADD_PARTITIONS_TO_TXN.allVersions().forEach( version =>
-      Array("kraft", "zk").foreach( quorum =>
+    ApiKeys.ADD_PARTITIONS_TO_TXN.allVersions().forEach { version =>
+      Array("kraft", "zk").foreach { quorum =>
         arguments += Arguments.of(quorum, version)
-      )
-    )
+      }
+    }
     arguments.asJava.stream()
   }
 }

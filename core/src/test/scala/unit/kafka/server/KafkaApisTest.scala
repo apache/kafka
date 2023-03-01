@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResourceCollection => LAlterConfigsResourceCollection}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfigCollection => LAlterableConfigCollection}
@@ -1935,7 +1936,7 @@ class KafkaApisTest {
       reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator, txnCoordinator)
 
       val capturedResponse: ArgumentCaptor[AddOffsetsToTxnResponse] = ArgumentCaptor.forClass(classOf[AddOffsetsToTxnResponse])
-      val responseCallback: ArgumentCaptor[Errors => Unit] = ArgumentCaptor.forClass(classOf[Errors => Unit])
+      val responseCallback: ArgumentCaptor[(Option[Errors], Map[TopicPartition, Errors]) => Unit] = ArgumentCaptor.forClass(classOf[(Option[Errors], Map[TopicPartition, Errors]) => Unit])
 
       val groupId = "groupId"
       val transactionalId = "txnId"
@@ -1964,9 +1965,8 @@ class KafkaApisTest {
         ArgumentMatchers.eq(Set(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))),
         ArgumentMatchers.eq(false),
         responseCallback.capture(),
-        ArgumentMatchers.any(),
         ArgumentMatchers.eq(requestLocal)
-      )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
+      )).thenAnswer(_ => responseCallback.getValue.apply(Some(Errors.PRODUCER_FENCED), Map.empty))
 
       createKafkaApis().handleAddOffsetsToTxnRequest(request, requestLocal)
 
@@ -1995,7 +1995,7 @@ class KafkaApisTest {
       reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
       val capturedResponse: ArgumentCaptor[AddPartitionsToTxnResponse] = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnResponse])
-      val responseCallback: ArgumentCaptor[Errors => Unit] = ArgumentCaptor.forClass(classOf[Errors => Unit])
+      val responseCallback: ArgumentCaptor[(Option[Errors], Map[TopicPartition, Errors]) => Unit] = ArgumentCaptor.forClass(classOf[(Option[Errors], Map[TopicPartition, Errors]) => Unit])
 
       val transactionalId = "txnId"
       val producerId = 15L
@@ -2020,9 +2020,8 @@ class KafkaApisTest {
         ArgumentMatchers.eq(Set(topicPartition)),
         ArgumentMatchers.eq(false),
         responseCallback.capture(),
-        ArgumentMatchers.any(),
         ArgumentMatchers.eq(requestLocal)
-      )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
+      )).thenAnswer(_ => responseCallback.getValue.apply(Some(Errors.PRODUCER_FENCED), Map.empty))
 
       createKafkaApis().handleAddPartitionsToTxnRequest(request, requestLocal)
 
@@ -2039,6 +2038,88 @@ class KafkaApisTest {
         assertEquals(Collections.singletonMap(topicPartition, Errors.PRODUCER_FENCED), response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID))
       }
     }
+  }
+
+  @Test
+  def testBatchedRequest(): Unit = {
+    val topic = "topic"
+    addTopicToMetadataCache(topic, numPartitions = 2)
+
+    val capturedResponse: ArgumentCaptor[AddPartitionsToTxnResponse] = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnResponse])
+    val responseCallback: ArgumentCaptor[(Option[Errors], Map[TopicPartition, Errors]) => Unit] = ArgumentCaptor.forClass(classOf[(Option[Errors], Map[TopicPartition, Errors]) => Unit])
+
+    val transactionalId1 = "txnId1"
+    val transactionalId2 = "txnId2"
+    val producerId = 15L
+    val epoch = 0.toShort
+    
+    val tp0 = new TopicPartition(topic, 0)
+    val tp1 = new TopicPartition(topic, 1)
+
+    val addPartitionsToTxnRequest = AddPartitionsToTxnRequest.Builder.forBroker(
+      new AddPartitionsToTxnTransactionCollection(
+        List(new AddPartitionsToTxnTransaction()
+          .setTransactionalId(transactionalId1)
+          .setProducerId(producerId)
+          .setProducerEpoch(epoch)
+          .setVerifyOnly(true)
+          .setTopics(new AddPartitionsToTxnTopicCollection(
+            Collections.singletonList(new AddPartitionsToTxnTopic()
+              .setName(tp0.topic)
+              .setPartitions(Collections.singletonList(tp0.partition))
+            ).iterator())
+          ), new AddPartitionsToTxnTransaction()
+          .setTransactionalId(transactionalId2)
+          .setProducerId(producerId)
+          .setProducerEpoch(epoch)
+          .setVerifyOnly(false)
+          .setTopics(new AddPartitionsToTxnTopicCollection(
+            Collections.singletonList(new AddPartitionsToTxnTopic()
+              .setName(tp1.topic)
+              .setPartitions(Collections.singletonList(tp1.partition))
+            ).iterator())
+          )
+        ).asJava.iterator()
+      )
+    ).build(4.toShort)
+    val request = buildRequest(addPartitionsToTxnRequest)
+
+    val requestLocal = RequestLocal.withThreadConfinedCaching
+    when(txnCoordinator.handleAddPartitionsToTransaction(
+      ArgumentMatchers.eq(transactionalId1),
+      ArgumentMatchers.eq(producerId),
+      ArgumentMatchers.eq(epoch),
+      ArgumentMatchers.eq(Set(tp0)),
+      ArgumentMatchers.eq(true),
+      responseCallback.capture(),
+      ArgumentMatchers.eq(requestLocal)
+    )).thenAnswer(_ => responseCallback.getValue.apply(None, Map(tp0 -> Errors.NONE)))
+
+    when(txnCoordinator.handleAddPartitionsToTransaction(
+      ArgumentMatchers.eq(transactionalId2),
+      ArgumentMatchers.eq(producerId),
+      ArgumentMatchers.eq(epoch),
+      ArgumentMatchers.eq(Set(tp1)),
+      ArgumentMatchers.eq(false),
+      responseCallback.capture(),
+      ArgumentMatchers.eq(requestLocal)
+    )).thenAnswer(_ => responseCallback.getValue.apply(None, Map(tp1 -> Errors.PRODUCER_FENCED)))
+
+    createKafkaApis().handleAddPartitionsToTxnRequest(request, requestLocal)
+
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(request),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None)
+    )
+    val response = capturedResponse.getValue
+    
+    val expectedErrors = Map(
+      transactionalId1 -> Collections.singletonMap(tp0, Errors.NONE),
+      transactionalId2 -> Collections.singletonMap(tp1, Errors.PRODUCER_FENCED)
+    ).asJava
+    
+    assertEquals(expectedErrors, response.errors())
   }
 
   @Test

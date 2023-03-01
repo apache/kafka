@@ -43,8 +43,6 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     private final AddPartitionsToTxnRequestData data;
 
-    private final short version;
-
     public static class Builder extends AbstractRequest.Builder<AddPartitionsToTxnRequest> {
         public final AddPartitionsToTxnRequestData data;
         
@@ -56,7 +54,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
             AddPartitionsToTxnTopicCollection topics = buildTxnTopicCollection(partitions);
             
             return new Builder(ApiKeys.ADD_PARTITIONS_TO_TXN.oldestVersion(),
-                    (short) 3, 
+                (short) 3, 
                 new AddPartitionsToTxnRequestData()
                     .setV3AndBelowTransactionalId(transactionalId)
                     .setV3AndBelowProducerId(producerId)
@@ -113,7 +111,6 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     public AddPartitionsToTxnRequest(final AddPartitionsToTxnRequestData data, short version) {
         super(ApiKeys.ADD_PARTITIONS_TO_TXN, version);
         this.data = data;
-        this.version = version;
     }
 
     @Override
@@ -125,7 +122,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     public AddPartitionsToTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         AddPartitionsToTxnResponseData response = new AddPartitionsToTxnResponseData();
-        if (version < 4) {
+        if (version() < 4) {
             response.setResultsByTopicV3AndBelow(errorResponseForTopics(data.v3AndBelowTopics(), error));
         } else {
             AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResultCollection();
@@ -161,7 +158,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     // Takes a version 3 or below request and returns a v4+ singleton (one transaction ID) request.
     public AddPartitionsToTxnRequest normalizeRequest() {
-        return new AddPartitionsToTxnRequest(new AddPartitionsToTxnRequestData().setTransactions(singletonTransaction()), version);
+        return new AddPartitionsToTxnRequest(new AddPartitionsToTxnRequestData().setTransactions(singletonTransaction()), version());
     }
 
     private AddPartitionsToTxnTransactionCollection singletonTransaction() {

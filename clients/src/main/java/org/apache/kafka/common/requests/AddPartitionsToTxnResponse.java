@@ -71,11 +71,12 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     public Map<String, Map<TopicPartition, Errors>> errors() {
         Map<String, Map<TopicPartition, Errors>> errorsMap = new HashMap<>();
 
-        errorsMap.put(V3_AND_BELOW_TXN_ID, errorsForTransaction(this.data.resultsByTopicV3AndBelow()));
+        if (this.data.resultsByTopicV3AndBelow().size() != 0) {
+            errorsMap.put(V3_AND_BELOW_TXN_ID, errorsForTransaction(this.data.resultsByTopicV3AndBelow()));
+        }
 
         for (AddPartitionsToTxnResult result : this.data.resultsByTransaction()) {
-            String transactionalId = result.transactionalId();
-            errorsMap.put(transactionalId, errorsForTransaction(data().resultsByTransaction().find(transactionalId).topicResults()));
+            errorsMap.put(result.transactionalId(), errorsForTransaction(result.topicResults()));
         }
         
         return errorsMap;
