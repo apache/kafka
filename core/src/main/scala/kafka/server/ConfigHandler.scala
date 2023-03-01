@@ -201,8 +201,8 @@ class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends Co
 }
 
 /**
-  * The BrokerConfigHandler will process individual broker config changes in ZK.
-  * The callback provides the brokerId and the full properties set read from ZK.
+  * The BrokerConfigHandler will process individual broker config changes in ZooKeeper or the metadata log.
+  * The callback provides the brokerId and the full properties set.
   * This implementation reports the overrides to the respective ReplicationQuotaManager objects
   */
 class BrokerConfigHandler(private val brokerConfig: KafkaConfig,

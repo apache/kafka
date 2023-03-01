@@ -26,6 +26,7 @@ import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher, BrokerMetadataPublisher}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
@@ -49,6 +50,7 @@ import org.apache.kafka.server.util.{Deadline, FutureUtils}
 import java.util.OptionalLong
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
+import scala.collection.immutable
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
@@ -105,6 +107,7 @@ class ControllerServer(
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
   var migrationSupport: Option[ControllerMigrationSupport] = None
+  def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -116,13 +119,6 @@ class ControllerServer(
       lock.unlock()
     }
     true
-  }
-
-  private def doRemoteKraftSetup(): Unit = {
-    // Explicitly configure metric reporters on this remote controller.
-    // We do not yet support dynamic reconfiguration on remote controllers in general;
-    // remove this once that is implemented.
-    new DynamicMetricReporterState(config.nodeId, config, metrics, clusterId)
   }
 
   def clusterId: String = sharedServer.metaProps.clusterId
@@ -243,11 +239,6 @@ class ControllerServer(
       }
       controller = controllerBuilder.build()
 
-      // Perform any setup that is done only when this node is a controller-only node.
-      if (!config.processRoles.contains(BrokerRole)) {
-        doRemoteKraftSetup()
-      }
-
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
         val migrationClient = new ZkMigrationClient(zkClient)
@@ -309,6 +300,26 @@ class ControllerServer(
       FutureUtils.waitWithLogging(logger.underlying, "all of the SocketServer Acceptors to be started",
         socketServerFuture, startupDeadline, time)
 
+      config.dynamicConfig.addReconfigurables(this)
+      if (!config.processRoles.contains(BrokerRole)) {
+        // We need to receive dynamic config changes, but we only need install a publisher for them when
+        // we aren't also running the broker role; the broker's DynamicConfigPublisher would take care of it otherwise.
+        val dynamicConfigHandlers = immutable.Map[String, ConfigHandler](
+          // isolated controllers don't host topics, so no need to do anything with dynamic topic config changes here
+          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
+        val brokerMetadataPublisher = new BrokerMetadataPublisher(
+          config,
+          new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas),
+          new DynamicConfigPublisher(
+            config,
+            sharedServer.metadataPublishingFaultHandler,
+            dynamicConfigHandlers,
+            "controller"),
+          sharedServer.metadataPublishingFaultHandler,
+          sharedServer.metadataPublishingFaultHandler
+        )
+        sharedServer.loader.installPublishers(List( brokerMetadataPublisher).asJava)
+      }
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)

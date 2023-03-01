@@ -26,6 +26,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.server.authorizer.Authorizer
@@ -96,18 +97,37 @@ object BrokerMetadataPublisher extends Logging {
 
 class BrokerMetadataPublisher(
   conf: KafkaConfig,
-  metadataCache: KRaftMetadataCache,
-  logManager: LogManager,
-  replicaManager: ReplicaManager,
-  groupCoordinator: GroupCoordinator,
-  txnCoordinator: TransactionCoordinator,
+  metadataCache: Option[KRaftMetadataCache],
+  logManager: Option[LogManager],
+  replicaManager: Option[ReplicaManager],
+  groupCoordinator: Option[GroupCoordinator],
+  txnCoordinator: Option[TransactionCoordinator],
   clientQuotaMetadataManager: ClientQuotaMetadataManager,
   var dynamicConfigPublisher: DynamicConfigPublisher,
   private val _authorizer: Option[Authorizer],
   fatalFaultHandler: FaultHandler,
   metadataPublishingFaultHandler: FaultHandler
-) extends MetadataPublisher with Logging {
+) extends MetadataPublisher with Logging with org.apache.kafka.image.publisher.MetadataPublisher {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
+
+  def this(
+    conf: KafkaConfig,
+    clientQuotaMetadataManager: ClientQuotaMetadataManager,
+    dynamicConfigPublisher: DynamicConfigPublisher,
+    fatalFaultHandler: FaultHandler,
+    metadataPublishingFaultHandler: FaultHandler,
+  ) = this(
+    conf,
+    None,
+    None,
+    None,
+    None,
+    None,
+    clientQuotaMetadataManager,
+    dynamicConfigPublisher,
+    None,
+    fatalFaultHandler,
+    metadataPublishingFaultHandler)
 
   import BrokerMetadataPublisher._
 
@@ -140,7 +160,7 @@ class BrokerMetadataPublisher(
       }
 
       // Publish the new metadata image to the metadata cache.
-      metadataCache.setImage(newImage)
+      metadataCache.foreach(_.setImage(newImage))
 
       val metadataVersionLogMsg = s"metadata.version ${newImage.features().metadataVersion()}"
 
@@ -162,52 +182,56 @@ class BrokerMetadataPublisher(
 
       // Apply topic deltas.
       Option(delta.topicsDelta()).foreach { topicsDelta =>
-        try {
-          // Notify the replica manager about changes to topics.
-          replicaManager.applyDelta(topicsDelta, newImage)
-        } catch {
-          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error applying topics " +
-            s"delta in ${deltaName}", t)
-        }
-        try {
-          // Update the group coordinator of local changes
-          updateCoordinator(newImage,
-            delta,
-            Topic.GROUP_METADATA_TOPIC_NAME,
-            groupCoordinator.onElection,
-            (partitionIndex, leaderEpochOpt) => groupCoordinator.onResignation(partitionIndex, toOptionalInt(leaderEpochOpt))
-          )
-        } catch {
-          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
-            s"coordinator with local changes in ${deltaName}", t)
-        }
-        try {
-          // Update the transaction coordinator of local changes
-          updateCoordinator(newImage,
-            delta,
-            Topic.TRANSACTION_STATE_TOPIC_NAME,
-            txnCoordinator.onElection,
-            txnCoordinator.onResignation)
-        } catch {
-          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating txn " +
-            s"coordinator with local changes in ${deltaName}", t)
-        }
-        try {
-          // Notify the group coordinator about deleted topics.
-          val deletedTopicPartitions = new mutable.ArrayBuffer[TopicPartition]()
-          topicsDelta.deletedTopicIds().forEach { id =>
-            val topicImage = topicsDelta.image().getTopic(id)
-            topicImage.partitions().keySet().forEach {
-              id => deletedTopicPartitions += new TopicPartition(topicImage.name(), id)
+        replicaManager.foreach(replicaManager =>
+          try {
+            // Notify the replica manager about changes to topics.
+            replicaManager.applyDelta(topicsDelta, newImage)
+          } catch {
+            case t: Throwable => metadataPublishingFaultHandler.handleFault("Error applying topics " +
+              s"delta in ${deltaName}", t)
+          })
+        groupCoordinator.foreach(groupCoordinator =>
+          try {
+            // Update the group coordinator of local changes
+            updateCoordinator(newImage,
+              delta,
+              Topic.GROUP_METADATA_TOPIC_NAME,
+              groupCoordinator.onElection,
+              (partitionIndex, leaderEpochOpt) => groupCoordinator.onResignation(partitionIndex, toOptionalInt(leaderEpochOpt))
+            )
+          } catch {
+            case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
+              s"coordinator with local changes in ${deltaName}", t)
+          })
+        txnCoordinator.foreach(txnCoordinator =>
+          try {
+            // Update the transaction coordinator of local changes
+            updateCoordinator(newImage,
+              delta,
+              Topic.TRANSACTION_STATE_TOPIC_NAME,
+              txnCoordinator.onElection,
+              txnCoordinator.onResignation)
+          } catch {
+            case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating txn " +
+              s"coordinator with local changes in ${deltaName}", t)
+          })
+        groupCoordinator.foreach(groupCoordinator =>
+          try {
+            // Notify the group coordinator about deleted topics.
+            val deletedTopicPartitions = new mutable.ArrayBuffer[TopicPartition]()
+            topicsDelta.deletedTopicIds().forEach { id =>
+              val topicImage = topicsDelta.image().getTopic(id)
+              topicImage.partitions().keySet().forEach {
+                id => deletedTopicPartitions += new TopicPartition(topicImage.name(), id)
+              }
             }
-          }
-          if (deletedTopicPartitions.nonEmpty) {
-            groupCoordinator.onPartitionsDeleted(deletedTopicPartitions.asJava, RequestLocal.NoCaching.bufferSupplier)
-          }
-        } catch {
-          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
-            s"coordinator with deleted partitions in ${deltaName}", t)
-        }
+            if (deletedTopicPartitions.nonEmpty) {
+              groupCoordinator.onPartitionsDeleted(deletedTopicPartitions.asJava, RequestLocal.NoCaching.bufferSupplier)
+            }
+          } catch {
+            case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
+              s"coordinator with deleted partitions in ${deltaName}", t)
+          })
       }
 
       // Apply configuration deltas.
@@ -260,7 +284,7 @@ class BrokerMetadataPublisher(
           case _ => // No ClusterMetadataAuthorizer is configured. There is nothing to do.
         })
 
-      if (_firstPublish) {
+      if (_firstPublish && replicaManager.nonEmpty) {
         finishInitializingReplicaManager(newImage)
       }
       publishedOffsetAtomic.set(newImage.highestOffsetAndEpoch().offset)
@@ -334,32 +358,32 @@ class BrokerMetadataPublisher(
     try {
       // Start log manager, which will perform (potentially lengthy)
       // recovery-from-unclean-shutdown if required.
-      logManager.startup(metadataCache.getAllTopics())
+      logManager.foreach(_.startup(metadataCache.get.getAllTopics()))
 
       // Make the LogCleaner available for reconfiguration. We can't do this prior to this
       // point because LogManager#startup creates the LogCleaner object, if
       // log.cleaner.enable is true. TODO: improve this (see KAFKA-13610)
-      Option(logManager.cleaner).foreach(conf.dynamicConfig.addBrokerReconfigurable)
+      logManager.foreach(logManager => Option(logManager.cleaner).foreach(conf.dynamicConfig.addBrokerReconfigurable))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting LogManager", t)
     }
     try {
       // Start the replica manager.
-      replicaManager.startup()
+      replicaManager.foreach(_.startup())
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting ReplicaManager", t)
     }
     try {
       // Start the group coordinator.
-      groupCoordinator.startup(() => metadataCache.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME)
-        .getOrElse(conf.offsetsTopicPartitions))
+      groupCoordinator.foreach(_.startup(() => metadataCache.get.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME)
+        .getOrElse(conf.offsetsTopicPartitions)))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting GroupCoordinator", t)
     }
     try {
       // Start the transaction coordinator.
-      txnCoordinator.startup(() => metadataCache.numPartitions(
-        Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(conf.transactionTopicPartitions))
+      txnCoordinator.foreach(_.startup(() => metadataCache.get.numPartitions(
+        Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(conf.transactionTopicPartitions)))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting TransactionCoordinator", t)
     }
@@ -370,9 +394,9 @@ class BrokerMetadataPublisher(
       // Delete log directories which we're not supposed to have, according to the
       // latest metadata. This is only necessary to do when we're first starting up. If
       // we have to load a snapshot later, these topics will appear in deletedTopicIds.
-      val strayPartitions = findStrayPartitions(brokerId, newImage.topics, logManager.allLogs)
+      val strayPartitions = findStrayPartitions(brokerId, newImage.topics, logManager.get.allLogs)
       if (strayPartitions.nonEmpty) {
-        replicaManager.deleteStrayReplicas(strayPartitions)
+        replicaManager.get.deleteStrayReplicas(strayPartitions)
       }
     } catch {
       case t: Throwable => metadataPublishingFaultHandler.handleFault("Error deleting stray " +
@@ -381,10 +405,46 @@ class BrokerMetadataPublisher(
     try {
       // Make sure that the high water mark checkpoint thread is running for the replica
       // manager.
-      replicaManager.startHighWatermarkCheckPointThread()
+      replicaManager.get.startHighWatermarkCheckPointThread()
     } catch {
       case t: Throwable => metadataPublishingFaultHandler.handleFault("Error starting high " +
         "watermark checkpoint thread during startup", t)
     }
 }
+
+  /**
+   * Returns the name of this publisher.
+   *
+   * @return The publisher name.
+   */
+  override def name(): String = s"BrokerMetadataPublisher ${dynamicConfigPublisher.nodeType} id=${conf.nodeId}"
+
+  /**
+   * Publish a new cluster metadata snapshot that we loaded.
+   *
+   * @param delta    The delta between the previous state and the new one.
+   * @param newImage The complete new state.
+   * @param manifest The contents of what was published.
+   */
+  override def publishSnapshot(delta: MetadataDelta, newImage: MetadataImage, manifest: SnapshotManifest): Unit = {
+    publish(delta, newImage)
+  }
+
+  /**
+   * Publish a change to the cluster metadata.
+   *
+   * @param delta    The delta between the previous state and the new one.
+   * @param newImage The complete new state.
+   * @param manifest The contents of what was published.
+   */
+  override def publishLogDelta(delta: MetadataDelta, newImage: MetadataImage, manifest: LogDeltaManifest): Unit = {
+    publish(delta, newImage)
+  }
+
+  /**
+   * Close this metadata publisher.
+   */
+  override def close(): Unit = {
+    // nothing to close
+  }
 }
