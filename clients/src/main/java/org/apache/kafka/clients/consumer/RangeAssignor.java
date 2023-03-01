@@ -29,7 +29,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -96,7 +96,7 @@ import java.util.stream.Collectors;
  */
 public class RangeAssignor extends AbstractPartitionAssignor {
     public static final String RANGE_ASSIGNOR_NAME = "range";
-    private final static TopicPartitionComparator PARTITION_COMPARATOR = new TopicPartitionComparator();
+    private static final TopicPartitionComparator PARTITION_COMPARATOR = new TopicPartitionComparator();
 
     @Override
     public String name() {
@@ -158,13 +158,12 @@ public class RangeAssignor extends AbstractPartitionAssignor {
                 break;
             List<TopicPartition> assignablePartitions = assignmentState.unassignedPartitions.stream()
                     .filter(tp -> mayAssign.apply(consumer, tp))
+                    .limit(assignmentState.maxAssignable(consumer))
                     .collect(Collectors.toList());
-
-            int maxAssignable = Math.min(assignmentState.maxAssignable(consumer), assignablePartitions.size());
-            if (maxAssignable <= 0)
+            if (assignablePartitions.isEmpty())
                 continue;
 
-            assign(consumer, assignablePartitions.subList(0, maxAssignable), assignmentState, assignment);
+            assign(consumer, assignablePartitions, assignmentState, assignment);
         }
     }
 
@@ -189,7 +188,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
                                                      Collection<TopicAssignmentState> assignmentStates,
                                                      Map<String, List<TopicPartition>> assignment) {
 
-        List<String> remainingConsumers = new LinkedList<>(consumers.keySet());
+        Set<String> remainingConsumers = new LinkedHashSet<>(consumers.keySet());
         for (int i = 0; i < numPartitions; i++) {
             int p = i;
 
@@ -227,7 +226,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         private final boolean needsRackAwareAssignment;
         private final Map<TopicPartition, Set<String>> partitionRacks;
 
-        private final List<TopicPartition> unassignedPartitions;
+        private final Set<TopicPartition> unassignedPartitions;
         private final Map<String, Integer> numAssignedByConsumer;
         private final int numPartitionsPerConsumer;
         private int remainingConsumersWithExtraPartition;
@@ -240,7 +239,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
                     .collect(Collectors.toMap(Function.identity(), c -> Optional.ofNullable(consumerRacks.get(c)), (a, b) -> a, LinkedHashMap::new));
 
             this.unassignedPartitions = partitionInfos.stream().map(p -> new TopicPartition(p.topic(), p.partition()))
-                    .collect(Collectors.toCollection(LinkedList::new));
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
             this.numAssignedByConsumer = consumers.keySet().stream().collect(Collectors.toMap(Function.identity(), c -> 0));
             numPartitionsPerConsumer = consumers.isEmpty() ? 0 : partitionInfos.size() / consumers.size();
             remainingConsumersWithExtraPartition = consumers.isEmpty() ? 0 : partitionInfos.size() % consumers.size();
