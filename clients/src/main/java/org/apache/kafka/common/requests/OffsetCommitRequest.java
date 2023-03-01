@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
@@ -79,8 +78,7 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     public static List<OffsetCommitResponseTopic> getErrorResponseTopics(
             List<OffsetCommitRequestTopic> requestTopics,
-            Errors e,
-            short version) {
+            Errors e) {
         List<OffsetCommitResponseTopic> responseTopicData = new ArrayList<>();
         for (OffsetCommitRequestTopic entry : requestTopics) {
             List<OffsetCommitResponsePartition> responsePartitions =
@@ -91,8 +89,8 @@ public class OffsetCommitRequest extends AbstractRequest {
                                            .setErrorCode(e.code()));
             }
             OffsetCommitResponseTopic responseTopic = new OffsetCommitResponseTopic()
-                .setTopicId(version >= 9 ? entry.topicId() : Uuid.ZERO_UUID)
-                .setName(version < 9 ? entry.name() : null);
+                .setTopicId(entry.topicId())
+                .setName(entry.name());
             responseTopicData.add(responseTopic.setPartitions(responsePartitions));
         }
         return responseTopicData;
@@ -101,7 +99,7 @@ public class OffsetCommitRequest extends AbstractRequest {
     @Override
     public OffsetCommitResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<OffsetCommitResponseTopic>
-                responseTopicData = getErrorResponseTopics(data.topics(), Errors.forException(e), version());
+                responseTopicData = getErrorResponseTopics(data.topics(), Errors.forException(e));
         return new OffsetCommitResponse(new OffsetCommitResponseData()
                 .setTopics(responseTopicData)
                 .setThrottleTimeMs(throttleTimeMs), version());

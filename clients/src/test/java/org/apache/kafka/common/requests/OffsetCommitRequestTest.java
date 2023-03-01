@@ -154,7 +154,7 @@ public class OffsetCommitRequestTest {
                         .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
                         .setPartitionIndex(partitionTwo)))
         );
-        assertEquals(expectedTopics, getErrorResponseTopics(data.topics(), Errors.UNKNOWN_MEMBER_ID, version));
+        assertEquals(expectedTopics, getErrorResponseTopics(data.topics(), Errors.UNKNOWN_MEMBER_ID));
     }
 
     @ParameterizedTest
