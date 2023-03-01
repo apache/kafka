@@ -21,6 +21,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 public class FetchDataInfo {
@@ -42,6 +43,28 @@ public class FetchDataInfo {
         this.records = records;
         this.firstEntryIncomplete = firstEntryIncomplete;
         this.abortedTransactions = abortedTransactions;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        FetchDataInfo that = (FetchDataInfo) o;
+
+        return firstEntryIncomplete != that.firstEntryIncomplete &&
+                Objects.equals(fetchOffsetMetadata, that.fetchOffsetMetadata) &&
+                Objects.equals(records, that.records) &&
+                Objects.equals(abortedTransactions, that.abortedTransactions);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = fetchOffsetMetadata != null ? fetchOffsetMetadata.hashCode() : 0;
+        result = 31 * result + (records != null ? records.hashCode() : 0);
+        result = 31 * result + (firstEntryIncomplete ? 1 : 0);
+        result = 31 * result + (abortedTransactions != null ? abortedTransactions.hashCode() : 0);
+        return result;
     }
 
     public static FetchDataInfo empty(long fetchOffset) {
