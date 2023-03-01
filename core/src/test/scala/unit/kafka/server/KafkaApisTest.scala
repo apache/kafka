@@ -1370,20 +1370,20 @@ class KafkaApisTest {
     addTopicToMetadataCache("baz", numPartitions = 2, topicId = bazId)
 
     val offsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
-      (NameOrId(id = fooId), ListMap(0 -> 10, 1 -> 20, 2 -> 30)), // foo exists but only has 2 partitions.
-      (NameOrId(id = barId), ListMap(0 -> 40, 1 -> 50)),          // bar exists.
-      (NameOrId(id = zarId), ListMap(0 -> 60, 1 -> 70)),          // zar does not exist.
-      (NameOrId(id = bazId), ListMap(0 -> 60, 1 -> 80)),          // baz exists.
-      (NameOrId(id = quxId), ListMap(0 -> 10))                    // qux does not exist.
+      (NameAndId(id = fooId), ListMap(0 -> 10, 1 -> 20, 2 -> 30)), // foo exists but only has 2 partitions.
+      (NameAndId(id = barId), ListMap(0 -> 40, 1 -> 50)),          // bar exists.
+      (NameAndId(id = zarId), ListMap(0 -> 60, 1 -> 70)),          // zar does not exist.
+      (NameAndId(id = bazId), ListMap(0 -> 60, 1 -> 80)),          // baz exists.
+      (NameAndId(id = quxId), ListMap(0 -> 10))                    // qux does not exist.
     ))
 
     val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
 
     // This is the request expected by the group coordinator.
     val expectedOffsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
-      (NameOrId("foo", fooId), ListMap(0 -> 10, 1 -> 20)),
-      (NameOrId("bar", barId), ListMap(0 -> 40, 1 -> 50)),
-      (NameOrId("baz", bazId), ListMap(0 -> 60, 1 -> 80))
+      (NameAndId("foo", fooId), ListMap(0 -> 10, 1 -> 20)),
+      (NameAndId("bar", barId), ListMap(0 -> 40, 1 -> 50)),
+      (NameAndId("baz", bazId), ListMap(0 -> 60, 1 -> 80))
     ))
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
@@ -1400,24 +1400,24 @@ class KafkaApisTest {
 
     // This is the response returned by the group coordinator.
     val offsetCommitResponse = newOffsetCommitResponseData(Seq(
-      (NameOrId("foo", fooId), ListMap(0 -> NONE, 1 -> NONE)),
-      (NameOrId("bar", barId), ListMap(0 -> NONE, 1 -> NONE)),
-      (NameOrId("baz", bazId), ListMap(0 -> NONE, 1 -> NONE))
+      (NameAndId("foo", fooId), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameAndId("bar", barId), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameAndId("baz", bazId), ListMap(0 -> NONE, 1 -> NONE))
     ))
 
     val expectedOffsetCommitResponse = newOffsetCommitResponseData(Seq(
       // zar is before bar because topics failing the validation are put in the response first.
-      (NameOrId(id = zarId), ListMap(0 -> UNKNOWN_TOPIC_ID, 1 -> UNKNOWN_TOPIC_ID)),
+      (NameAndId(id = zarId), ListMap(0 -> UNKNOWN_TOPIC_ID, 1 -> UNKNOWN_TOPIC_ID)),
 
       // qux is before bar because topics failing the validation are put in the response first.
-      (NameOrId(id = quxId), ListMap(0 -> UNKNOWN_TOPIC_ID)),
+      (NameAndId(id = quxId), ListMap(0 -> UNKNOWN_TOPIC_ID)),
 
       // foo-2 is first because partitions failing the validation are put in the response first.
-      (NameOrId(id = fooId), ListMap(2 -> UNKNOWN_TOPIC_OR_PARTITION, 0 -> NONE, 1 -> NONE)),
+      (NameAndId(id = fooId), ListMap(2 -> UNKNOWN_TOPIC_OR_PARTITION, 0 -> NONE, 1 -> NONE)),
 
       // Valid topics bar and baz.
-      (NameOrId(id = barId), ListMap(0 -> NONE, 1 -> NONE)),
-      (NameOrId(id = bazId), ListMap(0 -> NONE, 1 -> NONE))
+      (NameAndId(id = barId), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameAndId(id = bazId), ListMap(0 -> NONE, 1 -> NONE))
     ))
 
     future.complete(offsetCommitResponse)
@@ -1435,17 +1435,17 @@ class KafkaApisTest {
     addTopicToMetadataCache("baz", numPartitions = 2, topicId = bazId)
 
     val offsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
-      (NameOrId("foo"), ListMap(0 -> 10, 1 -> 20)),
-      (NameOrId("bar"), ListMap(0 -> 40, 1 -> 50)),
-      (if (version < 9) NameOrId("baz") else NameOrId(id = bazId), ListMap(0 -> 60, 1 -> 80))
+      (NameAndId("foo"), ListMap(0 -> 10, 1 -> 20)),
+      (NameAndId("bar"), ListMap(0 -> 40, 1 -> 50)),
+      (if (version < 9) NameAndId("baz") else NameAndId(id = bazId), ListMap(0 -> 60, 1 -> 80))
     ))
 
     val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build(version))
 
     val expectedOffsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
-      (NameOrId("foo"), ListMap(0 -> 10, 1 -> 20)),
-      (NameOrId("bar"), ListMap(0 -> 40, 1 -> 50)),
-      (if (version < 9) NameOrId("baz") else NameOrId("baz", bazId), ListMap(0 -> 60, 1 -> 80))
+      (NameAndId("foo"), ListMap(0 -> 10, 1 -> 20)),
+      (NameAndId("bar"), ListMap(0 -> 40, 1 -> 50)),
+      (if (version < 9) NameAndId("baz") else NameAndId("baz", bazId), ListMap(0 -> 60, 1 -> 80))
     ))
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
@@ -1461,15 +1461,15 @@ class KafkaApisTest {
     )
 
     val offsetCommitResponse = newOffsetCommitResponseData(Seq(
-      (NameOrId("foo"), ListMap(0 -> NONE, 1 -> NONE)),
-      (NameOrId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
-      (if (version < 9) NameOrId("baz") else NameOrId("baz", id = bazId), ListMap(0 -> NONE, 1 -> NONE))
+      (NameAndId("foo"), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameAndId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
+      (if (version < 9) NameAndId("baz") else NameAndId("baz", id = bazId), ListMap(0 -> NONE, 1 -> NONE))
     ))
 
     val expectedOffsetCommitResponse = newOffsetCommitResponseData(Seq(
-      (NameOrId("foo"), ListMap(0 -> NONE, 1 -> NONE)),
-      (NameOrId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
-      (if (version >= 9) NameOrId(id = bazId) else NameOrId("baz"), ListMap(0 -> NONE, 1 -> NONE))
+      (NameAndId("foo"), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameAndId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
+      (if (version >= 9) NameAndId(id = bazId) else NameAndId("baz"), ListMap(0 -> NONE, 1 -> NONE))
     ))
 
     future.complete(offsetCommitResponse)
@@ -1477,12 +1477,12 @@ class KafkaApisTest {
     assertEquals(expectedOffsetCommitResponse, response.data)
   }
 
-  // A topic name, id, or both.
-  case class NameOrId(name: String = "", id: Uuid = Uuid.ZERO_UUID)
+  // A topic name and its id. Either or both can be defined.
+  case class NameAndId(name: String = "", id: Uuid = Uuid.ZERO_UUID)
 
   def newOffsetCommitRequestData(groupId: String,
                                  memberId: String,
-                                 topics: Seq[(NameOrId, Map[Int, Long])]): OffsetCommitRequestData = {
+                                 topics: Seq[(NameAndId, Map[Int, Long])]): OffsetCommitRequestData = {
     val data = new OffsetCommitRequestData()
       .setGroupId(groupId)
       .setMemberId(memberId)
@@ -1505,7 +1505,7 @@ class KafkaApisTest {
     data
   }
 
-  def newOffsetCommitResponseData(topics: Seq[(NameOrId, Map[Int, Errors])]): OffsetCommitResponseData = {
+  def newOffsetCommitResponseData(topics: Seq[(NameAndId, Map[Int, Errors])]): OffsetCommitResponseData = {
     val data = new OffsetCommitResponseData()
 
     topics.foreach { topic =>
