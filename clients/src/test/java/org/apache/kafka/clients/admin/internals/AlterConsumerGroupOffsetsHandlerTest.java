@@ -73,7 +73,7 @@ public class AlterConsumerGroupOffsetsHandlerTest {
     public void testHandleSuccessfulResponse() {
         AlterConsumerGroupOffsetsHandler handler = new AlterConsumerGroupOffsetsHandler(groupId, partitions, logContext);
         Map<TopicPartition, Errors> responseData = Collections.singletonMap(t0p0, Errors.NONE);
-        OffsetCommitResponse response = new OffsetCommitResponse(0, responseData);
+        OffsetCommitResponse response = new OffsetCommitResponse(0, responseData, (short) 8);
         ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> result = handler.handleResponse(node, singleton(CoordinatorKey.byGroupId(groupId)), response);
         assertCompleted(result, responseData);
     }
@@ -116,7 +116,7 @@ public class AlterConsumerGroupOffsetsHandlerTest {
     ) {
         AlterConsumerGroupOffsetsHandler handler =
             new AlterConsumerGroupOffsetsHandler(groupKey.idValue, partitions, logContext);
-        OffsetCommitResponse response = new OffsetCommitResponse(0, partitionResults);
+        OffsetCommitResponse response = new OffsetCommitResponse(0, partitionResults, (short) 8);
         return handler.handleResponse(node, singleton(groupKey), response);
     }
 

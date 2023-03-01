@@ -66,6 +66,7 @@ import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartiti
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -2474,7 +2475,7 @@ public class KafkaConsumerTest {
     }
 
     private OffsetCommitResponse offsetCommitResponse(Map<TopicPartition, Errors> responseData) {
-        return new OffsetCommitResponse(responseData);
+        return new OffsetCommitResponse(responseData, OffsetCommitResponseData.HIGHEST_SUPPORTED_VERSION);
     }
 
     private JoinGroupResponse joinGroupFollowerResponse(ConsumerPartitionAssignor assignor, int generationId, String memberId, String leaderId, Errors error) {

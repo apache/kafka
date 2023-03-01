@@ -117,7 +117,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                 responseTopicData = getErrorResponseTopics(data.topics(), Errors.forException(e), version());
         return new OffsetCommitResponse(new OffsetCommitResponseData()
                 .setTopics(responseTopicData)
-                .setThrottleTimeMs(throttleTimeMs));
+                .setThrottleTimeMs(throttleTimeMs), version());
     }
 
     @Override

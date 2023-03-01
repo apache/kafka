@@ -1364,23 +1364,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
                 String topicName = topic.name();
-                Uuid topicId = topic.topicId();
-                boolean topicNameDefined = !Utils.isBlank(topicName);
-                boolean topicIdDefined = topicId != null && !ZERO_UUID.equals(topicId);
-
-                if (!topicNameDefined && !topicIdDefined) {
-                    // Should not happen, but defensive check.
-                    log.warn("No topic id or name defined in OffsetCommit response, ignoring");
-                    continue;
-                }
-
-                if (topicNameDefined && topicIdDefined) {
-                    log.warn("Topic id and name should not be defined at the same time in the OffsetCommit " +
-                        "response, ignoring topic " + topicName + " with id " + topicId);
-                    continue;
-                }
-
-                if (!topicNameDefined) {
+                if (commitResponse.version() >= 9) {
                     // The topic name can only be null/empty if OffsetCommit version >= 9 is used and the request
                     // referenced that topic by its ID instead.
                     topicName = topicResolver.getTopicName(topic.topicId()).orElse(null);
@@ -1392,7 +1376,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         // refreshed, here there is no reason to retry as the problem cannot be attributed to
                         // metadata convergence. Do not fail the entire consumer offset commit request,
                         // but warn and ignore the invalid topic ID.
-                        log.warn("Ignoring invalid topic ID found in OffsetCommit response: " + topicId);
+                        log.warn("Ignoring invalid topic ID found in OffsetCommit response: " + topic.topicId());
                         continue;
                     }
                 }

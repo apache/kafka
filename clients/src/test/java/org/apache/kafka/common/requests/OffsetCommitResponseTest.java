@@ -91,7 +91,8 @@ public class OffsetCommitResponseTest {
 
     @Test
     public void testConstructorWithErrorResponse() {
-        OffsetCommitResponse response = new OffsetCommitResponse(throttleTimeMs, errorsMap);
+        OffsetCommitResponse response = new OffsetCommitResponse(
+                throttleTimeMs, errorsMap, OffsetCommitResponseData.HIGHEST_SUPPORTED_VERSION);
 
         assertEquals(expectedErrorCounts, response.errorCounts());
         assertEquals(throttleTimeMs, response.throttleTimeMs());

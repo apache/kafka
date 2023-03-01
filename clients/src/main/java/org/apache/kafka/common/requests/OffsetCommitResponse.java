@@ -52,14 +52,21 @@ import java.util.function.Function;
 public class OffsetCommitResponse extends AbstractResponse {
 
     private final OffsetCommitResponseData data;
+    private final short version;
 
     public OffsetCommitResponse(OffsetCommitResponseData data) {
-        super(ApiKeys.OFFSET_COMMIT);
-        this.data = data;
+        this(data, OffsetCommitResponseData.HIGHEST_SUPPORTED_VERSION);
     }
 
-    public OffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData) {
+    public OffsetCommitResponse(OffsetCommitResponseData data, short version) {
         super(ApiKeys.OFFSET_COMMIT);
+        this.data = data;
+        this.version = version;
+    }
+
+    public OffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData, short version) {
+        super(ApiKeys.OFFSET_COMMIT);
+        this.version = version;
         Map<String, OffsetCommitResponseTopic>
                 responseTopicDataMap = new HashMap<>();
 
@@ -81,8 +88,8 @@ public class OffsetCommitResponse extends AbstractResponse {
                 .setThrottleTimeMs(requestThrottleMs);
     }
 
-    public OffsetCommitResponse(Map<TopicPartition, Errors> responseData) {
-        this(DEFAULT_THROTTLE_TIME, responseData);
+    public OffsetCommitResponse(Map<TopicPartition, Errors> responseData, short version) {
+        this(DEFAULT_THROTTLE_TIME, responseData, version);
     }
 
     @Override
@@ -98,7 +105,7 @@ public class OffsetCommitResponse extends AbstractResponse {
     }
 
     public static OffsetCommitResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetCommitResponse(new OffsetCommitResponseData(new ByteBufferAccessor(buffer), version));
+        return new OffsetCommitResponse(new OffsetCommitResponseData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
@@ -119,6 +126,10 @@ public class OffsetCommitResponse extends AbstractResponse {
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 4;
+    }
+
+    public short version() {
+        return version;
     }
 
     public static Builder<?> newBuilder(short version) {
@@ -192,7 +203,7 @@ public class OffsetCommitResponse extends AbstractResponse {
         }
 
         public final OffsetCommitResponse build() {
-            return new OffsetCommitResponse(data);
+            return new OffsetCommitResponse(data, version);
         }
 
         protected abstract void validate(String topicName, Uuid topicId);
