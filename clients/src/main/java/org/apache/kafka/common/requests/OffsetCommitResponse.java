@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
@@ -134,26 +133,29 @@ public class OffsetCommitResponse extends AbstractResponse {
     }
 
     public static Builder<?> newBuilder(TopicResolver topicResolver, short version) {
-        return version >= 9 ?
-            new BuilderByTopicId(topicResolver, version)
-            : new BuilderByTopicName(topicResolver, version);
+        if (version >= 9) {
+            return new Builder<>(topicResolver, new ByTopicId(), version);
+        } else {
+            return new Builder<>(topicResolver, new ByTopicName(), version);
+        }
     }
 
-    public static abstract class Builder<T> {
+    public static final class Builder<T> {
         private final TopicResolver topicResolver;
-        protected final short version;
+        private final TopicClassifier<T> topicClassifier;
+        private final short version;
+
         private OffsetCommitResponseData data = new OffsetCommitResponseData();
         private final Map<T, OffsetCommitResponseTopic> topics = new HashMap<>();
 
-        protected Builder(TopicResolver topicResolver, short version) {
+        protected Builder(TopicResolver topicResolver, TopicClassifier<T> topicClassifier, short version) {
             this.topicResolver = topicResolver;
+            this.topicClassifier = topicClassifier;
             this.version = version;
         }
 
-        public final Builder<T> addPartition(String topicName, Uuid topicId, int partitionIndex, Errors error) {
-            validate(topicName, topicId);
+        public Builder<T> addPartition(String topicName, Uuid topicId, int partitionIndex, Errors error) {
             OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName, topicId);
-
             topicResponse.partitions().add(new OffsetCommitResponsePartition()
                 .setPartitionIndex(partitionIndex)
                 .setErrorCode(error.code()));
@@ -161,15 +163,18 @@ public class OffsetCommitResponse extends AbstractResponse {
             return this;
         }
 
-        public final <P> Builder<T> addPartitions(
+        public <P> Builder<T> addPartitions(
                 String topicName,
                 Uuid topicId,
                 List<P> partitions,
                 Function<P, Integer> partitionIndex,
                 Errors error
         ) {
-            validate(topicName, topicId);
-            OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName, topicId);
+            OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic()
+                .setName(topicName)
+                .setTopicId(topicId);
+
+            data.topics().add(topicResponse);
 
             partitions.forEach(partition -> {
                 topicResponse.partitions().add(new OffsetCommitResponsePartition()
@@ -180,16 +185,21 @@ public class OffsetCommitResponse extends AbstractResponse {
             return this;
         }
 
-        public final Builder<T> merge(OffsetCommitResponseData newData) {
+        public Builder<T> merge(OffsetCommitResponseData newData) {
+            if (version >= 9) {
+                // This method is called after the group coordinator committed the offsets. The group coordinator
+                // provides the OffsetCommitResponseData it built in the process. As of now, this data does
+                // not contain topic ids, so we resolve them here.
+                newData.topics().forEach(
+                        topic -> topic.setTopicId(topicResolver.getTopicId(topic.name()).orElse(Uuid.ZERO_UUID)));
+            }
             if (data.topics().isEmpty()) {
                 // If the current data is empty, we can discard it and use the new data.
                 data = newData;
             } else {
                 // Otherwise, we have to merge them together.
                 newData.topics().forEach(newTopic -> {
-                    validate(newTopic.name(), newTopic.topicId());
-
-                    T topicKey = classifer(newTopic.name(), newTopic.topicId());
+                    T topicKey = topicClassifier.of(newTopic.name(), newTopic.topicId());
                     OffsetCommitResponseTopic existingTopic = topics.get(topicKey);
 
                     if (existingTopic == null) {
@@ -207,16 +217,12 @@ public class OffsetCommitResponse extends AbstractResponse {
             return this;
         }
 
-        public final OffsetCommitResponse build() {
+        public OffsetCommitResponse build() {
             return new OffsetCommitResponse(data, version);
         }
 
-        protected abstract void validate(String topicName, Uuid topicId);
-
-        protected abstract T classifer(String topicName, Uuid topicId);
-
         private OffsetCommitResponseTopic getOrCreateTopic(String topicName, Uuid topicId) {
-            T topicKey = classifer(topicName, topicId);
+            T topicKey = topicClassifier.of(topicName, topicId);
             OffsetCommitResponseTopic topic = topics.get(topicKey);
             if (topic == null) {
                 topic = new OffsetCommitResponseTopic().setName(topicName).setTopicId(topicId);
@@ -227,38 +233,20 @@ public class OffsetCommitResponse extends AbstractResponse {
         }
     }
 
-    public static final class BuilderByTopicId extends Builder<Uuid> {
-        protected BuilderByTopicId(TopicResolver topicResolver, short version) {
-            super(topicResolver, version);
-        }
+    interface TopicClassifier<T> {
+        T of(String topicName, Uuid topicId);
+    }
 
+    private static final class ByTopicId implements TopicClassifier<Uuid> {
         @Override
-        protected void validate(String topicName, Uuid topicId) {
-            if (topicId == null || Uuid.ZERO_UUID.equals(topicId))
-                throw new UnsupportedVersionException("OffsetCommitResponse version " + version +
-                        " does not support zero topic IDs.");
-        }
-
-        @Override
-        protected Uuid classifer(String topicName, Uuid topicId) {
+        public Uuid of(String topicName, Uuid topicId) {
             return topicId;
         }
     }
 
-    public static final class BuilderByTopicName extends Builder<String> {
-        protected BuilderByTopicName(TopicResolver topicResolver, short version) {
-            super(topicResolver, version);
-        }
-
+    private static final class ByTopicName implements TopicClassifier<String> {
         @Override
-        protected void validate(String topicName, Uuid topicId) {
-            if (topicName == null)
-                throw new UnsupportedVersionException("OffsetCommitResponse version " + version +
-                        " does not support null topic names.");
-        }
-
-        @Override
-        protected String classifer(String topicName, Uuid topicId) {
+        public String of(String topicName, Uuid topicId) {
             return topicName;
         }
     }
