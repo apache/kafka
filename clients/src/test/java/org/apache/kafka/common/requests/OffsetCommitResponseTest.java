@@ -202,13 +202,26 @@ public class OffsetCommitResponseTest {
             );
     }
 
-    private static final class NameAndId {
+    public static final class NameAndId {
         private final String name;
         private final Uuid id;
 
         NameAndId(String name) {
             this.name = name;
             this.id = Uuid.randomUuid();
+        }
+
+        public NameAndId(String name, Uuid id) {
+            this.name = name;
+            this.id = id;
+        }
+
+        public String name() {
+            return name;
+        }
+
+        public Uuid id() {
+            return id;
         }
     }
 }

@@ -110,7 +110,7 @@ public class OffsetCommitRequestTest {
         for (OffsetCommitRequestTopic topic : request.data().topics()) {
             String topicName = topic.name();
 
-            if (request.version() >= 9 && topicName == null) {
+            if (request.version() >= 9) {
                 topicName = topicResolver.getTopicName(topic.topicId()).orElseThrow(
                     () -> new UnknownTopicIdException("Topic with ID " + topic.topicId() + " not found."));
             }
