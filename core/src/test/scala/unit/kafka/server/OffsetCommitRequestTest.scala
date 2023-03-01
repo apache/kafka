@@ -73,7 +73,6 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     val request = new OffsetCommitRequest.Builder(requestData).build(OffsetCommitRequestData.HIGHEST_SUPPORTED_VERSION)
     val response = connectAndReceive[OffsetCommitResponse](request)
 
-    // Not what we want!
-    assertEquals(Uuid.ZERO_UUID, response.data().topics().get(0).topicId())
+    assertEquals(topicId, response.data().topics().get(0).topicId())
   }
 }

@@ -56,7 +56,6 @@ public class OffsetCommitRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("The broker offset commit protocol version " +
                         version + " does not support usage of config group.instance.id.");
             }
-
             return new OffsetCommitRequest(data, version);
         }
 
