@@ -210,12 +210,11 @@ public class OffsetCommitResponse extends AbstractResponse {
 
         protected abstract T classifer(String topicName, Uuid topicId);
 
-        protected abstract OffsetCommitResponseTopic newTopic(String topicName, Uuid topicId);
         private OffsetCommitResponseTopic getOrCreateTopic(String topicName, Uuid topicId) {
             T topicKey = classifer(topicName, topicId);
             OffsetCommitResponseTopic topic = topics.get(topicKey);
             if (topic == null) {
-                topic = newTopic(topicName, topicId);
+                topic = new OffsetCommitResponseTopic().setName(topicName).setTopicId(topicId);
                 data.topics().add(topic);
                 topics.put(topicKey, topic);
             }
@@ -239,11 +238,6 @@ public class OffsetCommitResponse extends AbstractResponse {
         protected Uuid classifer(String topicName, Uuid topicId) {
             return topicId;
         }
-
-        @Override
-        protected OffsetCommitResponseTopic newTopic(String topicName, Uuid topicId) {
-            return new OffsetCommitResponseTopic().setName(null).setTopicId(topicId);
-        }
     }
 
     public static final class BuilderByTopicName extends Builder<String> {
@@ -261,11 +255,6 @@ public class OffsetCommitResponse extends AbstractResponse {
         @Override
         protected String classifer(String topicName, Uuid topicId) {
             return topicName;
-        }
-
-        @Override
-        protected OffsetCommitResponseTopic newTopic(String topicName, Uuid topicId) {
-            return new OffsetCommitResponseTopic().setName(topicName);
         }
     }
 }
