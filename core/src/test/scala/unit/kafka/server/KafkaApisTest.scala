@@ -1406,14 +1406,14 @@ class KafkaApisTest {
     ))
 
     val expectedOffsetCommitResponse = newOffsetCommitResponseData(Seq(
-      // foo-2 is first because partitions failing the validation are put in the response first.
-      (NameOrId(id = fooId), ListMap(2 -> UNKNOWN_TOPIC_OR_PARTITION, 0 -> NONE, 1 -> NONE)),
-
       // zar is before bar because topics failing the validation are put in the response first.
       (NameOrId(id = zarId), ListMap(0 -> UNKNOWN_TOPIC_ID, 1 -> UNKNOWN_TOPIC_ID)),
 
       // qux is before bar because topics failing the validation are put in the response first.
       (NameOrId(id = quxId), ListMap(0 -> UNKNOWN_TOPIC_ID)),
+
+      // foo-2 is first because partitions failing the validation are put in the response first.
+      (NameOrId(id = fooId), ListMap(2 -> UNKNOWN_TOPIC_OR_PARTITION, 0 -> NONE, 1 -> NONE)),
 
       // Valid topics bar and baz.
       (NameOrId(id = barId), ListMap(0 -> NONE, 1 -> NONE)),

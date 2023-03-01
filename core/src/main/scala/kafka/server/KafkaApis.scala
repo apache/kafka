@@ -64,7 +64,7 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
-import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time, Utils}
+import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.authorizer._
@@ -427,24 +427,27 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      val topicNames =
-        if (offsetCommitRequest.version() >= 9)
-          metadataCache.topicIdsToNames()
-        else
-          Collections.emptyMap[Uuid, String]()
+      val responseBuilder = OffsetCommitResponse.newBuilder(offsetCommitRequest.version())
 
-      val resolvedTopics = new ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
-      offsetCommitRequest.data.topics.forEach { topic =>
-        var topicName = topic.name()
-        if (Utils.isBlank(topicName)) {
-          // Expected for requests version >= 9 which rely on topic IDs exclusively.
-          topicName = topicNames.get(topic.topicId())
+      val resolvedTopics =
+        if (offsetCommitRequest.version() < 9)
+          offsetCommitRequest.data.topics().asScala
+        else {
+          val topicNames = metadataCache.topicIdsToNames()
+          val topics = new ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
+
+          offsetCommitRequest.data.topics.forEach { topic =>
+            val topicName = topicNames.get(topic.topicId())
+            if (topicName != null) {
+              topic.setName(topicName)
+              topics += topic
+            } else {
+              responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
+                topic.name, topic.topicId, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_ID)
+            }
+          }
+          topics
         }
-        if (topicName != null) {
-          topic.setName(topicName)
-          resolvedTopics += topic
-        }
-      }
 
       val authorizedTopics = authHelper.filterByAuthorized(
         request.context,
@@ -453,16 +456,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         resolvedTopics
       )(_.name)
 
-      val responseBuilder = OffsetCommitResponse.newBuilder(offsetCommitRequest.version())
       val authorizedTopicsRequest = new mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
-      offsetCommitRequest.data.topics.forEach { topic =>
-        if (Utils.isBlank(topic.name)) {
-          // Topic name cannot be null for version < 9. From version >= 9, topicName is null iff it cannot
-          // be resolved from the local topic IDs cache or topic ID was left to default but no fallback topic
-          // name was provided.
-          responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
-            topic.name, topic.topicId, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_ID)
-        } else if (!authorizedTopics.contains(topic.name)) {
+      resolvedTopics.foreach { topic =>
+        if (!authorizedTopics.contains(topic.name)) {
           // If the topic is not authorized, we add the topic and all its partitions
           // to the response with TOPIC_AUTHORIZATION_FAILED.
           responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
