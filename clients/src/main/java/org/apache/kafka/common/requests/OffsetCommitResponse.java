@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
@@ -132,16 +133,20 @@ public class OffsetCommitResponse extends AbstractResponse {
         return version;
     }
 
-    public static Builder<?> newBuilder(short version) {
-        return version >= 9 ? new BuilderByTopicId(version) : new BuilderByTopicName(version);
+    public static Builder<?> newBuilder(TopicResolver topicResolver, short version) {
+        return version >= 9 ?
+            new BuilderByTopicId(topicResolver, version)
+            : new BuilderByTopicName(topicResolver, version);
     }
 
     public static abstract class Builder<T> {
+        private final TopicResolver topicResolver;
+        protected final short version;
         private OffsetCommitResponseData data = new OffsetCommitResponseData();
         private final Map<T, OffsetCommitResponseTopic> topics = new HashMap<>();
-        protected final short version;
 
-        protected Builder(short version) {
+        protected Builder(TopicResolver topicResolver, short version) {
+            this.topicResolver = topicResolver;
             this.version = version;
         }
 
@@ -223,8 +228,8 @@ public class OffsetCommitResponse extends AbstractResponse {
     }
 
     public static final class BuilderByTopicId extends Builder<Uuid> {
-        protected BuilderByTopicId(short version) {
-            super(version);
+        protected BuilderByTopicId(TopicResolver topicResolver, short version) {
+            super(topicResolver, version);
         }
 
         @Override
@@ -241,8 +246,8 @@ public class OffsetCommitResponse extends AbstractResponse {
     }
 
     public static final class BuilderByTopicName extends Builder<String> {
-        protected BuilderByTopicName(short version) {
-            super(version);
+        protected BuilderByTopicName(TopicResolver topicResolver, short version) {
+            super(topicResolver, version);
         }
 
         @Override

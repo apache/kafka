@@ -73,7 +73,7 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     val request = new OffsetCommitRequest.Builder(requestData).build(OffsetCommitRequestData.HIGHEST_SUPPORTED_VERSION)
     val response = connectAndReceive[OffsetCommitResponse](request)
 
-    // This currently fails as topic IDs are not propagated by the group coordinator.
-    // assertEquals(topicId, response.data().topics().get(0).topicId())
+    // Not what we want!
+    assertEquals(Uuid.ZERO_UUID, response.data().topics().get(0).topicId())
   }
 }

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
@@ -119,7 +120,7 @@ public class OffsetCommitResponseTest {
         NameAndId topic5 = new NameAndId("topic5");
         NameAndId topic6 = new NameAndId("topic6");
 
-        OffsetCommitResponse.Builder<?> builder = OffsetCommitResponse.newBuilder(version)
+        OffsetCommitResponse.Builder<?> builder = OffsetCommitResponse.newBuilder(TopicResolver.emptyResolver(), version)
             // Both topic name and id are defined.
             .addPartition(topicOne, topic1Id, partitionOne, Errors.NONE)
             .addPartition(topicOne, topic1Id, partitionTwo, Errors.NONE)
@@ -168,7 +169,7 @@ public class OffsetCommitResponseTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testExceptionIsThrownIfTopicNameIsNullPriorVersion9(short version) {
-        OffsetCommitResponse.Builder<?> builder = OffsetCommitResponse.newBuilder(version);
+        OffsetCommitResponse.Builder<?> builder = OffsetCommitResponse.newBuilder(TopicResolver.emptyResolver(), version);
 
         if (version < 9) {
             assertThrows(UnsupportedVersionException.class,

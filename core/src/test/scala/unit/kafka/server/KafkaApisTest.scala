@@ -1273,7 +1273,7 @@ class KafkaApisTest {
   @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
   def testHandleOffsetCommitRequest(version: Short): Unit = {
     val fooId = Uuid.randomUuid()
-    addTopicToMetadataCache("foo", numPartitions = 1)
+    addTopicToMetadataCache("foo", numPartitions = 1, topicId = fooId)
 
     val offsetCommitRequest = new OffsetCommitRequestData()
       .setGroupId("group")
@@ -1281,7 +1281,7 @@ class KafkaApisTest {
       .setTopics(List(
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
           .setName("foo")
-          .setTopicId(fooId)
+          .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
           .setPartitions(List(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
@@ -1305,7 +1305,7 @@ class KafkaApisTest {
     val offsetCommitResponse = new OffsetCommitResponseData()
       .setTopics(List(
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName("foo")
+          .setName(if (version < 9) "foo" else "")
           .setTopicId(if (version >= 9) fooId else Uuid.ZERO_UUID)
           .setPartitions(List(
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
@@ -1319,7 +1319,8 @@ class KafkaApisTest {
 
   @Test
   def testHandleOffsetCommitRequestFutureFailed(): Unit = {
-    addTopicToMetadataCache("foo", numPartitions = 1)
+    val fooId = Uuid.randomUuid()
+    addTopicToMetadataCache("foo", numPartitions = 1, topicId = fooId)
 
     val offsetCommitRequest = new OffsetCommitRequestData()
       .setGroupId("group")
@@ -1327,6 +1328,7 @@ class KafkaApisTest {
       .setTopics(List(
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
           .setName("foo")
+          .setTopicId(fooId)
           .setPartitions(List(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
@@ -1349,7 +1351,7 @@ class KafkaApisTest {
     val expectedOffsetCommitResponse = new OffsetCommitResponseData()
       .setTopics(List(
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName("foo")
+          .setTopicId(fooId)
           .setPartitions(List(
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(0)
@@ -1428,23 +1430,23 @@ class KafkaApisTest {
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
   def testHandleOffsetCommitRequestTopicsAndPartitionsAllValid(version: Short): Unit = {
-    val bazId = Uuid.randomUuid()
+    val (fooId, barId, bazId) = (Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid())
 
-    addTopicToMetadataCache("foo", numPartitions = 2)
-    addTopicToMetadataCache("bar", numPartitions = 2)
+    addTopicToMetadataCache("foo", numPartitions = 2, topicId = fooId)
+    addTopicToMetadataCache("bar", numPartitions = 2, topicId = barId)
     addTopicToMetadataCache("baz", numPartitions = 2, topicId = bazId)
 
     val offsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
-      (NameAndId("foo"), ListMap(0 -> 10, 1 -> 20)),
-      (NameAndId("bar"), ListMap(0 -> 40, 1 -> 50)),
+      (if (version < 9) NameAndId("foo") else NameAndId(id = fooId), ListMap(0 -> 10, 1 -> 20)),
+      (if (version < 9) NameAndId("bar") else NameAndId(id = barId), ListMap(0 -> 40, 1 -> 50)),
       (if (version < 9) NameAndId("baz") else NameAndId(id = bazId), ListMap(0 -> 60, 1 -> 80))
     ))
 
     val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build(version))
 
     val expectedOffsetCommitRequest = newOffsetCommitRequestData("group", "member", Seq(
-      (NameAndId("foo"), ListMap(0 -> 10, 1 -> 20)),
-      (NameAndId("bar"), ListMap(0 -> 40, 1 -> 50)),
+      (if (version < 9) NameAndId("foo") else NameAndId("foo", fooId), ListMap(0 -> 10, 1 -> 20)),
+      (if (version < 9) NameAndId("bar") else NameAndId("bar", barId), ListMap(0 -> 40, 1 -> 50)),
       (if (version < 9) NameAndId("baz") else NameAndId("baz", bazId), ListMap(0 -> 60, 1 -> 80))
     ))
 
@@ -1461,14 +1463,14 @@ class KafkaApisTest {
     )
 
     val offsetCommitResponse = newOffsetCommitResponseData(Seq(
-      (NameAndId("foo"), ListMap(0 -> NONE, 1 -> NONE)),
-      (NameAndId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
+      (if (version < 9) NameAndId("foo") else NameAndId("foo", fooId), ListMap(0 -> NONE, 1 -> NONE)),
+      (if (version < 9) NameAndId("bar") else NameAndId("bar", barId), ListMap(0 -> NONE, 1 -> NONE)),
       (if (version < 9) NameAndId("baz") else NameAndId("baz", id = bazId), ListMap(0 -> NONE, 1 -> NONE))
     ))
 
     val expectedOffsetCommitResponse = newOffsetCommitResponseData(Seq(
-      (NameAndId("foo"), ListMap(0 -> NONE, 1 -> NONE)),
-      (NameAndId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
+      (if (version >= 9) NameAndId(id = fooId) else NameAndId("foo"), ListMap(0 -> NONE, 1 -> NONE)),
+      (if (version >= 9) NameAndId(id = barId) else NameAndId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
       (if (version >= 9) NameAndId(id = bazId) else NameAndId("baz"), ListMap(0 -> NONE, 1 -> NONE))
     ))
 
@@ -4087,6 +4089,8 @@ class KafkaApisTest {
 
   @Test
   def rejectOffsetCommitRequestWhenStaticMembershipNotSupported(): Unit = {
+    val topicId = Uuid.randomUuid()
+
     val offsetCommitRequest = new OffsetCommitRequest.Builder(
       new OffsetCommitRequestData()
         .setGroupId("test")
@@ -4096,6 +4100,7 @@ class KafkaApisTest {
         .setTopics(Collections.singletonList(
           new OffsetCommitRequestData.OffsetCommitRequestTopic()
             .setName("test")
+            .setTopicId(topicId)
             .setPartitions(Collections.singletonList(
               new OffsetCommitRequestData.OffsetCommitRequestPartition()
                 .setPartitionIndex(0)
@@ -4112,7 +4117,7 @@ class KafkaApisTest {
 
     val expectedTopicErrors = Collections.singletonList(
       new OffsetCommitResponseData.OffsetCommitResponseTopic()
-        .setName("test")
+        .setTopicId(topicId)
         .setPartitions(Collections.singletonList(
           new OffsetCommitResponseData.OffsetCommitResponsePartition()
             .setPartitionIndex(0)

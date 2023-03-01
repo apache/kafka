@@ -65,7 +65,7 @@ import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
-import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, TopicResolver, Uuid}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
@@ -82,6 +82,7 @@ import java.util.{Collections, Optional, OptionalInt}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -427,23 +428,23 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      val responseBuilder = OffsetCommitResponse.newBuilder(offsetCommitRequest.version())
+      val topicResolver = TopicResolver.fromTopicIds(metadataCache.topicNamesToIds())
+      val responseBuilder = OffsetCommitResponse.newBuilder(topicResolver, offsetCommitRequest.version())
 
       val resolvedTopics =
         if (offsetCommitRequest.version() < 9)
           offsetCommitRequest.data.topics().asScala
         else {
-          val topicNames = metadataCache.topicIdsToNames()
           val topics = new ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
 
           offsetCommitRequest.data.topics.forEach { topic =>
-            val topicName = topicNames.get(topic.topicId())
-            if (topicName != null) {
-              topic.setName(topicName)
-              topics += topic
-            } else {
-              responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
-                topic.name, topic.topicId, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_ID)
+            topicResolver.getTopicName(topic.topicId()).asScala match {
+              case Some(topicName) =>
+                topic.setName(topicName)
+                topics += topic
+              case _ =>
+                responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
+                  topic.name, topic.topicId, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_ID)
             }
           }
           topics
