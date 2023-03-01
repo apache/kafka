@@ -29,10 +29,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
@@ -157,17 +154,17 @@ public class ClientUtils {
 
     public static Map<TopicPartition, ListOffsetsResultInfo> getEndOffsets(final ListOffsetsResult resultFuture,
                                                                            final Collection<TopicPartition> partitions) {
-        Map<TopicPartition, ListOffsetsResultInfo> result = new HashMap<>();
-        for (TopicPartition partition : partitions) {
+        final Map<TopicPartition, ListOffsetsResultInfo> result = new HashMap<>();
+        for (final TopicPartition partition : partitions) {
             try {
                 result.put(partition, resultFuture.partitionResult(partition).get());
-            } catch (ExecutionException e) {
-                Throwable cause = e.getCause();
-                String msg = String.format("Error while attempting to read end offsets for partition '%s'", partition.toString());
+            } catch (final ExecutionException e) {
+                final Throwable cause = e.getCause();
+                final String msg = String.format("Error while attempting to read end offsets for partition '%s'", partition.toString());
                 throw new StreamsException(msg, cause);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.interrupted();
-                String msg = String.format("Interrupted while attempting to read end offsets for partition '%s'", partition.toString());
+                final String msg = String.format("Interrupted while attempting to read end offsets for partition '%s'", partition.toString());
                 throw new StreamsException(msg, e);
             }
         }
