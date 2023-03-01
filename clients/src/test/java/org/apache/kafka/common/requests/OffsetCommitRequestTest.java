@@ -136,13 +136,6 @@ public class OffsetCommitRequestTest {
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
-    public void testInvalidConstructor(short version) {
-        OffsetCommitRequestData data = version < 9 ? dataWithTopicIds : dataWithTopicNames;
-        assertThrows(UnsupportedVersionException.class, () -> new OffsetCommitRequest.Builder(data).build(version));
-    }
-
-    @ParameterizedTest
-    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testGetErrorResponseTopics(short version) {
         OffsetCommitRequestData data = version >= 9 ? dataWithTopicIds : dataWithTopicNames;
         List<OffsetCommitResponseTopic> expectedTopics = Arrays.asList(

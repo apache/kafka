@@ -55,21 +55,8 @@ public class OffsetCommitRequest extends AbstractRequest {
         public OffsetCommitRequest build(short version) {
             if (data.groupInstanceId() != null && version < 7) {
                 throw new UnsupportedVersionException("The broker offset commit protocol version " +
-                    version + " does not support usage of config group.instance.id.");
+                        version + " does not support usage of config group.instance.id.");
             }
-
-            data.topics().forEach(topic -> {
-                if (version < 9) {
-                    if (topic.name() == null)
-                        throw new UnsupportedVersionException("OffsetCommitRequest version " + version +
-                            " does not support null topic names.");
-
-                } else {
-                    if (Uuid.ZERO_UUID.equals(topic.topicId()))
-                        throw new UnsupportedVersionException("OffsetCommitRequest version " + version +
-                            " does not support zero topic IDs.");
-                }
-            });
 
             return new OffsetCommitRequest(data, version);
         }
