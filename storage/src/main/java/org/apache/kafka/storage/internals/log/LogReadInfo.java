@@ -66,10 +66,10 @@ public class LogReadInfo {
     public int hashCode() {
         int result = fetchedData != null ? fetchedData.hashCode() : 0;
         result = 31 * result + (divergingEpoch != null ? divergingEpoch.hashCode() : 0);
-        result = 31 * result + (int) (highWatermark ^ (highWatermark >>> 32));
-        result = 31 * result + (int) (logStartOffset ^ (logStartOffset >>> 32));
-        result = 31 * result + (int) (logEndOffset ^ (logEndOffset >>> 32));
-        result = 31 * result + (int) (lastStableOffset ^ (lastStableOffset >>> 32));
+        result = 31 * result + Long.hashCode(highWatermark);
+        result = 31 * result + Long.hashCode(logStartOffset);
+        result = 31 * result + Long.hashCode(logEndOffset);
+        result = 31 * result + Long.hashCode(lastStableOffset);
         return result;
     }
 
