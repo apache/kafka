@@ -371,14 +371,13 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     assertFalse(runVerifyAssignment(cluster.adminClient, assignment, false).partsOngoing)
   }
 
-  @Test
-  def testInvalidCancellation(): Unit = {
-    cluster = new ReassignPartitionsTestCluster(zkConnect)
+  def setupPartitionMovementBeforeCancellation(cluster: ReassignPartitionsTestCluster) : String = {
     cluster.setup()
     cluster.produceMessages("foo", 0, 200)
-    val assignment = """{"version":1,"partitions":""" +
-      """[{"topic":"foo","partition":0,"replicas":[0,1,3],"log_dirs":["any","any","any"]}""" +
-      """]}"""
+    val assignment =
+      """{"version":1,"partitions":""" +
+        """[{"topic":"foo","partition":0,"replicas":[0,1,3],"log_dirs":["any","any","any"]}""" +
+        """]}"""
     assertEquals(unthrottledBrokerConfigs,
       describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
     val interBrokerThrottle = 1L
@@ -392,10 +391,36 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
         new TopicPartition("foo", 0) -> PartitionReassignmentState(Seq(0, 1, 3, 2), Seq(0, 1, 3), false)),
         true, Map(), false))
 
+    assignment
+  }
+
+  @Test
+  def testAtOrAboveMinISRCancellationSucceeds(): Unit = {
+    cluster = new ReassignPartitionsTestCluster(zkConnect)
+    val assignment = setupPartitionMovementBeforeCancellation(cluster)
+
     // shutdown one of the original replicas
     cluster.servers.find(_.config.brokerId == 2).get.shutdown()
 
-    // Cancel the reassignment should result in an exception
+    // Canceling the reassignment should be okay because
+    // there are enough replicas alive in the original list. {0, 1} are alive.
+    assertTrue(() => {
+      runCancelAssignment(cluster.adminClient, assignment, true)
+      true
+    })
+  }
+
+  @Test
+  def testBelowMinISRCancellationFails(): Unit = {
+    cluster = new ReassignPartitionsTestCluster(zkConnect, Map(KafkaConfig.LiMinOriginalAliveReplicasProp -> "2"))
+    val assignment = setupPartitionMovementBeforeCancellation(cluster)
+
+    // shutdown two of the original replicas.
+    cluster.servers.find(_.config.brokerId == 1).get.shutdown()
+    cluster.servers.find(_.config.brokerId == 2).get.shutdown()
+
+    // Cancel the reassignment should result in an exception because
+    // there are not enough alive replicas in the original list. Only {0} is alive.
     assertThrows(classOf[TerseReassignmentFailureException], () => runCancelAssignment(cluster.adminClient, assignment, true))
   }
 
