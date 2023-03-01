@@ -403,7 +403,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                 try {
                     result.add(pluginDesc(plugin, versionFor(plugin), loader));
                 } catch (ReflectiveOperationException | LinkageError e) {
-                    log.error("Unable to instantiate {}{}", plugin, reflectiveErrorDescription(e), e);
+                    log.error("Failed to discover {}: Unable to instantiate {}{}", klass.getSimpleName(), plugin.getSimpleName(), reflectiveErrorDescription(e), e);
                 }
             } else {
                 log.debug("Skipping {} as it is not concrete implementation", plugin);
@@ -428,7 +428,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                 try {
                     pluginImpl = iterator.next();
                 } catch (ServiceConfigurationError t) {
-                    log.error("Unable to instantiate plugin{}", reflectiveErrorDescription(t.getCause()), t);
+                    log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t.getCause()), t);
                     continue;
                 }
                 result.add(pluginDesc((Class<? extends T>) pluginImpl.getClass(),
@@ -459,15 +459,15 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     private static String reflectiveErrorDescription(Throwable t) {
         if (t instanceof NoSuchMethodException) {
-            return ": Plugin class must have a default constructor, and cannot be a non-static inner class";
+            return ": Plugin class must have a no-args constructor, and cannot be a non-static inner class";
         } else if (t instanceof SecurityException) {
             return ": Security settings must allow reflective instantiation of plugin classes";
         } else if (t instanceof IllegalAccessException) {
             return ": Plugin class default constructor must be public";
         } else if (t instanceof ExceptionInInitializerError) {
-            return ": Plugin class should not throw exception during static initialization";
+            return ": Failed to statically initialize plugin class";
         } else if (t instanceof InvocationTargetException) {
-            return ": Constructor must complete without throwing an exception";
+            return ": Failed to invoke plugin constructor";
         } else {
             return "";
         }
