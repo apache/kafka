@@ -531,8 +531,8 @@ class SocketServerTest {
     val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
     val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(props))
 
-    def openChannel: Option[KafkaChannel] = overrideServer.dataPlaneAcceptor(listener).get.processors(0).channel(overrideConnectionId)
-    def openOrClosingChannel: Option[KafkaChannel] = overrideServer.dataPlaneAcceptor(listener).get.processors(0).openOrClosingChannel(overrideConnectionId)
+    def openChannel: Option[KafkaChannel] = overrideServer.dataPlaneAcceptor(listener).get.processors.get(0).channel(overrideConnectionId)
+    def openOrClosingChannel: Option[KafkaChannel] = overrideServer.dataPlaneAcceptor(listener).get.processors.get(0).openOrClosingChannel(overrideConnectionId)
     def connectionCount = overrideServer.connectionCount(InetAddress.getByName("127.0.0.1"))
 
     // Create a client connection and wait for server to register the connection with the selector. For
@@ -598,7 +598,7 @@ class SocketServerTest {
     val request1 = receiveRequest(server.dataPlaneRequestChannel)
 
     val connectionId = request1.context.connectionId
-    val channel = server.dataPlaneAcceptor(listener).get.processors(0).channel(connectionId).getOrElse(throw new IllegalStateException("Channel not found"))
+    val channel = server.dataPlaneAcceptor(listener).get.processors.get(0).channel(connectionId).getOrElse(throw new IllegalStateException("Channel not found"))
     val transportLayer: SslTransportLayer = JTestUtils.fieldValue(channel, classOf[KafkaChannel], "transportLayer")
     val netReadBuffer: ByteBuffer = JTestUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "netReadBuffer")
 
@@ -708,10 +708,10 @@ class SocketServerTest {
   }
 
   def openChannel(request: RequestChannel.Request, server: SocketServer = this.server): Option[KafkaChannel] =
-    server.dataPlaneAcceptor(listener).get.processors(0).channel(request.context.connectionId)
+    server.dataPlaneAcceptor(listener).get.processors.get(0).channel(request.context.connectionId)
 
   def openOrClosingChannel(request: RequestChannel.Request, server: SocketServer = this.server): Option[KafkaChannel] =
-    server.dataPlaneAcceptor(listener).get.processors(0).openOrClosingChannel(request.context.connectionId)
+    server.dataPlaneAcceptor(listener).get.processors.get(0).openOrClosingChannel(request.context.connectionId)
 
   @Test
   def testSendActionResponseWithThrottledChannelWhereThrottlingInProgress(): Unit = {
@@ -1196,7 +1196,7 @@ class SocketServerTest {
       val channel = overrideServer.dataPlaneRequestChannel
       val request = receiveRequest(channel)
 
-      TestUtils.waitUntilTrue(() => overrideServer.dataPlaneAcceptor(listener).get.processors(request.processor).channel(request.context.connectionId).isEmpty,
+      TestUtils.waitUntilTrue(() => overrideServer.dataPlaneAcceptor(listener).get.processors.get(request.processor).channel(request.context.connectionId).isEmpty,
         s"Idle connection `${request.context.connectionId}` was not closed by selector")
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
@@ -2152,7 +2152,7 @@ class SocketServerTest {
 
     def testableProcessor: TestableProcessor = {
       val endpoint = this.config.dataPlaneListeners.head
-      dataPlaneAcceptors.get(endpoint).processors(0).asInstanceOf[TestableProcessor]
+      dataPlaneAcceptors.get(endpoint).processors.get(0).asInstanceOf[TestableProcessor]
     }
 
     def waitForChannelClose(connectionId: String, locallyClosed: Boolean): Unit = {
@@ -2169,7 +2169,7 @@ class SocketServerTest {
       val openCount = selector.allChannels.size - 1 // minus one for the channel just closed above
       TestUtils.waitUntilTrue(() => connectionCount(localAddress) == openCount, "Connection count not decremented")
       TestUtils.waitUntilTrue(() =>
-        dataPlaneAcceptor(listener).get.processors(0).inflightResponseCount == 0, "Inflight responses not cleared")
+        dataPlaneAcceptor(listener).get.processors.get(0).inflightResponseCount == 0, "Inflight responses not cleared")
       assertNull(selector.channel(connectionId), "Channel not removed")
       assertNull(selector.closingChannel(connectionId), "Closing channel not removed")
     }

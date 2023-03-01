@@ -117,6 +117,7 @@ class SocketServer(val config: KafkaConfig,
   // Socket server metrics
   newGauge(s"${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => {
     val dataPlaneProcessors = dataPlaneAcceptors.values.asScala.flatMap(a => a.processors.asScala)
+    // copy to an immutable array to avoid concurrency issue when calculating average
     val ioWaitRatioMetricNames = dataPlaneProcessors.map { p =>
       metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
     }.toArray
@@ -125,7 +126,7 @@ class SocketServer(val config: KafkaConfig,
     } else {
       ioWaitRatioMetricNames.map { metricName =>
         Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-      }.sum / ioWaitRatioMetricNames.size
+      }.sum / ioWaitRatioMetricNames.length
     }
   })
   if (config.requiresZookeeper) {
