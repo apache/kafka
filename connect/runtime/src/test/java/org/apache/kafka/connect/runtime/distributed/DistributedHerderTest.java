@@ -3780,7 +3780,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testTaskReconfigurationRetriesWithConnectorTaskConfigsException() {
+    public void testTaskReconfigurationRetriesWithConnectorTaskConfigsException() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
         expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
@@ -3809,7 +3809,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testTaskReconfigurationRetriesWithLeaderRequestForwardingException() {
+    public void testTaskReconfigurationRetriesWithLeaderRequestForwardingException() throws Exception {
         herder = PowerMock.createPartialMock(DistributedHerder.class,
                 new String[]{"connectorType", "updateDeletedConnectorStatus", "updateDeletedTaskStatus", "validateConnectorConfig", "buildRestartPlan", "recordRestarting"},
                 new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, KAFKA_CLUSTER_ID,
