@@ -71,7 +71,7 @@ import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyInt, anyString}
-import org.mockito.Mockito.{mock, never, reset, times, verify, when}
+import org.mockito.Mockito.{atLeast, mock, never, reset, times, verify, when}
 
 import scala.collection.{Map, Seq, mutable}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
@@ -719,6 +719,8 @@ class ReplicaManagerTest {
         new PartitionData(Uuid.ZERO_UUID, numRecords + 1, 0, 100000, Optional.empty()),
         replicaId = 1
       )
+
+      verify(replicaManager.alterPartitionManager, times(2)).updateBrokerEpoch(1, 1)
 
       // now all of the records should be fetchable
       consumerFetchResult = fetchPartitionAsConsumer(replicaManager, new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
@@ -1682,6 +1684,7 @@ class ReplicaManagerTest {
       minBytes = 1000,
       maxWaitMs = 1000
     )
+    verify(replicaManager.alterPartitionManager, times(2)).updateBrokerEpoch(1, 1)
     assertFalse(followerResult.hasFired, "Request completed immediately unexpectedly")
 
     // Complete the request in the purgatory by advancing the clock
@@ -2429,6 +2432,12 @@ class ReplicaManagerTest {
       quota,
       responseCallback
     )
+
+    if (replicaId != -1) {
+      verify(replicaManager.alterPartitionManager, atLeast(1)).updateBrokerEpoch(replicaId, 1)
+    } else {
+      verify(replicaManager.alterPartitionManager, never()).updateBrokerEpoch(replicaId, 1)
+    }
   }
 
   private def setupReplicaManagerWithMockedPurgatories(

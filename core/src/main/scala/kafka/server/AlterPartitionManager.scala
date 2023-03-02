@@ -20,6 +20,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import kafka.api.LeaderAndIsr
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
@@ -28,6 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.OperationNotAttemptedException
 import org.apache.kafka.common.message.AlterPartitionRequestData
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.RequestHeader
@@ -60,6 +62,8 @@ trait AlterPartitionManager {
     leaderAndIsr: LeaderAndIsr,
     controllerEpoch: Int
   ): CompletableFuture[LeaderAndIsr]
+
+  def updateBrokerEpoch(brokerId: Int, brokerEpoch: Long): Unit = {}
 }
 
 case class AlterPartitionItem(
@@ -98,6 +102,7 @@ object AlterPartitionManager {
       scheduler = scheduler,
       time = time,
       brokerId = config.brokerId,
+      metadataCache = metadataCache,
       brokerEpochSupplier = brokerEpochSupplier,
       metadataVersionSupplier = () => metadataCache.metadataVersion()
     )
@@ -120,6 +125,7 @@ class DefaultAlterPartitionManager(
   val scheduler: Scheduler,
   val time: Time,
   val brokerId: Int,
+  val metadataCache: MetadataCache,
   val brokerEpochSupplier: () => Long,
   val metadataVersionSupplier: () => MetadataVersion
 ) extends AlterPartitionManager with Logging {
@@ -142,6 +148,10 @@ class DefaultAlterPartitionManager(
 
   // Used to allow only one in-flight request at a time
   private val inflightRequest: AtomicBoolean = new AtomicBoolean(false)
+
+  // Used to store the mapping from broker ID to its brokerEpoch. If the epoch is -1, this broker may not support
+  // broker epoch verification.
+  private val brokerEpochs: util.Map[Int, Long] = new ConcurrentHashMap[Int, Long]()
 
   override def start(): Unit = {
     controllerChannelManager.start()
@@ -168,6 +178,10 @@ class DefaultAlterPartitionManager(
     future
   }
 
+  override def updateBrokerEpoch(brokerId: Int, brokerEpoch: Long): Unit = {
+    brokerEpochs.put(brokerId, brokerEpoch)
+  }
+
   private[server] def maybePropagateIsrChanges(): Unit = {
     // Send all pending items if there is not already a request in-flight.
     if (!unsentIsrUpdates.isEmpty && inflightRequest.compareAndSet(false, true)) {
@@ -186,8 +200,16 @@ class DefaultAlterPartitionManager(
 
   private def sendRequest(inflightAlterPartitionItems: Seq[AlterPartitionItem]): Unit = {
     val brokerEpoch = brokerEpochSupplier()
-    val (request, topicNamesByIds) = buildRequest(inflightAlterPartitionItems, brokerEpoch)
-    debug(s"Sending AlterPartition to controller $request")
+    val (request, topicNamesByIds, abortUpdateTopicPartitions) = buildRequest(inflightAlterPartitionItems, brokerEpoch)
+    debug(s"Sending AlterPartition to controller $request. Aborted partitions $abortUpdateTopicPartitions")
+
+    abortUpdateTopicPartitions.foreach(topicPartition => {
+      unsentIsrUpdates.remove(topicPartition)
+    })
+
+    if (request.data().topics().isEmpty) {
+      return
+    }
 
     // We will not timeout AlterPartition request, instead letting it retry indefinitely
     // until a response is received, or a new LeaderAndIsr overwrites the existing isrState
@@ -252,7 +274,7 @@ class DefaultAlterPartitionManager(
   private def buildRequest(
     inflightAlterPartitionItems: Seq[AlterPartitionItem],
     brokerEpoch: Long
-  ): (AlterPartitionRequest.Builder, mutable.Map[Uuid, String]) = {
+  ): (AlterPartitionRequest.Builder, mutable.Map[Uuid, String], List[TopicPartition]) = {
     val metadataVersion = metadataVersionSupplier()
     // We build this mapping in order to map topic id back to their name when we
     // receive the response. We cannot rely on the metadata cache for this because
@@ -267,6 +289,7 @@ class DefaultAlterPartitionManager(
       .setBrokerId(brokerId)
       .setBrokerEpoch(brokerEpoch)
 
+    val brokerEpochMismatchPartition = ListBuffer[TopicPartition]()
     inflightAlterPartitionItems.groupBy(_.topicIdPartition.topic).foreach { case (topicName, items) =>
       val topicId = items.head.topicIdPartition.topicId
       canUseTopicIds &= topicId != Uuid.ZERO_UUID
@@ -277,25 +300,66 @@ class DefaultAlterPartitionManager(
       val topicData = new AlterPartitionRequestData.TopicData()
         .setTopicName(topicName)
         .setTopicId(topicId)
-      message.topics.add(topicData)
 
       items.foreach { item =>
-        val partitionData = new AlterPartitionRequestData.PartitionData()
-          .setPartitionIndex(item.topicIdPartition.partition)
-          .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
-          .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
-          .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
+        val newIsrWithBrokerEpoch = new ListBuffer[BrokerState]()
+        item.leaderAndIsr.isr.foreach(isrBrokerId => {
+          var currentBrokerEpoch = brokerEpochs.getOrDefault(isrBrokerId, -2)
+          if (isrBrokerId == brokerId) {
+            currentBrokerEpoch = brokerEpoch
+          }
 
-        if (metadataVersion.isLeaderRecoverySupported) {
-          partitionData.setLeaderRecoveryState(item.leaderAndIsr.leaderRecoveryState.value)
+          if (isBrokerEpochConsistentWithMetadataCache(isrBrokerId, currentBrokerEpoch)) {
+            newIsrWithBrokerEpoch.append(new BrokerState()
+              .setBrokerId(isrBrokerId)
+              .setBrokerEpoch(currentBrokerEpoch))
+          }
+        })
+
+        if (newIsrWithBrokerEpoch.size != item.leaderAndIsr.isr.size) {
+          info(s"Skip sending AlterPartition request for ${item.topicIdPartition.topicPartition()} because of" +
+            s"inconsistent broker epoch for ISR brokers.")
+          brokerEpochMismatchPartition += item.topicIdPartition.topicPartition()
+        } else {
+          val partitionData = new AlterPartitionRequestData.PartitionData()
+            .setPartitionIndex(item.topicIdPartition.partition)
+            .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
+            .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
+            .setNewIsrWithEpochs(newIsrWithBrokerEpoch.toList.asJava)
+
+          if (metadataVersion.isLeaderRecoverySupported) {
+            partitionData.setLeaderRecoveryState(item.leaderAndIsr.leaderRecoveryState.value)
+          }
+
+          topicData.partitions.add(partitionData)
         }
-
-        topicData.partitions.add(partitionData)
+      }
+      if (!topicData.partitions().isEmpty) {
+        message.topics.add(topicData)
       }
     }
 
     // If we cannot use topic ids, the builder will ensure that no version higher than 1 is used.
-    (new AlterPartitionRequest.Builder(message, canUseTopicIds), topicNamesByIds)
+    (new AlterPartitionRequest.Builder(message, canUseTopicIds), topicNamesByIds, brokerEpochMismatchPartition.toList)
+  }
+
+  private def isBrokerEpochConsistentWithMetadataCache(brokerId: Int, brokerEpoch: Long): Boolean = {
+    if (brokerEpoch == -2) {
+      info(s"The leader has not received a Fetch request from broker ${brokerId}, try next time.")
+      return false
+    }
+
+    // We should verify whether the broker epoch is consistent between metadata cache and local cache.
+    if (brokerEpoch != -1 && metadataCache.isInstanceOf[KRaftMetadataCache]) {
+      val metadataCacheBrokerEpoch = metadataCache.asInstanceOf[KRaftMetadataCache]
+        .getAliveBrokerEpoch(brokerId)
+      if (metadataCacheBrokerEpoch.getOrElse(-1) != brokerEpoch) {
+        info(s"The metadata cache broker epoch(${metadataCacheBrokerEpoch.getOrElse(-1)})" +
+          s" mismatches with local cache(${brokerEpoch}) for broker ${brokerId}, try next time.")
+        return false
+      }
+    }
+    true
   }
 
   def handleAlterPartitionResponse(

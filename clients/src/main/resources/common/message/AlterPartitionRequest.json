@@ -21,7 +21,9 @@
   // Version 1 adds LeaderRecoveryState field (KIP-704).
   //
   // Version 2 adds TopicId field to replace TopicName field (KIP-841).
-  "validVersions": "0-2",
+  //
+  // Version 3 adds the NewIsrEpochs field and deprecates the NewIsr field (KIP-903).
+  "validVersions": "0-3",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -39,7 +41,13 @@
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
           "about": "The leader epoch of this partition" },
         { "name": "NewIsr", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
-          "about": "The ISR for this partition" },
+          "about": "The ISR for this partition. Deprecated since version 3." },
+        { "name": "NewIsrWithEpochs", "type": "[]BrokerState", "versions": "3+", "fields": [
+          { "name": "BrokerId", "type": "int32", "versions": "3+", "entityType": "brokerId",
+            "about": "The ID of the broker." },
+          { "name": "BrokerEpoch", "type": "int64", "versions": "3+", "default": "-1",
+            "about": "The epoch of the broker. It will be -1 if the epoch check is not supported." }
+        ]},
         { "name": "LeaderRecoveryState", "type": "int8", "versions": "1+", "default": "0",
           "about": "1 if the partition is recovering from an unclean leader election; 0 otherwise." },
         { "name": "PartitionEpoch", "type": "int32", "versions": "0+",

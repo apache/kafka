@@ -1048,6 +1048,10 @@ class ReplicaManager(val config: KafkaConfig,
     var hasPreferredReadReplica = false
     val logReadResultMap = new mutable.HashMap[TopicIdPartition, LogReadResult]
 
+    if (params.isFromFollower && params.replicaId != localBrokerId) {
+      alterPartitionManager.updateBrokerEpoch(params.replicaId, params.replicaEpoch)
+    }
+
     logReadResults.foreach { case (topicIdPartition, logReadResult) =>
       brokerTopicStats.topicStats(topicIdPartition.topicPartition.topic).totalFetchRequestRate.mark()
       brokerTopicStats.allTopicsStats.totalFetchRequestRate.mark()

@@ -2091,6 +2091,7 @@ class PartitionTest extends AbstractPartitionTest {
       scheduler = mock(classOf[KafkaScheduler]),
       time = time,
       brokerId = brokerId,
+      metadataCache,
       brokerEpochSupplier = () => 0,
       metadataVersionSupplier = () => MetadataVersion.IBP_3_0_IV0
     )
