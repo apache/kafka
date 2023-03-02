@@ -27,6 +27,15 @@ public class GroupState {
     public final String groupId;
     public final Optional<String> groupInstanceId;
     public Generation generation = Generation.NO_GENERATION;
+    public State state = State.UNJOINED;
+
+    enum State {
+        UNJOINED,
+        PREPARE,
+        ASSIGNING,
+        COMPLETE,
+        STABLE
+    }
 
     public GroupState(String groupId, Optional<String> groupInstanceId) {
         this.groupId = groupId;
