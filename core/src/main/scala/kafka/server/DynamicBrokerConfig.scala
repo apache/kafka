@@ -271,6 +271,35 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
   }
 
+  /**
+   * Add reconfigurables to be notified when a dynamic controller config is updated.
+   */
+  def addReconfigurables(controller: ControllerServer): Unit = {
+    controller.authorizer match {
+      case Some(authz: Reconfigurable) => addReconfigurable(authz)
+      case _ =>
+    }
+    if (kafkaConfig.isKRaftCoResidentMode) {
+      debug("Relying on the broker to reconfigure the Yammer metrics.")
+    } else {
+      addReconfigurable(controller.kafkaYammerMetrics)
+    }
+    if (kafkaConfig.isKRaftCoResidentMode) {
+      debug("Relying on the broker to reconfigure the metric reporters.")
+    } else {
+      addReconfigurable(new DynamicMetricsReporters(
+        kafkaConfig.brokerId, controller.config, controller.metrics, controller.clusterId))
+    }
+    addBrokerReconfigurable(controller.socketServer)
+
+    // KAFKA-14349: add dynamic thread pool resizing here
+
+    // KAFKA-14350: add dynamic listener reconfiguration here
+
+    // When we implement controller mutation quotas in KRaft, as discussed in KAFKA-14351,
+    // we'll need to make them reconfigurable here (probably via DynamicClientQuotaCallback).
+  }
+
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
     verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs.asScala)
     reconfigurables.add(reconfigurable)

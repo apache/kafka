@@ -312,23 +312,6 @@ class BrokerServer(
         config, Some(clientToControllerChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
 
-      /* Add all reconfigurables for config change notification before starting the metadata listener */
-      config.dynamicConfig.addReconfigurables(this)
-
-      dynamicConfigHandlers = Map[String, ConfigHandler](
-        ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
-        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
-
-      if (!config.processRoles.contains(ControllerRole)) {
-        // If no controller is defined, we rely on the broker to generate snapshots.
-        metadataSnapshotter = Some(new BrokerMetadataSnapshotter(
-          config.nodeId,
-          time,
-          threadNamePrefix,
-          new BrokerSnapshotWriterBuilder(raftManager.client)
-        ))
-      }
-
       metadataListener = new BrokerMetadataListener(
         config.nodeId,
         time,
@@ -369,9 +352,6 @@ class BrokerServer(
         featuresRemapped
       )
 
-      // Register a listener with the Raft layer to receive metadata event notifications
-      raftManager.register(metadataListener)
-
       val endpoints = new util.ArrayList[Endpoint](networkListeners.size())
       var interBrokerListener: Endpoint = null
       networkListeners.iterator().forEachRemaining(listener => {
@@ -407,6 +387,26 @@ class BrokerServer(
             ep -> CompletableFuture.completedFuture[Void](null)
           }.toMap
       }
+
+      /* Add all reconfigurables for config change notification before starting the metadata listener */
+      config.dynamicConfig.addReconfigurables(this)
+
+      dynamicConfigHandlers = Map[String, ConfigHandler](
+        ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
+        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
+
+      if (!config.processRoles.contains(ControllerRole)) {
+        // If no controller is defined, we rely on the broker to generate snapshots.
+        metadataSnapshotter = Some(new BrokerMetadataSnapshotter(
+          config.nodeId,
+          time,
+          threadNamePrefix,
+          new BrokerSnapshotWriterBuilder(raftManager.client)
+        ))
+      }
+
+      // Register a listener with the Raft layer to receive metadata event notifications
+      raftManager.register(metadataListener)
 
       val fetchManager = new FetchManager(Time.SYSTEM,
         new FetchSessionCache(config.maxIncrementalFetchSessionCacheSlots,

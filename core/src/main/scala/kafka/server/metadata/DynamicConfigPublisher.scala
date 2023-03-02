@@ -22,6 +22,7 @@ import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, KafkaConfig}
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
+import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.fault.FaultHandler
 
@@ -31,10 +32,16 @@ class DynamicConfigPublisher(
   faultHandler: FaultHandler,
   dynamicConfigHandlers: Map[String, ConfigHandler],
   nodeType: String
-) extends Logging {
+) extends org.apache.kafka.image.publisher.MetadataPublisher with Logging {
   logIdent = s"[DynamicConfigPublisher nodeType=${nodeType} id=${conf.nodeId}] "
 
-  def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
+  def name(): String = "DynamicConfigPublisher"
+
+  def publish(
+    delta: MetadataDelta,
+    newImage: MetadataImage,
+    manifest: LoaderManifest
+  ): Unit = {
     val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
     try {
       // Apply configuration deltas.

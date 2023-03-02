@@ -24,8 +24,8 @@ import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
-import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.DynamicConfigPublisher
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
@@ -35,6 +35,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
+import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
@@ -104,6 +105,7 @@ class ControllerServer(
   var quotaManagers: QuotaManagers = _
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
+  def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
   var migrationSupport: Option[ControllerMigrationSupport] = None
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
@@ -116,13 +118,6 @@ class ControllerServer(
       lock.unlock()
     }
     true
-  }
-
-  private def doRemoteKraftSetup(): Unit = {
-    // Explicitly configure metric reporters on this remote controller.
-    // We do not yet support dynamic reconfiguration on remote controllers in general;
-    // remove this once that is implemented.
-    new DynamicMetricReporterState(config.nodeId, config, metrics, clusterId)
   }
 
   def clusterId: String = sharedServer.metaProps.clusterId
@@ -242,11 +237,17 @@ class ControllerServer(
         case _ => // nothing to do
       }
       controller = controllerBuilder.build()
+      val metadataPublishers = new java.util.ArrayList[MetadataPublisher]()
 
-      // Perform any setup that is done only when this node is a controller-only node.
-      if (!config.processRoles.contains(BrokerRole)) {
-        doRemoteKraftSetup()
-      }
+      val dynamicConfigHandlers = Map[String, ConfigHandler](
+        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers)
+      )
+      metadataPublishers.add(new DynamicConfigPublisher(
+        config,
+        sharedServer.metadataPublishingFaultHandler,
+        dynamicConfigHandlers.toMap,
+        "controller"
+      ))
 
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
@@ -289,6 +290,14 @@ class ControllerServer(
         config.numIoThreads,
         s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix)
+
+      config.dynamicConfig.addReconfigurables(this)
+
+      // Install the metadata publishers. Note that they will not actually receive any metadata
+      // until we catch up to the high water mark of __cluster_metadata-0. We are not waiting for
+      // that. We are just waiting for the installation process to complete.
+      FutureUtils.waitWithLogging(logger.underlying, "all of the metadata publishers to be installed",
+        sharedServer.loader.installPublishers(metadataPublishers), startupDeadline, time)
 
       /**
        * Enable the controller endpoint(s). If we are using an authorizer which stores
