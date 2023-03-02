@@ -201,11 +201,12 @@ class DefaultStateUpdaterTest {
     public void shouldRemovePausedAndUpdatingTasksOnShutdown() throws Exception {
         final StreamTask activeTask = statefulTask(TASK_A_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_B_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+
+        when(topologyMetadata.isPaused(standbyTask.id().topologyName())).thenReturn(false).thenReturn(true);
+
         stateUpdater.start();
         stateUpdater.add(activeTask);
         stateUpdater.add(standbyTask);
-        verifyUpdatingTasks(activeTask, standbyTask);
-        when(topologyMetadata.isPaused("B")).thenReturn(true);
         verifyPausedTasks(standbyTask);
         verifyUpdatingTasks(activeTask);
         verifyRemovedTasks();
@@ -879,12 +880,11 @@ class DefaultStateUpdaterTest {
         final StreamTask task1 = statefulTask(TASK_A_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask task2 = standbyTask(TASK_B_0_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
 
+        when(topologyMetadata.isPaused(task1.id().topologyName())).thenReturn(false).thenReturn(true);
+
         stateUpdater.start();
         stateUpdater.add(task1);
         stateUpdater.add(task2);
-        verifyUpdatingTasks(task1, task2);
-
-        when(topologyMetadata.isPaused("A")).thenReturn(true);
 
         verifyPausedTasks(task1);
         verifyCheckpointTasks(true, task1);
@@ -897,19 +897,20 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldPauseStandbyTaskAndNotTransitToUpdateStandbyAgain() throws Exception {
+    public void shouldPauseStandbyTaskAndNotTransitToRestoreActive() throws Exception {
         final StandbyTask task1 = standbyTask(TASK_A_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         final StandbyTask task2 = standbyTask(TASK_B_0_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
+
+        when(topologyMetadata.isPaused(task1.id().topologyName())).thenReturn(false).thenReturn(true);
 
         stateUpdater.start();
         stateUpdater.add(task1);
         stateUpdater.add(task2);
-        verifyUpdatingTasks(task1, task2);
-
-        when(topologyMetadata.isPaused("A")).thenReturn(true);
 
         verifyPausedTasks(task1);
-        verify(changelogReader, times(1)).transitToUpdateStandby();
+        verifyUpdatingTasks(task2);
+        verifyCheckpointTasks(true, task1);
+        verify(changelogReader, never()).enforceRestoreActive();
     }
 
     private void shouldPauseStatefulTask(final Task task) throws Exception {
@@ -1556,7 +1557,8 @@ class DefaultStateUpdaterTest {
             mkEntry(standbyTask3.id(), standbyTask3)
         );
 
-        when(topologyMetadata.isPaused("B")).thenReturn(true);
+        when(topologyMetadata.isPaused(activeTask2.id().topologyName())).thenReturn(true);
+        when(topologyMetadata.isPaused(standbyTask4.id().topologyName())).thenReturn(true);
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
         when(changelogReader.restore(tasks1234)).thenReturn(1L);
