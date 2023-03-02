@@ -27,8 +27,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 import java.util.Properties
+import scala.collection.{Map, Seq}
 import scala.collection.immutable.ListMap
-import scala.jdk.CollectionConverters.SeqHasAsJava
+import scala.jdk.CollectionConverters.{ListHasAsScala, SeqHasAsJava}
 
 class OffsetCommitRequestTest extends BaseRequestTest {
   override def brokerCount: Int = 1
@@ -54,24 +55,19 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     })
   }
 
-  @Test
-  def testTopicIdsArePopulatedInOffsetCommitResponses(): Unit = {
-    val topics = createTopics("topic1", "topic2", "topic3")
-    val topicPartitions = topics.map(topic => new TopicPartition(topic.name, 0))
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    val consumer = createConsumer()
-    consumer.assign(topicPartitions.asJava)
+  def commitOffsets(offsets: Seq[(NameAndId, Map[Int, Long])],
+                    responses: Seq[(NameAndId, Map[Int, Errors])],
+                    versions: Seq[java.lang.Short]): Unit = {
 
     val requestData = newOffsetCommitRequestData(
       groupId = "group",
-      offsets = topics.map((_, ListMap(0 -> offset)))
+      offsets = offsets
     )
 
-    ApiKeys.OFFSET_COMMIT.allVersions.forEach { version =>
+    versions.foreach { version =>
       val expectedResponse = newOffsetCommitResponseData(
         version,
-        topicPartitions = topics.map((_, Map(0 -> Errors.NONE))),
+        topicPartitions = responses,
       )
 
       val response = connectAndReceive[OffsetCommitResponse](
@@ -82,11 +78,35 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     }
   }
 
- /* @Test
-  def testOffsetCommitWithInvalidId(): Unit = {
+  @Test
+  def testTopicIdsArePopulatedInOffsetCommitResponses(): Unit = {
     val topics = createTopics("topic1", "topic2", "topic3")
     val topicPartitions = topics.map(topic => new TopicPartition(topic.name, 0))
 
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    val consumer = createConsumer()
+    consumer.assign(topicPartitions.asJava)
 
-  }*/
+    commitOffsets(
+      topics.map((_, ListMap(0 -> offset))),
+      topics.map((_, Map(0 -> Errors.NONE))),
+      ApiKeys.OFFSET_COMMIT.allVersions().asScala
+    )
+  }
+
+  @Test
+  def testOffsetCommitWithUnknownTopicId(): Unit = {
+    val topics = createTopics("topic1", "topic2", "topic3")
+    val topicPartitions = topics.map(topic => new TopicPartition(topic.name, 0))
+
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    val consumer = createConsumer()
+    consumer.assign(topicPartitions.asJava)
+
+    commitOffsets(
+      topics.map((_, ListMap(0 -> offset))) ++ Seq((NameAndId("unresolvable"), ListMap(0 -> offset))),
+      Seq((NameAndId("unresolvable"), ListMap(0 -> Errors.UNKNOWN_TOPIC_ID))) ++ topics.map((_, Map(0 -> Errors.NONE))),
+      ApiKeys.OFFSET_COMMIT.allVersions().asScala.filter(_ >= 9)
+    )
+  }
 }

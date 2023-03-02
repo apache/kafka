@@ -1463,19 +1463,20 @@ class KafkaApisTest {
       RequestLocal.NoCaching
     )
 
-    val offsetCommitResponse = newOffsetCommitResponseData(Seq(
-      (if (version < 9) NameAndId("foo") else NameAndId("foo", fooId), ListMap(0 -> NONE, 1 -> NONE)),
-      (if (version < 9) NameAndId("bar") else NameAndId("bar", barId), ListMap(0 -> NONE, 1 -> NONE)),
-      (if (version < 9) NameAndId("baz") else NameAndId("baz", id = bazId), ListMap(0 -> NONE, 1 -> NONE))
+    val groupCoordinatorResponse = newOffsetCommitResponseData(Seq(
+      (NameAndId("foo"), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameAndId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
+      (NameAndId("baz"), ListMap(0 -> NONE, 1 -> NONE))
     ))
 
-    val expectedOffsetCommitResponse = newOffsetCommitResponseData(Seq(
-      (if (version >= 9) NameAndId(id = fooId) else NameAndId("foo"), ListMap(0 -> NONE, 1 -> NONE)),
-      (if (version >= 9) NameAndId(id = barId) else NameAndId("bar"), ListMap(0 -> NONE, 1 -> NONE)),
-      (if (version >= 9) NameAndId(id = bazId) else NameAndId("baz"), ListMap(0 -> NONE, 1 -> NONE))
-    ))
+    val expectedOffsetCommitResponse = newOffsetCommitResponseData(
+      version, Seq(
+        (NameAndId("foo", fooId), ListMap(0 -> NONE, 1 -> NONE)),
+        (NameAndId("bar", barId), ListMap(0 -> NONE, 1 -> NONE)),
+        (NameAndId("baz", bazId), ListMap(0 -> NONE, 1 -> NONE)))
+    )
 
-    future.complete(offsetCommitResponse)
+    future.complete(groupCoordinatorResponse)
     val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
     assertEquals(expectedOffsetCommitResponse, response.data)
   }
