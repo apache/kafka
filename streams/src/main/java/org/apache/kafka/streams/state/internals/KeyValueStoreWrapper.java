@@ -39,52 +39,57 @@ import org.apache.kafka.streams.state.VersionedRecord;
  */
 public class KeyValueStoreWrapper<K, V> implements StateStore {
 
-    private final StateStore store;
-    private final StoreType storeType;
+    private TimestampedKeyValueStore<K, V> timestampedStore = null;
+    private VersionedKeyValueStore<K, V> versionedStore = null;
 
-    private enum StoreType {
-        TIMESTAMPED,
-        VERSIONED;
-    }
+    // same as either timestampedStore or versionedStore above. kept merely as a convenience
+    // to simplify implementation for methods which do not depend on store type.
+    private StateStore store = null;
 
     public KeyValueStoreWrapper(final ProcessorContext<?, ?> context, final String storeName) {
-        store = context.getStateStore(storeName);
+        try {
+            // first try timestamped store
+            timestampedStore = context.getStateStore(storeName);
+            store = timestampedStore;
+            return;
+        } catch (final ClassCastException e) {
+            // ignore since could be versioned store instead
+        }
 
-        if (store instanceof TimestampedKeyValueStore) {
-            storeType = StoreType.TIMESTAMPED;
-        } else if (store instanceof VersionedKeyValueStore) {
-            storeType = StoreType.VERSIONED;
-        } else {
+        try {
+            // next try versioned store
+            versionedStore = context.getStateStore(storeName);
+            store = versionedStore;
+        } catch (final ClassCastException e) {
+            final String storeType = store == null ? "null" : store.getClass().getName();
             throw new InvalidStateStoreException("KTable source state store must implement either "
-                + "TimestampedKeyValueStore or VersionedKeyValueStore. Got: " + store.getClass().getName());
+                + "TimestampedKeyValueStore or VersionedKeyValueStore. Got: " + storeType);
         }
     }
 
     public ValueAndTimestamp<V> get(final K key) {
-        switch (storeType) {
-            case TIMESTAMPED:
-                return getTimestampedStore().get(key);
-            case VERSIONED:
-                final VersionedRecord<V> versionedRecord = getVersionedStore().get(key);
-                return versionedRecord == null
-                    ? null
-                    : ValueAndTimestamp.make(versionedRecord.value(), versionedRecord.timestamp());
-            default:
-                throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        if (timestampedStore != null) {
+            return timestampedStore.get(key);
         }
+        if (versionedStore != null) {
+            final VersionedRecord<V> versionedRecord = versionedStore.get(key);
+            return versionedRecord == null
+                ? null
+                : ValueAndTimestamp.make(versionedRecord.value(), versionedRecord.timestamp());
+        }
+        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
     }
 
     public void put(final K key, final V value, final long timestamp) {
-        switch (storeType) {
-            case TIMESTAMPED:
-                getTimestampedStore().put(key, ValueAndTimestamp.make(value, timestamp));
-                return;
-            case VERSIONED:
-                getVersionedStore().put(key, value, timestamp);
-                return;
-            default:
-                throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        if (timestampedStore != null) {
+            timestampedStore.put(key, ValueAndTimestamp.make(value, timestamp));
+            return;
         }
+        if (versionedStore != null) {
+            versionedStore.put(key, value, timestamp);
+            return;
+        }
+        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
     }
 
     public StateStore getStore() {
@@ -135,15 +140,5 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     @Override
     public Position getPosition() {
         return store.getPosition();
-    }
-
-    @SuppressWarnings("unchecked")
-    private TimestampedKeyValueStore<K, V> getTimestampedStore() {
-        return (TimestampedKeyValueStore<K, V>) store;
-    }
-
-    @SuppressWarnings("unchecked")
-    private VersionedKeyValueStore<K, V> getVersionedStore() {
-        return (VersionedKeyValueStore<K, V>) store;
     }
 }
