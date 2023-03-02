@@ -135,11 +135,11 @@ public class DefaultStateUpdater implements StateUpdater {
             log.info("State updater thread started");
             try {
                 while (isRunning.get()) {
-                    try {
-                        runOnce();
-                    } catch (final InterruptException interruptedException) {
-                        return;
-                    }
+                    // in state updater we never interrupt the thread
+                    // or wakeup the consumer, hence any of
+                    // InterruptException / InterruptedException / WakeupException
+                    // should never happen
+                    runOnce();
                 }
             } catch (final RuntimeException anyOtherException) {
                 handleRuntimeException(anyOtherException);
@@ -316,7 +316,8 @@ public class DefaultStateUpdater implements StateUpdater {
                     tasksAndActionsCondition.await();
                 }
             } catch (final InterruptedException ignored) {
-                // we never interrupt the thread, but only singal the condition
+                // we never interrupt the thread, but only signal the condition
+                // and hence this exception should never be thrown
             } finally {
                 tasksAndActionsLock.unlock();
             }
@@ -574,9 +575,11 @@ public class DefaultStateUpdater implements StateUpdater {
     @Override
     public void shutdown(final Duration timeout) {
         if (stateUpdaterThread != null) {
+            // first set the running flag and then
+            // notify the condition in case the thread is waiting on it;
+            // note this ordering should not be changed
             stateUpdaterThread.isRunning.set(false);
 
-            // notify the condition in case the thread is blocked as all changelogs are completed
             tasksAndActionsLock.lock();
             try {
                 tasksAndActionsCondition.signalAll();
@@ -591,8 +594,6 @@ public class DefaultStateUpdater implements StateUpdater {
                 stateUpdaterThread = null;
             } catch (final InterruptedException ignored) {
             }
-
-            log.info("StateUpdater thread shutdown complete");
         } else {
             removeAddedTasksFromInputQueue();
         }
