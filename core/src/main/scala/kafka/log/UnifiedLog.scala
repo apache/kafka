@@ -470,11 +470,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   }
 
-  val producerExpireCheck = scheduler.schedule("PeriodicProducerExpirationCheck", () => {
+  val producerExpireCheck = scheduler.schedule("PeriodicProducerExpirationCheck", () => removeExpiredProducers(time.milliseconds),
+    producerIdExpirationCheckIntervalMs, producerIdExpirationCheckIntervalMs)
+
+  // Visible for testing
+  def removeExpiredProducers(currentTimeMs: Long): Unit = {
     lock synchronized {
-      producerStateManager.removeExpiredProducers(time.milliseconds)
+      producerStateManager.removeExpiredProducers(currentTimeMs)
     }
-  }, producerIdExpirationCheckIntervalMs, producerIdExpirationCheckIntervalMs)
+  }
 
   // For compatibility, metrics are defined to be under `Log` class
   override def metricName(name: String, tags: scala.collection.Map[String, String]): MetricName = {
@@ -562,6 +566,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def hasLateTransaction(currentTimeMs: Long): Boolean = {
     producerStateManager.hasLateTransaction(currentTimeMs)
   }
+
+  @threadsafe
+  def producerIdCount: Int = producerStateManager.producerIdCount
 
   def activeProducers: Seq[DescribeProducersResponseData.ProducerState] = {
     lock synchronized {

@@ -357,6 +357,11 @@ class Partition(val topicPartition: TopicPartition,
 
   def isAddingReplica(replicaId: Int): Boolean = assignmentState.isAddingReplica(replicaId)
 
+  def producerIdCount: Int = log.map(_.producerIdCount).getOrElse(0)
+
+  // Visible for testing
+  def removeExpiredProducers(currentTimeMs: Long): Unit = log.foreach(_.removeExpiredProducers(currentTimeMs))
+
   def inSyncReplicaIds: Set[Int] = partitionState.isr
 
   def maybeAddListener(listener: PartitionListener): Boolean = {

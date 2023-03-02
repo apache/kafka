@@ -121,6 +121,9 @@ public class ProducerStateManager {
 
     private volatile File logDir;
 
+    // The same as producers.size, but for lock-free access.
+    private volatile int producerIdCount = 0;
+
     // Keep track of the last timestamp from the oldest transaction. This is used
     // to detect (approximately) when a transaction has been left hanging on a partition.
     // We make the field volatile so that it can be safely accessed without a lock.
@@ -160,6 +163,25 @@ public class ProducerStateManager {
         log.info("Reloading the producer state snapshots");
         truncateFullyAndStartAt(0L);
         snapshots = loadSnapshots();
+    }
+
+    public int producerIdCount() {
+        return producerIdCount;
+    }
+
+    private void addProducerId(long producerId, ProducerStateEntry entry) {
+        producers.put(producerId, entry);
+        producerIdCount = producers.size();
+    }
+
+    private void removeProducerIds(List<Long> keys) {
+        producers.keySet().removeAll(keys);
+        producerIdCount = producers.size();
+    }
+
+    private void clearProducerIds() {
+        producers.clear();
+        producerIdCount = 0;
     }
 
     /**
@@ -306,7 +328,7 @@ public class ProducerStateManager {
     // Visible for testing
     public void loadProducerEntry(ProducerStateEntry entry) {
         long producerId = entry.producerId();
-        producers.put(producerId, entry);
+        addProducerId(producerId, entry);
         entry.currentTxnFirstOffset().ifPresent(offset -> ongoingTxns.put(offset, new TxnMetadata(producerId, offset)));
     }
 
@@ -322,7 +344,7 @@ public class ProducerStateManager {
                 .filter(entry -> isProducerExpired(currentTimeMs, entry.getValue()))
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
-        producers.keySet().removeAll(keys);
+        removeProducerIds(keys);
     }
 
     /**
@@ -342,7 +364,7 @@ public class ProducerStateManager {
         }
 
         if (logEndOffset != mapEndOffset()) {
-            producers.clear();
+            clearProducerIds();
             ongoingTxns.clear();
             updateOldestTxnTimestamp();
 
@@ -374,7 +396,7 @@ public class ProducerStateManager {
         if (currentEntry != null) {
             currentEntry.update(updatedEntry);
         } else {
-            producers.put(appendInfo.producerId(), updatedEntry);
+            addProducerId(appendInfo.producerId(), updatedEntry);
         }
 
         appendInfo.startedTransactions().forEach(txn -> ongoingTxns.put(txn.firstOffset.messageOffset, txn));
@@ -479,7 +501,7 @@ public class ProducerStateManager {
      * Truncate the producer id mapping and remove all snapshots. This resets the state of the mapping.
      */
     public void truncateFullyAndStartAt(long offset) throws IOException {
-        producers.clear();
+        clearProducerIds();
         ongoingTxns.clear();
         unreplicatedTxns.clear();
         for (SnapshotFile snapshotFile : snapshots.values()) {
