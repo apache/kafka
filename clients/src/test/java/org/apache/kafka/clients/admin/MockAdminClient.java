@@ -50,8 +50,11 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
+import org.apache.kafka.common.errors.InvalidPrincipalTypeException;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -61,6 +64,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
+import org.apache.kafka.common.security.token.delegation.TokenInformation;
 
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
@@ -93,6 +99,8 @@ public class MockAdminClient extends AdminClient {
     private KafkaException listConsumerGroupOffsetsException;
 
     private Map<MetricName, Metric> mockMetrics = new HashMap<>();
+
+    private final List<DelegationToken> allTokens = new ArrayList<>();
 
     public static Builder create() {
         return new Builder();
@@ -182,7 +190,7 @@ public class MockAdminClient extends AdminClient {
             return new MockAdminClient(brokers,
                 controller == null ? brokers.get(0) : controller,
                 clusterId,
-                defaultPartitions != null ? defaultPartitions.shortValue() : 1,
+                defaultPartitions != null ? defaultPartitions : 1,
                 defaultReplicationFactor != null ? defaultReplicationFactor.shortValue() : Math.min(brokers.size(), 3),
                 brokerLogDirs,
                 usingRaftController,
@@ -596,22 +604,89 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<DelegationToken> future = new KafkaFutureImpl<>();
+
+        for (KafkaPrincipal renewer : options.renewers()) {
+            if (!renewer.getPrincipalType().equals(KafkaPrincipal.USER_TYPE)) {
+                future.completeExceptionally(new InvalidPrincipalTypeException(""));
+                return new CreateDelegationTokenResult(future);
+            }
+        }
+
+        String tokenId = Uuid.randomUuid().toString();
+        TokenInformation tokenInfo = new TokenInformation(tokenId, options.renewers().get(0), options.renewers(), System.currentTimeMillis(), options.maxlifeTimeMs(), -1);
+        DelegationToken token = new DelegationToken(tokenInfo, tokenId.getBytes());
+        allTokens.add(token);
+        future.complete(token);
+
+        return new CreateDelegationTokenResult(future);
     }
 
     @Override
     synchronized public RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<Long> future = new KafkaFutureImpl<>();
+
+        Boolean tokenFound = false;
+        Long expiryTimestamp = options.renewTimePeriodMs();
+        for (DelegationToken token : allTokens) {
+            if (Arrays.equals(token.hmac(), hmac)) {
+                token.tokenInfo().setExpiryTimestamp(expiryTimestamp);
+                tokenFound = true;
+            }
+        }
+
+        if (tokenFound) {
+            future.complete(expiryTimestamp);
+        } else {
+            future.completeExceptionally(new DelegationTokenNotFoundException(""));
+        }
+
+        return new RenewDelegationTokenResult(future);
     }
 
     @Override
     synchronized public ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<Long> future = new KafkaFutureImpl<>();
+
+        Long expiryTimestamp = options.expiryTimePeriodMs();
+        List<DelegationToken> tokensToRemove = new ArrayList<>();
+        Boolean tokenFound = false;
+        for (DelegationToken token : allTokens) {
+            if (Arrays.equals(token.hmac(), hmac)) {
+                if (expiryTimestamp == -1 || expiryTimestamp < System.currentTimeMillis()) {
+                    tokensToRemove.add(token);
+                }
+                tokenFound = true;
+            }
+        }
+
+        if (tokenFound) {
+            allTokens.removeAll(tokensToRemove);
+            future.complete(expiryTimestamp);
+        }   else {
+            future.completeExceptionally(new DelegationTokenNotFoundException(""));
+        }
+
+        return new ExpireDelegationTokenResult(future);
     }
 
     @Override
     synchronized public DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<List<DelegationToken>> future = new KafkaFutureImpl<>();
+
+        if (options.owners().isEmpty()) {
+            future.complete(allTokens);
+        } else {
+            List<DelegationToken> tokensResult = new ArrayList<>();
+            for (DelegationToken token : allTokens) {
+                if (options.owners().contains(token.tokenInfo().owner())) {
+                    tokensResult.add(token);
+                }
+            }
+            future.complete(tokensResult);
+        }
+
+        return new DescribeDelegationTokenResult(future);
     }
 
     @Override
@@ -782,7 +857,7 @@ public class MockAdminClient extends AdminClient {
             case BROKER: {
                 int brokerId;
                 try {
-                    brokerId = Integer.valueOf(resource.name());
+                    brokerId = Integer.parseInt(resource.name());
                 } catch (NumberFormatException e) {
                     return e;
                 }
@@ -921,7 +996,7 @@ public class MockAdminClient extends AdminClient {
                 newReassignments.entrySet()) {
             TopicPartition partition = entry.getKey();
             Optional<NewPartitionReassignment> newReassignment = entry.getValue();
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<Void>();
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             futures.put(partition, future);
             TopicMetadata topicMetadata = allTopics.get(partition.topic());
             if (partition.partition() < 0 ||
@@ -1058,7 +1133,7 @@ public class MockAdminClient extends AdminClient {
     ) {
         Map<String, KafkaFuture<Void>> results = new HashMap<>();
         for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<Void>();
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             String feature = entry.getKey();
             try {
                 short cur = featureLevels.getOrDefault(feature, (short) 0);
