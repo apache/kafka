@@ -30,7 +30,7 @@ class DynamicConfigPublisher(
   conf: KafkaConfig,
   faultHandler: FaultHandler,
   dynamicConfigHandlers: Map[String, ConfigHandler],
-  val nodeType: String
+  nodeType: String
 ) extends Logging {
   logIdent = s"[DynamicConfigPublisher nodeType=${nodeType} id=${conf.nodeId}] "
 

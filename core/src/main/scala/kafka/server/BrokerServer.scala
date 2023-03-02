@@ -445,11 +445,11 @@ class BrokerServer(
 
       // Apply the metadata log changes that we've accumulated.
       metadataPublisher = new BrokerMetadataPublisher(config,
-        Some(metadataCache),
-        Some(logManager),
-        Some(replicaManager),
-        Some(groupCoordinator),
-        Some(transactionCoordinator),
+        metadataCache,
+        logManager,
+        replicaManager,
+        groupCoordinator,
+        transactionCoordinator,
         clientQuotaMetadataManager,
         new DynamicConfigPublisher(
           config,
