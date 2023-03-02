@@ -1958,23 +1958,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
 
             final List<Map<String, String>> taskProps = worker.connectorTaskConfigs(connName, connConfig);
-            boolean changed = false;
-            int currentNumTasks = configState.taskCount(connName);
-            if (taskProps.size() != currentNumTasks) {
-                log.debug("Change in connector task count from {} to {}, writing updated task configurations", currentNumTasks, taskProps.size());
-                changed = true;
-            } else {
-                int index = 0;
-                for (Map<String, String> taskConfig : taskProps) {
-                    if (!taskConfig.equals(configState.taskConfig(new ConnectorTaskId(connName, index)))) {
-                        log.debug("Change in task configurations, writing updated task configurations");
-                        changed = true;
-                        break;
-                    }
-                    index++;
-                }
-            }
-            if (changed) {
+            if (taskConfigsChanged(configState, connName, taskProps)) {
                 List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
                 if (isLeader()) {
                     writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, rawTaskProps));
