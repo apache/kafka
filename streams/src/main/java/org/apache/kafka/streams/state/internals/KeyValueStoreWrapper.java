@@ -61,6 +61,7 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
             versionedStore = context.getStateStore(storeName);
             store = versionedStore;
         } catch (final ClassCastException e) {
+            store = context.getStateStore(storeName);
             final String storeType = store == null ? "null" : store.getClass().getName();
             throw new InvalidStateStoreException("KTable source state store must implement either "
                 + "TimestampedKeyValueStore or VersionedKeyValueStore. Got: " + storeType);
