@@ -76,7 +76,6 @@ public class DefaultStateUpdater implements StateUpdater {
         private final AtomicBoolean isRunning = new AtomicBoolean(true);
         private final Map<TaskId, Task> updatingTasks = new ConcurrentHashMap<>();
         private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
-        private final Logger log;
 
         private long totalCheckpointLatency = 0L;
 
@@ -86,10 +85,6 @@ public class DefaultStateUpdater implements StateUpdater {
             super(name);
             this.changelogReader = changelogReader;
             this.updaterMetrics = new StateUpdaterMetrics(metrics, name);
-
-            final String logPrefix = String.format("state-updater [%s] ", name);
-            final LogContext logContext = new LogContext(logPrefix);
-            log = logContext.logger(DefaultStateUpdater.class);
         }
 
         public Collection<Task> getUpdatingTasks() {
@@ -142,14 +137,13 @@ public class DefaultStateUpdater implements StateUpdater {
                 while (isRunning.get()) {
                     try {
                         runOnce();
-                    } catch (final InterruptedException | InterruptException interruptedException) {
+                    } catch (final InterruptException interruptedException) {
                         return;
                     }
                 }
             } catch (final RuntimeException anyOtherException) {
                 handleRuntimeException(anyOtherException);
             } finally {
-                Thread.interrupted(); // Clear the interrupted flag.
                 removeAddedTasksFromInputQueue();
                 removeUpdatingAndPausedTasks();
                 updaterMetrics.clear();
@@ -167,7 +161,7 @@ public class DefaultStateUpdater implements StateUpdater {
         //
         //   Note that, 1-3) are measured as restoring time, while 4) and 5) measured separately
         //   as checkpointing time and idle time
-        private void runOnce() throws InterruptedException {
+        private void runOnce() {
             final long totalStartTimeMs = time.milliseconds();
             performActionsOnTasks();
 
@@ -312,16 +306,19 @@ public class DefaultStateUpdater implements StateUpdater {
             updatingTasks.clear();
         }
 
-        private void waitIfAllChangelogsCompletelyRead() throws InterruptedException {
-            if (isRunning.get() && changelogReader.allChangelogsCompleted()) {
-                tasksAndActionsLock.lock();
-                try {
-                    while (tasksAndActions.isEmpty() && !isTopologyResumed.get()) {
-                        tasksAndActionsCondition.await();
-                    }
-                } finally {
-                    tasksAndActionsLock.unlock();
+        private void waitIfAllChangelogsCompletelyRead() {
+            tasksAndActionsLock.lock();
+            try {
+                while (isRunning.get() &&
+                    changelogReader.allChangelogsCompleted() &&
+                    tasksAndActions.isEmpty() &&
+                    !isTopologyResumed.get()) {
+                    tasksAndActionsCondition.await();
                 }
+            } catch (final InterruptedException ignored) {
+                // we never interrupt the thread, but only singal the condition
+            } finally {
+                tasksAndActionsLock.unlock();
             }
         }
 
@@ -522,6 +519,7 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     private final Time time;
+    private final Logger log;
     private final String name;
     private final Metrics metrics;
     private final ChangelogReader changelogReader;
@@ -554,6 +552,10 @@ public class DefaultStateUpdater implements StateUpdater {
         this.changelogReader = changelogReader;
         this.topologyMetadata = topologyMetadata;
         this.commitIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+
+        final String logPrefix = String.format("state-updater [%s] ", name);
+        final LogContext logContext = new LogContext(logPrefix);
+        this.log = logContext.logger(DefaultStateUpdater.class);
     }
 
     public void start() {
@@ -564,14 +566,24 @@ public class DefaultStateUpdater implements StateUpdater {
 
             // initialize the last commit as of now to prevent first commit happens immediately
             this.lastCommitMs = time.milliseconds();
+
+            log.info("StateUpdater thread started");
         }
     }
 
     @Override
     public void shutdown(final Duration timeout) {
         if (stateUpdaterThread != null) {
-            stateUpdaterThread.interrupt();
             stateUpdaterThread.isRunning.set(false);
+
+            // notify the condition in case the thread is blocked as all changelogs are completed
+            tasksAndActionsLock.lock();
+            try {
+                tasksAndActionsCondition.signalAll();
+            } finally {
+                tasksAndActionsLock.unlock();
+            }
+
             try {
                 if (!shutdownGate.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                     throw new StreamsException("State updater thread did not shutdown within the timeout");
@@ -579,6 +591,8 @@ public class DefaultStateUpdater implements StateUpdater {
                 stateUpdaterThread = null;
             } catch (final InterruptedException ignored) {
             }
+
+            log.info("StateUpdater thread shutdown complete");
         } else {
             removeAddedTasksFromInputQueue();
         }
