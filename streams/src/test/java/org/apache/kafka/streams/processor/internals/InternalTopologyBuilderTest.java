@@ -640,15 +640,15 @@ public class InternalTopologyBuilderTest {
         expectedTopicGroups.put(SUBTOPOLOGY_0, new InternalTopologyBuilder.TopicsInfo(
             Collections.emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
             Collections.emptyMap(),
-            Collections.singletonMap(store1, new UnwindowedChangelogTopicConfig(store1, Collections.emptyMap()))));
+            Collections.singletonMap(store1, new UnwindowedUnversionedChangelogTopicConfig(store1, Collections.emptyMap()))));
         expectedTopicGroups.put(SUBTOPOLOGY_1, new InternalTopologyBuilder.TopicsInfo(
             Collections.emptySet(), mkSet("topic-3", "topic-4"),
             Collections.emptyMap(),
-            Collections.singletonMap(store2, new UnwindowedChangelogTopicConfig(store2, Collections.emptyMap()))));
+            Collections.singletonMap(store2, new UnwindowedUnversionedChangelogTopicConfig(store2, Collections.emptyMap()))));
         expectedTopicGroups.put(SUBTOPOLOGY_2, new InternalTopologyBuilder.TopicsInfo(
             Collections.emptySet(), mkSet("topic-5"),
             Collections.emptyMap(),
-            Collections.singletonMap(store3, new UnwindowedChangelogTopicConfig(store3, Collections.emptyMap()))));
+            Collections.singletonMap(store3, new UnwindowedUnversionedChangelogTopicConfig(store3, Collections.emptyMap()))));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
@@ -943,7 +943,7 @@ public class InternalTopologyBuilderTest {
         assertEquals(2, properties.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-testStore-changelog", topicConfig.name());
-        assertTrue(topicConfig instanceof UnwindowedChangelogTopicConfig);
+        assertTrue(topicConfig instanceof UnwindowedUnversionedChangelogTopicConfig);
     }
 
     @Test

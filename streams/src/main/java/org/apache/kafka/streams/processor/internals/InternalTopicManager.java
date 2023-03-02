@@ -278,7 +278,7 @@ public class InternalTopicManager {
     private void validateCleanupPolicy(final ValidationResult validationResult,
                                        final InternalTopicConfig topicConfig,
                                        final Config brokerSideTopicConfig) {
-        if (topicConfig instanceof UnwindowedChangelogTopicConfig) {
+        if (topicConfig instanceof UnwindowedUnversionedChangelogTopicConfig) {
             validateCleanupPolicyForUnwindowedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);
         } else if (topicConfig instanceof WindowedChangelogTopicConfig) {
             validateCleanupPolicyForWindowedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);

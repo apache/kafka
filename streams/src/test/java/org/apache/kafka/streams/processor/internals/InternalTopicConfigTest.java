@@ -54,7 +54,7 @@ public class InternalTopicConfigTest {
 
     @Test
     public void shouldSetCreateTimeByDefaultForUnwindowedChangelog() {
-        final UnwindowedChangelogTopicConfig topicConfig = new UnwindowedChangelogTopicConfig("name", Collections.emptyMap());
+        final UnwindowedUnversionedChangelogTopicConfig topicConfig = new UnwindowedUnversionedChangelogTopicConfig("name", Collections.emptyMap());
 
         final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 0);
         assertEquals("CreateTime", properties.get(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG));
@@ -93,7 +93,7 @@ public class InternalTopicConfigTest {
         configs.put("retention.bytes", "10000");
         configs.put("message.timestamp.type", "LogAppendTime");
 
-        final UnwindowedChangelogTopicConfig topicConfig = new UnwindowedChangelogTopicConfig("name", configs);
+        final UnwindowedUnversionedChangelogTopicConfig topicConfig = new UnwindowedUnversionedChangelogTopicConfig("name", configs);
 
         final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 0);
         assertEquals("1000", properties.get(TopicConfig.RETENTION_MS_CONFIG));

@@ -635,7 +635,7 @@ public class InternalTopicManagerTest {
     public void shouldCreateRequiredTopics() throws Exception {
         final InternalTopicConfig topicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
         topicConfig.setNumberOfPartitions(1);
-        final InternalTopicConfig topicConfig2 = new UnwindowedChangelogTopicConfig(topic2, Collections.emptyMap());
+        final InternalTopicConfig topicConfig2 = new UnwindowedUnversionedChangelogTopicConfig(topic2, Collections.emptyMap());
         topicConfig2.setNumberOfPartitions(1);
         final InternalTopicConfig topicConfig3 = new WindowedChangelogTopicConfig(topic3, Collections.emptyMap());
         topicConfig3.setNumberOfPartitions(1);
@@ -714,9 +714,9 @@ public class InternalTopicManagerTest {
         when(admin.describeTopics(Collections.singleton(topic2)))
             .thenAnswer(answer -> new MockDescribeTopicsResult(Collections.singletonMap(topic2, topicDescriptionSuccessFuture)));
 
-        final InternalTopicConfig topicConfig = new UnwindowedChangelogTopicConfig(topic1, Collections.emptyMap());
+        final InternalTopicConfig topicConfig = new UnwindowedUnversionedChangelogTopicConfig(topic1, Collections.emptyMap());
         topicConfig.setNumberOfPartitions(1);
-        final InternalTopicConfig topic2Config = new UnwindowedChangelogTopicConfig(topic2, Collections.emptyMap());
+        final InternalTopicConfig topic2Config = new UnwindowedUnversionedChangelogTopicConfig(topic2, Collections.emptyMap());
         topic2Config.setNumberOfPartitions(1);
         topicManager.makeReady(mkMap(
             mkEntry(topic1, topicConfig),
@@ -1047,9 +1047,9 @@ public class InternalTopicManagerTest {
         );
         setupTopicInMockAdminClient(topic2, unwindowedChangelogConfigWithDeleteCompactCleanupPolicy);
         setupTopicInMockAdminClient(topic3, unwindowedChangelogConfig());
-        final InternalTopicConfig internalTopicConfig1 = setupUnwindowedChangelogTopicConfig(topic1, 1);
-        final InternalTopicConfig internalTopicConfig2 = setupUnwindowedChangelogTopicConfig(topic2, 1);
-        final InternalTopicConfig internalTopicConfig3 = setupUnwindowedChangelogTopicConfig(topic3, 1);
+        final InternalTopicConfig internalTopicConfig1 = setupUnwindowedUnversionedChangelogTopicConfig(topic1, 1);
+        final InternalTopicConfig internalTopicConfig2 = setupUnwindowedUnversionedChangelogTopicConfig(topic2, 1);
+        final InternalTopicConfig internalTopicConfig3 = setupUnwindowedUnversionedChangelogTopicConfig(topic3, 1);
 
         final ValidationResult validationResult = internalTopicManager.validate(mkMap(
             mkEntry(topic1, internalTopicConfig1),
@@ -1495,7 +1495,7 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldThrowWhenConfigDescriptionsDoNotCleanupPolicyForUnwindowedConfigDuringValidation() {
         shouldThrowWhenConfigDescriptionsDoNotContainConfigDuringValidation(
-            setupUnwindowedChangelogTopicConfig(topic1, 1),
+            setupUnwindowedUnversionedChangelogTopicConfig(topic1, 1),
             configWithoutKey(unwindowedChangelogConfig(), TopicConfig.CLEANUP_POLICY_CONFIG)
         );
     }
@@ -1691,10 +1691,10 @@ public class InternalTopicManagerTest {
         );
     }
 
-    private InternalTopicConfig setupUnwindowedChangelogTopicConfig(final String topicName,
-                                                                    final int partitionCount) {
+    private InternalTopicConfig setupUnwindowedUnversionedChangelogTopicConfig(final String topicName,
+                                                                               final int partitionCount) {
         final InternalTopicConfig internalTopicConfig =
-            new UnwindowedChangelogTopicConfig(topicName, Collections.emptyMap());
+            new UnwindowedUnversionedChangelogTopicConfig(topicName, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(partitionCount);
         return internalTopicConfig;
     }

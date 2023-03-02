@@ -1315,7 +1315,7 @@ public class InternalTopologyBuilder {
             config.setRetentionMs(factory.retentionPeriod());
             return config;
         } else {
-            return new UnwindowedChangelogTopicConfig(name, factory.logConfig());
+            return new UnwindowedUnversionedChangelogTopicConfig(name, factory.logConfig());
         }
     }
 

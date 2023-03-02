@@ -48,8 +48,8 @@ public class ChangelogTopicsTest {
     private static final Map<String, String> TOPIC_CONFIG = Collections.singletonMap("config1", "val1");
     private static final RepartitionTopicConfig REPARTITION_TOPIC_CONFIG =
         new RepartitionTopicConfig(REPARTITION_TOPIC_NAME, TOPIC_CONFIG);
-    private static final UnwindowedChangelogTopicConfig CHANGELOG_TOPIC_CONFIG =
-        new UnwindowedChangelogTopicConfig(CHANGELOG_TOPIC_NAME1, TOPIC_CONFIG);
+    private static final UnwindowedUnversionedChangelogTopicConfig CHANGELOG_TOPIC_CONFIG =
+        new UnwindowedUnversionedChangelogTopicConfig(CHANGELOG_TOPIC_NAME1, TOPIC_CONFIG);
 
     private static final TopicsInfo TOPICS_INFO1 = new TopicsInfo(
         mkSet(SINK_TOPIC_NAME),
