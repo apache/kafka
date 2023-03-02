@@ -79,7 +79,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TransactionsCommandTest {
 
-    private final MockExitProcedure exitProcedure = new MockExitProcedure();
+    private final ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
     private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     private final PrintStream out = new PrintStream(outputStream);
     private final MockTime time = new MockTime();
@@ -1048,27 +1048,14 @@ public class TransactionsCommandTest {
     }
 
     private void assertNormalExit() {
-        assertTrue(exitProcedure.hasExited);
-        assertEquals(0, exitProcedure.statusCode);
+        assertTrue(exitProcedure.hasExited());
+        assertEquals(0, exitProcedure.statusCode());
     }
 
     private void assertCommandFailure(String[] args) throws Exception {
         execute(args);
-        assertTrue(exitProcedure.hasExited);
-        assertEquals(1, exitProcedure.statusCode);
-    }
-
-    private static class MockExitProcedure implements Exit.Procedure {
-        private boolean hasExited = false;
-        private int statusCode;
-
-        @Override
-        public void execute(int statusCode, String message) {
-            if (!this.hasExited) {
-                this.hasExited = true;
-                this.statusCode = statusCode;
-            }
-        }
+        assertTrue(exitProcedure.hasExited());
+        assertEquals(1, exitProcedure.statusCode());
     }
 
 }

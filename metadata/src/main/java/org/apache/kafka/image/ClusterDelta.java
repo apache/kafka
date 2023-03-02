@@ -31,8 +31,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 
 /**
@@ -56,17 +54,6 @@ public final class ClusterDelta {
             return result.orElse(null);
         }
         return image.broker(nodeId);
-    }
-
-    public Set<Integer> liveZkBrokerIdChanges() {
-        return changedBrokers
-            .values()
-            .stream()
-            .filter(Optional::isPresent)
-            .map(Optional::get)
-            .filter(registration -> registration.isMigratingZkBroker() && !registration.fenced())
-            .map(BrokerRegistration::id)
-            .collect(Collectors.toSet());
     }
 
     public void finishSnapshot() {

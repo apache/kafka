@@ -33,8 +33,8 @@ import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test

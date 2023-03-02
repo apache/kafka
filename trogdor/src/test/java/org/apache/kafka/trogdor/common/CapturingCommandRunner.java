@@ -57,4 +57,4 @@ public class CapturingCommandRunner implements BasicPlatform.CommandRunner {
     public synchronized List<String> lines(String nodeName) {
         return new ArrayList<String>(getOrCreate(nodeName));
     }
-};
+}

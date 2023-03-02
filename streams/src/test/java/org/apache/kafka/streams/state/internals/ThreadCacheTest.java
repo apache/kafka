@@ -192,7 +192,7 @@ public class ThreadCacheTest {
         final Bytes key = Bytes.wrap(new byte[]{0});
 
         cache.put(namespace, key, dirtyEntry(key.get()));
-        assertEquals(key.get(), cache.delete(namespace, key).value());
+        assertArrayEquals(key.get(), cache.delete(namespace, key).value());
         assertNull(cache.get(namespace, key));
     }
 
@@ -203,7 +203,7 @@ public class ThreadCacheTest {
         final List<ThreadCache.DirtyEntry> received = new ArrayList<>();
         cache.addDirtyEntryFlushListener(namespace, received::addAll);
         cache.put(namespace, key, dirtyEntry(key.get()));
-        assertEquals(key.get(), cache.delete(namespace, key).value());
+        assertArrayEquals(key.get(), cache.delete(namespace, key).value());
 
         // flushing should have no further effect
         cache.flush(namespace);

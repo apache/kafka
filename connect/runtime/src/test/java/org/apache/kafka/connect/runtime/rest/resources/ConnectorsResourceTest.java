@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import javax.crypto.Mac;
 import javax.ws.rs.core.HttpHeaders;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,12 +25,11 @@ import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.RestartRequest;
-import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.NotAssignedException;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
-import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -61,7 +59,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -70,8 +67,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ALLOW_RESET_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -153,15 +148,15 @@ public class ConnectorsResourceTest {
     private ConnectorsResource connectorsResource;
     private UriInfo forward;
     @Mock
-    private WorkerConfig workerConfig;
-    @Mock
     private RestClient restClient;
+    @Mock
+    private RestServerConfig serverConfig;
 
     @Before
     public void setUp() throws NoSuchMethodException {
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(true);
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(true);
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        when(serverConfig.topicTrackingEnabled()).thenReturn(true);
+        when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
         forward = mock(UriInfo.class);
         MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
         queryParams.putSingle("forward", "true");
@@ -566,66 +561,6 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testPutConnectorTaskConfigsNoInternalRequestSignature() throws Throwable {
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackResult(cb, null).when(herder).putTaskConfigs(
-            eq(CONNECTOR_NAME),
-            eq(TASK_CONFIGS),
-            cb.capture(),
-            any()
-        );
-
-        connectorsResource.putTaskConfigs(CONNECTOR_NAME, NULL_HEADERS, FORWARD, serializeAsBytes(TASK_CONFIGS));
-    }
-
-    @Test
-    public void testPutConnectorTaskConfigsWithInternalRequestSignature() throws Throwable {
-        final String signatureAlgorithm = "HmacSHA256";
-        final String encodedSignature = "Kv1/OSsxzdVIwvZ4e30avyRIVrngDfhzVUm/kAZEKc4=";
-
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-        final ArgumentCaptor<InternalRequestSignature> signatureCapture = ArgumentCaptor.forClass(InternalRequestSignature.class);
-        expectAndCallbackResult(cb, null).when(herder).putTaskConfigs(
-            eq(CONNECTOR_NAME),
-            eq(TASK_CONFIGS),
-            cb.capture(),
-            signatureCapture.capture()
-        );
-
-        HttpHeaders headers = mock(HttpHeaders.class);
-        when(headers.getHeaderString(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER))
-            .thenReturn(signatureAlgorithm);
-        when(headers.getHeaderString(InternalRequestSignature.SIGNATURE_HEADER))
-            .thenReturn(encodedSignature);
-
-        connectorsResource.putTaskConfigs(CONNECTOR_NAME, headers, FORWARD, serializeAsBytes(TASK_CONFIGS));
-
-        InternalRequestSignature expectedSignature = new InternalRequestSignature(
-            serializeAsBytes(TASK_CONFIGS),
-            Mac.getInstance(signatureAlgorithm),
-            Base64.getDecoder().decode(encodedSignature)
-        );
-        assertEquals(
-            expectedSignature,
-            signatureCapture.getValue()
-        );
-    }
-
-    @Test
-    public void testPutConnectorTaskConfigsConnectorNotFound() {
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackException(cb, new NotFoundException("not found")).when(herder).putTaskConfigs(
-            eq(CONNECTOR_NAME),
-            eq(TASK_CONFIGS),
-            cb.capture(),
-            any()
-        );
-
-        assertThrows(NotFoundException.class, () -> connectorsResource.putTaskConfigs(CONNECTOR_NAME, NULL_HEADERS,
-            FORWARD, serializeAsBytes(TASK_CONFIGS)));
-    }
-
-    @Test
     public void testRestartConnectorAndTasksConnectorNotFound() {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
         final ArgumentCaptor<Callback<ConnectorStateInfo>> cb = ArgumentCaptor.forClass(Callback.class);
@@ -681,55 +616,6 @@ public class ConnectorsResourceTest {
         assertEquals(CONNECTOR_NAME, ((ConnectorStateInfo) response.getEntity()).name());
         assertEquals(state.state(), ((ConnectorStateInfo) response.getEntity()).connector().state());
         assertEquals(Response.Status.ACCEPTED.getStatusCode(), response.getStatus());
-    }
-
-    @Test
-    public void testFenceZombiesNoInternalRequestSignature() throws Throwable {
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackResult(cb, null)
-            .when(herder).fenceZombieSourceTasks(eq(CONNECTOR_NAME), cb.capture(), isNull());
-
-        connectorsResource.fenceZombies(CONNECTOR_NAME, NULL_HEADERS, FORWARD, serializeAsBytes(null));
-    }
-
-    @Test
-    public void testFenceZombiesWithInternalRequestSignature() throws Throwable {
-        final String signatureAlgorithm = "HmacSHA256";
-        final String encodedSignature = "Kv1/OSsxzdVIwvZ4e30avyRIVrngDfhzVUm/kAZEKc4=";
-
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-        final ArgumentCaptor<InternalRequestSignature> signatureCapture = ArgumentCaptor.forClass(InternalRequestSignature.class);
-        expectAndCallbackResult(cb, null)
-            .when(herder).fenceZombieSourceTasks(eq(CONNECTOR_NAME), cb.capture(), signatureCapture.capture());
-
-        HttpHeaders headers = mock(HttpHeaders.class);
-        when(headers.getHeaderString(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER))
-            .thenReturn(signatureAlgorithm);
-        when(headers.getHeaderString(InternalRequestSignature.SIGNATURE_HEADER))
-            .thenReturn(encodedSignature);
-
-        connectorsResource.fenceZombies(CONNECTOR_NAME, headers, FORWARD, serializeAsBytes(null));
-
-        InternalRequestSignature expectedSignature = new InternalRequestSignature(
-                serializeAsBytes(null),
-                Mac.getInstance(signatureAlgorithm),
-                Base64.getDecoder().decode(encodedSignature)
-        );
-        assertEquals(
-                expectedSignature,
-                signatureCapture.getValue()
-        );
-    }
-
-    @Test
-    public void testFenceZombiesConnectorNotFound() throws Throwable {
-        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-
-        expectAndCallbackException(cb, new NotFoundException("not found"))
-            .when(herder).fenceZombieSourceTasks(eq(CONNECTOR_NAME), cb.capture(), any());
-
-        assertThrows(NotFoundException.class,
-                () -> connectorsResource.fenceZombies(CONNECTOR_NAME, NULL_HEADERS, FORWARD, serializeAsBytes(null)));
     }
 
     @Test
@@ -806,9 +692,9 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testConnectorActiveTopicsWithTopicTrackingDisabled() {
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(false);
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(false);
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        when(serverConfig.topicTrackingEnabled()).thenReturn(false);
+        when(serverConfig.topicTrackingResetEnabled()).thenReturn(false);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
 
         Exception e = assertThrows(ConnectRestException.class,
             () -> connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME));
@@ -817,10 +703,10 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testResetConnectorActiveTopicsWithTopicTrackingDisabled() {
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(false);
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(true);
+        when(serverConfig.topicTrackingEnabled()).thenReturn(false);
+        when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
         HttpHeaders headers = mock(HttpHeaders.class);
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
 
         Exception e = assertThrows(ConnectRestException.class,
             () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
@@ -829,10 +715,10 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testResetConnectorActiveTopicsWithTopicTrackingEnabled() {
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(true);
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(false);
+        when(serverConfig.topicTrackingEnabled()).thenReturn(true);
+        when(serverConfig.topicTrackingResetEnabled()).thenReturn(false);
         HttpHeaders headers = mock(HttpHeaders.class);
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
 
         Exception e = assertThrows(ConnectRestException.class,
             () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
@@ -841,11 +727,11 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testConnectorActiveTopics() {
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(true);
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(true);
+        when(serverConfig.topicTrackingEnabled()).thenReturn(true);
+        when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
         when(herder.connectorActiveTopics(CONNECTOR_NAME))
             .thenReturn(new ActiveTopicsInfo(CONNECTOR_NAME, CONNECTOR_ACTIVE_TOPICS));
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
 
         Response response = connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME);
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
@@ -858,7 +744,7 @@ public class ConnectorsResourceTest {
     @Test
     public void testResetConnectorActiveTopics() {
         HttpHeaders headers = mock(HttpHeaders.class);
-        connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
 
         Response response = connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers);
         verify(herder).resetConnectorActiveTopics(CONNECTOR_NAME);
