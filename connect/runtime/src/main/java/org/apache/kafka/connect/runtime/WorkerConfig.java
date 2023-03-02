@@ -400,7 +400,7 @@ public class WorkerConfig extends AbstractConfig {
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
     }
 
-    public static List<String> pluginLocations(Map<String, String> props) {
+    public static List<String> pluginPathElements(Map<String, String> props) {
         String locationList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
         return locationList == null
                          ? new ArrayList<>()

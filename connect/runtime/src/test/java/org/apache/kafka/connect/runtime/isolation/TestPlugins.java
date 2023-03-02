@@ -191,12 +191,12 @@ public class TestPlugins {
     }
 
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
-    private static final Map<String, File> PLUGIN_JARS;
+    private static final Map<String, Path> PLUGIN_JARS;
     private static final Throwable INITIALIZATION_EXCEPTION;
 
     static {
         Throwable err = null;
-        Map<String, File> pluginJars = new HashMap<>();
+        Map<String, Path> pluginJars = new HashMap<>();
         try {
             for (TestPlugin testPlugin : TestPlugin.values()) {
                 if (pluginJars.containsKey(testPlugin.resourceDir())) {
@@ -227,8 +227,12 @@ public class TestPlugins {
      * @return A list of plugin jar filenames
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<String> pluginPath() {
+    public static List<Path> pluginPath() {
         return pluginPath(defaultPlugins());
+    }
+
+    public static String pluginPathJoined() {
+        return pluginPath().stream().map(Path::toString).collect(Collectors.joining(","));
     }
 
     /**
@@ -237,15 +241,18 @@ public class TestPlugins {
      * @return A list of plugin jar filenames containing the specified test plugins
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<String> pluginPath(TestPlugin... plugins) {
+    public static List<Path> pluginPath(TestPlugin... plugins) {
         assertAvailable();
         return Arrays.stream(plugins)
                 .filter(Objects::nonNull)
                 .map(TestPlugin::resourceDir)
                 .distinct()
                 .map(PLUGIN_JARS::get)
-                .map(File::getPath)
                 .collect(Collectors.toList());
+    }
+
+    public static String pluginPathJoined(TestPlugin... plugins) {
+        return pluginPath(plugins).stream().map(Path::toString).collect(Collectors.joining(","));
     }
 
     /**
@@ -278,17 +285,17 @@ public class TestPlugins {
                 .toArray(TestPlugin[]::new);
     }
 
-    private static File createPluginJar(String resourceDir, Predicate<String> removeRuntimeClasses) throws IOException {
+    private static Path createPluginJar(String resourceDir, Predicate<String> removeRuntimeClasses) throws IOException {
         Path inputDir = resourceDirectoryPath("test-plugins/" + resourceDir);
         Path binDir = Files.createTempDirectory(resourceDir + ".bin.");
         compileJavaSources(inputDir, binDir);
-        File jarFile = Files.createTempFile(resourceDir + ".", ".jar").toFile();
-        try (JarOutputStream jar = openJarFile(jarFile)) {
+        Path jarFile = Files.createTempFile(resourceDir + ".", ".jar");
+        try (JarOutputStream jar = openJarFile(jarFile.toFile())) {
             writeJar(jar, inputDir, removeRuntimeClasses);
             writeJar(jar, binDir, removeRuntimeClasses);
         }
         removeDirectory(binDir);
-        jarFile.deleteOnExit();
+        jarFile.toFile().deleteOnExit();
         return jarFile;
     }
 

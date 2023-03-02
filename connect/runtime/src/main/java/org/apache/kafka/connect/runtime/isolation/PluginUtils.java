@@ -24,6 +24,7 @@ import java.lang.reflect.Modifier;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -188,7 +189,26 @@ public class PluginUtils {
         return path.toString().toLowerCase(Locale.ROOT).endsWith(".class");
     }
 
-    public static List<Path> pluginLocations(Path topPath) throws IOException {
+    public static List<Path> pluginLocations(List<String> pluginPathElements) {
+        List<Path> pluginLocations = new ArrayList<>();
+        for (String path : pluginPathElements) {
+            try {
+                Path pluginPath = Paths.get(path).toAbsolutePath();
+                // Currently 'plugin.paths' property is a list of top-level directories
+                // containing plugins
+                if (Files.isDirectory(pluginPath)) {
+                    pluginLocations.addAll(PluginUtils.pluginLocations(pluginPath));
+                } else if (PluginUtils.isArchive(pluginPath)) {
+                    pluginLocations.add(pluginPath);
+                }
+            } catch (IOException e) {
+                log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
+            }
+        }
+        return pluginLocations;
+    }
+
+    private static List<Path> pluginLocations(Path topPath) throws IOException {
         List<Path> locations = new ArrayList<>();
         try (
                 DirectoryStream<Path> listing = Files.newDirectoryStream(
