@@ -32,6 +32,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.ToolsUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -47,19 +49,26 @@ import java.util.concurrent.atomic.AtomicLong;
 import static joptsimple.util.RegexMatcher.regex;
 
 public class ConsumerPerformance {
+    private static final Logger LOG = LoggerFactory.getLogger(ConsumerPerformance.class);
     private static final Random RND = new Random();
 
     public static void main(String[] args) {
         try {
+            LOG.info("Starting consumer...");
             ConsumerPerfOptions options = new ConsumerPerfOptions(args);
-            AtomicLong totalMessagesRead = new AtomicLong(0), totalBytesRead = new AtomicLong(0),
-                joinTimeMs = new AtomicLong(0), joinTimeMsInSingleRound = new AtomicLong(0);
+            AtomicLong totalMessagesRead = new AtomicLong(0);
+            AtomicLong totalBytesRead = new AtomicLong(0);
+            AtomicLong joinTimeMs = new AtomicLong(0);
+            AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
 
             if (!options.hideHeader())
                 printHeader(options.showDetailedStats());
 
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(options.props());
-            long bytesRead = 0L, messagesRead = 0L, lastBytesRead = 0L, lastMessagesRead = 0L;
+            long bytesRead = 0L;
+            long messagesRead = 0L;
+            long lastBytesRead = 0L;
+            long lastMessagesRead = 0L;
             long currentTimeMs = System.currentTimeMillis();
             long joinStartMs = currentTimeMs;
             long startMs = currentTimeMs;
@@ -211,7 +220,8 @@ public class ConsumerPerformance {
     }
 
     public static class ConsumerPerfRebListener implements ConsumerRebalanceListener {
-        private AtomicLong joinTimeMs, joinTimeMsInSingleRound;
+        private AtomicLong joinTimeMs;
+        private AtomicLong joinTimeMsInSingleRound;
         private long joinStartMs;
 
         public ConsumerPerfRebListener(AtomicLong joinTimeMs, long joinStartMs, AtomicLong joinTimeMsInSingleRound) {
