@@ -26,6 +26,9 @@ import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.QuotaFactory.QuotaManagers
+
+import scala.collection.immutable
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
@@ -102,6 +105,7 @@ class ControllerServer(
   var alterConfigPolicy: Option[AlterConfigPolicy] = None
   var controller: Controller = _
   var quotaManagers: QuotaManagers = _
+  var clientQuotaMetadataManager: ClientQuotaMetadataManager = _
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
   var migrationSupport: Option[ControllerMigrationSupport] = None
@@ -272,6 +276,7 @@ class ControllerServer(
         metrics,
         time,
         threadNamePrefix)
+      clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,
@@ -309,6 +314,20 @@ class ControllerServer(
       FutureUtils.waitWithLogging(logger.underlying, "all of the SocketServer Acceptors to be started",
         socketServerFuture, startupDeadline, time)
 
+      if (!config.processRoles.contains(BrokerRole)) {
+        // We need to receive dynamic config changes, but we only need install a publisher for them when
+        // we aren't also running the broker role; the broker's DynamicConfigPublisher would take care of it otherwise.
+        val dynamicConfigHandlers = immutable.Map[String, ConfigHandler](
+          // isolated controllers don't host topics, so no need to do anything with dynamic topic config changes here
+          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
+        val dynamicConfigPublisher = new DynamicConfigPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          dynamicConfigHandlers,
+          "controller",
+          Some(clientQuotaMetadataManager))
+        sharedServer.loader.installPublishers(List(dynamicConfigPublisher).asJava)
+      }
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)
