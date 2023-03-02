@@ -24,8 +24,8 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +58,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
 
 
     private class KStreamReduceProcessor extends ContextualProcessor<K, V, K, Change<V>> {
-        private TimestampedKeyValueStore<K, V> store;
+        private KeyValueStoreWrapper<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
         private Sensor droppedRecordsSensor;
 
@@ -70,9 +70,9 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
                 context.taskId().toString(),
                 (StreamsMetricsImpl) context.metrics()
             );
-            store = context.getStateStore(storeName);
+            store = new KeyValueStoreWrapper<>(context, storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
-                store,
+                store.getStore(),
                 context,
                 new TimestampedCacheFlushListener<>(context),
                 sendOldValues);
@@ -112,7 +112,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
                 newTimestamp = Math.max(record.timestamp(), oldAggAndTimestamp.timestamp());
             }
 
-            store.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp));
+            store.put(record.key(), newAgg, newTimestamp);
             tupleForwarder.maybeForward(
                 record.withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
                     .withTimestamp(newTimestamp));
@@ -136,11 +136,11 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
 
 
     private class KStreamReduceValueGetter implements KTableValueGetter<K, V> {
-        private TimestampedKeyValueStore<K, V> store;
+        private KeyValueStoreWrapper<K, V> store;
 
         @Override
         public void init(final ProcessorContext<?, ?> context) {
-            store = context.getStateStore(storeName);
+            store = new KeyValueStoreWrapper<>(context, storeName);
         }
 
         @Override
