@@ -255,6 +255,7 @@ class ReplicaManager(val config: KafkaConfig,
   newGauge("AtMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isAtMinIsr))
   newGauge("ReassigningPartitions", () => reassigningPartitionsCount)
   newGauge("PartitionsWithLateTransactionsCount", () => lateTransactionsCount)
+  newGauge("ProducerIdCount", () => producerIdCount)
 
   def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
 
@@ -262,6 +263,8 @@ class ReplicaManager(val config: KafkaConfig,
     val currentTimeMs = time.milliseconds()
     leaderPartitionsIterator.count(_.hasLateTransaction(currentTimeMs))
   }
+
+  def producerIdCount: Int = onlinePartitionsIterator.map(_.producerIdCount).sum
 
   val isrExpandRate: Meter = newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
   val isrShrinkRate: Meter = newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
@@ -1926,6 +1929,7 @@ class ReplicaManager(val config: KafkaConfig,
     removeMetric("AtMinIsrPartitionCount")
     removeMetric("ReassigningPartitions")
     removeMetric("PartitionsWithLateTransactionsCount")
+    removeMetric("ProducerIdCount")
   }
 
   def beginControlledShutdown(): Unit = {

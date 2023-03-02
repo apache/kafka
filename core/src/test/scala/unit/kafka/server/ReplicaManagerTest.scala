@@ -59,12 +59,14 @@ import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockScheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import com.yammer.metrics.core.Gauge
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.ArgumentMatchers
@@ -457,6 +459,89 @@ class ReplicaManagerTest {
         assertEquals(0, response.logStartOffset)
       }
 
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testProducerIdCountMetrics(): Unit = {
+    val timer = new MockTimer(time)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(timer)
+
+    try {
+      val brokerList = Seq[Integer](0, 1).asJava
+
+      // Create a couple partition for the topic.
+      val partition0 = replicaManager.createPartition(new TopicPartition(topic, 0))
+      partition0.createLogIfNotExists(isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+      val partition1 = replicaManager.createPartition(new TopicPartition(topic, 1))
+      partition1.createLogIfNotExists(isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+
+      // Make this replica the leader for the partitions.
+      Seq(0, 1).foreach { partition =>
+        val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+          Seq(new LeaderAndIsrPartitionState()
+            .setTopicName(topic)
+            .setPartitionIndex(partition)
+            .setControllerEpoch(0)
+            .setLeader(0)
+            .setLeaderEpoch(0)
+            .setIsr(brokerList)
+            .setPartitionEpoch(0)
+            .setReplicas(brokerList)
+            .setIsNew(true)).asJava,
+          Collections.singletonMap(topic, Uuid.randomUuid()),
+          Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava,
+          false).build()
+        replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
+        replicaManager.getPartitionOrException(new TopicPartition(topic, partition))
+          .localLogOrException
+      }
+
+      def appendRecord(pid: Long, sequence: Int, partition: Int): Unit = {
+        val epoch = 42.toShort
+        val records = MemoryRecords.withIdempotentRecords(CompressionType.NONE, pid, epoch, sequence,
+          new SimpleRecord(s"message $sequence".getBytes))
+        appendRecords(replicaManager, new TopicPartition(topic, partition), records).onFire { response =>
+          assertEquals(Errors.NONE, response.error)
+        }
+      }
+
+      def replicaManagerMetricValue(): Int = {
+        KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.filter { case (metricName, _) =>
+          metricName.getName == "ProducerIdCount" && metricName.getType == replicaManager.getClass.getSimpleName
+        }.head._2.asInstanceOf[Gauge[Int]].value
+      }
+
+      // Initially all metrics are 0.
+      assertEquals(0, replicaManagerMetricValue())
+
+      val pid1 = 123L
+      // Produce a record from 1st pid to 1st partition.
+      appendRecord(pid1, 0, 0)
+      assertEquals(1, replicaManagerMetricValue())
+
+      // Produce another record from 1st pid to 1st partition, metrics shouldn't change.
+      appendRecord(pid1, 1, 0)
+      assertEquals(1, replicaManagerMetricValue())
+
+      // Produce a record from 2nd pid to 1st partition
+      val pid2 = 456L
+      appendRecord(pid2, 1, 0)
+      assertEquals(2, replicaManagerMetricValue())
+
+      // Produce a record from 1st pid to 2nd partition
+      appendRecord(pid1, 0, 1)
+      assertEquals(3, replicaManagerMetricValue())
+
+      // Simulate producer id expiration.
+      // We use -1 because the timestamp in this test is set to -1, so when
+      // the expiration check subtracts timestamp, we get max value.
+      partition0.removeExpiredProducers(Long.MaxValue - 1);
+      assertEquals(1, replicaManagerMetricValue())
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }

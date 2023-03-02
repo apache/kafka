@@ -52,6 +52,7 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
 
     public static final String TOPIC_CONFIG = "topic";
     public static final String MESSAGES_PER_POLL_CONFIG = "messages.per.poll";
+    public static final String MAX_MESSAGES_PER_SECOND_CONFIG = "throughput";
 
     public static final String CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG = "custom.exactly.once.support";
     public static final String EXACTLY_ONCE_SUPPORTED = "supported";
@@ -177,7 +178,7 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
             startingSeqno = Optional.ofNullable((Long) offset.get("saved")).orElse(0L);
             seqno = startingSeqno;
             log.info("Started {} task {} with properties {}", this.getClass().getSimpleName(), taskId, props);
-            throttler = new ThroughputThrottler(Long.parseLong(props.getOrDefault("throughput", "-1")), System.currentTimeMillis());
+            throttler = new ThroughputThrottler(Long.parseLong(props.getOrDefault(MAX_MESSAGES_PER_SECOND_CONFIG, "-1")), System.currentTimeMillis());
             taskHandle.recordTaskStart();
             priorTransactionBoundary = 0;
             nextTransactionBoundary = 1;

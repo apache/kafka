@@ -18,6 +18,10 @@
 package org.apache.kafka.metadata.migration;
 
 /**
+ * This is the internal state of the KRaftMigrationDriver class on a particular controller node.
+ * Unlike the ZkMigrationState, which is persisted in the metadata log and image, this is soft
+ * state which is stored in memory only.
+ *
  *      UNINITIALIZED───────────────►INACTIVE◄────────────────DUAL_WRITE◄────────────────────────┐
  *            │                         ▲                                                        │
  *            │                         │                                                        │
@@ -34,7 +38,7 @@ package org.apache.kafka.metadata.migration;
  *            ▼                         │                         │                              │
  * BECOME_CONTROLLER───────────────────►└────────────────────►WAIT_FOR_BROKERS───────────────────┘
  */
-public enum MigrationState {
+public enum MigrationDriverState {
     UNINITIALIZED(false),                  // Initial state.
     INACTIVE(false),                       // State when not the active controller.
     WAIT_FOR_CONTROLLER_QUORUM(false),     // Ensure all the quorum nodes are ready for migration.
@@ -46,7 +50,7 @@ public enum MigrationState {
 
     private final boolean isActiveController;
 
-    MigrationState(boolean isActiveController) {
+    MigrationDriverState(boolean isActiveController) {
         this.isActiveController = isActiveController;
     }
 
