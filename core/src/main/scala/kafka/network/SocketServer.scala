@@ -115,20 +115,12 @@ class SocketServer(val config: KafkaConfig,
   private var stopped = false
 
   // Socket server metrics
-  newGauge(s"${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => {
-    val dataPlaneProcessors = dataPlaneAcceptors.values.asScala.flatMap(a => a.processors.asScala)
-    // copy to an immutable array to avoid concurrency issue when calculating average
-    val ioWaitRatioMetricNames = dataPlaneProcessors.map { p =>
-      metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
-    }.toArray
-    if (ioWaitRatioMetricNames.isEmpty) {
-      1.0
-    } else {
-      ioWaitRatioMetricNames.map { metricName =>
-        Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-      }.sum / ioWaitRatioMetricNames.length
-    }
-  })
+  newGauge(s"${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () =>
+    dataPlaneAcceptors.values.stream().flatMap(a => a.processors.stream())
+      .map(p => metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags))
+      .mapToDouble(metricName => Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0)))
+      .average().orElse(1.0)
+  )
   if (config.requiresZookeeper) {
     newGauge(s"${ControlPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => {
       val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors.get(0))
@@ -142,15 +134,12 @@ class SocketServer(val config: KafkaConfig,
   }
   newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
   newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
-  newGauge(s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => {
-    val dataPlaneProcessors = dataPlaneAcceptors.values.asScala.flatMap(a => a.processors.asScala)
-    val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.map { p =>
-      metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
-    }
-    expiredConnectionsKilledCountMetricNames.map { metricName =>
-      Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
-    }.sum
-  })
+  newGauge(s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () =>
+    dataPlaneAcceptors.values.stream().flatMap(a => a.processors.stream())
+      .map(p => metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags))
+      .mapToDouble(metricName => Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double]))
+      .sum
+  )
   if (config.requiresZookeeper) {
     newGauge(s"${ControlPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => {
       val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors.get(0))
@@ -607,6 +596,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     newPort
   }
 
+  // use CopyOnWriteArrayList to update metrics without lock. we don't update processors frequently.
   private[network] val processors = new CopyOnWriteArrayList[Processor]()
   // Build the metric name explicitly in order to keep the existing name for compatibility
   private val blockedPercentMeterMetricName = explicitMetricName(
