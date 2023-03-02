@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -42,6 +43,12 @@ import static java.util.Arrays.asList;
 import static java.util.function.Function.identity;
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 public class OffsetCommitResponseTest {
 
@@ -160,6 +167,78 @@ public class OffsetCommitResponseTest {
         }
 
         assertEquals(new OffsetCommitResponseData().setTopics(expectedTopics), builder.build().data());
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testAddPartitionRequiresAValidTopicName(short version) {
+        assertThrows(IllegalArgumentException.class,
+            () -> new OffsetCommitResponse.Builder(TopicResolver.emptyResolver(), version)
+                .addPartition("", Uuid.randomUuid(), 0, Errors.NONE));
+
+        assertThrows(IllegalArgumentException.class,
+            () -> new OffsetCommitResponse.Builder(TopicResolver.emptyResolver(), version)
+                .addPartition(null, Uuid.randomUuid(), 0, Errors.NONE));
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testMergeOffsetCommitRequestData(short version) {
+        NameAndId topic3 = new NameAndId("topic3");
+        NameAndId topic4 = new NameAndId("topic4");
+        NameAndId topic5 = new NameAndId("topic5");
+        NameAndId topic6 = new NameAndId("topic6");
+
+        Map<String, Uuid> topicIds = new HashMap<>();
+        topicIds.put(topicOne, topic1Id);
+        asList(topic3, topic4, topic5, topic6).forEach(nai -> topicIds.put(nai.name, nai.id));
+
+        TopicResolver resolver = TopicResolver.fromTopicIds(topicIds);
+
+        OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder(resolver, version)
+            .addPartition(topicOne, topic1Id, partitionOne, Errors.NONE)
+            .addPartition(topicOne, topic1Id, partitionTwo, Errors.NONE)
+            .addPartitions(topic6.name, topic6.id, asList(11, 12), identity(), Errors.NONE);
+
+        OffsetCommitResponseData coordinatorResults = new OffsetCommitResponseData()
+            .setTopics(Arrays.asList(
+                createResponseTopic(topicTwo, Uuid.ZERO_UUID, 3, 4, Errors.NONE),
+                createResponseTopic(topic3.name, Uuid.ZERO_UUID, 5, 6, Errors.NONE),
+                createResponseTopic(topic4.name, Uuid.ZERO_UUID, 7, 8, Errors.NONE),
+                createResponseTopic(topic5.name, Uuid.ZERO_UUID, 9, 10, Errors.NONE)
+            ));
+
+        List<OffsetCommitResponseTopic> expectedTopics = new ArrayList<>();
+        Logger logger = mock(Logger.class);
+
+        if (version < 9) {
+            expectedTopics.addAll(asList(
+                createResponseTopic(topicOne, topic1Id, partitionOne, partitionTwo, Errors.NONE),
+                createResponseTopic(topic6.name, topic6.id, 11, 12, Errors.NONE),
+                createResponseTopic(topicTwo, Uuid.ZERO_UUID, 3, 4, Errors.NONE),
+                createResponseTopic(topic3.name, Uuid.ZERO_UUID, 5, 6, Errors.NONE),
+                createResponseTopic(topic4.name, Uuid.ZERO_UUID, 7, 8, Errors.NONE),
+                createResponseTopic(topic5.name, Uuid.ZERO_UUID, 9, 10, Errors.NONE)
+            ));
+        } else {
+            expectedTopics.addAll(asList(
+                createResponseTopic(topicOne, topic1Id, partitionOne, partitionTwo, Errors.NONE),
+                createResponseTopic(topic6.name, topic6.id, 11, 12, Errors.NONE),
+                createResponseTopic(topicTwo, Uuid.ZERO_UUID, 3, 4, Errors.NONE),
+                createResponseTopic(topic3.name, topic3.id, 5, 6, Errors.NONE),
+                createResponseTopic(topic4.name, topic4.id, 7, 8, Errors.NONE),
+                createResponseTopic(topic5.name, topic5.id, 9, 10, Errors.NONE)
+            ));
+        }
+
+        OffsetCommitResponse response = builder.merge(coordinatorResults, logger).build();
+        assertEquals(new OffsetCommitResponseData().setTopics(expectedTopics), response.data());
+
+        if (version < 9) {
+            verifyNoInteractions(logger);
+        } else {
+            verify(logger).debug(anyString(), eq(topicTwo));
+        }
     }
 
     private static OffsetCommitResponseTopic createResponseTopic(
