@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CorruptRecordException;
@@ -84,7 +83,7 @@ public class RemoteIndexCache implements Closeable {
         this.remoteStorageManager = remoteStorageManager;
         cacheDir = new File(logDir, DIR_NAME);
 
-        entries = new LinkedHashMap<Uuid, RemoteIndexCache.Entry>(maxSize, 0.75f, true) {
+        entries = new LinkedHashMap<Uuid, RemoteIndexCache.Entry>(maxSize / 2, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<Uuid, RemoteIndexCache.Entry> eldest) {
                 if (this.size() > maxSize) {
@@ -243,7 +242,7 @@ public class RemoteIndexCache implements Closeable {
                         try {
                             return remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET);
                         } catch (RemoteStorageException e) {
-                            throw new RuntimeException(e);
+                            throw new KafkaException(e);
                         }
                     }, file -> {
                         try {
@@ -278,14 +277,13 @@ public class RemoteIndexCache implements Closeable {
                             throw new KafkaException(e);
                         }
                     }, file -> {
-                        TransactionIndex index = null;
                         try {
-                            index = new TransactionIndex(startOffset, file);
+                            TransactionIndex index = new TransactionIndex(startOffset, file);
+                            index.sanityCheck();
+                            return index;
                         } catch (IOException e) {
                             throw new KafkaException(e);
                         }
-                        index.sanityCheck();
-                        return index;
                     });
 
                     return new Entry(offsetIndex, timeIndex, txnIndex);
@@ -296,7 +294,7 @@ public class RemoteIndexCache implements Closeable {
         }
     }
 
-    public int lookupOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) throws IOException {
+    public int lookupOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
         return getIndexEntry(remoteLogSegmentMetadata).lookupOffset(offset).position;
     }
 
@@ -337,7 +335,7 @@ public class RemoteIndexCache implements Closeable {
         private boolean markedForCleanup = false;
         private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
-        public OffsetPosition lookupOffset(long targetOffset) throws IOException {
+        public OffsetPosition lookupOffset(long targetOffset) {
             lock.readLock().lock();
             try {
                 if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup");
@@ -364,8 +362,8 @@ public class RemoteIndexCache implements Closeable {
             try {
                 if (!markedForCleanup) {
                     markedForCleanup = true;
-
                     offsetIndex.renameTo(new File(Utils.replaceSuffix(offsetIndex.file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)));
+                    timeIndex.renameTo(new File(Utils.replaceSuffix(timeIndex.file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)));
                     txnIndex.renameTo(new File(Utils.replaceSuffix(txnIndex.file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)));
                 }
             } finally {
@@ -388,7 +386,7 @@ public class RemoteIndexCache implements Closeable {
                     return null;
                 }));
             } catch (Exception e) {
-                throw new KafkaException(e);
+                throw new IOException(e);
             }
         }
 
