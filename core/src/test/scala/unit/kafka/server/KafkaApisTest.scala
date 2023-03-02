@@ -28,6 +28,7 @@ import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.network.RequestChannel
+import kafka.server.KafkaApisTest.{NameAndId, newOffsetCommitRequestData, newOffsetCommitResponseData}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
 import kafka.utils.{Log4jController, MockTime, TestUtils}
@@ -1477,56 +1478,6 @@ class KafkaApisTest {
     future.complete(offsetCommitResponse)
     val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
     assertEquals(expectedOffsetCommitResponse, response.data)
-  }
-
-  // A topic name and its id. Either or both can be defined.
-  case class NameAndId(name: String = "", id: Uuid = Uuid.ZERO_UUID)
-
-  def newOffsetCommitRequestData(groupId: String,
-                                 memberId: String,
-                                 topics: Seq[(NameAndId, Map[Int, Long])]): OffsetCommitRequestData = {
-    val data = new OffsetCommitRequestData()
-      .setGroupId(groupId)
-      .setMemberId(memberId)
-
-    topics.foreach { topic =>
-      val requestTopic = new OffsetCommitRequestTopic()
-        .setName(topic._1.name)
-        .setTopicId(topic._1.id)
-
-      topic._2.foreach { _ match {
-        case (partition, offset) =>
-          requestTopic.partitions().add(new OffsetCommitRequestPartition()
-            .setPartitionIndex(partition)
-            .setCommittedOffset(offset))
-        }
-      }
-
-      data.topics().add(requestTopic)
-    }
-    data
-  }
-
-  def newOffsetCommitResponseData(topics: Seq[(NameAndId, Map[Int, Errors])]): OffsetCommitResponseData = {
-    val data = new OffsetCommitResponseData()
-
-    topics.foreach { topic =>
-      val responseTopic = new OffsetCommitResponseTopic()
-        .setName(topic._1.name)
-        .setTopicId(topic._1.id)
-
-      topic._2.foreach { _ match {
-        case (partition, error) =>
-          responseTopic.partitions().add(new OffsetCommitResponsePartition()
-            .setPartitionIndex(partition)
-            .setErrorCode(error.code)
-          )
-        }
-      }
-
-      data.topics().add(responseTopic)
-    }
-    data
   }
 
   @ParameterizedTest
@@ -6175,5 +6126,79 @@ class KafkaApisTest {
 
     val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
+  }
+}
+
+object KafkaApisTest {
+
+  // A topic name and its id. Either or both can be defined.
+  case class NameAndId(name: String = "", id: Uuid = Uuid.ZERO_UUID)
+
+  def newOffsetCommitRequestData(groupId: String,
+                                 memberId: String = "",
+                                 offsets: Seq[(NameAndId, Map[Int, Long])]): OffsetCommitRequestData = {
+    val data = new OffsetCommitRequestData()
+      .setGroupId(groupId)
+      .setMemberId(memberId)
+
+    offsets.foreach { topic =>
+      val requestTopic = new OffsetCommitRequestTopic()
+        .setName(topic._1.name)
+        .setTopicId(topic._1.id)
+
+      topic._2.foreach {
+        _ match {
+          case (partition, offset) =>
+            requestTopic.partitions().add(new OffsetCommitRequestPartition()
+              .setPartitionIndex(partition)
+              .setCommittedOffset(offset))
+        }
+      }
+
+      data.topics().add(requestTopic)
+    }
+    data
+  }
+
+  def newOffsetCommitResponseData(topicPartitions: Seq[(NameAndId, Map[Int, Errors])]): OffsetCommitResponseData = {
+    newOffsetCommitResponseData(
+      topicPartitions,
+      nai => new OffsetCommitResponseTopic().setName(nai.name).setTopicId(nai.id)
+    )
+  }
+
+  def newOffsetCommitResponseData(version: Short,
+                                  topicPartitions: Seq[(NameAndId, Map[Int, Errors])]): OffsetCommitResponseData = {
+    newOffsetCommitResponseData(
+      topicPartitions,
+      nai => {
+        if (version < 9)
+          new OffsetCommitResponseTopic().setName(nai.name)
+        else
+          new OffsetCommitResponseTopic().setTopicId(nai.id)
+      }
+    )
+  }
+
+  def newOffsetCommitResponseData(topicPartitions: Seq[(NameAndId, Map[Int, Errors])],
+                                  gen: NameAndId => OffsetCommitResponseTopic): OffsetCommitResponseData = {
+    val data = new OffsetCommitResponseData()
+
+    topicPartitions.foreach { nameAndId =>
+      val responseTopic = gen(nameAndId._1)
+
+      nameAndId._2.foreach {
+        _ match {
+          case (partition, error) =>
+            responseTopic.partitions().add(new OffsetCommitResponsePartition()
+              .setPartitionIndex(partition)
+              .setErrorCode(error.code)
+            )
+        }
+      }
+
+      data.topics().add(responseTopic)
+    }
+    data
   }
 }

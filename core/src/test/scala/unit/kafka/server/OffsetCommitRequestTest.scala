@@ -17,26 +17,24 @@
 
 package unit.kafka.server
 
+import kafka.server.KafkaApisTest.{NameAndId, newOffsetCommitRequestData, newOffsetCommitResponseData}
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.message.OffsetCommitRequestData
-import org.apache.kafka.common.message.OffsetCommitRequestData.{OffsetCommitRequestPartition, OffsetCommitRequestTopic}
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetCommitResponse}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
-import java.util.Collections.singletonList
 import java.util.Properties
+import scala.collection.immutable.ListMap
+import scala.jdk.CollectionConverters.SeqHasAsJava
 
 class OffsetCommitRequestTest extends BaseRequestTest {
   override def brokerCount: Int = 1
 
   val brokerId: Integer = 0
   val offset = 15L
-  val leaderEpoch = 3
-  val metadata = "metadata"
-  val topic = "topic"
   val groupId = "groupId"
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
@@ -45,34 +43,50 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
   }
 
+  def createTopics(topicNames: String*): Seq[NameAndId] = {
+    topicNames.map(topic => {
+      createTopic(topic)
+      val topicId: Uuid = getTopicIds().get(topic) match {
+        case Some(x) => x
+        case _ => throw new AssertionError("Topic ID not found for " + topic)
+      }
+      NameAndId(topic, topicId)
+    })
+  }
+
   @Test
   def testTopicIdsArePopulatedInOffsetCommitResponses(): Unit = {
-    createTopic(topic)
-    val topicId: Uuid = getTopicIds().get(topic) match {
-      case Some(x) => x
-      case _ => throw new AssertionError("Topic ID not found for " + topic)
-    }
+    val topics = createTopics("topic1", "topic2", "topic3")
+    val topicPartitions = topics.map(topic => new TopicPartition(topic.name, 0))
 
-    val tpList = singletonList(new TopicPartition(topic, 0))
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-
     val consumer = createConsumer()
-    consumer.assign(tpList)
+    consumer.assign(topicPartitions.asJava)
 
-    val requestData = new OffsetCommitRequestData().setGroupId(groupId)
-    requestData.topics().add(new OffsetCommitRequestTopic()
-      .setTopicId(topicId)
-      .setName(topic)
-      .setPartitions(singletonList(new OffsetCommitRequestPartition()
-        .setPartitionIndex(0)
-        .setCommittedOffset(offset)
-        .setCommittedMetadata(metadata)
-        .setCommittedLeaderEpoch(leaderEpoch)
-      )))
+    val requestData = newOffsetCommitRequestData(
+      groupId = "group",
+      offsets = topics.map((_, ListMap(0 -> offset)))
+    )
 
-    val request = new OffsetCommitRequest.Builder(requestData).build(OffsetCommitRequestData.HIGHEST_SUPPORTED_VERSION)
-    val response = connectAndReceive[OffsetCommitResponse](request)
+    ApiKeys.OFFSET_COMMIT.allVersions.forEach { version =>
+      val expectedResponse = newOffsetCommitResponseData(
+        version,
+        topicPartitions = topics.map((_, Map(0 -> Errors.NONE))),
+      )
 
-    assertEquals(topicId, response.data().topics().get(0).topicId())
+      val response = connectAndReceive[OffsetCommitResponse](
+        new OffsetCommitRequest.Builder(requestData).build(version)
+      )
+
+      assertEquals(expectedResponse, response.data(), s"OffsetCommit version = $version")
+    }
   }
+
+ /* @Test
+  def testOffsetCommitWithInvalidId(): Unit = {
+    val topics = createTopics("topic1", "topic2", "topic3")
+    val topicPartitions = topics.map(topic => new TopicPartition(topic.name, 0))
+
+
+  }*/
 }
