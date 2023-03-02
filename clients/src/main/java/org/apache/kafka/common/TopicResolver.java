@@ -56,6 +56,15 @@ public class TopicResolver {
     }
 
     /**
+     * A resolver which acts as a wrapper around the input mapping of topic ids from/to topic names.
+     * No validation is performed about the consistency of the mapping. This method is to be preferred
+     * when the copy of the input maps needs to be avoided.
+     */
+    public static TopicResolver wrap(Map<String, Uuid> topicIds, Map<Uuid, String> topicNames) {
+        return new TopicResolver(topicIds, topicNames);
+    }
+
+    /**
      * A resolver with no existing mapping between any topic name and id.
      */
     public static TopicResolver emptyResolver() {
