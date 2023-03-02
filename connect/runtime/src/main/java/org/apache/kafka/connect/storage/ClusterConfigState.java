@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeMap;
 
 /**
  * An immutable snapshot of the configuration state of connectors and tasks in a Kafka Connect cluster.
@@ -186,28 +185,6 @@ public class ClusterConfigState {
 
     public Map<String, String> rawTaskConfig(ConnectorTaskId task) {
         return taskConfigs.get(task);
-    }
-
-    /**
-     * Get all task configs for a connector. The configurations will have been transformed by
-     * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
-     * references replaced with the current values from external instances of
-     * {@link ConfigProvider}, and may include secrets.
-     * @param connector name of the connector
-     * @return a list of task configurations
-     */
-    public List<Map<String, String>> allTaskConfigs(String connector) {
-        Map<Integer, Map<String, String>> taskConfigs = new TreeMap<>();
-        for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : this.taskConfigs.entrySet()) {
-            if (taskConfigEntry.getKey().connector().equals(connector)) {
-                Map<String, String> configs = taskConfigEntry.getValue();
-                if (configTransformer != null) {
-                    configs = configTransformer.transform(connector, configs);
-                }
-                taskConfigs.put(taskConfigEntry.getKey().task(), configs);
-            }
-        }
-        return Collections.unmodifiableList(new ArrayList<>(taskConfigs.values()));
     }
 
     /**
