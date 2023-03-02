@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -58,6 +59,15 @@ import java.util.Set;
  */
 class CompletedFetch<K, V> {
 
+    final TopicPartition partition;
+    final FetchResponseData.PartitionData partitionData;
+    final short requestVersion;
+
+    long nextFetchOffset;
+    Optional<Integer> lastEpoch;
+    boolean isConsumed = false;
+    boolean initialized = false;
+
     private final Logger log;
     private final SubscriptionState subscriptions;
     private final boolean checkCrcs;
@@ -65,25 +75,18 @@ class CompletedFetch<K, V> {
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
     private final IsolationLevel isolationLevel;
-    public final TopicPartition partition;
     private final Iterator<? extends RecordBatch> batches;
     private final Set<Long> abortedProducerIds;
     private final PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactions;
-    final FetchResponseData.PartitionData partitionData;
-    final FetchResponseMetricAggregator metricAggregator;
-    final short responseVersion;
+    private final FetchResponseMetricAggregator metricAggregator;
 
     private int recordsRead;
     private int bytesRead;
     private RecordBatch currentBatch;
     private Record lastRecord;
     private CloseableIterator<Record> records;
-    long nextFetchOffset;
-    Optional<Integer> lastEpoch;
-    boolean isConsumed = false;
     private Exception cachedRecordException = null;
     private boolean corruptLastRecord = false;
-    boolean initialized = false;
 
     CompletedFetch(LogContext logContext,
                    SubscriptionState subscriptions,
@@ -97,7 +100,7 @@ class CompletedFetch<K, V> {
                    FetchResponseMetricAggregator metricAggregator,
                    Iterator<? extends RecordBatch> batches,
                    Long fetchOffset,
-                   short responseVersion) {
+                   short requestVersion) {
         this.log = logContext.logger(CompletedFetch.class);
         this.subscriptions = subscriptions;
         this.checkCrcs = checkCrcs;
@@ -110,28 +113,31 @@ class CompletedFetch<K, V> {
         this.metricAggregator = metricAggregator;
         this.batches = batches;
         this.nextFetchOffset = fetchOffset;
-        this.responseVersion = responseVersion;
+        this.requestVersion = requestVersion;
         this.lastEpoch = Optional.empty();
         this.abortedProducerIds = new HashSet<>();
         this.abortedTransactions = abortedTransactions(partitionData);
     }
 
     /**
+     * After each partition is parsed, we update the current metric totals with the total bytes
+     * and number of records parsed. After all partitions have reported, we write the metric.
+     */
+    void recordAggregatedMetrics(int bytes, int records) {
+        metricAggregator.record(partition, bytes, records);
+    }
+
+    /**
      * Draining a {@link CompletedFetch} will signal that the data has been consumed and the underlying resources
-     * are closed.
-     *
-     * <p/>
-     *
-     * TODO: Is this the same as close()-ing the CompletedFetch?
-     * TODO: Is the fetch usable after it's consumed? Should there be some kind of error thrown if it's used after
-     *       it's been drained?
+     * are closed. This is somewhat analogous to {@link Closeable#close() closing}, though no error will result if a
+     * caller invokes {@link #fetchRecords(int)}; an empty {@link List list} will be returned instead.
      */
     void drain() {
         if (!isConsumed) {
             maybeCloseRecordStream();
             cachedRecordException = null;
             this.isConsumed = true;
-            this.metricAggregator.record(partition, bytesRead, recordsRead);
+            recordAggregatedMetrics(bytesRead, recordsRead);
 
             // we move the partition to the end if we received some bytes. This way, it's more likely that partitions
             // for the same topic can remain together (allowing for more efficient serialization).

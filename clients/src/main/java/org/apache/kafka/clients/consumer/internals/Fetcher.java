@@ -558,7 +558,7 @@ public class Fetcher<K, V> implements Closeable {
                 completedFetch = nextCompletedFetch;
 
                 if (!batches.hasNext() && FetchResponse.recordsSize(partition) > 0) {
-                    if (completedFetch.responseVersion < 3) {
+                    if (completedFetch.requestVersion < 3) {
                         // Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
                         Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
                         throw new RecordTooLargeException("There are some messages at [Partition=Offset]: " +
@@ -654,7 +654,7 @@ public class Fetcher<K, V> implements Closeable {
             }
         } finally {
             if (completedFetch == null)
-                nextCompletedFetch.metricAggregator.record(tp, 0, 0);
+                nextCompletedFetch.recordAggregatedMetrics(0, 0);
 
             if (error != Errors.NONE)
                 // we move the partition to the end if there was an error. This way, it's more likely that partitions for
