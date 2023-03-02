@@ -4248,8 +4248,8 @@ public abstract class ConsumerCoordinatorTest {
             .map(tp -> new SimpleEntry<>(tp, error))
             .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
         Map<TopicPartition, Long> offsets = expectedOffsets.entrySet().stream()
-                .map(e -> new SimpleEntry<>(e.getKey().topicPartition(), e.getValue()))
-                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+            .map(e -> new SimpleEntry<>(e.getKey().topicPartition(), e.getValue()))
+            .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
         client.respond(offsetCommitRequestMatcher(offsets, __ -> { }), offsetCommitResponse(errors));
     }
 

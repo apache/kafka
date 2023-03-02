@@ -25,6 +25,8 @@ import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResp
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -132,30 +134,49 @@ public class OffsetCommitResponse extends AbstractResponse {
         return version;
     }
 
-    public static Builder<?> newBuilder(TopicResolver topicResolver, short version) {
-        if (version >= 9) {
-            return new Builder<>(topicResolver, new ByTopicId(), version);
-        } else {
-            return new Builder<>(topicResolver, new ByTopicName(), version);
-        }
-    }
-
-    public static final class Builder<T> {
+    public static class Builder {
+        OffsetCommitResponseData data = new OffsetCommitResponseData();
+        HashMap<String, OffsetCommitResponseTopic> byTopicName = new HashMap<>();
         private final TopicResolver topicResolver;
-        private final TopicClassifier<T> topicClassifier;
         private final short version;
 
-        private OffsetCommitResponseData data = new OffsetCommitResponseData();
-        private final Map<T, OffsetCommitResponseTopic> topics = new HashMap<>();
-
-        protected Builder(TopicResolver topicResolver, TopicClassifier<T> topicClassifier, short version) {
+        public Builder(TopicResolver topicResolver, short version) {
             this.topicResolver = topicResolver;
-            this.topicClassifier = topicClassifier;
             this.version = version;
         }
 
-        public Builder<T> addPartition(String topicName, Uuid topicId, int partitionIndex, Errors error) {
-            OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName, topicId);
+        private OffsetCommitResponseTopic getOrCreateTopic(
+            String topicName,
+            Uuid topicId
+        ) {
+            OffsetCommitResponseTopic topic = byTopicName.get(topicName);
+            if (topic == null) {
+                topic = new OffsetCommitResponseTopic().setName(topicName).setTopicId(topicId);
+                data.topics().add(topic);
+                byTopicName.put(topicName, topic);
+            }
+            return topic;
+        }
+
+        /**
+         * The topic name must be resolved when calling this method. In the broker request handler, resolution
+         * of topic names from topic ids happen before the {@link OffsetCommitResponse} is constructed via
+         * this builder method.
+         */
+        public Builder addPartition(
+            String topicName,
+            Uuid topicId,
+            int partitionIndex,
+            Errors error
+        ) {
+            // Enforce this check to avoid silent collisions when an invalid topic name is provided.
+            if (Utils.isBlank(topicName)) {
+                throw new IllegalArgumentException("OffsetCommitResponse.Builder#addPartition() expects a valid " +
+                    "topic name. Use the method addPartitions() when a topic name is undefined.");
+            }
+
+            final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName, topicId);
+
             topicResponse.partitions().add(new OffsetCommitResponsePartition()
                 .setPartitionIndex(partitionIndex)
                 .setErrorCode(error.code()));
@@ -163,12 +184,17 @@ public class OffsetCommitResponse extends AbstractResponse {
             return this;
         }
 
-        public <P> Builder<T> addPartitions(
-                String topicName,
-                Uuid topicId,
-                List<P> partitions,
-                Function<P, Integer> partitionIndex,
-                Errors error
+        /**
+         * This method must be called when a topic name cannot be resolved or is not known to the server.
+         * Unlike {@link Builder#addPartition(String, Uuid, int, Errors)}, the topic is not cached to avoid
+         * collisions based on an invalid topic name key.
+         */
+        public <P> Builder addPartitions(
+            String topicName,
+            Uuid topicId,
+            List<P> partitions,
+            Function<P, Integer> partitionIndex,
+            Errors error
         ) {
             OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic()
                 .setName(topicName)
@@ -185,13 +211,24 @@ public class OffsetCommitResponse extends AbstractResponse {
             return this;
         }
 
-        public Builder<T> merge(OffsetCommitResponseData newData) {
+        public Builder merge(
+            OffsetCommitResponseData newData,
+            Logger logger
+        ) {
             if (version >= 9) {
                 // This method is called after the group coordinator committed the offsets. The group coordinator
                 // provides the OffsetCommitResponseData it built in the process. As of now, this data does
                 // not contain topic ids, so we resolve them here.
-                newData.topics().forEach(
-                        topic -> topic.setTopicId(topicResolver.getTopicId(topic.name()).orElse(Uuid.ZERO_UUID)));
+                newData.topics().forEach(topic -> {
+                    Uuid topicId = topicResolver.getTopicId(topic.name()).orElse(Uuid.ZERO_UUID);
+                    if (Uuid.ZERO_UUID.equals(topicId)) {
+                        // This should not happen because topic names returned by the group coordinator should
+                        // always be resolvable.
+                        logger.debug("Unresolvable topic id for topic {} while preparing " +
+                                "the OffsetCommitResponse", topic.name());
+                    }
+                    topic.setTopicId(topicId);
+                });
             }
             if (data.topics().isEmpty()) {
                 // If the current data is empty, we can discard it and use the new data.
@@ -199,13 +236,11 @@ public class OffsetCommitResponse extends AbstractResponse {
             } else {
                 // Otherwise, we have to merge them together.
                 newData.topics().forEach(newTopic -> {
-                    T topicKey = topicClassifier.of(newTopic.name(), newTopic.topicId());
-                    OffsetCommitResponseTopic existingTopic = topics.get(topicKey);
-
+                    OffsetCommitResponseTopic existingTopic = byTopicName.get(newTopic.name());
                     if (existingTopic == null) {
                         // If no topic exists, we can directly copy the new topic data.
                         data.topics().add(newTopic);
-                        topics.put(topicKey, newTopic);
+                        byTopicName.put(newTopic.name(), newTopic);
                     } else {
                         // Otherwise, we add the partitions to the existing one. Note we
                         // expect non-overlapping partitions here as we don't verify
@@ -219,35 +254,6 @@ public class OffsetCommitResponse extends AbstractResponse {
 
         public OffsetCommitResponse build() {
             return new OffsetCommitResponse(data, version);
-        }
-
-        private OffsetCommitResponseTopic getOrCreateTopic(String topicName, Uuid topicId) {
-            T topicKey = topicClassifier.of(topicName, topicId);
-            OffsetCommitResponseTopic topic = topics.get(topicKey);
-            if (topic == null) {
-                topic = new OffsetCommitResponseTopic().setName(topicName).setTopicId(topicId);
-                data.topics().add(topic);
-                topics.put(topicKey, topic);
-            }
-            return topic;
-        }
-    }
-
-    interface TopicClassifier<T> {
-        T of(String topicName, Uuid topicId);
-    }
-
-    private static final class ByTopicId implements TopicClassifier<Uuid> {
-        @Override
-        public Uuid of(String topicName, Uuid topicId) {
-            return topicId;
-        }
-    }
-
-    private static final class ByTopicName implements TopicClassifier<String> {
-        @Override
-        public String of(String topicName, Uuid topicId) {
-            return topicName;
         }
     }
 }

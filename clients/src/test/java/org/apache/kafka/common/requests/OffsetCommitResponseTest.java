@@ -123,7 +123,7 @@ public class OffsetCommitResponseTest {
 
         TopicResolver resolver = TopicResolver.fromTopicIds(topicIds);
 
-        OffsetCommitResponse.Builder<?> builder = OffsetCommitResponse.newBuilder(resolver, version)
+        OffsetCommitResponse.Builder builder = new OffsetCommitResponse.Builder(resolver, version)
             .addPartition(topicOne, topic1Id, partitionOne, Errors.NONE)
             .addPartition(topicOne, topic1Id, partitionTwo, Errors.NONE)
             .addPartitions(topic6.name, topic6.id, asList(11, 12), identity(), Errors.NONE);
@@ -144,17 +144,17 @@ public class OffsetCommitResponseTest {
             ));
 
         } else {
-            builder.addPartition(null, topic4.id, 7, Errors.NONE)
-                .addPartition(null, topic4.id, 8, Errors.NONE)
-                .addPartition("", topic5.id, 9, Errors.NONE)
-                .addPartition("", topic5.id, 10, Errors.NONE)
+            builder.addPartition(topic4.name, topic4.id, 7, Errors.NONE)
+                .addPartition(topic4.name, topic4.id, 8, Errors.NONE)
+                .addPartition(topic5.name, topic5.id, 9, Errors.NONE)
+                .addPartition(topic5.name, topic5.id, 10, Errors.NONE)
                 .addPartition(topicTwo, Uuid.ZERO_UUID, 3, Errors.NONE);
 
             expectedTopics.addAll(asList(
                 createResponseTopic(topicOne, topic1Id, partitionOne, partitionTwo, Errors.NONE),
                 createResponseTopic(topic6.name, topic6.id, 11, 12, Errors.NONE),
-                createResponseTopic(null, topic4.id, 7, 8, Errors.NONE),
-                createResponseTopic("", topic5.id, 9, 10, Errors.NONE),
+                createResponseTopic(topic4.name, topic4.id, 7, 8, Errors.NONE),
+                createResponseTopic(topic5.name, topic5.id, 9, 10, Errors.NONE),
                 createResponseTopic(topicTwo, Uuid.ZERO_UUID, 3, Errors.NONE)
             ));
         }

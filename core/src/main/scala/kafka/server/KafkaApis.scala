@@ -429,7 +429,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       CompletableFuture.completedFuture[Unit](())
     } else {
       val topicResolver = metadataCache.topicResolver()
-      val responseBuilder = OffsetCommitResponse.newBuilder(topicResolver, offsetCommitRequest.version())
+      val responseBuilder = new OffsetCommitResponse.Builder(topicResolver, offsetCommitRequest.version())
 
       val resolvedTopics =
         if (offsetCommitRequest.version() < 9)
@@ -518,7 +518,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     request: RequestChannel.Request,
     offsetCommitRequest: OffsetCommitRequest,
     authorizedTopicsRequest: mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic],
-    responseBuilder: OffsetCommitResponse.Builder[_]
+    responseBuilder: OffsetCommitResponse.Builder
   ): CompletableFuture[Unit] = {
     val zkSupport = metadataSupport.requireZkOrThrow(
       KafkaApis.unsupported("Version 0 offset commit requests"))
@@ -553,7 +553,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     request: RequestChannel.Request,
     offsetCommitRequest: OffsetCommitRequest,
     authorizedTopicsRequest: mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic],
-    responseBuilder: OffsetCommitResponse.Builder[_],
+    responseBuilder: OffsetCommitResponse.Builder,
     requestLocal: RequestLocal
   ): CompletableFuture[Unit] = {
     val offsetCommitRequestData = new OffsetCommitRequestData()
@@ -572,7 +572,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
       } else {
-        requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build())
+        requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results, logger.underlying).build())
       }
     }
   }
