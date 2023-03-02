@@ -60,7 +60,6 @@ import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.mockito.stubbing.OngoingStubbing;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -81,6 +80,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.withSettings;
@@ -204,8 +204,7 @@ public class AbstractHerderTest {
                 .defaultAnswer(CALLS_REAL_METHODS));
 
         IsolatedConnector<?> connector = mockConnector(SampleSourceConnector.class);
-        OngoingStubbing<IsolatedConnector<?>> newConnector = when(plugins.newConnector(anyString()));
-        newConnector.thenReturn(connector);
+        doReturn(connector).when(plugins).newConnector(anyString());
         when(herder.plugins()).thenReturn(plugins);
 
         when(herder.rawConfig(connectorName)).thenReturn(Collections.singletonMap(
@@ -275,8 +274,7 @@ public class AbstractHerderTest {
                 .defaultAnswer(CALLS_REAL_METHODS));
 
         IsolatedConnector<?> connector = mockConnector(SampleSourceConnector.class);
-        OngoingStubbing<IsolatedConnector<?>> newConnector = when(plugins.newConnector(anyString()));
-        newConnector.thenReturn(connector);
+        doReturn(connector).when(plugins).newConnector(anyString());
         when(herder.plugins()).thenReturn(plugins);
 
         when(configStore.snapshot()).thenReturn(SNAPSHOT);
@@ -1138,8 +1136,7 @@ public class AbstractHerderTest {
             isolatedConnector = mock(IsolatedSinkConnector.class);
             when(isolatedConnector.type()).thenReturn(PluginType.SINK);
         }
-        OngoingStubbing<Class<?>> pluginClass = when(isolatedConnector.pluginClass());
-        pluginClass.thenReturn(connectorClass);
+        doReturn(connectorClass).when(isolatedConnector).pluginClass();
         when(isolatedConnector.config()).thenReturn(connector.config());
         when(isolatedConnector.validate(any())).thenAnswer(invocation -> connector.validate(invocation.getArgument(0)));
         return isolatedConnector;

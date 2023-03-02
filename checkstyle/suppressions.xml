@@ -164,7 +164,7 @@
     <suppress checks="ClassFanOutComplexity"
               files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation)Test.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="(AbstractHerder|DistributedHerder)Test.java"/>
+              files="DistributedHerderTest.java"/>
 
     <suppress checks="MethodLength"
               files="(RequestResponse|WorkerSinkTask)Test.java"/>
