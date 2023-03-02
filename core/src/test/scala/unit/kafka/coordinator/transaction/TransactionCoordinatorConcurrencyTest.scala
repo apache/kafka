@@ -501,12 +501,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     @volatile var results: Map[TopicPartition, R] = _
 
     def resultCallback(r: R): Unit = this.result = Some(r)
-    def addPartitionsResultCallback(rOpt: Option[R], rs: Map[TopicPartition, R]): Unit = {
-      rOpt match {
-        case Some(r) => this.result = rOpt
-        case None => this.results = rs
-      }
-    }
+    
   }
 
   class InitProducerIdOperation(val producerIdAndEpoch: Option[ProducerIdAndEpoch] = None) extends TxnOperation[InitProducerIdResult] {
@@ -528,9 +523,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
         transactionCoordinator.handleAddPartitionsToTransaction(txn.transactionalId,
             txnMetadata.producerId,
             txnMetadata.producerEpoch,
-            partitions, 
-            false,
-            addPartitionsResultCallback,
+            partitions,
+            resultCallback,
             RequestLocal.withThreadConfinedCaching)
         replicaManager.tryCompleteActions()
       }

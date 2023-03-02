@@ -17,9 +17,10 @@
 package kafka.coordinator.transaction
 
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.common.requests.TransactionResult
+import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.server.util.MockScheduler
 import org.junit.jupiter.api.Assertions._
@@ -201,19 +202,19 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(None))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, false, addPartitionsToTxnCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback)
     assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, error)
   }
 
   @Test
   def shouldRespondWithInvalidRequestAddPartitionsToTransactionWhenTransactionalIdIsEmpty(): Unit = {
-    coordinator.handleAddPartitionsToTransaction("", 0L, 1, partitions, false, addPartitionsToTxnCallback)
+    coordinator.handleAddPartitionsToTransaction("", 0L, 1, partitions, errorsCallback)
     assertEquals(Errors.INVALID_REQUEST, error)
   }
 
   @Test
   def shouldRespondWithInvalidRequestAddPartitionsToTransactionWhenTransactionalIdIsNull(): Unit = {
-    coordinator.handleAddPartitionsToTransaction(null, 0L, 1, partitions, false, addPartitionsToTxnCallback)
+    coordinator.handleAddPartitionsToTransaction(null, 0L, 1, partitions, errorsCallback)
     assertEquals(Errors.INVALID_REQUEST, error)
   }
 
@@ -222,7 +223,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Left(Errors.NOT_COORDINATOR))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, false, addPartitionsToTxnCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback)
     assertEquals(Errors.NOT_COORDINATOR, error)
   }
 
@@ -231,7 +232,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, false, addPartitionsToTxnCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback)
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, error)
   }
 
@@ -250,7 +251,7 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
         new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, state, mutable.Set.empty, 0, 0)))))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, false, addPartitionsToTxnCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback)
     assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
   }
 
@@ -260,7 +261,7 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
         new TransactionMetadata(transactionalId, 0, 0, 10, 9, 0, PrepareCommit, mutable.Set.empty, 0, 0)))))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, false, addPartitionsToTxnCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback)
     assertEquals(Errors.PRODUCER_FENCED, error)
   }
 
@@ -291,7 +292,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, producerId, producerEpoch, partitions, false, addPartitionsToTxnCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, producerId, producerEpoch, partitions, errorsCallback)
 
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
     verify(transactionManager).appendTransactionToLog(
@@ -310,7 +311,7 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
         new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, Empty, partitions, 0, 0)))))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, false, addPartitionsToTxnCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback)
     assertEquals(Errors.NONE, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
@@ -321,7 +322,7 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
         new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, Ongoing, partitions, 0, 0)))))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, true, addPartitionsToTxnCallback)
+    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     assertEquals(Errors.NONE, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
@@ -335,7 +336,7 @@ class TransactionCoordinatorTest {
     
     val extraPartitions = partitions ++ Set(new TopicPartition("topic2", 0))
     
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, extraPartitions, true, addPartitionsToTxnCallback)
+    coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, extraPartitions, verifyPartitionsInTxnCallback)
     assertEquals(Errors.INVALID_TXN_STATE, errors(new TopicPartition("topic2", 0)))
     assertEquals(Errors.NONE, errors(new TopicPartition("topic1", 0)))
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
@@ -1213,10 +1214,7 @@ class TransactionCoordinatorTest {
     error = ret
   }
 
-  def addPartitionsToTxnCallback(retOpt: Option[Errors], rets: Map[TopicPartition, Errors]): Unit = {
-    retOpt match {
-      case Some(ret) => error = ret
-      case None => errors = rets
-    }
+  def verifyPartitionsInTxnCallback(result: AddPartitionsToTxnResult): Unit = {
+    errors = AddPartitionsToTxnResponse.errorsForTransaction(result.topicResults()).asScala.toMap
   }
 }

@@ -126,9 +126,6 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
             response.setResultsByTopicV3AndBelow(errorResponseForTopics(data.v3AndBelowTopics(), error));
         } else {
             AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResultCollection();
-            for (AddPartitionsToTxnTransaction transaction : data().transactions()) {
-                results.add(errorResponseForTransaction(transaction.transactionalId(), error));
-            }
             response.setResultsByTransaction(results);
             response.setErrorCode(error.code());
         }

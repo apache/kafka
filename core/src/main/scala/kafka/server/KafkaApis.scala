@@ -2462,32 +2462,34 @@ class KafkaApis(val requestChannel: RequestChannel,
             authorizedPartitions.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)
           addResultAndMaybeSendResponse(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitionErrors.asJava))
         } else {
-          
-          def sendResponseCallback(error: Option[Errors], errors: Map[TopicPartition, Errors]): Unit = {
-            error match {
-              case Some(error) =>
-                val finalError = {
-                  if (version < 2 && error == Errors.PRODUCER_FENCED) {
-                    // For older clients, they could not understand the new PRODUCER_FENCED error code,
-                    // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
-                    Errors.INVALID_PRODUCER_EPOCH
-                  } else {
-                    error
-                  }
-                }
-                addResultAndMaybeSendResponse(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, finalError))
-              case None =>
-                addResultAndMaybeSendResponse(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, errors.asJava))
+          def sendResponseCallback(error: Errors): Unit = {
+            val finalError = {
+              if (version < 2 && error == Errors.PRODUCER_FENCED) {
+                // For older clients, they could not understand the new PRODUCER_FENCED error code,
+                // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
+                Errors.INVALID_PRODUCER_EPOCH
+              } else {
+                error
+              }
             }
+            addResultAndMaybeSendResponse(addPartitionsToTxnRequest.errorResponseForTransaction(transactionalId, finalError))
           }
 
-          txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-            transaction.producerId,
-            transaction.producerEpoch,
-            authorizedPartitions,
-            transaction.verifyOnly,
-            sendResponseCallback,
-            requestLocal)
+
+          if (!transaction.verifyOnly) {
+            txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
+              transaction.producerId,
+              transaction.producerEpoch,
+              authorizedPartitions,
+              sendResponseCallback,
+              requestLocal)
+          } else {
+            txnCoordinator.handleVerifyPartitionsInTransaction(transactionalId,
+              transaction.producerId,
+              transaction.producerEpoch,
+              authorizedPartitions,
+              addResultAndMaybeSendResponse)
+          }
         }
       }
     }
@@ -2512,16 +2514,15 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setThrottleTimeMs(requestThrottleMs))
       )
     else {
-      def sendResponseCallback(error: Option[Errors], errors: Map[TopicPartition, Errors]): Unit = {
-        // This will always have a single error, so error will always be defined.
+      def sendResponseCallback(error: Errors): Unit = {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
           val finalError =
-            if (addOffsetsToTxnRequest.version < 2 && error.get == Errors.PRODUCER_FENCED) {
+            if (addOffsetsToTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
               // For older clients, they could not understand the new PRODUCER_FENCED error code,
               // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
               Errors.INVALID_PRODUCER_EPOCH
             } else {
-              error.get
+              error
             }
 
           val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(
@@ -2539,7 +2540,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         addOffsetsToTxnRequest.data.producerId,
         addOffsetsToTxnRequest.data.producerEpoch,
         Set(offsetTopicPartition),
-        false,
         sendResponseCallback,
         requestLocal)
     }

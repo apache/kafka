@@ -119,7 +119,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         return data.resultsByTransaction().find(transactionalId).topicResults();
     }
 
-    public Map<TopicPartition, Errors> errorsForTransaction(AddPartitionsToTxnTopicResultCollection topicCollection) {
+    public static Map<TopicPartition, Errors> errorsForTransaction(AddPartitionsToTxnTopicResultCollection topicCollection) {
         Map<TopicPartition, Errors> topicResults = new HashMap<>();
         for (AddPartitionsToTxnTopicResult topicResult : topicCollection) {
             for (AddPartitionsToTxnPartitionResult partitionResult : topicResult.resultsByPartition()) {
@@ -133,6 +133,12 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         List<Errors> allErrors = new ArrayList<>();
+
+        // If we are not using this field, we have request 4 or later
+        if (this.data.resultsByTopicV3AndBelow().size() == 0) {
+            allErrors.add(Errors.forCode(data.errorCode()));
+        }
+        
         errors().forEach((txnId, errors) -> 
             allErrors.addAll(errors.values())
         );

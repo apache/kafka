@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.common.requests.AddPartitionsToTxnResponse.errorsForTransaction;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -106,11 +107,12 @@ public class AddPartitionsToTxnResponseTest {
             AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
 
             Map<Errors, Integer> newExpectedErrorCounts = new HashMap<>();
+            newExpectedErrorCounts.put(Errors.NONE, 1); // top level error
             newExpectedErrorCounts.put(errorOne, 2);
             newExpectedErrorCounts.put(errorTwo, 1);
             
             AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
-            assertEquals(txnTwoExpectedErrors, parsedResponse.errorsForTransaction(response.getTransactionTopicResults("txn2")));
+            assertEquals(txnTwoExpectedErrors, errorsForTransaction(response.getTransactionTopicResults("txn2")));
             assertEquals(newExpectedErrorCounts, parsedResponse.errorCounts());
             assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
             assertTrue(parsedResponse.shouldClientThrottle(version));
@@ -131,7 +133,7 @@ public class AddPartitionsToTxnResponseTest {
         
         AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData().setResultsByTransaction(results));
         
-        assertEquals(txn1Errors, response.errorsForTransaction(response.getTransactionTopicResults("txn1")));
-        assertEquals(txn2Errors, response.errorsForTransaction(response.getTransactionTopicResults("txn2")));
+        assertEquals(txn1Errors, errorsForTransaction(response.getTransactionTopicResults("txn1")));
+        assertEquals(txn2Errors, errorsForTransaction(response.getTransactionTopicResults("txn2")));
     }
 }

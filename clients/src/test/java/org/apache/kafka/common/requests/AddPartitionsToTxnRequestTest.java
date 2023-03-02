@@ -35,6 +35,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
+import static org.apache.kafka.common.requests.AddPartitionsToTxnResponse.errorsForTransaction;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AddPartitionsToTxnRequestTest {
@@ -78,11 +79,14 @@ public class AddPartitionsToTxnRequestTest {
         }
         AddPartitionsToTxnResponse response = request.getErrorResponse(throttleTimeMs, Errors.UNKNOWN_TOPIC_OR_PARTITION.exception());
 
-        assertEquals(Collections.singletonMap(Errors.UNKNOWN_TOPIC_OR_PARTITION, 2), response.errorCounts());
         assertEquals(throttleTimeMs, response.throttleTimeMs());
         
         if (version >= 4) {
             assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), response.data().errorCode());
+            // Since the error is top level, we count it as one error in the counts.
+            assertEquals(Collections.singletonMap(Errors.UNKNOWN_TOPIC_OR_PARTITION, 1), response.errorCounts());
+        } else {
+            assertEquals(Collections.singletonMap(Errors.UNKNOWN_TOPIC_OR_PARTITION, 2), response.errorCounts());  
         }
     }
     
@@ -108,8 +112,8 @@ public class AddPartitionsToTxnRequestTest {
                 .setResultsByTransaction(results)
                 .setThrottleTimeMs(throttleTimeMs));
         
-        assertEquals(Collections.singletonMap(tp0, Errors.UNKNOWN_TOPIC_OR_PARTITION), response.errorsForTransaction(response.getTransactionTopicResults(transactionalId1)));
-        assertEquals(Collections.singletonMap(tp1, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED), response.errorsForTransaction(response.getTransactionTopicResults(transactionalId2)));
+        assertEquals(Collections.singletonMap(tp0, Errors.UNKNOWN_TOPIC_OR_PARTITION), errorsForTransaction(response.getTransactionTopicResults(transactionalId1)));
+        assertEquals(Collections.singletonMap(tp1, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED), errorsForTransaction(response.getTransactionTopicResults(transactionalId2)));
     }
     
     @Test

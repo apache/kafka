@@ -1309,7 +1309,7 @@ public class TransactionManagerTest {
         AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setResultsByTopicV3AndBelow(result.topicResults()).setThrottleTimeMs(0);
         client.respond(body -> {
             AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
-            assertEquals(new HashSet<>(AddPartitionsToTxnRequest.getPartitions(request.data().v3AndBelowTopics())), new HashSet<>(errors.keySet()));
+            assertEquals(new HashSet<>(getPartitionsFromV3Request(request)), new HashSet<>(errors.keySet()));
             return true;
         }, new AddPartitionsToTxnResponse(data));
 
@@ -3447,7 +3447,7 @@ public class TransactionManagerTest {
         AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setResultsByTopicV3AndBelow(result.topicResults()).setThrottleTimeMs(0);
         client.prepareResponse(body -> {
             AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
-            assertEquals(new HashSet<>(AddPartitionsToTxnRequest.getPartitions(request.data().v3AndBelowTopics())), new HashSet<>(errors.keySet()));
+            assertEquals(new HashSet<>(getPartitionsFromV3Request(request)), new HashSet<>(errors.keySet()));
             return true;
         }, new AddPartitionsToTxnResponse(data));
     }
@@ -3552,10 +3552,14 @@ public class TransactionManagerTest {
             AddPartitionsToTxnRequest addPartitionsToTxnRequest = (AddPartitionsToTxnRequest) body;
             assertEquals(producerId, addPartitionsToTxnRequest.data().v3AndBelowProducerId());
             assertEquals(epoch, addPartitionsToTxnRequest.data().v3AndBelowProducerEpoch());
-            assertEquals(singletonList(topicPartition), AddPartitionsToTxnRequest.getPartitions(addPartitionsToTxnRequest.data().v3AndBelowTopics()));
+            assertEquals(singletonList(topicPartition), getPartitionsFromV3Request(addPartitionsToTxnRequest));
             assertEquals(transactionalId, addPartitionsToTxnRequest.data().v3AndBelowTransactionalId());
             return true;
         };
+    }
+    
+    private List<TopicPartition> getPartitionsFromV3Request(AddPartitionsToTxnRequest request) {
+        return AddPartitionsToTxnRequest.getPartitions(request.data().v3AndBelowTopics());
     }
 
     private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long producerId, final short epoch) {
