@@ -535,6 +535,11 @@ subprojects {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
     }
+
+    // Allows devs to run tests in a loop to debug flaky tests. See README.
+    if (project.hasProperty("rerun-tests")) {
+      outputs.upToDateWhen { false }
+    }
   }
 
   // remove test output from all test types
