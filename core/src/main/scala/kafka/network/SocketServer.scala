@@ -116,7 +116,7 @@ class SocketServer(val config: KafkaConfig,
 
   // Socket server metrics
   newGauge(s"${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () =>
-    dataPlaneAcceptors.values.stream().flatMap(a => a.processors.stream())
+    dataPlaneAcceptors.values.stream.flatMap(a => a.processors.stream)
       .map(p => metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags))
       .mapToDouble(metricName => Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0)))
       .average().orElse(1.0)
@@ -135,7 +135,7 @@ class SocketServer(val config: KafkaConfig,
   newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
   newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
   newGauge(s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () =>
-    dataPlaneAcceptors.values.stream().flatMap(a => a.processors.stream())
+    dataPlaneAcceptors.values.stream.flatMap(a => a.processors.stream)
       .map(p => metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags))
       .mapToDouble(metricName => Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double]))
       .sum
