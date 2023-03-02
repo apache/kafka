@@ -172,8 +172,8 @@ object Defaults {
   val ConsumerGroupMinSessionTimeoutMs = 45000
   val ConsumerGroupMaxSessionTimeoutMs = 60000
   val ConsumerGroupHeartbeatIntervalMs = 5000
-  val ConsumerGroupMinHeartbeatInternalMs = 5000
-  val ConsumerGroupMaxHeartbeatInternalMs = 15000
+  val ConsumerGroupMinHeartbeatIntervalMs = 5000
+  val ConsumerGroupMaxHeartbeatIntervalMs = 15000
   val ConsumerGroupMaxSize = Int.MaxValue
   val ConsumerGroupAssignors = ""
 
@@ -513,8 +513,8 @@ object KafkaConfig {
   val ConsumerGroupMinSessionTimeoutMsProp = "group.consumer.min.session.timeout.ms"
   val ConsumerGroupMaxSessionTimeoutMsProp = "group.consumer.max.session.timeout.ms"
   val ConsumerGroupHeartbeatIntervalMsProp = "group.consumer.heartbeat.interval.ms"
-  val ConsumerGroupMinHeartbeatInternalMsProp = "group.consumer.min.heartbeat.interval.ms"
-  val ConsumerGroupMaxHeartbeatInternalMsProp ="group.consumer.max.heartbeat.interval.ms"
+  val ConsumerGroupMinHeartbeatIntervalMsProp = "group.consumer.min.heartbeat.interval.ms"
+  val ConsumerGroupMaxHeartbeatIntervalMsProp ="group.consumer.max.heartbeat.interval.ms"
   val ConsumerGroupMaxSizeProp = "group.consumer.max.size"
   val ConsumerGroupAssignorsProp = "group.consumer.assignors"
 
@@ -974,8 +974,8 @@ object KafkaConfig {
   val ConsumerGroupMinSessionTimeoutMsDoc = "The minimum allowed session timeout for registered consumers."
   val ConsumerGroupMaxSessionTimeoutMsDoc = "The maximum allowed session timeout for registered consumers."
   val ConsumerGroupHeartbeatIntervalMsDoc = "The heartbeat interval given to the members of a consumer group."
-  val ConsumerGroupMinHeartbeatInternalMsDoc = "The minimum heartbeat interval for registered consumers."
-  val ConsumerGroupMaxHeartbeatInternalMsDoc = "The maximum heartbeat interval for registered consumers."
+  val ConsumerGroupMinHeartbeatIntervalMsDoc = "The minimum heartbeat interval for registered consumers."
+  val ConsumerGroupMaxHeartbeatIntervalMsDoc = "The maximum heartbeat interval for registered consumers."
   val ConsumerGroupMaxSizeDoc = "The maximum number of consumers that a single consumer group can accommodate."
   val ConsumerGroupAssignorsDoc = "The server side assignors as a list of full class names. The first one in the list is considered as the default assignor to be used in the case where the consumer does not specify an assignor."
 
@@ -1316,7 +1316,7 @@ object KafkaConfig {
 
       /** New group coordinator configs */
       // All properties are kept internal until KIP-848 is released.
-      // This property meant to be here only during the development of KIP-848. It will
+      // This property is meant to be here only during the development of KIP-848. It will
       // be replaced by a metadata version before releasing it.
       .defineInternal(NewGroupCoordinatorEnableProp, BOOLEAN, Defaults.NewGroupCoordinatorEnable, null, MEDIUM, NewGroupCoordinatorEnableDoc)
       .defineInternal(GroupCoordinatorNumThreadsProp, INT, Defaults.GroupCoordinatorNumThreads, atLeast(1), MEDIUM, GroupCoordinatorNumThreadsDoc)
@@ -1327,8 +1327,8 @@ object KafkaConfig {
       .defineInternal(ConsumerGroupMinSessionTimeoutMsProp, INT, Defaults.ConsumerGroupMinSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupMinSessionTimeoutMsDoc)
       .defineInternal(ConsumerGroupMaxSessionTimeoutMsProp, INT, Defaults.ConsumerGroupMaxSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupMaxSessionTimeoutMsDoc)
       .defineInternal(ConsumerGroupHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupHeartbeatIntervalMsDoc)
-      .defineInternal(ConsumerGroupMinHeartbeatInternalMsProp, INT, Defaults.ConsumerGroupMinHeartbeatInternalMs, atLeast(1), MEDIUM, ConsumerGroupMinHeartbeatInternalMsDoc)
-      .defineInternal(ConsumerGroupMaxHeartbeatInternalMsProp, INT, Defaults.ConsumerGroupMaxHeartbeatInternalMs, atLeast(1), MEDIUM, ConsumerGroupMaxHeartbeatInternalMsDoc)
+      .defineInternal(ConsumerGroupMinHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupMinHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupMinHeartbeatIntervalMsDoc)
+      .defineInternal(ConsumerGroupMaxHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupMaxHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupMaxHeartbeatIntervalMsDoc)
       .defineInternal(ConsumerGroupMaxSizeProp, INT, Defaults.ConsumerGroupMaxSize, atLeast(1), MEDIUM, ConsumerGroupMaxSizeDoc)
       .defineInternal(ConsumerGroupAssignorsProp, LIST, Defaults.ConsumerGroupAssignors, null, MEDIUM, ConsumerGroupAssignorsDoc)
 
@@ -1920,8 +1920,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val consumerGroupMinSessionTimeoutMs = getInt(KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp)
   val consumerGroupMaxSessionTimeoutMs = getInt(KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp)
   val consumerGroupHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp)
-  val consumerGroupMinHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupMinHeartbeatInternalMsProp)
-  val consumerGroupMaxHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupMaxHeartbeatInternalMsProp)
+  val consumerGroupMinHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp)
+  val consumerGroupMaxHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp)
   val consumerGroupMaxSize = getInt(KafkaConfig.ConsumerGroupMaxSizeProp)
   val consumerGroupAssignors = getList(KafkaConfig.ConsumerGroupAssignorsProp)
 
@@ -2376,6 +2376,27 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(principalBuilderClass != null, s"${KafkaConfig.PrincipalBuilderClassProp} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass),
       s"${KafkaConfig.PrincipalBuilderClassProp} must implement KafkaPrincipalSerde")
+
+    // New group coordinator configs validation.
+    require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
+      s"${KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp} must be greater than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp}")
+    require(consumerGroupHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
+      s"${KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp} must be greater than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp}")
+    require(consumerGroupHeartbeatIntervalMs <= consumerGroupMaxHeartbeatIntervalMs,
+      s"${KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp} must be less than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp}")
+
+    require(consumerGroupMaxSessionTimeoutMs >= consumerGroupMinSessionTimeoutMs,
+      s"${KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp} must be greater than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp}")
+    require(consumerGroupSessionTimeoutMs >= consumerGroupMinSessionTimeoutMs,
+      s"${KafkaConfig.ConsumerGroupSessionTimeoutMsProp} must be greater than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp}")
+    require(consumerGroupSessionTimeoutMs <= consumerGroupMaxSessionTimeoutMs,
+      s"${KafkaConfig.ConsumerGroupSessionTimeoutMsProp} must be less than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp}")
   }
 
   /**

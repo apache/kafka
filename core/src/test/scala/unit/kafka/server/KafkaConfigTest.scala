@@ -977,16 +977,16 @@ class KafkaConfigTest {
         case RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
 
         /** New group coordinator configs */
-        case KafkaConfig.NewGroupCoordinatorEnableProp => // ignore string
+        case KafkaConfig.NewGroupCoordinatorEnableProp => // ignore
         case KafkaConfig.GroupCoordinatorNumThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
 
         /** Consumer groups configs */
-        case KafkaConfig.ConsumerGroupSessionTimeoutMsProp => // ignore string
+        case KafkaConfig.ConsumerGroupSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case KafkaConfig.ConsumerGroupMinHeartbeatInternalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case KafkaConfig.ConsumerGroupMaxHeartbeatInternalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case KafkaConfig.ConsumerGroupMaxSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case KafkaConfig.ConsumerGroupAssignorsProp => // ignore string
 
@@ -1703,5 +1703,43 @@ class KafkaConfigTest {
 
     props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
     KafkaConfig.fromProps(props)
+  }
+
+  @Test
+  def testConsumerGroupSessionTimeoutValidation(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Max should be greater than or equals to min.
+    props.put(KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp, "20")
+    props.put(KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp, "10")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+
+    // The timeout should be within the min-max range.
+    props.put(KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp, "10")
+    props.put(KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp, "20")
+    props.put(KafkaConfig.ConsumerGroupSessionTimeoutMsProp, "5")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    props.put(KafkaConfig.ConsumerGroupSessionTimeoutMsProp, "25")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testConsumerGroupHeartbeatIntervalValidation(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Max should be greater than or equals to min.
+    props.put(KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp, "20")
+    props.put(KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp, "10")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+
+    // The timeout should be within the min-max range.
+    props.put(KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp, "10")
+    props.put(KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp, "20")
+    props.put(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp, "5")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    props.put(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp, "25")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 }
