@@ -64,7 +64,6 @@ import org.slf4j.LoggerFactory;
  * and reference the names of the different plugins directly via the {@link TestPlugin} enum.
  */
 public class TestPlugins {
-    private static final Predicate<String> REMOVE_CLASS_FILTER = s -> s.contains("NonExistentInterface");
     public enum TestPlugin {
         /**
          * A plugin which will always throw an exception during loading
@@ -119,39 +118,39 @@ public class TestPlugins {
         /**
          * A plugin which is incorrectly packaged, and is missing a superclass definition.
          */
-        BAD_PACKAGING_MISSING_SUPERCLASS("bad-packaging", "test.plugins.MissingSuperclass", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_MISSING_SUPERCLASS("bad-packaging", "test.plugins.MissingSuperclass", false, s -> s.contains("NonExistentInterface")),
         /**
          * A plugin which is packaged with other incorrectly packaged plugins, but itself has no issues loading.
          */
-        BAD_PACKAGING_CO_LOCATED("bad-packaging", "test.plugins.CoLocatedPlugin", true, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_CO_LOCATED("bad-packaging", "test.plugins.CoLocatedPlugin", true, s -> s.contains("NonExistentInterface")),
         /**
          * A connector which is incorrectly packaged, and throws during static initialization.
          */
-        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_CONNECTOR("bad-packaging", "test.plugins.StaticInitializerThrowsConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_CONNECTOR("bad-packaging", "test.plugins.StaticInitializerThrowsConnector", false, s -> s.contains("NonExistentInterface")),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR("bad-packaging", "test.plugins.VersionMethodThrowsConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR("bad-packaging", "test.plugins.VersionMethodThrowsConnector", false, s -> s.contains("NonExistentInterface")),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from default constructor.
          */
-        BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR("bad-packaging", "test.plugins.DefaultConstructorThrowsConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR("bad-packaging", "test.plugins.DefaultConstructorThrowsConnector", false, s -> s.contains("NonExistentInterface")),
         /**
          * A plugin which is incorrectly packaged, which has a private default constructor.
          */
-        BAD_PACKAGING_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR("bad-packaging", "test.plugins.DefaultConstructorPrivateConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR("bad-packaging", "test.plugins.DefaultConstructorPrivateConnector", false, s -> s.contains("NonExistentInterface")),
         /**
          * A plugin which is incorrectly packaged, which has a private default constructor.
          */
-        BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONNECTOR("bad-packaging", "test.plugins.NoDefaultConstructorConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONNECTOR("bad-packaging", "test.plugins.NoDefaultConstructorConnector", false, s -> s.contains("NonExistentInterface")),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        BAD_PACKAGING_INNER_CLASS_CONNECTOR("bad-packaging", "test.plugins.OuterClass$InnerClass", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_INNER_CLASS_CONNECTOR("bad-packaging", "test.plugins.OuterClass$InnerClass", false, s -> s.contains("NonExistentInterface")),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION("bad-packaging", "test.plugins.StaticInitializerThrowsRestExtension", false, REMOVE_CLASS_FILTER);
+        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION("bad-packaging", "test.plugins.StaticInitializerThrowsRestExtension", false, s -> s.contains("NonExistentInterface"));
 
         private final String resourceDir;
         private final String className;
