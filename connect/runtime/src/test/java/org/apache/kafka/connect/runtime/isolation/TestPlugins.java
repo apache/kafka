@@ -119,39 +119,39 @@ public class TestPlugins {
         /**
          * A plugin which is incorrectly packaged, and is missing a superclass definition.
          */
-        FAIL_TO_INITIALIZE_MISSING_SUPERCLASS("fail-to-initialize", "test.plugins.MissingSuperclass", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_MISSING_SUPERCLASS("bad-packaging", "test.plugins.MissingSuperclass", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is packaged with other incorrectly packaged plugins, but itself has no issues loading.
          */
-        FAIL_TO_INITIALIZE_CO_LOCATED("fail-to-initialize", "test.plugins.CoLocatedPlugin", true, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_CO_LOCATED("bad-packaging", "test.plugins.CoLocatedPlugin", true, REMOVE_CLASS_FILTER),
         /**
          * A connector which is incorrectly packaged, and throws during static initialization.
          */
-        FAIL_TO_INITIALIZE_STATIC_INITIALIZER_THROWS_CONNECTOR("fail-to-initialize", "test.plugins.StaticInitializerThrowsConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_CONNECTOR("bad-packaging", "test.plugins.StaticInitializerThrowsConnector", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        FAIL_TO_INITIALIZE_VERSION_METHOD_THROWS_CONNECTOR("fail-to-initialize", "test.plugins.VersionMethodThrowsConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR("bad-packaging", "test.plugins.VersionMethodThrowsConnector", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from default constructor.
          */
-        FAIL_TO_INITIALIZE_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR("fail-to-initialize", "test.plugins.DefaultConstructorThrowsConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR("bad-packaging", "test.plugins.DefaultConstructorThrowsConnector", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is incorrectly packaged, which has a private default constructor.
          */
-        FAIL_TO_INITIALIZE_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR("fail-to-initialize", "test.plugins.DefaultConstructorPrivateConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR("bad-packaging", "test.plugins.DefaultConstructorPrivateConnector", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is incorrectly packaged, which has a private default constructor.
          */
-        FAIL_TO_INITIALIZE_NO_DEFAULT_CONSTRUCTOR_CONNECTOR("fail-to-initialize", "test.plugins.NoDefaultConstructorConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONNECTOR("bad-packaging", "test.plugins.NoDefaultConstructorConnector", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        FAIL_TO_INITIALIZE_INNER_CLASS_CONNECTOR("fail-to-initialize", "test.plugins.OuterClass$InnerClass", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_INNER_CLASS_CONNECTOR("bad-packaging", "test.plugins.OuterClass$InnerClass", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        FAIL_TO_INITIALIZE_STATIC_INITIALIZER_THROWS_REST_EXTENSION("fail-to-initialize", "test.plugins.StaticInitializerThrowsRestExtension", false, REMOVE_CLASS_FILTER);
+        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION("bad-packaging", "test.plugins.StaticInitializerThrowsRestExtension", false, REMOVE_CLASS_FILTER);
 
         private final String resourceDir;
         private final String className;
