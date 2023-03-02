@@ -39,6 +39,7 @@ import java.util.function.Function;
  * Possible error codes:
  *
  *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
+ *   - {@link Errors#UNKNOWN_TOPIC_ID}
  *   - {@link Errors#REQUEST_TIMED_OUT}
  *   - {@link Errors#OFFSET_METADATA_TOO_LARGE}
  *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
