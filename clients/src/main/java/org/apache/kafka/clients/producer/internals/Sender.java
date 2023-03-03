@@ -647,9 +647,7 @@ public class Sender implements Runnable {
                 // thus it is not safe to reassign the sequence.
                 failBatch(batch, response, batch.attempts() < this.retries);
             }
-            // NetworkException is a subclass of InvalidMetadataException, but TimeoutException is not, so we
-            // we need to check for timeouts explicitly.
-            if (error.exception() instanceof InvalidMetadataException || error.exception() instanceof TimeoutException) {
+            if (error.exception() instanceof InvalidMetadataException) {
                 if (error.exception() instanceof UnknownTopicOrPartitionException) {
                     log.warn("Received unknown topic or partition error in produce request on partition {}. The " +
                             "topic-partition may not exist or the user may not have Describe access to it",

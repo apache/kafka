@@ -2531,40 +2531,6 @@ public class SenderTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testMetadataRefreshOnRequestTimeout() throws Exception {
-        // Send a single record...
-        Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
-        sender.runOnce(); // send record
-        assertEquals(1, client.inFlightRequestCount(), "We should have a single produce request in flight.");
-        assertEquals(1, sender.inFlightBatches(tp0).size());
-        assertTrue(client.hasInFlightRequests());
-
-        // Introduce the delay to force the timeout, call poll() to trigger the timeout handling,
-        // and make sure that our metadata update was triggered in Sender
-        time.sleep(REQUEST_TIMEOUT + 1);
-        client.respond(new ProduceResponse(new HashMap<>()), true, true);
-        sender.runOnce();
-        assertTrue(metadata.updateRequested());
-        assertEquals(0, client.inFlightRequestCount(), "All requests should have been cancelled due to the timeout.");
-        assertEquals(0, sender.inFlightBatches(tp0).size());
-        assertFalse(client.hasInFlightRequests());
-
-        // Make sure the that the expired batch causes a timeout exception
-        try {
-            future.get();
-            fail("The expired batch should throw a TimeoutException");
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof TimeoutException);
-        }
-
-        // Run poll() again and make sure that our metadata gets updated and we no longer have a
-        // pending request update.
-        sender.runOnce();
-        assertFalse(metadata.updateRequested());
-    }
-
     @Test
     public void testRecordErrorPropagatedToApplication() throws InterruptedException {
         int recordCount = 5;
