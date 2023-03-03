@@ -25,12 +25,16 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Materializes a key-value store as either a {@link TimestampedKeyValueStoreBuilder} or a
  * {@link VersionedKeyValueStoreBuilder} depending on whether the store is versioned or not.
  */
 public class KeyValueStoreMaterializer<K, V> {
+    private static final Logger LOG = LoggerFactory.getLogger(KeyValueStoreMaterializer.class);
+
     private final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized;
 
     public KeyValueStoreMaterializer(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
@@ -75,9 +79,12 @@ public class KeyValueStoreMaterializer<K, V> {
             builder.withLoggingDisabled();
         }
 
-        // versioned stores do not support caching
-        if (materialized.cachingEnabled() && !(builder instanceof VersionedKeyValueStoreBuilder)) {
-            builder.withCachingEnabled();
+        if (materialized.cachingEnabled()) {
+            if (!(builder instanceof VersionedKeyValueStoreBuilder)) {
+                builder.withCachingEnabled();
+            } else {
+                LOG.info("Not enabling caching for store '{}' as versioned stores do not support caching.", supplier.name());
+            }
         }
         return builder;
     }
