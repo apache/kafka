@@ -213,7 +213,7 @@ class BrokerMetadataPublisher(
       }
 
       // Apply configuration deltas.
-      dynamicConfigPublisher.publish(delta, newImage)
+      dynamicConfigPublisher.publish(delta, newImage, null)
 
       // Apply client quotas delta.
       try {
