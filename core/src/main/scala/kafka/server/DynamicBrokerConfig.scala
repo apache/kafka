@@ -25,6 +25,7 @@ import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogManager}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.server.DynamicBrokerConfig._
+import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -262,13 +263,33 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     }
     addReconfigurable(kafkaServer.kafkaYammerMetrics)
     addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer.config, kafkaServer.metrics, kafkaServer.clusterId))
-    addReconfigurable(new DynamicClientQuotaCallback(kafkaServer))
+    addReconfigurable(new DynamicClientQuotaCallback(new BrokerDynamicClientQuotaCallbackServer(kafkaServer)))
 
-    addBrokerReconfigurable(new DynamicThreadPool(kafkaServer))
+    addBrokerReconfigurable(new BrokerDynamicThreadPool(kafkaServer))
     addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
+  }
+
+  /**
+   * Add reconfigurables to be notified when a dynamic controller config is updated.
+   */
+  def addReconfigurables(controller: ControllerServer): Unit = {
+    controller.authorizer match {
+      case Some(authz: Reconfigurable) => addReconfigurable(authz)
+      case _ =>
+    }
+    if (!kafkaConfig.processRoles.contains(BrokerRole)) {
+      // only add these if the controller isn't also running the broker role
+      // because these would already be added via the broker in that case
+      addReconfigurable(controller.kafkaYammerMetrics)
+      addReconfigurable(new DynamicMetricsReporters(kafkaConfig.nodeId, controller.config, controller.metrics, controller.clusterId))
+    }
+    addReconfigurable(new DynamicClientQuotaCallback(new ControllerDynamicClientQuotaCallbackServer(controller)))
+    addBrokerReconfigurable(new ControllerDynamicThreadPool(controller))
+    // TODO: addBrokerReconfigurable(new DynamicListenerConfig(controller))
+    addBrokerReconfigurable(controller.socketServer)
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
@@ -704,19 +725,12 @@ object DynamicThreadPool {
     KafkaConfig.NumReplicaFetchersProp,
     KafkaConfig.NumRecoveryThreadsPerDataDirProp,
     KafkaConfig.BackgroundThreadsProp)
-}
 
-class DynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
-
-  override def reconfigurableConfigs: Set[String] = {
-    DynamicThreadPool.ReconfigurableConfigs
-  }
-
-  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+  def validateReconfiguration(currentConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     newConfig.values.forEach { (k, v) =>
-      if (DynamicThreadPool.ReconfigurableConfigs.contains(k)) {
+      if (ReconfigurableConfigs.contains(k)) {
         val newValue = v.asInstanceOf[Int]
-        val oldValue = currentValue(k)
+        val oldValue = getValue(currentConfig, k)
         if (newValue != oldValue) {
           val errorMsg = s"Dynamic thread count update validation failed for $k=$v"
           if (newValue <= 0)
@@ -730,6 +744,45 @@ class DynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
     }
   }
 
+  def getValue(config: KafkaConfig, name: String): Int = {
+    name match {
+      case KafkaConfig.NumIoThreadsProp => config.numIoThreads
+      case KafkaConfig.NumReplicaFetchersProp => config.numReplicaFetchers
+      case KafkaConfig.NumRecoveryThreadsPerDataDirProp => config.numRecoveryThreadsPerDataDir
+      case KafkaConfig.BackgroundThreadsProp => config.backgroundThreads
+      case n => throw new IllegalStateException(s"Unexpected config $n")
+    }
+  }
+}
+
+class ControllerDynamicThreadPool(controller: ControllerServer) extends BrokerReconfigurable {
+
+  override def reconfigurableConfigs: Set[String] = {
+    DynamicThreadPool.ReconfigurableConfigs // common configs
+  }
+
+  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+    DynamicThreadPool.validateReconfiguration(controller.config, newConfig) // common validation
+  }
+
+  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+    if (newConfig.numIoThreads != oldConfig.numIoThreads)
+      controller.controllerApisHandlerPool.resizeThreadPool(newConfig.numIoThreads)
+    // ignore changes to numReplicaFetchers, numRecoveryThreadsPerDataDir, and backgroundThreads
+    // because those do not apply to controllers
+  }
+}
+
+class BrokerDynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
+
+  override def reconfigurableConfigs: Set[String] = {
+    DynamicThreadPool.ReconfigurableConfigs
+  }
+
+  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+    DynamicThreadPool.validateReconfiguration(server.config, newConfig)
+  }
+
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     if (newConfig.numIoThreads != oldConfig.numIoThreads)
       server.dataPlaneRequestHandlerPool.resizeThreadPool(newConfig.numIoThreads)
@@ -739,16 +792,6 @@ class DynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
       server.logManager.resizeRecoveryThreadPool(newConfig.numRecoveryThreadsPerDataDir)
     if (newConfig.backgroundThreads != oldConfig.backgroundThreads)
       server.kafkaScheduler.resizeThreadPool(newConfig.backgroundThreads)
-  }
-
-  private def currentValue(name: String): Int = {
-    name match {
-      case KafkaConfig.NumIoThreadsProp => server.config.numIoThreads
-      case KafkaConfig.NumReplicaFetchersProp => server.config.numReplicaFetchers
-      case KafkaConfig.NumRecoveryThreadsPerDataDirProp => server.config.numRecoveryThreadsPerDataDir
-      case KafkaConfig.BackgroundThreadsProp => server.config.backgroundThreads
-      case n => throw new IllegalStateException(s"Unexpected config $n")
-    }
   }
 }
 
@@ -911,7 +954,22 @@ object DynamicListenerConfig {
   )
 }
 
-class DynamicClientQuotaCallback(server: KafkaBroker) extends Reconfigurable {
+trait DynamicClientQuotaCallbackServer {
+  def quotaManagers: QuotaFactory.QuotaManagers
+  def config: KafkaConfig
+}
+
+class BrokerDynamicClientQuotaCallbackServer(broker: KafkaBroker) extends DynamicClientQuotaCallbackServer {
+  override def quotaManagers: QuotaFactory.QuotaManagers = broker.quotaManagers
+  override def config: KafkaConfig = broker.config
+}
+
+class ControllerDynamicClientQuotaCallbackServer(controller: ControllerServer) extends DynamicClientQuotaCallbackServer {
+  override def quotaManagers: QuotaFactory.QuotaManagers = controller.quotaManagers
+  override def config: KafkaConfig = controller.config
+}
+
+class DynamicClientQuotaCallback(server: DynamicClientQuotaCallbackServer) extends Reconfigurable {
 
   override def configure(configs: util.Map[String, _]): Unit = {}
 

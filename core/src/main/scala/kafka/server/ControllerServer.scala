@@ -109,6 +109,7 @@ class ControllerServer(
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
   var migrationSupport: Option[ControllerMigrationSupport] = None
+  def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -120,13 +121,6 @@ class ControllerServer(
       lock.unlock()
     }
     true
-  }
-
-  private def doRemoteKraftSetup(): Unit = {
-    // Explicitly configure metric reporters on this remote controller.
-    // We do not yet support dynamic reconfiguration on remote controllers in general;
-    // remove this once that is implemented.
-    new DynamicMetricReporterState(config.nodeId, config, metrics, clusterId)
   }
 
   def clusterId: String = sharedServer.metaProps.clusterId
@@ -247,11 +241,6 @@ class ControllerServer(
       }
       controller = controllerBuilder.build()
 
-      // Perform any setup that is done only when this node is a controller-only node.
-      if (!config.processRoles.contains(BrokerRole)) {
-        doRemoteKraftSetup()
-      }
-
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
         val migrationClient = new ZkMigrationClient(zkClient)
@@ -314,9 +303,13 @@ class ControllerServer(
       FutureUtils.waitWithLogging(logger.underlying, "all of the SocketServer Acceptors to be started",
         socketServerFuture, startupDeadline, time)
 
+      // register this instance for dynamic config changes to the KafkaConfig
+      config.dynamicConfig.addReconfigurables(this)
+      // We still need to receive dynamic config changes that apply to this node or isolated-controller cluster defaults
+      // as well as client quotas (the above addReconfigurables() call does not cover these).
       if (!config.processRoles.contains(BrokerRole)) {
-        // We need to receive dynamic config changes, but we only need install a publisher for them when
-        // we aren't also running the broker role; the broker's DynamicConfigPublisher would take care of it otherwise.
+        // We only need install the below publisher and receive the changes when we aren't also running the broker role;
+        // the broker's DynamicConfigPublisher would take care of it otherwise.
         val dynamicConfigHandlers = immutable.Map[String, ConfigHandler](
           // isolated controllers don't host topics, so no need to do anything with dynamic topic config changes here
           ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
@@ -326,7 +319,8 @@ class ControllerServer(
           dynamicConfigHandlers,
           "controller",
           Some(clientQuotaMetadataManager))
-        sharedServer.loader.installPublishers(List(dynamicConfigPublisher).asJava)
+        FutureUtils.waitWithLogging(logger.underlying, "all of the dynamic config publishers to be installed",
+          sharedServer.loader.installPublishers(List(dynamicConfigPublisher).asJava), startupDeadline, time)
       }
     } catch {
       case e: Throwable =>
