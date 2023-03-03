@@ -382,6 +382,7 @@ public class MockClient implements KafkaClient {
                 clientRequest.createdTimeMs(), time.milliseconds(), false, null, null, response));
     }
 
+
     public void respond(AbstractResponse response, boolean disconnected) {
         if (requests.isEmpty())
             throw new IllegalStateException("No requests pending for inbound response " + response);
