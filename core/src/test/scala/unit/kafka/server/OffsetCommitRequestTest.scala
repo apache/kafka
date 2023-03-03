@@ -19,12 +19,13 @@ package unit.kafka.server
 
 import kafka.server.KafkaApisTest.{NameAndId, newOffsetCommitRequestData, newOffsetCommitResponseData}
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetCommitResponse}
+import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.util.Properties
 import scala.collection.{Map, Seq}
@@ -38,10 +39,26 @@ class OffsetCommitRequestTest extends BaseRequestTest {
   val offset = 15L
   val groupId = "groupId"
 
+  var consumer: KafkaConsumer[_, _] = _
+
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
+  }
+
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    consumer = createConsumer()
+  }
+
+  @AfterEach
+  override def tearDown(): Unit = {
+    if (consumer != null)
+      Utils.closeQuietly(consumer, "KafkaConsumer")
+    super.tearDown()
   }
 
   def createTopics(topicNames: String*): Seq[NameAndId] = {
@@ -69,11 +86,9 @@ class OffsetCommitRequestTest extends BaseRequestTest {
         version,
         topicPartitions = responses,
       )
-
       val response = connectAndReceive[OffsetCommitResponse](
         new OffsetCommitRequest.Builder(requestData).build(version)
       )
-
       assertEquals(expectedResponse, response.data(), s"OffsetCommit version = $version")
     }
   }
@@ -81,11 +96,7 @@ class OffsetCommitRequestTest extends BaseRequestTest {
   @Test
   def testTopicIdsArePopulatedInOffsetCommitResponses(): Unit = {
     val topics = createTopics("topic1", "topic2", "topic3")
-    val topicPartitions = topics.map(topic => new TopicPartition(topic.name, 0))
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    val consumer = createConsumer()
-    consumer.assign(topicPartitions.asJava)
+    consumer.subscribe(topics.map(_.name).asJava)
 
     commitOffsets(
       topics.map((_, ListMap(0 -> offset))),
@@ -97,11 +108,7 @@ class OffsetCommitRequestTest extends BaseRequestTest {
   @Test
   def testOffsetCommitWithUnknownTopicId(): Unit = {
     val topics = createTopics("topic1", "topic2", "topic3")
-    val topicPartitions = topics.map(topic => new TopicPartition(topic.name, 0))
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    val consumer = createConsumer()
-    consumer.assign(topicPartitions.asJava)
+    consumer.subscribe(topics.map(_.name).asJava)
 
     commitOffsets(
       topics.map((_, ListMap(0 -> offset))) ++ Seq((NameAndId("unresolvable"), ListMap(0 -> offset))),
