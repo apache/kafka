@@ -167,7 +167,7 @@ public enum MetadataVersion {
     // and updates to a handful of RPCs.
     IBP_3_4_IV0(8, "3.4", "IV0", true),
 
-    // Support for tiered storage (KIP-405)
+    // Support for tiered storage (KIP-405) and SCRAM
     IBP_3_5_IV0(9, "3.5", "IV0", false);
 
     // NOTE: update the default version in @ClusterTest annotation to point to the latest version
@@ -248,6 +248,10 @@ public enum MetadataVersion {
 
     public boolean isApiForwardingEnabled() {
         return this.isAtLeast(IBP_3_4_IV0);
+    }
+
+    public boolean isScramSupported() {
+        return this.isAtLeast(IBP_3_5_IV0);
     }
 
     public boolean isKRaftSupported() {
