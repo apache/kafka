@@ -335,7 +335,6 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val group = "fatal-exception-test"
     val topic = "fatal-exception-test"
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
-    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
 
     val partitions = createTopicPartitions(topic, numPartitions = maxGroupSize, replicationFactor = brokerCount)
@@ -354,7 +353,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     // assert group continues to live
     producerSend(createProducer(), maxGroupSize * 100, topic, numPartitions = Some(partitions.size))
     TestUtils.waitUntilTrue(() => {
-      consumerPollers.forall(p => p.receivedMessages >= 100)
+      consumerPollers.forall(p => {
+        System.out.print("resu:" + p.receivedMessages);
+        p.receivedMessages >= 100
+      })
     }, "The consumers in the group could not fetch the expected records", 10000L)
   }
 
