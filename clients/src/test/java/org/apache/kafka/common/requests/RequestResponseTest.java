@@ -932,7 +932,7 @@ public class RequestResponseTest {
     public void testErrorCountsIncludesNone() {
         assertEquals(1, createAddOffsetsToTxnResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createAddPartitionsToTxnResponse((short) 3).errorCounts().get(Errors.NONE));
-        assertEquals(1, createAddPartitionsToTxnResponse((short) 4).errorCounts().get(Errors.NONE));
+        assertEquals(2, createAddPartitionsToTxnResponse((short) 4).errorCounts().get(Errors.NONE));
         assertEquals(1, createAlterClientQuotasResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createAlterConfigsResponse().errorCounts().get(Errors.NONE));
         assertEquals(2, createAlterPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
