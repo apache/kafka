@@ -163,6 +163,20 @@ object Defaults {
   val GroupInitialRebalanceDelayMs = 3000
   val GroupMaxSize: Int = Int.MaxValue
 
+  /** New group coordinator configs */
+  val NewGroupCoordinatorEnable = false
+  val GroupCoordinatorNumThreads = 1
+
+  /** Consumer group configs */
+  val ConsumerGroupSessionTimeoutMs = 45000
+  val ConsumerGroupMinSessionTimeoutMs = 45000
+  val ConsumerGroupMaxSessionTimeoutMs = 60000
+  val ConsumerGroupHeartbeatIntervalMs = 5000
+  val ConsumerGroupMinHeartbeatIntervalMs = 5000
+  val ConsumerGroupMaxHeartbeatIntervalMs = 15000
+  val ConsumerGroupMaxSize = Int.MaxValue
+  val ConsumerGroupAssignors = ""
+
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSize = OffsetConfig.DefaultMaxMetadataSize
   val OffsetsLoadBufferSize = OffsetConfig.DefaultLoadBufferSize
@@ -483,11 +497,27 @@ object KafkaConfig {
   val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
   val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
   val ControlledShutdownEnableProp = "controlled.shutdown.enable"
+
   /** ********* Group coordinator configuration ***********/
   val GroupMinSessionTimeoutMsProp = "group.min.session.timeout.ms"
   val GroupMaxSessionTimeoutMsProp = "group.max.session.timeout.ms"
   val GroupInitialRebalanceDelayMsProp = "group.initial.rebalance.delay.ms"
   val GroupMaxSizeProp = "group.max.size"
+
+  /** New group coordinator configs */
+  val NewGroupCoordinatorEnableProp = "group.coordinator.new.enable"
+  val GroupCoordinatorNumThreadsProp = "group.coordinator.threads"
+
+  /** Consumer group configs */
+  val ConsumerGroupSessionTimeoutMsProp = "group.consumer.session.timeout.ms"
+  val ConsumerGroupMinSessionTimeoutMsProp = "group.consumer.min.session.timeout.ms"
+  val ConsumerGroupMaxSessionTimeoutMsProp = "group.consumer.max.session.timeout.ms"
+  val ConsumerGroupHeartbeatIntervalMsProp = "group.consumer.heartbeat.interval.ms"
+  val ConsumerGroupMinHeartbeatIntervalMsProp = "group.consumer.min.heartbeat.interval.ms"
+  val ConsumerGroupMaxHeartbeatIntervalMsProp ="group.consumer.max.heartbeat.interval.ms"
+  val ConsumerGroupMaxSizeProp = "group.consumer.max.size"
+  val ConsumerGroupAssignorsProp = "group.consumer.assignors"
+
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeProp = "offset.metadata.max.bytes"
   val OffsetsLoadBufferSizeProp = "offsets.load.buffer.size"
@@ -499,6 +529,7 @@ object KafkaConfig {
   val OffsetsRetentionCheckIntervalMsProp = "offsets.retention.check.interval.ms"
   val OffsetCommitTimeoutMsProp = "offsets.commit.timeout.ms"
   val OffsetCommitRequiredAcksProp = "offsets.commit.required.acks"
+
   /** ********* Transaction management configuration ***********/
   val TransactionalIdExpirationMsProp = "transactional.id.expiration.ms"
   val TransactionsMaxTimeoutMsProp = "transaction.max.timeout.ms"
@@ -927,11 +958,27 @@ object KafkaConfig {
   val ControlledShutdownMaxRetriesDoc = "Controlled shutdown can fail for multiple reasons. This determines the number of retries when such failure happens"
   val ControlledShutdownRetryBackoffMsDoc = "Before each retry, the system needs time to recover from the state that caused the previous failure (Controller fail over, replica lag etc). This config determines the amount of time to wait before retrying."
   val ControlledShutdownEnableDoc = "Enable controlled shutdown of the server"
+
   /** ********* Group coordinator configuration ***********/
   val GroupMinSessionTimeoutMsDoc = "The minimum allowed session timeout for registered consumers. Shorter timeouts result in quicker failure detection at the cost of more frequent consumer heartbeating, which can overwhelm broker resources."
   val GroupMaxSessionTimeoutMsDoc = "The maximum allowed session timeout for registered consumers. Longer timeouts give consumers more time to process messages in between heartbeats at the cost of a longer time to detect failures."
   val GroupInitialRebalanceDelayMsDoc = "The amount of time the group coordinator will wait for more consumers to join a new group before performing the first rebalance. A longer delay means potentially fewer rebalances, but increases the time until processing begins."
   val GroupMaxSizeDoc = "The maximum number of consumers that a single consumer group can accommodate."
+
+  /** New group coordinator configs */
+  val NewGroupCoordinatorEnableDoc = "Enable the new group coordinator."
+  val GroupCoordinatorNumThreadsDoc = "The number of threads used by the group coordinator."
+
+  /** Consumer group configs */
+  val ConsumerGroupSessionTimeoutMsDoc = "The timeout to detect client failures when using the consumer group protocol."
+  val ConsumerGroupMinSessionTimeoutMsDoc = "The minimum allowed session timeout for registered consumers."
+  val ConsumerGroupMaxSessionTimeoutMsDoc = "The maximum allowed session timeout for registered consumers."
+  val ConsumerGroupHeartbeatIntervalMsDoc = "The heartbeat interval given to the members of a consumer group."
+  val ConsumerGroupMinHeartbeatIntervalMsDoc = "The minimum heartbeat interval for registered consumers."
+  val ConsumerGroupMaxHeartbeatIntervalMsDoc = "The maximum heartbeat interval for registered consumers."
+  val ConsumerGroupMaxSizeDoc = "The maximum number of consumers that a single consumer group can accommodate."
+  val ConsumerGroupAssignorsDoc = "The server side assignors as a list of full class names. The first one in the list is considered as the default assignor to be used in the case where the consumer does not specify an assignor."
+
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeDoc = "The maximum size for a metadata entry associated with an offset commit"
   val OffsetsLoadBufferSizeDoc = "Batch size for reading from the offsets segments when loading offsets into the cache (soft-limit, overridden if records are too large)."
@@ -1266,6 +1313,24 @@ object KafkaConfig {
       .define(GroupMaxSessionTimeoutMsProp, INT, Defaults.GroupMaxSessionTimeoutMs, MEDIUM, GroupMaxSessionTimeoutMsDoc)
       .define(GroupInitialRebalanceDelayMsProp, INT, Defaults.GroupInitialRebalanceDelayMs, MEDIUM, GroupInitialRebalanceDelayMsDoc)
       .define(GroupMaxSizeProp, INT, Defaults.GroupMaxSize, atLeast(1), MEDIUM, GroupMaxSizeDoc)
+
+      /** New group coordinator configs */
+      // All properties are kept internal until KIP-848 is released.
+      // This property is meant to be here only during the development of KIP-848. It will
+      // be replaced by a metadata version before releasing it.
+      .defineInternal(NewGroupCoordinatorEnableProp, BOOLEAN, Defaults.NewGroupCoordinatorEnable, null, MEDIUM, NewGroupCoordinatorEnableDoc)
+      .defineInternal(GroupCoordinatorNumThreadsProp, INT, Defaults.GroupCoordinatorNumThreads, atLeast(1), MEDIUM, GroupCoordinatorNumThreadsDoc)
+
+      /** Consumer groups configs */
+      // All properties are kept internal until KIP-848 is released.
+      .defineInternal(ConsumerGroupSessionTimeoutMsProp, INT, Defaults.ConsumerGroupSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupSessionTimeoutMsDoc)
+      .defineInternal(ConsumerGroupMinSessionTimeoutMsProp, INT, Defaults.ConsumerGroupMinSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupMinSessionTimeoutMsDoc)
+      .defineInternal(ConsumerGroupMaxSessionTimeoutMsProp, INT, Defaults.ConsumerGroupMaxSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupMaxSessionTimeoutMsDoc)
+      .defineInternal(ConsumerGroupHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupHeartbeatIntervalMsDoc)
+      .defineInternal(ConsumerGroupMinHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupMinHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupMinHeartbeatIntervalMsDoc)
+      .defineInternal(ConsumerGroupMaxHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupMaxHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupMaxHeartbeatIntervalMsDoc)
+      .defineInternal(ConsumerGroupMaxSizeProp, INT, Defaults.ConsumerGroupMaxSize, atLeast(1), MEDIUM, ConsumerGroupMaxSizeDoc)
+      .defineInternal(ConsumerGroupAssignorsProp, LIST, Defaults.ConsumerGroupAssignors, null, MEDIUM, ConsumerGroupAssignorsDoc)
 
       /** ********* Offset management configuration ***********/
       .define(OffsetMetadataMaxSizeProp, INT, Defaults.OffsetMetadataMaxSize, HIGH, OffsetMetadataMaxSizeDoc)
@@ -1846,6 +1911,20 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val groupInitialRebalanceDelay = getInt(KafkaConfig.GroupInitialRebalanceDelayMsProp)
   val groupMaxSize = getInt(KafkaConfig.GroupMaxSizeProp)
 
+  /** New group coordinator configs */
+  val isNewGroupCoordinatorEnabled = getBoolean(KafkaConfig.NewGroupCoordinatorEnableProp)
+  val groupCoordinatorNumThreads = getInt(KafkaConfig.GroupCoordinatorNumThreadsProp)
+
+  /** Consumer group configs */
+  val consumerGroupSessionTimeoutMs = getInt(KafkaConfig.ConsumerGroupSessionTimeoutMsProp)
+  val consumerGroupMinSessionTimeoutMs = getInt(KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp)
+  val consumerGroupMaxSessionTimeoutMs = getInt(KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp)
+  val consumerGroupHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp)
+  val consumerGroupMinHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp)
+  val consumerGroupMaxHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp)
+  val consumerGroupMaxSize = getInt(KafkaConfig.ConsumerGroupMaxSizeProp)
+  val consumerGroupAssignors = getList(KafkaConfig.ConsumerGroupAssignorsProp)
+
   /** ********* Offset management configuration ***********/
   val offsetMetadataMaxSize = getInt(KafkaConfig.OffsetMetadataMaxSizeProp)
   val offsetsLoadBufferSize = getInt(KafkaConfig.OffsetsLoadBufferSizeProp)
@@ -2297,6 +2376,27 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(principalBuilderClass != null, s"${KafkaConfig.PrincipalBuilderClassProp} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass),
       s"${KafkaConfig.PrincipalBuilderClassProp} must implement KafkaPrincipalSerde")
+
+    // New group coordinator configs validation.
+    require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
+      s"${KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp} must be greater than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp}")
+    require(consumerGroupHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
+      s"${KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp} must be greater than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp}")
+    require(consumerGroupHeartbeatIntervalMs <= consumerGroupMaxHeartbeatIntervalMs,
+      s"${KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp} must be less than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp}")
+
+    require(consumerGroupMaxSessionTimeoutMs >= consumerGroupMinSessionTimeoutMs,
+      s"${KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp} must be greater than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp}")
+    require(consumerGroupSessionTimeoutMs >= consumerGroupMinSessionTimeoutMs,
+      s"${KafkaConfig.ConsumerGroupSessionTimeoutMsProp} must be greater than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp}")
+    require(consumerGroupSessionTimeoutMs <= consumerGroupMaxSessionTimeoutMs,
+      s"${KafkaConfig.ConsumerGroupSessionTimeoutMsProp} must be less than or equals " +
+      s"to ${KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp}")
   }
 
   /**
