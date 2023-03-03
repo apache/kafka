@@ -142,7 +142,7 @@ public class SnapshotEmitterTest {
 
         @Override
         public long lastContainedLogOffset() {
-            return snapshotId.offset();
+            return snapshotId.offset() - 1;
         }
 
         @Override
@@ -190,7 +190,7 @@ public class SnapshotEmitterTest {
             build();
         emitter.maybeEmit(MetadataImageTest.IMAGE1);
         MockSnapshotWriter writer = mockRaftClient.writers.get(
-                MetadataImageTest.IMAGE1.highestOffsetAndEpoch());
+                MetadataImageTest.IMAGE1.provenance().snapshotId());
         assertNotNull(writer);
         assertEquals(MetadataImageTest.IMAGE1.highestOffsetAndEpoch().offset(),
                 writer.lastContainedLogOffset());

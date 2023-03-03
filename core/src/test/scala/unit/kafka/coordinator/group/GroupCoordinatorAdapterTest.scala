@@ -21,15 +21,19 @@ import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallbac
 import kafka.server.RequestLocal
 import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.errors.InvalidGroupIdException
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
+import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
+import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{OffsetFetchResponse, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
+import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -346,6 +350,7 @@ class GroupCoordinatorAdapterTest {
           .setProtocolType("qwerty")
       ).asJava)
 
+    assertTrue(future.isDone)
     assertEquals(expectedData, future.get())
   }
 
@@ -679,5 +684,182 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertEquals(expectedResponseData, future.get())
+  }
+
+  @Test
+  def testCommitTransactionalOffsets(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val time = new MockTime()
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, time)
+    val now = time.milliseconds()
+
+    val ctx = makeContext(ApiKeys.TXN_OFFSET_COMMIT, ApiKeys.TXN_OFFSET_COMMIT.latestVersion)
+    val data = new TxnOffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(10)
+      .setProducerEpoch(1)
+      .setProducerId(2)
+      .setTransactionalId("transaction-id")
+      .setTopics(List(
+        new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+    val bufferSupplier = BufferSupplier.create()
+
+    val future = adapter.commitTransactionalOffsets(ctx, data, bufferSupplier)
+    assertFalse(future.isDone)
+
+    val capturedCallback: ArgumentCaptor[Map[TopicPartition, Errors] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, Errors] => Unit])
+
+    verify(groupCoordinator).handleTxnCommitOffsets(
+      ArgumentMatchers.eq(data.groupId),
+      ArgumentMatchers.eq(data.producerId),
+      ArgumentMatchers.eq(data.producerEpoch),
+      ArgumentMatchers.eq(data.memberId),
+      ArgumentMatchers.eq(None),
+      ArgumentMatchers.eq(data.generationId),
+      ArgumentMatchers.eq(Map(
+        new TopicPartition("foo", 0) -> new OffsetAndMetadata(
+          offset = 100,
+          leaderEpoch = Optional.of[Integer](1),
+          metadata = "",
+          commitTimestamp = now,
+          expireTimestamp = None
+        )
+      )),
+      capturedCallback.capture(),
+      ArgumentMatchers.eq(RequestLocal(bufferSupplier))
+    )
+
+    capturedCallback.getValue.apply(Map(
+      new TopicPartition("foo", 0) -> Errors.NONE
+    ))
+
+    val expectedData = new TxnOffsetCommitResponseData()
+      .setTopics(List(
+        new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code)
+          ).asJava)
+      ).asJava)
+
+    assertTrue(future.isDone)
+    assertEquals(expectedData, future.get())
+  }
+
+  def testDeleteOffsets(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+
+    val foo0 = new TopicPartition("foo", 0)
+    val foo1 = new TopicPartition("foo", 1)
+    val bar0 = new TopicPartition("bar", 0)
+    val bar1 = new TopicPartition("bar", 1)
+
+    val ctx = makeContext(ApiKeys.OFFSET_DELETE, ApiKeys.OFFSET_DELETE.latestVersion)
+    val data = new OffsetDeleteRequestData()
+      .setGroupId("group")
+      .setTopics(new OffsetDeleteRequestTopicCollection(List(
+        new OffsetDeleteRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetDeleteRequestPartition().setPartitionIndex(0),
+            new OffsetDeleteRequestPartition().setPartitionIndex(1)
+          ).asJava),
+        new OffsetDeleteRequestTopic()
+          .setName("bar")
+          .setPartitions(List(
+            new OffsetDeleteRequestPartition().setPartitionIndex(0),
+            new OffsetDeleteRequestPartition().setPartitionIndex(1)
+          ).asJava)
+      ).asJava.iterator))
+    val bufferSupplier = BufferSupplier.create()
+
+    when(groupCoordinator.handleDeleteOffsets(
+      data.groupId,
+      Seq(foo0, foo1, bar0, bar1),
+      RequestLocal(bufferSupplier)
+    )).thenReturn((
+      Errors.NONE,
+      Map(
+        foo0 -> Errors.NONE,
+        foo1 -> Errors.NONE,
+        bar0 -> Errors.GROUP_SUBSCRIBED_TO_TOPIC,
+        bar1 -> Errors.GROUP_SUBSCRIBED_TO_TOPIC,
+      )
+    ))
+
+    val future = adapter.deleteOffsets(ctx, data, bufferSupplier)
+
+    val expectedData = new OffsetDeleteResponseData()
+      .setTopics(new OffsetDeleteResponseTopicCollection(List(
+        new OffsetDeleteResponseTopic()
+          .setName("foo")
+          .setPartitions(new OffsetDeleteResponsePartitionCollection(List(
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code),
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.NONE.code)
+          ).asJava.iterator)),
+        new OffsetDeleteResponseTopic()
+          .setName("bar")
+          .setPartitions(new OffsetDeleteResponsePartitionCollection(List(
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code),
+            new OffsetDeleteResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code)
+          ).asJava.iterator)),
+      ).asJava.iterator))
+
+    assertTrue(future.isDone)
+    assertEquals(expectedData, future.get())
+  }
+
+  @Test
+  def testDeleteOffsetsWithGroupLevelError(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+
+    val foo0 = new TopicPartition("foo", 0)
+    val foo1 = new TopicPartition("foo", 1)
+
+    val ctx = makeContext(ApiKeys.OFFSET_DELETE, ApiKeys.OFFSET_DELETE.latestVersion)
+    val data = new OffsetDeleteRequestData()
+      .setGroupId("group")
+      .setTopics(new OffsetDeleteRequestTopicCollection(List(
+        new OffsetDeleteRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetDeleteRequestPartition().setPartitionIndex(0),
+            new OffsetDeleteRequestPartition().setPartitionIndex(1)
+          ).asJava)
+      ).asJava.iterator))
+    val bufferSupplier = BufferSupplier.create()
+
+    when(groupCoordinator.handleDeleteOffsets(
+      data.groupId,
+      Seq(foo0, foo1),
+      RequestLocal(bufferSupplier)
+    )).thenReturn((Errors.INVALID_GROUP_ID, Map.empty[TopicPartition, Errors]))
+
+    val future = adapter.deleteOffsets(ctx, data, bufferSupplier)
+    assertTrue(future.isDone)
+    assertTrue(future.isCompletedExceptionally)
+    assertFutureThrows(future, classOf[InvalidGroupIdException])
   }
 }

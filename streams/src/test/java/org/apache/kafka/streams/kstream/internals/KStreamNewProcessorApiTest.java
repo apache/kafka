@@ -121,10 +121,6 @@ public class KStreamNewProcessorApiTest {
                     context().forward(record.withValue(record.value() + "Updated"));
                 }
 
-                @Override
-                public void close() {
-
-                }
             };
         }
         @Override

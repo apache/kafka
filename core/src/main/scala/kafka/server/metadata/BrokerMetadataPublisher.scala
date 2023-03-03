@@ -17,21 +17,22 @@
 
 package kafka.server.metadata
 
-import java.util.Properties
+import java.util.{OptionalInt, Properties}
 import java.util.concurrent.atomic.AtomicLong
-import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.fault.FaultHandler
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 
 object BrokerMetadataPublisher extends Logging {
@@ -174,7 +175,8 @@ class BrokerMetadataPublisher(
             delta,
             Topic.GROUP_METADATA_TOPIC_NAME,
             groupCoordinator.onElection,
-            groupCoordinator.onResignation)
+            (partitionIndex, leaderEpochOpt) => groupCoordinator.onResignation(partitionIndex, toOptionalInt(leaderEpochOpt))
+          )
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
             s"coordinator with local changes in ${deltaName}", t)
@@ -200,7 +202,7 @@ class BrokerMetadataPublisher(
             }
           }
           if (deletedTopicPartitions.nonEmpty) {
-            groupCoordinator.handleDeletedPartitions(deletedTopicPartitions, RequestLocal.NoCaching)
+            groupCoordinator.onPartitionsDeleted(deletedTopicPartitions.asJava, RequestLocal.NoCaching.bufferSupplier)
           }
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
@@ -267,6 +269,13 @@ class BrokerMetadataPublisher(
         s"publishing broker metadata from ${deltaName}", t)
     } finally {
       _firstPublish = false
+    }
+  }
+
+  private def toOptionalInt(option: Option[Int]): OptionalInt = {
+    option match {
+      case Some(leaderEpoch) => OptionalInt.of(leaderEpoch)
+      case None => OptionalInt.empty
     }
   }
 
@@ -342,8 +351,8 @@ class BrokerMetadataPublisher(
     }
     try {
       // Start the group coordinator.
-      groupCoordinator.startup(() => metadataCache.numPartitions(
-        Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(conf.offsetsTopicPartitions))
+      groupCoordinator.startup(() => metadataCache.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME)
+        .getOrElse(conf.offsetsTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting GroupCoordinator", t)
     }

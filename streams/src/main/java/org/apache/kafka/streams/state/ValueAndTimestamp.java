@@ -31,7 +31,6 @@ public final class ValueAndTimestamp<V> {
 
     private ValueAndTimestamp(final V value,
                               final long timestamp) {
-        Objects.requireNonNull(value);
         this.value = value;
         this.timestamp = timestamp;
     }
@@ -48,6 +47,19 @@ public final class ValueAndTimestamp<V> {
     public static <V> ValueAndTimestamp<V> make(final V value,
                                                 final long timestamp) {
         return value == null ? null : new ValueAndTimestamp<>(value, timestamp);
+    }
+
+    /**
+     * Create a new {@link ValueAndTimestamp} instance. The provided {@code value} may be {@code null}.
+     *
+     * @param value      the value
+     * @param timestamp  the timestamp
+     * @param <V> the type of the value
+     * @return a new {@link ValueAndTimestamp} instance
+     */
+    public static <V> ValueAndTimestamp<V> makeAllowNullable(
+        final V value, final long timestamp) {
+        return new ValueAndTimestamp<>(value, timestamp);
     }
 
     /**

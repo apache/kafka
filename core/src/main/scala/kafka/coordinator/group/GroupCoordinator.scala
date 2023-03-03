@@ -16,7 +16,7 @@
  */
 package kafka.coordinator.group
 
-import java.util.Properties
+import java.util.{OptionalInt, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.common.OffsetAndMetadata
 import kafka.server._
@@ -48,14 +48,16 @@ import scala.math.max
  * used by its callback.  The delayed callback may acquire the group lock
  * since the delayed operation is completed only if the group lock can be acquired.
  */
-class GroupCoordinator(val brokerId: Int,
-                       val groupConfig: GroupConfig,
-                       val offsetConfig: OffsetConfig,
-                       val groupManager: GroupMetadataManager,
-                       val heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
-                       val rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance],
-                       time: Time,
-                       metrics: Metrics) extends Logging {
+private[group] class GroupCoordinator(
+  val brokerId: Int,
+  val groupConfig: GroupConfig,
+  val offsetConfig: OffsetConfig,
+  val groupManager: GroupMetadataManager,
+  val heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
+  val rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance],
+  time: Time,
+  metrics: Metrics
+) extends Logging {
   import GroupCoordinator._
 
   type JoinCallback = JoinGroupResult => Unit
@@ -1188,7 +1190,7 @@ class GroupCoordinator(val brokerId: Int,
    *
    * @param offsetTopicPartitionId The partition we are no longer leading
    */
-  def onResignation(offsetTopicPartitionId: Int, coordinatorEpoch: Option[Int]): Unit = {
+  def onResignation(offsetTopicPartitionId: Int, coordinatorEpoch: OptionalInt): Unit = {
     info(s"Resigned as the group coordinator for partition $offsetTopicPartitionId in epoch $coordinatorEpoch")
     groupManager.removeGroupsForPartition(offsetTopicPartitionId, coordinatorEpoch, onGroupUnloaded)
   }
@@ -1707,10 +1709,12 @@ object GroupCoordinator {
   val DeadGroup = GroupSummary(Dead.toString, NoProtocolType, NoProtocol, NoMembers)
   val NewMemberJoinTimeoutMs: Int = 5 * 60 * 1000
 
-  def apply(config: KafkaConfig,
-            replicaManager: ReplicaManager,
-            time: Time,
-            metrics: Metrics): GroupCoordinator = {
+  private[group] def apply(
+    config: KafkaConfig,
+    replicaManager: ReplicaManager,
+    time: Time,
+    metrics: Metrics
+  ): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
     val rebalancePurgatory = DelayedOperationPurgatory[DelayedRebalance]("Rebalance", config.brokerId)
     GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, time, metrics)
@@ -1729,12 +1733,14 @@ object GroupCoordinator {
     offsetCommitRequiredAcks = config.offsetCommitRequiredAcks
   )
 
-  def apply(config: KafkaConfig,
-            replicaManager: ReplicaManager,
-            heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
-            rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance],
-            time: Time,
-            metrics: Metrics): GroupCoordinator = {
+  private[group] def apply(
+    config: KafkaConfig,
+    replicaManager: ReplicaManager,
+    heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
+    rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance],
+    time: Time,
+    metrics: Metrics
+  ): GroupCoordinator = {
     val offsetConfig = this.offsetConfig(config)
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs,

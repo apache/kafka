@@ -54,13 +54,13 @@ public class PlainSaslServerTest {
     }
 
     @Test
-    public void noAuthorizationIdSpecified() throws Exception {
+    public void noAuthorizationIdSpecified() {
         byte[] nextChallenge = saslServer.evaluateResponse(saslMessage("", USER_A, PASSWORD_A));
         assertEquals(0, nextChallenge.length);
     }
 
     @Test
-    public void authorizatonIdEqualsAuthenticationId() throws Exception {
+    public void authorizatonIdEqualsAuthenticationId() {
         byte[] nextChallenge = saslServer.evaluateResponse(saslMessage(USER_A, USER_A, PASSWORD_A));
         assertEquals(0, nextChallenge.length);
     }

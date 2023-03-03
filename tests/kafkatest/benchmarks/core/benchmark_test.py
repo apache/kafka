@@ -173,7 +173,7 @@ class Benchmark(Test):
 
         Return aggregate latency statistics.
 
-        (Under the hood, this simply runs EndToEndLatency.scala)
+        (Under the hood, this simply runs EndToEndLatency.java)
         """
         client_version = KafkaVersion(client_version)
         broker_version = KafkaVersion(broker_version)

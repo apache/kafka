@@ -17,8 +17,7 @@
 
 package kafka.tools
 
-import kafka.utils.CommandDefaultOptions
-
+import org.apache.kafka.server.util.CommandDefaultOptions
 
 class PerfConfig(args: Array[String]) extends CommandDefaultOptions(args) {
   val numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume")

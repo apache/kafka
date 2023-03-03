@@ -24,7 +24,6 @@ import kafka.api.LeaderAndIsr
 import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
 import org.apache.kafka.common.TopicIdPartition
@@ -36,7 +35,8 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.{AppendOrigin, CleanerConfig, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogAppendInfo, LogConfig, LogDirFailureChannel, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -387,14 +387,14 @@ class PartitionLockTest extends Logging {
     val maxBytes = 1
 
     while (fetchOffset < numRecords) {
-      val fetchParams = FetchParams(
-        requestVersion = ApiKeys.FETCH.latestVersion,
-        replicaId = followerId,
-        maxWaitMs = 0,
-        minBytes = 1,
-        maxBytes = maxBytes,
-        isolation = FetchLogEnd,
-        clientMetadata = None
+      val fetchParams = new FetchParams(
+        ApiKeys.FETCH.latestVersion,
+        followerId,
+        0L,
+        1,
+        maxBytes,
+        FetchIsolation.LOG_END,
+        Optional.empty()
       )
 
       val fetchPartitionData = new FetchRequest.PartitionData(

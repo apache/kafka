@@ -20,11 +20,11 @@ package kafka.server
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.{Lock, ReentrantLock}
-
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
 import kafka.utils.timer._
+import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.collection._
 import scala.collection.mutable.ListBuffer
