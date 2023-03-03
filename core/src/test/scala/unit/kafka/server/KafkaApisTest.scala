@@ -93,7 +93,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteRes
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
-import org.apache.kafka.server.log.internals.{AppendOrigin, FetchParams, FetchPartitionData}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData}
 
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -182,7 +182,7 @@ class KafkaApisTest {
     } else {
       ApiKeys.apisForListener(listenerType).asScala.toSet
     }
-    val apiVersionManager = new SimpleApiVersionManager(listenerType, enabledApis, BrokerFeatures.defaultSupportedFeatures())
+    val apiVersionManager = new SimpleApiVersionManager(listenerType, enabledApis, BrokerFeatures.defaultSupportedFeatures(), true)
 
     new KafkaApis(
       requestChannel = requestChannel,
@@ -4208,6 +4208,77 @@ class KafkaApisTest {
     assertEquals(expectedOffsetFetchResponse, response.data)
   }
 
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+  def testHandleOffsetFetchAllOffsetsWithSingleGroup(version: Short): Unit = {
+    // Version 0 gets offsets from Zookeeper. Version 1 does not support fetching all
+    // offsets request. We are not interested in testing these here.
+    if (version < 2) return
+
+    def makeRequest(version: Short): RequestChannel.Request = {
+      buildRequest(new OffsetFetchRequest.Builder(
+        "group-1",
+        false,
+        null, // all offsets.
+        false
+      ).build(version))
+    }
+
+    val requestChannelRequest = makeRequest(version)
+
+    val future = new CompletableFuture[util.List[OffsetFetchResponseData.OffsetFetchResponseTopics]]()
+    when(groupCoordinator.fetchAllOffsets(
+      requestChannelRequest.context,
+      "group-1",
+      false
+    )).thenReturn(future)
+
+    createKafkaApis().handleOffsetFetchRequest(requestChannelRequest)
+
+    val group1Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId("group-1")
+      .setTopics(List(
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1),
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(1)
+              .setCommittedOffset(200)
+              .setCommittedLeaderEpoch(2)
+          ).asJava)
+      ).asJava)
+
+    val expectedOffsetFetchResponse = if (version >= 8) {
+      new OffsetFetchResponseData()
+        .setGroups(List(group1Response).asJava)
+    } else {
+      new OffsetFetchResponseData()
+        .setTopics(List(
+          new OffsetFetchResponseData.OffsetFetchResponseTopic()
+            .setName("foo")
+            .setPartitions(List(
+              new OffsetFetchResponseData.OffsetFetchResponsePartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(100)
+                .setCommittedLeaderEpoch(if (version >= 5) 1 else -1),
+              new OffsetFetchResponseData.OffsetFetchResponsePartition()
+                .setPartitionIndex(1)
+                .setCommittedOffset(200)
+                .setCommittedLeaderEpoch(if (version >= 5) 2 else -1)
+            ).asJava)
+        ).asJava)
+    }
+
+    future.complete(group1Response.topics)
+
+    val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
+    assertEquals(expectedOffsetFetchResponse, response.data)
+  }
+
   @Test
   def testHandleOffsetFetchAuthorization(): Unit = {
     def makeRequest(version: Short): RequestChannel.Request = {
@@ -5742,5 +5813,21 @@ class KafkaApisTest {
   def testRaftShouldAlwaysForwardListPartitionReassignments(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleListPartitionReassignmentsRequest)
+  }
+
+  @Test
+  def testConsumerGroupHeartbeatReturnsUnsupportedVersion(): Unit = {
+    val requestChannelRequest = buildRequest(
+      new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData()
+        .setGroupId("group")
+      ).build()
+    )
+
+    createKafkaApis().handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val expectedHeartbeatResponse = new ConsumerGroupHeartbeatResponseData()
+      .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+    val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(expectedHeartbeatResponse, response.data)
   }
 }

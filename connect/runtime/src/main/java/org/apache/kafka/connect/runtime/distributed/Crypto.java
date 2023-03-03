@@ -64,6 +64,6 @@ public interface Crypto {
         public KeyGenerator keyGenerator(String algorithm) throws NoSuchAlgorithmException {
             return KeyGenerator.getInstance(algorithm);
         }
-    };
+    }
 
 }

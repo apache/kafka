@@ -28,8 +28,8 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.raft._
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.test.TestUtils.assertOptional
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}

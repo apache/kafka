@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, FetchResponse, ListOffsetsRequest}
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.kafka.server.util.CommandLineUtils
+import org.apache.kafka.server.util.{CommandLineUtils, ShutdownableThread}
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 
@@ -393,7 +393,9 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
                              topicIds: Map[String, Uuid], replicaBuffer: ReplicaBuffer, socketTimeout: Int, socketBufferSize: Int,
                              fetchSize: Int, maxWait: Int, minBytes: Int, doVerification: Boolean, consumerConfig: Properties,
                              fetcherId: Int)
-  extends ShutdownableThread(name) {
+  extends ShutdownableThread(name) with Logging {
+
+  this.logIdent = logPrefix
 
   private val fetchEndpoint = new ReplicaFetcherBlockingSend(sourceBroker, new ConsumerConfig(consumerConfig), new Metrics(), Time.SYSTEM, fetcherId,
     s"broker-${FetchRequest.DEBUGGING_CONSUMER_ID}-fetcher-$fetcherId")

@@ -1038,7 +1038,7 @@ public class StreamThreadTest {
 
         assertEquals(1, clientSupplier.producers.size());
         final Producer<byte[], byte[]> globalProducer = clientSupplier.producers.get(0);
-        for (final Task task : thread.activeTasks()) {
+        for (final Task task : thread.readOnlyActiveTasks()) {
             assertSame(globalProducer, ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer());
         }
         assertSame(clientSupplier.consumer, thread.mainConsumer());
@@ -1078,7 +1078,7 @@ public class StreamThreadTest {
 
         thread.runOnce();
 
-        assertEquals(thread.activeTasks().size(), clientSupplier.producers.size());
+        assertEquals(thread.readOnlyActiveTasks().size(), clientSupplier.producers.size());
         assertSame(clientSupplier.consumer, thread.mainConsumer());
         assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer());
     }
@@ -1195,7 +1195,7 @@ public class StreamThreadTest {
             10 * 1000,
             "Thread never shut down.");
 
-        for (final Task task : thread.activeTasks()) {
+        for (final Task task : thread.readOnlyActiveTasks()) {
             assertTrue(((MockProducer<byte[], byte[]>) ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer()).closed());
         }
     }
@@ -1245,7 +1245,7 @@ public class StreamThreadTest {
 
         final ChangelogReader changelogReader = new MockChangelogReader() {
             @Override
-            public void restore(final Map<TaskId, Task> tasks) {
+            public long restore(final Map<TaskId, Task> tasks) {
                 consumer.addRecord(new ConsumerRecord<>(topic1, 1, 11, new byte[0], new byte[0]));
                 consumer.addRecord(new ConsumerRecord<>(topic1, 1, 12, new byte[1], new byte[0]));
 
@@ -1388,7 +1388,7 @@ public class StreamThreadTest {
         thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
 
         thread.runOnce();
-        assertThat(thread.activeTasks().size(), equalTo(1));
+        assertThat(thread.readOnlyActiveTasks().size(), equalTo(1));
         final MockProducer<byte[], byte[]> producer = clientSupplier.producers.get(0);
 
         // change consumer subscription from "pattern" to "manual" to be able to call .addRecords()
@@ -1415,7 +1415,7 @@ public class StreamThreadTest {
         } catch (final KafkaException expected) {
             assertTrue(expected instanceof TaskMigratedException);
             assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
-                thread.activeTasks().stream().anyMatch(task -> task.id().equals(task1)));
+                thread.readOnlyActiveTasks().stream().anyMatch(task -> task.id().equals(task1)));
         }
 
         assertThat(producer.commitCount(), equalTo(1L));
@@ -1447,7 +1447,7 @@ public class StreamThreadTest {
 
         thread.runOnce();
 
-        assertThat(thread.activeTasks().size(), equalTo(1));
+        assertThat(thread.readOnlyActiveTasks().size(), equalTo(1));
 
         // need to process a record to enable committing
         addRecord(mockConsumer, 0L);
@@ -1457,7 +1457,7 @@ public class StreamThreadTest {
         assertThrows(TaskMigratedException.class, () -> thread.rebalanceListener().onPartitionsRevoked(assignedPartitions));
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
         assertFalse(clientSupplier.producers.get(0).closed());
-        assertEquals(1, thread.activeTasks().size());
+        assertEquals(1, thread.readOnlyActiveTasks().size());
     }
 
     @Test
@@ -1523,7 +1523,7 @@ public class StreamThreadTest {
 
         // the first iteration completes the restoration
         thread.runOnce();
-        assertThat(thread.activeTasks().size(), equalTo(1));
+        assertThat(thread.readOnlyActiveTasks().size(), equalTo(1));
 
         // the second transits to running and unpause the input
         thread.runOnce();
@@ -1578,7 +1578,7 @@ public class StreamThreadTest {
         thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
 
         thread.runOnce();
-        assertThat(thread.activeTasks().size(), equalTo(1));
+        assertThat(thread.readOnlyActiveTasks().size(), equalTo(1));
         final MockProducer<byte[], byte[]> producer = clientSupplier.producers.get(0);
 
         producer.commitTransactionException = new ProducerFencedException("Producer is fenced");
@@ -1590,7 +1590,7 @@ public class StreamThreadTest {
         } catch (final KafkaException expected) {
             assertTrue(expected instanceof TaskMigratedException);
             assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
-                thread.activeTasks().stream().anyMatch(task -> task.id().equals(task1)));
+                thread.readOnlyActiveTasks().stream().anyMatch(task -> task.id().equals(task1)));
         }
 
         assertThat(producer.commitCount(), equalTo(0L));
@@ -1598,7 +1598,7 @@ public class StreamThreadTest {
         assertTrue(clientSupplier.producers.get(0).transactionInFlight());
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
         assertFalse(clientSupplier.producers.get(0).closed());
-        assertEquals(1, thread.activeTasks().size());
+        assertEquals(1, thread.readOnlyActiveTasks().size());
     }
 
     @Test
@@ -1627,7 +1627,7 @@ public class StreamThreadTest {
 
         thread.runOnce();
 
-        assertThat(thread.activeTasks().size(), equalTo(1));
+        assertThat(thread.readOnlyActiveTasks().size(), equalTo(1));
 
         // need to process a record to enable committing
         addRecord(mockConsumer, 0L);
@@ -1636,7 +1636,7 @@ public class StreamThreadTest {
         thread.rebalanceListener().onPartitionsRevoked(assignedPartitions);
         assertTrue(clientSupplier.producers.get(0).transactionCommitted());
         assertFalse(clientSupplier.producers.get(0).closed());
-        assertEquals(1, thread.activeTasks().size());
+        assertEquals(1, thread.readOnlyActiveTasks().size());
     }
 
     @Test
@@ -2734,7 +2734,7 @@ public class StreamThreadTest {
         expect(task3.state()).andReturn(Task.State.CREATED).anyTimes();
         expect(task3.id()).andReturn(taskId3).anyTimes();
 
-        expect(taskManager.allTasks()).andReturn(mkMap(
+        expect(taskManager.allOwnedTasks()).andReturn(mkMap(
             mkEntry(taskId1, task1),
             mkEntry(taskId2, task2),
             mkEntry(taskId3, task3)
@@ -3084,7 +3084,7 @@ public class StreamThreadTest {
 
         expect(runningTask.state()).andStubReturn(Task.State.RUNNING);
         expect(runningTask.id()).andStubReturn(taskId);
-        expect(taskManager.allTasks()).andStubReturn(Collections.singletonMap(taskId, runningTask));
+        expect(taskManager.allOwnedTasks()).andStubReturn(Collections.singletonMap(taskId, runningTask));
         expect(taskManager.commit(Collections.singleton(runningTask))).andStubReturn(1);
         return taskManager;
     }

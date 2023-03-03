@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -30,6 +32,10 @@ public class KafkaStreamsWrapper extends KafkaStreams {
     public KafkaStreamsWrapper(final Topology topology,
                                final Properties props) {
         super(topology, props);
+    }
+
+    public List<StreamThread> streamThreads() {
+        return new ArrayList<>(threads);
     }
 
     /**

@@ -40,6 +40,7 @@ import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.runtime.isolation.TestPlugins.TestPlugin;
+import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
@@ -140,12 +141,13 @@ public class PluginsTest {
 
     @Test
     public void shouldInstantiateAndConfigureConnectRestExtension() {
-        props.put(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG,
+        props.clear();
+        props.put(RestServerConfig.REST_EXTENSION_CLASSES_CONFIG,
                   TestConnectRestExtension.class.getName());
-        createConfig();
+        config = RestServerConfig.forPublic(null, props);
 
         List<ConnectRestExtension> connectRestExtensions =
-            plugins.newPlugins(config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
+            plugins.newPlugins(config.getList(RestServerConfig.REST_EXTENSION_CLASSES_CONFIG),
                                config,
                                ConnectRestExtension.class);
         assertNotNull(connectRestExtensions);
@@ -183,6 +185,76 @@ public class PluginsTest {
             TestPlugin.ALWAYS_THROW_EXCEPTION.className(),
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
+        ));
+    }
+
+    @Test
+    public void shouldFindCoLocatedPluginIfBadPackaging() {
+        Converter converter = plugins.newPlugin(
+                TestPlugin.BAD_PACKAGING_CO_LOCATED.className(),
+                new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
+                Converter.class
+        );
+        assertNotNull(converter);
+    }
+
+    @Test
+    public void shouldThrowIfPluginMissingSuperclass() {
+        assertThrows(ConnectException.class, () -> plugins.newPlugin(
+                TestPlugin.BAD_PACKAGING_MISSING_SUPERCLASS.className(),
+                new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
+                Converter.class
+        ));
+    }
+
+    @Test
+    public void shouldThrowIfStaticInitializerThrows() {
+        assertThrows(ConnectException.class, () -> plugins.newConnector(
+                TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_CONNECTOR.className()
+        ));
+    }
+
+    @Test
+    public void shouldThrowIfStaticInitializerThrowsServiceLoader() {
+        assertThrows(ConnectException.class, () -> plugins.newPlugin(
+                TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION.className(),
+                new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
+                ConnectRestExtension.class
+        ));
+    }
+
+    @Test
+    public void shouldThrowIfDefaultConstructorThrows() {
+        assertThrows(ConnectException.class, () -> plugins.newConnector(
+                TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR.className()
+        ));
+    }
+
+    @Test
+    public void shouldThrowIfDefaultConstructorPrivate() {
+        assertThrows(ConnectException.class, () -> plugins.newConnector(
+                TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR.className()
+        ));
+    }
+
+    @Test
+    public void shouldThrowIfNoDefaultConstructor() {
+        assertThrows(ConnectException.class, () -> plugins.newConnector(
+                TestPlugin.BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONNECTOR.className()
+        ));
+    }
+
+    @Test
+    public void shouldNotThrowIfVersionMethodThrows() {
+        assertNotNull(plugins.newConnector(
+                TestPlugin.BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR.className()
+        ));
+    }
+
+    @Test
+    public void shouldThrowIfPluginInnerClass() {
+        assertThrows(ConnectException.class, () -> plugins.newConnector(
+                TestPlugin.BAD_PACKAGING_INNER_CLASS_CONNECTOR.className()
         ));
     }
 

@@ -259,6 +259,9 @@ public class StandardAuthorizerData {
         AuthorizableRequestContext requestContext,
         Action action
     ) {
+        if (action.resourcePattern().patternType() != LITERAL) {
+            throw new IllegalArgumentException("Only literal resources are supported. Got: " + action.resourcePattern().patternType());
+        }
         KafkaPrincipal principal = baseKafkaPrincipal(requestContext);
         final MatchingRule rule;
 

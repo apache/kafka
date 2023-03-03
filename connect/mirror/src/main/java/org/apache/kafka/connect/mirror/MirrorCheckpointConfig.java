@@ -150,6 +150,12 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                 : targetConsumerConfig();
     }
 
+    Map<String, Object> offsetSyncsTopicAdminConfig() {
+        return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? sourceAdminConfig()
+                : targetAdminConfig();
+    }
+
     Duration consumerPollTimeout() {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }

@@ -30,6 +30,10 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * An implementation of ConfigBackingStore that stores Kafka Connect connector configurations in-memory (i.e. configs
+ * aren't persisted and will be wiped if the worker is restarted).
+ */
 public class MemoryConfigBackingStore implements ConfigBackingStore {
 
     private final Map<String, ConnectorState> connectors = new HashMap<>();

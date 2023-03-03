@@ -20,8 +20,8 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -106,16 +106,16 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
 
     private class KTableMapValuesProcessor implements Processor<KIn, Change<VIn>, KIn, Change<VOut>> {
         private ProcessorContext<KIn, Change<VOut>> context;
-        private TimestampedKeyValueStore<KIn, VOut> store;
+        private KeyValueStoreWrapper<KIn, VOut> store;
         private TimestampedTupleForwarder<KIn, VOut> tupleForwarder;
 
         @Override
         public void init(final ProcessorContext<KIn, Change<VOut>> context) {
             this.context = context;
             if (queryableName != null) {
-                store = context.getStateStore(queryableName);
+                store = new KeyValueStoreWrapper<>(context, queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store,
+                    store.getStore(),
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
@@ -128,7 +128,7 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
             final VOut oldValue = computeOldValue(record.key(), record.value());
 
             if (queryableName != null) {
-                store.put(record.key(), ValueAndTimestamp.make(newValue, record.timestamp()));
+                store.put(record.key(), newValue, record.timestamp());
                 tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue)));
             } else {
                 context.forward(record.withValue(new Change<>(newValue, oldValue)));

@@ -41,6 +41,7 @@ class ReadOnlyTaskTest {
             add("changelogPartitions");
             add("commitRequested");
             add("isActive");
+            add("changelogOffsets");
             add("state");
             add("id");
         }

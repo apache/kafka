@@ -26,9 +26,9 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{PrimitiveRef, Time}
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.LogValidator.ValidationResult
-import org.apache.kafka.server.log.internals.{AppendOrigin, LogValidator, RecordValidationException}
+import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogValidator, RecordValidationException}
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test

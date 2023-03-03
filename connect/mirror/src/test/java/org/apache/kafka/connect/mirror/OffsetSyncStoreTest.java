@@ -21,6 +21,8 @@ import org.apache.kafka.common.TopicPartition;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.OptionalLong;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class OffsetSyncStoreTest {
@@ -30,7 +32,13 @@ public class OffsetSyncStoreTest {
     static class FakeOffsetSyncStore extends OffsetSyncStore {
 
         FakeOffsetSyncStore() {
-            super(null, null);
+            super();
+        }
+
+        @Override
+        public void start() {
+            // do not call super to avoid NPE without a KafkaBasedLog.
+            readToEnd = true;
         }
 
         void sync(TopicPartition topicPartition, long upstreamOffset, long downstreamOffset) {
@@ -44,29 +52,57 @@ public class OffsetSyncStoreTest {
 
     @Test
     public void testOffsetTranslation() {
-        FakeOffsetSyncStore store = new FakeOffsetSyncStore();
+        try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
+            store.start();
 
-        store.sync(tp, 100, 200);
-        assertEquals(250L, store.translateDownstream(tp, 150).getAsLong(),
-                "Failure in translating downstream offset 250");
+            // Emit synced downstream offset without dead-reckoning
+            store.sync(tp, 100, 200);
+            assertEquals(OptionalLong.of(201), store.translateDownstream(tp, 150));
 
-        // Translate exact offsets
-        store.sync(tp, 150, 251);
-        assertEquals(251L, store.translateDownstream(tp, 150).getAsLong(),
-                "Failure in translating exact downstream offset 251");
+            // Translate exact offsets
+            store.sync(tp, 150, 251);
+            assertEquals(OptionalLong.of(251), store.translateDownstream(tp, 150));
 
-        // Use old offset (5) prior to any sync -> can't translate
-        assertEquals(-1, store.translateDownstream(tp, 5).getAsLong(),
-                "Expected old offset to not translate");
+            // Use old offset (5) prior to any sync -> can't translate
+            assertEquals(OptionalLong.of(-1), store.translateDownstream(tp, 5));
 
-        // Downstream offsets reset
-        store.sync(tp, 200, 10);
-        assertEquals(10L, store.translateDownstream(tp, 200).getAsLong(),
-                "Failure in resetting translation of downstream offset");
+            // Downstream offsets reset
+            store.sync(tp, 200, 10);
+            assertEquals(OptionalLong.of(10), store.translateDownstream(tp, 200));
 
-        // Upstream offsets reset
-        store.sync(tp, 20, 20);
-        assertEquals(20L, store.translateDownstream(tp, 20).getAsLong(),
-                "Failure in resetting translation of upstream offset");
+            // Upstream offsets reset
+            store.sync(tp, 20, 20);
+            assertEquals(OptionalLong.of(20), store.translateDownstream(tp, 20));
+        }
+    }
+
+    @Test
+    public void testNoTranslationIfStoreNotStarted() {
+        try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
+            // no offsets exist and store is not started
+            assertEquals(OptionalLong.empty(), store.translateDownstream(tp, 0));
+            assertEquals(OptionalLong.empty(), store.translateDownstream(tp, 100));
+            assertEquals(OptionalLong.empty(), store.translateDownstream(tp, 200));
+
+            // read a sync during startup
+            store.sync(tp, 100, 200);
+            assertEquals(OptionalLong.empty(), store.translateDownstream(tp, 0));
+            assertEquals(OptionalLong.empty(), store.translateDownstream(tp, 100));
+            assertEquals(OptionalLong.empty(), store.translateDownstream(tp, 200));
+
+            // After the store is started all offsets are visible
+            store.start();
+            assertEquals(OptionalLong.of(-1), store.translateDownstream(tp, 0));
+            assertEquals(OptionalLong.of(200), store.translateDownstream(tp, 100));
+            assertEquals(OptionalLong.of(201), store.translateDownstream(tp, 200));
+        }
+    }
+
+    @Test
+    public void testNoTranslationIfNoOffsetSync() {
+        try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
+            store.start();
+            assertEquals(OptionalLong.empty(), store.translateDownstream(tp, 0));
+        }
     }
 }

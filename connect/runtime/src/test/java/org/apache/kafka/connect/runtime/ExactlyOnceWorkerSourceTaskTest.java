@@ -79,6 +79,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -215,7 +216,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verify(sourceTask, MockitoUtils.anyTimes()).commitRecord(any(), any());
 
         verify(offsetWriter, MockitoUtils.anyTimes()).offset(PARTITION, OFFSET);
-        verify(offsetWriter, MockitoUtils.anyTimes()).willFlush();
         verify(offsetWriter, MockitoUtils.anyTimes()).beginFlush();
         verify(offsetWriter, MockitoUtils.anyTimes()).doFlush(any());
 
@@ -296,9 +296,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
             return null;
         }).when(statusListener).onPause(eq(taskId));
 
-        // The task checks to see if there are offsets to commit before pausing
-        when(offsetWriter.willFlush()).thenReturn(false);
-
         startTaskThread();
 
         assertTrue(pauseLatch.await(5, TimeUnit.SECONDS));
@@ -318,7 +315,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
         expectSuccessfulSends();
         expectSuccessfulFlushes();
-        when(offsetWriter.willFlush()).thenReturn(true);
 
         final CountDownLatch pauseLatch = new CountDownLatch(1);
         doAnswer(invocation -> {
@@ -341,7 +337,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
         verify(statusListener).onPause(taskId);
         // Task should have flushed offsets for every record poll, once on pause, and once for end-of-life offset commit
-        verifyTransactions(pollCount() + 2);
+        verifyTransactions(pollCount() + 2, pollCount() + 2);
         verifySends();
         verifyPossibleTopicCreation();
         // make sure we didn't poll again after triggering shutdown
@@ -420,7 +416,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
         expectSuccessfulSends();
         expectSuccessfulFlushes();
-        when(offsetWriter.willFlush()).thenReturn(true);
 
         startTaskThread();
 
@@ -429,7 +424,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         awaitShutdown();
 
         // Task should have flushed offsets for every record poll and for end-of-life offset commit
-        verifyTransactions(pollCount() + 1);
+        verifyTransactions(pollCount() + 1, pollCount() + 1);
         verifySends();
         verifyPossibleTopicCreation();
 
@@ -497,7 +492,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
         final CountDownLatch workerStopLatch = new CountDownLatch(1);
         final RuntimeException exception = new RuntimeException();
         // We check if there are offsets that need to be committed before shutting down the task
-        when(offsetWriter.willFlush()).thenReturn(false);
         when(sourceTask.poll()).thenAnswer(invocation -> {
             pollLatch.countDown();
             ConcurrencyUtils.awaitLatch(workerStopLatch, "task was not stopped in time");
@@ -511,7 +505,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         workerStopLatch.countDown();
         awaitShutdown(false);
 
-        verifyTransactions(0);
+        verifyTransactions(0, 0);
 
         verifyPreflight();
         verifyStartup();
@@ -524,7 +518,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         // Test that the task handles an empty list of records
         createWorkerTask();
 
-        when(offsetWriter.willFlush()).thenReturn(false);
+        when(offsetWriter.beginFlush()).thenReturn(false);
 
         startTaskThread();
 
@@ -532,7 +526,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
         awaitShutdown();
 
-        verifyTransactions(0);
+        // task commits for each empty poll, plus the final commit
+        verifyTransactions(pollCount() + 1, 0);
 
         verifyPreflight();
         verifyStartup();
@@ -549,7 +544,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
         expectSuccessfulSends();
         expectSuccessfulFlushes();
-        when(offsetWriter.willFlush()).thenReturn(true);
 
         startTaskThread();
 
@@ -558,7 +552,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         awaitShutdown();
 
         // Task should have flushed offsets for every record poll, and for end-of-life offset commit
-        verifyTransactions(pollCount() + 1);
+        verifyTransactions(pollCount() + 1, pollCount() + 1);
         verifySends();
         verifyPossibleTopicCreation();
 
@@ -582,7 +576,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
         expectSuccessfulSends();
         expectSuccessfulFlushes();
-        when(offsetWriter.willFlush()).thenReturn(true);
 
         startTaskThread();
 
@@ -600,7 +593,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         awaitShutdown();
 
         // Task should have flushed offsets twice based on offset commit interval, and performed final end-of-life offset commit
-        verifyTransactions(3);
+        verifyTransactions(3, 3);
         verifySends();
         verifyPossibleTopicCreation();
 
@@ -638,7 +631,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
         expectSuccessfulSends();
         expectSuccessfulFlushes();
-        when(offsetWriter.willFlush()).thenReturn(true);
 
         TransactionContext transactionContext = workerTask.sourceTaskContext.transactionContext();
 
@@ -680,7 +672,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
     @Test
     public void testCommitFlushSyncCallbackFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
-        when(offsetWriter.willFlush()).thenReturn(true);
         when(offsetWriter.beginFlush()).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             Callback<Void> callback = invocation.getArgument(0);
@@ -693,7 +684,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
     @Test
     public void testCommitFlushAsyncCallbackFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
-        when(offsetWriter.willFlush()).thenReturn(true);
         when(offsetWriter.beginFlush()).thenReturn(true);
         // doFlush delegates its callback to the producer,
         // which delays completing the callback until commitTransaction
@@ -712,7 +702,6 @@ public class ExactlyOnceWorkerSourceTaskTest {
     @Test
     public void testCommitTransactionFailure() throws Exception {
         Exception failure = new RecordTooLargeException();
-        when(offsetWriter.willFlush()).thenReturn(true);
         when(offsetWriter.beginFlush()).thenReturn(true);
         doThrow(failure).when(producer).commitTransaction();
         testCommitFailure(failure, true);
@@ -828,8 +817,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
             return null;
         }).when(sourceTask).start(eq(TASK_PROPS));
 
-        when(offsetWriter.willFlush()).thenReturn(false);
-
+        when(offsetWriter.beginFlush()).thenReturn(false);
         startTaskThread();
 
         // Stopping immediately while the other thread has work to do should result in no polling, no offset commits,
@@ -841,7 +829,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
         awaitShutdown(false);
 
         verify(sourceTask, never()).poll();
-        verifyTransactions(0);
+        // task commit called on shutdown
+        verifyTransactions(1, 0);
         verifySends(0);
 
         verifyPreflight();
@@ -904,7 +893,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         workerTaskFuture = executor.submit(workerTask);
     }
 
-    private void expectSuccessfulFlushes() {
+    private void expectSuccessfulFlushes() throws InterruptedException, TimeoutException {
         when(offsetWriter.beginFlush()).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             Callback<Void> cb = invocation.getArgument(0);
@@ -1036,13 +1025,16 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verify(producer, times(count)).send(any(), any());
     }
 
-    private void verifyTransactions(int numBatches) throws InterruptedException {
-        VerificationMode mode = times(numBatches);
-        verify(producer, mode).beginTransaction();
-        verify(producer, mode).commitTransaction();
-        verify(offsetWriter, mode).beginFlush();
-        verify(offsetWriter, mode).doFlush(any());
-        verify(sourceTask, mode).commit();
+    private void verifyTransactions(int numTaskCommits, int numProducerCommits) throws InterruptedException {
+        // these operations happen on every commit opportunity
+        VerificationMode commitOpportunities = times(numTaskCommits);
+        verify(offsetWriter, commitOpportunities).beginFlush();
+        verify(sourceTask, commitOpportunities).commit();
+        // these operations only happen on non-empty commits
+        VerificationMode commits = times(numProducerCommits);
+        verify(producer, commits).beginTransaction();
+        verify(producer, commits).commitTransaction();
+        verify(offsetWriter, commits).doFlush(any());
     }
 
     private void assertTransactionMetrics(int minimumMaxSizeExpected) {
@@ -1071,7 +1063,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
             assertEquals(RECORDS.size(), metrics.currentMetricValueAsDouble(taskGroup, "batch-size-avg"), 0.000001d);
             assertTrue(pollRate > 0.0d);
         } else {
-            assertTrue(pollRate == 0.0d);
+            assertEquals(0.0d, pollRate, 0.0);
         }
         assertTrue(pollTotal >= minimumPollCountExpected);
 
@@ -1080,7 +1072,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         if (minimumPollCountExpected > 0) {
             assertTrue(writeRate > 0.0d);
         } else {
-            assertTrue(writeRate == 0.0d);
+            assertEquals(0.0d, writeRate, 0.0);
         }
         assertTrue(writeTotal >= minimumPollCountExpected);
 
