@@ -19,8 +19,6 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
@@ -40,6 +38,7 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
@@ -339,14 +338,17 @@ public class TestPlugins {
     private static JarOutputStream openJarFile(File jarFile) throws IOException {
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
-        return new JarOutputStream(new FileOutputStream(jarFile), manifest);
+        return new JarOutputStream(Files.newOutputStream(jarFile.toPath()), manifest);
     }
 
     private static void removeDirectory(Path binDir) throws IOException {
-        List<File> classFiles = Files.walk(binDir)
-            .sorted(Comparator.reverseOrder())
-            .map(Path::toFile)
-            .collect(Collectors.toList());
+        List<File> classFiles;
+        try (Stream<Path> stream = Files.walk(binDir)) {
+            classFiles = stream
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .collect(Collectors.toList());
+        }
         for (File classFile : classFiles) {
             if (!classFile.delete()) {
                 throw new IOException("Could not delete: " + classFile);
@@ -360,18 +362,21 @@ public class TestPlugins {
      *
      * <p>Dependencies between source files in this directory are resolved against one another
      * and the classes present in the test environment.
-     * See https://stackoverflow.com/questions/1563909/ for more information.
+     * See <a href="https://stackoverflow.com/questions/1563909/"/> for more information.
      * Additional dependencies in your plugins should be added as test scope to :connect:runtime.
      * @param sourceDir Directory containing java source files
      * @throws IOException if the files cannot be compiled
      */
     private static void compileJavaSources(Path sourceDir, Path binDir) throws IOException {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-        List<File> sourceFiles = Files.walk(sourceDir)
-            .filter(Files::isRegularFile)
-            .filter(path -> path.toFile().getName().endsWith(".java"))
-            .map(Path::toFile)
-            .collect(Collectors.toList());
+        List<File> sourceFiles;
+        try (Stream<Path> stream = Files.walk(sourceDir)) {
+            sourceFiles = stream
+                    .filter(Files::isRegularFile)
+                    .map(Path::toFile)
+                    .filter(file -> file.getName().endsWith(".java"))
+                    .collect(Collectors.toList());
+        }
         StringWriter writer = new StringWriter();
         List<String> options = Arrays.asList(
             "-d", binDir.toString() // Write class output to a different directory.
@@ -393,13 +398,16 @@ public class TestPlugins {
     }
 
     private static void writeJar(JarOutputStream jar, Path inputDir, Predicate<String> removeRuntimeClasses) throws IOException {
-        List<Path> paths = Files.walk(inputDir)
-            .filter(Files::isRegularFile)
-            .filter(path -> !path.toFile().getName().endsWith(".java"))
-            .filter(path -> !removeRuntimeClasses.test(path.toFile().getName()))
-            .collect(Collectors.toList());
+        List<Path> paths;
+        try (Stream<Path> stream = Files.walk(inputDir)) {
+            paths = stream
+                    .filter(Files::isRegularFile)
+                    .filter(path -> !path.toFile().getName().endsWith(".java"))
+                    .filter(path -> !removeRuntimeClasses.test(path.toFile().getName()))
+                    .collect(Collectors.toList());
+        }
         for (Path path : paths) {
-            try (InputStream in = new BufferedInputStream(new FileInputStream(path.toFile()))) {
+            try (InputStream in = new BufferedInputStream(Files.newInputStream(path.toFile().toPath()))) {
                 jar.putNextEntry(new JarEntry(
                     inputDir.relativize(path)
                         .toFile()
