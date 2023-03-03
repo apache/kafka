@@ -23,6 +23,7 @@ import java.util.Map.Entry;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
@@ -217,18 +218,14 @@ public final class AssignmentTestUtils {
         final AdminClient adminClient = mock(AdminClient.class);
 
         final ListOffsetsResult result = mock(ListOffsetsResult.class);
-        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
-        allFuture.complete(changelogEndOffsets.entrySet().stream().collect(Collectors.toMap(
-            Entry::getKey,
-            t -> {
-                final ListOffsetsResultInfo info = mock(ListOffsetsResultInfo.class);
-                lenient().when(info.offset()).thenReturn(t.getValue());
-                return info;
-            }))
-        );
-
         when(adminClient.listOffsets(any())).thenReturn(result);
-        when(result.all()).thenReturn(allFuture);
+        for (final Map.Entry<TopicPartition, Long> entry : changelogEndOffsets.entrySet()) {
+            final KafkaFutureImpl<ListOffsetsResultInfo> partitionFuture = new KafkaFutureImpl<>();
+            final ListOffsetsResultInfo info = mock(ListOffsetsResultInfo.class);
+            lenient().when(info.offset()).thenReturn(entry.getValue());
+            partitionFuture.complete(info);
+            when(result.partitionResult(entry.getKey())).thenReturn(partitionFuture);
+        }
 
         return adminClient;
     }
