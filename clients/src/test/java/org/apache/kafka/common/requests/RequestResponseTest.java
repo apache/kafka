@@ -2609,13 +2609,13 @@ public class RequestResponseTest {
                     singletonList(new TopicPartition("topic", 73))).build(version);
         } else {
             AddPartitionsToTxnTransactionCollection transactions = new AddPartitionsToTxnTransactionCollection(
-                    singletonList(new AddPartitionsToTxnTransaction()
+                singletonList(new AddPartitionsToTxnTransaction()
                     .setTransactionalId("tid")
                     .setProducerId(21L)
                     .setProducerEpoch((short) 42)
                     .setVerifyOnly(false)
                     .setTopics(new AddPartitionsToTxnTopicCollection(
-                         singletonList(new AddPartitionsToTxnTopic()
+                        singletonList(new AddPartitionsToTxnTopic()
                             .setName("topic")
                             .setPartitions(Collections.singletonList(73))).iterator())))
                     .iterator());

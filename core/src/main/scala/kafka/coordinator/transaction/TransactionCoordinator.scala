@@ -329,23 +329,24 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                                           partitions: collection.Set[TopicPartition],
                                           responseCallback: VerifyPartitionsCallback): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
-      debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
+      debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request for verification")
       responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitions.map(_ -> Errors.INVALID_REQUEST).toMap.asJava))
     } else {
       val result: ApiResult[(Int, TransactionMetadata)] = getTransactionMetadata(transactionalId, producerId, producerEpoch, partitions)
       
       result match {
         case Left(err) =>
-          debug(s"Returning $err error code to client for $transactionalId's AddPartitions request")
+          debug(s"Returning $err error code to client for $transactionalId's AddPartitions request for verification")
           responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitions.map(_ -> err).toMap.asJava))
 
         case Right((_, txnMetadata)) =>
-          val txnMetadataPartitions = txnMetadata.topicPartitions
-          val addedPartitions = partitions.intersect(txnMetadataPartitions)
-          val nonAddedPartitions = partitions.diff(txnMetadataPartitions)
           val errors = mutable.Map[TopicPartition, Errors]()
-          addedPartitions.foreach(errors.put(_, Errors.NONE))
-          nonAddedPartitions.foreach(errors.put(_, Errors.INVALID_TXN_STATE))
+          partitions.foreach { tp => 
+            if (txnMetadata.topicPartitions.contains(tp))
+              errors.put(tp, Errors.NONE)
+            else
+              errors.put(tp, Errors.INVALID_TXN_STATE)  
+          }
           responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, errors.asJava))
       }
     }
@@ -378,11 +379,9 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
   }
   
   private def getTransactionMetadata(transactionalId: String,
-                             producerId: Long,
-                             producerEpoch: Short,
-                             partitions: collection.Set[TopicPartition]): ApiResult[(Int, TransactionMetadata)] = {
-    // try to update the transaction metadata and append the updated metadata to txn log;
-    // if there is no such metadata treat it as invalid producerId mapping error.
+                                     producerId: Long,
+                                     producerEpoch: Short,
+                                     partitions: collection.Set[TopicPartition]): ApiResult[(Int, TransactionMetadata)] = {
     txnManager.getTransactionState(transactionalId).flatMap {
       case None => Left(Errors.INVALID_PRODUCER_ID_MAPPING)
 

@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnPartitionResult;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnPartitionResultCollection;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult;
-import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResult;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -53,8 +52,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
             AddPartitionsToTxnTopicCollection topics = buildTxnTopicCollection(partitions);
             
-            return new Builder(ApiKeys.ADD_PARTITIONS_TO_TXN.oldestVersion(),
-                (short) 3, 
+            return new Builder(ApiKeys.ADD_PARTITIONS_TO_TXN.oldestVersion(), (short) 3,
                 new AddPartitionsToTxnRequestData()
                     .setV3AndBelowTransactionalId(transactionalId)
                     .setV3AndBelowProducerId(producerId)
@@ -68,7 +66,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
                     .setTransactions(transactions));
         }
         
-        public Builder(short minVersion, short maxVersion, AddPartitionsToTxnRequestData data) {
+        private Builder(short minVersion, short maxVersion, AddPartitionsToTxnRequestData data) {
             super(ApiKeys.ADD_PARTITIONS_TO_TXN, minVersion, maxVersion);
 
             this.data = data;
@@ -125,8 +123,6 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         if (version() < 4) {
             response.setResultsByTopicV3AndBelow(errorResponseForTopics(data.v3AndBelowTopics(), error));
         } else {
-            AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResultCollection();
-            response.setResultsByTransaction(results);
             response.setErrorCode(error.code());
         }
         response.setThrottleTimeMs(throttleTimeMs);

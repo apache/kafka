@@ -2420,7 +2420,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def addResultAndMaybeSendResponse(result: AddPartitionsToTxnResult): Unit = {
       val canSend = responses.synchronized {
         responses.add(result)
-        responses.size() == txns.size()
+        responses.size == txns.size
       }
       if (canSend) {
         requestHelper.sendResponseMaybeThrottle(request, createResponse)

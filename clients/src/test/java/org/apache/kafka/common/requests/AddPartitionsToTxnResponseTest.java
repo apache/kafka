@@ -135,5 +135,10 @@ public class AddPartitionsToTxnResponseTest {
         
         assertEquals(txn1Errors, errorsForTransaction(response.getTransactionTopicResults("txn1")));
         assertEquals(txn2Errors, errorsForTransaction(response.getTransactionTopicResults("txn2")));
+        
+        Map<String, Map<TopicPartition, Errors>> expectedErrors = new HashMap<>();
+        expectedErrors.put("txn1", txn1Errors);
+        expectedErrors.put("txn2", txn2Errors);
+        assertEquals(expectedErrors, response.errors());
     }
 }

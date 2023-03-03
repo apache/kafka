@@ -64,7 +64,6 @@ class TransactionCoordinatorTest {
   val transactionStatePartitionCount = 1
   var result: InitProducerIdResult = _
   var error: Errors = Errors.NONE
-  var errors: Map[TopicPartition, Errors] = _
 
   private def mockPidGenerator(): Unit = {
     when(pidGenerator.generateProducerId()).thenAnswer(_ => {
@@ -318,6 +317,11 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRespondWithErrorsNoneOnAddPartitionWhenOngoingVerifyOnlyAndPartitionsTheSame(): Unit = {
+    var errors: Map[TopicPartition, Errors] = Map.empty
+    def verifyPartitionsInTxnCallback(result: AddPartitionsToTxnResult): Unit = {
+      errors = AddPartitionsToTxnResponse.errorsForTransaction(result.topicResults()).asScala.toMap
+    }
+    
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
         new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, Ongoing, partitions, 0, 0)))))
@@ -329,10 +333,14 @@ class TransactionCoordinatorTest {
   
   @Test
   def shouldRespondWithInvalidTxnStateWhenVerifyOnlyAndPartitionNotPresent(): Unit = {
+    var errors: Map[TopicPartition, Errors] = Map.empty
+    def verifyPartitionsInTxnCallback(result: AddPartitionsToTxnResult): Unit = {
+      errors = AddPartitionsToTxnResponse.errorsForTransaction(result.topicResults()).asScala.toMap
+    }
+    
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
         new TransactionMetadata(transactionalId, 0, 0, 0, RecordBatch.NO_PRODUCER_EPOCH, 0, Empty, partitions, 0, 0)))))
-
     
     val extraPartitions = partitions ++ Set(new TopicPartition("topic2", 0))
     
@@ -1212,9 +1220,5 @@ class TransactionCoordinatorTest {
 
   def errorsCallback(ret: Errors): Unit = {
     error = ret
-  }
-
-  def verifyPartitionsInTxnCallback(result: AddPartitionsToTxnResult): Unit = {
-    errors = AddPartitionsToTxnResponse.errorsForTransaction(result.topicResults()).asScala.toMap
   }
 }

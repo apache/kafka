@@ -71,7 +71,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     public Map<String, Map<TopicPartition, Errors>> errors() {
         Map<String, Map<TopicPartition, Errors>> errorsMap = new HashMap<>();
 
-        if (this.data.resultsByTopicV3AndBelow().size() != 0) {
+        if (!this.data.resultsByTopicV3AndBelow().isEmpty()) {
             errorsMap.put(V3_AND_BELOW_TXN_ID, errorsForTransaction(this.data.resultsByTopicV3AndBelow()));
         }
 
@@ -135,7 +135,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         List<Errors> allErrors = new ArrayList<>();
 
         // If we are not using this field, we have request 4 or later
-        if (this.data.resultsByTopicV3AndBelow().size() == 0) {
+        if (this.data.resultsByTopicV3AndBelow().isEmpty()) {
             allErrors.add(Errors.forCode(data.errorCode()));
         }
         

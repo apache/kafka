@@ -2040,11 +2040,10 @@ class KafkaApisTest {
   }
 
   @Test
-  def testBatchedRequest(): Unit = {
+  def testBatchedAddPartitionsToTxnRequest(): Unit = {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 2)
 
-    val capturedResponse: ArgumentCaptor[AddPartitionsToTxnResponse] = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnResponse])
     val responseCallback: ArgumentCaptor[Errors => Unit] = ArgumentCaptor.forClass(classOf[Errors => Unit])
     val verifyPartitionsCallback: ArgumentCaptor[AddPartitionsToTxnResult => Unit] = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnResult => Unit])
 
@@ -2104,12 +2103,7 @@ class KafkaApisTest {
 
     createKafkaApis().handleAddPartitionsToTxnRequest(request, requestLocal)
 
-    verify(requestChannel).sendResponse(
-      ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
-    )
-    val response = capturedResponse.getValue
+    val response = verifyNoThrottling[AddPartitionsToTxnResponse](request)
     
     val expectedErrors = Map(
       transactionalId1 -> Collections.singletonMap(tp0, Errors.NONE),

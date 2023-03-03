@@ -72,7 +72,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
           producerId,
           producerEpoch,
           List(createdTopicPartition, nonExistentTopic).asJava
-        ).build()
+        ).build(version)
       } else {
         val topics = new AddPartitionsToTxnTopicCollection()
         topics.add(new AddPartitionsToTxnTopic()
@@ -89,7 +89,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
           .setProducerEpoch(producerEpoch)
           .setVerifyOnly(false)
           .setTopics(topics))
-        AddPartitionsToTxnRequest.Builder.forBroker(transactions).build()
+        AddPartitionsToTxnRequest.Builder.forBroker(transactions).build(version)
       }
 
     val leaderId = brokers.head.config.brokerId
