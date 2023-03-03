@@ -171,10 +171,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         }
     }
 
-    ReplicationPolicy replicationPolicy() {
-        return getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
-    }
-
     int replicationFactor() {
         return getInt(REPLICATION_FACTOR);
     }
