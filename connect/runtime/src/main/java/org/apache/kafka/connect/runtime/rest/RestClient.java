@@ -19,11 +19,8 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.HttpHeaders;
-
-import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.Crypto;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
@@ -37,6 +34,8 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.crypto.SecretKey;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -45,9 +44,24 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * Client for outbound REST requests to other members of a Connect cluster
+ * This class is thread-safe.
+ */
 public class RestClient {
     private static final Logger log = LoggerFactory.getLogger(RestClient.class);
     private static final ObjectMapper JSON_SERDE = new ObjectMapper();
+
+    private final AbstractConfig config;
+
+    public RestClient(AbstractConfig config) {
+        this.config = config;
+    }
+
+    // VisibleForTesting
+    HttpClient httpClient() {
+        return new HttpClient(SSLUtils.createClientSideSslContextFactory(config));
+    }
 
     /**
      * Sends HTTP request to remote REST server
@@ -60,9 +74,9 @@ public class RestClient {
      * @param <T>             The type of the deserialized response to the HTTP request.
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
-    public static <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
-                                                  TypeReference<T> responseFormat, WorkerConfig config) {
-        return httpRequest(url, method, headers, requestBodyData, responseFormat, config, null, null);
+    public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
+                                                  TypeReference<T> responseFormat) {
+        return httpRequest(url, method, headers, requestBodyData, responseFormat, null, null);
     }
 
     /**
@@ -80,17 +94,10 @@ public class RestClient {
      *                                  may be null if the request doesn't need to be signed
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
-    public static <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
-                                                  TypeReference<T> responseFormat, WorkerConfig config,
+    public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
+                                                  TypeReference<T> responseFormat,
                                                   SecretKey sessionKey, String requestSignatureAlgorithm) {
-        HttpClient client;
-
-        if (url.startsWith("https://")) {
-            client = new HttpClient(SSLUtils.createClientSideSslContextFactory(config));
-        } else {
-            client = new HttpClient();
-        }
-
+        HttpClient client = httpClient();
         client.setFollowRedirects(false);
 
         try {
@@ -100,6 +107,21 @@ public class RestClient {
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Failed to start RestClient: " + e.getMessage(), e);
         }
 
+        try {
+            return httpRequest(client, url, method, headers, requestBodyData, responseFormat, sessionKey, requestSignatureAlgorithm);
+        } finally {
+            try {
+                client.stop();
+            } catch (Exception e) {
+                log.error("Failed to stop HTTP client", e);
+            }
+        }
+    }
+
+    private <T> HttpResponse<T> httpRequest(HttpClient client, String url, String method,
+                                           HttpHeaders headers, Object requestBodyData,
+                                           TypeReference<T> responseFormat, SecretKey sessionKey,
+                                           String requestSignatureAlgorithm) {
         try {
             String serializedBody = requestBodyData == null ? null : JSON_SERDE.writeValueAsString(requestBodyData);
             log.trace("Sending {} with input {} to {}", method, serializedBody, url);
@@ -112,14 +134,16 @@ public class RestClient {
 
             if (serializedBody != null) {
                 req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
-                if (sessionKey != null && requestSignatureAlgorithm != null) {
-                    InternalRequestSignature.addToRequest(
-                        sessionKey,
-                        serializedBody.getBytes(StandardCharsets.UTF_8),
-                        requestSignatureAlgorithm,
-                        req
-                    );
-                }
+            }
+
+            if (sessionKey != null && requestSignatureAlgorithm != null) {
+                InternalRequestSignature.addToRequest(
+                    Crypto.SYSTEM,
+                    sessionKey,
+                    serializedBody != null ? serializedBody.getBytes(StandardCharsets.UTF_8) : null,
+                    requestSignatureAlgorithm,
+                    req
+                );
             }
 
             ContentResponse res = req.send();
@@ -142,15 +166,14 @@ public class RestClient {
         } catch (IOException | InterruptedException | TimeoutException | ExecutionException e) {
             log.error("IO error forwarding REST request: ", e);
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "IO Error trying to forward REST request: " + e.getMessage(), e);
+        } catch (ConnectRestException e) {
+            // catching any explicitly thrown ConnectRestException-s to preserve its status code
+            // and to avoid getting it overridden by the more generic catch (Throwable) clause down below
+            log.error("Error forwarding REST request", e);
+            throw e;
         } catch (Throwable t) {
             log.error("Error forwarding REST request", t);
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Error trying to forward REST request: " + t.getMessage(), t);
-        } finally {
-            try {
-                client.stop();
-            } catch (Exception e) {
-                log.error("Failed to stop HTTP client", e);
-            }
         }
     }
 
@@ -170,9 +193,9 @@ public class RestClient {
     }
 
     /**
-     * Convert response parameters from Jetty format (HttpFields)
-     * @param httpFields
-     * @return
+     * Convert response headers from Jetty format ({@link HttpFields}) to a simple {@link Map}
+     * @param httpFields the response headers
+     * @return a {@link Map} containing the response headers
      */
     private static Map<String, String> convertHttpFieldsToMap(HttpFields httpFields) {
         Map<String, String> headers = new HashMap<>();

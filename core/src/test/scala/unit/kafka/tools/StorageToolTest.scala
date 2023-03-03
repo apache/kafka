@@ -22,12 +22,14 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util
 import java.util.Properties
-
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.apache.kafka.server.common.MetadataVersion
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
+
+import scala.collection.mutable
 
 
 @Timeout(value = 40)
@@ -160,11 +162,11 @@ Found problem:
         clusterId = "XcZZOzUqS4yHOjhMQB6JLQ", nodeId = 2)
       val stream = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, false))
-      assertEquals("Formatting %s%n".format(tempDir), stream.toString())
+        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), ignoreFormatted = false))
+      assertTrue(stream.toString().startsWith("Formatting %s".format(tempDir)))
 
       try assertEquals(1, StorageTool.
-        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, false)) catch {
+        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), ignoreFormatted = false)) catch {
         case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
           "formatted. Use --ignore-formatted to ignore this directory and format the " +
           "others.", e.getMessage)
@@ -172,7 +174,7 @@ Found problem:
 
       val stream2 = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, true))
+        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, MetadataVersion.latest(), ignoreFormatted = true))
       assertEquals("All of the log directories are already formatted.%n".format(), stream2.toString())
     } finally Utils.delete(tempDir)
   }
@@ -184,5 +186,39 @@ Found problem:
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
         "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
           () => StorageTool.buildMetadataProperties("invalid", config)).getMessage)
+  }
+
+  @Test
+  def testDefaultMetadataVersion(): Unit = {
+    val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
+    val mv = StorageTool.getMetadataVersion(namespace, defaultVersionString = None)
+    assertEquals(MetadataVersion.latest().featureLevel(), mv.featureLevel(),
+      "Expected the default metadata.version to be the latest version")
+  }
+
+  @Test
+  def testConfiguredMetadataVersion(): Unit = {
+    val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
+    val mv = StorageTool.getMetadataVersion(namespace, defaultVersionString = Some(MetadataVersion.IBP_3_3_IV2.toString))
+    assertEquals(MetadataVersion.IBP_3_3_IV2.featureLevel(), mv.featureLevel(),
+      "Expected the default metadata.version to be 3.3-IV2")
+  }
+
+  @Test
+  def testMetadataVersionFlags(): Unit = {
+    def parseMetadataVersion(strings: String*): MetadataVersion = {
+      var args = mutable.Seq("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ")
+      args ++= strings
+      val namespace = StorageTool.parseArguments(args.toArray)
+      StorageTool.getMetadataVersion(namespace, defaultVersionString = None)
+    }
+
+    var mv = parseMetadataVersion("--release-version", "3.0")
+    assertEquals("3.0", mv.shortVersion())
+
+    mv = parseMetadataVersion("--release-version", "3.0-IV1")
+    assertEquals(MetadataVersion.IBP_3_0_IV1, mv)
+
+    assertThrows(classOf[IllegalArgumentException], () => parseMetadataVersion("--release-version", "0.0"))
   }
 }

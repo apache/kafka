@@ -34,9 +34,9 @@ import org.apache.kafka.test.TestUtils.isValidClusterId
 
 
 class ServerGenerateClusterIdTest extends QuorumTestHarness {
-  var config1: KafkaConfig = null
-  var config2: KafkaConfig = null
-  var config3: KafkaConfig = null
+  var config1: KafkaConfig = _
+  var config2: KafkaConfig = _
+  var config3: KafkaConfig = _
   var servers: Seq[KafkaServer] = Seq()
   val brokerMetaPropsFile = "meta.properties"
 
@@ -122,7 +122,7 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
   @Test
   def testAutoGenerateClusterIdForKafkaClusterParallel(): Unit = {
     val firstBoot = Future.traverse(Seq(config1, config2, config3))(config => Future(TestUtils.createServer(config, threadNamePrefix = Option(this.getClass.getName))))
-    servers = Await.result(firstBoot, 100 second)
+    servers = Await.result(firstBoot, 100.second)
     val Seq(server1, server2, server3) = servers
 
     val clusterIdFromServer1 = server1.clusterId
@@ -138,7 +138,7 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
       server.startup()
       server
     })
-    servers = Await.result(secondBoot, 100 second)
+    servers = Await.result(secondBoot, 100.second)
     servers.foreach(server => assertEquals(clusterIdFromServer1, server.clusterId))
 
     servers.foreach(_.shutdown())

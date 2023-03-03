@@ -19,22 +19,21 @@ package org.apache.kafka.streams.scala
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
-  KStream => KStreamJ,
-  KGroupedStream => KGroupedStreamJ,
-  TimeWindowedKStream => TimeWindowedKStreamJ,
-  SessionWindowedKStream => SessionWindowedKStreamJ,
   CogroupedKStream => CogroupedKStreamJ,
-  TimeWindowedCogroupedKStream => TimeWindowedCogroupedKStreamJ,
-  SessionWindowedCogroupedKStream => SessionWindowedCogroupedKStreamJ,
+  KGroupedStream => KGroupedStreamJ,
+  KGroupedTable => KGroupedTableJ,
+  KStream => KStreamJ,
   KTable => KTableJ,
-  KGroupedTable => KGroupedTableJ
+  SessionWindowedCogroupedKStream => SessionWindowedCogroupedKStreamJ,
+  SessionWindowedKStream => SessionWindowedKStreamJ,
+  TimeWindowedCogroupedKStream => TimeWindowedCogroupedKStreamJ,
+  TimeWindowedKStream => TimeWindowedKStreamJ
 }
 import org.apache.kafka.streams.processor.StateStore
 import org.apache.kafka.streams.scala.kstream._
 
 /**
- * Implicit conversions between the Scala wrapper objects and the underlying Java
- * objects.
+ * Implicit conversions between the Scala wrapper objects and the underlying Java objects.
  */
 object ImplicitConversions {
 

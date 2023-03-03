@@ -205,7 +205,7 @@ public class DefaultRecordTest {
     }
 
     @Test
-    public void testInvalidValueSizePartial() throws IOException {
+    public void testInvalidValueSizePartial() {
         byte attributes = 0;
         long timestampDelta = 2;
         int offsetDelta = 1;
@@ -247,6 +247,20 @@ public class DefaultRecordTest {
         buf.flip();
         assertThrows(InvalidRecordException.class,
             () -> DefaultRecord.readFrom(buf, 0L, 0L, RecordBatch.NO_SEQUENCE, null));
+
+        ByteBuffer buf2 = ByteBuffer.allocate(sizeOfBodyInBytes + ByteUtils.sizeOfVarint(sizeOfBodyInBytes));
+        ByteUtils.writeVarint(sizeOfBodyInBytes, buf2);
+        buf2.put(attributes);
+        ByteUtils.writeVarlong(timestampDelta, buf2);
+        ByteUtils.writeVarint(offsetDelta, buf2);
+        ByteUtils.writeVarint(-1, buf2); // null key
+        ByteUtils.writeVarint(-1, buf2); // null value
+        ByteUtils.writeVarint(sizeOfBodyInBytes, buf2); // more headers than remaining buffer size, not allowed
+        buf2.position(buf2.limit());
+
+        buf2.flip();
+        assertThrows(InvalidRecordException.class,
+                () -> DefaultRecord.readFrom(buf2, 0L, 0L, RecordBatch.NO_SEQUENCE, null));
     }
 
     @Test

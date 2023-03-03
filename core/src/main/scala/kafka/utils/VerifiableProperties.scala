@@ -20,7 +20,6 @@ package kafka.utils
 import java.util.Properties
 import java.util.Collections
 import scala.collection._
-import kafka.message.{CompressionCodec, NoCompressionCodec}
 import scala.jdk.CollectionConverters._
 import kafka.utils.Implicits._
 
@@ -201,24 +200,6 @@ class VerifiableProperties(val props: Properties) extends Logging {
       m
     } catch {
       case e: Exception => throw new IllegalArgumentException("Error parsing configuration property '%s': %s".format(name, e.getMessage))
-    }
-  }
-
-  /**
-   * Parse compression codec from a property list in either. Codecs may be specified as integers, or as strings.
-   * See [[kafka.message.CompressionCodec]] for more details.
-   * @param name The property name
-   * @param default Default compression codec
-   * @return compression codec
-   */
-  def getCompressionCodec(name: String, default: CompressionCodec) = {
-    val prop = getString(name, NoCompressionCodec.name)
-    try {
-      CompressionCodec.getCompressionCodec(prop.toInt)
-    }
-    catch {
-      case _: NumberFormatException =>
-        CompressionCodec.getCompressionCodec(prop)
     }
   }
 

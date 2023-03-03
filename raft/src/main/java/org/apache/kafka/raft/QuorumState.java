@@ -139,13 +139,13 @@ public class QuorumState {
             throw new IllegalStateException("Initialized quorum state " + election
                 + " with a voted candidate, which indicates this node was previously "
                 + " a voter, but the local id " + localIdDescription);
-        } else if (election.epoch < logEndOffsetAndEpoch.epoch) {
+        } else if (election.epoch < logEndOffsetAndEpoch.epoch()) {
             log.warn("Epoch from quorum-state file is {}, which is " +
                 "smaller than last written epoch {} in the log",
-                election.epoch, logEndOffsetAndEpoch.epoch);
+                election.epoch, logEndOffsetAndEpoch.epoch());
             initialState = new UnattachedState(
                 time,
-                logEndOffsetAndEpoch.epoch,
+                logEndOffsetAndEpoch.epoch(),
                 voters,
                 Optional.empty(),
                 randomElectionTimeoutMs(),

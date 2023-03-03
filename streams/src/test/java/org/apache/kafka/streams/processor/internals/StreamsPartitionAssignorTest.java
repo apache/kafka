@@ -70,11 +70,15 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -122,8 +126,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getInfo;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -136,10 +138,20 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@RunWith(value = Parameterized.class)
+@RunWith(Parameterized.class)
 @SuppressWarnings("deprecation")
 public class StreamsPartitionAssignorTest {
+    // We need this rule because we would like to combine Parameterised tests with strict Mockito stubs.
+    @Rule
+    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
+
     private static final String CONSUMER_1 = "consumer1";
     private static final String CONSUMER_2 = "consumer2";
     private static final String CONSUMER_3 = "consumer3";
@@ -193,7 +205,8 @@ public class StreamsPartitionAssignorTest {
     private Admin adminClient;
     private InternalTopologyBuilder builder = new InternalTopologyBuilder();
     private TopologyMetadata topologyMetadata;
-    private StreamsMetadataState streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
+    @Mock
+    private StreamsMetadataState streamsMetadataState;
     private final Map<String, Subscription> subscriptions = new HashMap<>();
     private final Class<? extends TaskAssignor> taskAssignor;
     private Map<String, String> clientTags;
@@ -202,6 +215,7 @@ public class StreamsPartitionAssignorTest {
     private final MockTime time = new MockTime();
     private final byte uniqueField = 1;
 
+    @SuppressWarnings("unchecked")
     private Map<String, Object> configProps() {
         final Map<String, Object> configurationMap = new HashMap<>();
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
@@ -233,7 +247,6 @@ public class StreamsPartitionAssignorTest {
         configMap.putAll(props);
 
         partitionAssignor.configure(configMap);
-        EasyMock.replay(taskManager, adminClient);
 
         topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
         return overwriteInternalTopicManagerWithMock(false);
@@ -245,10 +258,10 @@ public class StreamsPartitionAssignorTest {
 
     private void createMockTaskManager(final Set<TaskId> activeTasks,
                                        final Set<TaskId> standbyTasks) {
-        taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.topologyMetadata()).andStubReturn(topologyMetadata);
-        expect(taskManager.getTaskOffsetSums()).andStubReturn(getTaskOffsetSums(activeTasks, standbyTasks));
-        expect(taskManager.processId()).andStubReturn(UUID_1);
+        taskManager = mock(TaskManager.class);
+        lenient().when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
+        lenient().when(taskManager.getTaskOffsetSums()).thenReturn(getTaskOffsetSums(activeTasks, standbyTasks));
+        lenient().when(taskManager.processId()).thenReturn(UUID_1);
         builder.setApplicationId(APPLICATION_ID);
         topologyMetadata.buildAndRewriteTopology();
     }
@@ -1155,7 +1168,7 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void testOnAssignment() {
-        taskManager = EasyMock.createStrictMock(TaskManager.class);
+        taskManager = mock(TaskManager.class);
 
         final Map<HostInfo, Set<TopicPartition>> hostState = Collections.singletonMap(
             new HostInfo("localhost", 9090),
@@ -1168,13 +1181,8 @@ public class StreamsPartitionAssignorTest {
         standbyTasks.put(TASK_0_1, mkSet(t3p1));
         standbyTasks.put(TASK_0_2, mkSet(t3p2));
 
-        taskManager.handleAssignment(activeTasks, standbyTasks);
-        EasyMock.expectLastCall();
-        streamsMetadataState = EasyMock.createStrictMock(StreamsMetadataState.class);
-        final Capture<Cluster> capturedCluster = EasyMock.newCapture();
-        streamsMetadataState.onChange(EasyMock.eq(hostState), EasyMock.anyObject(), EasyMock.capture(capturedCluster));
-        EasyMock.expectLastCall();
-        EasyMock.replay(streamsMetadataState);
+        streamsMetadataState = mock(StreamsMetadataState.class);
+        final ArgumentCaptor<Cluster> capturedCluster = ArgumentCaptor.forClass(Cluster.class);
 
         configureDefaultPartitionAssignor();
 
@@ -1184,8 +1192,8 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.onAssignment(assignment, null);
 
-        EasyMock.verify(streamsMetadataState);
-        EasyMock.verify(taskManager);
+        verify(streamsMetadataState).onChange(eq(hostState), any(), capturedCluster.capture());
+        verify(taskManager).handleAssignment(activeTasks, standbyTasks);
 
         assertEquals(singleton(t3p0.topic()), capturedCluster.getValue().topics());
         assertEquals(2, capturedCluster.getValue().partitionsForTopic(t3p0.topic()).size());
@@ -1328,7 +1336,6 @@ public class StreamsPartitionAssignorTest {
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
 
         createDefaultMockTaskManager();
-        EasyMock.replay(taskManager);
         partitionAssignor.configure(configProps());
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
@@ -1363,7 +1370,6 @@ public class StreamsPartitionAssignorTest {
         topologyMetadata = new TopologyMetadata(builder, config);
 
         createDefaultMockTaskManager();
-        EasyMock.replay(taskManager);
         partitionAssignor.configure(configProps());
         final MockInternalTopicManager mockInternalTopicManager =  new MockInternalTopicManager(
             time,
@@ -1520,11 +1526,7 @@ public class StreamsPartitionAssignorTest {
             mkEntry(new HostInfo("newotherhost", 9090), mkSet(t2p0, t2p1))
         );
 
-        streamsMetadataState = EasyMock.createStrictMock(StreamsMetadataState.class);
-
-        streamsMetadataState.onChange(EasyMock.eq(initialHostState), EasyMock.anyObject(), EasyMock.anyObject());
-        streamsMetadataState.onChange(EasyMock.eq(newHostState), EasyMock.anyObject(), EasyMock.anyObject());
-        EasyMock.replay(streamsMetadataState);
+        streamsMetadataState = mock(StreamsMetadataState.class);
 
         createDefaultMockTaskManager();
         configureDefaultPartitionAssignor();
@@ -1532,7 +1534,8 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.onAssignment(createAssignment(initialHostState), null);
         partitionAssignor.onAssignment(createAssignment(newHostState), null);
 
-        EasyMock.verify(taskManager, streamsMetadataState);
+        verify(streamsMetadataState).onChange(eq(initialHostState), any(), any());
+        verify(streamsMetadataState).onChange(eq(newHostState), any(), any());
     }
 
     @Test
@@ -1994,13 +1997,13 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldSkipListOffsetsRequestForNewlyCreatedChangelogTopics() {
-        adminClient = EasyMock.createMock(AdminClient.class);
-        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
+        adminClient = mock(AdminClient.class);
+        final ListOffsetsResult result = mock(ListOffsetsResult.class);
         final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
         allFuture.complete(emptyMap());
 
-        expect(adminClient.listOffsets(emptyMap())).andStubReturn(result);
-        expect(result.all()).andReturn(allFuture);
+        when(adminClient.listOffsets(emptyMap())).thenReturn(result);
+        when(result.all()).thenReturn(allFuture);
 
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addProcessor("processor1", new MockApiProcessorSupplier<>(), "source1");
@@ -2012,13 +2015,10 @@ public class StreamsPartitionAssignorTest {
                               defaultSubscriptionInfo.encode()
                           ));
 
-        EasyMock.replay(result);
         configureDefault();
         overwriteInternalTopicManagerWithMock(true);
 
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
-
-        EasyMock.verify(adminClient);
     }
 
     @Test
@@ -2028,22 +2028,22 @@ public class StreamsPartitionAssignorTest {
             new TopicPartition(APPLICATION_ID + "-store-changelog", 1),
             new TopicPartition(APPLICATION_ID + "-store-changelog", 2)
         );
-        adminClient = EasyMock.createMock(AdminClient.class);
-        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
+        adminClient = mock(AdminClient.class);
+        final ListOffsetsResult result = mock(ListOffsetsResult.class);
         final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
         allFuture.complete(changelogs.stream().collect(Collectors.toMap(
             tp -> tp,
             tp -> {
-                final ListOffsetsResultInfo info = EasyMock.createNiceMock(ListOffsetsResultInfo.class);
-                expect(info.offset()).andStubReturn(Long.MAX_VALUE);
-                EasyMock.replay(info);
+                final ListOffsetsResultInfo info = mock(ListOffsetsResultInfo.class);
+                when(info.offset()).thenReturn(Long.MAX_VALUE);
                 return info;
             }))
         );
-        final Capture<Map<TopicPartition, OffsetSpec>> capturedChangelogs = EasyMock.newCapture();
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<Map<TopicPartition, OffsetSpec>> capturedChangelogs = ArgumentCaptor.forClass(Map.class);
 
-        expect(adminClient.listOffsets(EasyMock.capture(capturedChangelogs))).andReturn(result).once();
-        expect(result.all()).andReturn(allFuture);
+        when(adminClient.listOffsets(capturedChangelogs.capture())).thenReturn(result);
+        when(result.all()).thenReturn(allFuture);
 
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addProcessor("processor1", new MockApiProcessorSupplier<>(), "source1");
@@ -2055,13 +2055,11 @@ public class StreamsPartitionAssignorTest {
                 defaultSubscriptionInfo.encode()
             ));
 
-        EasyMock.replay(result);
         configureDefault();
         overwriteInternalTopicManagerWithMock(false);
 
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
 
-        EasyMock.verify(adminClient);
         assertThat(
             capturedChangelogs.getValue().keySet(),
             equalTo(changelogs)
@@ -2096,13 +2094,10 @@ public class StreamsPartitionAssignorTest {
         overwriteInternalTopicManagerWithMock(false);
 
         final Consumer<byte[], byte[]> consumerClient = referenceContainer.mainConsumer;
-        EasyMock.expect(consumerClient.committed(EasyMock.eq(changelogs)))
-            .andReturn(changelogs.stream().collect(Collectors.toMap(tp -> tp, tp -> new OffsetAndMetadata(Long.MAX_VALUE)))).once();
+        when(consumerClient.committed(changelogs))
+            .thenReturn(changelogs.stream().collect(Collectors.toMap(tp -> tp, tp -> new OffsetAndMetadata(Long.MAX_VALUE))));
 
-        EasyMock.replay(consumerClient);
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
-
-        EasyMock.verify(consumerClient);
     }
 
     @Test

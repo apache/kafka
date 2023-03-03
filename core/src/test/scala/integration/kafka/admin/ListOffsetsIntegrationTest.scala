@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package integration.kafka.admin
+package kafka.admin
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
 class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
   val topicName = "foo"
-  var adminClient: Admin = null
+  var adminClient: Admin = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {

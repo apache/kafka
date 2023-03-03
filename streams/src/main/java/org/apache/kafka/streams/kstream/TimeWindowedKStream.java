@@ -648,4 +648,18 @@ public interface TimeWindowedKStream<K, V> {
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final Named named,
                                   final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Configure when the aggregated result will be emitted for {@code TimeWindowedKStream}.
+     * <p>
+     * For example, for {@link EmitStrategy#onWindowClose} strategy, the aggregated result for a
+     * window will only be emitted when the window closes. For {@link EmitStrategy#onWindowUpdate()}
+     * strategy, the aggregated result for a window will be emitted whenever there is an update to
+     * the window. Note that whether the result will be available in downstream also depends on
+     * cache policy.
+     *
+     * @param emitStrategy {@link EmitStrategy} to configure when the aggregated result for a window will be emitted.
+     * @return a {@code TimeWindowedKStream} with {@link EmitStrategy} configured.
+     */
+    TimeWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy);
 }

@@ -12,7 +12,6 @@
   */
 package kafka.api
 
-import java.io.File
 import java.util
 import java.util.concurrent._
 
@@ -84,7 +83,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
 
   override protected def securityProtocol = SecurityProtocol.SSL
-  override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
   private val adminClients = mutable.Buffer.empty[Admin]
 
   override def setUpSasl(): Unit = {

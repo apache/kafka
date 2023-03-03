@@ -17,58 +17,23 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class ConnectUtilsTest {
-
-    @Test
-    public void testLookupKafkaClusterId() {
-        final Node broker1 = new Node(0, "dummyHost-1", 1234);
-        final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
-        MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(cluster).build();
-        assertEquals(MockAdminClient.DEFAULT_CLUSTER_ID, ConnectUtils.lookupKafkaClusterId(adminClient));
-    }
-
-    @Test
-    public void testLookupNullKafkaClusterId() {
-        final Node broker1 = new Node(0, "dummyHost-1", 1234);
-        final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
-        MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(cluster).clusterId(null).build();
-        assertNull(ConnectUtils.lookupKafkaClusterId(adminClient));
-    }
-
-    @Test
-    public void testLookupKafkaClusterIdTimeout() {
-        final Node broker1 = new Node(0, "dummyHost-1", 1234);
-        final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
-        MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(cluster).build();
-        adminClient.timeoutNextRequest(1);
-
-        assertThrows(ConnectException.class, () -> ConnectUtils.lookupKafkaClusterId(adminClient));
-    }
 
     @Test
     public void testAddMetricsContextPropertiesDistributed() {
@@ -170,6 +135,32 @@ public class ConnectUtilsTest {
                         true)
         );
         assertEquals(Collections.singletonMap("\u1984", "big brother"), props);
+    }
+
+    @Test
+    public void testClientIdBase() {
+        String groupId = "connect-cluster";
+        String userSpecifiedClientId = "worker-57";
+
+        String expectedClientIdBase = groupId + "-" + userSpecifiedClientId + "-";
+        assertClientIdBase(groupId, userSpecifiedClientId, expectedClientIdBase);
+
+        expectedClientIdBase = groupId + "-";
+        assertClientIdBase(groupId, null, expectedClientIdBase);
+
+        expectedClientIdBase = "connect-";
+        assertClientIdBase(null, null, expectedClientIdBase);
+
+        expectedClientIdBase = "connect-" + userSpecifiedClientId + "-";
+        assertClientIdBase(null, userSpecifiedClientId, expectedClientIdBase);
+    }
+
+    private void assertClientIdBase(String groupId, String userSpecifiedClientId, String expectedClientIdBase) {
+        WorkerConfig config = mock(WorkerConfig.class);
+        when(config.groupId()).thenReturn(groupId);
+        when(config.getString(CLIENT_ID_CONFIG)).thenReturn(userSpecifiedClientId);
+        String actualClientIdBase = ConnectUtils.clientIdBase(config);
+        assertEquals(expectedClientIdBase, actualClientIdBase);
     }
 
 }

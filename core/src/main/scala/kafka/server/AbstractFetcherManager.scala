@@ -68,7 +68,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         if (id.fetcherId >= newSize)
           thread.shutdown()
         partitionStates.forKeyValue { (topicPartition, currentFetchState) =>
-            val initialFetchState = InitialFetchState(currentFetchState.topicId, thread.sourceBroker,
+            val initialFetchState = InitialFetchState(currentFetchState.topicId, thread.leader.brokerEndPoint(),
               currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
               initOffset = currentFetchState.fetchOffset)
             allRemovedPartitionsMap += topicPartition -> initialFetchState
@@ -139,7 +139,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
       for ((brokerAndFetcherId, initialFetchOffsets) <- partitionsPerFetcher) {
         val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerAndFetcherId.broker.id, brokerAndFetcherId.fetcherId)
         val fetcherThread = fetcherThreadMap.get(brokerIdAndFetcherId) match {
-          case Some(currentFetcherThread) if currentFetcherThread.sourceBroker == brokerAndFetcherId.broker =>
+          case Some(currentFetcherThread) if currentFetcherThread.leader.brokerEndPoint() == brokerAndFetcherId.broker =>
             // reuse the fetcher thread
             currentFetcherThread
           case Some(f) =>
@@ -163,7 +163,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   protected def addPartitionsToFetcherThread(fetcherThread: T,
                                              initialOffsetAndEpochs: collection.Map[TopicPartition, InitialFetchState]): Unit = {
     fetcherThread.addPartitions(initialOffsetAndEpochs)
-    info(s"Added fetcher to broker ${fetcherThread.sourceBroker.id} for partitions $initialOffsetAndEpochs")
+    info(s"Added fetcher to broker ${fetcherThread.leader.brokerEndPoint().id} for partitions $initialOffsetAndEpochs")
   }
 
   /**

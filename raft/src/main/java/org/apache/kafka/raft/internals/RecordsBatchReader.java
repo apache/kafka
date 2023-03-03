@@ -100,11 +100,12 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
         RecordSerde<T> serde,
         BufferSupplier bufferSupplier,
         int maxBatchSize,
-        CloseListener<BatchReader<T>> closeListener
+        CloseListener<BatchReader<T>> closeListener,
+        boolean doCrcValidation
     ) {
         return new RecordsBatchReader<>(
             baseOffset,
-            new RecordsIterator<>(records, serde, bufferSupplier, maxBatchSize),
+            new RecordsIterator<>(records, serde, bufferSupplier, maxBatchSize, doCrcValidation),
             closeListener
         );
     }

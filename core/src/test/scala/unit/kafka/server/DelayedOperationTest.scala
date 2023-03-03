@@ -32,8 +32,8 @@ import scala.jdk.CollectionConverters._
 
 class DelayedOperationTest {
 
-  var purgatory: DelayedOperationPurgatory[DelayedOperation] = null
-  var executorService: ExecutorService = null
+  var purgatory: DelayedOperationPurgatory[DelayedOperation] = _
+  var executorService: ExecutorService = _
 
   @BeforeEach
   def setUp(): Unit = {

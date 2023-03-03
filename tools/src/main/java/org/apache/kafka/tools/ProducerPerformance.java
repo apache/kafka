@@ -43,6 +43,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.ToolsUtils;
 
 public class ProducerPerformance {
 
@@ -328,12 +329,13 @@ public class ProducerPerformance {
         return parser;
     }
 
-    private static class Stats {
+    // Visible for testing
+    static class Stats {
         private long start;
         private long windowStart;
         private int[] latencies;
-        private int sampling;
-        private int iteration;
+        private long sampling;
+        private long iteration;
         private int index;
         private long count;
         private long bytes;
@@ -349,11 +351,10 @@ public class ProducerPerformance {
             this.start = System.currentTimeMillis();
             this.windowStart = System.currentTimeMillis();
             this.iteration = 0;
-            this.sampling = (int) (numRecords / Math.min(numRecords, 500000));
+            this.sampling = numRecords / Math.min(numRecords, 500000);
             this.latencies = new int[(int) (numRecords / this.sampling) + 1];
             this.index = 0;
             this.maxLatency = 0;
-            this.totalLatency = 0;
             this.windowCount = 0;
             this.windowMaxLatency = 0;
             this.windowTotalLatency = 0;
@@ -362,7 +363,7 @@ public class ProducerPerformance {
             this.reportingInterval = reportingInterval;
         }
 
-        public void record(int iter, int latency, int bytes, long time) {
+        public void record(long iter, int latency, int bytes, long time) {
             this.count++;
             this.bytes += bytes;
             this.totalLatency += latency;
@@ -439,11 +440,11 @@ public class ProducerPerformance {
 
     private static final class PerfCallback implements Callback {
         private final long start;
-        private final int iteration;
+        private final long iteration;
         private final int bytes;
         private final Stats stats;
 
-        public PerfCallback(int iter, long start, int bytes, Stats stats) {
+        public PerfCallback(long iter, long start, int bytes, Stats stats) {
             this.start = start;
             this.stats = stats;
             this.iteration = iter;

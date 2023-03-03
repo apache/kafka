@@ -17,16 +17,14 @@
 
 package kafka.tools
 
-import java.io.{ByteArrayOutputStream, File, PrintWriter}
+import java.io.{ByteArrayOutputStream, PrintWriter}
 import java.text.SimpleDateFormat
-import kafka.utils.Exit
+import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 
 class ConsumerPerformanceTest {
-
-  private val outContent = new ByteArrayOutputStream()
   private val dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
 
   @Test
@@ -113,8 +111,7 @@ class ConsumerPerformanceTest {
 
   @Test
   def testClientIdOverride(): Unit = {
-    val consumerConfigFile = File.createTempFile("test_consumer_config",".conf")
-    consumerConfigFile.deleteOnExit()
+    val consumerConfigFile = TestUtils.tempFile("test_consumer_config",".conf")
     new PrintWriter(consumerConfigFile.getPath) { write("client.id=consumer-1"); close() }
 
     //Given
@@ -149,16 +146,21 @@ class ConsumerPerformanceTest {
   }
 
   private def testHeaderMatchContent(detailed: Boolean, expectedOutputLineCount: Int, fun: () => Unit): Unit = {
-    Console.withOut(outContent) {
-      ConsumerPerformance.printHeader(detailed)
-      fun()
+    val outContent = new ByteArrayOutputStream
+    try {
+      Console.withOut(outContent) {
+        ConsumerPerformance.printHeader(detailed)
+        fun()
 
-      val contents = outContent.toString.split("\n")
-      assertEquals(expectedOutputLineCount, contents.length)
-      val header = contents(0)
-      val body = contents(1)
+        val contents = outContent.toString.split("\n")
+        assertEquals(expectedOutputLineCount, contents.length)
+        val header = contents(0)
+        val body = contents(1)
 
-      assertEquals(header.split(",").length, body.split(",").length)
+        assertEquals(header.split(",\\s").length, body.split(",\\s").length)
+      }
+    } finally {
+      outContent.close()
     }
   }
 }

@@ -18,7 +18,9 @@
 package org.apache.kafka.streams.tests;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,6 +30,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
 public class SystemTestUtilTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     private final Map<String, String> expectedParsedMap = new TreeMap<>();
 

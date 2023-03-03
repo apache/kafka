@@ -204,25 +204,6 @@ object CoreUtils {
     for (_ <- Iterator.continually(1); t <- coll) yield t
 
   /**
-   * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
-   */
-  def replaceSuffix(s: String, oldSuffix: String, newSuffix: String): String = {
-    if(!s.endsWith(oldSuffix))
-      throw new IllegalArgumentException("Expected string to end with '%s' but string is '%s'".format(oldSuffix, s))
-    s.substring(0, s.length - oldSuffix.length) + newSuffix
-  }
-
-  /**
-   * Read a big-endian integer from a byte array
-   */
-  def readInt(bytes: Array[Byte], offset: Int): Int = {
-    ((bytes(offset) & 0xFF) << 24) |
-    ((bytes(offset + 1) & 0xFF) << 16) |
-    ((bytes(offset + 2) & 0xFF) << 8) |
-    (bytes(offset + 3) & 0xFF)
-  }
-
-  /**
    * Execute the given function inside the lock
    */
   def inLock[T](lock: Lock)(fun: => T): T = {

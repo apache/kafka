@@ -19,13 +19,12 @@ import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
-import kafka.log.LogConfig
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.producer._
@@ -33,7 +32,7 @@ import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
+import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, TopicConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
@@ -85,9 +84,8 @@ object AuthorizerIntegrationTest {
   class PrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       context.listenerName match {
-        case BrokerListenerName => BrokerPrincipal
+        case BrokerListenerName | ControllerListenerName => BrokerPrincipal
         case ClientListenerName => ClientPrincipal
-        case ControllerListenerName => BrokerPrincipal
         case listenerName => throw new IllegalArgumentException(s"No principal mapped to listener $listenerName")
       }
     }
@@ -152,32 +150,32 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    addNodeProperties(properties)
+  }
+
+  override def kraftControllerConfigs(): collection.Seq[Properties] = {
+    val controllerConfigs = super.kraftControllerConfigs()
+    controllerConfigs.foreach(addNodeProperties)
+    controllerConfigs
+  }
+
+  private def addNodeProperties(properties: Properties): Unit = {
     if (isKRaftTest()) {
       properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
-      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString())
+      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
     } else {
       properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
     }
-    properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
-    properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
-      classOf[PrincipalBuilder].getName)
+    properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[PrincipalBuilder].getName)
   }
 
-  override def kraftControllerConfigs(): Seq[Properties] = {
-    val controllerConfigs = Seq(new Properties())
-    controllerConfigs.foreach { properties =>
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName())
-      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString())
-      properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
-        classOf[PrincipalBuilder].getName)
-    }
-    controllerConfigs
-  }
 
   val requestKeyToError = (topicNames: Map[Uuid, String], version: Short) => Map[ApiKeys, Nothing => Errors](
     ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
@@ -549,7 +547,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setLeader(brokerId)
         .setLeaderEpoch(Int.MaxValue)
         .setIsr(List(brokerId).asJava)
-        .setZkVersion(2)
+        .setPartitionEpoch(2)
         .setReplicas(Seq(brokerId).asJava)
         .setIsNew(false)).asJava,
       getTopicIds().asJava,
@@ -562,7 +560,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setTopicName(tp.topic)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp.partition)
-          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
           .setDeletePartition(true)).asJava)
     ).asJava
     new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue,
@@ -618,13 +616,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     new AlterConfigsRequest.Builder(
       Collections.singletonMap(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic),
         new AlterConfigsRequest.Config(Collections.singleton(
-          new AlterConfigsRequest.ConfigEntry(LogConfig.MaxMessageBytesProp, "1000000")
+          new AlterConfigsRequest.ConfigEntry(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "1000000")
         ))), true).build()
 
   private def incrementalAlterConfigsRequest = {
     val data = new IncrementalAlterConfigsRequestData
     val alterableConfig = new AlterableConfig
-    alterableConfig.setName(LogConfig.MaxMessageBytesProp).
+    alterableConfig.setName(TopicConfig.MAX_MESSAGE_BYTES_CONFIG).
       setValue("1000000").setConfigOperation(AlterConfigOp.OpType.SET.id())
     val alterableConfigSet = new AlterableConfigCollection
     alterableConfigSet.add(alterableConfig)
@@ -1341,7 +1339,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumer.poll(Duration.ofMillis(50L))
       brokers.forall { broker =>
         broker.metadataCache.getPartitionInfo(newTopic, 0) match {
-          case Some(partitionState) => Request.isValidBrokerId(partitionState.leader)
+          case Some(partitionState) => FetchRequest.isValidBrokerId(partitionState.leader)
           case _ => false
         }
       }
@@ -2510,13 +2508,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val aclEntryFilter = new AccessControlEntryFilter(clientPrincipalString, null, AclOperation.ANY, AclPermissionType.ANY)
     val aclFilter = new AclBindingFilter(ResourcePatternFilter.ANY, aclEntryFilter)
 
-    authorizerForWrite.deleteAcls(null, List(aclFilter).asJava).asScala.map(_.toCompletableFuture.get).flatMap { deletion =>
-      deletion.aclBindingDeleteResults().asScala.map(_.aclBinding.pattern).toSet
-    }.foreach { resource =>
-      (brokers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach { authorizer =>
-        TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer, resource, aclEntryFilter)
+    authorizerForWrite.deleteAcls(TestUtils.anonymousAuthorizableContext, List(aclFilter).asJava).asScala.
+      map(_.toCompletableFuture.get).flatMap { deletion =>
+        deletion.aclBindingDeleteResults().asScala.map(_.aclBinding.pattern).toSet
+      }.foreach { resource =>
+        (brokers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach { authorizer =>
+          TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer, resource, aclEntryFilter)
+        }
       }
-    }
   }
 
   private def sendRequestAndVerifyResponseError(request: AbstractRequest,
@@ -2573,14 +2572,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  private def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    TestUtils.addAndVerifyAcls(brokers, acls, resource, controllerServers)
-  }
-
-  private def removeAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    TestUtils.removeAndVerifyAcls(brokers, acls, resource, controllerServers)
-  }
-
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
                              numRecords: Int = 1,
                              startingOffset: Int = 0,
@@ -2627,4 +2618,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     )
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testPrefixAcls(quorum: String): Unit = {
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, CREATE, ALLOW)),
+      new ResourcePattern(TOPIC, "f", PREFIXED))
+    addAndVerifyAcls(Set(new AccessControlEntry("User:otherPrincipal", WildcardHost, CREATE, DENY)),
+      new ResourcePattern(TOPIC, "fooa", PREFIXED))
+    addAndVerifyAcls(Set(new AccessControlEntry("User:otherPrincipal", WildcardHost, CREATE, ALLOW)),
+      new ResourcePattern(TOPIC, "foob", PREFIXED))
+    createAdminClient().createTopics(Collections.
+      singletonList(new NewTopic("foobar", 1, 1.toShort))).all().get()
+  }
 }

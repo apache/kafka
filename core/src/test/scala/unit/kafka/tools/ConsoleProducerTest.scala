@@ -17,10 +17,11 @@
 
 package kafka.tools
 
+import java.nio.file.Files
 import kafka.tools.ConsoleProducer.LineMessageReader
-import kafka.utils.Exit
+import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.util
@@ -135,9 +136,32 @@ class ConsoleProducerTest {
   def testParseKeyProp(): Unit = {
     val config = new ConsoleProducer.ProducerConfig(brokerListValidArgs)
     val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[LineMessageReader]
-    reader.init(System.in,ConsoleProducer.getReaderProps(config))
-    assert(reader.keySeparator == "#")
-    assert(reader.parseKey)
+    reader.init(System.in, ConsoleProducer.getReaderProps(config))
+    assertTrue(reader.keySeparator == "#")
+    assertTrue(reader.parseKey)
+  }
+
+  @Test
+  def testParseReaderConfigFile(): Unit = {
+    val propsFile = TestUtils.tempFile()
+    val propsStream = Files.newOutputStream(propsFile.toPath)
+    propsStream.write("parse.key=true\n".getBytes())
+    propsStream.write("key.separator=|".getBytes())
+    propsStream.close()
+
+    val args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--property", "key.separator=;",
+      "--property", "parse.headers=true",
+      "--reader-config", propsFile.getAbsolutePath
+    )
+    val config = new ConsoleProducer.ProducerConfig(args)
+    val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[LineMessageReader]
+    reader.init(System.in, ConsoleProducer.getReaderProps(config))
+    assertEquals(";", reader.keySeparator)
+    assertTrue(reader.parseKey)
+    assertTrue(reader.parseHeaders)
   }
 
   @Test

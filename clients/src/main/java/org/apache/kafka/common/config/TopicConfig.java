@@ -139,11 +139,13 @@ public class TopicConfig {
     public static final String CLEANUP_POLICY_CONFIG = "cleanup.policy";
     public static final String CLEANUP_POLICY_COMPACT = "compact";
     public static final String CLEANUP_POLICY_DELETE = "delete";
-    public static final String CLEANUP_POLICY_DOC = "A string that is either \"" + CLEANUP_POLICY_DELETE +
-        "\" or \"" + CLEANUP_POLICY_COMPACT + "\" or both. This string designates the retention policy to use on " +
-        "old log segments. The default policy (\"delete\") will discard old segments when their retention " +
-        "time or size limit has been reached. The \"compact\" setting will enable <a href=\"#compaction\">log " +
-        "compaction</a> on the topic.";
+    public static final String CLEANUP_POLICY_DOC = "This config designates the retention policy to " +
+        "use on log segments. The \"delete\" policy (which is the default) will discard old segments " +
+        "when their retention time or size limit has been reached. The \"compact\" policy will enable " +
+        "<a href=\"#compaction\">log compaction</a>, which retains the latest value for each key. " +
+        "It is also possible to specify both policies in a comma-separated list (e.g. \"delete,compact\"). " +
+        "In this case, old segments will be discarded per the retention time and size configuration, " +
+        "while retained segments will be compacted.";
 
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "unclean.leader.election.enable";
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas " +

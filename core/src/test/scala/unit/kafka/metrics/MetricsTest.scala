@@ -19,7 +19,6 @@ package kafka.metrics
 
 import java.lang.management.ManagementFactory
 import java.util.Properties
-
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricPredicate
 import org.junit.jupiter.api.Assertions._
@@ -29,8 +28,8 @@ import kafka.utils._
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
-import kafka.log.LogConfig
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.JmxReporter
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -173,7 +172,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val bytesOut = s"${BrokerTopicStats.BytesOutPerSec},topic=$topic"
 
     val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, "2")
+    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
     createTopic(topic, 1, numNodes, topicConfig)
     // Produce a few messages to create the metrics
     TestUtils.generateAndProduceMessages(brokers, topic, nMessages)
@@ -227,6 +226,27 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount"), 1)
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ActiveBrokerCount"), 1)
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=FencedBrokerCount"), 1)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft"))
+  def testKRaftControllerMetrics(quorum: String): Unit = {
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    Set(
+      "kafka.controller:type=KafkaController,name=ActiveControllerCount",
+      "kafka.controller:type=KafkaController,name=GlobalPartitionCount",
+      "kafka.controller:type=KafkaController,name=GlobalTopicCount",
+      "kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs",
+      "kafka.controller:type=KafkaController,name=LastAppliedRecordOffset",
+      "kafka.controller:type=KafkaController,name=LastAppliedRecordTimestamp",
+      "kafka.controller:type=KafkaController,name=LastCommittedRecordOffset",
+      "kafka.controller:type=KafkaController,name=MetadataErrorCount",
+      "kafka.controller:type=KafkaController,name=OfflinePartitionsCount",
+      "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
+    ).foreach(expected => {
+      assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName.equals(expected)),
+        s"Unable to find ${expected}")
+    })
   }
 
   /**

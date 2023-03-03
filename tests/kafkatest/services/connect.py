@@ -152,14 +152,17 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
                                err_msg="Never saw message indicating Kafka Connect joined group on node: " +
                                        "%s in condition mode: %s" % (str(node.account), self.startup_mode))
 
-    def stop_node(self, node, clean_shutdown=True):
-        self.logger.info((clean_shutdown and "Cleanly" or "Forcibly") + " stopping Kafka Connect on " + str(node.account))
+    def stop_node(self, node, clean_shutdown=True, await_shutdown=None):
+        if await_shutdown is None:
+            await_shutdown = clean_shutdown
+        self.logger.info((clean_shutdown and "Cleanly" or "Forcibly") + " stopping Kafka Connect on " + str(node.account) \
+                         + " and " + ("" if await_shutdown else "not ") + "awaiting shutdown")
         pids = self.pids(node)
         sig = signal.SIGTERM if clean_shutdown else signal.SIGKILL
 
         for pid in pids:
             node.account.signal(pid, sig, allow_fail=True)
-        if clean_shutdown:
+        if await_shutdown:
             for pid in pids:
                 wait_until(lambda: not node.account.alive(pid), timeout_sec=self.startup_timeout_sec, err_msg="Kafka Connect process on " + str(
                     node.account) + " took too long to exit")
@@ -464,13 +467,14 @@ class VerifiableSource(VerifiableConnector):
     Helper class for running a verifiable source connector on a Kafka Connect cluster and analyzing the output.
     """
 
-    def __init__(self, cc, name="verifiable-source", tasks=1, topic="verifiable", throughput=1000):
+    def __init__(self, cc, name="verifiable-source", tasks=1, topic="verifiable", throughput=1000, complete_records=False):
         self.cc = cc
         self.logger = self.cc.logger
         self.name = name
         self.tasks = tasks
         self.topic = topic
         self.throughput = throughput
+        self.complete_records = complete_records
 
     def committed_messages(self):
         return list(filter(lambda m: 'committed' in m and m['committed'], self.messages()))
@@ -485,7 +489,8 @@ class VerifiableSource(VerifiableConnector):
             'connector.class': 'org.apache.kafka.connect.tools.VerifiableSourceConnector',
             'tasks.max': self.tasks,
             'topic': self.topic,
-            'throughput': self.throughput
+            'throughput': self.throughput,
+            'complete.record.data': self.complete_records
         })
 
 

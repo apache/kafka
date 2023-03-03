@@ -35,10 +35,10 @@ import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, verify, when}
 
 class ReplicaStateMachineTest {
-  private var controllerContext: ControllerContext = null
-  private var mockZkClient: KafkaZkClient = null
-  private var mockControllerBrokerRequestBatch: ControllerBrokerRequestBatch = null
-  private var replicaStateMachine: ReplicaStateMachine = null
+  private var controllerContext: ControllerContext = _
+  private var mockZkClient: KafkaZkClient = _
+  private var mockControllerBrokerRequestBatch: ControllerBrokerRequestBatch = _
+  private var replicaStateMachine: ReplicaStateMachine = _
 
   private val brokerId = 5
   private val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId, "zkConnect"))
@@ -213,7 +213,7 @@ class ReplicaStateMachineTest {
 
     val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     val adjustedLeaderAndIsr = leaderAndIsr.newLeaderAndIsr(LeaderAndIsr.NoLeader, List(otherBrokerId))
-    val updatedLeaderAndIsr = adjustedLeaderAndIsr.withZkVersion(adjustedLeaderAndIsr .zkVersion + 1)
+    val updatedLeaderAndIsr = adjustedLeaderAndIsr.withPartitionEpoch(adjustedLeaderAndIsr.partitionEpoch + 1)
     val updatedLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch)
     when(mockZkClient.getTopicPartitionStatesRaw(partitions)).thenReturn(
       Seq(GetDataResponse(Code.OK, null, Some(partition),

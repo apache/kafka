@@ -190,4 +190,10 @@ public enum CompressionType {
         else
             throw new IllegalArgumentException("Unknown compression name: " + name);
     }
+
+    @Override
+    public String toString() {
+        return name;
+    }
+
 }

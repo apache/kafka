@@ -54,4 +54,8 @@ public interface Writable {
         // ints outside the valid range of a short.
         writeShort((short) i);
     }
+
+    default void writeUnsignedInt(long i) {
+        writeInt((int) i);
+    }
 }

@@ -236,7 +236,6 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
                 memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
-            log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
         }
     }

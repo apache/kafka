@@ -40,6 +40,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -61,7 +62,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 @RunWith(Parameterized.class)
 public class KTableEfficientRangeQueryTest {
-    private enum StoreType { InMemory, RocksDB, Timed };
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
+    private enum StoreType { InMemory, RocksDB, Timed }
     private static final String TABLE_NAME = "mytable";
     private static final int DATA_SIZE = 5;
 

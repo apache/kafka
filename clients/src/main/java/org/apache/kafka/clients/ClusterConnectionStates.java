@@ -246,7 +246,6 @@ final class ClusterConnectionStates {
     public void checkingApiVersions(String id) {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.CHECKING_API_VERSIONS;
-        resetReconnectBackoff(nodeState);
         resetConnectionSetupTimeout(nodeState);
         connectingNodes.remove(id);
     }

@@ -68,8 +68,8 @@
     <p>
         Slightly simplified, the maximum parallelism at which your application may run is bounded by the maximum number of stream tasks, which itself is determined by
         maximum number of partitions of the input topic(s) the application is reading from. For example, if your input topic has 5 partitions, then you can run up to 5
-        applications instances. These instances will collaboratively process the topic’s data. If you run a larger number of app instances than partitions of the input
-        topic, the “excess” app instances will launch but remain idle; however, if one of the busy instances goes down, one of the idle instances will resume the former’s
+        applications instances. These instances will collaboratively process the topic's data. If you run a larger number of app instances than partitions of the input
+        topic, the "excess" app instances will launch but remain idle; however, if one of the busy instances goes down, one of the idle instances will resume the former's
         work.
     </p>
 

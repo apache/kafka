@@ -260,6 +260,12 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         }
 
         @Override
+        public KeyValueIterator<Windowed<K>, AGG> findSessions(final long earliestSessionEndTime,
+                                                               final long latestSessionEndTime) {
+            return wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime);
+        }
+
+        @Override
         public void remove(final Windowed<K> sessionKey) {
             wrapped().remove(sessionKey);
         }

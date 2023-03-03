@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class RequestTestUtils {
 
@@ -177,6 +178,16 @@ public class RequestTestUtils {
                 topicIds);
     }
 
+    public static MetadataResponse metadataUpdateWithIds(final int numNodes,
+                                                         final Map<String, Integer> topicPartitionCounts,
+                                                         final Function<TopicPartition, Integer> epochSupplier,
+                                                         final Map<String, Uuid> topicIds,
+                                                         final Boolean leaderOnly) {
+        return metadataUpdateWith("kafka-cluster", numNodes, Collections.emptyMap(),
+                topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(),
+                topicIds, leaderOnly);
+    }
+
     public static MetadataResponse metadataUpdateWithIds(final String clusterId,
                                                          final int numNodes,
                                                          final Map<String, Errors> topicErrors,
@@ -195,6 +206,20 @@ public class RequestTestUtils {
                                                       final PartitionMetadataSupplier partitionSupplier,
                                                       final short responseVersion,
                                                       final Map<String, Uuid> topicIds) {
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+                topicPartitionCounts, epochSupplier, partitionSupplier,
+                responseVersion, topicIds, true);
+    }
+
+    public static MetadataResponse metadataUpdateWith(final String clusterId,
+                                                      final int numNodes,
+                                                      final Map<String, Errors> topicErrors,
+                                                      final Map<String, Integer> topicPartitionCounts,
+                                                      final Function<TopicPartition, Integer> epochSupplier,
+                                                      final PartitionMetadataSupplier partitionSupplier,
+                                                      final short responseVersion,
+                                                      final Map<String, Uuid> topicIds,
+                                                      final Boolean leaderOnly) {
         final List<Node> nodes = new ArrayList<>(numNodes);
         for (int i = 0; i < numNodes; i++)
             nodes.add(new Node(i, "localhost", 1969 + i));
@@ -208,10 +233,10 @@ public class RequestTestUtils {
             for (int i = 0; i < numPartitions; i++) {
                 TopicPartition tp = new TopicPartition(topic, i);
                 Node leader = nodes.get(i % nodes.size());
-                List<Integer> replicaIds = Collections.singletonList(leader.id());
+                List<Integer> replicaIds = leaderOnly ? Collections.singletonList(leader.id()) : nodes.stream().map(Node::id).collect(Collectors.toList());
                 partitionMetadata.add(partitionSupplier.supply(
                         Errors.NONE, tp, Optional.of(leader.id()), Optional.ofNullable(epochSupplier.apply(tp)),
-                        replicaIds, replicaIds, replicaIds));
+                        replicaIds, replicaIds, Collections.emptyList()));
             }
 
             topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic, topicIds.getOrDefault(topic, Uuid.ZERO_UUID),

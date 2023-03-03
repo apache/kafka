@@ -342,6 +342,8 @@ public class DefaultRecord implements Record {
             int numHeaders = ByteUtils.readVarint(buffer);
             if (numHeaders < 0)
                 throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
+            if (numHeaders > buffer.remaining())
+                throw new InvalidRecordException("Found invalid number of record headers. " + numHeaders + " is larger than the remaining size of the buffer");
 
             final Header[] headers;
             if (numHeaders == 0)

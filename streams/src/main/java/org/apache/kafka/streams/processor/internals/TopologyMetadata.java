@@ -73,6 +73,7 @@ public class TopologyMetadata {
     private final ProcessingMode processingMode;
     private final TopologyVersion version;
     private final TaskExecutionMetadata taskExecutionMetadata;
+    private final Set<String> pausedTopologies;
 
     private final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders; // Keep sorted by topology name for readability
 
@@ -104,6 +105,7 @@ public class TopologyMetadata {
         this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
         this.log = LoggerFactory.getLogger(getClass());
+        this.pausedTopologies = ConcurrentHashMap.newKeySet();
 
         builders = new ConcurrentSkipListMap<>();
         if (builder.hasNamedTopology()) {
@@ -111,7 +113,7 @@ public class TopologyMetadata {
         } else {
             builders.put(UNNAMED_TOPOLOGY, builder);
         }
-        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet());
+        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet(), pausedTopologies, processingMode);
     }
 
     public TopologyMetadata(final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders,
@@ -120,12 +122,13 @@ public class TopologyMetadata {
         this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
         this.log = LoggerFactory.getLogger(getClass());
+        this.pausedTopologies = ConcurrentHashMap.newKeySet();
 
         this.builders = builders;
         if (builders.isEmpty()) {
             log.info("Created an empty KafkaStreams app with no topology");
         }
-        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet());
+        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet(), pausedTopologies, processingMode);
     }
 
     // Need to (re)set the log here to pick up the `processId` part of the clientId in the prefix
@@ -255,6 +258,35 @@ public class TopologyMetadata {
         } finally {
             unlock();
         }
+    }
+
+    /**
+     * Pauses a topology by name
+     * @param topologyName Name of the topology to pause
+     */
+    public void pauseTopology(final String topologyName) {
+        pausedTopologies.add(topologyName);
+    }
+
+    /**
+     * Checks if a given topology is paused.
+     * @param topologyName If null, assume that we are checking the `UNNAMED_TOPOLOGY`.
+     * @return A boolean indicating if the topology is paused.
+     */
+    public boolean isPaused(final String topologyName) {
+        if (topologyName == null) {
+            return pausedTopologies.contains(UNNAMED_TOPOLOGY);
+        } else {
+            return pausedTopologies.contains(topologyName);
+        }
+    }
+
+    /**
+     * Resumes a topology by name
+     * @param topologyName Name of the topology to resume
+     */
+    public void resumeTopology(final String topologyName) {
+        pausedTopologies.remove(topologyName);
     }
 
     /**

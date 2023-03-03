@@ -16,12 +16,11 @@
  */
 package kafka
 
-import java.io.File
 import java.nio.file.Files
 import java.util
 import java.util.Properties
 import kafka.server.KafkaConfig
-import kafka.utils.Exit
+import kafka.utils.{Exit, TestUtils}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
@@ -390,8 +389,7 @@ class KafkaTest {
   }
 
   def prepareConfig(lines : Array[String]): String = {
-    val file = File.createTempFile("kafkatest", ".properties")
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("kafkatest", ".properties")
 
     val writer = Files.newOutputStream(file.toPath)
     try {

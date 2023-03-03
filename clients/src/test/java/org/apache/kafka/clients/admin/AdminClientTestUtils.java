@@ -24,7 +24,9 @@ import java.util.stream.Collectors;
 import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -103,8 +105,17 @@ public class AdminClientTestUtils {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> KafkaFuture.completedFuture(e.getValue()))));
     }
 
-    public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(Map<TopicPartition, OffsetAndMetadata> offsets) {
-        return new ListConsumerGroupOffsetsResult(KafkaFuture.completedFuture(offsets));
+    public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(Map<String, Map<TopicPartition, OffsetAndMetadata>> offsets) {
+        Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> resultMap = offsets.entrySet().stream()
+            .collect(Collectors.toMap(e -> CoordinatorKey.byGroupId(e.getKey()),
+                                      e -> KafkaFutureImpl.completedFuture(e.getValue())));
+        return new ListConsumerGroupOffsetsResult(resultMap);
+    }
+
+    public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(String group, KafkaException exception) {
+        final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(exception);
+        return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
     }
 
     /**

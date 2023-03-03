@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -79,35 +78,14 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-
-        final String processorName = processorParameters().processorName();
-        final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters().processorSupplier();
-
-        topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
+        processorParameters().addProcessorTo(topologyBuilder, parentNodeNames());
 
         if (storeNames != null && storeNames.length > 0) {
-            topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
+            topologyBuilder.connectProcessorAndStateStores(processorParameters().processorName(), storeNames);
         }
 
         if (storeBuilder != null) {
-            topologyBuilder.addStateStore(storeBuilder, processorName);
+            topologyBuilder.addStateStore(storeBuilder, processorParameters().processorName());
         }
-
-        if (processorSupplier.stores() != null) {
-            for (final StoreBuilder<?> storeBuilder : processorSupplier.stores()) {
-                topologyBuilder.addStateStore(storeBuilder, processorName);
-            }
-        }
-
-        // temporary hack until KIP-478 is fully implemented
-        @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> oldProcessorSupplier =
-            processorParameters().oldProcessorSupplier();
-        if (oldProcessorSupplier != null && oldProcessorSupplier.stores() != null) {
-            for (final StoreBuilder<?> storeBuilder : oldProcessorSupplier.stores()) {
-                topologyBuilder.addStateStore(storeBuilder, processorName);
-            }
-        }
-
     }
 }

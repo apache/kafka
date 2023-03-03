@@ -792,6 +792,38 @@ public class MetadataTest {
     }
 
     @Test
+    public void testNodeIfOnlineWhenNotInReplicaSet() {
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        partitionCounts.put("topic-1", 1);
+        Node node0 = new Node(0, "localhost", 9092);
+
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 2, Collections.emptyMap(), partitionCounts, _tp -> 99,
+            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
+                new MetadataResponse.PartitionMetadata(error, partition, Optional.of(node0.id()), leaderEpoch,
+                    Collections.singletonList(node0.id()), Collections.emptyList(),
+                        Collections.emptyList()), ApiKeys.METADATA.latestVersion(), Collections.emptyMap());
+        metadata.updateWithCurrentRequestVersion(emptyMetadataResponse(), false, 0L);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 10L);
+
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+
+        assertEquals(1, metadata.fetch().nodeById(1).id());
+        assertFalse(metadata.fetch().nodeIfOnline(tp, 1).isPresent());
+    }
+
+    @Test
+    public void testNodeIfOnlineNonExistentTopicPartition() {
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
+
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+
+        assertEquals(metadata.fetch().nodeById(0).id(), 0);
+        assertNull(metadata.fetch().partition(tp));
+        assertEquals(metadata.fetch().nodeIfOnline(tp, 0), Optional.empty());
+    }
+
+    @Test
     public void testLeaderMetadataInconsistentWithBrokerMetadata() {
         // Tests a reordering scenario which can lead to inconsistent leader state.
         // A partition initially has one broker offline. That broker comes online and

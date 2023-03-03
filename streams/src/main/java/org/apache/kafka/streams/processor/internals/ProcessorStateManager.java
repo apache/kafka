@@ -43,8 +43,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -168,6 +170,7 @@ public class ProcessorStateManager implements StateManager {
     private final OffsetCheckpoint checkpointFile;
 
     private TaskType taskType;
+    private final boolean stateUpdaterEnabled;
 
     public static String storeChangelogTopic(final String prefix, final String storeName, final String namedTopology) {
         if (namedTopology == null) {
@@ -187,7 +190,8 @@ public class ProcessorStateManager implements StateManager {
                                  final StateDirectory stateDirectory,
                                  final ChangelogRegister changelogReader,
                                  final Map<String, String> storeToChangelogTopic,
-                                 final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
+                                 final Collection<TopicPartition> sourcePartitions,
+                                 final boolean stateUpdaterEnabled) throws ProcessorStateException {
         this.storeToChangelogTopic = storeToChangelogTopic;
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
@@ -196,6 +200,7 @@ public class ProcessorStateManager implements StateManager {
         this.eosEnabled = eosEnabled;
         this.changelogReader = changelogReader;
         this.sourcePartitions = sourcePartitions;
+        this.stateUpdaterEnabled = stateUpdaterEnabled;
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
@@ -207,7 +212,9 @@ public class ProcessorStateManager implements StateManager {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
             if (stores.containsKey(store.name())) {
-                maybeRegisterStoreWithChangelogReader(store.name());
+                if (!stateUpdaterEnabled) {
+                    maybeRegisterStoreWithChangelogReader(store.name());
+                }
             } else {
                 store.init((StateStoreContext) processorContext, store);
             }
@@ -350,7 +357,9 @@ public class ProcessorStateManager implements StateManager {
         // on the state manager this state store would be closed as well
         stores.put(storeName, storeMetadata);
 
-        maybeRegisterStoreWithChangelogReader(storeName);
+        if (!stateUpdaterEnabled) {
+            maybeRegisterStoreWithChangelogReader(storeName);
+        }
 
         log.debug("Registered state store {} to its state manager", storeName);
     }
@@ -364,21 +373,22 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    Collection<TopicPartition> changelogPartitions() {
-        return changelogOffsets().keySet();
+    Set<TopicPartition> changelogPartitions() {
+        return Collections.unmodifiableSet(changelogOffsets().keySet());
     }
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
+        final Collection<TopicPartition> partitionsToMarkAsCorrupted = new LinkedList<>(partitions);
         for (final StateStoreMetadata storeMetadata : stores.values()) {
-            if (partitions.contains(storeMetadata.changelogPartition)) {
+            if (partitionsToMarkAsCorrupted.contains(storeMetadata.changelogPartition)) {
                 storeMetadata.corrupted = true;
-                partitions.remove(storeMetadata.changelogPartition);
+                partitionsToMarkAsCorrupted.remove(storeMetadata.changelogPartition);
             }
         }
 
-        if (!partitions.isEmpty()) {
-            throw new IllegalStateException("Some partitions " + partitions + " are not contained in the store list of task " +
-                taskId + " marking as corrupted, this is not expected");
+        if (!partitionsToMarkAsCorrupted.isEmpty()) {
+            throw new IllegalStateException("Some partitions " + partitionsToMarkAsCorrupted + " are not contained in " +
+                "the store list of task " + taskId + " marking as corrupted, this is not expected");
         }
     }
 
@@ -533,7 +543,9 @@ public class ProcessorStateManager implements StateManager {
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
-        changelogReader.unregister(getAllChangelogTopicPartitions());
+        if (!stateUpdaterEnabled) {
+            changelogReader.unregister(getAllChangelogTopicPartitions());
+        }
 
         RuntimeException firstException = null;
         // attempting to close the stores, just in case they
@@ -572,21 +584,18 @@ public class ProcessorStateManager implements StateManager {
     void recycle() {
         log.debug("Recycling state for {} task {}.", taskType, taskId);
 
-        final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
-        changelogReader.unregister(allChangelogs);
+        if (!stateUpdaterEnabled) {
+            final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
+            changelogReader.unregister(allChangelogs);
+        }
     }
 
-    void transitionTaskType(final TaskType newType, final LogContext logContext) {
+    void transitionTaskType(final TaskType newType) {
         if (taskType.equals(newType)) {
             throw new IllegalStateException("Tried to recycle state for task type conversion but new type was the same.");
         }
 
-        final TaskType oldType = taskType;
         taskType = newType;
-        log = logContext.logger(ProcessorStateManager.class);
-        logPrefix = logContext.logPrefix();
-
-        log.debug("Transitioning state manager for {} task {} to {}", oldType, taskId, newType);
     }
 
     @Override

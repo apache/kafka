@@ -20,7 +20,6 @@ import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collections;
@@ -31,6 +30,10 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * An implementation of ConfigBackingStore that stores Kafka Connect connector configurations in-memory (i.e. configs
+ * aren't persisted and will be wiped if the worker is restarted).
+ */
 public class MemoryConfigBackingStore implements ConfigBackingStore {
 
     private final Map<String, ConnectorState> connectors = new HashMap<>();
@@ -75,8 +78,12 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
                 connectorConfigs,
                 connectorTargetStates,
                 taskConfigs,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
-                configTransformer);
+                Collections.emptySet(),
+                configTransformer
+        );
     }
 
     @Override
@@ -153,6 +160,11 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
 
     @Override
     public void putRestartRequest(RestartRequest restartRequest) {
+        // no-op
+    }
+
+    @Override
+    public void putTaskCountRecord(String connector, int taskCount) {
         // no-op
     }
 

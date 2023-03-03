@@ -19,9 +19,9 @@ package kafka.api
 import java.util.Properties
 
 import kafka.server.KafkaConfig
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils._
 import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
@@ -45,20 +45,28 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   private val clientPassword = JaasTestUtils.KafkaScramPassword
 
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramAdmin)
-  private val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
+  protected val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
+  override val unimplementedquorum = "kraft"
 
-  private val privilegedAdminClientConfig = new Properties()
+  protected val privilegedAdminClientConfig = new Properties()
 
   this.serverConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
 
+  def createDelegationTokenOptions(): CreateDelegationTokenOptions = new CreateDelegationTokenOptions()
+
+  def configureTokenAclsBeforeServersStart(): Unit = { }
+
   override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
+    configureTokenAclsBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker admin credentials before starting brokers
     createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
   }
 
-  override def createPrivilegedAdminClient() = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
+  override def createPrivilegedAdminClient(): Admin = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
+
+  def createAdditionalCredentialsAfterServersStarted(): Unit = {}
 
   override def configureSecurityAfterServersStart(): Unit = {
     super.configureSecurityAfterServersStart()
@@ -66,6 +74,8 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     // create scram credential for user "scram-user"
     createScramCredentialsViaPrivilegedAdminClient(clientPrincipal.getName, clientPassword)
     waitForUserScramCredentialToAppearOnAllBrokers(clientPrincipal.getName, kafkaClientSaslMechanism)
+
+    createAdditionalCredentialsAfterServersStarted()
 
     //create a token with "scram-user" credentials and a privileged token with scram-admin credentials
     val tokens = createDelegationTokens()
@@ -81,6 +91,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     val privilegedClientLoginContext = JaasTestUtils.tokenClientLoginModule(privilegedToken.tokenInfo().tokenId(), privilegedToken.hmacAsBase64String())
     privilegedAdminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, privilegedClientLoginContext)
+    superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, privilegedClientLoginContext)
   }
 
   @Test
@@ -100,17 +111,43 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
-    super.setUp(testInfo)
-    privilegedAdminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+    if (!TestInfoUtils.isKRaft(testInfo)) {
+      startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
+      super.setUp(testInfo)
+      privilegedAdminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+    }
   }
 
-  private def createDelegationTokens(): (DelegationToken, DelegationToken) = {
-    val adminClient = createScramAdminClient(kafkaClientSaslMechanism, clientPrincipal.getName, clientPassword)
+  def assertTokenOwner(owner: KafkaPrincipal, token: DelegationToken): Unit = {
+    assertEquals(owner, token.tokenInfo().owner())
+  }
+
+  def assertTokenRequester(requester: KafkaPrincipal, token: DelegationToken): Unit = {
+    assertEquals(requester, token.tokenInfo().tokenRequester())
+  }
+
+  def assertToken(token: DelegationToken): Unit = {
+    assertTokenOwner(clientPrincipal, token)
+    assertTokenRequester(clientPrincipal, token)
+  }
+
+  def createTokenRequesterAdminClient(): Admin = {
+    createScramAdminClient(kafkaClientSaslMechanism, clientPrincipal.getName, clientPassword)
+  }
+
+  def createDelegationTokens(): (DelegationToken, DelegationToken) = {
+    createDelegationTokens(createDelegationTokenOptions)
+  }
+
+  def createDelegationTokens(createDelegationTokenOptions: () => CreateDelegationTokenOptions, assert: Boolean = true): (DelegationToken, DelegationToken) = {
+    val adminClient = createTokenRequesterAdminClient()
     try {
       val privilegedAdminClient = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
       try {
-        val token = adminClient.createDelegationToken().delegationToken().get()
+        val token = adminClient.createDelegationToken(createDelegationTokenOptions()).delegationToken().get()
+        if (assert) {
+          assertToken(token)
+        }
         val privilegedToken = privilegedAdminClient.createDelegationToken().delegationToken().get()
         //wait for tokens to reach all the brokers
         TestUtils.waitUntilTrue(() => servers.forall(server => server.tokenCache.tokens().size() == 2),

@@ -20,7 +20,6 @@ package kafka.integration
 import java.io.File
 import java.util
 import java.util.Arrays
-
 import kafka.server.QuorumTestHarness
 import kafka.server._
 import kafka.utils.TestUtils
@@ -30,18 +29,20 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 import java.util.Properties
-
 import kafka.utils.TestUtils.{createAdminClient, resource}
+import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 
 /**
  * A test harness that brings up some number of broker nodes
  */
 abstract class KafkaServerTestHarness extends QuorumTestHarness {
-  var instanceConfigs: Seq[KafkaConfig] = null
+  var instanceConfigs: Seq[KafkaConfig] = _
 
   private val _brokers = new mutable.ArrayBuffer[KafkaBroker]
 
@@ -59,7 +60,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     _brokers.asInstanceOf[mutable.Buffer[KafkaServer]]
   }
 
-  var alive: Array[Boolean] = null
+  var alive: Array[Boolean] = _
 
   /**
    * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
@@ -168,10 +169,11 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     topicConfig: Properties = new Properties,
-    listenerName: ListenerName = listenerName
+    listenerName: ListenerName = listenerName,
+    adminClientConfig: Properties = new Properties
   ): scala.collection.immutable.Map[Int, Int] = {
     if (isKRaftTest()) {
-      resource(createAdminClient(brokers, listenerName)) { admin =>
+      resource(createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
         TestUtils.createTopicWithAdmin(
           admin = admin,
           topic = topic,
@@ -230,11 +232,19 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         TestUtils.deleteTopicWithAdmin(
           admin = admin,
           topic = topic,
-          brokers = brokers)
+          brokers = aliveBrokers)
       }
     } else {
       adminZkClient.deleteTopic(topic)
     }
+  }
+
+  def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
+    TestUtils.addAndVerifyAcls(brokers, acls, resource, controllerServers)
+  }
+
+  def removeAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
+    TestUtils.removeAndVerifyAcls(brokers, acls, resource, controllerServers)
   }
 
   /**
@@ -289,7 +299,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def getTopicIds(names: Seq[String]): Map[String, Uuid] = {
     val result = new util.HashMap[String, Uuid]()
     if (isKRaftTest()) {
-      val topicIdsMap = controllerServer.controller.findTopicIds(Long.MaxValue, names.asJava).get()
+      val topicIdsMap = controllerServer.controller.findTopicIds(ANONYMOUS_CONTEXT, names.asJava).get()
       names.foreach { name =>
         val response = topicIdsMap.get(name)
         result.put(name, response.result())
@@ -305,7 +315,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
 
   def getTopicIds(): Map[String, Uuid] = {
     if (isKRaftTest()) {
-      controllerServer.controller.findAllTopicIds(Long.MaxValue).get().asScala.toMap
+      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
     } else {
       getController().kafkaController.controllerContext.topicIds.toMap
     }
@@ -314,7 +324,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def getTopicNames(): Map[Uuid, String] = {
     if (isKRaftTest()) {
       val result = new util.HashMap[Uuid, String]()
-      controllerServer.controller.findAllTopicIds(Long.MaxValue).get().entrySet().forEach {
+      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().entrySet().forEach {
         e => result.put(e.getValue(), e.getKey())
       }
       result.asScala.toMap
@@ -347,7 +357,21 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         config,
         time = brokerTime(config.brokerId),
         threadNamePrefix = None,
-        startup = false
+        startup = false,
+        enableZkApiForwarding = isZkMigrationTest() || (config.migrationEnabled && config.interBrokerProtocolVersion.isApiForwardingEnabled)
+      )
+    }
+  }
+
+  def aliveBrokers: Seq[KafkaBroker] = {
+    _brokers.filter(broker => alive(broker.config.brokerId)).toSeq
+  }
+
+  def ensureConsistentKRaftMetadata(): Unit = {
+    if (isKRaftTest()) {
+      TestUtils.ensureConsistentKRaftMetadata(
+        aliveBrokers,
+        controllerServer
       )
     }
   }

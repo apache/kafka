@@ -84,6 +84,11 @@ public class MetadataResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     /**
      * Get a map of the topics which had metadata errors
      * @return the map

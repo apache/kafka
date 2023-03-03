@@ -20,18 +20,14 @@ package kafka.coordinator.group
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.util.Optional
+import java.util.{Optional, OptionalInt}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
-
+import java.util.concurrent.ConcurrentHashMap
 import com.yammer.metrics.core.Gauge
-import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0}
 import kafka.common.OffsetAndMetadata
-import kafka.internals.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
-import kafka.log.AppendOrigin
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{FetchLogEnd, ReplicaManager, RequestLocal}
+import kafka.server.{ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
 import kafka.utils._
@@ -47,19 +43,24 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicPartition}
+import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
+import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
 class GroupMetadataManager(brokerId: Int,
-                           interBrokerProtocolVersion: ApiVersion,
+                           interBrokerProtocolVersion: MetadataVersion,
                            config: OffsetConfig,
                            val replicaManager: ReplicaManager,
                            time: Time,
                            metrics: Metrics) extends Logging with KafkaMetricsGroup {
 
-  private val compressionType: CompressionType = CompressionType.forId(config.offsetsTopicCompressionCodec.codec)
+  private val compressionType: CompressionType = config.offsetsTopicCompressionType
 
   private val groupMetadataCache = new Pool[String, GroupMetadata]
 
@@ -79,7 +80,7 @@ class GroupMetadataManager(brokerId: Int,
   @volatile private var groupMetadataTopicPartitionCount: Int = _
 
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
-  private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
+  private val scheduler = new KafkaScheduler(1, true, "group-metadata-manager-")
 
   /* The groups with open transactional offsets commits per producer. We need this because when the commit or abort
    * marker comes in for a transaction, it is for a particular partition on the offsets topic and a particular producerId.
@@ -175,10 +176,10 @@ class GroupMetadataManager(brokerId: Int,
     groupMetadataTopicPartitionCount = retrieveGroupMetadataTopicPartitionCount()
     scheduler.startup()
     if (enableMetadataExpiration) {
-      scheduler.schedule(name = "delete-expired-group-metadata",
-        fun = () => cleanupGroupMetadata(),
-        period = config.offsetsRetentionCheckIntervalMs,
-        unit = TimeUnit.MILLISECONDS)
+      scheduler.schedule("delete-expired-group-metadata",
+        () => cleanupGroupMetadata(),
+        0L,
+        config.offsetsRetentionCheckIntervalMs)
     }
   }
 
@@ -330,7 +331,7 @@ class GroupMetadataManager(brokerId: Int,
       timeout = config.offsetCommitTimeoutMs.toLong,
       requiredAcks = config.offsetCommitRequiredAcks,
       internalTopicsAllowed = true,
-      origin = AppendOrigin.Coordinator,
+      origin = AppendOrigin.COORDINATOR,
       entriesPerPartition = records,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback,
@@ -537,7 +538,7 @@ class GroupMetadataManager(brokerId: Int,
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     info(s"Scheduling loading of offsets and group metadata from $topicPartition for epoch $coordinatorEpoch")
     val startTimeMs = time.milliseconds()
-    scheduler.schedule(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, coordinatorEpoch, onGroupLoaded, startTimeMs))
+    scheduler.scheduleOnce(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, coordinatorEpoch, onGroupLoaded, startTimeMs))
   }
 
   private[group] def loadGroupsAndOffsets(
@@ -546,7 +547,7 @@ class GroupMetadataManager(brokerId: Int,
     onGroupLoaded: GroupMetadata => Unit,
     startTimeMs: java.lang.Long
   ): Unit = {
-    if (!maybeUpdateCoordinatorEpoch(topicPartition.partition, Some(coordinatorEpoch))) {
+    if (!maybeUpdateCoordinatorEpoch(topicPartition.partition, OptionalInt.of(coordinatorEpoch))) {
       info(s"Not loading offsets and group metadata for $topicPartition " +
         s"in epoch $coordinatorEpoch since current epoch is ${epochForPartitionId.get(topicPartition.partition)}")
     } else if (!addLoadingPartition(topicPartition.partition)) {
@@ -598,7 +599,7 @@ class GroupMetadataManager(brokerId: Int,
         while (currOffset < logEndOffset && readAtLeastOneRecord && !shuttingDown.get()) {
           val fetchDataInfo = log.read(currOffset,
             maxLength = config.loadBufferSize,
-            isolation = FetchLogEnd,
+            isolation = FetchIsolation.LOG_END,
             minOneMessage = true)
 
           readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0
@@ -762,15 +763,15 @@ class GroupMetadataManager(brokerId: Int,
    * @param offsetsPartition Groups belonging to this partition of the offsets topic will be deleted from the cache.
    */
   def removeGroupsForPartition(offsetsPartition: Int,
-                               coordinatorEpoch: Option[Int],
+                               coordinatorEpoch: OptionalInt,
                                onGroupUnloaded: GroupMetadata => Unit): Unit = {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     info(s"Scheduling unloading of offsets and group metadata from $topicPartition")
-    scheduler.schedule(topicPartition.toString, () => removeGroupsAndOffsets(topicPartition, coordinatorEpoch, onGroupUnloaded))
+    scheduler.scheduleOnce(topicPartition.toString, () => removeGroupsAndOffsets(topicPartition, coordinatorEpoch, onGroupUnloaded))
   }
 
   private [group] def removeGroupsAndOffsets(topicPartition: TopicPartition,
-                                             coordinatorEpoch: Option[Int],
+                                             coordinatorEpoch: OptionalInt,
                                              onGroupUnloaded: GroupMetadata => Unit): Unit = {
     val offsetsPartition = topicPartition.partition
     if (maybeUpdateCoordinatorEpoch(offsetsPartition, coordinatorEpoch)) {
@@ -809,19 +810,22 @@ class GroupMetadataManager(brokerId: Int,
    */
   private def maybeUpdateCoordinatorEpoch(
     partitionId: Int,
-    epochOpt: Option[Int]
+    epochOpt: OptionalInt
   ): Boolean = {
     val updatedEpoch = epochForPartitionId.compute(partitionId, (_, currentEpoch) => {
       if (currentEpoch == null) {
-        epochOpt.map(Int.box).orNull
+        if (epochOpt.isPresent) epochOpt.getAsInt
+        else null
       } else {
-        epochOpt match {
-          case Some(epoch) if epoch > currentEpoch => epoch
-          case _ => currentEpoch
-        }
+        if (epochOpt.isPresent && epochOpt.getAsInt > currentEpoch) epochOpt.getAsInt
+        else currentEpoch
       }
     })
-    epochOpt.forall(_ == updatedEpoch)
+    if (epochOpt.isPresent) {
+      epochOpt.getAsInt == updatedEpoch
+    } else {
+      true
+    }
   }
 
   // visible for testing
@@ -889,7 +893,7 @@ class GroupMetadataManager(brokerId: Int,
                 // do not need to require acks since even if the tombstone is lost,
                 // it will be appended again in the next purge cycle
                 val records = MemoryRecords.withRecords(magicValue, 0L, compressionType, timestampType, tombstones.toArray: _*)
-                partition.appendRecordsToLeader(records, origin = AppendOrigin.Coordinator, requiredAcks = 0,
+                partition.appendRecordsToLeader(records, origin = AppendOrigin.COORDINATOR, requiredAcks = 0,
                   requestLocal = requestLocal)
 
                 offsetsRemoved += removedOffsets.size
@@ -921,7 +925,7 @@ class GroupMetadataManager(brokerId: Int,
    * the scheduler thread to avoid deadlocks.
    */
   def scheduleHandleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean): Unit = {
-    scheduler.schedule(s"handleTxnCompletion-$producerId", () =>
+    scheduler.scheduleOnce(s"handleTxnCompletion-$producerId", () =>
       handleTxnCompletion(producerId, completedPartitions, isCommit))
   }
 
@@ -974,8 +978,7 @@ class GroupMetadataManager(brokerId: Int,
 
   def shutdown(): Unit = {
     shuttingDown.set(true)
-    if (scheduler.isStarted)
-      scheduler.shutdown()
+    scheduler.shutdown()
     metrics.removeSensor(GroupMetadataManager.LoadTimeSensor)
     metrics.removeSensor(GroupMetadataManager.OffsetCommitsSensor)
     metrics.removeSensor(GroupMetadataManager.OffsetExpiredSensor)
@@ -993,11 +996,11 @@ class GroupMetadataManager(brokerId: Int,
     replicaManager.getMagic(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))
 
   /**
-   * Add the partition into the owned list
+   * Add a partition to the owned partition set.
    *
-   * NOTE: this is for test only
+   * NOTE: this is for test only.
    */
-  private[group] def addPartitionOwnership(partition: Int): Unit = {
+  private[group] def addOwnedPartition(partition: Int): Unit = {
     inLock(partitionLock) {
       ownedPartitions.add(partition)
     }
@@ -1074,14 +1077,14 @@ object GroupMetadataManager {
    * Generates the payload for offset commit message from given offset and metadata
    *
    * @param offsetAndMetadata consumer's current offset and metadata
-   * @param apiVersion the api version
+   * @param metadataVersion the api version
    * @return payload for offset commit message
    */
   def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata,
-                        apiVersion: ApiVersion): Array[Byte] = {
+                        metadataVersion: MetadataVersion): Array[Byte] = {
     val version =
-      if (apiVersion < KAFKA_2_1_IV0 || offsetAndMetadata.expireTimestamp.nonEmpty) 1.toShort
-      else if (apiVersion < KAFKA_2_1_IV1) 2.toShort
+      if (metadataVersion.isLessThan(IBP_2_1_IV0) || offsetAndMetadata.expireTimestamp.nonEmpty) 1.toShort
+      else if (metadataVersion.isLessThan(IBP_2_1_IV1)) 2.toShort
       else 3.toShort
     MessageUtil.toVersionPrefixedBytes(version, new OffsetCommitValue()
       .setOffset(offsetAndMetadata.offset)
@@ -1099,17 +1102,17 @@ object GroupMetadataManager {
    *
    * @param groupMetadata current group metadata
    * @param assignment the assignment for the rebalancing generation
-   * @param apiVersion the api version
+   * @param metadataVersion the api version
    * @return payload for offset commit message
    */
   def groupMetadataValue(groupMetadata: GroupMetadata,
                          assignment: Map[String, Array[Byte]],
-                         apiVersion: ApiVersion): Array[Byte] = {
+                         metadataVersion: MetadataVersion): Array[Byte] = {
 
     val version =
-      if (apiVersion < KAFKA_0_10_1_IV0) 0.toShort
-      else if (apiVersion < KAFKA_2_1_IV0) 1.toShort
-      else if (apiVersion < KAFKA_2_3_IV0) 2.toShort
+      if (metadataVersion.isLessThan(IBP_0_10_1_IV0)) 0.toShort
+      else if (metadataVersion.isLessThan(IBP_2_1_IV0)) 1.toShort
+      else if (metadataVersion.isLessThan(IBP_2_3_IV0)) 2.toShort
       else 3.toShort
 
     MessageUtil.toVersionPrefixedBytes(version, new GroupMetadataValue()

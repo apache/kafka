@@ -32,7 +32,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
 
@@ -241,7 +241,7 @@ public class StateDirectoryTest {
 
         // Replace application's stateDir to regular file
         Utils.delete(appDir);
-        appDir.createNewFile();
+        Files.createFile(appDir.toPath());
 
         assertThrows(ProcessorStateException.class, () -> directory.getOrCreateDirectoryForTask(taskId));
     }
@@ -253,7 +253,7 @@ public class StateDirectoryTest {
         // Replace taskDir to a regular file
         final File taskDir = new File(appDir, toTaskDirString(taskId));
         Utils.delete(taskDir);
-        taskDir.createNewFile();
+        Files.createFile(taskDir.toPath());
 
         // Error: ProcessorStateException should be thrown.
         assertThrows(ProcessorStateException.class, () -> directory.getOrCreateDirectoryForTask(taskId));
@@ -391,8 +391,8 @@ public class StateDirectoryTest {
 
         // make sure the File#listFiles returns null and StateDirectory#listAllTaskDirectories is able to handle null
         Utils.delete(appDir);
-        assertTrue(appDir.createNewFile());
-        assertTrue(appDir.exists());
+        Files.createFile(appDir.toPath());
+        assertTrue(Files.exists(appDir.toPath()));
         assertNull(appDir.listFiles());
         assertEquals(0, directory.listAllTaskDirectories().size());
     }
@@ -571,7 +571,7 @@ public class StateDirectoryTest {
 
         // Create a dummy file in appDir; for this, appDir will not be empty after cleanup.
         final File dummyFile = new File(appDir, "dummy");
-        assertTrue(dummyFile.createNewFile());
+        Files.createFile(dummyFile.toPath());
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             // call StateDirectory#clean
@@ -791,7 +791,7 @@ public class StateDirectoryTest {
     @Test
     public void shouldGetFreshProcessIdIfJsonUnreadable() throws Exception {
         final File processFile = new File(appDir, PROCESS_FILE_NAME);
-        assertThat(processFile.createNewFile(), is(true));
+        Files.createFile(processFile.toPath());
         final UUID processId = UUID.randomUUID();
 
         final FileOutputStream fileOutputStream = new FileOutputStream(processFile);

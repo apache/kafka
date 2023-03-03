@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.controller.ControllerRequestContext;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult;
@@ -69,7 +70,10 @@ public class ClusterMetadataAuthorizerTest {
         }
 
         @Override
-        public CompletableFuture<List<AclCreateResult>> createAcls(List<AclBinding> aclBindings) {
+        public CompletableFuture<List<AclCreateResult>> createAcls(
+            ControllerRequestContext context,
+            List<AclBinding> aclBindings
+        ) {
             return createAclsResponse;
         }
 
@@ -78,7 +82,10 @@ public class ClusterMetadataAuthorizerTest {
         }
 
         @Override
-        public CompletableFuture<List<AclDeleteResult>> deleteAcls(List<AclBindingFilter> aclBindingFilters) {
+        public CompletableFuture<List<AclDeleteResult>> deleteAcls(
+            ControllerRequestContext context,
+            List<AclBindingFilter> aclBindingFilters
+        ) {
             return deleteAclsResponse;
         }
     }
@@ -97,6 +104,16 @@ public class ClusterMetadataAuthorizerTest {
                 throw new NotControllerException("The current node is not the active controller.");
             }
             return aclMutator;
+        }
+
+        @Override
+        public void completeInitialLoad() {
+            // do nothing
+        }
+
+        @Override
+        public void completeInitialLoad(Exception e) {
+            // do nothing
         }
 
         @Override

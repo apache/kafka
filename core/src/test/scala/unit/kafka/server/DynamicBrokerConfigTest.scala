@@ -18,21 +18,24 @@
 package kafka.server
 
 import java.{lang, util}
-import java.util.{Map => JMap, Properties}
+import java.util.{Properties, Map => JMap}
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.atomic.AtomicReference
-
 import kafka.controller.KafkaController
-import kafka.log.{LogConfig, LogManager}
+import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
-import kafka.utils.{KafkaScheduler, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyString
@@ -105,7 +108,7 @@ class DynamicBrokerConfigTest {
     Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
     Mockito.when(logManagerMock.allLogs).thenReturn(Iterable.empty)
 
-    val currentDefaultLogConfig = new AtomicReference(LogConfig())
+    val currentDefaultLogConfig = new AtomicReference(new LogConfig(new Properties))
     Mockito.when(logManagerMock.currentDefaultConfig).thenAnswer(_ => currentDefaultLogConfig.get())
     Mockito.when(logManagerMock.reconfigureDefaultLogConfig(ArgumentMatchers.any(classOf[LogConfig])))
       .thenAnswer(invocation => currentDefaultLogConfig.set(invocation.getArgument(0)))
@@ -181,7 +184,7 @@ class DynamicBrokerConfigTest {
     props.put(KafkaConfig.BackgroundThreadsProp, "6")
     config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(6, config.backgroundThreads)
-    Mockito.verify(schedulerMock).resizeThreadPool(newSize = 6)
+    Mockito.verify(schedulerMock).resizeThreadPool(6)
 
     Mockito.verifyNoMoreInteractions(
       handlerPoolMock,
@@ -511,7 +514,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.initialize(None)
 
     assertEquals(Defaults.MaxConnections, config.maxConnections)
-    assertEquals(Defaults.MessageMaxBytes, config.messageMaxBytes)
+    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, config.messageMaxBytes)
 
     var newProps = new Properties()
     newProps.put(KafkaConfig.MaxConnectionsProp, "9999")
@@ -530,6 +533,70 @@ class DynamicBrokerConfigTest {
     assertEquals(Defaults.MaxConnections, config.maxConnections)
     // Even if One property is invalid, the below should get correctly updated.
     assertEquals(1111, config.messageMaxBytes)
+  }
+
+  @Test
+  def testUpdateMetricReporters(): Unit = {
+    val brokerId = 0
+    val origProps = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect, port = 8181)
+
+    val config = KafkaConfig(origProps)
+    val serverMock = Mockito.mock(classOf[KafkaBroker])
+    val metrics = Mockito.mock(classOf[Metrics])
+
+    Mockito.when(serverMock.config).thenReturn(config)
+
+    config.dynamicConfig.initialize(None)
+    val m = new DynamicMetricsReporters(brokerId, config, metrics, "clusterId")
+    config.dynamicConfig.addReconfigurable(m)
+    assertEquals(1, m.currentReporters.size)
+    assertEquals(classOf[JmxReporter].getName, m.currentReporters.keySet.head)
+
+    val props = new Properties()
+    props.put(KafkaConfig.MetricReporterClassesProp, classOf[MockMetricsReporter].getName)
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(2, m.currentReporters.size)
+    assertEquals(Set(classOf[JmxReporter].getName, classOf[MockMetricsReporter].getName), m.currentReporters.keySet)
+  }
+
+  @Test
+  @nowarn("cat=deprecation")
+  def testUpdateMetricReportersNoJmxReporter(): Unit = {
+    val brokerId = 0
+    val origProps = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect, port = 8181)
+    origProps.put(KafkaConfig.AutoIncludeJmxReporterProp, "false")
+
+    val config = KafkaConfig(origProps)
+    val serverMock = Mockito.mock(classOf[KafkaBroker])
+    val metrics = Mockito.mock(classOf[Metrics])
+
+    Mockito.when(serverMock.config).thenReturn(config)
+
+    config.dynamicConfig.initialize(None)
+    val m = new DynamicMetricsReporters(brokerId, config, metrics, "clusterId")
+    config.dynamicConfig.addReconfigurable(m)
+    assertTrue(m.currentReporters.isEmpty)
+
+    val props = new Properties()
+    props.put(KafkaConfig.MetricReporterClassesProp, classOf[MockMetricsReporter].getName)
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(1, m.currentReporters.size)
+    assertEquals(classOf[MockMetricsReporter].getName, m.currentReporters.keySet.head)
+
+    props.remove(KafkaConfig.MetricReporterClassesProp)
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertTrue(m.currentReporters.isEmpty)
+  }
+
+  @Test
+  def testNonInternalValuesDoesNotExposeInternalConfigs(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.put(KafkaConfig.MetadataLogSegmentMinBytesProp, "1024")
+    val config = new KafkaConfig(props)
+    assertFalse(config.nonInternalValues.containsKey(KafkaConfig.MetadataLogSegmentMinBytesProp))
+    config.updateCurrentConfig(new KafkaConfig(props))
+    assertFalse(config.nonInternalValues.containsKey(KafkaConfig.MetadataLogSegmentMinBytesProp))
   }
 }
 

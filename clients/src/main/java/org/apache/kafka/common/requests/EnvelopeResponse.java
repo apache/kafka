@@ -67,6 +67,11 @@ public class EnvelopeResponse extends AbstractResponse {
         return DEFAULT_THROTTLE_TIME;
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
     public static EnvelopeResponse parse(ByteBuffer buffer, short version) {
         return new EnvelopeResponse(new EnvelopeResponseData(new ByteBufferAccessor(buffer), version));
     }

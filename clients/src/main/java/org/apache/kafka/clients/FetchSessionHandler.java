@@ -71,6 +71,11 @@ public class FetchSessionHandler {
         this.node = node;
     }
 
+    // visible for testing
+    public int sessionId() {
+        return nextMetadata.sessionId();
+    }
+
     /**
      * All of the partitions which exist in the fetch request session.
      */
@@ -433,13 +438,13 @@ public class FetchSessionHandler {
             extraIds = findMissing(ids, sessionTopicNames.keySet());
         }
         if (!omitted.isEmpty()) {
-            bld.append("omittedPartitions=(").append(Utils.join(omitted, ", ")).append(", ");
+            bld.append("omittedPartitions=(").append(Utils.join(omitted, ", ")).append("), ");
         }
         if (!extra.isEmpty()) {
-            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append(", ");
+            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");
         }
         if (!extraIds.isEmpty()) {
-            bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append(", ");
+            bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append("), ");
         }
         if ((!omitted.isEmpty()) || (!extra.isEmpty()) || (!extraIds.isEmpty())) {
             bld.append("response=(").append(Utils.join(topicPartitions, ", ")).append(")");
@@ -525,7 +530,7 @@ public class FetchSessionHandler {
             if (response.error() == Errors.FETCH_SESSION_ID_NOT_FOUND) {
                 nextMetadata = FetchMetadata.INITIAL;
             } else {
-                nextMetadata = nextMetadata.nextCloseExisting();
+                nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             }
             return false;
         }
@@ -567,7 +572,7 @@ public class FetchSessionHandler {
             String problem = verifyIncrementalFetchResponsePartitions(topicPartitions, response.topicIds(), version);
             if (problem != null) {
                 log.info("Node {} sent an invalid incremental fetch response with {}", node, problem);
-                nextMetadata = nextMetadata.nextCloseExisting();
+                nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
                 return false;
             } else if (response.sessionId() == INVALID_SESSION_ID) {
                 // The incremental fetch session was closed by the server.
@@ -591,6 +596,14 @@ public class FetchSessionHandler {
     }
 
     /**
+     * The client will initiate the session close on next fetch request.
+     */
+    public void notifyClose() {
+        log.debug("Set the metadata for next fetch request to close the existing session ID={}", nextMetadata.sessionId());
+        nextMetadata = nextMetadata.nextCloseExisting();
+    }
+
+    /**
      * Handle an error sending the prepared request.
      *
      * When a network error occurs, we close any existing fetch session on our next request,
@@ -600,6 +613,13 @@ public class FetchSessionHandler {
      */
     public void handleError(Throwable t) {
         log.info("Error sending fetch request {} to node {}:", nextMetadata, node, t);
-        nextMetadata = nextMetadata.nextCloseExisting();
+        nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
+    }
+
+    /**
+     * Get the fetch request session's partitions.
+     */
+    public Set<TopicPartition> sessionTopicPartitions() {
+        return sessionPartitions.keySet();
     }
 }

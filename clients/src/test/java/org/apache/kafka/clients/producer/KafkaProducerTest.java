@@ -172,7 +172,7 @@ public class KafkaProducerTest {
                   KafkaClient kafkaClient,
                   ProducerInterceptors<K, V> interceptors,
                   Time time) {
-        return new KafkaProducer<K, V>(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
+        return new KafkaProducer<>(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
             keySerializer, valueSerializer, metadata, kafkaClient, interceptors, time);
     }
 
@@ -455,6 +455,28 @@ public class KafkaProducerTest {
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) producer.metrics.reporters().get(0);
 
         assertEquals(producer.getClientId(), mockMetricsReporter.clientId);
+        assertEquals(2, producer.metrics.reporters().size());
+        producer.close();
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testDisableJmxReporter() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        assertTrue(producer.metrics.reporters().isEmpty());
+        producer.close();
+    }
+
+    @Test
+    public void testExplicitlyEnableJmxReporter() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        assertEquals(1, producer.metrics.reporters().size());
         producer.close();
     }
 
@@ -547,7 +569,31 @@ public class KafkaProducerTest {
             MockProducerInterceptor.resetCounters();
         }
     }
+    @Test
+    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
+        final int targetInterceptor = 3;
+        try {
+            Properties props = new Properties();
+            props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, org.apache.kafka.test.MockProducerInterceptor.class.getName() + ", "
+                    +  org.apache.kafka.test.MockProducerInterceptor.class.getName() + ", "
+                    +  org.apache.kafka.test.MockProducerInterceptor.class.getName());
+            props.setProperty(MockProducerInterceptor.APPEND_STRING_PROP, "something");
 
+            MockProducerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
+
+            assertThrows(KafkaException.class, () -> {
+                new KafkaProducer<>(
+                        props, new StringSerializer(), new StringSerializer());
+            });
+
+            assertEquals(3, MockProducerInterceptor.CONFIG_COUNT.get());
+            assertEquals(3, MockProducerInterceptor.CLOSE_COUNT.get());
+
+        } finally {
+            MockProducerInterceptor.resetCounters();
+        }
+    }
     @Test
     public void testPartitionerClose() {
         try {
@@ -1901,10 +1947,13 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCallbackHandlesError() throws Exception {
+    public void testCallbackAndInterceptorHandleError() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "1000");
+        configs.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MockProducerInterceptor.class.getName());
+        configs.put(MockProducerInterceptor.APPEND_STRING_PROP, "something");
+
 
         Time time = new MockTime();
         ProducerMetadata producerMetadata = newMetadata(0, Long.MAX_VALUE);
@@ -1912,8 +1961,11 @@ public class KafkaProducerTest {
 
         String invalidTopicName = "topic abc"; // Invalid topic name due to space
 
+        ProducerInterceptors<String, String> producerInterceptors =
+                new ProducerInterceptors<>(Arrays.asList(new MockProducerInterceptor()));
+
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
-                producerMetadata, client, null, time)) {
+                producerMetadata, client, producerInterceptors, time)) {
             ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
 
             // Here's the important piece of the test. Let's make sure that the RecordMetadata we get
@@ -1938,6 +1990,7 @@ public class KafkaProducerTest {
             };
 
             producer.send(record, callBack);
+            assertEquals(1, MockProducerInterceptor.ON_ACKNOWLEDGEMENT_COUNT.intValue());
         }
     }
 
@@ -1983,6 +2036,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testPartitionAddedToTransactionAfterFullBatchRetry() throws Exception {
         StringSerializer serializer = new StringSerializer();
@@ -2046,21 +2100,28 @@ public class KafkaProducerTest {
         )).thenReturn(initialSelectedPartition.partition());
 
         when(ctx.accumulator.append(
-            eq(initialSelectedPartition),
-            eq(timestamp),
-            eq(serializedKey),
-            eq(serializedValue),
-            eq(Record.EMPTY_HEADERS),
-            any(Callback.class),
+            eq(initialSelectedPartition.topic()),            // 0
+            eq(initialSelectedPartition.partition()),        // 1
+            eq(timestamp),                                   // 2
+            eq(serializedKey),                               // 3
+            eq(serializedValue),                             // 4
+            eq(Record.EMPTY_HEADERS),                        // 5
+            any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),
             eq(true),
-            anyLong()
-        )).thenReturn(new RecordAccumulator.RecordAppendResult(
-            futureRecordMetadata,
-            false,
-            false,
-            false
-        ));
+            anyLong(),
+            any()
+        )).thenAnswer(invocation -> {
+            RecordAccumulator.AppendCallbacks callbacks =
+                (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
+            callbacks.setPartition(initialSelectedPartition.partition());
+            return new RecordAccumulator.RecordAppendResult(
+                futureRecordMetadata,
+                false,
+                false,
+                false,
+                0);
+        });
 
         return futureRecordMetadata;
     }
@@ -2097,38 +2158,52 @@ public class KafkaProducerTest {
           .thenReturn(retrySelectedPartition.partition());
 
         when(ctx.accumulator.append(
-            eq(initialSelectedPartition),
-            eq(timestamp),
-            eq(serializedKey),
-            eq(serializedValue),
-            eq(Record.EMPTY_HEADERS),
-            any(Callback.class),
+            eq(initialSelectedPartition.topic()),            // 0
+            eq(initialSelectedPartition.partition()),        // 1
+            eq(timestamp),                                   // 2
+            eq(serializedKey),                               // 3
+            eq(serializedValue),                             // 4
+            eq(Record.EMPTY_HEADERS),                        // 5
+            any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),
             eq(true), // abortOnNewBatch
-            anyLong()
-        )).thenReturn(new RecordAccumulator.RecordAppendResult(
-            null,
-            false,
-            false,
-            true
-        ));
+            anyLong(),
+            any()
+        )).thenAnswer(invocation -> {
+            RecordAccumulator.AppendCallbacks callbacks =
+                (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
+            callbacks.setPartition(initialSelectedPartition.partition());
+            return new RecordAccumulator.RecordAppendResult(
+                null,
+                false,
+                false,
+                true,
+                0);
+        });
 
         when(ctx.accumulator.append(
-            eq(retrySelectedPartition),
-            eq(timestamp),
-            eq(serializedKey),
-            eq(serializedValue),
-            eq(Record.EMPTY_HEADERS),
-            any(Callback.class),
+            eq(retrySelectedPartition.topic()),              // 0
+            eq(retrySelectedPartition.partition()),          // 1
+            eq(timestamp),                                   // 2
+            eq(serializedKey),                               // 3
+            eq(serializedValue),                             // 4
+            eq(Record.EMPTY_HEADERS),                        // 5
+            any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),
             eq(false), // abortOnNewBatch
-            anyLong()
-        )).thenReturn(new RecordAccumulator.RecordAppendResult(
-            futureRecordMetadata,
-            false,
-            true,
-            false
-        ));
+            anyLong(),
+            any()
+        )).thenAnswer(invocation -> {
+            RecordAccumulator.AppendCallbacks callbacks =
+                (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
+            callbacks.setPartition(retrySelectedPartition.partition());
+            return new RecordAccumulator.RecordAppendResult(
+                futureRecordMetadata,
+                false,
+                true,
+                false,
+                0);
+        });
 
         return futureRecordMetadata;
     }

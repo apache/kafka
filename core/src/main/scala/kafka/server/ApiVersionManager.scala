@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import kafka.api.ApiVersion
 import kafka.network
 import kafka.network.RequestChannel
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
@@ -26,10 +26,13 @@ import org.apache.kafka.common.requests.ApiVersionsResponse
 import scala.jdk.CollectionConverters._
 
 trait ApiVersionManager {
+  def enableUnstableLastVersion: Boolean
   def listenerType: ListenerType
   def enabledApis: collection.Set[ApiKeys]
   def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse
-  def isApiEnabled(apiKey: ApiKeys): Boolean = enabledApis.contains(apiKey)
+  def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
+    apiKey != null && apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
+  }
   def newRequestMetrics: RequestChannel.Metrics = new network.RequestChannel.Metrics(enabledApis)
 }
 
@@ -38,71 +41,69 @@ object ApiVersionManager {
     listenerType: ListenerType,
     config: KafkaConfig,
     forwardingManager: Option[ForwardingManager],
-    features: BrokerFeatures,
-    featureCache: FinalizedFeatureCache
+    supportedFeatures: BrokerFeatures,
+    metadataCache: MetadataCache
   ): ApiVersionManager = {
     new DefaultApiVersionManager(
       listenerType,
-      config.interBrokerProtocolVersion,
       forwardingManager,
-      features,
-      featureCache
+      supportedFeatures,
+      metadataCache,
+      config.unstableApiVersionsEnabled
     )
   }
 }
 
 class SimpleApiVersionManager(
   val listenerType: ListenerType,
-  val enabledApis: collection.Set[ApiKeys]
+  val enabledApis: collection.Set[ApiKeys],
+  brokerFeatures: Features[SupportedVersionRange],
+  val enableUnstableLastVersion: Boolean
 ) extends ApiVersionManager {
 
-  def this(listenerType: ListenerType) = {
-    this(listenerType, ApiKeys.apisForListener(listenerType).asScala)
+  def this(
+    listenerType: ListenerType,
+    enableUnstableLastVersion: Boolean
+  ) = {
+    this(
+      listenerType,
+      ApiKeys.apisForListener(listenerType).asScala,
+      BrokerFeatures.defaultSupportedFeatures(),
+      enableUnstableLastVersion
+    )
   }
 
-  private val apiVersions = ApiVersionsResponse.collectApis(enabledApis.asJava)
+  private val apiVersions = ApiVersionsResponse.collectApis(enabledApis.asJava, enableUnstableLastVersion)
 
   override def apiVersionResponse(requestThrottleMs: Int): ApiVersionsResponse = {
-    ApiVersionsResponse.createApiVersionsResponse(0, apiVersions)
+    ApiVersionsResponse.createApiVersionsResponse(requestThrottleMs, apiVersions, brokerFeatures)
   }
 }
 
 class DefaultApiVersionManager(
   val listenerType: ListenerType,
-  interBrokerProtocolVersion: ApiVersion,
   forwardingManager: Option[ForwardingManager],
   features: BrokerFeatures,
-  featureCache: FinalizedFeatureCache
+  metadataCache: MetadataCache,
+  val enableUnstableLastVersion: Boolean
 ) extends ApiVersionManager {
+
+  val enabledApis = ApiKeys.apisForListener(listenerType).asScala
 
   override def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse = {
     val supportedFeatures = features.supportedFeatures
-    val finalizedFeaturesOpt = featureCache.get
+    val finalizedFeatures = metadataCache.features()
     val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
 
-    finalizedFeaturesOpt match {
-      case Some(finalizedFeatures) => ApiVersion.apiVersionsResponse(
-        throttleTimeMs,
-        interBrokerProtocolVersion.recordVersion,
-        supportedFeatures,
-        finalizedFeatures.features,
-        finalizedFeatures.epoch,
-        controllerApiVersions,
-        listenerType)
-      case None => ApiVersion.apiVersionsResponse(
-        throttleTimeMs,
-        interBrokerProtocolVersion.recordVersion,
-        supportedFeatures,
-        controllerApiVersions,
-        listenerType)
-    }
-  }
-
-  override def enabledApis: collection.Set[ApiKeys] = {
-    ApiKeys.apisForListener(listenerType).asScala
-  }
-
-  override def isApiEnabled(apiKey: ApiKeys): Boolean = {
-    apiKey.inScope(listenerType)
+    ApiVersionsResponse.createApiVersionsResponse(
+      throttleTimeMs,
+      metadataCache.metadataVersion().highestSupportedRecordVersion,
+      supportedFeatures,
+      finalizedFeatures.features.map(kv => (kv._1, kv._2.asInstanceOf[java.lang.Short])).asJava,
+      finalizedFeatures.epoch,
+      controllerApiVersions.orNull,
+      listenerType,
+      enableUnstableLastVersion
+    )
   }
 }

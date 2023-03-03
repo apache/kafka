@@ -216,7 +216,7 @@ public class TestSslUtils {
         }
         if (trustCerts != null) {
             if (tsPath == null) {
-                tsPath = File.createTempFile("truststore", ".pem").getPath();
+                tsPath = TestUtils.tempFile("truststore", ".pem").getPath();
                 sslProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, tsPath);
             }
             sslProps.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, PEM_TYPE);
@@ -244,7 +244,7 @@ public class TestSslUtils {
 
         if (certChain != null) {
             if (ksPath == null) {
-                ksPath = File.createTempFile("keystore", ".pem").getPath();
+                ksPath = TestUtils.tempFile("keystore", ".pem").getPath();
                 sslProps.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, ksPath);
             }
             sslProps.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, PEM_TYPE);
@@ -330,7 +330,7 @@ public class TestSslUtils {
 
     static String pem(Certificate cert) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8.name()))) {
+        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
             pemWriter.writeObject(new JcaMiscPEMGenerator(cert));
         }
         return new String(out.toByteArray(), StandardCharsets.UTF_8);
@@ -338,7 +338,7 @@ public class TestSslUtils {
 
     static String pem(PrivateKey privateKey, Password password) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8.name()))) {
+        try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
             if (password == null) {
                 pemWriter.writeObject(new JcaPKCS8Generator(privateKey, null));
             } else {
@@ -504,13 +504,13 @@ public class TestSslUtils {
             File keyStoreFile = null;
 
             if (mode == Mode.CLIENT && useClientCert) {
-                keyStoreFile = File.createTempFile("clientKS", ".jks");
+                keyStoreFile = TestUtils.tempFile("clientKS", ".jks");
                 KeyPair cKP = generateKeyPair(algorithm);
                 X509Certificate cCert = certBuilder.generate("CN=" + cn + ", O=A client", cKP);
                 createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyPassword, "client", cKP.getPrivate(), cCert);
                 certs.put(certAlias, cCert);
             } else if (mode == Mode.SERVER) {
-                keyStoreFile = File.createTempFile("serverKS", ".jks");
+                keyStoreFile = TestUtils.tempFile("serverKS", ".jks");
                 KeyPair sKP = generateKeyPair(algorithm);
                 X509Certificate sCert = certBuilder.generate("CN=" + cn + ", O=A server", sKP);
                 createKeyStore(keyStoreFile.getPath(), keyStorePassword, keyPassword, "server", sKP.getPrivate(), sCert);
