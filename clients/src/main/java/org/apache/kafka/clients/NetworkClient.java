@@ -508,7 +508,7 @@ public class NetworkClient implements KafkaClient {
                     clientRequest.correlationId(), clientRequest.destination(), unsupportedVersionException);
             ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(builder.latestAllowedVersion()),
                     clientRequest.callback(), clientRequest.destination(), now, now,
-                    false, false, unsupportedVersionException, null, null);
+                    false, unsupportedVersionException, null, null);
 
             if (!isInternalRequest)
                 abortedSends.add(clientResponse);
