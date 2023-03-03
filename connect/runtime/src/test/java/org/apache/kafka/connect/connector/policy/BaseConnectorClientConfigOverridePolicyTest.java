@@ -27,7 +27,7 @@ import java.util.Map;
 
 public abstract class BaseConnectorClientConfigOverridePolicyTest {
 
-    protected abstract ConnectorClientConfigOverridePolicy  policyToTest();
+    protected abstract ConnectorClientConfigOverridePolicy policyToTest();
 
     protected void testValidOverride(Map<String, Object> clientConfig) {
         List<ConfigValue> configValues = configValues(clientConfig);

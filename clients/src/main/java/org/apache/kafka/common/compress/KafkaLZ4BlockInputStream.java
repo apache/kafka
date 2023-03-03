@@ -173,7 +173,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
                 in.getInt(); // TODO: verify this content checksum
             return;
         } else if (blockSize > maxBlockSize) {
-            throw new IOException(String.format("Block size %s exceeded max: %s", blockSize, maxBlockSize));
+            throw new IOException(String.format("Block size %d exceeded max: %d", blockSize, maxBlockSize));
         }
 
         if (in.remaining() < blockSize) {

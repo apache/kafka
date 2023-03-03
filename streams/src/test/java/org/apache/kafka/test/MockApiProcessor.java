@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.time.Duration;
@@ -133,6 +134,12 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
         }
 
         processed.clear();
+    }
+
+    public void addProcessorMetadata(final String key, final long value) {
+        if (context instanceof InternalProcessorContext) {
+            ((InternalProcessorContext<KOut, VOut>) context).addProcessorMetadataKeyValue(key, value);
+        }
     }
 
     public ArrayList<KeyValueTimestamp<KIn, VIn>> processed() {

@@ -77,6 +77,8 @@ import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -153,7 +155,7 @@ public class TransactionManagerTest {
     private void initializeTransactionManager(Optional<String> transactionalId) {
         Metrics metrics = new Metrics(time);
 
-        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                     .setMinVersion((short) 0)
@@ -693,8 +695,9 @@ public class TransactionManagerTest {
 
         assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
 
-        Future<RecordMetadata> responseFuture1 = accumulator.append(tp0, time.milliseconds(), "1".getBytes(), "1".getBytes(), Record.EMPTY_HEADERS,
-                null, MAX_BLOCK_TIMEOUT, false, time.milliseconds()).future;
+        Future<RecordMetadata> responseFuture1 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
+                "1".getBytes(), "1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false, time.milliseconds(),
+                TestUtils.singletonCluster()).future;
         sender.runOnce();
         assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
 
@@ -723,8 +726,9 @@ public class TransactionManagerTest {
         assertEquals(epoch + 1, transactionManager.producerIdAndEpoch().epoch);
         assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
 
-        Future<RecordMetadata> responseFuture2 = accumulator.append(tp0, time.milliseconds(), "2".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS,
-                null, MAX_BLOCK_TIMEOUT, false, time.milliseconds()).future;
+        Future<RecordMetadata> responseFuture2 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
+                "2".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false, time.milliseconds(),
+                TestUtils.singletonCluster()).future;
         sender.runOnce();
         sender.runOnce();
         assertEquals(0, transactionManager.firstInFlightSequence(tp0));
@@ -1676,6 +1680,61 @@ public class TransactionManagerTest {
         assertTrue(secondResponseFuture.isDone());
     }
 
+    @ParameterizedTest
+    @EnumSource(names = {
+            "UNKNOWN_TOPIC_OR_PARTITION",
+            "REQUEST_TIMED_OUT",
+            "COORDINATOR_LOAD_IN_PROGRESS",
+            "CONCURRENT_TRANSACTIONS"
+    })
+    public void testRetriableErrors2(Errors error) {
+        // Ensure FindCoordinator retries.
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(error, false, CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        // Ensure InitPid retries.
+        prepareInitPidResponse(error, false, producerId, epoch);
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(transactionManager::hasProducerId);
+
+        result.await();
+        transactionManager.beginTransaction();
+
+        // Ensure AddPartitionsToTxn retries. Since CONCURRENT_TRANSACTIONS is handled differently here, we substitute.
+        Errors addPartitionsToTxnError = error.equals(Errors.CONCURRENT_TRANSACTIONS) ? Errors.COORDINATOR_LOAD_IN_PROGRESS : error;
+        transactionManager.maybeAddPartition(tp0);
+        prepareAddPartitionsToTxnResponse(addPartitionsToTxnError, tp0, epoch, producerId);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
+
+        // Ensure txnOffsetCommit retries is tested in testRetriableErrorInTxnOffsetCommit.
+
+        // Ensure EndTxn retries.
+        TransactionalRequestResult abortResult = transactionManager.beginCommit();
+        prepareEndTxnResponse(error, TransactionResult.COMMIT, producerId, epoch);
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
+        runUntil(abortResult::isCompleted);
+        assertTrue(abortResult.isSuccessful());
+    }
+
+    @Test
+    public void testCoordinatorNotAvailable() {
+        // Ensure FindCoordinator with COORDINATOR_NOT_AVAILABLE error retries.
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, false, CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(transactionManager::hasProducerId);
+
+        result.await();
+    }
+
     @Test
     public void testProducerFencedExceptionInInitProducerId() {
         verifyProducerFencedForInitProducerId(Errors.PRODUCER_FENCED);
@@ -2613,7 +2672,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException {
-        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                     .setMinVersion((short) 0)
@@ -2812,7 +2871,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testAbortTransactionAndReuseSequenceNumberOnError() throws InterruptedException {
-        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
                 new ApiVersion()
                         .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                         .setMinVersion((short) 0)
@@ -2864,7 +2923,7 @@ public class TransactionManagerTest {
         // Set the InitProducerId version such that bumping the epoch number is not supported. This will test the case
         // where the sequence number is reset on an UnknownProducerId error, allowing subsequent transactions to
         // append to the log successfully
-        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                     .setMinVersion((short) 0)
@@ -3178,7 +3237,7 @@ public class TransactionManagerTest {
         // New tp1 batches should not be drained from the accumulator while tp1 has in-flight requests using the old epoch
         appendToAccumulator(tp1);
         sender.runOnce();
-        assertEquals(1, accumulator.batches().get(tp1).size());
+        assertEquals(1, accumulator.getDeque(tp1).size());
 
         // Partition failover occurs and tp1 returns a NOT_LEADER_OR_FOLLOWER error
         // Despite having the old epoch, the batch should retry
@@ -3189,8 +3248,8 @@ public class TransactionManagerTest {
 
         // The batch with the old epoch should be successfully drained, leaving the new one in the queue
         sender.runOnce();
-        assertEquals(1, accumulator.batches().get(tp1).size());
-        assertNotEquals(tp1b2, accumulator.batches().get(tp1).peek());
+        assertEquals(1, accumulator.getDeque(tp1).size());
+        assertNotEquals(tp1b2, accumulator.getDeque(tp1).peek());
         assertEquals(epoch, tp1b2.producerEpoch());
 
         // After successfully retrying, there should be no in-flight batches for tp1 and the sequence should be 0
@@ -3205,7 +3264,7 @@ public class TransactionManagerTest {
 
         // The last batch should now be drained and sent
         runUntil(() -> transactionManager.hasInflightBatches(tp1));
-        assertTrue(accumulator.batches().get(tp1).isEmpty());
+        assertTrue(accumulator.getDeque(tp1).isEmpty());
         ProducerBatch tp1b3 = transactionManager.nextBatchBySequence(tp1);
         assertEquals(epoch + 1, tp1b3.producerEpoch());
 
@@ -3302,7 +3361,7 @@ public class TransactionManagerTest {
         // New tp1 batches should not be drained from the accumulator while tp1 has in-flight requests using the old epoch
         appendToAccumulator(tp1);
         sender.runOnce();
-        assertEquals(1, accumulator.batches().get(tp1).size());
+        assertEquals(1, accumulator.getDeque(tp1).size());
 
         // Partition failover occurs and tp1 returns a NOT_LEADER_OR_FOLLOWER error
         // Despite having the old epoch, the batch should retry
@@ -3313,8 +3372,8 @@ public class TransactionManagerTest {
 
         // The batch with the old epoch should be successfully drained, leaving the new one in the queue
         sender.runOnce();
-        assertEquals(1, accumulator.batches().get(tp1).size());
-        assertNotEquals(tp1b2, accumulator.batches().get(tp1).peek());
+        assertEquals(1, accumulator.getDeque(tp1).size());
+        assertNotEquals(tp1b2, accumulator.getDeque(tp1).peek());
         assertEquals(epoch, tp1b2.producerEpoch());
 
         // After successfully retrying, there should be no in-flight batches for tp1 and the sequence should be 0
@@ -3329,7 +3388,7 @@ public class TransactionManagerTest {
 
         // The last batch should now be drained and sent
         runUntil(() -> transactionManager.hasInflightBatches(tp1));
-        assertTrue(accumulator.batches().get(tp1).isEmpty());
+        assertTrue(accumulator.getDeque(tp1).isEmpty());
         ProducerBatch tp1b3 = transactionManager.nextBatchBySequence(tp1);
         assertEquals(epoch + 1, tp1b3.producerEpoch());
 
@@ -3344,8 +3403,8 @@ public class TransactionManagerTest {
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
         final long nowMs = time.milliseconds();
-        return accumulator.append(tp, nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,
-                null, MAX_BLOCK_TIMEOUT, false, nowMs).future;
+        return accumulator.append(tp.topic(), tp.partition(), nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,
+                null, MAX_BLOCK_TIMEOUT, false, nowMs, TestUtils.singletonCluster()).future;
     }
 
     private void verifyCommitOrAbortTransactionRetriable(TransactionResult firstTransactionResult,

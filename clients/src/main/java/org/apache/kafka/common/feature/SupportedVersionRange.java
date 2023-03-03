@@ -41,4 +41,16 @@ public class SupportedVersionRange extends BaseVersionRange {
             BaseVersionRange.valueOrThrow(MIN_VERSION_KEY_LABEL, versionRangeMap),
             BaseVersionRange.valueOrThrow(MAX_VERSION_KEY_LABEL, versionRangeMap));
     }
+
+    /**
+     * Checks if the version level does *NOT* fall within the [min, max] range of this SupportedVersionRange.
+     *
+     * @param version   the version to be checked
+     *
+     * @return  - true, if the version levels are incompatible
+     *          - false otherwise
+     */
+    public boolean isIncompatibleWith(short version) {
+        return min() > version || max() < version;
+    }
 }

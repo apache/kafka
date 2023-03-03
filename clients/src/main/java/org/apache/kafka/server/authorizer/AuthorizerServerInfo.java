@@ -48,4 +48,9 @@ public interface AuthorizerServerInfo {
      * Returns the inter-broker endpoint. This is one of the endpoints returned by {@link #endpoints()}.
      */
     Endpoint interBrokerEndpoint();
+
+    /**
+     * Returns the configured early start listeners.
+     */
+    Collection<String> earlyStartListeners();
 }

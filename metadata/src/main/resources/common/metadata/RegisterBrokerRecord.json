@@ -17,11 +17,13 @@
   "apiKey": 0,
   "type": "metadata",
   "name": "RegisterBrokerRecord",
-  "validVersions": "0",
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker id." },
+    { "name": "IsMigratingZkBroker", "type": "bool", "versions": "2+", "default": "false",
+      "about": "True if the broker is a ZK broker in migration mode. Otherwise, false" },
     { "name": "IncarnationId", "type": "uuid", "versions": "0+",
       "about": "The incarnation ID of the broker process" },
     { "name": "BrokerEpoch", "type": "int64", "versions": "0+",
@@ -49,6 +51,8 @@
     { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The broker rack." },
     { "name": "Fenced", "type": "bool", "versions": "0+", "default": "true",
-      "about": "True if the broker is fenced." }
+      "about": "True if the broker is fenced." },
+    { "name": "InControlledShutdown", "type": "bool", "versions": "1+", "default": "false",
+      "about": "True if the broker is in controlled shutdown." }
   ]
 }

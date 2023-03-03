@@ -40,19 +40,19 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.niceMock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class MeteredTimestampedWindowStoreTest {
 
     private static final String STORE_NAME = "mocked-store";
@@ -69,20 +69,10 @@ public class MeteredTimestampedWindowStoreTest {
 
     private InternalMockProcessorContext context;
     private final TaskId taskId = new TaskId(0, 0, "My-Topology");
-    private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
+    @Mock
+    private WindowStore<Bytes, byte[]> innerStoreMock;
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
-    private MeteredTimestampedWindowStore<String, String> store = new MeteredTimestampedWindowStore<>(
-        innerStoreMock,
-        WINDOW_SIZE_MS, // any size
-        STORE_TYPE,
-        new MockTime(),
-        Serdes.String(),
-        new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
-    );
-
-    {
-        EasyMock.expect(innerStoreMock.name()).andStubReturn(STORE_NAME);
-    }
+    private MeteredTimestampedWindowStore<String, String> store;
 
     @Before
     public void setUp() {
@@ -100,11 +90,23 @@ public class MeteredTimestampedWindowStoreTest {
             Time.SYSTEM,
             taskId
         );
+
+        when(innerStoreMock.name()).thenReturn(STORE_NAME);
+
+        store = new MeteredTimestampedWindowStore<>(
+            innerStoreMock,
+            WINDOW_SIZE_MS, // any size
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
+        );
     }
 
     @SuppressWarnings("deprecation")
     @Test
     public void shouldDelegateDeprecatedInit() {
+        @SuppressWarnings("unchecked")
         final WindowStore<Bytes, byte[]> inner = mock(WindowStore.class);
         final MeteredTimestampedWindowStore<String, String> outer = new MeteredTimestampedWindowStore<>(
             inner,
@@ -114,16 +116,16 @@ public class MeteredTimestampedWindowStoreTest {
             Serdes.String(),
             new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
         );
-        expect(inner.name()).andStubReturn("store");
-        inner.init((ProcessorContext) context, outer);
-        expectLastCall();
-        replay(inner);
+        when(inner.name()).thenReturn("store");
+
         outer.init((ProcessorContext) context, outer);
-        verify(inner);
+
+        verify(inner).init((ProcessorContext) context, outer);
     }
 
     @Test
     public void shouldDelegateInit() {
+        @SuppressWarnings("unchecked")
         final WindowStore<Bytes, byte[]> inner = mock(WindowStore.class);
         final MeteredTimestampedWindowStore<String, String> outer = new MeteredTimestampedWindowStore<>(
             inner,
@@ -133,12 +135,11 @@ public class MeteredTimestampedWindowStoreTest {
             Serdes.String(),
             new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
         );
-        expect(inner.name()).andStubReturn("store");
-        inner.init((StateStoreContext) context, outer);
-        expectLastCall();
-        replay(inner);
+        when(inner.name()).thenReturn("store");
+
         outer.init((StateStoreContext) context, outer);
-        verify(inner);
+
+        verify(inner).init((StateStoreContext) context, outer);
     }
 
     @Test
@@ -155,19 +156,23 @@ public class MeteredTimestampedWindowStoreTest {
     }
 
     private void doShouldPassChangelogTopicNameToStateStoreSerde(final String topic) {
-        final Serde<String> keySerde = niceMock(Serde.class);
+        @SuppressWarnings("unchecked")
+        final Serde<String> keySerde = mock(Serde.class);
+        @SuppressWarnings("unchecked")
         final Serializer<String> keySerializer = mock(Serializer.class);
-        final Serde<ValueAndTimestamp<String>> valueSerde = niceMock(Serde.class);
+        @SuppressWarnings("unchecked")
+        final Serde<ValueAndTimestamp<String>> valueSerde = mock(Serde.class);
+        @SuppressWarnings("unchecked")
         final Deserializer<ValueAndTimestamp<String>> valueDeserializer = mock(Deserializer.class);
+        @SuppressWarnings("unchecked")
         final Serializer<ValueAndTimestamp<String>> valueSerializer = mock(Serializer.class);
-        expect(keySerde.serializer()).andStubReturn(keySerializer);
-        expect(keySerializer.serialize(topic, KEY)).andStubReturn(KEY.getBytes());
-        expect(valueSerde.deserializer()).andStubReturn(valueDeserializer);
-        expect(valueDeserializer.deserialize(topic, VALUE_AND_TIMESTAMP_BYTES)).andStubReturn(VALUE_AND_TIMESTAMP);
-        expect(valueSerde.serializer()).andStubReturn(valueSerializer);
-        expect(valueSerializer.serialize(topic, VALUE_AND_TIMESTAMP)).andStubReturn(VALUE_AND_TIMESTAMP_BYTES);
-        expect(innerStoreMock.fetch(KEY_BYTES, TIMESTAMP)).andStubReturn(VALUE_AND_TIMESTAMP_BYTES);
-        replay(innerStoreMock, keySerializer, keySerde, valueDeserializer, valueSerializer, valueSerde);
+        when(keySerde.serializer()).thenReturn(keySerializer);
+        when(keySerializer.serialize(topic, KEY)).thenReturn(KEY.getBytes());
+        when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+        when(valueDeserializer.deserialize(topic, VALUE_AND_TIMESTAMP_BYTES)).thenReturn(VALUE_AND_TIMESTAMP);
+        when(valueSerde.serializer()).thenReturn(valueSerializer);
+        when(valueSerializer.serialize(topic, VALUE_AND_TIMESTAMP)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
+        when(innerStoreMock.fetch(KEY_BYTES, TIMESTAMP)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
         store = new MeteredTimestampedWindowStore<>(
             innerStoreMock,
             WINDOW_SIZE_MS,
@@ -176,29 +181,26 @@ public class MeteredTimestampedWindowStoreTest {
             keySerde,
             valueSerde
         );
-        store.init((StateStoreContext) context, store);
 
+        store.init((StateStoreContext) context, store);
         store.fetch(KEY, TIMESTAMP);
         store.put(KEY, VALUE_AND_TIMESTAMP, TIMESTAMP);
 
-        verify(keySerializer, valueDeserializer, valueSerializer);
+        verify(innerStoreMock).fetch(KEY_BYTES, TIMESTAMP);
+        verify(innerStoreMock).put(KEY_BYTES, VALUE_AND_TIMESTAMP_BYTES, TIMESTAMP);
     }
 
     @Test
     public void shouldCloseUnderlyingStore() {
-        innerStoreMock.close();
-        EasyMock.expectLastCall();
-        EasyMock.replay(innerStoreMock);
-
         store.init((StateStoreContext) context, store);
         store.close();
-        EasyMock.verify(innerStoreMock);
+
+        verify(innerStoreMock).close();
     }
 
     @Test
     public void shouldNotExceptionIfFetchReturnsNull() {
-        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).andReturn(null);
-        EasyMock.replay(innerStoreMock);
+        when(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).thenReturn(null);
 
         store.init((StateStoreContext) context, store);
         assertNull(store.fetch("a", 0));
@@ -206,8 +208,7 @@ public class MeteredTimestampedWindowStoreTest {
 
     @Test
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext() {
-        EasyMock.expect(innerStoreMock.name()).andStubReturn("mocked-store");
-        EasyMock.replay(innerStoreMock);
+        when(innerStoreMock.name()).thenReturn("mocked-store");
         final MeteredTimestampedWindowStore<String, Long> store = new MeteredTimestampedWindowStore<>(
             innerStoreMock,
             10L, // any size
@@ -230,8 +231,7 @@ public class MeteredTimestampedWindowStoreTest {
 
     @Test
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters() {
-        EasyMock.expect(innerStoreMock.name()).andStubReturn("mocked-store");
-        EasyMock.replay(innerStoreMock);
+        when(innerStoreMock.name()).thenReturn("mocked-store");
         final MeteredTimestampedWindowStore<String, Long> store = new MeteredTimestampedWindowStore<>(
             innerStoreMock,
             10L, // any size

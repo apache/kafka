@@ -25,6 +25,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -36,9 +37,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
@@ -224,7 +227,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     @Override
-    protected boolean onJoinPrepare(int generation, String memberId) {
+    protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
         log.info("Rebalance started");
         leaderState(null);
         final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
@@ -255,7 +258,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     /**
      * Return the current generation. The generation refers to this worker's knowledge with
-     * respect to which  generation is the latest one and, therefore, this information is local.
+     * respect to which generation is the latest one and, therefore, this information is local.
      *
      * @return the generation ID or -1 if no generation is defined
      */
@@ -372,10 +375,10 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
             metrics.addMetric(metrics.metricName("assigned-connectors",
                               this.metricGrpName,
-                              "The number of connector instances currently assigned to this consumer"), numConnectors);
+                              "The number of connector instances currently assigned to this worker"), numConnectors);
             metrics.addMetric(metrics.metricName("assigned-tasks",
                               this.metricGrpName,
-                              "The number of tasks currently assigned to this consumer"), numTasks);
+                              "The number of tasks currently assigned to this worker"), numTasks);
         }
     }
 
@@ -416,6 +419,29 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             return allMembers.get(ownerId).url();
         }
 
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof LeaderState)) return false;
+            LeaderState that = (LeaderState) o;
+            return Objects.equals(allMembers, that.allMembers)
+                    && Objects.equals(connectorOwners, that.connectorOwners)
+                    && Objects.equals(taskOwners, that.taskOwners);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(allMembers, connectorOwners, taskOwners);
+        }
+
+        @Override
+        public String toString() {
+            return "LeaderState{"
+                    + "allMembers=" + allMembers
+                    + ", connectorOwners=" + connectorOwners
+                    + ", taskOwners=" + taskOwners
+                    + '}';
+        }
     }
 
     public static class ConnectorsAndTasks {
@@ -431,30 +457,31 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         }
 
         public static class Builder {
-            private Collection<String> withConnectors;
-            private Collection<ConnectorTaskId> withTasks;
+            private Set<String> withConnectors = new LinkedHashSet<>();
+            private Set<ConnectorTaskId> withTasks = new LinkedHashSet<>();
 
             public Builder() {
             }
 
-            public ConnectorsAndTasks.Builder withCopies(Collection<String> connectors,
-                                                         Collection<ConnectorTaskId> tasks) {
-                withConnectors = new ArrayList<>(connectors);
-                withTasks = new ArrayList<>(tasks);
+            public ConnectorsAndTasks.Builder with(Collection<String> connectors,
+                                                   Collection<ConnectorTaskId> tasks) {
+                withConnectors = new LinkedHashSet<>(connectors);
+                withTasks = new LinkedHashSet<>(tasks);
                 return this;
             }
 
-            public ConnectorsAndTasks.Builder with(Collection<String> connectors,
-                                                   Collection<ConnectorTaskId> tasks) {
-                withConnectors = new ArrayList<>(connectors);
-                withTasks = new ArrayList<>(tasks);
+            public ConnectorsAndTasks.Builder addConnectors(Collection<String> connectors) {
+                this.withConnectors.addAll(connectors);
+                return this;
+            }
+
+            public ConnectorsAndTasks.Builder addTasks(Collection<ConnectorTaskId> tasks) {
+                this.withTasks.addAll(tasks);
                 return this;
             }
 
             public ConnectorsAndTasks build() {
-                return new ConnectorsAndTasks(
-                        withConnectors != null ? withConnectors : new ArrayList<>(),
-                        withTasks != null ? withTasks : new ArrayList<>());
+                return new ConnectorsAndTasks(withConnectors, withTasks);
             }
         }
 

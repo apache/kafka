@@ -49,6 +49,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -69,6 +70,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
 public abstract class AbstractResetIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
+
     static EmbeddedKafkaCluster cluster;
 
     private static MockTime mockTime;
@@ -390,7 +394,7 @@ public abstract class AbstractResetIntegrationTest {
                                    final String appID) throws Exception {
         final List<String> parameterList = new ArrayList<>(
             Arrays.asList("--application-id", appID,
-                    "--bootstrap-servers", cluster.bootstrapServers(),
+                    "--bootstrap-server", cluster.bootstrapServers(),
                     "--input-topics", INPUT_TOPIC
             ));
         if (withIntermediateTopics) {

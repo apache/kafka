@@ -40,6 +40,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.slf4j.Logger;
@@ -254,6 +255,32 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     /**
+     * Pauses a topology by name
+     * @param topologyName Name of the topology to pause
+     */
+    public void pauseNamedTopology(final String topologyName) {
+        topologyMetadata.pauseTopology(topologyName);
+    }
+
+    /**
+     * Checks if a given topology is paused.
+     * @param topologyName If null, assume that we are checking the `UNNAMED_TOPOLOGY`.
+     * @return A boolean indicating if the topology is paused.
+     */
+    public boolean isNamedTopologyPaused(final String topologyName) {
+        return topologyMetadata.isPaused(topologyName);
+    }
+
+    /**
+     * Resumes a topology by name
+     * @param topologyName Name of the topology to resume
+     */
+    public void resumeNamedTopology(final String topologyName) {
+        topologyMetadata.resumeTopology(topologyName);
+        threads.forEach(StreamThread::signalResume);
+    }
+
+    /**
      * @return  true iff the application is still in CREATED and the future was completed
      */
     private boolean maybeCompleteFutureIfStillInCREATED(final KafkaFutureImpl<Void> updateTopologyFuture,
@@ -411,7 +438,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         }
         final List<Task> allTopologyTasks = new ArrayList<>();
         processStreamThread(thread -> allTopologyTasks.addAll(
-            thread.allTasks().values().stream()
+            thread.readyOnlyAllTasks().stream()
                 .filter(t -> topologyName.equals(t.id().topologyName()))
                 .collect(Collectors.toList())));
         return allLocalStorePartitionLags(allTopologyTasks);

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.function.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -57,8 +56,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
@@ -76,6 +75,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
@@ -128,7 +128,7 @@ public final class RaftClientTestContext {
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final MockableRandom random = new MockableRandom(1L);
         private final LogContext logContext = new LogContext();
-        private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID, logContext);
+        private final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID, logContext);
         private final Set<Integer> voters;
         private final OptionalInt localId;
 
@@ -196,8 +196,8 @@ public final class RaftClientTestContext {
         }
 
         Builder deleteBeforeSnapshot(OffsetAndEpoch snapshotId) throws IOException {
-            if (snapshotId.offset > log.highWatermark().offset) {
-                log.updateHighWatermark(new LogOffsetMetadata(snapshotId.offset));
+            if (snapshotId.offset() > log.highWatermark().offset) {
+                log.updateHighWatermark(new LogOffsetMetadata(snapshotId.offset()));
             }
             log.deleteBeforeSnapshot(snapshotId);
 
@@ -440,31 +440,37 @@ public final class RaftClientTestContext {
         assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), quorumStateStore.readElectionState());
     }
 
-    int assertSentDescribeQuorumResponse(
-        int leaderId,
-        int leaderEpoch,
-        long highWatermark,
-        List<ReplicaState> voterStates,
-        List<ReplicaState> observerStates
-    ) {
+    DescribeQuorumResponseData collectDescribeQuorumResponse() {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.DESCRIBE_QUORUM);
         assertEquals(1, sentMessages.size());
         RaftResponse.Outbound raftMessage = sentMessages.get(0);
         assertTrue(
             raftMessage.data() instanceof DescribeQuorumResponseData,
             "Unexpected request type " + raftMessage.data());
-        DescribeQuorumResponseData response = (DescribeQuorumResponseData) raftMessage.data();
+        return (DescribeQuorumResponseData) raftMessage.data();
+    }
 
+    void assertSentDescribeQuorumResponse(
+        int leaderId,
+        int leaderEpoch,
+        long highWatermark,
+        List<ReplicaState> voterStates,
+        List<ReplicaState> observerStates
+    ) {
+        DescribeQuorumResponseData response = collectDescribeQuorumResponse();
+
+        DescribeQuorumResponseData.PartitionData partitionData = new DescribeQuorumResponseData.PartitionData()
+            .setErrorCode(Errors.NONE.code())
+            .setLeaderId(leaderId)
+            .setLeaderEpoch(leaderEpoch)
+            .setHighWatermark(highWatermark)
+            .setCurrentVoters(voterStates)
+            .setObservers(observerStates);
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(
             metadataPartition,
-            leaderId,
-            leaderEpoch,
-            highWatermark,
-            voterStates,
-            observerStates);
-
+            partitionData
+        );
         assertEquals(expectedResponse, response);
-        return raftMessage.correlationId();
     }
 
     int assertSentVoteRequest(int epoch, int lastEpoch, long lastEpochOffset, int numVoteReceivers) {

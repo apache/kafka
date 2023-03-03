@@ -23,27 +23,26 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineLong;
+import org.apache.kafka.timeline.TimelineObject;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
 
 
 public class ProducerIdControlManager {
-
     private final ClusterControlManager clusterControlManager;
-    private final TimelineLong nextProducerId; // Initializes to 0
+    private final TimelineObject<ProducerIdsBlock> nextProducerBlock;
+    private final TimelineLong brokerEpoch;
 
     ProducerIdControlManager(ClusterControlManager clusterControlManager, SnapshotRegistry snapshotRegistry) {
         this.clusterControlManager = clusterControlManager;
-        this.nextProducerId = new TimelineLong(snapshotRegistry);
+        this.nextProducerBlock = new TimelineObject<>(snapshotRegistry, ProducerIdsBlock.EMPTY);
+        this.brokerEpoch = new TimelineLong(snapshotRegistry);
     }
 
     ControllerResult<ProducerIdsBlock> generateNextProducerId(int brokerId, long brokerEpoch) {
         clusterControlManager.checkBrokerEpoch(brokerId, brokerEpoch);
 
-        long firstProducerIdInBlock = nextProducerId.get();
+        long firstProducerIdInBlock = nextProducerBlock.get().firstProducerId();
         if (firstProducerIdInBlock > Long.MAX_VALUE - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE) {
             throw new UnknownServerException("Exhausted all producerIds as the next block's end producerId " +
                 "has exceeded the int64 type limit");
@@ -59,28 +58,21 @@ public class ProducerIdControlManager {
         return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(record, (short) 0)), block);
     }
 
-    void replay(ProducerIdsRecord record) {
-        long currentNextProducerId = nextProducerId.get();
-        if (record.nextProducerId() <= currentNextProducerId) {
-            throw new RuntimeException("Next Producer ID from replayed record (" + record.nextProducerId() + ")" +
-                " is not greater than current next Producer ID (" + currentNextProducerId + ")");
-        } else {
-            nextProducerId.set(record.nextProducerId());
-        }
+    // VisibleForTesting
+    ProducerIdsBlock nextProducerBlock() {
+        return nextProducerBlock.get();
     }
 
-    Iterator<List<ApiMessageAndVersion>> iterator(long epoch) {
-        List<ApiMessageAndVersion> records = new ArrayList<>(1);
-
-        long producerId = nextProducerId.get(epoch);
-        if (producerId > 0) {
-            records.add(new ApiMessageAndVersion(
-                new ProducerIdsRecord()
-                    .setNextProducerId(producerId)
-                    .setBrokerId(0)
-                    .setBrokerEpoch(0L),
-                (short) 0));
+    void replay(ProducerIdsRecord record) {
+        // During a migration, we may be calling replay() without ever having called generateNextProducerId(),
+        // so the next producer block could be EMPTY
+        ProducerIdsBlock nextBlock = nextProducerBlock.get();
+        if (nextBlock != ProducerIdsBlock.EMPTY && record.nextProducerId() <= nextBlock.firstProducerId()) {
+            throw new RuntimeException("Next Producer ID from replayed record (" + record.nextProducerId() + ")" +
+                " is not greater than current next Producer ID (" + nextBlock.firstProducerId() + ")");
+        } else {
+            nextProducerBlock.set(new ProducerIdsBlock(record.brokerId(), record.nextProducerId(), ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE));
+            brokerEpoch.set(record.brokerEpoch());
         }
-        return Collections.singleton(records).iterator();
     }
 }

@@ -21,14 +21,19 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.ChoiceCallback;
 import javax.ws.rs.HttpMethod;
+import javax.ws.rs.core.SecurityContext;
 import javax.ws.rs.core.UriInfo;
 
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -40,10 +45,14 @@ import java.util.Map;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.Response;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 public class JaasBasicAuthFilterTest {
@@ -58,7 +67,7 @@ public class JaasBasicAuthFilterTest {
         ContainerRequestContext requestContext = setMock("Basic", "user", "password");
         jaasBasicAuthFilter.filter(requestContext);
 
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -69,7 +78,7 @@ public class JaasBasicAuthFilterTest {
         ContainerRequestContext requestContext = setMock("Basic", "user", "password");
         jaasBasicAuthFilter.filter(requestContext);
 
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -81,7 +90,7 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -93,7 +102,7 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -105,7 +114,7 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -117,7 +126,7 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -128,7 +137,7 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
@@ -139,17 +148,26 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
     }
 
     @Test
-    public void testPostWithoutAppropriateCredential() throws IOException {
+    public void testInternalTaskConfigEndpointSkipped() throws IOException {
+        testInternalEndpointSkipped(HttpMethod.POST, "connectors/connName/tasks");
+    }
+
+    @Test
+    public void testInternalZombieFencingEndpointSkipped() throws IOException {
+        testInternalEndpointSkipped(HttpMethod.PUT, "connectors/connName/fence");
+    }
+
+    private void testInternalEndpointSkipped(String method, String endpoint) throws IOException {
         UriInfo uriInfo = mock(UriInfo.class);
-        when(uriInfo.getPath()).thenReturn("connectors/connName/tasks");
+        when(uriInfo.getPath()).thenReturn(endpoint);
 
         ContainerRequestContext requestContext = mock(ContainerRequestContext.class);
-        when(requestContext.getMethod()).thenReturn(HttpMethod.POST);
+        when(requestContext.getMethod()).thenReturn(method);
         when(requestContext.getUriInfo()).thenReturn(uriInfo);
 
         File credentialFile = setupPropertyLoginFile(true);
@@ -158,8 +176,9 @@ public class JaasBasicAuthFilterTest {
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(uriInfo).getPath();
-        verify(requestContext).getMethod();
+        verify(requestContext, atLeastOnce()).getMethod();
         verify(requestContext).getUriInfo();
+        verifyNoMoreInteractions(requestContext);
     }
 
     @Test
@@ -186,8 +205,8 @@ public class JaasBasicAuthFilterTest {
 
     @Test
     public void testUnsupportedCallback() {
-        String authHeader = authHeader("basic", "user", "pwd");
-        CallbackHandler callbackHandler = new JaasBasicAuthFilter.BasicAuthCallBackHandler(authHeader);
+        CallbackHandler callbackHandler = new JaasBasicAuthFilter.BasicAuthCallBackHandler(
+                new JaasBasicAuthFilter.BasicAuthCredentials(authHeader("basic", "user", "pwd")));
         Callback unsupportedCallback = new ChoiceCallback(
             "You take the blue pill... the story ends, you wake up in your bed and believe whatever you want to believe. " 
                 + "You take the red pill... you stay in Wonderland, and I show you how deep the rabbit hole goes.",
@@ -196,6 +215,23 @@ public class JaasBasicAuthFilterTest {
             true
         );
         assertThrows(ConnectException.class, () -> callbackHandler.handle(new Callback[] {unsupportedCallback}));
+    }
+
+    @Test
+    public void testSecurityContextSet() throws IOException, URISyntaxException {
+        File credentialFile = setupPropertyLoginFile(true);
+        JaasBasicAuthFilter jaasBasicAuthFilter = setupJaasFilter("KafkaConnect", credentialFile.getPath());
+        ContainerRequestContext requestContext = setMock("Basic", "user1", "password1");
+
+        when(requestContext.getUriInfo()).thenReturn(mock(UriInfo.class));
+        when(requestContext.getUriInfo().getRequestUri()).thenReturn(new URI("https://foo.bar"));
+
+        jaasBasicAuthFilter.filter(requestContext);
+
+        ArgumentCaptor<SecurityContext> capturedContext = ArgumentCaptor.forClass(SecurityContext.class);
+        verify(requestContext).setSecurityContext(capturedContext.capture());
+        assertEquals("user1", capturedContext.getValue().getUserPrincipal().getName());
+        assertTrue(capturedContext.getValue().isSecure());
     }
 
     private String authHeader(String authorization, String username, String password) {
@@ -211,8 +247,7 @@ public class JaasBasicAuthFilterTest {
     }
 
     private File setupPropertyLoginFile(boolean includeUsers) throws IOException {
-        File credentialFile = File.createTempFile("credential", ".properties");
-        credentialFile.deleteOnExit();
+        File credentialFile = TestUtils.tempFile("credential", ".properties");
         if (includeUsers) {
             List<String> lines = new ArrayList<>();
             lines.add("user=password");

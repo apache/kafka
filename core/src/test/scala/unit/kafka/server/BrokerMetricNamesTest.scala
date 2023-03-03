@@ -28,7 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 
-@ClusterTestDefaults(clusterType = Type.BOTH)
+@ClusterTestDefaults(clusterType = Type.ALL)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class BrokerMetricNamesTest(cluster: ClusterInstance) {
   @AfterEach
@@ -48,6 +48,7 @@ class BrokerMetricNamesTest(cluster: ClusterInstance) {
       "LeaderCount", "PartitionCount", "OfflineReplicaCount", "UnderReplicatedPartitions",
       "UnderMinIsrPartitionCount", "AtMinIsrPartitionCount", "ReassigningPartitions",
       "IsrExpandsPerSec", "IsrShrinksPerSec", "FailedIsrUpdatesPerSec",
+      "ProducerIdCount",
     )
     expectedMetricNames.foreach { metricName =>
       assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName == s"$expectedPrefix=$metricName"))

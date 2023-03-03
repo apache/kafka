@@ -15,6 +15,7 @@
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.connect import ConnectDistributedService, ConnectRestError, ConnectServiceBase
+from kafkatest.services.kafka import quorum
 from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
@@ -34,7 +35,8 @@ class ConnectRestApiTest(KafkaTest):
 
     FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'batch.size',
                            'topic', 'file', 'transforms', 'config.action.reload', 'errors.retry.timeout', 'errors.retry.delay.max.ms',
-                           'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages', 'predicates', 'topic.creation.groups'}
+                           'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages', 'predicates', 'topic.creation.groups',
+                           'exactly.once.support', 'transaction.boundary', 'transaction.boundary.interval.ms', 'offsets.storage.topic'}
     FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'topics',
                          'file', 'transforms', 'topics.regex', 'config.action.reload', 'errors.retry.timeout', 'errors.retry.delay.max.ms',
                          'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages', 'errors.deadletterqueue.topic.name',
@@ -77,8 +79,8 @@ class ConnectRestApiTest(KafkaTest):
                                             include_filestream_connectors=True)
 
     @cluster(num_nodes=4)
-    @matrix(connect_protocol=['compatible', 'eager'])
-    def test_rest_api(self, connect_protocol):
+    @matrix(connect_protocol=['compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_rest_api(self, connect_protocol, metadata_quorum):
         # Template parameters
         self.key_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
@@ -157,10 +159,15 @@ class ConnectRestApiTest(KafkaTest):
         expected_source_task_info = [{
             'id': {'connector': 'local-file-source', 'task': 0},
             'config': {
+                'connector.class': 'org.apache.kafka.connect.file.FileStreamSourceConnector',
                 'task.class': 'org.apache.kafka.connect.file.FileStreamSourceTask',
                 'file': self.INPUT_FILE,
                 'topic': self.TOPIC,
-                'batch.size': self.DEFAULT_BATCH_SIZE
+                'tasks.max': '1',
+                'name': 'local-file-source',
+                'errors.log.include.messages': 'true',
+                'errors.tolerance': 'none',
+                'errors.log.enable': 'true'
             }
         }]
         source_task_info = self.cc.get_connector_tasks("local-file-source")
@@ -168,9 +175,17 @@ class ConnectRestApiTest(KafkaTest):
         expected_sink_task_info = [{
             'id': {'connector': 'local-file-sink', 'task': 0},
             'config': {
+                'connector.class': 'org.apache.kafka.connect.file.FileStreamSinkConnector',
                 'task.class': 'org.apache.kafka.connect.file.FileStreamSinkTask',
                 'file': self.OUTPUT_FILE,
-                'topics': self.TOPIC
+                'topics': self.TOPIC,
+                'key.converter.schemas.enable': 'True',
+                'tasks.max': '1',
+                'name': 'local-file-sink',
+                'value.converter.schemas.enable':'True',
+                'errors.tolerance': 'none',
+                'errors.log.enable': 'true',
+                'errors.log.include.messages': 'true',
             }
         }]
         sink_task_info = self.cc.get_connector_tasks("local-file-sink")

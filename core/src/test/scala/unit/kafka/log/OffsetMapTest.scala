@@ -18,8 +18,8 @@
 package kafka.log
 
 import java.nio._
-
 import kafka.utils.Exit
+import org.apache.kafka.storage.internals.log.SkimpyOffsetMap
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions._
 

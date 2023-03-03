@@ -79,17 +79,22 @@
             <ul>
                 <li><a href="#basic_ops">6.1 Basic Kafka Operations</a>
                     <ul>
-                        <li><a href="#basic_ops_add_topic">Adding and removing topics</a>
-                        <li><a href="#basic_ops_modify_topic">Modifying topics</a>
-                        <li><a href="#basic_ops_restarting">Graceful shutdown</a>
-                        <li><a href="#basic_ops_leader_balancing">Balancing leadership</a>
-                        <li><a href="#basic_ops_consumer_lag">Checking consumer position</a>
-                        <li><a href="#basic_ops_mirror_maker">Mirroring data between clusters</a>
-                        <li><a href="#basic_ops_cluster_expansion">Expanding your cluster</a>
-                        <li><a href="#basic_ops_decommissioning_brokers">Decommissioning brokers</a>
-                        <li><a href="#basic_ops_increase_replication_factor">Increasing replication factor</a>
+                        <li><a href="#basic_ops_add_topic">Adding and removing topics</a></li>
+                        <li><a href="#basic_ops_modify_topic">Modifying topics</a></li>
+                        <li><a href="#basic_ops_restarting">Graceful shutdown</a></li>
+                        <li><a href="#basic_ops_leader_balancing">Balancing leadership</a></li>
+                        <li><a href="#basic_ops_racks">Balancing Replicas Across Racks</a></li>
+                        <li><a href="#basic_ops_mirror_maker">Mirroring data between clusters</a></li>
+                        <li><a href="#basic_ops_consumer_lag">Checking consumer position</a></li>
+                        <li><a href="#basic_ops_consumer_group">Managing Consumer Groups</a></li>
+                        <li><a href="#basic_ops_cluster_expansion">Expanding your cluster</a></li>
+                        <li><a href="#basic_ops_decommissioning_brokers">Decommissioning brokers</a></li>
+                        <li><a href="#basic_ops_increase_replication_factor">Increasing replication factor</a></li>
+                        <li><a href="#rep-throttle">Limiting Bandwidth Usage during Data Migration</a></li>
+                        <li><a href="#quotas">Setting quotas</a></li>
                     </ul>
-                <li><a href="#datacenters">6.2 Datacenters</a>
+                </li>
+                <li><a href="#datacenters">6.2 Datacenters</a></li>
                 <li><a href="#georeplication">6.3 Geo-Replication (Cross-Cluster Data Mirroring)</a></li>
                     <ul>
                         <li><a href="#georeplication-overview">Geo-Replication Overview</a></li>
@@ -100,6 +105,7 @@
                         <li><a href="#georeplication-apply-config-changes">Applying Configuration Changes</a></li>
                         <li><a href="#georeplication-monitoring">Monitoring Geo-Replication</a></li>
                     </ul>
+                </li>
                 <li><a href="#multitenancy">6.4 Multi-Tenancy</a></li>
                     <ul>
                         <li><a href="#multitenancy-overview">Multi-Tenancy Overview</a></li>
@@ -111,22 +117,28 @@
                         <li><a href="#multitenancy-georeplication">Multi-Tenancy and Geo-Replication</a></li>
                         <li><a href="#multitenancy-more">Further considerations</a></li>
                     </ul>
+                </li>
                 <li><a href="#config">6.5 Important Configs</a>
                     <ul>
                         <li><a href="#clientconfig">Important Client Configs</a>
                         <li><a href="#prodconfig">A Production Server Configs</a>
                     </ul>
+                </li>
                 <li><a href="#java">6.6 Java Version</a>
                 <li><a href="#hwandos">6.7 Hardware and OS</a>
                     <ul>
-                        <li><a href="#os">OS</a>
-                        <li><a href="#diskandfs">Disks and Filesystems</a>
-                        <li><a href="#appvsosflush">Application vs OS Flush Management</a>
-                        <li><a href="#linuxflush">Linux Flush Behavior</a>
-                        <li><a href="#ext4">Ext4 Notes</a>
+                        <li><a href="#os">OS</a></li>
+                        <li><a href="#diskandfs">Disks and Filesystems</a></li>
+                        <li><a href="#appvsosflush">Application vs OS Flush Management</a></li>
+                        <li><a href="#linuxflush">Linux Flush Behavior</a></li>
+                        <li><a href="#filesystems">Filesystem Selection</a></li>
+                        <li><a href="#replace_disk">Replace KRaft Controller Disk</a></li>
                     </ul>
+                </li>
                 <li><a href="#monitoring">6.8 Monitoring</a>
                     <ul>
+                        <li><a href="#remote_jmx">Security Considerations for Remote Monitoring using JMX</a></li>
+                        <li><a href="#kraft_monitoring">KRaft Monitoring</a></li>
                         <li><a href="#selector_monitoring">Selector Monitoring</a></li>
                         <li><a href="#common_node_monitoring">Common Node Monitoring</a></li>
                         <li><a href="#producer_monitoring">Producer Monitoring</a></li>
@@ -135,21 +147,33 @@
                         <li><a href="#kafka_streams_monitoring">Streams Monitoring</a></li>
                         <li><a href="#others_monitoring">Others</a></li>
                     </ul>
+                </li>
                 <li><a href="#zk">6.9 ZooKeeper</a>
                     <ul>
                         <li><a href="#zkversion">Stable Version</a>
                         <li><a href="#zkops">Operationalization</a>
                     </ul>
+                </li>
+                <li><a href="#kraft">6.10 KRaft</a>
+                    <ul>
+                        <li><a href="#kraft_config">Configuration</a></li>
+                        <li><a href="#kraft_storage">Storage Tool</a></li>
+                        <li><a href="#kraft_debug">Debugging</a></li>
+                        <li><a href="#kraft_deployment">Deploying Considerations</a></li>
+                        <li><a href="#kraft_missing">Missing Features</a></li>
+                    </ul>
+                </li>
             </ul>
         </li>
         <li><a href="#security">7. Security</a>
             <ul>
                 <li><a href="#security_overview">7.1 Security Overview</a></li>
-                <li><a href="#security_ssl">7.2 Encryption and Authentication using SSL</a></li>
-                <li><a href="#security_sasl">7.3 Authentication using SASL</a></li>
-                <li><a href="#security_authz">7.4 Authorization and ACLs</a></li>
-                <li><a href="#security_rolling_upgrade">7.5 Incorporating Security Features in a Running Cluster</a></li>
-                <li><a href="#zk_authz">7.6 ZooKeeper Authentication</a></li>
+                <li><a href="#listener_configuration">7.2 Listener Configuration</a></li>
+                <li><a href="#security_ssl">7.3 Encryption and Authentication using SSL</a></li>
+                <li><a href="#security_sasl">7.4 Authentication using SASL</a></li>
+                <li><a href="#security_authz">7.5 Authorization and ACLs</a></li>
+                <li><a href="#security_rolling_upgrade">7.6 Incorporating Security Features in a Running Cluster</a></li>
+                <li><a href="#zk_authz">7.7 ZooKeeper Authentication</a></li>
                 <ul>
                     <li><a href="#zk_authz_new">New Clusters</a></li>
                     <ul>
@@ -160,7 +184,7 @@
                     <li><a href="#zk_authz_ensemble">Migrating the ZooKeeper Ensemble</a></li>
                     <li><a href="#zk_authz_quorum">ZooKeeper Quorum Mutual TLS Authentication</a></li>
                 </ul>
-                <li><a href="#zk_encryption">7.7 ZooKeeper Encryption</a></li>
+                <li><a href="#zk_encryption">7.8 ZooKeeper Encryption</a></li>
             </ul>
         </li>
         <li><a href="#connect">8. Kafka Connect</a>
@@ -172,6 +196,7 @@
                     <li><a href="#connect_configuring">Configuring Connectors</a></li>
                     <li><a href="#connect_transforms">Transformations</a></li>
                     <li><a href="#connect_rest">REST API</a></li>
+                    <li><a href="#connect_errorreporting">Error Reporting in Connect</a></li>
                 </ul>
                 <li><a href="#connect_development">8.3 Connector Development Guide</a></li>
             </ul>

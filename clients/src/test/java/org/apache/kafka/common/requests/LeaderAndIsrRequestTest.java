@@ -116,7 +116,7 @@ public class LeaderAndIsrRequestTest {
                     .setLeader(0)
                     .setLeaderEpoch(10)
                     .setIsr(asList(0, 1))
-                    .setZkVersion(10)
+                    .setPartitionEpoch(10)
                     .setReplicas(asList(0, 1, 2))
                     .setAddingReplicas(asList(3))
                     .setRemovingReplicas(asList(2)),
@@ -127,7 +127,7 @@ public class LeaderAndIsrRequestTest {
                     .setLeader(1)
                     .setLeaderEpoch(11)
                     .setIsr(asList(1, 2, 3))
-                    .setZkVersion(11)
+                    .setPartitionEpoch(11)
                     .setReplicas(asList(1, 2, 3))
                     .setAddingReplicas(emptyList())
                     .setRemovingReplicas(emptyList()),
@@ -138,7 +138,7 @@ public class LeaderAndIsrRequestTest {
                     .setLeader(2)
                     .setLeaderEpoch(11)
                     .setIsr(asList(2, 3, 4))
-                    .setZkVersion(11)
+                    .setPartitionEpoch(11)
                     .setReplicas(asList(2, 3, 4))
                     .setAddingReplicas(emptyList())
                     .setRemovingReplicas(emptyList())

@@ -17,15 +17,17 @@
 
 package kafka.controller
 
+import com.yammer.metrics.core.Timer
+
 import java.util.ArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantLock
-
-import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
+import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
-import kafka.utils.ShutdownableThread
+import kafka.utils.Logging
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.collection._
 
@@ -70,7 +72,7 @@ class QueuedEvent(val event: ControllerEvent,
 class ControllerEventManager(controllerId: Int,
                              processor: ControllerEventProcessor,
                              time: Time,
-                             rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
+                             rateAndTimeMetrics: Map[ControllerState, Timer],
                              eventQueueTimeTimeoutMs: Long = 300000) extends KafkaMetricsGroup {
   import ControllerEventManager._
 
@@ -114,8 +116,12 @@ class ControllerEventManager(controllerId: Int,
 
   def isEmpty: Boolean = queue.isEmpty
 
-  class ControllerEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
-    logIdent = s"[ControllerEventThread controllerId=$controllerId] "
+  class ControllerEventThread(name: String)
+    extends ShutdownableThread(
+      name, false, s"[ControllerEventThread controllerId=$controllerId] ")
+      with Logging {
+
+    logIdent = logPrefix
 
     override def doWork(): Unit = {
       val dequeued = pollFromEventQueue()
@@ -130,7 +136,7 @@ class ControllerEventManager(controllerId: Int,
             def process(): Unit = dequeued.process(processor)
 
             rateAndTimeMetrics.get(state) match {
-              case Some(timer) => timer.time { process() }
+              case Some(timer) => timer.time(() => process())
               case None => process()
             }
           } catch {

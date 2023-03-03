@@ -84,6 +84,11 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
 
     @Override
     protected MemberData memberData(Subscription subscription) {
+        // In ConsumerProtocolSubscription v2 or higher, we can take member data from fields directly
+        if (subscription.generationId().isPresent()) {
+            return new MemberData(subscription.ownedPartitions(), subscription.generationId());
+        }
+
         ByteBuffer buffer = subscription.userData();
         Optional<Integer> encodedGeneration;
         if (buffer == null) {

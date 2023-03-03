@@ -21,7 +21,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -29,12 +28,10 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 
 class StandbyTaskCreator {
@@ -46,9 +43,7 @@ class StandbyTaskCreator {
     private final ThreadCache dummyCache;
     private final Logger log;
     private final Sensor createTaskSensor;
-
-    // tasks may be assigned for a NamedTopology that is not yet known by this host, and saved for later creation
-    private final Map<TaskId, Set<TopicPartition>> unknownTasksToBeCreated = new HashMap<>();
+    private final boolean stateUpdaterEnabled;
 
     StandbyTaskCreator(final TopologyMetadata topologyMetadata,
                        final StreamsConfig applicationConfig,
@@ -56,13 +51,15 @@ class StandbyTaskCreator {
                        final StateDirectory stateDirectory,
                        final ChangelogReader storeChangelogReader,
                        final String threadId,
-                       final Logger log) {
+                       final Logger log,
+                       final boolean stateUpdaterEnabled) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
         this.log = log;
+        this.stateUpdaterEnabled = stateUpdaterEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
 
@@ -73,30 +70,13 @@ class StandbyTaskCreator {
         );
     }
 
-    void removeRevokedUnknownTasks(final Set<TaskId> assignedTasks) {
-        unknownTasksToBeCreated.keySet().retainAll(assignedTasks);
-    }
-
-    Map<TaskId, Set<TopicPartition>> uncreatedTasksForTopologies(final Set<String> currentTopologies) {
-        return filterMap(unknownTasksToBeCreated, t -> currentTopologies.contains(t.getKey().topologyName()));
-    }
-
-    // TODO: change return type to `StandbyTask`
+    // TODO: convert to StandbyTask when we remove TaskManager#StateMachineTask with mocks
     Collection<Task> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
-        // TODO: change type to `StandbyTask`
         final List<Task> createdTasks = new ArrayList<>();
-        final Map<TaskId, Set<TopicPartition>>  newUnknownTasks = new HashMap<>();
 
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
-
-            // task belongs to a named topology that hasn't been added yet, wait until it has to create this
-            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
-                newUnknownTasks.put(taskId, partitions);
-                continue;
-            }
-
             final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
 
             if (topology.hasStateWithChangelogs()) {
@@ -108,10 +88,10 @@ class StandbyTaskCreator {
                     stateDirectory,
                     storeChangelogReader,
                     topology.storeToChangelogTopic(),
-                    partitions
-                );
+                    partitions,
+                    stateUpdaterEnabled);
 
-                final InternalProcessorContext context = new ProcessorContextImpl(
+                final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
                     taskId,
                     applicationConfig,
                     stateManager,
@@ -127,37 +107,46 @@ class StandbyTaskCreator {
                     taskId, partitions
                 );
             }
-            unknownTasksToBeCreated.remove(taskId);
-        }
-        if (!newUnknownTasks.isEmpty()) {
-            log.info("Delaying creation of tasks not yet known by this instance: {}", newUnknownTasks.keySet());
-            unknownTasksToBeCreated.putAll(newUnknownTasks);
         }
         return createdTasks;
     }
 
+    /*
+     * TODO: we pass in the new input partitions to validate if they still match,
+     *       in the future we when we have fixed partitions -> tasks mapping,
+     *       we should always reuse the input partition and hence no need validations
+     */
     StandbyTask createStandbyTaskFromActive(final StreamTask streamTask,
                                             final Set<TopicPartition> inputPartitions) {
-        final InternalProcessorContext context = streamTask.processorContext();
-        final ProcessorStateManager stateManager = streamTask.stateMgr;
+        if (!inputPartitions.equals(streamTask.inputPartitions)) {
+            log.warn("Detected unmatched input partitions for task {} when recycling it from active to standby", streamTask.id);
+        }
 
-        streamTask.closeCleanAndRecycleState();
-        stateManager.transitionTaskType(TaskType.STANDBY, getLogContext(streamTask.id()));
+        streamTask.prepareRecycle();
+        streamTask.stateMgr.transitionTaskType(Task.TaskType.STANDBY);
 
-        return createStandbyTask(
-            streamTask.id(),
+        final StandbyTask task = new StandbyTask(
+            streamTask.id,
             inputPartitions,
-            topologyMetadata.buildSubtopology(streamTask.id),
-            stateManager,
-            context
+            streamTask.topology,
+            streamTask.config,
+            streamsMetrics,
+            streamTask.stateMgr,
+            stateDirectory,
+            dummyCache,
+            streamTask.processorContext
         );
+
+        log.trace("Created standby task {} from recycled active task with assigned partitions {}", task.id, inputPartitions);
+        createTaskSensor.record();
+        return task;
     }
 
     StandbyTask createStandbyTask(final TaskId taskId,
                                   final Set<TopicPartition> inputPartitions,
                                   final ProcessorTopology topology,
                                   final ProcessorStateManager stateManager,
-                                  final InternalProcessorContext context) {
+                                  final InternalProcessorContext<Object, Object> context) {
         final StandbyTask task = new StandbyTask(
             taskId,
             inputPartitions,
@@ -170,7 +159,7 @@ class StandbyTaskCreator {
             context
         );
 
-        log.trace("Created task {} with assigned partitions {}", taskId, inputPartitions);
+        log.trace("Created standby task {} with assigned partitions {}", taskId, inputPartitions);
         createTaskSensor.record();
         return task;
     }

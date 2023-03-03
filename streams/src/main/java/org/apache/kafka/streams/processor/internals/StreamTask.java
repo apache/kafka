@@ -83,7 +83,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Map<TopicPartition, Long> committedOffsets;
     private final Map<TopicPartition, Long> highWatermark;
     private final Set<TopicPartition> resetOffsetsForPartitions;
-    private Optional<Long> timeCurrentIdlingStarted;
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
     private final StreamsMetricsImpl streamsMetrics;
@@ -97,15 +96,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor bufferedRecordsSensor;
     private final Map<String, Sensor> e2eLatencySensors = new HashMap<>();
 
-    @SuppressWarnings("rawtypes")
-    private final InternalProcessorContext processorContext;
-
     private final RecordQueueCreator recordQueueCreator;
+
+    @SuppressWarnings("rawtypes")
+    protected final InternalProcessorContext processorContext;
 
     private StampedRecord record;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
     private boolean hasPendingTxCommit = false;
+    private Optional<Long> timeCurrentIdlingStarted;
 
     @SuppressWarnings("rawtypes")
     public StreamTask(final TaskId id,
@@ -127,7 +127,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             stateDirectory,
             stateMgr,
             inputPartitions,
-            config.taskTimeoutMs,
+            config,
             "task",
             StreamTask.class
         );
@@ -184,7 +184,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             createPartitionQueues(),
             mainConsumer::currentLag,
             TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
-            TaskMetrics.totalBytesSensor(threadId, taskId, streamsMetrics),
             enforcedProcessingSensor,
             maxTaskIdleMs
         );
@@ -215,6 +214,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     /**
+     * @throws TaskCorruptedException if the state cannot be reused (with EOS) and needs to be reset
      * @throws LockException    could happen when multi-threads within the single instance, could retry
      * @throws TimeoutException if initializing record collector timed out
      * @throws StreamsException fatal error, should close the thread
@@ -293,7 +293,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     partitionGroup.clear();
                 } finally {
                     transitToSuspend();
-                    log.info("Suspended running");
                 }
 
                 break;
@@ -483,14 +482,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             case RESTORING:
             case SUSPENDED:
-                maybeWriteCheckpoint(enforceCheckpoint);
+                maybeCheckpoint(enforceCheckpoint);
                 log.debug("Finalized commit for {} task with enforce checkpoint {}", state(), enforceCheckpoint);
 
                 break;
 
             case RUNNING:
                 if (enforceCheckpoint || !eosEnabled) {
-                    maybeWriteCheckpoint(enforceCheckpoint);
+                    maybeCheckpoint(enforceCheckpoint);
                 }
                 log.debug("Finalized commit for {} task with eos {} enforce checkpoint {}", state(), eosEnabled, enforceCheckpoint);
 
@@ -546,13 +545,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void closeCleanAndRecycleState() {
+    public void prepareRecycle() {
         validateClean();
         removeAllSensors();
         clearCommitStatuses();
         switch (state()) {
             case SUSPENDED:
                 stateMgr.recycle();
+                partitionGroup.close();
                 recordCollector.closeClean();
 
                 break;
@@ -567,10 +567,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         closeTaskSensor.record();
-
         transitionTo(State.CLOSED);
 
-        log.info("Closed clean and recycled state");
+        log.info("Closed and recycled state");
     }
 
     /**
@@ -581,14 +580,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      *                          or flushing state store get IO errors; such error should cause the thread to die
      */
     @Override
-    protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
+    public void maybeCheckpoint(final boolean enforceCheckpoint) {
         // commitNeeded indicates we may have processed some records since last commit
         // and hence we need to refresh checkpointable offsets regardless whether we should checkpoint or not
         if (commitNeeded || enforceCheckpoint) {
             stateMgr.updateChangelogOffsets(checkpointableOffsets());
         }
 
-        super.maybeWriteCheckpoint(enforceCheckpoint);
+        super.maybeCheckpoint(enforceCheckpoint);
     }
 
     private void validateClean() {
@@ -614,6 +613,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private void close(final boolean clean) {
         switch (state()) {
             case SUSPENDED:
+                TaskManager.executeAndMaybeSwallow(
+                    clean,
+                    partitionGroup::close,
+                    "partition group close",
+                    log
+                );
+
                 // first close state manager (which is idempotent) then close the record collector
                 // if the latter throws and we re-close dirty which would close the state manager again.
                 TaskManager.executeAndMaybeSwallow(
@@ -653,7 +659,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         record = null;
-        partitionGroup.clear();
         closeTaskSensor.record();
 
         transitionTo(State.CLOSED);
@@ -724,8 +729,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
-            // TODO maxBufferedSize != -1 would be removed once the deprecated config buffered.records.per.partition is removed
-            if (maxBufferedSize != -1 && recordInfo.queue().size() == maxBufferedSize) {
+            if (recordInfo.queue().size() == maxBufferedSize) {
                 mainConsumer.resume(singleton(partition));
             }
 
@@ -985,8 +989,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
-        // We do this only if the deprecated config buffered.records.per.partition is set
-        if (maxBufferedSize != -1 && newQueueSize > maxBufferedSize) {
+        if (newQueueSize > maxBufferedSize) {
             mainConsumer.pause(singleton(partition));
         }
     }
@@ -1213,7 +1216,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     private void transitToSuspend() {
-        log.info("Suspended {}", state());
+        log.info("Suspended from {}", state());
         transitionTo(State.SUSPENDED);
         timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
     }
@@ -1237,14 +1240,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     RecordCollector recordCollector() {
         return recordCollector;
-    }
-
-    Set<TopicPartition> getNonEmptyTopicPartitions() {
-        return this.partitionGroup.getNonEmptyTopicPartitions();
-    }
-
-    long totalBytesBuffered() {
-        return partitionGroup.totalBytesBuffered();
     }
 
     // below are visible for testing only
@@ -1273,7 +1268,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final SourceNode<?, ?> source = topology.source(partition.topic());
             if (source == null) {
                 throw new TopologyException(
-                        "Topic is unknown to the topology. " +
+                        "Topic " + partition.topic() + " is unknown to the topology. " +
                                 "This may happen if different KafkaStreams instances of the same application execute different Topologies. " +
                                 "Note that Topologies are only identical if all operators are added in the same order."
                 );

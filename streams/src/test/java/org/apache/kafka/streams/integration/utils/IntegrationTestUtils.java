@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
 import org.apache.kafka.clients.admin.Admin;
@@ -35,6 +34,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
@@ -58,6 +58,7 @@ import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,11 +67,11 @@ import scala.Option;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -101,6 +102,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.fail;
+import static java.util.Collections.singletonList;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -225,9 +227,27 @@ public class IntegrationTestUtils {
     /**
      * Gives a test name that is safe to be used in application ids, topic names, etc.
      * The name is safe even for parameterized methods.
+     * Used by tests not yet migrated from JUnit 4.
      */
     public static String safeUniqueTestName(final Class<?> testClass, final TestName testName) {
-        return (testClass.getSimpleName() + testName.getMethodName())
+        return safeUniqueTestName(testClass, testName.getMethodName());
+    }
+
+    /**
+     * Same as @see IntegrationTestUtils#safeUniqueTestName except it accepts a TestInfo passed in by
+     * JUnit 5 instead of a TestName from JUnit 4.
+     * Used by tests migrated to JUnit 5.
+     */
+    public static String safeUniqueTestName(final Class<?> testClass, final TestInfo testInfo) {
+        final String displayName = testInfo.getDisplayName();
+        final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("unknownMethodName");
+        final String testName = displayName.contains(methodName) ? methodName : methodName + displayName;
+        return safeUniqueTestName(testClass, testName);
+    }
+
+    private static String safeUniqueTestName(final Class<?> testClass, final String testName) {
+        return (testClass.getSimpleName() + testName)
+                .replace(':', '_')
                 .replace('.', '_')
                 .replace('[', '_')
                 .replace(']', '_')
@@ -929,7 +949,7 @@ public class IntegrationTestUtils {
                 }
 
                 final UpdateMetadataPartitionState metadataPartitionState = partitionInfo.get();
-                if (!Request.isValidBrokerId(metadataPartitionState.leader())) {
+                if (!FetchRequest.isValidBrokerId(metadataPartitionState.leader())) {
                     invalidBrokerIds.add(server);
                 }
             }
@@ -938,6 +958,14 @@ public class IntegrationTestUtils {
                 ". Brokers with invalid broker id for partition leader: " + invalidBrokerIds;
             assertThat(reason, emptyPartitionInfos.isEmpty() && invalidBrokerIds.isEmpty());
         });
+    }
+
+    public static void startApplicationAndWaitUntilRunning(final KafkaStreams streams) throws Exception {
+        startApplicationAndWaitUntilRunning(singletonList(streams));
+    }
+
+    public static void startApplicationAndWaitUntilRunning(final List<KafkaStreams> streamsList) throws Exception {
+        startApplicationAndWaitUntilRunning(streamsList, Duration.ofSeconds(DEFAULT_TIMEOUT));
     }
 
     /**
@@ -1079,7 +1107,7 @@ public class IntegrationTestUtils {
                                                final String applicationId) {
         try {
             final ConsumerGroupDescription groupDescription =
-                    adminClient.describeConsumerGroups(Collections.singletonList(applicationId))
+                    adminClient.describeConsumerGroups(singletonList(applicationId))
                             .describedGroups()
                             .get(applicationId)
                             .get();
@@ -1262,7 +1290,8 @@ public class IntegrationTestUtils {
                                                                  final long waitTime,
                                                                  final int maxMessages) {
         final List<ConsumerRecord<K, V>> consumerRecords;
-        consumer.subscribe(Collections.singletonList(topic));
+        consumer.subscribe(singletonList(topic));
+        System.out.println("Got assignment:" + consumer.assignment());
         final int pollIntervalMs = 100;
         consumerRecords = new ArrayList<>();
         int totalPollTimeMs = 0;
@@ -1384,6 +1413,41 @@ public class IntegrationTestUtils {
             }
             Thread.sleep(Math.min(100L, waitTime));
         }
+    }
+
+    public static long getTopicSize(final Properties consumerConfig, final String topicName) {
+        long sum = 0;
+        try (final Consumer<Object, Object> consumer = createConsumer(consumerConfig)) {
+            final Collection<TopicPartition> partitions = consumer.partitionsFor(topicName)
+                .stream()
+                .map(info -> new TopicPartition(topicName, info.partition()))
+                .collect(Collectors.toList());
+            final Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(partitions);
+            final Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
+
+            for (final TopicPartition partition : beginningOffsets.keySet()) {
+                sum += endOffsets.get(partition) - beginningOffsets.get(partition);
+            }
+        }
+        return sum;
+    }
+
+    private static Double getStreamsPollNumber(final KafkaStreams kafkaStreams) {
+        return (Double) kafkaStreams.metrics()
+            .entrySet()
+            .stream()
+            .filter(entry -> entry.getKey().name().equals("poll-total"))
+            .findFirst().get()
+            .getValue()
+            .metricValue();
+    }
+
+    public static void waitUntilStreamsHasPolled(final KafkaStreams kafkaStreams, final int pollNumber)
+        throws InterruptedException {
+        final Double initialCount = getStreamsPollNumber(kafkaStreams);
+        retryOnExceptionWithTimeout(1000, () -> {
+            assertThat(getStreamsPollNumber(kafkaStreams), is(greaterThanOrEqualTo(initialCount + pollNumber)));
+        });
     }
 
     public static class StableAssignmentListener implements AssignmentListener {

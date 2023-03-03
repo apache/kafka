@@ -19,11 +19,11 @@ package org.apache.kafka.streams.scala.kstream
 import org.apache.kafka.streams.kstream.Suppressed.BufferConfig
 import org.apache.kafka.streams.kstream.{
   Named,
-  SlidingWindows,
   SessionWindows,
+  SlidingWindows,
+  Suppressed => JSuppressed,
   TimeWindows,
-  Windowed,
-  Suppressed => JSuppressed
+  Windowed
 }
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes._

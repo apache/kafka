@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.query;
 
-
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.query.internals.FailedQueryResult;
 import org.apache.kafka.streams.query.internals.SucceededQueryResult;
@@ -31,7 +30,7 @@ import java.util.List;
 public interface QueryResult<R> {
     /**
      * Static factory method to create a result object for a successful query. Used by StateStores
-     * to respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
+     * to respond to a {@link StateStore#query(Query, PositionBound, QueryConfig)}.
      */
     static <R> QueryResult<R> forResult(final R result) {
         return new SucceededQueryResult<>(result);
@@ -39,7 +38,7 @@ public interface QueryResult<R> {
 
     /**
      * Static factory method to create a result object for a failed query. Used by StateStores to
-     * respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
+     * respond to a {@link StateStore#query(Query, PositionBound, QueryConfig)}.
      */
     static <R> QueryResult<R> forFailure(
         final FailureReason failureReason,
@@ -52,7 +51,7 @@ public interface QueryResult<R> {
      * Static factory method to create a failed query result object to indicate that the store does
      * not know how to handle the query.
      * <p>
-     * Used by StateStores to respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
+     * Used by StateStores to respond to a {@link StateStore#query(Query, PositionBound, QueryConfig)}.
      */
     static <R> QueryResult<R> forUnknownQueryType(
         final Query<R> query,
@@ -69,7 +68,7 @@ public interface QueryResult<R> {
      * Static factory method to create a failed query result object to indicate that the store has
      * not yet caught up to the requested position bound.
      * <p>
-     * Used by StateStores to respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
+     * Used by StateStores to respond to a {@link StateStore#query(Query, PositionBound, QueryConfig)}.
      */
     static <R> QueryResult<R> notUpToBound(
         final Position currentPosition,
@@ -105,14 +104,14 @@ public interface QueryResult<R> {
 
     /**
      * True iff the query was successfully executed. The response is available in {@link
-     * this#getResult()}.
+     * #getResult()}.
      */
     boolean isSuccess();
 
 
     /**
      * True iff the query execution failed. More information about the failure is available in
-     * {@link this#getFailureReason()} and {@link this#getFailureMessage()}.
+     * {@link #getFailureReason()} and {@link #getFailureMessage()}.
      */
     boolean isFailure();
 
@@ -147,7 +146,7 @@ public interface QueryResult<R> {
     /**
      * Returns the result of executing the query on one partition. The result type is determined by
      * the query. Note: queries may choose to return {@code null} for a successful query, so {@link
-     * this#isSuccess()} and {@link this#isFailure()} must be used to determine whether the query
+     * #isSuccess()} and {@link #isFailure()} must be used to determine whether the query
      * was successful of failed on this partition.
      *
      * @throws IllegalArgumentException if this is not a successful query.

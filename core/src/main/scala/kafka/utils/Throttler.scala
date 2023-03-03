@@ -36,7 +36,7 @@ import scala.math._
  * @param time: The time implementation to use
  */
 @threadsafe
-class Throttler(desiredRatePerSec: Double,
+class Throttler(@volatile var desiredRatePerSec: Double,
                 checkIntervalMs: Long = 100L,
                 throttleDown: Boolean = true,
                 metricName: String = "throttler",
@@ -52,6 +52,7 @@ class Throttler(desiredRatePerSec: Double,
   def maybeThrottle(observed: Double): Unit = {
     val msPerSec = TimeUnit.SECONDS.toMillis(1)
     val nsPerSec = TimeUnit.SECONDS.toNanos(1)
+    val currentDesiredRatePerSec = desiredRatePerSec;
 
     meter.mark(observed.toLong)
     lock synchronized {
@@ -62,14 +63,14 @@ class Throttler(desiredRatePerSec: Double,
       // we should take a little nap
       if (elapsedNs > checkIntervalNs && observedSoFar > 0) {
         val rateInSecs = (observedSoFar * nsPerSec) / elapsedNs
-        val needAdjustment = !(throttleDown ^ (rateInSecs > desiredRatePerSec))
+        val needAdjustment = !(throttleDown ^ (rateInSecs > currentDesiredRatePerSec))
         if (needAdjustment) {
           // solve for the amount of time to sleep to make us hit the desired rate
-          val desiredRateMs = desiredRatePerSec / msPerSec.toDouble
+          val desiredRateMs = currentDesiredRatePerSec / msPerSec.toDouble
           val elapsedMs = TimeUnit.NANOSECONDS.toMillis(elapsedNs)
           val sleepTime = round(observedSoFar / desiredRateMs - elapsedMs)
           if (sleepTime > 0) {
-            trace("Natural rate is %f per second but desired rate is %f, sleeping for %d ms to compensate.".format(rateInSecs, desiredRatePerSec, sleepTime))
+            trace("Natural rate is %f per second but desired rate is %f, sleeping for %d ms to compensate.".format(rateInSecs, currentDesiredRatePerSec, sleepTime))
             time.sleep(sleepTime)
           }
         }
@@ -79,6 +80,9 @@ class Throttler(desiredRatePerSec: Double,
     }
   }
 
+  def updateDesiredRatePerSec(updatedDesiredRatePerSec: Double): Unit = {
+    desiredRatePerSec = updatedDesiredRatePerSec;
+  }
 }
 
 object Throttler {

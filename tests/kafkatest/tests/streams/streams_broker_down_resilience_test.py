@@ -14,7 +14,9 @@
 # limitations under the License.
 
 import time
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
+from kafkatest.services.kafka import quorum
 from kafkatest.services.streams import StreamsBrokerDownResilienceService
 from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 
@@ -39,10 +41,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                                           num_brokers=1)
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
 
     @cluster(num_nodes=7)
-    def test_streams_resilient_to_broker_down(self):
+    @matrix(metadata_quorum=[quorum.remote_kraft])
+    def test_streams_resilient_to_broker_down(self, metadata_quorum):
         self.kafka.start()
 
         # Broker should be down over 2x of retries * timeout ms
@@ -78,7 +82,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=7)
-    def test_streams_runs_with_broker_down_initially(self):
+    @matrix(metadata_quorum=[quorum.remote_kraft])
+    def test_streams_runs_with_broker_down_initially(self, metadata_quorum):
         self.kafka.start()
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
@@ -145,7 +150,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=9)
-    def test_streams_should_scale_in_while_brokers_down(self):
+    @matrix(metadata_quorum=[quorum.remote_kraft])
+    def test_streams_should_scale_in_while_brokers_down(self, metadata_quorum):
         self.kafka.start()
 
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
@@ -223,7 +229,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=9)
-    def test_streams_should_failover_while_brokers_down(self):
+    @matrix(metadata_quorum=[quorum.remote_kraft])
+    def test_streams_should_failover_while_brokers_down(self, metadata_quorum):
         self.kafka.start()
 
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor

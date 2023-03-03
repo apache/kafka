@@ -41,7 +41,9 @@
   // and leader discovery through the `CurrentLeader` field
   //
   // Version 13 replaces the topic name field with topic ID (KIP-516).
-  "validVersions": "0-13",
+  //
+  // Version 14 is the same as version 13 but it also receives a new error called OffsetMovedToTieredStorageException (KIP-405)
+  "validVersions": "0-14",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,

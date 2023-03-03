@@ -75,8 +75,10 @@ case class ZkSupport(adminManager: ZkAdminManager,
                      controller: KafkaController,
                      zkClient: KafkaZkClient,
                      forwardingManager: Option[ForwardingManager],
-                     metadataCache: ZkMetadataCache) extends MetadataSupport {
+                     metadataCache: ZkMetadataCache,
+                     brokerEpochManager: ZkBrokerEpochManager) extends MetadataSupport {
   override def requireZkOrThrow(createException: => Exception): ZkSupport = this
+
   override def requireRaftOrThrow(createException: => Exception): RaftSupport = throw createException
 
   override def ensureConsistentWith(config: KafkaConfig): Unit = {
@@ -86,9 +88,14 @@ case class ZkSupport(adminManager: ZkAdminManager,
   }
 
   override def canForward(): Boolean = forwardingManager.isDefined && (!controller.isActive)
+
+  def isBrokerEpochStale(brokerEpochInRequest: Long, isKRaftControllerRequest: Boolean): Boolean = {
+    brokerEpochManager.isBrokerEpochStale(brokerEpochInRequest, isKRaftControllerRequest)
+  }
 }
 
-case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: KRaftMetadataCache)
+case class RaftSupport(fwdMgr: ForwardingManager,
+                       metadataCache: KRaftMetadataCache)
     extends MetadataSupport {
   override val forwardingManager: Option[ForwardingManager] = Some(fwdMgr)
   override def requireZkOrThrow(createException: => Exception): ZkSupport = throw createException

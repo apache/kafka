@@ -50,9 +50,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     private final String name;
     protected final AbstractSegments<S> segments;
-    private final String metricScope;
     protected final KeySchema baseKeySchema;
     protected final Optional<KeySchema> indexKeySchema;
+    private final long retentionPeriod;
 
 
     protected ProcessorContext context;
@@ -65,26 +65,29 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     private volatile boolean open;
 
     AbstractDualSchemaRocksDBSegmentedBytesStore(final String name,
-                                                 final String metricScope,
                                                  final KeySchema baseKeySchema,
                                                  final Optional<KeySchema> indexKeySchema,
-                                                 final AbstractSegments<S> segments) {
+                                                 final AbstractSegments<S> segments,
+                                                 final long retentionPeriod) {
         this.name = name;
-        this.metricScope = metricScope;
         this.baseKeySchema = baseKeySchema;
         this.indexKeySchema = indexKeySchema;
         this.segments = segments;
+        this.retentionPeriod = retentionPeriod;
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
+
+        final long actualFrom = getActualFrom(0, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
+
         final List<S> searchSpace = segments.allSegments(true);
-        final Bytes from = baseKeySchema.lowerRange(null, 0);
+        final Bytes from = baseKeySchema.lowerRange(null, actualFrom);
         final Bytes to = baseKeySchema.upperRange(null, Long.MAX_VALUE);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, true),
+                baseKeySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, true),
                 from,
                 to,
                 true);
@@ -92,13 +95,16 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardAll() {
+
+        final long actualFrom = getActualFrom(0, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
+
         final List<S> searchSpace = segments.allSegments(false);
-        final Bytes from = baseKeySchema.lowerRange(null, 0);
+        final Bytes from = baseKeySchema.lowerRange(null, actualFrom);
         final Bytes to = baseKeySchema.upperRange(null, Long.MAX_VALUE);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, false),
+                baseKeySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, false),
                 from,
                 to,
                 false);
@@ -121,6 +127,15 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     }
 
     abstract protected KeyValue<Bytes, byte[]> getIndexKeyValue(final Bytes baseKey, final byte[] baseValue);
+
+    // isTimeFirstWindowSchema true implies ON_WINDOW_CLOSE semantics. There's an edge case
+    // when retentionPeriod = grace Period. If we add 1, then actualFrom > to which would
+    // lead to no records being returned.
+    protected long getActualFrom(final long from, final boolean isTimeFirstWindowSchema) {
+        return isTimeFirstWindowSchema ? Math.max(from, observedStreamTime - retentionPeriod) :
+                Math.max(from, observedStreamTime - retentionPeriod + 1);
+
+    }
 
     // For testing
     void putIndex(final Bytes indexKey, final byte[] value) {
@@ -175,22 +190,43 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
 
         if (segment == null) {
-            expiredRecordSensor.record(1.0d, ProcessorContextUtils.currentSystemTime(context));
+            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
             StoreQueryUtils.updatePosition(position, stateStoreContext);
-            segment.put(rawBaseKey, value);
 
+            // Put to index first so that if put to base failed, when we iterate index, we will
+            // find no base value. If put to base first but putting to index fails, when we iterate
+            // index, we can't find the key but if we iterate over base store, we can find the key
+            // which lead to inconsistency.
             if (hasIndex()) {
                 final KeyValue<Bytes, byte[]> indexKeyValue = getIndexKeyValue(rawBaseKey, value);
                 segment.put(indexKeyValue.key, indexKeyValue.value);
             }
+            segment.put(rawBaseKey, value);
         }
     }
 
     @Override
     public byte[] get(final Bytes rawKey) {
-        final S segment = segments.getSegmentForTimestamp(baseKeySchema.segmentTimestamp(rawKey));
+        final long timestampFromRawKey = baseKeySchema.segmentTimestamp(rawKey);
+        // check if timestamp is expired
+
+        if (baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema) {
+            if (timestampFromRawKey < observedStreamTime - retentionPeriod) {
+                LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
+                        rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod);
+                return null;
+            }
+        } else {
+            if (timestampFromRawKey < observedStreamTime - retentionPeriod + 1) {
+                LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
+                        rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod + 1);
+                return null;
+            }
+        }
+
+        final S segment = segments.getSegmentForTimestamp(timestampFromRawKey);
         if (segment == null) {
             return null;
         }

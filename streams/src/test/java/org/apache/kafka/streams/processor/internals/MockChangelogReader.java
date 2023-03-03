@@ -39,8 +39,16 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void restore(final Map<TaskId, Task> tasks) {
+    public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) {
+        for (final TopicPartition changelogPartition : changelogPartitions) {
+            register(changelogPartition, stateManager);
+        }
+    }
+
+    @Override
+    public long restore(final Map<TaskId, Task> tasks) {
         // do nothing
+        return 0L;
     }
 
     @Override
@@ -54,9 +62,19 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
+    public boolean isRestoringActive() {
+        return true;
+    }
+
+    @Override
     public Set<TopicPartition> completedChangelogs() {
         // assuming all restoring partitions are completed
         return restoringPartitions;
+    }
+
+    @Override
+    public boolean allChangelogsCompleted() {
+        return false;
     }
 
     @Override

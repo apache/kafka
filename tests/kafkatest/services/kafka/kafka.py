@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import json
+import math
 import os.path
 import re
 import signal
@@ -158,7 +159,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     METADATA_SNAPSHOT_SEARCH_STR = "%s/__cluster_metadata-0/*.checkpoint" % METADATA_LOG_DIR
     METADATA_FIRST_LOG = "%s/__cluster_metadata-0/00000000000000000000.log" % METADATA_LOG_DIR
     # Kafka Authorizer
-    ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
+    ZK_ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
+    KRAFT_ACL_AUTHORIZER = "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
     HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "kafka_heap_dump.bin")
     INTERBROKER_LISTENER_NAME = 'INTERNAL'
     JAAS_CONF_PROPERTY = "java.security.auth.login.config=/mnt/security/jaas.conf"
@@ -182,6 +184,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         "kafka_data_2": {
             "path": DATA_LOG_DIR_2,
             "collect_default": False},
+        "kafka_cluster_metadata": {
+            "path": METADATA_LOG_DIR,
+            "collect_default": False},
         "kafka_heap_dump_file": {
             "path": HEAP_DUMP_FILE,
             "collect_default": True}
@@ -198,6 +203,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  remote_kafka=None,
                  controller_num_nodes_override=0,
                  allow_zk_with_kraft=False,
+                 quorum_info_provider=None
                  ):
         """
         :param context: test context
@@ -257,15 +263,19 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param KafkaService remote_kafka: process.roles=controller for this cluster when not None; ignored when using ZooKeeper
         :param int controller_num_nodes_override: the number of nodes to use in the cluster, instead of 5, 3, or 1 based on num_nodes, if positive, not using ZooKeeper, and remote_kafka is not None; ignored otherwise
         :param bool allow_zk_with_kraft: if True, then allow a KRaft broker or controller to also use ZooKeeper
-
+        :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
         """
 
         self.zk = zk
         self.remote_kafka = remote_kafka
         self.allow_zk_with_kraft = allow_zk_with_kraft
-        self.quorum_info = quorum.ServiceQuorumInfo(self, context)
+        if quorum_info_provider is None:
+            self.quorum_info = quorum.ServiceQuorumInfo.from_test_context(self, context)
+        else:
+            self.quorum_info = quorum_info_provider(self)
         self.controller_quorum = None # will define below if necessary
         self.remote_controller_quorum = None # will define below if necessary
+        self.configured_for_zk_migration = False
 
         if num_nodes < 1:
             raise Exception("Must set a positive number of nodes: %i" % num_nodes)
@@ -422,6 +432,38 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.colocated_nodes_started = 0
         self.nodes_to_start = self.nodes
 
+    def reconfigure_zk_for_migration(self, kraft_quorum):
+        self.configured_for_zk_migration = True
+        self.controller_quorum = kraft_quorum
+
+        # Set the migration properties
+        self.server_prop_overrides.extend([
+            ["zookeeper.metadata.migration.enable", "true"],
+            ["controller.quorum.voters", kraft_quorum.controller_quorum_voters],
+            ["controller.listener.names", kraft_quorum.controller_listener_names]
+        ])
+
+        # Add a port mapping for the controller listener.
+        # This is not added to "advertised.listeners" because of configured_for_zk_migration=True
+        self.port_mappings[kraft_quorum.controller_listener_names] = kraft_quorum.port_mappings.get(kraft_quorum.controller_listener_names)
+
+    def reconfigure_zk_as_kraft(self, kraft_quorum):
+        self.configured_for_zk_migration = True
+
+        # Remove the configs we set in reconfigure_zk_for_migration
+        props = []
+        for prop in self.server_prop_overrides:
+            if not prop[0].startswith("controller"):
+                props.append(prop)
+        self.server_prop_overrides.clear()
+        self.server_prop_overrides.extend(props)
+        del self.port_mappings[kraft_quorum.controller_listener_names]
+
+        # Set the quorum info to remote KRaft
+        self.quorum_info = quorum.ServiceQuorumInfo(quorum.remote_kraft, self)
+        self.remote_controller_quorum = kraft_quorum
+        self.controller_quorum = kraft_quorum
+
     def num_kraft_controllers(self, num_nodes_broker_role, controller_num_nodes_override):
         if controller_num_nodes_override < 0:
             raise Exception("controller_num_nodes_override must not be negative: %i" % controller_num_nodes_override)
@@ -562,7 +604,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def alive(self, node):
         return len(self.pids(node)) > 0
 
-    def start(self, add_principals="", nodes_to_skip=[], timeout_sec=60):
+    def start(self, add_principals="", nodes_to_skip=[], timeout_sec=60, **kwargs):
         """
         Start the Kafka broker and wait until it registers its ID in ZooKeeper
         Startup will be skipped for any nodes in nodes_to_skip. These nodes can be started later via add_broker
@@ -601,7 +643,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         if self.remote_controller_quorum:
             self.remote_controller_quorum.start()
-        Service.start(self)
+
+        Service.start(self, **kwargs)
+
         if self.concurrent_start:
             # We didn't wait while starting each individual node, so wait for them all now
             for node in self.nodes_to_start:
@@ -759,7 +803,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return cmd
 
     def controller_listener_name_list(self, node):
-        if self.quorum_info.using_zk:
+        if self.quorum_info.using_zk and self.configured_for_zk_migration:
+            return [self.controller_listener_name(self.controller_quorum.controller_security_protocol)]
+        elif self.quorum_info.using_zk:
             return []
         broker_to_controller_listener_name = self.controller_listener_name(self.controller_quorum.controller_security_protocol)
         # Brokers always use the first controller listener, so include a second, inter-controller listener if and only if:
@@ -770,7 +816,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 self.controller_quorum.intercontroller_security_protocol != self.controller_quorum.controller_security_protocol) \
             else [broker_to_controller_listener_name]
 
-    def start_node(self, node, timeout_sec=60):
+    def start_node(self, node, timeout_sec=60, **kwargs):
         if node not in self.nodes_to_start:
             return
         node.account.mkdirs(KafkaService.PERSISTENT_ROOT)
@@ -845,6 +891,19 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if len(self.pids(node)) == 0:
             raise Exception("No process ids recorded on node %s" % node.account.hostname)
 
+    def upgrade_metadata_version(self, new_version):
+        self.run_features_command("upgrade", new_version)
+
+    def downgrade_metadata_version(self, new_version):
+        self.run_features_command("downgrade", new_version)
+
+    def run_features_command(self, op, new_version):
+        cmd = self.path.script("kafka-features.sh ")
+        cmd += "--bootstrap-server %s " % self.bootstrap_servers()
+        cmd += "%s --metadata %s" % (op, new_version)
+        self.logger.info("Running %s command...\n%s" % (op, cmd))
+        self.nodes[0].account.ssh(cmd)
+
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
@@ -863,12 +922,25 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         leader = self.leader(topic, partition)
         self.signal_node(leader, sig)
 
+    def controllers_required_for_quorum(self):
+        """
+        Assume N = the total number of controller nodes in the cluster, and positive
+        For N=1, we need 1 controller to be running to have a quorum
+        For N=2, we need 2 controllers
+        For N=3, we need 2 controllers
+        For N=4, we need 3 controllers
+        For N=5, we need 3 controllers
+
+        :return: the number of controller nodes that must be started for there to be a quorum
+        """
+        return math.ceil((1 + self.num_nodes_controller_role) / 2)
+
     def stop_node(self, node, clean_shutdown=True, timeout_sec=60):
         pids = self.pids(node)
         cluster_has_colocated_controllers = self.quorum_info.has_brokers and self.quorum_info.has_controllers
         force_sigkill_due_to_too_few_colocated_controllers =\
             clean_shutdown and cluster_has_colocated_controllers\
-            and self.colocated_nodes_started < round(self.num_nodes_controller_role / 2)
+            and self.colocated_nodes_started < self.controllers_required_for_quorum()
         if force_sigkill_due_to_too_few_colocated_controllers:
             self.logger.info("Forcing node to stop via SIGKILL due to too few co-located KRaft controllers: %i/%i" %\
                              (self.colocated_nodes_started, self.num_nodes_controller_role))
@@ -1394,7 +1466,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
 
     def search_data_files(self, topic, messages):
-        """Check if a set of messages made it into the Kakfa data files. Note that
+        """Check if a set of messages made it into the Kafka data files. Note that
         this method takes no account of replication. It simply looks for the
         payload in all the partition files of the specified topic. 'messages' should be
         an array of numbers. The list of missing messages is returned.

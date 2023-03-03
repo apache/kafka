@@ -17,6 +17,11 @@
 
 package org.apache.kafka.metadata;
 
+import net.jqwik.api.Arbitraries;
+import net.jqwik.api.Arbitrary;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+import net.jqwik.api.Provide;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
@@ -31,6 +36,7 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -85,7 +91,7 @@ public class PartitionRegistrationTest {
                 setLeader(1).
                 setLeaderEpoch(123).
                 setIsr(Arrays.asList(1, 2)).
-                setZkVersion(456).
+                setPartitionEpoch(456).
                 setReplicas(Arrays.asList(1, 2, 3)).
                 setAddingReplicas(Collections.emptyList()).
                 setRemovingReplicas(Collections.emptyList()).
@@ -98,7 +104,7 @@ public class PartitionRegistrationTest {
                 setLeader(2).
                 setLeaderEpoch(234).
                 setIsr(Arrays.asList(2, 3, 4)).
-                setZkVersion(567).
+                setPartitionEpoch(567).
                 setReplicas(Arrays.asList(2, 3, 4)).
                 setAddingReplicas(Collections.emptyList()).
                 setRemovingReplicas(Collections.emptyList()).
@@ -125,4 +131,43 @@ public class PartitionRegistrationTest {
             new int[] {1, 2, 4}, Replicas.NONE, Replicas.NONE, 1, LeaderRecoveryState.RECOVERED, 100, 202), partition2);
         assertFalse(partition2.isReassigning());
     }
+
+    @Property
+    public void testConsistentEqualsAndHashCode(
+        @ForAll("uniqueSamples") PartitionRegistration a,
+        @ForAll("uniqueSamples") PartitionRegistration b
+    ) {
+        if (a.equals(b)) {
+            assertEquals(a.hashCode(), b.hashCode());
+        }
+
+        if (a.hashCode() != b.hashCode()) {
+            assertNotEquals(a, b);
+        }
+    }
+
+    @Provide
+    Arbitrary<PartitionRegistration> uniqueSamples() {
+        return Arbitraries.of(
+            new PartitionRegistration(new int[] {1, 2, 3}, new int[] {1, 2, 3}, Replicas.NONE, Replicas.NONE,
+                1, LeaderRecoveryState.RECOVERED, 100, 200),
+            new PartitionRegistration(new int[] {1, 2, 3}, new int[] {1, 2, 3}, Replicas.NONE, Replicas.NONE,
+                1, LeaderRecoveryState.RECOVERED, 101, 200),
+            new PartitionRegistration(new int[] {1, 2, 3}, new int[] {1, 2, 3}, Replicas.NONE, Replicas.NONE,
+                1, LeaderRecoveryState.RECOVERED, 100, 201),
+            new PartitionRegistration(new int[] {1, 2, 3}, new int[] {1, 2, 3}, Replicas.NONE, Replicas.NONE,
+                2, LeaderRecoveryState.RECOVERED, 100, 200),
+            new PartitionRegistration(new int[] {1, 2, 3}, new int[] {1}, Replicas.NONE, Replicas.NONE,
+                1, LeaderRecoveryState.RECOVERING, 100, 200),
+            new PartitionRegistration(new int[] {1, 2, 3, 4, 5, 6}, new int[] {1, 2, 3}, new int[] {4, 5, 6}, new int[] {1, 2, 3},
+                1, LeaderRecoveryState.RECOVERED, 100, 200),
+            new PartitionRegistration(new int[] {1, 2, 3, 4, 5, 6}, new int[] {1, 2, 3}, new int[] {1, 2, 3}, new int[] {4, 5, 6},
+                1, LeaderRecoveryState.RECOVERED, 100, 200),
+            new PartitionRegistration(new int[] {1, 2, 3, 4, 5, 6}, new int[] {1, 2, 3}, new int[] {1, 2, 3}, Replicas.NONE,
+                1, LeaderRecoveryState.RECOVERED, 100, 200),
+            new PartitionRegistration(new int[] {1, 2, 3, 4, 5, 6}, new int[] {1, 2, 3}, Replicas.NONE, new int[] {4, 5, 6},
+                1, LeaderRecoveryState.RECOVERED, 100, 200)
+        );
+    }
+
 }

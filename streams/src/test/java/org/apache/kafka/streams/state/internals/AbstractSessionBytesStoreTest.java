@@ -19,10 +19,12 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -32,7 +34,8 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -42,6 +45,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,11 +59,13 @@ import java.util.Properties;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -73,6 +79,13 @@ public abstract class AbstractSessionBytesStoreTest {
     static final long SEGMENT_INTERVAL = 60_000L;
     static final long RETENTION_PERIOD = 10_000L;
 
+    enum StoreType {
+        RocksDBSessionStore,
+        RocksDBTimeOrderedSessionStoreWithIndex,
+        RocksDBTimeOrderedSessionStoreWithoutIndex,
+        InMemoryStore
+    }
+
     SessionStore<String, Long> sessionStore;
 
     private MockRecordCollector recordCollector;
@@ -82,6 +95,8 @@ public abstract class AbstractSessionBytesStoreTest {
     abstract <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
                                                          final Serde<K> keySerde,
                                                          final Serde<V> valueSerde);
+
+    abstract StoreType getStoreType();
 
     @Before
     public void setUp() {
@@ -175,6 +190,75 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 5L);
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("a")) {
+            assertEquals(expected, toList(values));
+        }
+    }
+
+    @Test
+    public void shouldFindSessionsForTimeRange() {
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 5L);
+
+        if (getStoreType() == StoreType.RocksDBSessionStore) {
+            assertThrows(
+                "This API is not supported by this implementation of SessionStore.",
+                UnsupportedOperationException.class,
+                () -> sessionStore.findSessions(0, 0)
+            );
+            return;
+        }
+
+        // Find point
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(0, 0)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 5L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        sessionStore.put(new Windowed<>("b", new SessionWindow(10, 20)), 10L);
+        sessionStore.put(new Windowed<>("c", new SessionWindow(30, 40)), 20L);
+
+        // Find boundary
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(0, 20)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 5L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(10, 20)), 10L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // Find left boundary
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(0, 19)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 5L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // Find right boundary
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(1, 20)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(10, 20)), 10L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // Find partial off by 1
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(19, 41)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(10, 20)), 10L),
+                KeyValue.pair(new Windowed<>("c", new SessionWindow(30, 40)), 20L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // Find all boundary
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(0, 40)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 5L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(10, 20)), 10L),
+                KeyValue.pair(new Windowed<>("c", new SessionWindow(30, 40)), 20L)
+            );
             assertEquals(expected, toList(values));
         }
     }
@@ -808,6 +892,93 @@ public abstract class AbstractSessionBytesStoreTest {
                     "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
                     " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
+        }
+    }
+
+    @Test
+    public void shouldRemoveExpired() {
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        if (getStoreType() == StoreType.InMemoryStore) {
+            sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
+            sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
+
+            // Advance stream time to expire the first record
+            sessionStore.put(new Windowed<>("aa", new SessionWindow(10, RETENTION_PERIOD)), 4L);
+        } else {
+            sessionStore.put(new Windowed<>("aa", new SessionWindow(0, SEGMENT_INTERVAL)), 2L);
+            sessionStore.put(new Windowed<>("a", new SessionWindow(10, SEGMENT_INTERVAL)), 3L);
+
+            // Advance stream time to expire the first record
+            sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 2 * SEGMENT_INTERVAL)), 4L);
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+            sessionStore.findSessions("a", "b", 0L, Long.MAX_VALUE)
+        ) {
+            if (getStoreType() == StoreType.InMemoryStore) {
+                assertEquals(valuesToSet(iterator), new HashSet<>(Arrays.asList(2L, 3L, 4L)));
+            } else {
+                // The 2 records with values 2L and 3L are considered expired as
+                // their end times < observed stream time - retentionPeriod + 1.
+                Assertions.assertEquals(valuesToSet(iterator), new HashSet<>(Collections.singletonList(4L)));
+            }
+        }
+    }
+
+    @Test
+    public void shouldMatchPositionAfterPut() {
+        final MeteredSessionStore<String, Long> meteredSessionStore = (MeteredSessionStore<String, Long>) sessionStore;
+        final ChangeLoggingSessionBytesStore changeLoggingSessionBytesStore = (ChangeLoggingSessionBytesStore) meteredSessionStore.wrapped();
+        final SessionStore wrapped = (SessionStore) changeLoggingSessionBytesStore.wrapped();
+
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
+        sessionStore.put(new Windowed<String>("a", new SessionWindow(0, 0)), 1L);
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "", new RecordHeaders()));
+        sessionStore.put(new Windowed<String>("aa", new SessionWindow(0, 10)), 2L);
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
+        sessionStore.put(new Windowed<String>("a", new SessionWindow(10, 20)), 3L);
+
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
+        final Position actual = sessionStore.getPosition();
+        assertThat(expected, is(actual));
+    }
+
+    @Test
+    public void shouldNotFetchExpiredSessions() {
+        final long systemTime = Time.SYSTEM.milliseconds();
+        sessionStore.put(new Windowed<>("p", new SessionWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)), 1L);
+        sessionStore.put(new Windowed<>("q", new SessionWindow(systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)), 4L);
+        sessionStore.put(new Windowed<>("r", new SessionWindow(systemTime - RETENTION_PERIOD, systemTime - RETENTION_PERIOD / 2)), 3L);
+        sessionStore.put(new Windowed<>("p", new SessionWindow(systemTime - RETENTION_PERIOD, systemTime - RETENTION_PERIOD / 2)), 2L);
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.findSessions("p", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
+        ) {
+            Assertions.assertEquals(mkSet(2L), valuesToSet(iterator));
+        }
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.backwardFindSessions("p", systemTime - 5 * RETENTION_PERIOD, systemTime - 4 * RETENTION_PERIOD)
+        ) {
+            Assertions.assertFalse(iterator.hasNext());
+        }
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.findSessions("p", "r", systemTime - 5 * RETENTION_PERIOD, systemTime - 4 * RETENTION_PERIOD)
+        ) {
+            Assertions.assertFalse(iterator.hasNext());
+        }
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.findSessions("p", "r", systemTime - RETENTION_PERIOD, systemTime - RETENTION_PERIOD / 2)
+        ) {
+            Assertions.assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
+        }
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.findSessions("p", "r", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
+        ) {
+            Assertions.assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
+        }
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                     sessionStore.backwardFindSessions("p", "r", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
+        ) {
+            Assertions.assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
         }
     }
 }

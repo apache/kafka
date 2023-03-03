@@ -19,21 +19,20 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
-
 import kafka.common.LogSegmentOffsetOverflowException
-import kafka.log.UnifiedLog.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
-import kafka.server.{LogDirFailureChannel, LogOffsetMetadata}
-import kafka.server.epoch.LeaderEpochFileCache
-import kafka.utils.{CoreUtils, Logging, Scheduler}
+import kafka.log.UnifiedLog.{CleanedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
+import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidOffsetException
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.snapshot.Snapshots
+import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
+import org.apache.kafka.storage.internals.log.{CorruptIndexException, LoadedLogOffsets, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, ProducerStateManager}
 
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import scala.collection.{Set, mutable}
-
-case class LoadedLogOffsets(logStartOffset: Long,
-                            recoveryPoint: Long,
-                            nextOffsetMetadata: LogOffsetMetadata)
+import scala.jdk.CollectionConverters._
 
 object LogLoader extends Logging {
 
@@ -64,6 +63,7 @@ object LogLoader extends Logging {
  * @param recoveryPointCheckpoint The checkpoint of the offset at which to begin the recovery
  * @param leaderEpochCache An optional LeaderEpochFileCache instance to be updated during recovery
  * @param producerStateManager The ProducerStateManager instance to be updated during recovery
+ * @param numRemainingSegments The remaining segments to be recovered in this log keyed by recovery thread name
  */
 class LogLoader(
   dir: File,
@@ -77,7 +77,8 @@ class LogLoader(
   logStartOffsetCheckpoint: Long,
   recoveryPointCheckpoint: Long,
   leaderEpochCache: Option[LeaderEpochFileCache],
-  producerStateManager: ProducerStateManager
+  producerStateManager: ProducerStateManager,
+  numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]
 ) extends Logging {
   logIdent = s"[LogLoader partition=$topicPartition, dir=${dir.getParent}] "
 
@@ -106,7 +107,7 @@ class LogLoader(
     // We store segments that require renaming in this code block, and do the actual renaming later.
     var minSwapFileOffset = Long.MaxValue
     var maxSwapFileOffset = Long.MinValue
-    swapFiles.filter(f => UnifiedLog.isLogFile(new File(CoreUtils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach { f =>
+    swapFiles.filter(f => UnifiedLog.isLogFile(new File(Utils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach { f =>
       val baseOffset = offsetFromFile(f)
       val segment = LogSegment.open(f.getParentFile,
         baseOffset = baseOffset,
@@ -141,7 +142,7 @@ class LogLoader(
     for (file <- dir.listFiles if file.isFile) {
       if (file.getName.endsWith(SwapFileSuffix)) {
         info(s"Recovering file ${file.getName} by renaming from ${UnifiedLog.SwapFileSuffix} files.")
-        file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, UnifiedLog.SwapFileSuffix, "")))
+        file.renameTo(new File(Utils.replaceSuffix(file.getPath, UnifiedLog.SwapFileSuffix, "")))
       }
     }
 
@@ -191,7 +192,7 @@ class LogLoader(
     // Reload all snapshots into the ProducerStateManager cache, the intermediate ProducerStateManager used
     // during log recovery may have deleted some files without the LogLoader.producerStateManager instance witnessing the
     // deletion.
-    producerStateManager.removeStraySnapshots(segments.baseOffsets.toSeq)
+    producerStateManager.removeStraySnapshots(segments.baseOffsets.map(x => Long.box(x)).asJavaCollection)
     UnifiedLog.rebuildProducerState(
       producerStateManager,
       segments,
@@ -202,10 +203,10 @@ class LogLoader(
       reloadFromCleanShutdown = hadCleanShutdown,
       logIdent)
     val activeSegment = segments.lastSegment.get
-    LoadedLogOffsets(
+    new LoadedLogOffsets(
       newLogStartOffset,
       newRecoveryPoint,
-      LogOffsetMetadata(nextOffset, activeSegment.baseOffset, activeSegment.size))
+      new LogOffsetMetadata(nextOffset, activeSegment.baseOffset, activeSegment.size))
   }
 
   /**
@@ -226,7 +227,10 @@ class LogLoader(
       if (!file.canRead)
         throw new IOException(s"Could not read file $file")
       val filename = file.getName
-      if (filename.endsWith(DeletedFileSuffix)) {
+
+      // Delete stray files marked for deletion, but skip KRaft snapshots.
+      // These are handled in the recovery logic in `KafkaMetadataLog`.
+      if (filename.endsWith(LogFileUtils.DELETED_FILE_SUFFIX) && !filename.endsWith(Snapshots.DELETE_SUFFIX)) {
         debug(s"Deleting stray temporary file ${file.getAbsolutePath}")
         Files.deleteIfExists(file.toPath)
       } else if (filename.endsWith(CleanedFileSuffix)) {
@@ -351,8 +355,8 @@ class LogLoader(
     val producerStateManager = new ProducerStateManager(
       topicPartition,
       dir,
-      this.producerStateManager.maxTransactionTimeoutMs,
-      this.producerStateManager.maxProducerIdExpirationMs,
+      this.producerStateManager.maxTransactionTimeoutMs(),
+      this.producerStateManager.producerStateManagerConfig(),
       time)
     UnifiedLog.rebuildProducerState(
       producerStateManager,
@@ -392,7 +396,7 @@ class LogLoader(
           Some(logEndOffset)
         else {
           warn(s"Deleting all segments because logEndOffset ($logEndOffset) " +
-            s"is smaller than logStartOffset ${logStartOffsetCheckpoint}. " +
+            s"is smaller than logStartOffset $logStartOffsetCheckpoint. " +
             "This could happen if segment files were deleted from the file system.")
           removeAndDeleteSegmentsAsync(segments.values)
           leaderEpochCache.foreach(_.clearAndFlush())
@@ -404,12 +408,18 @@ class LogLoader(
 
     // If we have the clean shutdown marker, skip recovery.
     if (!hadCleanShutdown) {
-      val unflushed = segments.values(recoveryPointCheckpoint, Long.MaxValue).iterator
+      val unflushed = segments.values(recoveryPointCheckpoint, Long.MaxValue)
+      val numUnflushed = unflushed.size
+      val unflushedIter = unflushed.iterator
       var truncated = false
+      var numFlushed = 0
+      val threadName = Thread.currentThread().getName
+      numRemainingSegments.put(threadName, numUnflushed)
 
-      while (unflushed.hasNext && !truncated) {
-        val segment = unflushed.next()
-        info(s"Recovering unflushed segment ${segment.baseOffset}")
+      while (unflushedIter.hasNext && !truncated) {
+        val segment = unflushedIter.next()
+        info(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$numUnflushed recovered for $topicPartition.")
+
         val truncatedBytes =
           try {
             recoverSegment(segment)
@@ -424,8 +434,13 @@ class LogLoader(
           // we had an invalid message, delete all remaining log
           warn(s"Corruption found in segment ${segment.baseOffset}," +
             s" truncating to offset ${segment.readNextOffset}")
-          removeAndDeleteSegmentsAsync(unflushed.toList)
+          removeAndDeleteSegmentsAsync(unflushedIter.toList)
           truncated = true
+          // segment is truncated, so set remaining segments to 0
+          numRemainingSegments.put(threadName, 0)
+        } else {
+          numFlushed += 1
+          numRemainingSegments.put(threadName, numUnflushed - numFlushed)
         }
       }
     }

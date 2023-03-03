@@ -24,107 +24,87 @@ import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
-import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.connect.runtime.WorkerInfo;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.connect.storage.FileOffsetBackingStore;
-import org.apache.kafka.connect.util.ConnectUtils;
+import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Map;
 
 /**
  * <p>
- * Command line utility that runs Kafka Connect as a standalone process. In this mode, work is not
- * distributed. Instead, all the normal Connect machinery works within a single process. This is
- * useful for ad hoc, small, or experimental jobs.
+ * Command line utility that runs Kafka Connect as a standalone process. In this mode, work (connectors and tasks) is not
+ * distributed. Instead, all the normal Connect machinery works within a single process. This is useful for ad hoc,
+ * small, or experimental jobs.
  * </p>
  * <p>
- * By default, no job configs or offset data is persistent. You can make jobs persistent and
- * fault tolerant by overriding the settings to use file storage for both.
+ * Connector and task configs are stored in memory and are not persistent. However, connector offset data is persistent
+ * since it uses file storage (configurable via {@link StandaloneConfig#OFFSET_STORAGE_FILE_FILENAME_CONFIG})
  * </p>
  */
-public class ConnectStandalone {
+public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
     private static final Logger log = LoggerFactory.getLogger(ConnectStandalone.class);
 
-    public static void main(String[] args) {
+    protected ConnectStandalone(String... args) {
+        super(args);
+    }
 
-        if (args.length < 2 || Arrays.asList(args).contains("--help")) {
-            log.info("Usage: ConnectStandalone worker.properties connector1.properties [connector2.properties ...]");
-            Exit.exit(1);
-        }
+    @Override
+    protected String usage() {
+        return "ConnectStandalone worker.properties [connector1.properties connector2.properties ...]";
+    }
 
+    @Override
+    protected void processExtraArgs(Herder herder, Connect connect, String[] extraArgs) {
         try {
-            Time time = Time.SYSTEM;
-            log.info("Kafka Connect standalone worker initializing ...");
-            long initStart = time.hiResClockMs();
-            WorkerInfo initInfo = new WorkerInfo();
-            initInfo.logAll();
-
-            String workerPropsFile = args[0];
-            Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
-                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.emptyMap();
-
-            log.info("Scanning for plugin classes. This might take a moment ...");
-            Plugins plugins = new Plugins(workerProps);
-            plugins.compareAndSwapWithDelegatingLoader();
-            StandaloneConfig config = new StandaloneConfig(workerProps);
-
-            String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
-            log.debug("Kafka cluster ID: {}", kafkaClusterId);
-
-            RestServer rest = new RestServer(config);
-            rest.initializeServer();
-
-            URI advertisedUrl = rest.advertisedUrl();
-            String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
-
-            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy = plugins.newPlugin(
-                config.getString(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG),
-                config, ConnectorClientConfigOverridePolicy.class);
-            Worker worker = new Worker(workerId, time, plugins, config, new FileOffsetBackingStore(),
-                                       connectorClientConfigOverridePolicy);
-
-            Herder herder = new StandaloneHerder(worker, kafkaClusterId, connectorClientConfigOverridePolicy);
-            final Connect connect = new Connect(herder, rest);
-            log.info("Kafka Connect standalone worker initialization took {}ms", time.hiResClockMs() - initStart);
-
-            try {
-                connect.start();
-                for (final String connectorPropsFile : Arrays.copyOfRange(args, 1, args.length)) {
-                    Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
-                    FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>((error, info) -> {
-                        if (error != null)
-                            log.error("Failed to create job for {}", connectorPropsFile);
-                        else
-                            log.info("Created connector {}", info.result().name());
-                    });
-                    herder.putConnectorConfig(
-                            connectorProps.get(ConnectorConfig.NAME_CONFIG),
-                            connectorProps, false, cb);
-                    cb.get();
-                }
-            } catch (Throwable t) {
-                log.error("Stopping after connector error", t);
-                connect.stop();
-                Exit.exit(3);
+            for (final String connectorPropsFile : extraArgs) {
+                Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
+                FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>((error, info) -> {
+                    if (error != null)
+                        log.error("Failed to create connector for {}", connectorPropsFile);
+                    else
+                        log.info("Created connector {}", info.result().name());
+                });
+                herder.putConnectorConfig(
+                        connectorProps.get(ConnectorConfig.NAME_CONFIG),
+                        connectorProps, false, cb);
+                cb.get();
             }
-
-            // Shutdown will be triggered by Ctrl-C or via HTTP shutdown request
-            connect.awaitStop();
-
         } catch (Throwable t) {
-            log.error("Stopping due to error", t);
-            Exit.exit(2);
+            log.error("Stopping after connector error", t);
+            connect.stop();
+            Exit.exit(3);
         }
+    }
+
+    @Override
+    protected Herder createHerder(StandaloneConfig config, String workerId, Plugins plugins,
+                                  ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                                  RestServer restServer, RestClient restClient) {
+
+        OffsetBackingStore offsetBackingStore = new FileOffsetBackingStore();
+        offsetBackingStore.configure(config);
+
+        Worker worker = new Worker(workerId, Time.SYSTEM, plugins, config, offsetBackingStore,
+                connectorClientConfigOverridePolicy);
+
+        return new StandaloneHerder(worker, config.kafkaClusterId(), connectorClientConfigOverridePolicy);
+    }
+
+    @Override
+    protected StandaloneConfig createConfig(Map<String, String> workerProps) {
+        return new StandaloneConfig(workerProps);
+    }
+
+    public static void main(String[] args) {
+        ConnectStandalone connectStandalone = new ConnectStandalone(args);
+        connectStandalone.run();
     }
 }

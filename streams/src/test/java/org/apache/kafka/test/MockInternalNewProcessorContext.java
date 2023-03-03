@@ -25,7 +25,9 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorMetadata;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
@@ -231,5 +233,19 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     @Override
     public ProcessorMetadata getProcessorMetadata() {
         return processorMetadata;
+    }
+
+    @Override
+    public <K extends KOut, V extends VOut> void forward(final FixedKeyRecord<K, V> record) {
+        forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
+    }
+
+    @Override
+    public <K extends KOut, V extends VOut> void forward(final FixedKeyRecord<K, V> record,
+                                                         final String childName) {
+        forward(
+            new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
+            childName
+        );
     }
 }

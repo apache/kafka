@@ -29,6 +29,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ResignedStateTest {
@@ -89,5 +90,18 @@ class ResignedStateTest {
         assertFalse(state.canGrantVote(1, isLogUpToDate));
         assertFalse(state.canGrantVote(2, isLogUpToDate));
         assertFalse(state.canGrantVote(3, isLogUpToDate));
+    }
+
+    @Test
+    void testNegativeScenarioAcknowledgeResignation() {
+        Set<Integer> voters = Utils.mkSet(0, 1, 2, 3, 4, 5);
+
+        ResignedState state = newResignedState(voters, Collections.emptyList());
+
+        assertEquals(ElectionState.withElectedLeader(epoch, 0, voters), state.election());
+        assertEquals(epoch, state.epoch());
+
+        // try non-existed voter must throw an exception
+        assertThrows(IllegalArgumentException.class, () -> state.acknowledgeResignation(10));
     }
 }

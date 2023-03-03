@@ -36,8 +36,8 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
                               with KafkaCSVMetricsReporterMBean
                               with Logging {
 
-  private var csvDir: File = null
-  private var underlying: CsvReporter = null
+  private var csvDir: File = _
+  private var underlying: CsvReporter = _
   private var running = false
   private var initialized = false
 
@@ -51,7 +51,7 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
         val metricsConfig = new KafkaMetricsConfig(props)
         csvDir = new File(props.getString("kafka.csv.metrics.dir", "kafka_metrics"))
         Utils.delete(csvDir)
-        Files.createDirectories(csvDir.toPath())
+        Files.createDirectories(csvDir.toPath)
         underlying = new CsvReporter(KafkaYammerMetrics.defaultRegistry(), csvDir)
         if (props.getBoolean("kafka.csv.metrics.reporter.enabled", default = false)) {
           initialized = true

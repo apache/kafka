@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
 import java.util.{Collections, Properties}
-
 import kafka.consumer.BaseConsumerRecord
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
@@ -35,6 +34,7 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.HashMap
@@ -63,12 +63,12 @@ import scala.util.{Failure, Success, Try}
 @deprecated(message = "Use the Connect-based MirrorMaker instead (aka MM2).", since = "3.0")
 object MirrorMaker extends Logging with KafkaMetricsGroup {
 
-  private[tools] var producer: MirrorMakerProducer = null
-  private var mirrorMakerThreads: Seq[MirrorMakerThread] = null
+  private[tools] var producer: MirrorMakerProducer = _
+  private var mirrorMakerThreads: Seq[MirrorMakerThread] = _
   private val isShuttingDown: AtomicBoolean = new AtomicBoolean(false)
   // Track the messages not successfully sent by mirror maker.
   private val numDroppedMessages: AtomicInteger = new AtomicInteger(0)
-  private var messageHandler: MirrorMakerMessageHandler = null
+  private var messageHandler: MirrorMakerMessageHandler = _
   private var offsetCommitIntervalMs = 0
   private var abortOnSendFailure: Boolean = true
   @volatile private var exitingOnSendFailure: Boolean = false
@@ -86,7 +86,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     info("Starting mirror maker")
     try {
       val opts = new MirrorMakerOptions(args)
-      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to continuously copy data between two Kafka clusters.")
+      CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to continuously copy data between two Kafka clusters.")
       opts.checkArgs()
     } catch {
       case ct: ControlThrowable => throw ct
@@ -297,7 +297,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                                        customRebalanceListener: Option[ConsumerRebalanceListener],
                                        includeOpt: Option[String]) {
     val regex = includeOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports include."))
-    var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
+    var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = _
 
     // We manually maintain the consumed offsets for historical reasons and it could be simplified
     // Visible for testing
