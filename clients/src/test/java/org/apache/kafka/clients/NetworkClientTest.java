@@ -481,7 +481,7 @@ public class NetworkClientTest {
 
         NetworkClient client = createNetworkClientWithNoVersionDiscovery(metadata);
 
-        // Send first produce, without any timeout.
+        // Send first produce without any timeout.
         ClientResponse clientResponse = produce(client, requestTimeoutMs, false);
         assertEquals(node.idString(), clientResponse.destination());
         assertFalse(clientResponse.wasDisconnected(), "Expected response to succeed and not disconnect");
@@ -508,7 +508,7 @@ public class NetworkClientTest {
         client.send(request, time.milliseconds());
 
         if (shouldEmulateTimeout) {
-            // Sleep some amount of time between sending request and receiving response.
+            // For a delay of slightly more than our timeout threshold to emulate the request timing out.
             time.sleep(requestTimeoutMs + 1);
         } else {
             ProduceResponse produceResponse = new ProduceResponse(new ProduceResponseData());
