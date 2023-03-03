@@ -51,9 +51,28 @@ public final class ScramImage {
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
-        for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
-            for (Entry<String, ScramCredentialData> userEntry : mechanismEntry.getValue().entrySet()) {
-                writer.write(0, userEntry.getValue().toRecord(userEntry.getKey(), mechanismEntry.getKey()));
+        if (options.metadataVersion().isScramSupported()) {
+            for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
+                for (Entry<String, ScramCredentialData> userEntry : mechanismEntry.getValue().entrySet()) {
+                    writer.write(0, userEntry.getValue().toRecord(userEntry.getKey(), mechanismEntry.getKey()));
+                }
+            }
+        } else {
+            boolean isEmpty = true;
+            StringBuffer scramImageString = new StringBuffer("ScramImage({");
+            for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
+                if (!mechanismEntry.getValue().isEmpty()) {
+                    scramImageString.append(mechanismEntry.getKey() + ":");
+                    List<String> users = new ArrayList<>(mechanismEntry.getValue().keySet());
+                    scramImageString.append(users.stream().collect(Collectors.joining(", ")));
+                    scramImageString.append("},{");
+                    isEmpty = false;
+                }
+            }
+
+            if (!isEmpty) {
+                scramImageString.append("})");
+                options.handleLoss(scramImageString.toString());
             }
         }
     }

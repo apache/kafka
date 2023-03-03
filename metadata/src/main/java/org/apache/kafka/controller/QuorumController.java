@@ -1790,7 +1790,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new AlterUserScramCredentialsResponseData());
         }
         return appendWriteEvent("alterUserScramCredentials", context.deadlineNs(),
-            () -> scramControlManager.alterCredentials(request));
+            () -> scramControlManager.alterCredentials(request, featureControl.metadataVersion()));
     }
 
     @Override

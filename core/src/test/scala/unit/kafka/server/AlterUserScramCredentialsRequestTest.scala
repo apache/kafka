@@ -33,6 +33,7 @@ import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, Alter
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.{Test, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -46,10 +47,17 @@ import scala.jdk.CollectionConverters._
  * Also tests the Alter and Describe APIs for the case where credentials are successfully altered/described.
  */
 class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
+
+  protected var testMetadataVersion = MetadataVersion.latest
+  override protected def metadataVersion = testMetadataVersion
+
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     if (TestInfoUtils.isKRaft(testInfo)) {
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
+      if (testInfo.getDisplayName().contains("quorum=kraft-IBP_3_4")) {
+        testMetadataVersion = MetadataVersion.IBP_3_4_IV0
+      }
     } else {
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AlterCredentialsTest.TestAuthorizer].getName)
 
@@ -365,6 +373,27 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     // now describe them all, which should yield 0 credentials
     val results7 = describeAllWithNoTopLevelErrorConfirmed().data.results
     assertEquals(0, results7.size)
+  }
+
+  /*
+   * Test that SCRAM alter command on KRaft cluster with IBP version less that IBP_3_5 fails
+   */
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft-IBP_3_4"))
+  def testMetadataVersionTooLow(quorum: String): Unit = {
+    val upsertionMetadataVersionTooLow = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user1)
+      .setMechanism(ScramMechanism.SCRAM_SHA_256.`type`).setIterations(8192)
+      .setSalt(saltBytes).setSaltedPassword(saltedPasswordBytes)
+    val request = new AlterUserScramCredentialsRequest.Builder(
+      new AlterUserScramCredentialsRequestData()
+        .setDeletions(util.Collections.emptyList())
+        .setUpsertions(util.Arrays.asList(upsertionMetadataVersionTooLow))).build()
+    val response = sendAlterUserScramCredentialsRequest(request)
+    val results = response.data.results
+    assertEquals(1, results.size)
+    checkAllErrorsAlteringCredentials(results, Errors.UNSUPPORTED_VERSION,
+                                      "when altering the credentials on unsupported IPB version")
+    assertEquals("The current metadata version does not support SCRAM", results.get(0).errorMessage)
   }
 
   private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = adminSocketServer): AlterUserScramCredentialsResponse = {

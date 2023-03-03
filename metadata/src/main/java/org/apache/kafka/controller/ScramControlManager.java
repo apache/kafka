@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
@@ -43,6 +44,7 @@ import java.util.Objects;
 import static org.apache.kafka.common.protocol.Errors.DUPLICATE_RESOURCE;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.RESOURCE_NOT_FOUND;
+import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
 import static org.apache.kafka.common.protocol.Errors.UNACCEPTABLE_CREDENTIAL;
 import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_SASL_MECHANISM;
 
@@ -158,9 +160,15 @@ public class ScramControlManager {
         this.credentials = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
+    /*
+     * Pass in the MetadataVersion so that we can return a response to the caller 
+     * if the current metadataVersion is too low.
+     */
     public ControllerResult<AlterUserScramCredentialsResponseData> alterCredentials(
-        AlterUserScramCredentialsRequestData request
+        AlterUserScramCredentialsRequestData request,
+        MetadataVersion metadataVersion
     ) {
+        boolean scramIsSupported = metadataVersion.isScramSupported();
         Map<String, ScramCredentialDeletion> userToDeletion = new HashMap<>();
         Map<String, ScramCredentialUpsertion> userToUpsert = new HashMap<>();
         Map<String, ApiError> userToError = new HashMap<>();
@@ -171,11 +179,16 @@ public class ScramControlManager {
                     userToError.put(deletion.name(), new ApiError(DUPLICATE_RESOURCE,
                         "A user credential cannot be altered twice in the same request"));
                 } else {
-                    ApiError error = validateDeletion(deletion);
-                    if (error.isFailure()) {
-                        userToError.put(deletion.name(), error);
+                    if (!scramIsSupported) {
+                        userToError.put(deletion.name(), new ApiError(UNSUPPORTED_VERSION,
+                            "The current metadata version does not support SCRAM"));
                     } else {
-                        userToDeletion.put(deletion.name(), deletion);
+                        ApiError error = validateDeletion(deletion);
+                        if (error.isFailure()) {
+                            userToError.put(deletion.name(), error);
+                        } else {
+                            userToDeletion.put(deletion.name(), deletion);
+                        }
                     }
                 }
             }
@@ -187,11 +200,16 @@ public class ScramControlManager {
                     userToError.put(upsertion.name(), new ApiError(DUPLICATE_RESOURCE,
                         "A user credential cannot be altered twice in the same request"));
                 } else {
-                    ApiError error = validateUpsertion(upsertion);
-                    if (error.isFailure()) {
-                        userToError.put(upsertion.name(), error);
+                    if (!scramIsSupported) {
+                        userToError.put(upsertion.name(), new ApiError(UNSUPPORTED_VERSION,
+                            "The current metadata version does not support SCRAM"));
                     } else {
-                        userToUpsert.put(upsertion.name(), upsertion);
+                        ApiError error = validateUpsertion(upsertion);
+                        if (error.isFailure()) {
+                            userToError.put(upsertion.name(), error);
+                        } else {
+                            userToUpsert.put(upsertion.name(), upsertion);
+                        }
                     }
                 }
             }
