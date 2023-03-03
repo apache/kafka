@@ -18,7 +18,6 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.message.FetchResponseData;
 
-import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -45,32 +44,6 @@ public class LogReadInfo {
         this.logStartOffset = logStartOffset;
         this.logEndOffset = logEndOffset;
         this.lastStableOffset = lastStableOffset;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        LogReadInfo that = (LogReadInfo) o;
-
-        return highWatermark == that.highWatermark &&
-                logStartOffset == that.logStartOffset &&
-                logEndOffset == that.logEndOffset &&
-                lastStableOffset == that.lastStableOffset &&
-                Objects.equals(fetchedData, that.fetchedData) &&
-                Objects.equals(divergingEpoch, that.divergingEpoch);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = fetchedData != null ? fetchedData.hashCode() : 0;
-        result = 31 * result + (divergingEpoch != null ? divergingEpoch.hashCode() : 0);
-        result = 31 * result + Long.hashCode(highWatermark);
-        result = 31 * result + Long.hashCode(logStartOffset);
-        result = 31 * result + Long.hashCode(logEndOffset);
-        result = 31 * result + Long.hashCode(lastStableOffset);
-        return result;
     }
 
     @Override
