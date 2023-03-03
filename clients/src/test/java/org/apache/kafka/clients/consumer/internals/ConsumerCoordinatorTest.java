@@ -123,7 +123,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Collections.emptyList;
@@ -131,12 +130,12 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.toMap;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.EAGER;
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
+import static org.apache.kafka.common.utils.MoreAssertions.assertRequestEquals;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -2839,7 +2838,7 @@ public abstract class ConsumerCoordinatorTest {
         // The consumer does not provide a guarantee on the order of occurrence of topics and partitions in the
         // OffsetCommit request, since a map of offsets is provided to the consumer API. Here, both requests
         // are asserted to be identical irrespective of the order in which topic and partitions appear in the requests.
-        assertEqualsUnordered(expectedRequestData, captor.requestData());
+        assertRequestEquals(expectedRequestData, captor.requestData());
     }
     @Test
     public void testInvalidTopicIdReturnedByBrokerWhenCommittingOffsetSync() {
@@ -4251,37 +4250,6 @@ public abstract class ConsumerCoordinatorTest {
             .map(e -> new SimpleEntry<>(e.getKey().topicPartition(), e.getValue()))
             .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
         client.respond(offsetCommitRequestMatcher(offsets, __ -> { }), offsetCommitResponse(errors));
-    }
-
-    /**
-     * Compares the two {@link OffsetCommitRequestData} independently of the order in which the
-     * {@link OffsetCommitRequestTopic} and {@link OffsetCommitRequestPartition} are defined in the response.
-     */
-    private static void assertEqualsUnordered(OffsetCommitRequestData expected, OffsetCommitRequestData actual) {
-        assertEquals(expected.groupId(), actual.groupId(), "Group id mismatch");
-        assertEquals(expected.groupInstanceId(), actual.groupInstanceId(), "Group instance id mismatch");
-        assertEquals(expected.generationId(), actual.generationId(), "Generation id mismatch");
-        assertEquals(expected.memberId(), actual.memberId(), "Member id mismatch");
-        assertEquals(expected.retentionTimeMs(), actual.retentionTimeMs(), "Retention time mismatch");
-        assertEquals(offsetCommitRequestPartitions(expected), offsetCommitRequestPartitions(actual));
-    }
-
-    /**
-     * Returns all the {@link OffsetCommitRequestPartition} contained in the response for which the
-     * {@link OffsetCommitRequestTopic} satisfies the filter. The partition objects are keyed using the
-     * provided keyMapper, which intends to generate a {@link TopicPartition} or {@link TopicIdPartition}
-     * depending on how the topic-partition is referenced to from the {@link OffsetCommitRequest}
-     * (that is, by topic id or topic name).
-     */
-    private static Map<TopicIdPartition, OffsetCommitRequestPartition> offsetCommitRequestPartitions(
-            OffsetCommitRequestData request) {
-
-        return request.topics().stream()
-            .flatMap(topic -> topic.partitions().stream()
-                .collect(Collectors.toMap(p -> new TopicIdPartition(topic.topicId(), p.partitionIndex(), topic.name()), identity()))
-                .entrySet()
-                .stream())
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private void prepareJoinAndSyncResponse(String consumerId, int generation, List<String> subscription, List<TopicPartition> assignment) {

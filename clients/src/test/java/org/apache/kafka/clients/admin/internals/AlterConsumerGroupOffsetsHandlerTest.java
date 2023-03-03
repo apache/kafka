@@ -17,12 +17,14 @@
 package org.apache.kafka.clients.admin.internals;
 
 import static java.util.Collections.emptyMap;
+import static org.apache.kafka.common.utils.MoreAssertions.assertRequestEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,6 +33,7 @@ import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
@@ -61,12 +64,37 @@ public class AlterConsumerGroupOffsetsHandlerTest {
 
     @Test
     public void testBuildRequest() {
+        // Note: this test validates that the OffsetCommitRequest created from the handler uses topic names instead
+        // of topic ids. When the admin client supports topic ids, update this test accordingly.
         AlterConsumerGroupOffsetsHandler handler = new AlterConsumerGroupOffsetsHandler(groupId, partitions, logContext);
         OffsetCommitRequest request = handler.buildBatchedRequest(-1, singleton(CoordinatorKey.byGroupId(groupId))).build();
-        assertEquals(groupId, request.data().groupId());
-        assertEquals(2, request.data().topics().size());
-        assertEquals(2, request.data().topics().get(0).partitions().size());
-        assertEquals(offset, request.data().topics().get(0).partitions().get(0).committedOffset());
+
+        OffsetCommitRequestData requestData = new OffsetCommitRequestData()
+            .setGroupId(groupId)
+            .setTopics(Arrays.asList(
+                new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                    .setName(t0p0.topic())
+                    .setPartitions(Arrays.asList(
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(t0p0.partition())
+                            .setCommittedOffset(offset),
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(t0p1.partition())
+                            .setCommittedOffset(offset)
+                    )),
+                new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                    .setName(t1p0.topic())
+                    .setPartitions(Arrays.asList(
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(t1p0.partition())
+                            .setCommittedOffset(offset),
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(t1p1.partition())
+                            .setCommittedOffset(offset)
+                    ))
+            ));
+
+        assertRequestEquals(requestData, request.data());
     }
 
     @Test
