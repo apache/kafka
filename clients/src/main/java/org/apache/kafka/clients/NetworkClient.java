@@ -1283,10 +1283,6 @@ public class NetworkClient implements KafkaClient {
                     false, null, null, response);
         }
 
-        public ClientResponse disconnected(long timeMs, AuthenticationException authenticationException) {
-            return disconnected(timeMs, authenticationException, false);
-        }
-
         public ClientResponse disconnected(long timeMs, AuthenticationException authenticationException, boolean timedOut) {
             // A timed out request is considered disconnected as well
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
