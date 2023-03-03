@@ -107,6 +107,19 @@ class OffsetCommitRequestTest extends BaseRequestTest {
   }
 
   @Test
+  def testCommitOffsetFromConsumer(): Unit = {
+    val topics = createTopics("topic1", "topic2", "topic3")
+    val topicPartitions = topics.map(nai => new TopicPartition(nai.name, 0))
+    consumer.assign(topicPartitions.asJava)
+
+    val offsets = topics
+      .map(t => new TopicPartition(t.name, 0) -> new OffsetAndMetadata(offset, empty(), "metadata"))
+      .toMap
+
+    consumer.commitSync(offsets.asJava)
+  }
+
+  @Test
   def testOffsetCommitWithUnknownTopicId(): Unit = {
     val topics = createTopics("topic1", "topic2", "topic3")
     consumer.subscribe(topics.map(_.name).asJava)

@@ -46,8 +46,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         private final OffsetCommitRequestData data;
 
         public Builder(OffsetCommitRequestData data) {
-            super(ApiKeys.OFFSET_COMMIT);
-            this.data = data;
+            this(data, ApiKeys.OFFSET_COMMIT.latestVersion());
         }
 
         /**
