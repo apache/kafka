@@ -61,8 +61,8 @@ public class Plugins {
 
     // VisibleForTesting
     Plugins(Map<String, String> props, ClassLoader parent) {
-        List<String> pluginPathElements = WorkerConfig.pluginPathElements(props);
-        List<Path> pluginLocations = PluginUtils.pluginLocations(pluginPathElements);
+        String pluginPath = WorkerConfig.pluginPath(props);
+        List<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
         delegatingLoader = newDelegatingClassLoader(pluginLocations, parent);
         delegatingLoader.initLoaders();
     }
