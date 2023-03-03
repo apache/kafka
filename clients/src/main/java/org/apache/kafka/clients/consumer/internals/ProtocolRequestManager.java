@@ -51,20 +51,42 @@ public class ProtocolRequestManager implements RequestManager {
     }
 
     class HeartbeatRequestManager implements RequestManager {
-        RequestState heartbeatRequestState;
+        HeartbeatRequestState heartbeatRequestState;
 
         @Override
         public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-            // just a demo, don't do anything
+            NetworkClientDelegate.PollResult req = trySendHeartbeat(currentTimeMs);
+        }
+
+        private NetworkClientDelegate.PollResult trySendHeartbeat(long currentTimeMs) {
+            if (groupState.state != GroupState.State.UNJOINED && heartbeatRequestState.canSendHeartbeat(currentTimeMs)) {
+                return sendHeartbeat(currentTimeMs);
+            }
+        }
+
+        private NetworkClientDelegate.PollResult sendHeartbeat(long currentTimeMs) {
+            // construct a heartbeat
             return null;
         }
 
-        public void sendHeartbeat(long currentTimeMs) {
-            heartbeatRequestState.canSendRequest(currentTimeMs);
-        }
+        class HeartbeatRequestState extends RequestState  {
+
+           public HeartbeatRequestState(long retryBackoffMs) {
+               super(retryBackoffMs);
+           }
+
+           public boolean canSendHeartbeat(long currentTimeMs) {
+               // of course, this is demo
+               return true;
+           }
+       }
     }
 
-    class ServierSideProtocol implements RebalanceProtocol {
+    static class NeoConsumerProtocol implements RebalanceProtocol {
+        private Mode mode; // get it from the config
+        enum Mode {
+            CLIENT_SIDE, SERVER_SIDE
+        }
 
         @Override
         public NetworkClientDelegate.PollResult onPrepare(long currentTimeMs) {
