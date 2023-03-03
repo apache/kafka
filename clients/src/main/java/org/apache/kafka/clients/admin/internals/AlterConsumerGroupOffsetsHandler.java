@@ -33,6 +33,7 @@ import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitReque
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
@@ -93,7 +94,6 @@ public class AlterConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Co
         offsets.forEach((topicPartition, offsetAndMetadata) -> {
             OffsetCommitRequestTopic topic = offsetData.computeIfAbsent(
                 topicPartition.topic(),
-                // The admin client does not support topic IDs as of 2023/02/24.
                 key -> new OffsetCommitRequestTopic().setName(topicPartition.topic())
             );
 
@@ -108,7 +108,7 @@ public class AlterConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Co
             .setGroupId(groupId.idValue)
             .setTopics(new ArrayList<>(offsetData.values()));
 
-        return new OffsetCommitRequest.Builder(data);
+        return new OffsetCommitRequest.Builder(data, (short) Math.min(8, ApiKeys.OFFSET_COMMIT.latestVersion()));
     }
 
     @Override

@@ -19,18 +19,19 @@ package unit.kafka.server
 
 import kafka.server.KafkaApisTest.{NameAndId, newOffsetCommitRequestData, newOffsetCommitResponseData}
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetCommitResponse}
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
+import java.util.Optional.empty
 import java.util.Properties
 import scala.collection.{Map, Seq}
 import scala.collection.immutable.ListMap
-import scala.jdk.CollectionConverters.{ListHasAsScala, SeqHasAsJava}
+import scala.jdk.CollectionConverters.{ListHasAsScala, MapHasAsJava, SeqHasAsJava}
 
 class OffsetCommitRequestTest extends BaseRequestTest {
   override def brokerCount: Int = 1
@@ -115,5 +116,25 @@ class OffsetCommitRequestTest extends BaseRequestTest {
       Seq((NameAndId("unresolvable"), ListMap(0 -> Errors.UNKNOWN_TOPIC_ID))) ++ topics.map((_, Map(0 -> Errors.NONE))),
       ApiKeys.OFFSET_COMMIT.allVersions().asScala.filter(_ >= 9)
     )
+  }
+
+  @Test
+  def alterConsumerGroupOffsetsDoNotUseTopicIds(): Unit = {
+    val topics = createTopics("topic1", "topic2", "topic3")
+    consumer.subscribe(topics.map(_.name).asJava)
+
+    val admin = createAdminClient()
+
+    try {
+      val offsets = topics
+        .map(t => new TopicPartition(t.name, 0) -> new OffsetAndMetadata(offset, empty(), "metadata"))
+        .toMap
+
+      // Would throw an UnknownTopicId exception if the OffsetCommitRequest was set to version 9 or higher.
+      admin.alterConsumerGroupOffsets(groupId, offsets.asJava).all.get()
+
+    } finally {
+      Utils.closeQuietly(admin, "AdminClient")
+    }
   }
 }

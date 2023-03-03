@@ -50,6 +50,15 @@ public class OffsetCommitRequest extends AbstractRequest {
             this.data = data;
         }
 
+        /**
+         * Builds an {@link OffsetCommitRequest} with the maximum allowed version provided. To be used
+         * by clients which do not support topic IDs, used by the {@link OffsetCommitRequest} from version 9.
+         */
+        public Builder(OffsetCommitRequestData data, short latestAllowedVersion) {
+            super(ApiKeys.OFFSET_COMMIT, ApiKeys.OFFSET_COMMIT.oldestVersion(), latestAllowedVersion);
+            this.data = data;
+        }
+
         @Override
         public OffsetCommitRequest build(short version) {
             if (data.groupInstanceId() != null && version < 7) {
