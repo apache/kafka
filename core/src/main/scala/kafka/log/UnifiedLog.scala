@@ -25,11 +25,12 @@ import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, PartitionMetadataFile
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
+import org.apache.kafka.common.message.DescribeProducersResponseData
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
+import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
@@ -39,51 +40,17 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetsListener, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
-import java.util.{Optional, OptionalInt, OptionalLong}
+import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
-
-/**
- * Container class which represents a snapshot of the significant offsets for a partition. This allows fetching
- * of these offsets atomically without the possibility of a leader change affecting their consistency relative
- * to each other. See [[UnifiedLog.fetchOffsetSnapshot()]].
- */
-case class LogOffsetSnapshot(logStartOffset: Long,
-                             logEndOffset: LogOffsetMetadata,
-                             highWatermark: LogOffsetMetadata,
-                             lastStableOffset: LogOffsetMetadata)
-
-/**
- * Another container which is used for lower level reads using  [[kafka.cluster.Partition.fetchRecords()]].
- */
-case class LogReadInfo(fetchedData: FetchDataInfo,
-                       divergingEpoch: Option[FetchResponseData.EpochEndOffset],
-                       highWatermark: Long,
-                       logStartOffset: Long,
-                       logEndOffset: Long,
-                       lastStableOffset: Long)
-
-sealed trait LogStartOffsetIncrementReason
-case object ClientRecordDeletion extends LogStartOffsetIncrementReason {
-  override def toString: String = "client delete records request"
-}
-case object LeaderOffsetIncremented extends LogStartOffsetIncrementReason {
-  override def toString: String = "leader offset increment"
-}
-case object SegmentDeletion extends LogStartOffsetIncrementReason {
-  override def toString: String = "segment deletion"
-}
-case object SnapshotGenerated extends LogStartOffsetIncrementReason {
-  override def toString: String = "snapshot generated"
-}
 
 /**
  * A log which presents a unified view of local and tiered log segments.
@@ -444,7 +411,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val lastStable = fetchLastStableOffsetMetadata
     val highWatermark = fetchHighWatermarkMetadata
 
-    LogOffsetSnapshot(
+    new LogOffsetSnapshot(
       logStartOffset,
       localLog.logEndOffsetMetadata,
       highWatermark,
@@ -1119,7 +1086,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
     new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp,
       RecordBatch.NO_TIMESTAMP, logStartOffset, RecordConversionStats.EMPTY, sourceCompression, targetCompression,
-      shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
+      shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], null,
+      LeaderHwChange.NONE)
   }
 
   /**
@@ -1380,7 +1348,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // remove the segments for lookups
         localLog.removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, reason)
         deleteProducerSnapshots(deletable, asyncDelete = true)
-        maybeIncrementLogStartOffset(localLog.segments.firstSegmentBaseOffset.get, SegmentDeletion)
+        maybeIncrementLogStartOffset(localLog.segments.firstSegmentBaseOffset.get, LogStartOffsetIncrementReason.SegmentDeletion)
       }
       numToDelete
     }

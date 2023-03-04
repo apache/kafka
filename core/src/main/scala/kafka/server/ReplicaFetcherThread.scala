@@ -17,13 +17,11 @@
 
 package kafka.server
 
-import kafka.log.LeaderOffsetIncremented
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchResponse
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.server.common.OffsetAndEpoch
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.storage.internals.log.LogAppendInfo
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 
 import scala.collection.mutable
 
@@ -136,7 +134,7 @@ class ReplicaFetcherThread(name: String,
       partitionsWithNewHighWatermark += topicPartition
     }
 
-    log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
+    log.maybeIncrementLogStartOffset(leaderLogStartOffset, LogStartOffsetIncrementReason.LeaderOffsetIncremented)
     if (logTrace)
       trace(s"Follower received high watermark ${partitionData.highWatermark} from the leader " +
         s"$maybeUpdateHighWatermarkMessage for partition $topicPartition")

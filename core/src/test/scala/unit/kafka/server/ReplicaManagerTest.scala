@@ -61,7 +61,7 @@ import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockScheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -2934,7 +2934,7 @@ class ReplicaManagerTest {
       new SimpleRecord(11, "k2".getBytes, "v2".getBytes)))
     partition.appendRecordsToLeader(batch, AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
     partition.log.get.updateHighWatermark(2L)
-    partition.log.get.maybeIncrementLogStartOffset(1L, LeaderOffsetIncremented)
+    partition.log.get.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.LeaderOffsetIncremented)
     replicaManager.logManager.checkpointLogRecoveryOffsets()
     replicaManager.logManager.checkpointLogStartOffsets()
     assertEquals(Some(1L), readRecoveryPointCheckpoint().get(tp0))
