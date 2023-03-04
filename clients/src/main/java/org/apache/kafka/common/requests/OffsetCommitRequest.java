@@ -46,15 +46,14 @@ public class OffsetCommitRequest extends AbstractRequest {
         private final OffsetCommitRequestData data;
 
         public Builder(OffsetCommitRequestData data) {
-            this(data, ApiKeys.OFFSET_COMMIT.latestVersion());
+            this(data, true);
         }
 
-        /**
-         * Builds an {@link OffsetCommitRequest} with the maximum allowed version provided. To be used
-         * by clients which do not support topic IDs, used by the {@link OffsetCommitRequest} from version 9.
-         */
-        public Builder(OffsetCommitRequestData data, short latestAllowedVersion) {
-            super(ApiKeys.OFFSET_COMMIT, ApiKeys.OFFSET_COMMIT.oldestVersion(), latestAllowedVersion);
+        public Builder(OffsetCommitRequestData data, boolean canUseTopicIds) {
+            // Version 8 is the maximum version that can be used without topic IDs.
+            super(ApiKeys.OFFSET_COMMIT,
+                ApiKeys.OFFSET_COMMIT.oldestVersion(),
+                canUseTopicIds ? ApiKeys.OFFSET_COMMIT.latestVersion() : (short) 8);
             this.data = data;
         }
 

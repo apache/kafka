@@ -218,7 +218,8 @@ public class CommitRequestManager implements RequestManager {
                             .setGenerationId(generation.generationId)
                             .setMemberId(generation.memberId)
                             .setGroupInstanceId(groupInstanceId)
-                            .setTopics(new ArrayList<>(requestTopicDataMap.values())));
+                            .setTopics(new ArrayList<>(requestTopicDataMap.values())),
+                    false);
             return new NetworkClientDelegate.UnsentRequest(
                     builder,
                     coordinatorRequestManager.coordinator(),

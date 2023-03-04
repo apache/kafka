@@ -39,6 +39,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicResolver;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -1277,6 +1278,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return RequestFuture.coordinatorNotAvailable();
 
         TopicResolver topicResolver = metadata.topicResolver();
+        int topicPartitionsWithoutTopicId = 0;
 
         // create the offset commit request
         Map<String, OffsetCommitRequestData.OffsetCommitRequestTopic> requestTopicDataMap = new HashMap<>();
@@ -1287,11 +1289,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return RequestFuture.failure(new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset()));
             }
 
+            Uuid topicId = topicResolver.getTopicId(topicPartition.topic()).orElse(ZERO_UUID);
+            if (topicId.equals(ZERO_UUID)) {
+                ++topicPartitionsWithoutTopicId;
+            }
+
             OffsetCommitRequestData.OffsetCommitRequestTopic topic = requestTopicDataMap
                     .getOrDefault(topicPartition.topic(),
                             new OffsetCommitRequestData.OffsetCommitRequestTopic()
                                     .setName(topicPartition.topic())
-                                    .setTopicId(topicResolver.getTopicId(topicPartition.topic()).orElse(ZERO_UUID))
+                                    .setTopicId(topicId)
                     );
 
             topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
@@ -1330,13 +1337,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             groupInstanceId = null;
         }
 
+        boolean canUseTopicIds = topicPartitionsWithoutTopicId == 0;
+
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                 new OffsetCommitRequestData()
                         .setGroupId(this.rebalanceConfig.groupId)
                         .setGenerationId(generation.generationId)
                         .setMemberId(generation.memberId)
                         .setGroupInstanceId(groupInstanceId)
-                        .setTopics(new ArrayList<>(requestTopicDataMap.values()))
+                        .setTopics(new ArrayList<>(requestTopicDataMap.values())),
+                canUseTopicIds
         );
 
         log.trace("Sending OffsetCommit request with {} to coordinator {}", offsets, coordinator);

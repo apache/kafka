@@ -33,7 +33,6 @@ import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitReque
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
@@ -108,7 +107,7 @@ public class AlterConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Co
             .setGroupId(groupId.idValue)
             .setTopics(new ArrayList<>(offsetData.values()));
 
-        return new OffsetCommitRequest.Builder(data, (short) Math.min(8, ApiKeys.OFFSET_COMMIT.latestVersion()));
+        return new OffsetCommitRequest.Builder(data, false);
     }
 
     @Override
