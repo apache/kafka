@@ -681,11 +681,8 @@ subprojects {
     }
 
     // Scalac 2.12 `-release` requires Java 9 or higher, but Scala 2.13 doesn't have that restriction
-    if (versions.baseScala == "2.13")
-      scalaCompileOptions.additionalParameters += ["-release:" + minJavaVersion] // Use `:` here to workaround Gradle bug (see https://github.com/gradle/gradle/issues/23962#issuecomment-1437348400)
-    else if (JavaVersion.current().isJava9Compatible())
-      scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)] // Don't use `:` here as it breaks compilation with Scala 2.12
-
+    if (versions.baseScala == "2.13" || JavaVersion.current().isJava9Compatible())
+      scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = defaultMaxHeapSize
