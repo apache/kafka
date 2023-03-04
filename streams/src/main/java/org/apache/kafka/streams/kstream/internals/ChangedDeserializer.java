@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
@@ -50,7 +51,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
         // The format we need to deserialize is:
         // {BYTE_ARRAY oldValue}{BYTE newOldFlag=0}
         // {BYTE_ARRAY newValue}{BYTE newOldFlag=1}
-        // {INT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOldFlag=2}
+        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOldFlag=2}
         final ByteBuffer buffer = ByteBuffer.wrap(data);
         final byte newOldFlag = buffer.get(data.length - NEW_OLD_FLAG_SIZE);
 
@@ -67,7 +68,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
             newData = new byte[newDataLength];
             buffer.get(newData);
         } else if (newOldFlag == (byte) 2) {
-            final int newDataLength = buffer.getInt();
+            final int newDataLength = Math.toIntExact(ByteUtils.readUnsignedInt(buffer));
             newData = new byte[newDataLength];
 
             final int oldDataLength = data.length - Integer.BYTES - newDataLength - NEW_OLD_FLAG_SIZE;

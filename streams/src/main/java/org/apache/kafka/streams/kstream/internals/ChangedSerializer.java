@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
@@ -28,6 +29,7 @@ import java.util.Map;
 public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNullableSerializer<Change<T>, Void, T> {
 
     private static final int NEW_OLD_FLAG_SIZE = 1;
+    private static final int UINT32_SIZE = 4;
     private Serializer<T> inner;
     private boolean isUpgrade;
 
@@ -103,16 +105,17 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
         // The serialization format is:
         // {BYTE_ARRAY oldValue}{BYTE newOldFlag=0}
         // {BYTE_ARRAY newValue}{BYTE newOldFlag=1}
-        // {INT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOldFlag=2}
+        // {UINT32 newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE newOldFlag=2}
         final ByteBuffer buf;
         if (!newValueIsNull && !oldValueIsNull) {
             if (isUpgrade) {
                 throw new StreamsException("Both old and new values are not null (" + data.oldValue
                         + " : " + data.newValue + ") in ChangeSerializer, which is not allowed unless upgrading.");
             } else {
-                final int capacity = Integer.BYTES + newDataLength + oldDataLength + NEW_OLD_FLAG_SIZE;
+                final int capacity = UINT32_SIZE + newDataLength + oldDataLength + NEW_OLD_FLAG_SIZE;
                 buf = ByteBuffer.allocate(capacity);
-                buf.putInt(newDataLength).put(newData).put(oldData).put((byte) 2);
+                ByteUtils.writeUnsignedInt(buf, newDataLength);
+                buf.put(newData).put(oldData).put((byte) 2);
             }
         } else if (!newValueIsNull) {
             final int capacity = newDataLength + NEW_OLD_FLAG_SIZE;
