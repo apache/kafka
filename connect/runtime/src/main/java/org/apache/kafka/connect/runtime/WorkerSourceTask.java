@@ -320,7 +320,8 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         return true;
     }
 
-    private void updateCommittableOffsets() {
+    // Visible for testing
+    void updateCommittableOffsets() {
         CommittableOffsets newOffsets = submittedRecords.committableOffsets();
         synchronized (this) {
             this.committableOffsets = this.committableOffsets.updatedWith(newOffsets);
