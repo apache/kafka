@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -51,9 +52,13 @@ public class PrototypeAsyncConsumerTest {
         }
     }
 
+    @BeforeEach
+    public void setup() {
+        injectConsumerConfigs();
+    }
+
     @Test
     public void testBackgroundThreadRunning() {
-        injectConsumerConfigs();
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
     }
 
