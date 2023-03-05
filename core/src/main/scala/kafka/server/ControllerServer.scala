@@ -24,7 +24,6 @@ import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
-import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
@@ -305,30 +304,24 @@ class ControllerServer(
 
       // register this instance for dynamic config changes to the KafkaConfig
       config.dynamicConfig.addReconfigurables(this)
-      // We still need to receive dynamic config changes that apply to this node or isolated-controller cluster defaults
-      // as well as client quotas (the above addReconfigurables() call does not cover these).
-      if (!config.processRoles.contains(BrokerRole)) {
-        // We only need install the below publisher and receive the changes when we aren't also running the broker role;
-        // the broker's DynamicConfigPublisher would take care of it otherwise.
-        val dynamicConfigHandlers = immutable.Map[String, ConfigHandler](
-          // isolated controllers don't host topics, so no need to do anything with dynamic topic config changes here
-          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
-        val dynamicConfigPublisher = new DynamicConfigPublisher(
-          config,
-          sharedServer.metadataPublishingFaultHandler,
-          dynamicConfigHandlers,
-          "controller")
-        FutureUtils.waitWithLogging(logger.underlying, "all of the dynamic config publishers to be installed",
-          sharedServer.loader.installPublishers(List(dynamicConfigPublisher).asJava), startupDeadline, time)
-      }
-      // install dynamic client quota publisher regardless of whether we are in isolated or combined mode
+      // We must install the below publisher and receive the changes when we are also running the broker role
+      // because we don't share a single KafkaConfig instance with the broker, and therefore
+      // the broker's DynamicConfigPublisher won't take care of the changes for us.
+      val dynamicConfigHandlers = immutable.Map[String, ConfigHandler](
+        // controllers don't host topics, so no need to do anything with dynamic topic config changes here
+        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
+      val dynamicConfigPublisher = new DynamicConfigPublisher(
+        config,
+        sharedServer.metadataPublishingFaultHandler,
+        dynamicConfigHandlers,
+        "controller")
       val dynamicClientQuotaPublisher = new DynamicClientQuotaPublisher(
         config,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
         clientQuotaMetadataManager)
-      FutureUtils.waitWithLogging(logger.underlying, "all of the dynamic client quota publishers to be installed",
-        sharedServer.loader.installPublishers(List(dynamicClientQuotaPublisher).asJava), startupDeadline, time)
+      FutureUtils.waitWithLogging(logger.underlying, "all of the dynamic config and client quota publishers to be installed",
+        sharedServer.loader.installPublishers(List(dynamicConfigPublisher, dynamicClientQuotaPublisher).asJava), startupDeadline, time)
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)
