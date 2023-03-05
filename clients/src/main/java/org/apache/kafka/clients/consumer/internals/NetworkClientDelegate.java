@@ -80,7 +80,6 @@ public class NetworkClientDelegate implements AutoCloseable {
         if (!unsentRequests.isEmpty()) {
             pollTimeoutMs = Math.min(retryBackoffMs, pollTimeoutMs);
         }
-
         this.client.poll(pollTimeoutMs, currentTimeMs);
         checkDisconnects();
     }
@@ -182,6 +181,9 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public void addAll(final List<UnsentRequest> requests) {
+        requests.forEach(u -> {
+            u.setTimer(this.time, this.requestTimeoutMs);
+        });
         this.unsentRequests.addAll(requests);
     }
 
@@ -213,7 +215,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             Objects.requireNonNull(requestBuilder);
             this.requestBuilder = requestBuilder;
             this.node = node;
-            this.callback = new FutureCompletionHandler();
+            this.callback = handler;
         }
 
         public void setTimer(final Time time, final long requestTimeoutMs) {

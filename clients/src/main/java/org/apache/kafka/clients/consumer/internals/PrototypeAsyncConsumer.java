@@ -246,11 +246,20 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
-        commitEvent.future().whenComplete((r, t) -> {
-            callback.onComplete(offsets, new RuntimeException(t));
+        CompletableFuture<Void> future = commit(offsets);
+        future.whenComplete((r, t) -> {
+            if (t != null) {
+                callback.onComplete(offsets, new RuntimeException(t));
+            } else {
+                callback.onComplete(offsets, null);
+            }
         });
+    }
+
+    private CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
         eventHandler.add(commitEvent);
+        return commitEvent.future();
     }
 
     @Override
@@ -416,7 +425,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void wakeup() {
-        throw new KafkaException("method not implemented");
+        // do nothing
     }
 
     /**
