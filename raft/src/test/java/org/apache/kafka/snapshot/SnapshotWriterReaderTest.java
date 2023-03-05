@@ -218,7 +218,7 @@ final public class SnapshotWriterReaderTest {
         Record record = records.next();
         countRecords += 1;
 
-        SnapshotHeaderRecord headerRecord = ControlRecordUtils.deserializedSnapshotHeaderRecord(record);
+        SnapshotHeaderRecord headerRecord = ControlRecordUtils.deserializeSnapshotHeaderRecord(record);
         assertEquals(headerRecord.version(), ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION);
         assertEquals(headerRecord.lastContainedLogTimestamp(), lastContainedLogTime);
 
@@ -238,7 +238,7 @@ final public class SnapshotWriterReaderTest {
         // Verify existence of the footer record in the end
         assertTrue(batch.isControlBatch());
 
-        SnapshotFooterRecord footerRecord = ControlRecordUtils.deserializedSnapshotFooterRecord(record);
+        SnapshotFooterRecord footerRecord = ControlRecordUtils.deserializeSnapshotFooterRecord(record);
         assertEquals(footerRecord.version(), ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION);
 
         return countRecords;
