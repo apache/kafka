@@ -73,9 +73,53 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     })
   }
 
-  def commitOffsets(offsets: Seq[(NameAndId, Map[Int, Long])],
-                    responses: Seq[(NameAndId, Map[Int, Errors])],
-                    versions: Seq[java.lang.Short]): Unit = {
+
+  @Test
+  def testTopicIdsArePopulatedInOffsetCommitResponses(): Unit = {
+    val topics = createTopics("topic1", "topic2", "topic3")
+    consumer.subscribe(topics.map(_.name).asJava)
+
+    sendOffsetCommitRequest(
+      topics.map((_, ListMap(0 -> offset))),
+      topics.map((_, Map(0 -> Errors.NONE))),
+      ApiKeys.OFFSET_COMMIT.allVersions().asScala
+    )
+  }
+
+  @Test
+  def testCommitOffsetFromConsumer(): Unit = {
+    val topics = createTopics("topic1", "topic2", "topic3")
+    consumer.commitSync(offsetsToCommit(topics, offset))
+  }
+
+  @Test
+  def testOffsetCommitWithUnknownTopicId(): Unit = {
+    val topics = createTopics("topic1", "topic2", "topic3")
+
+    sendOffsetCommitRequest(
+      topics.map((_, ListMap(0 -> offset))) ++ Seq((NameAndId("unresolvable"), ListMap(0 -> offset))),
+      Seq((NameAndId("unresolvable"), ListMap(0 -> Errors.UNKNOWN_TOPIC_ID))) ++ topics.map((_, Map(0 -> Errors.NONE))),
+      ApiKeys.OFFSET_COMMIT.allVersions().asScala.filter(_ >= 9)
+    )
+  }
+
+  @Test
+  def alterConsumerGroupOffsetsDoNotUseTopicIds(): Unit = {
+    val topics = createTopics("topic1", "topic2", "topic3")
+    val admin = createAdminClient()
+
+    try {
+      // Would throw an UnknownTopicId exception if the OffsetCommitRequest was set to version 9 or higher.
+      admin.alterConsumerGroupOffsets(groupId, offsetsToCommit(topics, offset)).all.get()
+
+    } finally {
+      Utils.closeQuietly(admin, "AdminClient")
+    }
+  }
+
+  def sendOffsetCommitRequest(offsets: Seq[(NameAndId, Map[Int, Long])],
+                              responses: Seq[(NameAndId, Map[Int, Errors])],
+                              versions: Seq[java.lang.Short]): Unit = {
 
     val requestData = newOffsetCommitRequestData(
       groupId = "group",
@@ -94,60 +138,10 @@ class OffsetCommitRequestTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testTopicIdsArePopulatedInOffsetCommitResponses(): Unit = {
-    val topics = createTopics("topic1", "topic2", "topic3")
-    consumer.subscribe(topics.map(_.name).asJava)
-
-    commitOffsets(
-      topics.map((_, ListMap(0 -> offset))),
-      topics.map((_, Map(0 -> Errors.NONE))),
-      ApiKeys.OFFSET_COMMIT.allVersions().asScala
-    )
-  }
-
-  @Test
-  def testCommitOffsetFromConsumer(): Unit = {
-    val topics = createTopics("topic1", "topic2", "topic3")
-    val topicPartitions = topics.map(nai => new TopicPartition(nai.name, 0))
-    consumer.assign(topicPartitions.asJava)
-
-    val offsets = topics
+  def offsetsToCommit(topics: Seq[NameAndId], offset: Long): java.util.Map[TopicPartition, OffsetAndMetadata] = {
+    topics
       .map(t => new TopicPartition(t.name, 0) -> new OffsetAndMetadata(offset, empty(), "metadata"))
       .toMap
-
-    consumer.commitSync(offsets.asJava)
-  }
-
-  @Test
-  def testOffsetCommitWithUnknownTopicId(): Unit = {
-    val topics = createTopics("topic1", "topic2", "topic3")
-    consumer.subscribe(topics.map(_.name).asJava)
-
-    commitOffsets(
-      topics.map((_, ListMap(0 -> offset))) ++ Seq((NameAndId("unresolvable"), ListMap(0 -> offset))),
-      Seq((NameAndId("unresolvable"), ListMap(0 -> Errors.UNKNOWN_TOPIC_ID))) ++ topics.map((_, Map(0 -> Errors.NONE))),
-      ApiKeys.OFFSET_COMMIT.allVersions().asScala.filter(_ >= 9)
-    )
-  }
-
-  @Test
-  def alterConsumerGroupOffsetsDoNotUseTopicIds(): Unit = {
-    val topics = createTopics("topic1", "topic2", "topic3")
-    consumer.subscribe(topics.map(_.name).asJava)
-
-    val admin = createAdminClient()
-
-    try {
-      val offsets = topics
-        .map(t => new TopicPartition(t.name, 0) -> new OffsetAndMetadata(offset, empty(), "metadata"))
-        .toMap
-
-      // Would throw an UnknownTopicId exception if the OffsetCommitRequest was set to version 9 or higher.
-      admin.alterConsumerGroupOffsets(groupId, offsets.asJava).all.get()
-
-    } finally {
-      Utils.closeQuietly(admin, "AdminClient")
-    }
+      .asJava
   }
 }

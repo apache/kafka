@@ -95,6 +95,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -2840,8 +2841,11 @@ public abstract class ConsumerCoordinatorTest {
         // are asserted to be identical irrespective of the order in which topic and partitions appear in the requests.
         assertRequestEquals(expectedRequestData, captor.requestData());
     }
-    @Test
-    public void testInvalidTopicIdReturnedByBrokerWhenCommittingOffsetSync() {
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = { "", topic1 })
+    public void testInvalidTopicIdReturnedByBrokerWhenCommittingOffsetSync(String topicName) {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
@@ -2849,21 +2853,23 @@ public abstract class ConsumerCoordinatorTest {
 
         // The following offset commit response is valid and the authorization failure results in failing the
         // offset commit invocation.
-        client.prepareResponse(offsetCommitResponse(null, ti1p.topicId(), Errors.GROUP_AUTHORIZATION_FAILED));
+        client.prepareResponse(offsetCommitResponse(topicName, ti1p.topicId(), Errors.GROUP_AUTHORIZATION_FAILED));
         assertThrows(GroupAuthorizationException.class,
             () -> coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
 
-        // The following offset commit responses define a topic incorrectly. The coordinator ignores the topic,
+        // The following offset commit response defines a topic incorrectly. The coordinator ignores the topic,
         // and the group authorization failure is therefore not propagated.
-        client.prepareResponse(offsetCommitResponse(null, Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED));
+        client.prepareResponse(offsetCommitResponse(topicName, Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED));
         assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
 
-        client.prepareResponse(offsetCommitResponse(topic1, Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED));
+        client.prepareResponse(offsetCommitResponse(topicName, Uuid.randomUuid(), Errors.GROUP_AUTHORIZATION_FAILED));
         assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
     }
 
-    @Test
-    public void testInvalidTopicIdReturnedByBrokerWhenCommittingOffsetAsync() {
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = { "", topic1 })
+    public void testInvalidTopicIdReturnedByBrokerWhenCommittingOffsetAsync(String topicName) {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
@@ -2880,7 +2886,8 @@ public abstract class ConsumerCoordinatorTest {
                     .setPartitions(singletonList(new OffsetCommitResponsePartition().setPartitionIndex(0)))
             ));
 
-        BiConsumer<OffsetCommitResponseTopic, Class<? extends Exception>> asserter = (topic, exceptionType) -> {
+        BiConsumer<OffsetCommitResponse, Class<? extends Exception>> asserter = (response, exceptionType) -> {
+            OffsetCommitResponseTopic topic = response.data().topics().get(0);
             OffsetCommitResponseData data = commonData.duplicate();
             data.topics().add(topic);
             client.prepareResponse(new OffsetCommitResponse(data));
@@ -2901,21 +2908,17 @@ public abstract class ConsumerCoordinatorTest {
         // The following offset commit responses are valid and the authorization failure results in failing the
         // offset commit invocation.
         asserter.accept(
-            offsetCommitResponse(null, ti1p.topicId(), Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
+            offsetCommitResponse(topicName, ti1p.topicId(), Errors.GROUP_AUTHORIZATION_FAILED),
             GroupAuthorizationException.class);
 
-        asserter.accept(
-            offsetCommitResponse(topic1, ti1p.topicId(), Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
-                GroupAuthorizationException.class);
-
-        // The following offset commit responses define a topic incorrectly. The coordinator ignores the topic,
+        // The following offset commit responses defines a topic incorrectly. The coordinator ignores the topic,
         // and the group authorization failure is therefore not propagated.
         asserter.accept(
-            offsetCommitResponse(null, Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
+            offsetCommitResponse(topicName, Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED),
             null);
 
         asserter.accept(
-            offsetCommitResponse(topic1, Uuid.ZERO_UUID, Errors.GROUP_AUTHORIZATION_FAILED).data().topics().get(0),
+            offsetCommitResponse(topicName, Uuid.randomUuid(), Errors.GROUP_AUTHORIZATION_FAILED),
             null);
     }
 

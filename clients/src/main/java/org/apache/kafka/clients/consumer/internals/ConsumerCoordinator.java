@@ -1378,12 +1378,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     topicName = topicResolver.getTopicName(topic.topicId()).orElse(null);
 
                     if (topicName == null) {
-                        // The topic ID returned by the broker must have been sent by this client with the
-                        // OffsetCommit request. This ID must still be known by the topic resolver. Unlike the
-                        // cases where a topic ID is unknown because metadata on the client have not yet been
-                        // refreshed, here there is no reason to retry as the problem cannot be attributed to
-                        // metadata convergence. Do not fail the entire consumer offset commit request,
-                        // but warn and ignore the invalid topic ID.
+                        // OffsetCommit responses version 9 must use topic IDs. The topic's ID must have been
+                        // known by the client which sent the OffsetCommitRequest but was removed from the metadata
+                        // before the response was received.
                         log.warn("Ignoring invalid topic ID found in OffsetCommit response: " + topic.topicId());
                         continue;
                     }

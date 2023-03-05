@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -60,9 +61,7 @@ public class OffsetCommitRequestTest {
 
     protected static int throttleTimeMs = 10;
 
-    private static OffsetCommitRequestData dataWithTopicNames;
-    private static OffsetCommitRequestData dataWithTopicIds;
-
+    private static OffsetCommitRequestData data;
     private static OffsetCommitRequestPartition requestPartitionOne;
     private static OffsetCommitRequestPartition requestPartitionTwo;
 
@@ -80,29 +79,18 @@ public class OffsetCommitRequestTest {
             .setCommittedLeaderEpoch(leaderEpoch)
             .setCommittedMetadata(metadata);
 
-        dataWithTopicNames = new OffsetCommitRequestData()
+        data = new OffsetCommitRequestData()
            .setGroupId(groupId)
            .setTopics(Arrays.asList(
                new OffsetCommitRequestTopic()
+                   .setTopicId(topicOneId)
                    .setName(topicOne)
                    .setPartitions(Collections.singletonList(requestPartitionOne)),
                new OffsetCommitRequestTopic()
+                   .setTopicId(topicTwoId)
                    .setName(topicTwo)
                    .setPartitions(Collections.singletonList(requestPartitionTwo))
            ));
-
-        dataWithTopicIds = new OffsetCommitRequestData()
-            .setGroupId(groupId)
-            .setTopics(Arrays.asList(
-                new OffsetCommitRequestTopic()
-                    .setTopicId(topicOneId)
-                    .setName(null)
-                    .setPartitions(Collections.singletonList(requestPartitionOne)),
-                new OffsetCommitRequestTopic()
-                    .setTopicId(topicTwoId)
-                    .setName(null)
-                    .setPartitions(Collections.singletonList(requestPartitionTwo))
-            ));
     }
 
     public static Map<TopicPartition, Long> offsets(OffsetCommitRequest request, TopicResolver topicResolver) {
@@ -125,7 +113,6 @@ public class OffsetCommitRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testConstructor(short version) {
-        OffsetCommitRequestData data = version >= 9 ? dataWithTopicIds : dataWithTopicNames;
         OffsetCommitRequest request = new OffsetCommitRequest.Builder(data).build(version);
         OffsetCommitResponse response = request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());
 
@@ -134,21 +121,19 @@ public class OffsetCommitRequestTest {
         assertEquals(throttleTimeMs, response.throttleTimeMs());
     }
 
-    @ParameterizedTest
-    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
-    public void testGetErrorResponseTopics(short version) {
-        OffsetCommitRequestData data = version >= 9 ? dataWithTopicIds : dataWithTopicNames;
+    @Test
+    public void testGetErrorResponseTopics() {
         List<OffsetCommitResponseTopic> expectedTopics = Arrays.asList(
             new OffsetCommitResponseTopic()
-                .setName(version < 9 ? topicOne : null)
-                .setTopicId(version < 9 ? Uuid.ZERO_UUID : topicOneId)
+                .setName(topicOne)
+                .setTopicId(topicOneId)
                 .setPartitions(Collections.singletonList(
                     new OffsetCommitResponsePartition()
                         .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
                         .setPartitionIndex(partitionOne))),
             new OffsetCommitResponseTopic()
-                .setName(version < 9 ? topicTwo : null)
-                .setTopicId(version < 9 ? Uuid.ZERO_UUID : topicTwoId)
+                .setName(topicTwo)
+                .setTopicId(topicTwoId)
                 .setPartitions(Collections.singletonList(
                     new OffsetCommitResponsePartition()
                         .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
@@ -178,7 +163,6 @@ public class OffsetCommitRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testResolvesTopicNameIfRequiredWhenListingOffsets(short version) {
-        OffsetCommitRequestData data = version >= 9 ? dataWithTopicIds : dataWithTopicNames;
         OffsetCommitRequest request = new OffsetCommitRequest.Builder(data).build(version);
         List<OffsetCommitRequestTopic> topics = request.data().topics();
 
@@ -189,8 +173,15 @@ public class OffsetCommitRequestTest {
 
     @Test
     public void testUnresolvableTopicIdWhenListingOffset() {
-        OffsetCommitRequest request = new OffsetCommitRequest.Builder(dataWithTopicIds.duplicate()).build((short) 9);
+        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data.duplicate()).build((short) 9);
         assertThrows(UnknownTopicIdException.class,
                 () -> OffsetCommitRequestTest.offsets(request, TopicResolver.emptyResolver()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void maxAllowedVersionIsEightIfRequestCannotUseTopicIds(boolean canUseTopicIds) {
+        OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data.duplicate(), canUseTopicIds);
+        assertEquals(canUseTopicIds ? 9 : 8, builder.build(builder.latestAllowedVersion()).version());
     }
 }
