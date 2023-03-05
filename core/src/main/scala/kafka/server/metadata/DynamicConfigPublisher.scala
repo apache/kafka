@@ -31,10 +31,9 @@ class DynamicConfigPublisher(
   conf: KafkaConfig,
   faultHandler: FaultHandler,
   dynamicConfigHandlers: Map[String, ConfigHandler],
-  val nodeType: String,
-  clientQuotaMetadataManager: Option[ClientQuotaMetadataManager] = None
+  nodeType: String,
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
-  logIdent = s"[DynamicConfigPublisher nodeType=${nodeType} id=${conf.nodeId}] "
+  logIdent = s"[${name()}] "
 
   def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
     val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
@@ -93,11 +92,6 @@ class DynamicConfigPublisher(
           }
         }
       }
-      clientQuotaMetadataManager.foreach(clientQuotaMetadataManager =>
-        // Apply client quotas delta.
-        Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
-          clientQuotaMetadataManager.update(clientQuotasDelta)
-        })
     } catch {
       case t: Throwable => faultHandler.handleFault("Uncaught exception while " +
         s"publishing dynamic configuration changes from ${deltaName}", t)

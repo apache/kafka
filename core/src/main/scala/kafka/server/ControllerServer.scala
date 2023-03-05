@@ -28,7 +28,7 @@ import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher}
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.config.ConfigException
@@ -317,11 +317,18 @@ class ControllerServer(
           config,
           sharedServer.metadataPublishingFaultHandler,
           dynamicConfigHandlers,
-          "controller",
-          Some(clientQuotaMetadataManager))
+          "controller")
         FutureUtils.waitWithLogging(logger.underlying, "all of the dynamic config publishers to be installed",
           sharedServer.loader.installPublishers(List(dynamicConfigPublisher).asJava), startupDeadline, time)
       }
+      // install dynamic client quota publisher regardless of whether we are in isolated or combined mode
+      val dynamicClientQuotaPublisher = new DynamicClientQuotaPublisher(
+        config,
+        sharedServer.metadataPublishingFaultHandler,
+        "controller",
+        clientQuotaMetadataManager)
+      FutureUtils.waitWithLogging(logger.underlying, "all of the dynamic config publishers to be installed",
+        sharedServer.loader.installPublishers(List(dynamicClientQuotaPublisher).asJava), startupDeadline, time)
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)
