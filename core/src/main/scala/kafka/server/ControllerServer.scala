@@ -327,7 +327,7 @@ class ControllerServer(
         sharedServer.metadataPublishingFaultHandler,
         "controller",
         clientQuotaMetadataManager)
-      FutureUtils.waitWithLogging(logger.underlying, "all of the dynamic config publishers to be installed",
+      FutureUtils.waitWithLogging(logger.underlying, "all of the dynamic client quota publishers to be installed",
         sharedServer.loader.installPublishers(List(dynamicClientQuotaPublisher).asJava), startupDeadline, time)
     } catch {
       case e: Throwable =>
