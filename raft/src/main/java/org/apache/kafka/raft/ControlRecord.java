@@ -37,10 +37,6 @@ public final class ControlRecord {
         );
     }
 
-    // TODO: Add a test that:
-    // 1. checks fails if the number of enums in ControlRecordType changes
-    // 2. the comment on the tests should point to all of the places that check types value
-    // 3. ask the developer to audit all places that check the value of control rectord type
     public ControlRecord(ControlRecordType recordType, ApiMessage message) {
         switch (recordType) {
             case LEADER_CHANGE:

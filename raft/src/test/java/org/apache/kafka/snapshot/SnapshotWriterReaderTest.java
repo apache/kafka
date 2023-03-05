@@ -71,6 +71,8 @@ final public class SnapshotWriterReaderTest {
 
         // Verify that an empty snapshot has only the Header and Footer
         try (SnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE)) {
+            assertEquals(magicTimestamp, reader.lastContainedLogTimestamp());
+
             RawSnapshotReader snapshot = context.log.readSnapshot(id).get();
             int recordCount = validateDelimiters(snapshot, magicTimestamp);
             assertEquals((recordsPerBatch * batches) + delimiterCount, recordCount);
