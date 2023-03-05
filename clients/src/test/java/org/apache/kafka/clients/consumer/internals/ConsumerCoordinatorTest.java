@@ -95,6 +95,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -124,7 +126,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
@@ -136,7 +140,7 @@ import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Rebala
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.EAGER;
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
-import static org.apache.kafka.common.utils.MoreAssertions.assertRequestEquals;
+import static org.apache.kafka.test.MoreAssertions.assertRequestEquals;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -151,13 +155,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public abstract class ConsumerCoordinatorTest {
-    private final String topic1 = "test1";
-    private final String topic2 = "test2";
-    private final TopicPartition t1p = new TopicPartition(topic1, 0);
-    private final TopicIdPartition ti1p = new TopicIdPartition(Uuid.randomUuid(), t1p);
-    private final TopicPartition t2p = new TopicPartition(topic2, 0);
-    private final TopicIdPartition ti2p = new TopicIdPartition(Uuid.randomUuid(), t2p);
-    private final String groupId = "test-group";
+    private static String topic1 = "test1";
+    private static String topic2 = "test2";
+    private static TopicPartition t1p = new TopicPartition(topic1, 0);
+    private static TopicIdPartition ti1p = new TopicIdPartition(Uuid.randomUuid(), t1p);
+    private static TopicPartition t2p = new TopicPartition(topic2, 0);
+    private static TopicIdPartition ti2p = new TopicIdPartition(Uuid.randomUuid(), t2p);
+    private static String groupId = "test-group";
     private final Optional<String> groupInstanceId = Optional.of("test-instance");
     private final int rebalanceTimeoutMs = 60000;
     private final int sessionTimeoutMs = 10000;
@@ -2779,14 +2783,21 @@ public abstract class ConsumerCoordinatorTest {
             new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE)));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testTopicIdsArePopulatedByTheConsumerCoordinator(boolean sync) {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+    static Stream<Arguments> commitOffsetTestArgs() {
+        Map<TopicIdPartition, Long> byTopicIdOffsets = new HashMap<>();
+        byTopicIdOffsets.put(ti1p, 100L);
+        byTopicIdOffsets.put(ti2p, 200L);
 
-        OffsetCommitRequestData expectedRequestData = new OffsetCommitRequestData()
-            .setGroupId(rebalanceConfig.groupId)
+        TopicIdPartition unknownTopicIdPartition =
+            new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic3", 5));
+
+        Map<TopicIdPartition, Long> byTopicNameOffsets = new HashMap<>();
+        byTopicNameOffsets.put(ti1p, 100L);
+        byTopicNameOffsets.put(ti2p, 200L);
+        byTopicNameOffsets.put(unknownTopicIdPartition, 300L);
+
+        OffsetCommitRequestData byTopicIdData = new OffsetCommitRequestData()
+            .setGroupId(groupId)
             .setGenerationId(OffsetCommitRequest.DEFAULT_GENERATION_ID)
             .setTopics(Arrays.asList(
                 new OffsetCommitRequestTopic()
@@ -2795,39 +2806,67 @@ public abstract class ConsumerCoordinatorTest {
                     .setPartitions(singletonList(new OffsetCommitRequestPartition()
                         .setPartitionIndex(t1p.partition())
                         .setCommittedOffset(100L)
-                        .setCommittedMetadata("metadata1"))),
+                        .setCommittedMetadata("metadata"))),
                 new OffsetCommitRequestTopic()
                     .setTopicId(ti2p.topicId())
                     .setName(topic2)
                     .setPartitions(singletonList(new OffsetCommitRequestPartition()
                         .setPartitionIndex(t2p.partition())
                         .setCommittedOffset(200L)
-                        .setCommittedMetadata("metadata2")))
+                        .setCommittedMetadata("metadata")))
             ));
 
-        Map<TopicIdPartition, Long> expectedOffsets = new HashMap<>();
-        expectedOffsets.put(ti1p, 100L);
-        expectedOffsets.put(ti2p, 200L);
+        OffsetCommitRequestData byTopicNameData = byTopicIdData.duplicate();
+        byTopicNameData.topics().add(new OffsetCommitRequestTopic()
+            .setName(unknownTopicIdPartition.topic())
+            .setPartitions(singletonList(new OffsetCommitRequestPartition()
+                .setPartitionIndex(5)
+                .setCommittedOffset(300L)
+                .setCommittedMetadata("metadata")))
+        );
+
+        return Stream.of(
+            Arguments.of(true, byTopicIdOffsets, byTopicIdData, (short) 9),
+            Arguments.of(false, byTopicIdOffsets, byTopicIdData, (short) 9),
+            Arguments.of(true, byTopicNameOffsets, byTopicNameData, (short) 8),
+            Arguments.of(false, byTopicNameOffsets, byTopicNameData, (short) 8)
+        );
+    }
+
+    private static Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata(Map<TopicIdPartition, Long> offsets) {
+        return offsets.entrySet().stream()
+            .map(e -> new SimpleEntry<>(e.getKey().topicPartition(), new OffsetAndMetadata(e.getValue(), "metadata")))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    @ParameterizedTest
+    @MethodSource("commitOffsetTestArgs")
+    public void testTopicIdsArePopulatedByTheConsumerCoordinator(
+            boolean commitSync,
+            Map<TopicIdPartition, Long> offsets,
+            OffsetCommitRequestData expectedRequestData,
+            short expectedRequestVersion) {
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         OffsetCommitRequestCaptor captor = new OffsetCommitRequestCaptor();
-        prepareOffsetCommitRequest(expectedOffsets, Errors.NONE, false, captor);
+        prepareOffsetCommitRequest(offsets, Errors.NONE, false, captor);
 
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(t1p, new OffsetAndMetadata(100L, "metadata1"));
-        offsets.put(t2p, new OffsetAndMetadata(200L, "metadata2"));
+        Map<TopicPartition, OffsetAndMetadata> input = offsetAndMetadata(offsets);
 
-        if (sync) {
-            assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+        if (commitSync) {
+            assertTrue(coordinator.commitOffsetsSync(input, time.timer(Long.MAX_VALUE)));
 
         } else {
             AtomicBoolean callbackInvoked = new AtomicBoolean();
-            coordinator.commitOffsetsAsync(offsets, (inputOffsets, exception) -> {
+            coordinator.commitOffsetsAsync(input, (inputOffsets, exception) -> {
                 // Notes:
                 // 1) The offsets passed to the callback are the same object provided to the offset commit method.
                 //    The validation on the offsets is not required but defensive.
                 // 2) We validate that the commit was successful, which is the case if the exception is null.
                 // 3) We validate this callback was invoked, which is not necessary but defensive.
-                assertSame(inputOffsets, offsets);
+                assertSame(inputOffsets, input);
                 assertNull(exception);
                 callbackInvoked.set(true);
             });
@@ -2839,12 +2878,15 @@ public abstract class ConsumerCoordinatorTest {
         // The consumer does not provide a guarantee on the order of occurrence of topics and partitions in the
         // OffsetCommit request, since a map of offsets is provided to the consumer API. Here, both requests
         // are asserted to be identical irrespective of the order in which topic and partitions appear in the requests.
-        assertRequestEquals(expectedRequestData, captor.requestData());
+        assertRequestEquals(
+            new OffsetCommitRequest(expectedRequestData, expectedRequestVersion),
+            captor.request
+        );
     }
 
     @ParameterizedTest
     @NullSource
-    @ValueSource(strings = { "", topic1 })
+    @ValueSource(strings = { "", "test1" })
     public void testInvalidTopicIdReturnedByBrokerWhenCommittingOffsetSync(String topicName) {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -2868,7 +2910,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @ParameterizedTest
     @NullSource
-    @ValueSource(strings = { "", topic1 })
+    @ValueSource(strings = { "", "test1" })
     public void testInvalidTopicIdReturnedByBrokerWhenCommittingOffsetAsync(String topicName) {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -4372,18 +4414,18 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     private static class OffsetCommitRequestCaptor implements Consumer<OffsetCommitRequest> {
-        private OffsetCommitRequestData requestData;
+        private OffsetCommitRequest request;
 
         @Override
         public synchronized void accept(OffsetCommitRequest offsetCommitRequest) {
-            if (requestData != null)
+            if (request != null)
                 throw new AssertionError("Multiple OffsetCommitRequest capture is not supported.");
 
-            requestData = offsetCommitRequest.data();
+            request = offsetCommitRequest;
         }
 
-        public synchronized OffsetCommitRequestData requestData() {
-            return requestData;
+        public synchronized OffsetCommitRequest reques() {
+            return request;
         }
     }
 }

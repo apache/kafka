@@ -14,12 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.test;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestPartition;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
+import org.apache.kafka.common.requests.OffsetCommitRequest;
 
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -32,7 +33,16 @@ public final class MoreAssertions {
      * Compares the two {@link OffsetCommitRequestData} independently of the order in which the
      * {@link OffsetCommitRequestTopic} and {@link OffsetCommitRequestPartition} are defined in the response.
      */
-    public static void assertRequestEquals(OffsetCommitRequestData expected, OffsetCommitRequestData actual) {
+    public static void assertRequestEquals(OffsetCommitRequest expectedRequest, OffsetCommitRequest actualRequest) {
+        if (expectedRequest.version() > 9 || actualRequest.version() > 9) {
+            throw new AssertionError("A new version of OffsetCommitRequest has been detected. Please " +
+                "review the equality contract enforced here and add/remove fields accordingly.");
+        }
+
+        OffsetCommitRequestData expected = expectedRequest.data();
+        OffsetCommitRequestData actual = actualRequest.data();
+
+        assertEquals(expectedRequest.version(), actualRequest.version());
         assertEquals(expected.groupId(), actual.groupId(), "Group id mismatch");
         assertEquals(expected.groupInstanceId(), actual.groupInstanceId(), "Group instance id mismatch");
         assertEquals(expected.generationId(), actual.generationId(), "Generation id mismatch");

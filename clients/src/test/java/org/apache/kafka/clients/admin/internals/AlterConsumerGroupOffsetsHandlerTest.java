@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.admin.internals;
 
 import static java.util.Collections.emptyMap;
-import static org.apache.kafka.common.utils.MoreAssertions.assertRequestEquals;
+import static org.apache.kafka.test.MoreAssertions.assertRequestEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -94,7 +94,7 @@ public class AlterConsumerGroupOffsetsHandlerTest {
                     ))
             ));
 
-        assertRequestEquals(requestData, request.data());
+        assertRequestEquals(new OffsetCommitRequest(requestData, (short) 8), request);
     }
 
     @Test

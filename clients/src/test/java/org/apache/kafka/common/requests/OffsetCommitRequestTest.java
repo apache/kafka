@@ -175,7 +175,7 @@ public class OffsetCommitRequestTest {
     public void testUnresolvableTopicIdWhenListingOffset() {
         OffsetCommitRequest request = new OffsetCommitRequest.Builder(data.duplicate()).build((short) 9);
         assertThrows(UnknownTopicIdException.class,
-                () -> OffsetCommitRequestTest.offsets(request, TopicResolver.emptyResolver()));
+            () -> OffsetCommitRequestTest.offsets(request, TopicResolver.emptyResolver()));
     }
 
     @ParameterizedTest
