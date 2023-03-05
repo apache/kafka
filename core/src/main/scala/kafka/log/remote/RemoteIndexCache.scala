@@ -133,7 +133,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
 
       // Create entries for each path if all the index files exist.
       val firstIndex = name.indexOf('_')
-      val offset = name.substring(0, firstIndex).toInt
+      val offset = name.substring(0, firstIndex).toLong
       val uuid = Uuid.fromString(name.substring(firstIndex + 1, name.lastIndexOf('_')))
 
       if(!entries.containsKey(uuid)) {
