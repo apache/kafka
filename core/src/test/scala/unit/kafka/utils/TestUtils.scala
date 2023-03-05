@@ -378,6 +378,118 @@ object TestUtils extends Logging {
     props
   }
 
+  def createCombinedControllerConfig(nodeId: Int,
+                                     enableControlledShutdown: Boolean = true,
+                                     enableDeleteTopic: Boolean = true,
+                                     port: Int = RandomPort,
+                                     interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
+                                     trustStoreFile: Option[File] = None,
+                                     saslProperties: Option[Properties] = None,
+                                     enablePlaintext: Boolean = true,
+                                     enableSaslPlaintext: Boolean = false,
+                                     saslPlaintextPort: Int = RandomPort,
+                                     enableSsl: Boolean = false,
+                                     sslPort: Int = RandomPort,
+                                     enableSaslSsl: Boolean = false,
+                                     saslSslPort: Int = RandomPort,
+                                     rack: Option[String] = None,
+                                     logDirCount: Int = 1,
+                                     enableToken: Boolean = false,
+                                     numPartitions: Int = 1,
+                                     defaultReplicationFactor: Short = 1,
+                                     enableFetchFromFollower: Boolean = false): Properties = {
+    val retval = createBrokerConfig(nodeId,
+      zkConnect = null,
+      enableControlledShutdown,
+      enableDeleteTopic,
+      port,
+      interBrokerSecurityProtocol,
+      trustStoreFile,
+      saslProperties,
+      enablePlaintext,
+      enableSaslPlaintext,
+      saslPlaintextPort,
+      enableSsl,
+      sslPort,
+      enableSaslSsl,
+      saslSslPort,
+      rack,
+      logDirCount,
+      enableToken,
+      numPartitions,
+      defaultReplicationFactor,
+      enableFetchFromFollower,
+    )
+    retval.put(KafkaConfig.ProcessRolesProp, "broker,controller")
+    retval.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    retval.put(KafkaConfig.ListenersProp, s"${retval.get(KafkaConfig.ListenersProp)},CONTROLLER://localhost:0")
+    retval.put(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
+    retval
+  }
+
+  def createIsolatedControllerConfig(nodeId: Int,
+                                     enableControlledShutdown: Boolean = true,
+                                     enableDeleteTopic: Boolean = true,
+                                     port: Int = RandomPort,
+                                     interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
+                                     trustStoreFile: Option[File] = None,
+                                     saslProperties: Option[Properties] = None,
+                                     enablePlaintext: Boolean = true,
+                                     enableSaslPlaintext: Boolean = false,
+                                     saslPlaintextPort: Int = RandomPort,
+                                     enableSsl: Boolean = false,
+                                     sslPort: Int = RandomPort,
+                                     enableSaslSsl: Boolean = false,
+                                     saslSslPort: Int = RandomPort,
+                                     rack: Option[String] = None,
+                                     logDirCount: Int = 1,
+                                     enableToken: Boolean = false,
+                                     numPartitions: Int = 1,
+                                     defaultReplicationFactor: Short = 1,
+                                     enableFetchFromFollower: Boolean = false): Properties = {
+    val retval = createBrokerConfig(nodeId,
+      zkConnect = null,
+      enableControlledShutdown,
+      enableDeleteTopic,
+      port,
+      interBrokerSecurityProtocol,
+      trustStoreFile,
+      saslProperties,
+      enablePlaintext,
+      enableSaslPlaintext,
+      saslPlaintextPort,
+      enableSsl,
+      sslPort,
+      enableSaslSsl,
+      saslSslPort,
+      rack,
+      logDirCount,
+      enableToken,
+      numPartitions,
+      defaultReplicationFactor,
+      enableFetchFromFollower,
+    )
+    retval.put(KafkaConfig.ProcessRolesProp, "controller")
+    retval.remove(KafkaConfig.AdvertisedListenersProp)
+
+    def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
+
+    val protocols = ArrayBuffer[SecurityProtocol]()
+    if (enablePlaintext || shouldEnable(SecurityProtocol.PLAINTEXT))
+      protocols += SecurityProtocol.PLAINTEXT
+    if (enableSsl || shouldEnable(SecurityProtocol.SSL))
+      protocols += SecurityProtocol.SSL
+    if (enableSaslPlaintext || shouldEnable(SecurityProtocol.SASL_PLAINTEXT))
+      protocols += SecurityProtocol.SASL_PLAINTEXT
+    if (enableSaslSsl || shouldEnable(SecurityProtocol.SASL_SSL))
+      protocols += SecurityProtocol.SASL_SSL
+
+    val controllerListenerNames = protocols.map(_.name).mkString(",")
+    retval.put(KafkaConfig.ControllerListenerNamesProp, controllerListenerNames)
+    retval.put(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
+    retval
+  }
+
   @nowarn("cat=deprecation")
   def setIbpAndMessageFormatVersions(config: Properties, version: MetadataVersion): Unit = {
     config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, version.version)

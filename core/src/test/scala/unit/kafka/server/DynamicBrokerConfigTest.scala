@@ -445,6 +445,32 @@ class DynamicBrokerConfigTest {
     assertThrows(classOf[ConfigException], () => dynamicListenerConfig.validateReconfiguration(KafkaConfig(props)))
   }
 
+  class TestAuthorizer extends Authorizer with Reconfigurable {
+    @volatile var superUsers = ""
+
+    override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = Map.empty.asJava
+
+    override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = null
+
+    override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = null
+
+    override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = null
+
+    override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = null
+
+    override def close(): Unit = {}
+
+    override def configure(configs: util.Map[String, _]): Unit = {}
+
+    override def reconfigurableConfigs(): util.Set[String] = Set("super.users").asJava
+
+    override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
+
+    override def reconfigure(configs: util.Map[String, _]): Unit = {
+      superUsers = configs.get("super.users").toString
+    }
+  }
+
   @Test
   def testAuthorizerConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
@@ -453,22 +479,6 @@ class DynamicBrokerConfigTest {
 
     val kafkaServer: KafkaServer = mock(classOf[kafka.server.KafkaServer])
 
-    class TestAuthorizer extends Authorizer with Reconfigurable {
-      @volatile var superUsers = ""
-      override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = Map.empty.asJava
-      override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = null
-      override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = null
-      override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = null
-      override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = null
-      override def close(): Unit = {}
-      override def configure(configs: util.Map[String, _]): Unit = {}
-      override def reconfigurableConfigs(): util.Set[String] = Set("super.users").asJava
-      override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
-      override def reconfigure(configs: util.Map[String, _]): Unit = {
-        superUsers = configs.get("super.users").toString
-      }
-    }
-
     val authorizer = new TestAuthorizer
     when(kafkaServer.config).thenReturn(oldConfig)
     when(kafkaServer.authorizer).thenReturn(Some(authorizer))
@@ -476,6 +486,42 @@ class DynamicBrokerConfigTest {
     assertThrows(classOf[Throwable], () => kafkaServer.config.dynamicConfig.addReconfigurables(kafkaServer))
     props.put("super.users", "User:admin")
     kafkaServer.config.dynamicConfig.updateBrokerConfig(0, props)
+    assertEquals("User:admin", authorizer.superUsers)
+  }
+
+  @Test
+  def testCombinedControllerAuthorizerConfig(): Unit = {
+    val props = TestUtils.createCombinedControllerConfig(0, port = 9092)
+    val oldConfig = KafkaConfig.fromProps(props)
+    oldConfig.dynamicConfig.initialize(None)
+
+    val controllerServer: ControllerServer = mock(classOf[kafka.server.ControllerServer])
+
+    val authorizer = new TestAuthorizer
+    when(controllerServer.config).thenReturn(oldConfig)
+    when(controllerServer.authorizer).thenReturn(Some(authorizer))
+    // We are only testing authorizer reconfiguration, ignore any exceptions due to incomplete mock
+    assertThrows(classOf[Throwable], () => controllerServer.config.dynamicConfig.addReconfigurables(controllerServer))
+    props.put("super.users", "User:admin")
+    controllerServer.config.dynamicConfig.updateBrokerConfig(0, props)
+    assertEquals("User:admin", authorizer.superUsers)
+  }
+
+  @Test
+  def testIsolatedControllerAuthorizerConfig(): Unit = {
+    val props = TestUtils.createIsolatedControllerConfig(0, port = 9092)
+    val oldConfig = KafkaConfig.fromProps(props)
+    oldConfig.dynamicConfig.initialize(None)
+
+    val controllerServer: ControllerServer = mock(classOf[kafka.server.ControllerServer])
+
+    val authorizer = new TestAuthorizer
+    when(controllerServer.config).thenReturn(oldConfig)
+    when(controllerServer.authorizer).thenReturn(Some(authorizer))
+    // We are only testing authorizer reconfiguration, ignore any exceptions due to incomplete mock
+    assertThrows(classOf[Throwable], () => controllerServer.config.dynamicConfig.addReconfigurables(controllerServer))
+    props.put("super.users", "User:admin")
+    controllerServer.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals("User:admin", authorizer.superUsers)
   }
 
