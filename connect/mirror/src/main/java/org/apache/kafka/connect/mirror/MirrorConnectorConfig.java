@@ -163,6 +163,18 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String SYNC_TOPIC_CONFIGS_ENABLED = SYNC_TOPIC_CONFIGS + ENABLED_SUFFIX;
     private static final String SYNC_TOPIC_CONFIGS_ENABLED_DOC = "Whether to periodically configure remote topics to match their corresponding upstream topics.";
     public static final boolean SYNC_TOPIC_CONFIGS_ENABLED_DEFAULT = true;
+    @Deprecated
+    public static final String USE_INCREMENTAL_ALTER_CONFIG = "use.incremental.alter.configs";
+    private static final String USE_INCREMENTAL_ALTER_CONFIG_DOC = "Deprecated. Which API to use for syncing topic configs. " +
+            "The valid values are \"requested\", \"required\" and \"never\". " +
+            "By default, set to \"requested\", which means the IncrementalAlterConfigs is being used for syncing topic configurations " +
+            "and if any request receives an error from an incompatible broker, it will fallback to using the deprecated AlterConfigs API. " +
+            "If explicitly set to \"required\", the IncrementalAlterConfigs is used without the fallback logic. " +
+            "If explicitly set to \"never\", the AlterConfig is always used." +
+            "This setting will be removed in Kafka 4.0, therefore users should ensure that target broker is at least 2.3.0";
+    public static final String USE_INCREMENTAL_ALTER_CONFIG_DEFAULT = "requested";
+    public static final String REQUIRE_INCREMENTAL_ALTER_CONFIG = "required";
+    public static final String NEVER_USE_INCREMENTAL_ALTER_CONFIG = "never";
     public static final String SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS = SYNC_TOPIC_CONFIGS + INTERVAL_SECONDS_SUFFIX;
     private static final String SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DOC = "Frequency of topic config sync.";
     public static final long SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DEFAULT = 10 * 60;
@@ -489,6 +501,15 @@ public class MirrorConnectorConfig extends AbstractConfig {
         }
     }
 
+    String useIncrementalAlterConfig() {
+        String prop = getString(USE_INCREMENTAL_ALTER_CONFIG);
+        if (prop.equals(NEVER_USE_INCREMENTAL_ALTER_CONFIG) || prop.equals(REQUIRE_INCREMENTAL_ALTER_CONFIG)) {
+            return prop;
+        } else {
+            return USE_INCREMENTAL_ALTER_CONFIG_DEFAULT;
+        }
+    }
+
     @SuppressWarnings("deprecation")
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = ConnectorConfig.configDef()
             .define(
@@ -616,6 +637,13 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     SYNC_TOPIC_CONFIGS_ENABLED_DEFAULT,
                     ConfigDef.Importance.LOW,
                     SYNC_TOPIC_CONFIGS_ENABLED_DOC)
+            .define(
+                    USE_INCREMENTAL_ALTER_CONFIG,
+                    ConfigDef.Type.STRING,
+                    USE_INCREMENTAL_ALTER_CONFIG_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    USE_INCREMENTAL_ALTER_CONFIG_DOC
+            )
             .define(
                     SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS,
                     ConfigDef.Type.LONG,

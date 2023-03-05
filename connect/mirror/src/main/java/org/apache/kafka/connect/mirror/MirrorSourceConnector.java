@@ -21,6 +21,7 @@ import java.util.Map.Entry;
 
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ForwardingAdmin;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
@@ -85,6 +86,8 @@ public class MirrorSourceConnector extends SourceConnector {
     private ForwardingAdmin sourceAdminClient;
     private ForwardingAdmin targetAdminClient;
 
+    private String useIncrementalAlterConfigs;
+
     public MirrorSourceConnector() {
         // nop
     }
@@ -119,6 +122,8 @@ public class MirrorSourceConnector extends SourceConnector {
         replicationFactor = config.replicationFactor();
         sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
         targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
+        useIncrementalAlterConfigs =  config.useIncrementalAlterConfig();
+
         scheduler = new Scheduler(MirrorSourceConnector.class, config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
@@ -304,8 +309,7 @@ public class MirrorSourceConnector extends SourceConnector {
         Map<String, Config> sourceConfigs = describeTopicConfigs(topicsBeingReplicated());
         Map<String, Config> targetConfigs = sourceConfigs.entrySet().stream()
             .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue())));
-        updateTopicConfigsUsingIncrementalAlterConfigs(targetConfigs);
-        // updateTopicConfigs(targetConfigs);
+        updateTopicConfigs(targetConfigs);
     }
 
     private void createOffsetSyncsTopic() {
@@ -416,9 +420,17 @@ public class MirrorSourceConnector extends SourceConnector {
                 .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
     }
 
+    private void updateTopicConfigs(Map<String, Config> topicConfigs) {
+        if (useIncrementalAlterConfigs.equals(MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)) {
+            alterConfigs(topicConfigs);
+        } else {
+            incrementalAlterConfigs(topicConfigs);
+        }
+    }
+
     @SuppressWarnings("deprecation")
     // use deprecated alterConfigs API for broker compatibility back to 0.11.0
-    private void updateTopicConfigs(Map<String, Config> topicConfigs) {
+    private void alterConfigs(Map<String, Config> topicConfigs) {
         Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
             .collect(Collectors.toMap(x ->
                 new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), Entry::getValue));
@@ -430,20 +442,30 @@ public class MirrorSourceConnector extends SourceConnector {
         }));
     }
 
-    private void updateTopicConfigsUsingIncrementalAlterConfigs(Map<String, Config> topicConfigs) {
+    private void incrementalAlterConfigs(Map<String, Config> topicConfigs) {
         Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>();
         for (Map.Entry<String, Config> topicConfig : topicConfigs.entrySet()) {
             Collection<AlterConfigOp> ops = new ArrayList<>();
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, topicConfig.getKey());
             for (ConfigEntry config : topicConfig.getValue().entries()) {
-                ops.add(new AlterConfigOp(config, AlterConfigOp.OpType.SET));
+                if (config.isDefault() && !shouldReplicateSourceDefault(config.source())) {
+                    ops.add(new AlterConfigOp(config, AlterConfigOp.OpType.DELETE));
+                } else {
+                    ops.add(new AlterConfigOp(config, AlterConfigOp.OpType.SET));
+                }
             }
             configOps.put(configResource, ops);
         }
         log.trace("Syncing configs for {} topics.", configOps.size());
         targetAdminClient.incrementalAlterConfigs(configOps).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
-                log.warn("Could not alter configuration of topic {}.", k.name(), e);
+                if (useIncrementalAlterConfigs == MirrorConnectorConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT
+                        && e.getCause() instanceof UnsupportedVersionException) {
+                    //Fallback logic
+                    alterConfigs(topicConfigs);
+                } else {
+                    log.warn("Could not alter configuration of topic {}.", k.name(), e);
+                }
             }
         }));
     }
@@ -474,11 +496,20 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     Config targetConfig(Config sourceConfig) {
-        List<ConfigEntry> entries = sourceConfig.entries().stream()
-            .filter(x -> !x.isDefault() && !x.isReadOnly() && !x.isSensitive())
-            .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
-            .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
-            .collect(Collectors.toList());
+        List<ConfigEntry> entries = null;
+        if (useIncrementalAlterConfigs == MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG) {
+            entries = sourceConfig.entries().stream()
+                    .filter(x -> !x.isDefault() && !x.isReadOnly() && !x.isSensitive())
+                    .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
+                    .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
+                    .collect(Collectors.toList());
+        } else {
+            entries = sourceConfig.entries().stream()
+                    .filter(x -> !x.isReadOnly() && !x.isSensitive())
+                    .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
+                    .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
+                    .collect(Collectors.toList());
+        }
         return new Config(entries);
     }
 
@@ -512,6 +543,9 @@ public class MirrorSourceConnector extends SourceConnector {
         return configPropertyFilter.shouldReplicateConfigProperty(property);
     }
 
+    boolean shouldReplicateSourceDefault(ConfigEntry.ConfigSource configSource) {
+        return configPropertyFilter.shouldReplicateSourceDefault(configSource);
+    }
     // Recurse upstream to detect cycles, i.e. whether this topic is already on the target cluster
     boolean isCycle(String topic) {
         String source = replicationPolicy.topicSource(topic);

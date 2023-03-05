@@ -57,6 +57,19 @@ import java.util.List;
 import java.util.Map;
 
 public class MirrorSourceConnectorTest {
+    private ConfigPropertyFilter getConfigPropertyFilter(Boolean replicateConfigProperty, Boolean replicateSourceDefault) {
+        return new ConfigPropertyFilter() {
+            @Override
+            public boolean shouldReplicateConfigProperty(String prop) {
+                return replicateConfigProperty;
+            }
+
+            @Override
+            public boolean shouldReplicateSourceDefault(ConfigEntry.ConfigSource source) {
+                return replicateSourceDefault;
+            }
+        };
+    }
 
     @Test
     public void testReplicatesHeartbeatsByDefault() {
@@ -77,7 +90,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testNoCycles() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, x -> true);
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter(true, false));
         assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("source.target.topic1"), "should not allow cycles");
@@ -90,7 +103,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testIdentityReplication() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new IdentityReplicationPolicy(), x -> true, x -> true);
+            new IdentityReplicationPolicy(), x -> true, getConfigPropertyFilter(true, false));
         assertTrue(connector.shouldReplicateTopic("target.topic1"), "should allow cycles");
         assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should allow cycles");
         assertTrue(connector.shouldReplicateTopic("source.target.topic1"), "should allow cycles");
@@ -110,7 +123,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testAclFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, x -> true);
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter(true, false));
         assertFalse(connector.shouldReplicateAcl(
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
@@ -122,7 +135,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testAclTransformation() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, x -> true);
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter(true, false));
         AclBinding allowAllAclBinding = new AclBinding(
             new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW));

@@ -165,6 +165,8 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         // exclude topic config:
         mm2Props.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "delete\\.retention\\..*");
+        // set it to shorter sync interval for testing
+        mm2Props.put("sync.topic.configs.interval.seconds", "1");
 
         mm2Config = new MirrorMakerConfig(mm2Props);
         primaryWorkerProps = mm2Config.workerConfig(new SourceAndTarget(BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS));

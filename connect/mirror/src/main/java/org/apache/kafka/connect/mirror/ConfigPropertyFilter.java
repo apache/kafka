@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Map;
@@ -26,6 +27,8 @@ import java.util.Map;
 public interface ConfigPropertyFilter extends Configurable, AutoCloseable {
 
     boolean shouldReplicateConfigProperty(String prop);
+
+    boolean shouldReplicateSourceDefault(ConfigEntry.ConfigSource source);
 
     default void close() {
         //nop

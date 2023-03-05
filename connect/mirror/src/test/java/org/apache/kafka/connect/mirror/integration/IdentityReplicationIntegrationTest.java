@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.mirror.DefaultConfigPropertyFilter;
 import org.apache.kafka.connect.mirror.IdentityReplicationPolicy;
 import org.apache.kafka.connect.mirror.MirrorClient;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
@@ -151,9 +152,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testSyncTopicConfigs() throws Exception {
-        mm2Props.put("sync.topic.configs.interval.seconds", "1");
         mm2Config = new MirrorMakerConfig(mm2Props);
 
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
@@ -177,6 +176,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         ops.add(new AlterConfigOp(new ConfigEntry("retention.bytes", "2000"), AlterConfigOp.OpType.SET));
         Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>(1);
         configOps.put(configResource, ops);
+        // alter configs on target cluster
         backup.kafka().incrementalAlterConfigs(configOps);
 
         // sleep few seconds to have MM2 sync topic configuration
@@ -195,10 +195,114 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         backupConfig = getTopicConfig(backup.kafka(), backupTopic, "retention.bytes");
         assertEquals(primaryConfig, backupConfig,
                 "`retention.bytes` should be the same, because it isn't in exclude filter! ");
+    }
+
+    @Test
+    public void testReplicateSourceDefault() throws Exception {
+        mm2Props.put(DefaultConfigPropertyFilter.USE_DEFAULTS_FROM, "source");
+        mm2Config = new MirrorMakerConfig(mm2Props);
+
+        waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
+        waitUntilMirrorMakerIsRunning(primary, Collections.singletonList(MirrorHeartbeatConnector.class), mm2Config, BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS);
+
+        // create topic with default configurations to test
+        final String topic = "test-topic-with-config";
+        final String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
+
+        primary.kafka().createTopic(topic, NUM_PARTITIONS, 1, new HashMap<>());
+        waitForTopicCreated(backup, backupTopic);
+
+        // alter target topic configurations
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, backupTopic);
+        Collection<AlterConfigOp> ops = new ArrayList<>();
+        ops.add(new AlterConfigOp(new ConfigEntry("delete.retention.ms", "2000"), AlterConfigOp.OpType.SET));
+        ops.add(new AlterConfigOp(new ConfigEntry("retention.bytes", "2000"), AlterConfigOp.OpType.SET));
+        Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>(1);
+        configOps.put(configResource, ops);
+        backup.kafka().incrementalAlterConfigs(configOps);
+
+        // sleep few seconds to have MM2 sync topic configuration
+        Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+
+        String primaryConfig, backupConfig;
+
+        // altered configuration of the target topic should be synced with the source cluster's default
+        primaryConfig = getTopicConfig(primary.kafka(), topic, "retention.bytes");
+        backupConfig = getTopicConfig(backup.kafka(), backupTopic, "retention.bytes");
+        assertEquals(primaryConfig, backupConfig,
+                "`retention.bytes` should be the same, because the source cluster default is being used! ");
+        assertEquals("-1", backupConfig,
+                "`retention.bytes` should be synced with default value!");
+
+        // when using the source cluster's default, the excluded configuration should still not be changed
+        primaryConfig = getTopicConfig(primary.kafka(), topic, "delete.retention.ms");
+        backupConfig = getTopicConfig(backup.kafka(), backupTopic, "delete.retention.ms");
+        assertNotEquals(primaryConfig, backupConfig,
+                "`delete.retention.ms` should be different, because it's in exclude filter! ");
+        assertEquals("2000", backupConfig, "`delete.retention.ms` should be 2000, because it's explicitly defined on the target topic! ");
+    }
+
+    @Test
+    public void testReplicateTargetDefault() throws Exception {
+        mm2Config = new MirrorMakerConfig(mm2Props);
+
+        waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
+        waitUntilMirrorMakerIsRunning(primary, Collections.singletonList(MirrorHeartbeatConnector.class), mm2Config, BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS);
+
+        // create topic with configuration to test:
+        final Map<String, String> topicConfig = new HashMap<>();
+        topicConfig.put("retention.bytes", "1000");
+
+        final String topic = "test-topic-with-config";
+        final String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
+
+        primary.kafka().createTopic(topic, NUM_PARTITIONS, 1, topicConfig);
+        waitForTopicCreated(backup, backupTopic);
+
+        // sleep few seconds to have MM2 sync topic configuration
+        Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+
+        String primaryConfig, backupConfig;
+
+        primaryConfig = getTopicConfig(primary.kafka(), topic, "retention.bytes");
+        backupConfig = getTopicConfig(backup.kafka(), backupTopic, "retention.bytes");
+        assertEquals(primaryConfig, backupConfig,
+                "`retention.bytes` should be the same");
         assertEquals("1000", backupConfig,
-                "`retention.bytes` should be the same, because it's explicitly defined on the source topic! ");
+                "`retention.bytes` should be synced with default value!");
+
+        // delete the previously altered configuration of the source topic
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+        Collection<AlterConfigOp> ops = new ArrayList<>();
+        ops.add(new AlterConfigOp(new ConfigEntry("retention.bytes", "1000"), AlterConfigOp.OpType.DELETE));
+        Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>(1);
+        configOps.put(configResource, ops);
+        primary.kafka().incrementalAlterConfigs(configOps);
+
+        // sleep few seconds to have MM2 sync topic configuration
+        Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+
+        // the configuration on the target topic should be changed to the target cluster's default
+        backupConfig = getTopicConfig(backup.kafka(), backupTopic, "retention.bytes");
+        assertEquals("-1", backupConfig,
+                "`retention.bytes` should be synced with default value!");
+    }
+
+    @Test
+    public void testIncrementalAlterConfigRequired() throws Exception {
 
     }
+
+    @Test
+    public void testIncrementalAlterConfigRequested() throws Exception {
+
+    }
+
+    @Test
+    public void testIncrementalAlterConfigNever() throws Exception {
+
+    }
+
     @Test
     public void testReplicationWithEmptyPartition() throws Exception {
         String consumerGroupName = "consumer-group-testReplicationWithEmptyPartition";
