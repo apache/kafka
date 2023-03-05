@@ -61,6 +61,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -91,6 +92,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
+    public PrototypeAsyncConsumer(Properties properties,
+                         Deserializer<K> keyDeserializer,
+                         Deserializer<V> valueDeserializer) {
+        this(Utils.propsToMap(properties), keyDeserializer, valueDeserializer);
+    }
 
     public PrototypeAsyncConsumer(final Map<String, Object> configs,
                                   final Deserializer<K> keyDeser,

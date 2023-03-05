@@ -45,16 +45,16 @@ public class PrototypeAsyncConsumerTest {
 
     private final Time time = new MockTime();
 
+    @BeforeEach
+    public void setup() {
+        injectConsumerConfigs();
+    }
+
     @AfterEach
     public void cleanup() {
         if (consumer != null) {
             consumer.close(Duration.ZERO);
         }
-    }
-
-    @BeforeEach
-    public void setup() {
-        injectConsumerConfigs();
     }
 
     @Test
@@ -73,7 +73,7 @@ public class PrototypeAsyncConsumerTest {
                 subscription, new LogContext(), new ClusterResourceListeners());
     }
 
-    public void injectConsumerConfigs() {
+    private void injectConsumerConfigs() {
         consumerProps.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
     }
 
