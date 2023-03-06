@@ -157,7 +157,14 @@ public class ClientUtils {
         final Map<TopicPartition, ListOffsetsResultInfo> result = new HashMap<>();
         for (final TopicPartition partition : partitions) {
             try {
-                result.put(partition, resultFuture.partitionResult(partition).get());
+                final KafkaFuture<ListOffsetsResultInfo> future = resultFuture.partitionResult(partition);
+
+                if (future == null) {
+                    // this NPE -> IllegalStateE translation is needed
+                    // to keep exception throwing behavior consistent
+                    throw new IllegalStateException("Could not get end offset for " + partition);
+                }
+                result.put(partition, future.get());
             } catch (final ExecutionException e) {
                 final Throwable cause = e.getCause();
                 final String msg = String.format("Error while attempting to read end offsets for partition '%s'", partition.toString());

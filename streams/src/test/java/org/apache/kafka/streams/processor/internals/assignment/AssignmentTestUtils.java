@@ -222,7 +222,7 @@ public final class AssignmentTestUtils {
             final ListOffsetsResultInfo info = mock(ListOffsetsResultInfo.class);
             lenient().when(info.offset()).thenReturn(entry.getValue());
             partitionFuture.complete(info);
-            when(result.partitionResult(entry.getKey())).thenReturn(partitionFuture);
+            lenient().when(result.partitionResult(entry.getKey())).thenReturn(partitionFuture);
         }
 
         return adminClient;
