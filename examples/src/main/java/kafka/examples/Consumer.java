@@ -27,6 +27,9 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
+/**
+ *
+ */
 public class Consumer extends Thread {
     private final KafkaConsumer<Integer, String> consumer;
     private final String topic;
@@ -91,6 +94,7 @@ public class Consumer extends Thread {
     }
 
     public void shutdown() {
+        this.consumer.close();
         latch.countDown();
     }
 }
