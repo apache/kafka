@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test
 
 class BaseAsyncConsumerTest extends AbstractConsumerTest {
   @Test
-  def testSimpleConsumption(): Unit = {
+  def testCommitAPI(): Unit = {
     val consumer = createAsyncConsumer()
     val producer = createProducer()
     val numRecords = 10000
@@ -32,5 +32,6 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     waitUntilTrue(() => {
       cb.successCount == 1
     }, "wait until commit is completed successfully", 5000)
+    consumer.commitSync();
   }
 }
