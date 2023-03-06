@@ -163,7 +163,12 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name,
         'role' => 'ce-kafka',
         'Owner' => 'ce-kafka',
-        'JenkinsBuildUrl' => ENV['BUILD_URL']
+        'JenkinsBuildUrl' => ENV['BUILD_URL'],
+        'cflt_environment' => 'devel',
+        'cflt_partition' => 'onprem',
+        'cflt_managed_by' => 'iac',
+        'cflt_managed_id' => 'kafka',
+        'cflt_service' => 'kafka'
       }
     end
   end
