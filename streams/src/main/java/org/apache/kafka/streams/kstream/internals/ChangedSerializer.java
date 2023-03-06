@@ -76,6 +76,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
             case StreamsConfig.UPGRADE_FROM_31:
             case StreamsConfig.UPGRADE_FROM_32:
             case StreamsConfig.UPGRADE_FROM_33:
+            case StreamsConfig.UPGRADE_FROM_34:
                 return true;
             default:
                 return false;
