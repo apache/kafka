@@ -586,10 +586,10 @@ class KRaftClusterTest {
         assertEquals(Seq(ApiError.NONE), incrementalAlter(admin, Seq(
           (new ConfigResource(Type.BROKER, ""), Seq(
             new AlterConfigOp(new ConfigEntry("log.roll.ms", "1234567"), OpType.SET),
-            new AlterConfigOp(new ConfigEntry("max.connections.per.ip", "6"), OpType.SET))))))
+            new AlterConfigOp(new ConfigEntry("max.connections.per.ip", "60"), OpType.SET))))))
         validateConfigs(admin, Map(new ConfigResource(Type.BROKER, "") -> Seq(
           ("log.roll.ms", "1234567"),
-          ("max.connections.per.ip", "6"))), true)
+          ("max.connections.per.ip", "60"))), true)
 
         admin.createTopics(Arrays.asList(
           new NewTopic("foo", 2, 3.toShort),

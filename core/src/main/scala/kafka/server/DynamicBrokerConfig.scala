@@ -287,9 +287,9 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       addReconfigurable(new DynamicMetricsReporters(kafkaConfig.nodeId, controller.config, controller.metrics, controller.clusterId))
     }
     addReconfigurable(new DynamicClientQuotaCallback(new ControllerDynamicClientQuotaCallbackServer(controller)))
-    // addBrokerReconfigurable(new ControllerDynamicThreadPool(controller))
+    addBrokerReconfigurable(new ControllerDynamicThreadPool(controller))
     // TODO: addBrokerReconfigurable(new DynamicListenerConfig(controller))
-    // addBrokerReconfigurable(controller.socketServer)
+    addBrokerReconfigurable(controller.socketServer)
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
