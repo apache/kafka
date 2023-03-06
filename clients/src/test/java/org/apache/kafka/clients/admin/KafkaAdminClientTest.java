@@ -3450,7 +3450,8 @@ public class KafkaAdminClientTest {
         waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
 
         ClientRequest clientRequest = mockClient.requests().peek();
-        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
+        OffsetFetchRequest request = (OffsetFetchRequest) clientRequest.requestBuilder().build();
+        OffsetFetchRequestData data = request.data();
         Map<String, Map<TopicPartition, PartitionData>> results = new HashMap<>();
         Map<String, Errors> errors = new HashMap<>();
         data.groups().forEach(group -> {
@@ -3463,7 +3464,8 @@ public class KafkaAdminClientTest {
         });
         if (!batched) {
             assertEquals(1, data.groups().size());
-            mockClient.respond(new OffsetFetchResponse(THROTTLE, error, results.values().iterator().next()));
+            mockClient.respond(
+                    new OffsetFetchResponse(THROTTLE, error, results.values().iterator().next()));
         } else
             mockClient.respond(new OffsetFetchResponse(THROTTLE, errors, results));
     }
@@ -6781,7 +6783,8 @@ public class KafkaAdminClientTest {
                     .setLogDir(logDir))));
     }
 
-    private OffsetFetchResponse offsetFetchResponse(Errors error, Map<TopicPartition, PartitionData> responseData) {
+    private OffsetFetchResponse offsetFetchResponse(
+            Errors error, Map<TopicPartition, PartitionData> responseData) {
         return new OffsetFetchResponse(THROTTLE,
                                        Collections.singletonMap(GROUP_ID, error),
                                        Collections.singletonMap(GROUP_ID, responseData));

@@ -22,6 +22,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
@@ -754,7 +755,8 @@ public class RequestResponseTest {
             String allTopicPartitionsString = new OffsetFetchRequest.Builder("someGroup",
                 requireStable,
                 null,
-                false)
+                false,
+                TopicResolver.emptyResolver())
                 .toString();
 
             assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null,"
@@ -763,7 +765,8 @@ public class RequestResponseTest {
                 requireStable,
                 singletonList(
                     new TopicPartition("test11", 1)),
-                false)
+                false,
+                TopicResolver.emptyResolver())
                 .toString();
             assertTrue(string.contains("test11"));
             assertTrue(string.contains("group1"));
@@ -773,12 +776,17 @@ public class RequestResponseTest {
 
     @Test
     public void testOffsetFetchRequestBuilderToStringV8AndAbove() {
+        TopicResolver topicResolver = new TopicResolver.Builder()
+                .add("test11", Uuid.randomUuid())
+                .build();
+
         List<Boolean> stableFlags = asList(true, false);
         for (Boolean requireStable : stableFlags) {
             String allTopicPartitionsString = new OffsetFetchRequest.Builder(
                 Collections.singletonMap("someGroup", null),
                 requireStable,
-                false)
+                false,
+                topicResolver)
                 .toString();
             assertTrue(allTopicPartitionsString.contains("groups=[OffsetFetchRequestGroup"
                 + "(groupId='someGroup', topics=null)], requireStable=" + requireStable));
@@ -788,7 +796,8 @@ public class RequestResponseTest {
                     "group1",
                     singletonList(new TopicPartition("test11", 1))),
                 requireStable,
-                false)
+                false,
+                topicResolver)
                 .toString();
             assertTrue(subsetTopicPartitionsString.contains("test11"));
             assertTrue(subsetTopicPartitionsString.contains("group1"));
@@ -2066,24 +2075,36 @@ public class RequestResponseTest {
     }
 
     private OffsetFetchRequest createOffsetFetchRequest(short version, boolean requireStable) {
+        TopicResolver topicResolver = new TopicResolver.Builder()
+            .add("test11", Uuid.randomUuid())
+            .build();
+
         if (version < 8) {
             return new OffsetFetchRequest.Builder(
                 "group1",
                 requireStable,
                 singletonList(new TopicPartition("test11", 1)),
-                false)
+                false,
+                TopicResolver.emptyResolver())
                 .build(version);
         }
         return new OffsetFetchRequest.Builder(
                 Collections.singletonMap(
                 "group1",
                 singletonList(new TopicPartition("test11", 1))),
-            requireStable,
-            false)
+                requireStable,
+                false,
+                topicResolver)
             .build(version);
     }
 
     private OffsetFetchRequest createOffsetFetchRequestWithMultipleGroups(short version, boolean requireStable) {
+        TopicResolver topicResolver = new TopicResolver.Builder()
+            .add("topic1", Uuid.randomUuid())
+            .add("topic2", Uuid.randomUuid())
+            .add("topic3", Uuid.randomUuid())
+            .build();
+
         Map<String, List<TopicPartition>> groupToPartitionMap = new HashMap<>();
         List<TopicPartition> topic1 = singletonList(
             new TopicPartition("topic1", 0));
@@ -2107,7 +2128,8 @@ public class RequestResponseTest {
         return new OffsetFetchRequest.Builder(
             groupToPartitionMap,
             requireStable,
-            false
+            false,
+            topicResolver
         ).build(version);
     }
 
@@ -2117,14 +2139,16 @@ public class RequestResponseTest {
                 "group1",
                 requireStable,
                 null,
-                false)
+                false,
+                TopicResolver.emptyResolver())
                 .build(version);
         }
         return new OffsetFetchRequest.Builder(
             Collections.singletonMap(
                 "group1", null),
             requireStable,
-            false)
+            false,
+            TopicResolver.emptyResolver())
             .build(version);
     }
 

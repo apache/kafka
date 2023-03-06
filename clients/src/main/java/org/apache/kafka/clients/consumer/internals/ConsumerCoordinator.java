@@ -36,6 +36,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -1472,10 +1473,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (coordinator == null)
             return RequestFuture.coordinatorNotAvailable();
 
+        TopicResolver topicResolver = metadata.topicResolver();
+
         log.debug("Fetching committed offsets for partitions: {}", partitions);
         // construct the request
         OffsetFetchRequest.Builder requestBuilder =
-            new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId, true, new ArrayList<>(partitions), throwOnFetchStableOffsetsUnsupported);
+            new OffsetFetchRequest.Builder(
+                this.rebalanceConfig.groupId,
+                true,
+                new ArrayList<>(partitions),
+                throwOnFetchStableOffsetsUnsupported,
+                topicResolver);
 
         // send the request with a callback
         return client.send(coordinator, requestBuilder)
@@ -1508,9 +1516,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return;
             }
 
+            TopicResolver topicResolver = metadata.topicResolver();
+
             Set<String> unauthorizedTopics = null;
             Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
-                response.partitionDataMap(rebalanceConfig.groupId);
+                response.partitionDataMap(rebalanceConfig.groupId, topicResolver, log);
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(responseData.size());
             Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {

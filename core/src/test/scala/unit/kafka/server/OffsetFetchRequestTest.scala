@@ -19,12 +19,14 @@ package kafka.server
 
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, OffsetAndMetadata}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, TopicResolver, Uuid}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.{AbstractResponse, OffsetFetchRequest, OffsetFetchResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.mockito.Mockito.mock
+import org.slf4j.Logger
 
 import java.util
 import java.util.Collections.singletonList
@@ -83,6 +85,10 @@ class OffsetFetchRequestTest extends BaseRequestTest {
   def testOffsetFetchRequestSingleGroup(): Unit = {
     createTopic(topic)
 
+    val topicResolver = new TopicResolver.Builder()
+      .add(topic, Uuid.randomUuid())
+      .build()
+
     val tpList = singletonList(new TopicPartition(topic, 0))
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
     commitOffsets(tpList)
@@ -93,11 +99,11 @@ class OffsetFetchRequestTest extends BaseRequestTest {
         val request =
           if (version < 7) {
             new OffsetFetchRequest.Builder(
-              groupId, false, tpList, false)
+              groupId, false, tpList, false, topicResolver)
               .build(version.asInstanceOf[Short])
           } else {
             new OffsetFetchRequest.Builder(
-              groupId, false, tpList, true)
+              groupId, false, tpList, true, topicResolver)
               .build(version.asInstanceOf[Short])
           }
         val response = connectAndReceive[OffsetFetchResponse](request)
@@ -112,7 +118,7 @@ class OffsetFetchRequestTest extends BaseRequestTest {
           partitionData.committedLeaderEpoch(), partitionData.metadata())
       } else {
         val request = new OffsetFetchRequest.Builder(
-          Map(groupId -> tpList).asJava, false, false)
+          Map(groupId -> tpList).asJava, false, false, topicResolver)
           .build(version.asInstanceOf[Short])
         val response = connectAndReceive[OffsetFetchResponse](request)
         val groupData = response.data().groups().get(0)
@@ -130,6 +136,10 @@ class OffsetFetchRequestTest extends BaseRequestTest {
   def testOffsetFetchRequestAllOffsetsSingleGroup(): Unit = {
     createTopic(topic)
 
+    val topicResolver = new TopicResolver.Builder()
+      .add(topic, Uuid.randomUuid())
+      .build()
+
     val tpList = singletonList(new TopicPartition(topic, 0))
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
     commitOffsets(tpList)
@@ -142,7 +152,8 @@ class OffsetFetchRequestTest extends BaseRequestTest {
           groupId,
           false,
           null,
-          version >= 7
+          version >= 7,
+          topicResolver
         ).build(version.toShort)
 
         val response = connectAndReceive[OffsetFetchResponse](request)
@@ -160,7 +171,8 @@ class OffsetFetchRequestTest extends BaseRequestTest {
         val request = new OffsetFetchRequest.Builder(
           Collections.singletonMap(groupId, null),
           false,
-          false
+          false,
+          topicResolver
         ).build(version.toShort)
 
         val response = connectAndReceive[OffsetFetchResponse](request)
@@ -189,12 +201,20 @@ class OffsetFetchRequestTest extends BaseRequestTest {
       commitOffsets(partitionMap(groupId))
     }
 
+    val topicResolver = {
+      val builder = new TopicResolver.Builder()
+      topics.foreach { topic => builder.add(topic, Uuid.randomUuid()) }
+      builder.build()
+    }
+
+    val log = mock(classOf[Logger])
+
     for (version <- 8 to ApiKeys.OFFSET_FETCH.latestVersion()) {
-      val request =  new OffsetFetchRequest.Builder(groupToPartitionMap, false, false)
+      val request =  new OffsetFetchRequest.Builder(groupToPartitionMap, false, false, topicResolver)
         .build(version.asInstanceOf[Short])
       val response = connectAndReceive[OffsetFetchResponse](request)
       response.data.groups.asScala.map(_.groupId).foreach( groupId =>
-        verifyResponse(response.groupLevelError(groupId), response.partitionDataMap(groupId), partitionMap(groupId))
+        verifyResponse(response.groupLevelError(groupId), response.partitionDataMap(groupId, topicResolver, log), partitionMap(groupId))
       )
     }
   }

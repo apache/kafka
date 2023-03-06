@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseGroup;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchRespon
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -72,6 +74,7 @@ public class OffsetFetchResponse extends AbstractResponse {
     private final OffsetFetchResponseData data;
     private final Errors error;
     private final Map<String, Errors> groupLevelErrors = new HashMap<>();
+    private final boolean useTopicIds;
 
     public static final class PartitionData {
         public final long offset;
@@ -159,6 +162,7 @@ public class OffsetFetchResponse extends AbstractResponse {
             .setErrorCode(error.code())
             .setThrottleTimeMs(throttleTimeMs);
         this.error = error;
+        this.useTopicIds = false; // Topic IDs are only supported from version 9.
     }
 
     /**
@@ -201,11 +205,13 @@ public class OffsetFetchResponse extends AbstractResponse {
             .setGroups(groupList)
             .setThrottleTimeMs(throttleTimeMs);
         this.error = null;
+        this.useTopicIds = false;
     }
 
     public OffsetFetchResponse(List<OffsetFetchResponseGroup> groups, short version) {
         super(ApiKeys.OFFSET_FETCH);
         data = new OffsetFetchResponseData();
+        this.useTopicIds = version >= 9;
 
         if (version >= 8) {
             data.setGroups(groups);
@@ -259,6 +265,7 @@ public class OffsetFetchResponse extends AbstractResponse {
     public OffsetFetchResponse(OffsetFetchResponseData data, short version) {
         super(ApiKeys.OFFSET_FETCH);
         this.data = data;
+        this.useTopicIds = version >= 9;
         // for version 2 and later use the top-level error code (in ERROR_CODE_KEY_NAME) from the response.
         // for older versions there is no top-level error in the response and all errors are partition errors,
         // so if there is a group or coordinator error at the partition level use that as the top-level error.
@@ -360,7 +367,8 @@ public class OffsetFetchResponse extends AbstractResponse {
         return responseData;
     }
 
-    private Map<TopicPartition, PartitionData> buildResponseData(String groupId) {
+    private Map<TopicPartition, PartitionData> buildResponseData(
+            String groupId, TopicResolver topicResolver, Logger logger) {
         Map<TopicPartition, PartitionData> responseData = new HashMap<>();
         OffsetFetchResponseGroup group = data
             .groups()
@@ -370,7 +378,20 @@ public class OffsetFetchResponse extends AbstractResponse {
             .get(0);
         for (OffsetFetchResponseTopics topic : group.topics()) {
             for (OffsetFetchResponsePartitions partition : topic.partitions()) {
-                responseData.put(new TopicPartition(topic.name(), partition.partitionIndex()),
+                String topicName = topic.name();
+                if (useTopicIds) {
+                    topicName = topicResolver.getTopicName(topic.topicId()).orElse(null);
+
+                    if (topicName == null) {
+                        // OffsetFetch responses version 9 must use topic IDs. The topic's ID must have been
+                        // known by the client which sent the OffsetFetchRequest but was removed from the metadata
+                        // before the response was received.
+                        logger.warn("Ignoring invalid topic ID found in OffsetFetch response: " + topic.topicId());
+                        continue;
+                    }
+                }
+
+                responseData.put(new TopicPartition(topicName, partition.partitionIndex()),
                     new PartitionData(partition.committedOffset(),
                         RequestUtils.getLeaderEpoch(partition.committedLeaderEpoch()),
                         partition.metadata(),
@@ -381,11 +402,12 @@ public class OffsetFetchResponse extends AbstractResponse {
         return responseData;
     }
 
-    public Map<TopicPartition, PartitionData> partitionDataMap(String groupId) {
+    public Map<TopicPartition, PartitionData> partitionDataMap(
+            String groupId, TopicResolver topicResolver, Logger logger) {
         if (groupLevelErrors.isEmpty()) {
             return responseDataV0ToV7();
         }
-        return buildResponseData(groupId);
+        return buildResponseData(groupId, topicResolver, logger);
     }
 
     public static OffsetFetchResponse parse(ByteBuffer buffer, short version) {

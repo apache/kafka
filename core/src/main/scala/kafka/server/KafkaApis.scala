@@ -80,6 +80,7 @@ import java.util.{Collections, Optional, OptionalInt}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -1401,8 +1402,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def handleOffsetFetchRequestFromCoordinator(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val offsetFetchRequest = request.body[OffsetFetchRequest]
-    val groups = offsetFetchRequest.groups()
     val requireStable = offsetFetchRequest.requireStable()
+    val groups = offsetFetchRequest.groups()
 
     val futures = new mutable.ArrayBuffer[CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]](groups.size)
     groups.forEach { groupOffsetFetch =>
@@ -1468,12 +1469,40 @@ class KafkaApis(val requestChannel: RequestChannel,
     groupOffsetFetch: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
+    val response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId(groupOffsetFetch.groupId)
+
+    val topicResolver = metadataCache.topicResolver()
+    val resolvedTopics =
+      if (requestContext.requestVersion() < 9)
+        groupOffsetFetch.topics.asScala
+      else {
+        val topics = new ArrayBuffer[OffsetFetchRequestData.OffsetFetchRequestTopics]()
+        groupOffsetFetch.topics.forEach { topic =>
+          topicResolver.getTopicName(topic.topicId()).asScala match {
+            case Some(topicName) =>
+              topic.setName(topicName)
+              topics += topic
+            case _ =>
+              val topicResponse = new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name)
+              topic.partitionIndexes.forEach { partitionIndex =>
+                topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(partitionIndex)
+                  .setCommittedOffset(-1)
+                  .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))
+              }
+              response.topics.add(topicResponse)
+          }
+        }
+        topics
+      }
+
     // Clients are not allowed to see offsets for topics that are not authorized for Describe.
     val (authorizedTopics, unauthorizedTopics) = authHelper.partitionSeqByAuthorized(
       requestContext,
       DESCRIBE,
       TOPIC,
-      groupOffsetFetch.topics.asScala
+      resolvedTopics
     )(_.name)
 
     groupCoordinator.fetchOffsets(
@@ -1487,13 +1516,22 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setGroupId(groupOffsetFetch.groupId)
           .setErrorCode(Errors.forException(exception).code)
       } else {
-        val response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
-          .setGroupId(groupOffsetFetch.groupId)
-
+        if (requestContext.requestVersion() >= 9) {
+          topicOffsets.forEach { topic =>
+            topicResolver.getTopicId(topic.name()).asScala match {
+              case Some(topicId) =>
+                topic.setTopicId(topicId)
+              case _ =>
+                debug(s"Unresolvable topic id for topic ${topic.name()} while preparing the OffsetFetchResponse")
+            }
+          }
+        }
         response.topics.addAll(topicOffsets)
 
         unauthorizedTopics.foreach { topic =>
-          val topicResponse = new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name)
+          val topicResponse = new OffsetFetchResponseData.OffsetFetchResponseTopics()
+            .setName(topic.name)
+            .setTopicId(topic.topicId)
           topic.partitionIndexes.forEach { partitionIndex =>
             topicResponse.partitions.add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
               .setPartitionIndex(partitionIndex)

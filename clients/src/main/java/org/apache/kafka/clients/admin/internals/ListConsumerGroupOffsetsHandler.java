@@ -30,6 +30,7 @@ import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -93,7 +94,11 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
             coordinatorGroupIdToTopicPartitions.put(g.idValue, partitions);
         });
 
-        return new OffsetFetchRequest.Builder(coordinatorGroupIdToTopicPartitions, requireStable, false);
+        return new OffsetFetchRequest.Builder(
+            coordinatorGroupIdToTopicPartitions,
+            requireStable,
+            false,
+            TopicResolver.emptyResolver()); // Do not use topic ids.
     }
 
     @Override
@@ -131,7 +136,8 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                 handleGroupError(CoordinatorKey.byGroupId(group), response.groupLevelError(group), failed, unmapped);
             } else {
                 final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
-                Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = response.partitionDataMap(group);
+                Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
+                    response.partitionDataMap(group, TopicResolver.emptyResolver(), log);
                 for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> partitionEntry : responseData.entrySet()) {
                     final TopicPartition topicPartition = partitionEntry.getKey();
                     OffsetFetchResponse.PartitionData partitionData = partitionEntry.getValue();

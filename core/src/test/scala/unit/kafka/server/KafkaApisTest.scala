@@ -75,7 +75,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, TopicResolver, Uuid}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -4031,6 +4031,10 @@ class KafkaApisTest {
     // in testing this here.
     if (version == 0) return
 
+    val topicResolver = new TopicResolver.Builder()
+      .add("foo", Uuid.randomUuid())
+      .build()
+
     def makeRequest(version: Short): RequestChannel.Request = {
       val groups = Map(
         "group-1" -> List(
@@ -4040,7 +4044,7 @@ class KafkaApisTest {
         "group-2" -> null,
         "group-3" -> null,
       ).asJava
-      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+      buildRequest(new OffsetFetchRequest.Builder(groups, false, false, topicResolver).build(version))
     }
 
     if (version < 8) {
@@ -4137,6 +4141,10 @@ class KafkaApisTest {
     // in testing this here.
     if (version == 0) return
 
+    val topicResolver = new TopicResolver.Builder()
+      .add("foo", Uuid.randomUuid())
+      .build()
+
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(new OffsetFetchRequest.Builder(
         "group-1",
@@ -4145,7 +4153,8 @@ class KafkaApisTest {
           new TopicPartition("foo", 0),
           new TopicPartition("foo", 1)
         ).asJava,
-        false
+        false,
+        topicResolver
       ).build(version))
     }
 
@@ -4220,7 +4229,8 @@ class KafkaApisTest {
         "group-1",
         false,
         null, // all offsets.
-        false
+        false,
+        TopicResolver.emptyResolver()
       ).build(version))
     }
 
@@ -4282,6 +4292,11 @@ class KafkaApisTest {
   @Test
   def testHandleOffsetFetchAuthorization(): Unit = {
     def makeRequest(version: Short): RequestChannel.Request = {
+      val topicResolver = new TopicResolver.Builder()
+        .add("foo", Uuid.randomUuid())
+        .add("bar", Uuid.randomUuid())
+        .build()
+
       val groups = Map(
         "group-1" -> List(
           new TopicPartition("foo", 0),
@@ -4294,7 +4309,7 @@ class KafkaApisTest {
         "group-3" -> null,
         "group-4" -> null,
       ).asJava
-      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+      buildRequest(new OffsetFetchRequest.Builder(groups, false, false, topicResolver).build(version))
     }
 
     val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion)

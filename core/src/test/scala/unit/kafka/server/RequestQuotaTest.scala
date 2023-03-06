@@ -321,7 +321,8 @@ class RequestQuotaTest extends BaseRequestTest {
               )
           )
         case ApiKeys.OFFSET_FETCH =>
-          new OffsetFetchRequest.Builder(Map("test-group"-> List(tp).asJava).asJava, false, false)
+          val topicResolver = new TopicResolver.Builder().add(tp.topic(), Uuid.randomUuid()).build()
+          new OffsetFetchRequest.Builder(Map("test-group"-> List(tp).asJava).asJava, false, false, topicResolver)
 
         case ApiKeys.FIND_COORDINATOR =>
           new FindCoordinatorRequest.Builder(

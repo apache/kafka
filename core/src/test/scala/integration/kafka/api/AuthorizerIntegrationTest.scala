@@ -57,7 +57,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{ElectionType, IsolationLevel, KafkaException, Node, TopicPartition, Uuid, requests}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, KafkaException, Node, TopicPartition, TopicResolver, Uuid, requests}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
@@ -68,6 +68,8 @@ import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 import java.util.Collections.singletonList
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic
 import org.junit.jupiter.api.function.Executable
+import org.mockito.Mockito.mock
+import org.slf4j.Logger
 
 import scala.annotation.nowarn
 import scala.collection.mutable
@@ -143,6 +145,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val transactionalIdDescribeAcl = Map(transactionalIdResource -> Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)))
 
   val numRecords = 1
+  val log = mock(classOf[Logger])
 
   producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "1")
   producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
@@ -412,15 +415,17 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createOffsetFetchRequest: OffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(group, false, List(tp).asJava, false).build()
+    val topicResolver = new TopicResolver.Builder().add(tp.topic(), Uuid.randomUuid()).build()
+    new requests.OffsetFetchRequest.Builder(group, false, List(tp).asJava, false, topicResolver).build()
   }
 
   private def createOffsetFetchRequestAllPartitions: OffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(group, false, null, false).build()
+    new requests.OffsetFetchRequest.Builder(group, false, null, false, TopicResolver.emptyResolver()).build()
   }
 
-  private def createOffsetFetchRequest(groupToPartitionMap: util.Map[String, util.List[TopicPartition]]): OffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(groupToPartitionMap, false, false).build()
+  private def createOffsetFetchRequest(groupToPartitionMap: util.Map[String, util.List[TopicPartition]],
+                                       topicResolver: TopicResolver): OffsetFetchRequest = {
+    new requests.OffsetFetchRequest.Builder(groupToPartitionMap, false, false, topicResolver).build()
   }
 
   private def createFindCoordinatorRequest = {
@@ -1454,7 +1459,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetFetchAllTopicPartitionsAuthorization(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
-
+    val topicResolver = new TopicResolver.Builder().add(topic, Uuid.randomUuid()).build()
     val offset = 15L
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
@@ -1472,14 +1477,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val offsetFetchRequest = createOffsetFetchRequestAllPartitions
     var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
     assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
-    assertTrue(offsetFetchResponse.partitionDataMap(group).isEmpty)
+    assertTrue(offsetFetchResponse.partitionDataMap(group, topicResolver, log).isEmpty)
 
     // now add describe permission on the topic and verify that the offset can be fetched
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
     assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(group))
-    assertTrue(offsetFetchResponse.partitionDataMap(group).containsKey(tp))
-    assertEquals(offset, offsetFetchResponse.partitionDataMap(group).get(tp).offset)
+    assertTrue(offsetFetchResponse.partitionDataMap(group, topicResolver, log).containsKey(tp))
+    assertEquals(offset, offsetFetchResponse.partitionDataMap(group, topicResolver, log).get(tp).offset)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -1502,6 +1507,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       new TopicPartition(topics(2), 0),
       new TopicPartition(topics(2), 1),
       new TopicPartition(topics(2), 2))
+
+    val topicResolver = {
+      val builder = new TopicResolver.Builder
+      topics.foreach { topic => builder.add(topic, Uuid.randomUuid()) }
+      builder.build()
+    }
 
     // create group to partition map to build batched offsetFetch request
     val groupToPartitionMap = new util.HashMap[String, util.List[TopicPartition]]()
@@ -1565,16 +1576,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResources(1))
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResources(3))
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResources(0))
-    val offsetFetchRequest = createOffsetFetchRequest(groupToPartitionMap)
+    val offsetFetchRequest = createOffsetFetchRequest(groupToPartitionMap, topicResolver)
     var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
     offsetFetchResponse.data().groups().forEach(g =>
       g.groupId() match {
         case "group1" =>
           verifyResponse(offsetFetchResponse.groupLevelError(groups(0)), offsetFetchResponse
-            .partitionDataMap(groups(0)), topic1List)
+            .partitionDataMap(groups(0), topicResolver, log), topic1List)
         case "group2" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groups(1)))
-          val group2Response = offsetFetchResponse.partitionDataMap(groups(1))
+          val group2Response = offsetFetchResponse.partitionDataMap(groups(1), topicResolver, log)
           assertTrue(group2Response.size() == 3)
           assertTrue(group2Response.keySet().containsAll(topic1And2List))
           verifyPartitionData(group2Response.get(topic1And2List.get(0)))
@@ -1584,13 +1595,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group2Response.get(topic1And2List.get(2)))
         case "group3" =>
           assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, offsetFetchResponse.groupLevelError(groups(2)))
-          assertTrue(offsetFetchResponse.partitionDataMap(groups(2)).size() == 0)
+          assertTrue(offsetFetchResponse.partitionDataMap(groups(2), topicResolver, log).size() == 0)
         case "group4" =>
           verifyResponse(offsetFetchResponse.groupLevelError(groups(3)), offsetFetchResponse
-            .partitionDataMap(groups(3)), topic1List)
+            .partitionDataMap(groups(3), topicResolver, log), topic1List)
         case "group5" =>
           assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, offsetFetchResponse.groupLevelError(groups(4)))
-          assertTrue(offsetFetchResponse.partitionDataMap(groups(4)).size() == 0)
+          assertTrue(offsetFetchResponse.partitionDataMap(groups(4), topicResolver, log).size() == 0)
       })
 
     // test that after adding some of the ACLs, we get no group level authorization errors, but
@@ -1603,13 +1614,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       g.groupId() match {
         case "group1" =>
           verifyResponse(offsetFetchResponse.groupLevelError(groups(0)), offsetFetchResponse
-            .partitionDataMap(groups(0)), topic1List)
+            .partitionDataMap(groups(0), topicResolver, log), topic1List)
         case "group2" =>
           verifyResponse(offsetFetchResponse.groupLevelError(groups(1)), offsetFetchResponse
-            .partitionDataMap(groups(1)), topic1And2List)
+            .partitionDataMap(groups(1), topicResolver, log), topic1And2List)
         case "group3" =>
           assertEquals(Errors.NONE, offsetFetchResponse.groupLevelError(groups(2)))
-          val group3Response = offsetFetchResponse.partitionDataMap(groups(2))
+          val group3Response = offsetFetchResponse.partitionDataMap(groups(2), topicResolver, log)
           assertTrue(group3Response.size() == 6)
           assertTrue(group3Response.keySet().containsAll(allTopicsList))
           verifyPartitionData(group3Response.get(allTopicsList.get(0)))
@@ -1623,10 +1634,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           assertEquals(OffsetFetchResponse.UNAUTHORIZED_PARTITION, group3Response.get(allTopicsList.get(5)))
         case "group4" =>
           verifyResponse(offsetFetchResponse.groupLevelError(groups(3)), offsetFetchResponse
-            .partitionDataMap(groups(3)), topic1And2List)
+            .partitionDataMap(groups(3), topicResolver, log), topic1And2List)
         case "group5" =>
           verifyResponse(offsetFetchResponse.groupLevelError(groups(4)), offsetFetchResponse
-            .partitionDataMap(groups(4)), topic1And2List)
+            .partitionDataMap(groups(4), topicResolver, log), topic1And2List)
       })
 
     // test that after adding all necessary ACLs, we get no partition level or group level errors
@@ -1634,7 +1645,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResources(2))
     offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
     offsetFetchResponse.data.groups.asScala.map(_.groupId).foreach( groupId =>
-      verifyResponse(offsetFetchResponse.groupLevelError(groupId), offsetFetchResponse.partitionDataMap(groupId), partitionMap(groupId))
+      verifyResponse(
+        offsetFetchResponse.groupLevelError(groupId),
+        offsetFetchResponse.partitionDataMap(groupId, topicResolver, log),
+        partitionMap(groupId))
     )
   }
 

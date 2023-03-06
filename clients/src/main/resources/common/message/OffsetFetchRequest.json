@@ -33,6 +33,8 @@
   // Version 7 is adding the require stable flag.
   //
   // Version 8 is adding support for fetching offsets for multiple groups at a time
+  //
+  // Version 9 adds the TopicId field (KIP-848).
   "validVersions": "0-8",
   "flexibleVersions": "6+",
   "fields": [
@@ -51,8 +53,10 @@
         "about": "The group ID."},
       { "name": "Topics", "type": "[]OffsetFetchRequestTopics", "versions": "8+", "nullableVersions": "8+",
         "about": "Each topic we would like to fetch offsets for, or null to fetch offsets for all topics.", "fields": [
-        { "name": "Name", "type": "string", "versions": "8+", "entityType": "topicName",
+        { "name": "Name", "type": "string", "versions": "8", "ignorable": true, "entityType": "topicName",
           "about": "The topic name."},
+        { "name": "TopicId", "type": "uuid", "versions": "9+", "ignorable": true,
+          "about": "The unique topic ID." },
         { "name": "PartitionIndexes", "type": "[]int32", "versions": "8+",
           "about": "The partition indexes we would like to fetch offsets for." }
       ]}
