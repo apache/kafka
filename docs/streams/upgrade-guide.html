@@ -76,6 +76,20 @@
     </p>
 
     <p>
+        Downgrading from 3.5.x or newer version to 3.4.x or older version needs special attention:
+        Since 3.5.0 release, Kafka Streams uses a new serialization format for repartition topics.
+        This means that older versions of Kafka Streams would not be able to recognize the bytes written by newer versions,
+        and hence it is harder to downgrade Kafka Streams with version 3.5.0 or newer to older versions in-flight. For
+        more details, please refer to <a href="https://cwiki.apache.org/confluence/x/P5VbDg">KIP-904</a>.
+
+        For a downgrade, first switch the config from <code>"upgrade.from"</code> to the version you are downgrading to.
+        This disables writing of the new serialization format in your application. It's important to wait in this state
+        for a few minutes to make sure that the application has finished processing any "in-flight" messages written
+        into the repartition topics in the new serialization format. Afterwards, you can downgrade your application to a
+        pre-3.5.x version.
+    </p>
+
+    <p>
         Kafka Streams does not support running multiple instances of the same application as different processes on the same physical state directory. Starting in 2.8.0 (as well as 2.7.1 and 2.6.2),
         this restriction will be enforced. If you wish to run more than one instance of Kafka Streams, you must configure them with different values for <code>state.dir</code>.
     </p>
