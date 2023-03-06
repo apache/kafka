@@ -94,7 +94,7 @@ public class ProducerPerformance {
             }
             Random random = new Random(0);
             ProducerRecord<byte[], byte[]> record;
-            Stats stats = new Stats(numRecords, 5000);
+            stats = new Stats(numRecords, 5000);
             long startMs = System.currentTimeMillis();
 
             ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
@@ -113,7 +113,7 @@ public class ProducerPerformance {
                 record = new ProducerRecord<>(topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
-                Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
+                cb = stats.nextCompletion(sendStartMs, payload.length);
                 producer.send(record, cb);
 
                 currentTransactionSize++;
@@ -163,6 +163,10 @@ public class ProducerPerformance {
     KafkaProducer<byte[], byte[]> createKafkaProducer(Properties props) {
         return new KafkaProducer<>(props);
     }
+
+    Callback cb;
+
+    Stats stats;
 
     static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
             Random random) {
@@ -383,9 +387,16 @@ public class ProducerPerformance {
             }
         }
 
-        public Callback nextCompletion(long start, int bytes, Stats stats) {
-            Callback cb = new PerfCallback(this.iteration, start, bytes, stats);
-            this.iteration++;
+        public long totalCount() {
+            return this.count;
+        }
+
+        public long currentWindowCount() {
+            return this.windowCount;
+        }
+
+        public Callback nextCompletion(long start, int bytes) {
+            Callback cb = new PerfCallback(this.iteration, start, bytes, this);
             return cb;
         }
 
@@ -454,7 +465,12 @@ public class ProducerPerformance {
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             long now = System.currentTimeMillis();
             int latency = (int) (now - start);
-            this.stats.record(iteration, latency, bytes, now);
+            // It will only be counted when the sending is successful, otherwise the number of sent records may be
+            // magically printed when the sending fails.
+            if (exception == null) {
+                this.stats.record(iteration, latency, bytes, now);
+                this.stats.iteration++;
+            }
             if (exception != null)
                 exception.printStackTrace();
         }
