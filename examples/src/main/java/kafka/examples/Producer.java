@@ -91,7 +91,6 @@ public class Producer extends Thread {
             recordsSent += 1;
         }
         System.out.println("Producer sent " + numRecords + " records successfully");
-        producer.close();
         latch.countDown();
     }
 }
