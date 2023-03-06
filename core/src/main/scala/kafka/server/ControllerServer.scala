@@ -312,7 +312,7 @@ class ControllerServer(
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)
-        sharedServer.controllerStartupFault.handleFault("caught exception", e)
+        sharedServer.controllerStartupFaultHandler.handleFault("caught exception", e)
         shutdown()
         throw e
     }

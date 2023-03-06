@@ -173,7 +173,7 @@ class SharedServer(
   /**
    * The fault handler to use when ControllerServer.startup throws an exception.
    */
-  def controllerStartupFault: FaultHandler = faultHandlerFactory.build(
+  def controllerStartupFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "controller startup",
     fatal = true,
     action = () => SharedServer.this.synchronized {
