@@ -437,11 +437,6 @@ subprojects {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
     }
-
-    // Allows devs to run tests in a loop to debug flaky tests. See README.
-    if (project.hasProperty("rerun-tests")) {
-      outputs.upToDateWhen { false }
-    }
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
@@ -487,11 +482,6 @@ subprojects {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
     }
-
-    // Allows devs to run tests in a loop to debug flaky tests. See README.
-    if (project.hasProperty("rerun-tests")) {
-      outputs.upToDateWhen { false }
-    }
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
@@ -534,11 +524,6 @@ subprojects {
     retry {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
-    }
-
-    // Allows devs to run tests in a loop to debug flaky tests. See README.
-    if (project.hasProperty("rerun-tests")) {
-      outputs.upToDateWhen { false }
     }
   }
 
