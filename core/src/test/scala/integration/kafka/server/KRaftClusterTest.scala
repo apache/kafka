@@ -962,6 +962,7 @@ class KRaftClusterTest {
       cluster.format()
       val exception = assertThrows(classOf[ExecutionException], () => cluster.startup())
       assertEquals("java.lang.IllegalStateException: test authorizer exception", exception.getMessage)
+      cluster.fatalFaultHandler().setIgnore(true)
     } finally {
       cluster.close()
     }
