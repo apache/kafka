@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.RequestManager;
+import org.apache.kafka.common.KafkaException;
 
 import java.util.Map;
 import java.util.Objects;
@@ -45,6 +46,8 @@ public class ApplicationEventProcessor {
                 return process((CommitApplicationEvent) event);
             case POLL:
                 return process((PollApplicationEvent) event);
+            case FETCH_COMMITTED_OFFSET:
+                return process((OffsetFetchApplicationEvent) event);
         }
         return false;
     }
@@ -76,8 +79,7 @@ public class ApplicationEventProcessor {
         if (!commitRequestManger.isPresent()) {
             // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
             // upfront so we should never get to this block.
-            Exception exception = new RuntimeException("Unable to commit offset. Most likely because the group.id " +
-                    "wasn't set");
+            Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
             event.future().completeExceptionally(exception);
             return false;
         }
@@ -90,6 +92,18 @@ public class ApplicationEventProcessor {
             }
             event.future().complete(null);
         });
+        return true;
+    }
+
+    private boolean process(final OffsetFetchApplicationEvent event) {
+        Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
+        if (!commitRequestManger.isPresent()) {
+            event.future.completeExceptionally(new KafkaException("Unable to fetch committed offset because the " +
+                    "CommittedRequestManager is not available. Check if group.id was set correctly"));
+            return false;
+        }
+        CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
+        manager.sendFetchCommittedOffsetRequest(event.partitions, event.future);
         return true;
     }
 }

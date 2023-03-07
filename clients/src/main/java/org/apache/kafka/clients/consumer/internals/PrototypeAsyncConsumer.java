@@ -32,6 +32,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -64,6 +66,7 @@ import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -306,13 +309,28 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
+    public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
+        return committed(partitions, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions, Duration timeout) {
-        throw new KafkaException("method not implemented");
+    public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions,
+                                                            final Duration timeout) {
+        maybeThrowInvalidGroupIdException();
+        final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
+        eventHandler.add(event);
+        try {
+            Map<TopicPartition, OffsetAndMetadata> res = event.future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            return res;
+        } catch (ExecutionException | InterruptedException | TimeoutException e) {
+            throw new KafkaException(e);
+        }
+    }
+
+    private void maybeThrowInvalidGroupIdException() {
+        if (!groupId.isPresent() || groupId.get().isEmpty())
+            throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
+                    "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
     }
 
     @Override
@@ -437,29 +455,24 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(final Duration timeout) {
-        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(subscriptions.allConsumed());
-        eventHandler.add(commitEvent);
-
-        final CompletableFuture<Void> commitFuture = commitEvent.future();
-        try {
-            commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (final TimeoutException e) {
-            throw new org.apache.kafka.common.errors.TimeoutException(
-                     "timeout");
-        } catch (final Exception e) {
-            // handle exception here
-            throw new RuntimeException(e);
-        }
+        commitSync(subscriptions.allConsumed(), timeout);
     }
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
-        throw new KafkaException("method not implemented");
+        commitSync(offsets, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
-        throw new KafkaException("method not implemented");
+        CompletableFuture<Void> commitFuture = commit(offsets);
+        try {
+            commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (final TimeoutException e) {
+            throw new org.apache.kafka.common.errors.TimeoutException("timeout");
+        } catch (final Exception e) {
+            throw new KafkaException(e);
+        }
     }
 
     @Override

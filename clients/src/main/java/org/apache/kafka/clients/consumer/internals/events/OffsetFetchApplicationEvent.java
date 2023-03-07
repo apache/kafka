@@ -16,26 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * This is the abstract definition of the events created by the KafkaConsumer API
- */
-abstract public class ApplicationEvent {
-    public final Type type;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 
-    protected ApplicationEvent(Type type) {
-        this.type = type;
-    }
-    /**
-     * process the application event. Return true upon succesful execution,
-     * false otherwise.
-     * @return true if the event was successfully executed; false otherwise.
-     */
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
-    @Override
-    public String toString() {
-        return type + " ApplicationEvent";
-    }
-    public enum Type {
-        NOOP, COMMIT, POLL, FETCH_COMMITTED_OFFSET,
+public class OffsetFetchApplicationEvent extends ApplicationEvent {
+    final public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
+    public final Set<TopicPartition> partitions;
+    public OffsetFetchApplicationEvent(final Set<TopicPartition> partitions) {
+        super(Type.FETCH_COMMITTED_OFFSET);
+        this.partitions = partitions;
+        this.future = new CompletableFuture<>();
     }
 }
