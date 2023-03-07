@@ -45,12 +45,7 @@ public class KafkaMetricsGroup {
      * @return Sanitized metric name object.
      */
     public MetricName metricName(String name, Map<String, String> tags) {
-        String pkg;
-        if (klass.getPackage() == null) {
-            pkg = "";
-        } else {
-            pkg = klass.getPackage().getName();
-        }
+        String pkg = klass.getPackage() == null ? "" : klass.getPackage().getName();
         String simpleName = klass.getSimpleName().replaceAll("\\$$", "");
         return explicitMetricName(pkg, simpleName, name, tags);
     }
