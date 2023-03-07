@@ -19,7 +19,6 @@ package org.apache.kafka.streams.integration;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.lessThan;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -28,6 +27,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -43,6 +43,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -82,6 +83,7 @@ public class VersionedKeyValueStoreIntegrationTest {
     private static final long HISTORY_RETENTION = 3600_000L;
 
     private String inputStream;
+    private String globalTableTopic;
     private String outputStream;
     private long baseTimestamp;
 
@@ -106,6 +108,7 @@ public class VersionedKeyValueStoreIntegrationTest {
     public void beforeTest() throws InterruptedException {
         final String uniqueTestName = safeUniqueTestName(getClass(), testName);
         inputStream = "input-stream-" + uniqueTestName;
+        globalTableTopic = "global-table-" + uniqueTestName;
         outputStream = "output-stream-" + uniqueTestName;
         CLUSTER.createTopic(inputStream);
         CLUSTER.createTopic(outputStream);
@@ -136,7 +139,7 @@ public class VersionedKeyValueStoreIntegrationTest {
                 )
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .process(VersionedStoreContentCheckerProcessor::new, STORE_NAME)
+            .process(() -> new VersionedStoreContentCheckerProcessor(true), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
         final Properties props = props();
@@ -145,11 +148,11 @@ public class VersionedKeyValueStoreIntegrationTest {
 
         // produce source data
         int numRecordsProduced = 0;
-        numRecordsProduced += produceSourceData(baseTimestamp, KeyValue.pair(1, "a0"), KeyValue.pair(2, "b0"), KeyValue.pair(3, null));
-        numRecordsProduced += produceSourceData(baseTimestamp + 5, KeyValue.pair(1, "a5"), KeyValue.pair(2, null), KeyValue.pair(3, "c5"));
-        numRecordsProduced += produceSourceData(baseTimestamp + 2, KeyValue.pair(1, "a2"), KeyValue.pair(2, "b2"), KeyValue.pair(3, null)); // out-of-order data
-        numRecordsProduced += produceSourceData(baseTimestamp + 5, KeyValue.pair(1, "a5_new"), KeyValue.pair(2, "b5"), KeyValue.pair(3, null)); // replace existing records
-        numRecordsProduced += produceSourceData(baseTimestamp + 7, KeyValue.pair(1, "delete"), KeyValue.pair(2, "delete"), KeyValue.pair(3, "delete")); // delete
+        numRecordsProduced += produceDataToTopic(inputStream, baseTimestamp, KeyValue.pair(1, "a0"), KeyValue.pair(2, "b0"), KeyValue.pair(3, null));
+        numRecordsProduced += produceDataToTopic(inputStream, baseTimestamp + 5, KeyValue.pair(1, "a5"), KeyValue.pair(2, null), KeyValue.pair(3, "c5"));
+        numRecordsProduced += produceDataToTopic(inputStream, baseTimestamp + 2, KeyValue.pair(1, "a2"), KeyValue.pair(2, "b2"), KeyValue.pair(3, null)); // out-of-order data
+        numRecordsProduced += produceDataToTopic(inputStream, baseTimestamp + 5, KeyValue.pair(1, "a5_new"), KeyValue.pair(2, "b5"), KeyValue.pair(3, null)); // replace existing records
+        numRecordsProduced += produceDataToTopic(inputStream, baseTimestamp + 7, KeyValue.pair(1, DataTracker.DELETE_VALUE_KEYWORD), KeyValue.pair(2, DataTracker.DELETE_VALUE_KEYWORD), KeyValue.pair(3, DataTracker.DELETE_VALUE_KEYWORD)); // delete
 
         // wait for output and verify
         final List<KeyValue<Integer, Integer>> receivedRecords = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
@@ -162,7 +165,7 @@ public class VersionedKeyValueStoreIntegrationTest {
 
         for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
             // verify zero failed checks for each record
-            assertThat(0, equalTo(receivedRecord.value));
+            assertThat(receivedRecord.value, equalTo(0));
         }
     }
 
@@ -181,7 +184,7 @@ public class VersionedKeyValueStoreIntegrationTest {
                 )
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .process(VersionedStoreCountProcessor::new, STORE_NAME)
+            .process(() -> new VersionedStoreContentCheckerProcessor(false), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
         final Properties props = props();
@@ -189,7 +192,7 @@ public class VersionedKeyValueStoreIntegrationTest {
         kafkaStreams.start();
 
         // produce record (and wait for result) to create changelog
-        produceSourceData(baseTimestamp, KeyValue.pair(0, "foo"));
+        produceDataToTopic(inputStream, baseTimestamp, KeyValue.pair(0, "foo"));
 
         IntegrationTestUtils.waitUntilMinRecordsReceived(
             TestUtils.consumerConfig(
@@ -209,7 +212,7 @@ public class VersionedKeyValueStoreIntegrationTest {
     @Test
     public void shouldRestore() throws Exception {
         // build topology and start app
-        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         streamsBuilder
             .addStateStore(
@@ -221,24 +224,25 @@ public class VersionedKeyValueStoreIntegrationTest {
                 )
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .process(VersionedStoreCountProcessor::new, STORE_NAME)
+            .process(() -> new VersionedStoreContentCheckerProcessor(true), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
         final Properties props = props();
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
         kafkaStreams.start();
 
-        // produce source data
+        // produce source data and track in-memory to verify after restore
+        final DataTracker data = new DataTracker();
         int initialRecordsProduced = 0;
-        initialRecordsProduced += produceSourceData(baseTimestamp, KeyValue.pair(1, "a0"), KeyValue.pair(2, "b0"), KeyValue.pair(3, null));
-        initialRecordsProduced += produceSourceData(baseTimestamp + 5, KeyValue.pair(1, "a5"), KeyValue.pair(2, null), KeyValue.pair(3, "c5"));
-        initialRecordsProduced += produceSourceData(baseTimestamp + 2, KeyValue.pair(1, "a2"), KeyValue.pair(2, "b2"), KeyValue.pair(3, null)); // out-of-order data
-        initialRecordsProduced += produceSourceData(baseTimestamp + 5, KeyValue.pair(1, "a5_new"), KeyValue.pair(2, "b5"), KeyValue.pair(3, null)); // replace existing records
-        initialRecordsProduced += produceSourceData(baseTimestamp + 7, KeyValue.pair(1, "delete"), KeyValue.pair(2, "delete"), KeyValue.pair(3, "delete")); // delete
-        initialRecordsProduced += produceSourceData(baseTimestamp + 10, KeyValue.pair(1, "a10"), KeyValue.pair(2, "b10"), KeyValue.pair(3, "c10")); // new data so latest is not tombstone
+        initialRecordsProduced += produceDataToTopic(inputStream, data, baseTimestamp, KeyValue.pair(1, "a0"), KeyValue.pair(2, "b0"), KeyValue.pair(3, null));
+        initialRecordsProduced += produceDataToTopic(inputStream, data, baseTimestamp + 5, KeyValue.pair(1, "a5"), KeyValue.pair(2, null), KeyValue.pair(3, "c5"));
+        initialRecordsProduced += produceDataToTopic(inputStream, data, baseTimestamp + 2, KeyValue.pair(1, "a2"), KeyValue.pair(2, "b2"), KeyValue.pair(3, null)); // out-of-order data
+        initialRecordsProduced += produceDataToTopic(inputStream, data, baseTimestamp + 5, KeyValue.pair(1, "a5_new"), KeyValue.pair(2, "b5"), KeyValue.pair(3, null)); // replace existing records
+        initialRecordsProduced += produceDataToTopic(inputStream, data, baseTimestamp + 7, KeyValue.pair(1, DataTracker.DELETE_VALUE_KEYWORD), KeyValue.pair(2, DataTracker.DELETE_VALUE_KEYWORD), KeyValue.pair(3, DataTracker.DELETE_VALUE_KEYWORD)); // delete
+        initialRecordsProduced += produceDataToTopic(inputStream, data, baseTimestamp + 10, KeyValue.pair(1, "a10"), KeyValue.pair(2, "b10"), KeyValue.pair(3, "c10")); // new data so latest is not tombstone
 
         // wait for output
-        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+        IntegrationTestUtils.waitUntilMinRecordsReceived(
             TestUtils.consumerConfig(
                 CLUSTER.bootstrapServers(),
                 IntegerDeserializer.class,
@@ -250,12 +254,27 @@ public class VersionedKeyValueStoreIntegrationTest {
         kafkaStreams.close();
         kafkaStreams.cleanUp();
 
-        // restart app
+        // restart app and pass expected store contents to processor
+        streamsBuilder = new StreamsBuilder();
+
+        streamsBuilder
+            .addStateStore(
+                new VersionedKeyValueStoreBuilder<>(
+                    new RocksDbVersionedKeyValueBytesStoreSupplier(STORE_NAME, HISTORY_RETENTION),
+                    Serdes.Integer(),
+                    Serdes.String(),
+                    Time.SYSTEM
+                )
+            )
+            .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .process(() -> new VersionedStoreContentCheckerProcessor(true, data), STORE_NAME)
+            .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
+
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
         kafkaStreams.start();
 
         // produce additional records
-        final int additionalRecordsProduced = produceSourceData(baseTimestamp + 12, KeyValue.pair(1, "a12"), KeyValue.pair(2, "b12"), KeyValue.pair(3, "c12"));
+        final int additionalRecordsProduced = produceDataToTopic(inputStream, baseTimestamp + 12, KeyValue.pair(1, "a12"), KeyValue.pair(2, "b12"), KeyValue.pair(3, "c12"));
 
         // wait for output and verify
         final List<KeyValue<Integer, Integer>> receivedRecords = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
@@ -266,10 +285,9 @@ public class VersionedKeyValueStoreIntegrationTest {
             outputStream,
             initialRecordsProduced + additionalRecordsProduced);
 
-        for (int i = 1; i <= additionalRecordsProduced; i++) {
-            final KeyValue<Integer, Integer> receivedRecord = receivedRecords.get(receivedRecords.size() - i);
-            // verify more than one record version found, which confirms that restore took place
-            assertThat(1, lessThan(receivedRecord.value));
+        for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
+            // verify zero failed checks for each record
+            assertThat(receivedRecord.value, equalTo(0));
         }
     }
 
@@ -288,8 +306,7 @@ public class VersionedKeyValueStoreIntegrationTest {
                 )
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .process(VersionedStoreCountProcessor::new, STORE_NAME)
-            .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
+            .process(() -> new VersionedStoreContentCheckerProcessor(false), STORE_NAME);
 
         final Properties props = props();
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
@@ -302,7 +319,54 @@ public class VersionedKeyValueStoreIntegrationTest {
                 .withPartitions(Collections.singleton(0));
         final StateQueryResult<String> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
-        assertThat("success", equalTo(result.getOnlyPartitionResult().getResult()));
+        assertThat(result.getOnlyPartitionResult().getResult(), equalTo("success"));
+    }
+
+    @Test
+    public void shouldCreateGlobalTable() throws Exception {
+        // produce data to global store topic and track in-memory for processor to verify
+        final DataTracker data = new DataTracker();
+        produceDataToTopic(globalTableTopic, data, baseTimestamp, KeyValue.pair(1, "a0"), KeyValue.pair(2, "b0"), KeyValue.pair(3, null));
+        produceDataToTopic(globalTableTopic, data, baseTimestamp + 5, KeyValue.pair(1, "a5"), KeyValue.pair(2, null), KeyValue.pair(3, "c5"));
+        produceDataToTopic(globalTableTopic, data, baseTimestamp + 2, KeyValue.pair(1, "a2"), KeyValue.pair(2, "b2"), KeyValue.pair(3, null)); // out-of-order data
+
+        // build topology and start app
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+
+        streamsBuilder
+            .globalTable(
+                globalTableTopic,
+                Consumed.with(Serdes.Integer(), Serdes.String()),
+                Materialized
+                    .<Integer, String>as(new RocksDbVersionedKeyValueBytesStoreSupplier(STORE_NAME, HISTORY_RETENTION))
+                    .withKeySerde(Serdes.Integer())
+                    .withValueSerde(Serdes.String())
+            );
+        streamsBuilder
+            .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .process(() -> new VersionedStoreContentCheckerProcessor(false, data))
+            .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
+
+        final Properties props = props();
+        kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
+        kafkaStreams.start();
+
+        // produce source data to trigger store verifications in processor
+        int numRecordsProduced = produceDataToTopic(inputStream, baseTimestamp + 8, KeyValue.pair(1, "a8"), KeyValue.pair(2, "b8"), KeyValue.pair(3, "c8"));
+
+        // wait for output and verify
+        final List<KeyValue<Integer, Integer>> receivedRecords = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+            TestUtils.consumerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerDeserializer.class,
+                IntegerDeserializer.class),
+            outputStream,
+            numRecordsProduced);
+
+        for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
+            // verify zero failed checks for each record
+            assertThat(receivedRecord.value, equalTo(0));
+        }
     }
 
     private Properties props() {
@@ -321,10 +385,11 @@ public class VersionedKeyValueStoreIntegrationTest {
      */
     @SuppressWarnings("varargs")
     @SafeVarargs
-    private final int produceSourceData(final long timestamp,
-                                        final KeyValue<Integer, String>... keyValues) {
+    private final int produceDataToTopic(final String topic,
+                                         final long timestamp,
+                                         final KeyValue<Integer, String>... keyValues) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
+            topic,
             Arrays.asList(keyValues),
             TestUtils.producerConfig(CLUSTER.bootstrapServers(),
                 IntegerSerializer.class,
@@ -334,18 +399,65 @@ public class VersionedKeyValueStoreIntegrationTest {
     }
 
     /**
-     * Test-only processor for inserting records into a versioned store while also tracking
-     * them separately in-memory, and performing checks to validate expected store contents.
-     * Forwards the number of failed checks downstream for consumption.
+     * @param topic       topic to produce to
+     * @param dataTracker map of key -> timestamp -> value for tracking data which is produced to
+     *                    the topic. This method will add the produced data into this in-memory
+     *                    tracker in addition to producing to the topic, in order to keep the two
+     *                    in sync.
+     * @param timestamp   timestamp to produce with
+     * @param keyValues   key-value pairs to produce
+     *
+     * @return number of records produced
+     */
+    @SuppressWarnings("varargs")
+    @SafeVarargs
+    private final int produceDataToTopic(final String topic,
+                                         final DataTracker dataTracker,
+                                         final long timestamp,
+                                         final KeyValue<Integer, String>... keyValues) {
+        produceDataToTopic(topic, timestamp, keyValues);
+
+        for (final KeyValue<Integer, String> keyValue : keyValues) {
+            dataTracker.add(keyValue.key, timestamp, keyValue.value);
+        }
+
+        return keyValues.length;
+    }
+
+    /**
+     * Test-only processor for validating expected contents of a versioned store, and forwards
+     * the number of failed checks downstream for consumption. Callers specify whether the
+     * processor should also be responsible for inserting records into the store (while also
+     * tracking them separately in-memory for use in validation).
      */
     private static class VersionedStoreContentCheckerProcessor implements Processor<Integer, String, Integer, Integer> {
 
         private ProcessorContext<Integer, Integer> context;
         private VersionedKeyValueStore<Integer, String> store;
 
+        // whether or not the processor should write records to the store as they arrive.
+        // must be false for global stores.
+        private final boolean writeToStore;
         // in-memory copy of seen data, to validate for testing purposes.
-        // maps from key -> timestamp -> value
-        private final Map<Integer, Map<Long, String>> data = new HashMap<>();
+        private final DataTracker data;
+
+        /**
+         * @param writeToStore whether or not this processor should write to the store
+         */
+        VersionedStoreContentCheckerProcessor(final boolean writeToStore) {
+            this(writeToStore, new DataTracker());
+        }
+
+        /**
+         * @param writeToStore whether or not this processor should write to the store
+         * @param initialData  expected store contents which have already been inserted from
+         *                     outside of this processor
+         */
+        VersionedStoreContentCheckerProcessor(final boolean writeToStore,
+                                              final DataTracker initialData) {
+            this.writeToStore = writeToStore;
+            this.data = initialData;
+        }
 
         @Override
         public void init(final ProcessorContext<Integer, Integer> context) {
@@ -355,14 +467,15 @@ public class VersionedKeyValueStoreIntegrationTest {
 
         @Override
         public void process(final Record<Integer, String> record) {
-            // add record to store. special value "delete" is interpreted as a delete() call,
-            // in contrast to null value, which is a tombstone inserted via put()
-            if ("delete".equals(record.value())) {
-                store.delete(record.key(), record.timestamp());
-                addToSeenData(record.key(), record.timestamp(), null);
-            } else {
-                store.put(record.key(), record.value(), record.timestamp());
-                addToSeenData(record.key(), record.timestamp(), record.value());
+            if (writeToStore) {
+                // add record to store. special value "delete" is interpreted as a delete() call,
+                // in contrast to null value, which is a tombstone inserted via put()
+                if (DataTracker.DELETE_VALUE_KEYWORD.equals(record.value())) {
+                    store.delete(record.key(), record.timestamp());
+                } else {
+                    store.put(record.key(), record.value(), record.timestamp());
+                }
+                data.add(record.key(), record.timestamp(), record.value());
             }
 
             // check expected contents of store, and signal completion by writing
@@ -371,27 +484,22 @@ public class VersionedKeyValueStoreIntegrationTest {
             context.forward(record.withValue(failedChecks));
         }
 
-        private void addToSeenData(final Integer key, final long timestamp, final String value) {
-            data.computeIfAbsent(key, k -> new HashMap<>());
-            data.get(key).put(timestamp, value);
-        }
-
         /**
          * @return number of failed checks
          */
         private int checkStoreContents() {
             int failedChecks = 0;
-            for (final Map.Entry<Integer, Map<Long, String>> keyWithTimestampsAndValues : data.entrySet()) {
+            for (final Map.Entry<Integer, Map<Long, Optional<String>>> keyWithTimestampsAndValues : data.data.entrySet()) {
                 final Integer key = keyWithTimestampsAndValues.getKey();
-                final Map<Long, String> timestampsAndValues = keyWithTimestampsAndValues.getValue();
+                final Map<Long, Optional<String>> timestampsAndValues = keyWithTimestampsAndValues.getValue();
 
                 // track largest timestamp seen for key
                 long maxExpectedTimestamp = -1L;
                 String expectedValueForMaxTimestamp = null;
 
-                for (final Map.Entry<Long, String> timestampAndValue : timestampsAndValues.entrySet()) {
+                for (final Map.Entry<Long, Optional<String>> timestampAndValue : timestampsAndValues.entrySet()) {
                     final Long expectedTimestamp = timestampAndValue.getKey();
-                    final String expectedValue = timestampAndValue.getValue();
+                    final String expectedValue = timestampAndValue.getValue().orElse(null);
 
                     if (expectedTimestamp > maxExpectedTimestamp) {
                         maxExpectedTimestamp = expectedTimestamp;
@@ -430,47 +538,24 @@ public class VersionedKeyValueStoreIntegrationTest {
     }
 
     /**
-     * Test-only processor for counting the number of record versions for a specific key,
-     * and forwards this count downstream for consumption. The count only includes record
-     * versions earlier than the current one, and stops as soon as a null is encountered.
+     * In-memory copy of data put to versioned store, for verification purposes.
      */
-    private static class VersionedStoreCountProcessor implements Processor<Integer, String, Integer, Integer> {
+    private static class DataTracker {
 
-        private ProcessorContext<Integer, Integer> context;
-        private VersionedKeyValueStore<Integer, String> store;
+        // special value which is interpreted as call to store.delete()
+        static final String DELETE_VALUE_KEYWORD = "delete";
 
-        @Override
-        public void init(final ProcessorContext<Integer, Integer> context) {
-            this.context = context;
-            store = context.getStateStore(STORE_NAME);
-        }
+        // maps from key -> timestamp -> value.
+        // value is represented as Optional to ensure proper recording of nulls.
+        final Map<Integer, Map<Long, Optional<String>>> data = new HashMap<>();
 
-        @Override
-        public void process(final Record<Integer, String> record) {
-            // add record to store. special value "delete" is interpreted as a delete() call,
-            // in contrast to null value, which is a tombstone inserted via put()
-            if ("delete".equals(record.value())) {
-                store.delete(record.key(), record.timestamp());
+        void add(final Integer key, final long timestamp, final String value) {
+            data.computeIfAbsent(key, k -> new HashMap<>());
+            if (DELETE_VALUE_KEYWORD.equals(value)) {
+                data.get(key).put(timestamp, Optional.empty());
             } else {
-                store.put(record.key(), record.value(), record.timestamp());
+                data.get(key).put(timestamp, Optional.ofNullable(value));
             }
-
-            // count number of versions for this key, up through the current version.
-            // count stops as soon as a null is reached
-            int numVersions = 0;
-            long timestamp = record.timestamp();
-            while (true) {
-                final VersionedRecord<String> versionedRecord = store.get(record.key(), timestamp);
-                if (versionedRecord != null) {
-                    numVersions++;
-                    // search using earlier timestamp in order to find the next earlier record version
-                    timestamp = versionedRecord.timestamp() - 1;
-                } else {
-                    break;
-                }
-            }
-
-            context.forward(record.withValue(numVersions));
         }
     }
 
