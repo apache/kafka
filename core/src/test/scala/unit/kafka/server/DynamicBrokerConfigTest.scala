@@ -489,9 +489,25 @@ class DynamicBrokerConfigTest {
     assertEquals("User:admin", authorizer.superUsers)
   }
 
+  private def createCombinedControllerConfig(
+    nodeId: Int,
+    port: Int
+  ): Properties = {
+    val retval = TestUtils.createBrokerConfig(nodeId,
+      zkConnect = null,
+      enableControlledShutdown = true,
+      enableDeleteTopic = true,
+      port)
+    retval.put(KafkaConfig.ProcessRolesProp, "broker,controller")
+    retval.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    retval.put(KafkaConfig.ListenersProp, s"${retval.get(KafkaConfig.ListenersProp)},CONTROLLER://localhost:0")
+    retval.put(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
+    retval
+  }
+
   @Test
   def testCombinedControllerAuthorizerConfig(): Unit = {
-    val props = TestUtils.createCombinedControllerConfig(0, port = 9092)
+    val props = createCombinedControllerConfig(0, 9092)
     val oldConfig = KafkaConfig.fromProps(props)
     oldConfig.dynamicConfig.initialize(None)
 
@@ -507,9 +523,28 @@ class DynamicBrokerConfigTest {
     assertEquals("User:admin", authorizer.superUsers)
   }
 
+  private def createIsolatedControllerConfig(
+    nodeId: Int,
+    port: Int
+  ): Properties = {
+    val retval = TestUtils.createBrokerConfig(nodeId,
+      zkConnect = null,
+      enableControlledShutdown = true,
+      enableDeleteTopic = true,
+      port
+    )
+    retval.put(KafkaConfig.ProcessRolesProp, "controller")
+    retval.remove(KafkaConfig.AdvertisedListenersProp)
+
+    retval.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    retval.put(KafkaConfig.ListenersProp, "CONTROLLER://localhost:0")
+    retval.put(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
+    retval
+  }
+
   @Test
   def testIsolatedControllerAuthorizerConfig(): Unit = {
-    val props = TestUtils.createIsolatedControllerConfig(0, port = 9092)
+    val props = createIsolatedControllerConfig(0, port = 9092)
     val oldConfig = KafkaConfig.fromProps(props)
     oldConfig.dynamicConfig.initialize(None)
 

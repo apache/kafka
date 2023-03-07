@@ -17,14 +17,12 @@
 
 package org.apache.kafka.controller;
 
-
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
-import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.function.Consumer;
 
@@ -45,39 +43,39 @@ public class ControllerRequestContext {
     private final OptionalLong deadlineNs;
     private final RequestHeaderData requestHeader;
 
-    private final Optional<Consumer<Double>> requestedPartitionCountRecorder;
+    private final Consumer<Integer> partitionChangeQuotaApplier;
 
     public ControllerRequestContext(
         RequestHeaderData requestHeader,
         KafkaPrincipal principal,
         OptionalLong deadlineNs
     ) {
-        this(requestHeader, principal, deadlineNs, Optional.empty());
+        this(requestHeader, principal, deadlineNs, __ -> { });
     }
 
     public ControllerRequestContext(
         RequestHeaderData requestHeader,
         KafkaPrincipal principal,
         OptionalLong deadlineNs,
-        Optional<Consumer<Double>> requestedPartitionCountRecorder
+        Consumer<Integer> partitionChangeQuotaApplier
     ) {
         this.requestHeader = requestHeader;
         this.principal = principal;
         this.deadlineNs = deadlineNs;
-        this.requestedPartitionCountRecorder = requestedPartitionCountRecorder;
+        this.partitionChangeQuotaApplier = partitionChangeQuotaApplier;
     }
 
     public ControllerRequestContext(
         AuthorizableRequestContext requestContext,
         OptionalLong deadlineNs
     ) {
-        this(requestContext, deadlineNs, Optional.empty());
+        this(requestContext, deadlineNs, __ -> { });
     }
 
     public ControllerRequestContext(
         AuthorizableRequestContext requestContext,
         OptionalLong deadlineNs,
-        Optional<Consumer<Double>> requestedPartitionCountRecorder
+        Consumer<Integer> partitionChangeQuotaApplier
     ) {
         this(
             new RequestHeaderData()
@@ -87,7 +85,7 @@ public class ControllerRequestContext {
                 .setClientId(requestContext.clientId()),
             requestContext.principal(),
             deadlineNs,
-            requestedPartitionCountRecorder
+            partitionChangeQuotaApplier
         );
     }
 
@@ -104,12 +102,13 @@ public class ControllerRequestContext {
     }
 
     /**
+     * Apply the partition change quota.
      *
-     * @param requestedPartitionCount the value to record
-     * @throws ThrottlingQuotaExceededException if recording this value moves a metric beyond its configured maximum or minimum
-     *         bound
+     * @param requestedPartitionCount           The value to apply.
+     * @throws ThrottlingQuotaExceededException If recording this value moves a metric beyond its configured
+     *                                          maximum or minimum bound
      */
-    public void record(double requestedPartitionCount) {
-        this.requestedPartitionCountRecorder.ifPresent(recorder -> recorder.accept(requestedPartitionCount));
+    public void applyPartitionChangeQuota(int requestedPartitionCount) {
+        partitionChangeQuotaApplier.accept(requestedPartitionCount);
     }
 }

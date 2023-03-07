@@ -711,7 +711,7 @@ public class ReplicationControlManager {
         }
         int numPartitions = newParts.size();
         try {
-            context.record(numPartitions); // check controller mutation quota
+            context.applyPartitionChangeQuota(numPartitions); // check controller mutation quota
         } catch (ThrottlingQuotaExceededException e) {
             log.debug("Topic creation of {} partitions not allowed because quota is violated. Delay time: {}",
                 numPartitions, e.throttleTimeMs());
@@ -884,7 +884,7 @@ public class ReplicationControlManager {
         }
         int numPartitions = topic.parts.size();
         try {
-            context.record(numPartitions); // check controller mutation quota
+            context.applyPartitionChangeQuota(numPartitions); // check controller mutation quota
         } catch (ThrottlingQuotaExceededException e) {
             // log a message and rethrow the exception
             log.debug("Topic deletion of {} partitions not allowed because quota is violated. Delay time: {}",
@@ -1531,7 +1531,7 @@ public class ReplicationControlManager {
             }
         }
         try {
-            context.record(additional); // check controller mutation quota
+            context.applyPartitionChangeQuota(additional); // check controller mutation quota
         } catch (ThrottlingQuotaExceededException e) {
             // log a message and rethrow the exception
             log.debug("Partition creation of {} partitions not allowed because quota is violated. Delay time: {}",

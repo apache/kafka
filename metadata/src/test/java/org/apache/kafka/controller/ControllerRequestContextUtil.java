@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.function.Consumer;
 
@@ -35,26 +34,26 @@ public class ControllerRequestContextUtil {
     public static final String QUOTA_EXCEEDED_IN_TEST_MSG = "Quota exceeded in test";
 
     public static ControllerRequestContext anonymousContextFor(ApiKeys apiKeys) {
-        return anonymousContextFor(apiKeys, apiKeys.latestVersion(), Optional.empty());
+        return anonymousContextFor(apiKeys, apiKeys.latestVersion(), __ -> { });
     }
 
     public static ControllerRequestContext anonymousContextWithMutationQuotaExceededFor(ApiKeys apiKeys) {
-        return anonymousContextFor(apiKeys, apiKeys.latestVersion(), Optional.of(x -> {
+        return anonymousContextFor(apiKeys, apiKeys.latestVersion(), x -> {
             throw new ThrottlingQuotaExceededException(QUOTA_EXCEEDED_IN_TEST_MSG);
-        }));
+        });
     }
 
     public static ControllerRequestContext anonymousContextFor(
         ApiKeys apiKeys,
         short version
     ) {
-        return anonymousContextFor(apiKeys, version, Optional.empty());
+        return anonymousContextFor(apiKeys, version, __ -> { });
     }
 
     public static ControllerRequestContext anonymousContextFor(
         ApiKeys apiKeys,
         short version,
-        Optional<Consumer<Double>> requestedPartitionCountRecorder
+        Consumer<Integer> partitionChangeQuotaApplier
     ) {
         return new ControllerRequestContext(
             new RequestHeaderData()
@@ -62,7 +61,7 @@ public class ControllerRequestContextUtil {
                 .setRequestApiVersion(version),
             KafkaPrincipal.ANONYMOUS,
             OptionalLong.empty(),
-            requestedPartitionCountRecorder
+            partitionChangeQuotaApplier
         );
     }
 }
