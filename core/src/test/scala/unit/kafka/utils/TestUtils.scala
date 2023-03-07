@@ -374,7 +374,6 @@ object TestUtils extends Logging {
       props.put(KafkaConfig.RackProp, nodeId.toString)
       props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
     }
-
     props
   }
 
