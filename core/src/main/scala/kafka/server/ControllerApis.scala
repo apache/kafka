@@ -99,6 +99,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentials(request)
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
@@ -813,6 +814,18 @@ class ControllerApis(val requestChannel: RequestChannel,
       .thenApply[Unit] { response =>
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new AlterPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+      }
+  }
+
+  def handleAlterUserScramCredentials(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val alterRequest = request.body[AlterUserScramCredentialsRequest]
+    authHelper.authorizeClusterOperation(request, ALTER)
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+    controller.alterUserScramCredentials(context, alterRequest.data)
+      .thenApply[Unit] { response =>
+         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+           new AlterUserScramCredentialsResponse(response.setThrottleTimeMs(requestThrottleMs)))
       }
   }
 

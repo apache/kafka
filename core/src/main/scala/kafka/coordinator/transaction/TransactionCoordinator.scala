@@ -22,13 +22,17 @@ import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
 import org.apache.kafka.common.message.{DescribeTransactionsResponseData, ListTransactionsResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.common.requests.TransactionResult
+import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
 import org.apache.kafka.server.util.Scheduler
+
+import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 object TransactionCoordinator {
 
@@ -92,6 +96,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
   type InitProducerIdCallback = InitProducerIdResult => Unit
   type AddPartitionsCallback = Errors => Unit
+  type VerifyPartitionsCallback = AddPartitionsToTxnResult => Unit
   type EndTxnCallback = Errors => Unit
   type ApiResult[T] = Either[Errors, T]
 
@@ -317,6 +322,35 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       }
     }
   }
+  
+  def handleVerifyPartitionsInTransaction(transactionalId: String,
+                                          producerId: Long,
+                                          producerEpoch: Short,
+                                          partitions: collection.Set[TopicPartition],
+                                          responseCallback: VerifyPartitionsCallback): Unit = {
+    if (transactionalId == null || transactionalId.isEmpty) {
+      debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request for verification")
+      responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitions.map(_ -> Errors.INVALID_REQUEST).toMap.asJava))
+    } else {
+      val result: ApiResult[(Int, TransactionMetadata)] = getTransactionMetadata(transactionalId, producerId, producerEpoch, partitions)
+      
+      result match {
+        case Left(err) =>
+          debug(s"Returning $err error code to client for $transactionalId's AddPartitions request for verification")
+          responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitions.map(_ -> err).toMap.asJava))
+
+        case Right((_, txnMetadata)) =>
+          val errors = mutable.Map[TopicPartition, Errors]()
+          partitions.foreach { tp => 
+            if (txnMetadata.topicPartitions.contains(tp))
+              errors.put(tp, Errors.NONE)
+            else
+              errors.put(tp, Errors.INVALID_TXN_STATE)  
+          }
+          responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, errors.asJava))
+      }
+    }
+  }
 
   def handleAddPartitionsToTransaction(transactionalId: String,
                                        producerId: Long,
@@ -330,42 +364,49 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     } else {
       // try to update the transaction metadata and append the updated metadata to txn log;
       // if there is no such metadata treat it as invalid producerId mapping error.
-      val result: ApiResult[(Int, TxnTransitMetadata)] = txnManager.getTransactionState(transactionalId).flatMap {
-        case None => Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-
-        case Some(epochAndMetadata) =>
-          val coordinatorEpoch = epochAndMetadata.coordinatorEpoch
-          val txnMetadata = epochAndMetadata.transactionMetadata
-
-          // generate the new transaction metadata with added partitions
-          txnMetadata.inLock {
-            if (txnMetadata.producerId != producerId) {
-              Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-            } else if (txnMetadata.producerEpoch != producerEpoch) {
-              Left(Errors.PRODUCER_FENCED)
-            } else if (txnMetadata.pendingTransitionInProgress) {
-              // return a retriable exception to let the client backoff and retry
-              Left(Errors.CONCURRENT_TRANSACTIONS)
-            } else if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort) {
-              Left(Errors.CONCURRENT_TRANSACTIONS)
-            } else if (txnMetadata.state == Ongoing && partitions.subsetOf(txnMetadata.topicPartitions)) {
-              // this is an optimization: if the partitions are already in the metadata reply OK immediately
-              Left(Errors.NONE)
-            } else {
-              Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.milliseconds()))
-            }
-          }
-      }
+      val result: ApiResult[(Int, TransactionMetadata)] = getTransactionMetadata(transactionalId, producerId, producerEpoch, partitions)
 
       result match {
         case Left(err) =>
           debug(s"Returning $err error code to client for $transactionalId's AddPartitions request")
           responseCallback(err)
 
-        case Right((coordinatorEpoch, newMetadata)) =>
-          txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
+        case Right((coordinatorEpoch, txnMetadata)) =>
+          txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.milliseconds()),
             responseCallback, requestLocal = requestLocal)
       }
+    }
+  }
+  
+  private def getTransactionMetadata(transactionalId: String,
+                                     producerId: Long,
+                                     producerEpoch: Short,
+                                     partitions: collection.Set[TopicPartition]): ApiResult[(Int, TransactionMetadata)] = {
+    txnManager.getTransactionState(transactionalId).flatMap {
+      case None => Left(Errors.INVALID_PRODUCER_ID_MAPPING)
+
+      case Some(epochAndMetadata) =>
+        val coordinatorEpoch = epochAndMetadata.coordinatorEpoch
+        val txnMetadata = epochAndMetadata.transactionMetadata
+
+        // generate the new transaction metadata with added partitions
+        txnMetadata.inLock {
+          if (txnMetadata.producerId != producerId) {
+            Left(Errors.INVALID_PRODUCER_ID_MAPPING)
+          } else if (txnMetadata.producerEpoch != producerEpoch) {
+            Left(Errors.PRODUCER_FENCED)
+          } else if (txnMetadata.pendingTransitionInProgress) {
+            // return a retriable exception to let the client backoff and retry
+            Left(Errors.CONCURRENT_TRANSACTIONS)
+          } else if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort) {
+            Left(Errors.CONCURRENT_TRANSACTIONS)
+          } else if (txnMetadata.state == Ongoing && partitions.subsetOf(txnMetadata.topicPartitions)) {
+            // this is an optimization: if the partitions are already in the metadata reply OK immediately
+            Left(Errors.NONE)
+          } else {
+            Right(coordinatorEpoch, txnMetadata)
+          }
+        }
     }
   }
 

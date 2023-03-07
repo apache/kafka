@@ -594,10 +594,10 @@ public class ReplicationControlManager {
             resultsPrefix = ", ";
         }
         if (request.validateOnly()) {
-            log.info("Validate-only CreateTopics result(s): {}", resultsBuilder.toString());
+            log.info("Validate-only CreateTopics result(s): {}", resultsBuilder);
             return ControllerResult.atomicOf(Collections.emptyList(), data);
         } else {
-            log.info("CreateTopics result(s): {}", resultsBuilder.toString());
+            log.info("CreateTopics result(s): {}", resultsBuilder);
             return ControllerResult.atomicOf(records, data);
         }
     }
@@ -1679,7 +1679,7 @@ public class ReplicationControlManager {
                         append(record.partitionId());
                     prefix = ", ";
                 }
-                log.debug("{}: changing partition(s): {}", context, bld.toString());
+                log.debug("{}: changing partition(s): {}", context, bld);
             } else if (log.isInfoEnabled()) {
                 log.info("{}: changing {} partition(s)", context, records.size() - oldSize);
             }

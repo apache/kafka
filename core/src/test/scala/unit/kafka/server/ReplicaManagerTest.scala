@@ -54,14 +54,14 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.image.{AclsImage, ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, MetadataProvenance, ProducerIdsImage, TopicsDelta, TopicsImage}
+import org.apache.kafka.image._
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockScheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -2934,7 +2934,7 @@ class ReplicaManagerTest {
       new SimpleRecord(11, "k2".getBytes, "v2".getBytes)))
     partition.appendRecordsToLeader(batch, AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
     partition.log.get.updateHighWatermark(2L)
-    partition.log.get.maybeIncrementLogStartOffset(1L, LeaderOffsetIncremented)
+    partition.log.get.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.LeaderOffsetIncremented)
     replicaManager.logManager.checkpointLogRecoveryOffsets()
     replicaManager.logManager.checkpointLogStartOffsets()
     assertEquals(Some(1L), readRecoveryPointCheckpoint().get(tp0))
@@ -4362,7 +4362,8 @@ class ReplicaManagerTest {
       ConfigurationsImage.EMPTY,
       ClientQuotasImage.EMPTY,
       ProducerIdsImage.EMPTY,
-      AclsImage.EMPTY
+      AclsImage.EMPTY,
+      ScramImage.EMPTY
     )
   }
 

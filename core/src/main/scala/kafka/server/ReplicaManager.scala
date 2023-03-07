@@ -21,7 +21,7 @@ import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition, PartitionListener}
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log.remote.RemoteLogManager
-import kafka.log.{LogManager, LogReadInfo, UnifiedLog}
+import kafka.log.{LogManager, UnifiedLog}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
@@ -56,7 +56,7 @@ import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, RecordValidationException}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, RecordValidationException}
 
 import java.io.File
 import java.nio.file.{Files, Paths}
@@ -1174,7 +1174,7 @@ class ReplicaManager(val config: KafkaConfig,
           }
 
           LogReadResult(info = fetchDataInfo,
-            divergingEpoch = readInfo.divergingEpoch,
+            divergingEpoch = readInfo.divergingEpoch.asScala,
             highWatermark = readInfo.highWatermark,
             leaderLogStartOffset = readInfo.logStartOffset,
             leaderLogEndOffset = readInfo.logEndOffset,
