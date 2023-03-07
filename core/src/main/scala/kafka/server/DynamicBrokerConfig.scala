@@ -758,7 +758,7 @@ object DynamicThreadPool {
 class ControllerDynamicThreadPool(controller: ControllerServer) extends BrokerReconfigurable {
 
   override def reconfigurableConfigs: Set[String] = {
-    DynamicThreadPool.ReconfigurableConfigs // common configs
+    Set(KafkaConfig.NumIoThreadsProp)
   }
 
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
@@ -768,8 +768,6 @@ class ControllerDynamicThreadPool(controller: ControllerServer) extends BrokerRe
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     if (newConfig.numIoThreads != oldConfig.numIoThreads)
       controller.controllerApisHandlerPool.resizeThreadPool(newConfig.numIoThreads)
-    // ignore changes to numReplicaFetchers, numRecoveryThreadsPerDataDir, and backgroundThreads
-    // because those do not apply to controllers
   }
 }
 
