@@ -87,7 +87,7 @@ public class FetchParams {
     public int hashCode() {
         int result = requestVersion;
         result = 31 * result + replicaId;
-        result = 31 * result + (int)replicaEpoch;
+        result = 31 * result + (int) replicaEpoch;
         result = 31 * result + Long.hashCode(32);
         result = 31 * result + minBytes;
         result = 31 * result + maxBytes;

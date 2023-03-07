@@ -49,6 +49,7 @@ import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.requests.FetchResponse;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.requests.VoteRequest;
@@ -958,7 +959,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 Errors.INVALID_REQUEST, Optional.empty()));
         }
 
-        FetchResponseData response = tryCompleteFetchRequest(request.replicaState().replicaId(), fetchPartition, currentTimeMs);
+        FetchResponseData response = tryCompleteFetchRequest(
+                FetchRequest.getReplicaIdWithoutVersion(request),
+                fetchPartition,
+                currentTimeMs);
         FetchResponseData.PartitionData partitionResponse =
             response.responses().get(0).partitions().get(0);
 
@@ -1792,7 +1796,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             .setMaxWaitMs(fetchMaxWaitMs)
             .setClusterId(clusterId)
             .setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(quorum.localIdOrSentinel()));
-//            .setReplicaId(quorum.localIdOrSentinel());
     }
 
     private long maybeSendAnyVoterFetch(long currentTimeMs) {

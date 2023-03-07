@@ -44,7 +44,10 @@ object KafkaNetworkChannel {
       case fetchRequest: FetchRequestData =>
         // Since we already have the request, we go through a simplified builder
         new AbstractRequest.Builder[FetchRequest](ApiKeys.FETCH) {
-          override def build(version: Short): FetchRequest = new FetchRequest(fetchRequest, version)
+          override def build(version: Short): FetchRequest = {
+            FetchRequest.updateReplicaStateBasedOnVersion(fetchRequest, version)
+            new FetchRequest(fetchRequest, version)
+          }
           override def toString: String = fetchRequest.toString
         }
       case fetchSnapshotRequest: FetchSnapshotRequestData =>

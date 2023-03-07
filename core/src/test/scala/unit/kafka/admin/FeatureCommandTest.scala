@@ -173,7 +173,7 @@ class FeatureCommandUnitTest {
 
   @Test
   def testMetadataVersionsToString(): Unit = {
-    assertEquals("3.3-IV0, 3.3-IV1, 3.3-IV2, 3.3-IV3, 3.4-IV0, 3.5-IV1",
+    assertEquals("3.3-IV0, 3.3-IV1, 3.3-IV2, 3.3-IV3, 3.4-IV0, 3.5-IV0, 3.5-IV1",
       FeatureCommand.metadataVersionsToString(IBP_3_3_IV0, IBP_3_5_IV1))
   }
 

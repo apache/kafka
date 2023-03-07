@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -198,6 +199,32 @@ public class FetchRequestTest {
                 expectedForgottenTopics.add(new TopicIdPartition(tidp.topicId(), new TopicPartition(expectedName, tidp.partition())));
             });
             assertEquals(expectedForgottenTopics, forgottenTopics);
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("fetchVersions")
+    public void testUpdateReplicaState(short version) {
+        FetchRequestData fetchRequestDataWithReplicaId = new FetchRequestData();
+        FetchRequestData fetchRequestDataWithReplicaState = new FetchRequestData();
+        fetchRequestDataWithReplicaId.setReplicaId(1);
+        fetchRequestDataWithReplicaState.setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(1));
+        FetchRequest.updateReplicaStateBasedOnVersion(fetchRequestDataWithReplicaId, version);
+        FetchRequest.updateReplicaStateBasedOnVersion(fetchRequestDataWithReplicaState, version);
+
+        assertEquals(1, FetchRequest.getReplicaIdWithoutVersion(fetchRequestDataWithReplicaId));
+        assertEquals(1, FetchRequest.getReplicaIdWithoutVersion(fetchRequestDataWithReplicaState));
+
+        if (version < 15) {
+            assertEquals(1, fetchRequestDataWithReplicaId.replicaId());
+            assertEquals(-1, fetchRequestDataWithReplicaId.replicaState().replicaId());
+            assertEquals(1, fetchRequestDataWithReplicaState.replicaId());
+            assertEquals(-1, fetchRequestDataWithReplicaState.replicaState().replicaId());
+        } else {
+            assertEquals(-1, fetchRequestDataWithReplicaId.replicaId());
+            assertEquals(1, fetchRequestDataWithReplicaId.replicaState().replicaId());
+            assertEquals(-1, fetchRequestDataWithReplicaState.replicaId());
+            assertEquals(1, fetchRequestDataWithReplicaState.replicaState().replicaId());
         }
     }
 

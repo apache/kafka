@@ -51,14 +51,15 @@
   //
   // Version 14 is the same as version 13 but it also receives a new error called OffsetMovedToTieredStorageException(KIP-405)
   //
-  // Version 15 adds the ReplicaState which includes new field ReplicaEpoch and the ReplicaId (KIP-903)
+  // Version 15 adds the ReplicaState which includes new field ReplicaEpoch and the ReplicaId. Also,
+  // deprecate the old ReplicaId field and set its default value to -1. (KIP-903)
   "validVersions": "0-15",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
       "taggedVersions": "12+", "tag": 0, "ignorable": true,
       "about": "The clusterId if known. This is used to validate metadata fetches prior to broker registration." },
-    { "name": "ReplicaId", "type": "int32", "versions": "0-14", "entityType": "brokerId",
+    { "name": "ReplicaId", "type": "int32", "versions": "0-14", "default": "-1", "entityType": "brokerId",
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
     { "name": "ReplicaState", "type": "ReplicaState", "taggedVersions":"15+", "tag": 1, "fields": [
       { "name": "ReplicaId", "type": "int32", "versions": "15+", "default": "-1", "entityType": "brokerId",
