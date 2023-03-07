@@ -249,7 +249,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         CompletableFuture<Void> future = commit(offsets);
         future.whenComplete((r, t) -> {
             if (t != null) {
-                callback.onComplete(offsets, new RuntimeException(t));
+                callback.onComplete(offsets, new KafkaException(t));
             } else {
                 callback.onComplete(offsets, null);
             }

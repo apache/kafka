@@ -18,8 +18,10 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -28,14 +30,18 @@ import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PrototypeAsyncConsumerTest {
@@ -44,10 +50,25 @@ public class PrototypeAsyncConsumerTest {
     private Map<String, Object> consumerProps = new HashMap<>();
 
     private final Time time = new MockTime();
+    private LogContext logContext;
+    private SubscriptionState subscriptions;
+    private EventHandler eventHandler;
+    private Metrics metrics;
+    private ClusterResourceListeners clusterResourceListeners;
+
+    private String groupId;
+    private String clientId = "client-1";
+    private ConsumerConfig config;
 
     @BeforeEach
     public void setup() {
         injectConsumerConfigs();
+        this.config = new ConsumerConfig(consumerProps);
+        this.logContext = new LogContext();
+        this.subscriptions = Mockito.mock(SubscriptionState.class);
+        this.eventHandler = Mockito.mock(DefaultEventHandler.class);
+        this.metrics = new Metrics(time);
+        this.clusterResourceListeners = new ClusterResourceListeners();
     }
 
     @AfterEach
@@ -58,8 +79,9 @@ public class PrototypeAsyncConsumerTest {
     }
 
     @Test
-    public void testBackgroundThreadRunning() {
+    public void testSuccessfulStartupShutdown() {
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        assertDoesNotThrow(() -> consumer.close());
     }
 
     @Test
@@ -75,6 +97,7 @@ public class PrototypeAsyncConsumerTest {
 
     private void injectConsumerConfigs() {
         consumerProps.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        consumerProps.put(DEFAULT_API_TIMEOUT_MS_CONFIG, "60000");
     }
 
     private PrototypeAsyncConsumer<?, ?> newConsumer(final Time time,
@@ -84,9 +107,16 @@ public class PrototypeAsyncConsumerTest {
         consumerProps.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
 
         return new PrototypeAsyncConsumer<>(
-                new ConsumerConfig(consumerProps),
-                keyDeserializer,
-                valueDeserializer);
+                time,
+                logContext,
+                config,
+                subscriptions,
+                eventHandler,
+                metrics,
+                clusterResourceListeners,
+                Optional.ofNullable(this.groupId),
+                clientId,
+                config.getInt(DEFAULT_API_TIMEOUT_MS_CONFIG));
     }
 }
 
