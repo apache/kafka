@@ -575,6 +575,8 @@ class LogManager(logDirs: Seq[File],
   def shutdown(): Unit = {
     info("Shutting down.")
 
+    deleteLogs(true)
+
     removeMetric("OfflineLogDirectoryCount")
     for (dir <- logDirs) {
       removeMetric("LogDirectoryOffline", Map("logDirectory" -> dir.getAbsolutePath))
@@ -1025,14 +1027,17 @@ class LogManager(logDirs: Seq[File],
    *  after the remaining time for the first log that is not deleted. If there are no more `logsToBeDeleted`,
    *  `deleteLogs` will be executed after `currentDefaultConfig.fileDeleteDelayMs`.
    */
-  private def deleteLogs(): Unit = {
+  private def deleteLogs(force : Boolean = false): Unit = {
     var nextDelayMs = 0L
     val fileDeleteDelayMs = currentDefaultConfig.fileDeleteDelayMs
     try {
       def nextDeleteDelayMs: Long = {
         if (!logsToBeDeleted.isEmpty) {
-          val (_, scheduleTimeMs) = logsToBeDeleted.peek()
-          scheduleTimeMs + fileDeleteDelayMs - time.milliseconds()
+          if (force) -1L
+          else {
+            val (_, scheduleTimeMs) = logsToBeDeleted.peek()
+            scheduleTimeMs + fileDeleteDelayMs - time.milliseconds()
+          }
         } else
           fileDeleteDelayMs
       }
