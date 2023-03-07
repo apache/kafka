@@ -372,13 +372,8 @@ public class VersionedKeyValueStoreIntegrationTest {
         }
 
         private void addToSeenData(final Integer key, final long timestamp, final String value) {
-            if (data.containsKey(key)) {
-                data.get(key).put(timestamp, value);
-            } else {
-                final Map<Long, String> timestampsAndValues = new HashMap<>();
-                timestampsAndValues.put(timestamp, value);
-                data.put(key, timestampsAndValues);
-            }
+            data.computeIfAbsent(key, k -> new HashMap<>());
+            data.get(key).put(timestamp, value);
         }
 
         /**
@@ -391,28 +386,28 @@ public class VersionedKeyValueStoreIntegrationTest {
                 final Map<Long, String> timestampsAndValues = keyWithTimestampsAndValues.getValue();
 
                 // track largest timestamp seen for key
-                long maxTimestamp = -1L;
+                long maxExpectedTimestamp = -1L;
                 String expectedValueForMaxTimestamp = null;
 
                 for (final Map.Entry<Long, String> timestampAndValue : timestampsAndValues.entrySet()) {
-                    final Long timestamp = timestampAndValue.getKey();
+                    final Long expectedTimestamp = timestampAndValue.getKey();
                     final String expectedValue = timestampAndValue.getValue();
 
-                    if (timestamp > maxTimestamp) {
-                        maxTimestamp = timestamp;
+                    if (expectedTimestamp > maxExpectedTimestamp) {
+                        maxExpectedTimestamp = expectedTimestamp;
                         expectedValueForMaxTimestamp = expectedValue;
                     }
 
                     // validate timestamped get on store
-                    final VersionedRecord<String> versionedRecord = store.get(key, timestamp);
-                    if (!contentsMatch(versionedRecord, expectedValue, timestamp)) {
+                    final VersionedRecord<String> versionedRecord = store.get(key, expectedTimestamp);
+                    if (!contentsMatch(versionedRecord, expectedValue, expectedTimestamp)) {
                         failedChecks++;
                     }
                 }
 
                 // validate get latest on store
                 final VersionedRecord<String> versionedRecord = store.get(key);
-                if (!contentsMatch(versionedRecord, expectedValueForMaxTimestamp, maxTimestamp)) {
+                if (!contentsMatch(versionedRecord, expectedValueForMaxTimestamp, maxExpectedTimestamp)) {
                     failedChecks++;
                 }
             }
@@ -420,8 +415,8 @@ public class VersionedKeyValueStoreIntegrationTest {
         }
 
         private static boolean contentsMatch(final VersionedRecord<String> versionedRecord,
-                                      final String expectedValue,
-                                      final long expectedTimestamp) {
+                                             final String expectedValue,
+                                             final long expectedTimestamp) {
             if (expectedValue == null) {
                 return versionedRecord == null;
             } else {
@@ -468,7 +463,7 @@ public class VersionedKeyValueStoreIntegrationTest {
                 final VersionedRecord<String> versionedRecord = store.get(record.key(), timestamp);
                 if (versionedRecord != null) {
                     numVersions++;
-                    // skip forward from current record version to search for more
+                    // search using earlier timestamp in order to find the next earlier record version
                     timestamp = versionedRecord.timestamp() - 1;
                 } else {
                     break;
