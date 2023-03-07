@@ -284,30 +284,6 @@ public class OffsetFetchRequest extends AbstractRequest {
         }
     }
 
-    public Map<String, List<TopicPartition>> groupIdsToPartitions() {
-        Map<String, List<TopicPartition>> groupIdsToPartitions = new HashMap<>();
-        for (OffsetFetchRequestGroup group : data.groups()) {
-            List<TopicPartition> tpList = null;
-            if (group.topics() != ALL_TOPIC_PARTITIONS_BATCH) {
-                tpList = new ArrayList<>();
-                for (OffsetFetchRequestTopics topic : group.topics()) {
-                    for (Integer partitionIndex : topic.partitionIndexes()) {
-                        tpList.add(new TopicPartition(topic.name(), partitionIndex));
-                    }
-                }
-            }
-            groupIdsToPartitions.put(group.groupId(), tpList);
-        }
-        return groupIdsToPartitions;
-    }
-
-    public Map<String, List<OffsetFetchRequestTopics>> groupIdsToTopics() {
-        Map<String, List<OffsetFetchRequestTopics>> groupIdsToTopics =
-            new HashMap<>(data.groups().size());
-        data.groups().forEach(g -> groupIdsToTopics.put(g.groupId(), g.topics()));
-        return groupIdsToTopics;
-    }
-
     public List<String> groupIds() {
         return data.groups()
             .stream()
@@ -315,7 +291,8 @@ public class OffsetFetchRequest extends AbstractRequest {
             .collect(Collectors.toList());
     }
 
-    private OffsetFetchRequest(OffsetFetchRequestData data, short version) {
+    // Visible for tests.
+    OffsetFetchRequest(OffsetFetchRequestData data, short version) {
         super(ApiKeys.OFFSET_FETCH, version);
         this.data = data;
     }
@@ -369,16 +346,6 @@ public class OffsetFetchRequest extends AbstractRequest {
 
     public boolean isAllPartitions() {
         return data.topics() == ALL_TOPIC_PARTITIONS;
-    }
-
-    public boolean isAllPartitionsForGroup(String groupId) {
-        OffsetFetchRequestGroup group = data
-            .groups()
-            .stream()
-            .filter(g -> g.groupId().equals(groupId))
-            .collect(Collectors.toList())
-            .get(0);
-        return group.topics() == ALL_TOPIC_PARTITIONS_BATCH;
     }
 
     @Override

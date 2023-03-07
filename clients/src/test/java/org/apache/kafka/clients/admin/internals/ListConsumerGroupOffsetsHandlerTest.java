@@ -23,6 +23,7 @@ import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -105,13 +106,13 @@ public class ListConsumerGroupOffsetsHandlerTest {
         assertEquals(Utils.mkSet(groupThree), requestGroups(request2));
 
         Map<String, ListConsumerGroupOffsetsSpec> builtRequests = new HashMap<>();
-        request1.groupIdsToPartitions().forEach((group, partitions) ->
+        groupIdsToPartitions(request1).forEach((group, partitions) ->
                 builtRequests.put(group, new ListConsumerGroupOffsetsSpec().topicPartitions(partitions)));
-        request2.groupIdsToPartitions().forEach((group, partitions) ->
+        groupIdsToPartitions(request2).forEach((group, partitions) ->
                 builtRequests.put(group, new ListConsumerGroupOffsetsSpec().topicPartitions(partitions)));
 
         assertEquals(requestMap, builtRequests);
-        Map<String, List<OffsetFetchRequestTopics>> groupIdsToTopics = request1.groupIdsToTopics();
+        Map<String, List<OffsetFetchRequestTopics>> groupIdsToTopics = groupIdsToTopics(request1);
 
         assertEquals(3, groupIdsToTopics.size());
         assertEquals(1, groupIdsToTopics.get(groupZero).size());
@@ -125,7 +126,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         assertEquals(2, groupIdsToTopics.get(groupTwo).get(1).partitionIndexes().size());
         assertEquals(3, groupIdsToTopics.get(groupTwo).get(2).partitionIndexes().size());
 
-        groupIdsToTopics = request2.groupIdsToTopics();
+        groupIdsToTopics = groupIdsToTopics(request2);
         assertEquals(1, groupIdsToTopics.size());
         assertEquals(1, groupIdsToTopics.get(groupThree).size());
         assertEquals(2, groupIdsToTopics.get(groupThree).get(0).partitionIndexes().size());
@@ -419,20 +420,43 @@ public class ListConsumerGroupOffsetsHandlerTest {
         }
     }
 
-    private Set<CoordinatorKey> coordinatorKeys(String... groups) {
+    private static Set<CoordinatorKey> coordinatorKeys(String... groups) {
         return Stream.of(groups)
                 .map(CoordinatorKey::byGroupId)
                 .collect(Collectors.toSet());
     }
 
-    private Set<String> requestGroups(OffsetFetchRequest request) {
+    private static Set<String> requestGroups(OffsetFetchRequest request) {
         return request.data().groups()
-                .stream()
-                .map(OffsetFetchRequestGroup::groupId)
-                .collect(Collectors.toSet());
+            .stream()
+            .map(OffsetFetchRequestGroup::groupId)
+            .collect(Collectors.toSet());
     }
 
-    private Map<String, Errors> errorMap(Collection<String> groups, Errors error) {
+    private static Map<String, List<TopicPartition>> groupIdsToPartitions(OffsetFetchRequest request) {
+        Map<String, List<TopicPartition>> groupIdsToPartitions = new HashMap<>();
+        for (OffsetFetchRequestGroup group : request.data().groups()) {
+            List<TopicPartition> tpList = null;
+            if (group.topics() != null) {
+                tpList = new ArrayList<>();
+                for (OffsetFetchRequestTopics topic : group.topics()) {
+                    for (Integer partitionIndex : topic.partitionIndexes()) {
+                        tpList.add(new TopicPartition(topic.name(), partitionIndex));
+                    }
+                }
+            }
+            groupIdsToPartitions.put(group.groupId(), tpList);
+        }
+        return groupIdsToPartitions;
+    }
+
+    private static Map<String, List<OffsetFetchRequestTopics>> groupIdsToTopics(OffsetFetchRequest request) {
+        Map<String, List<OffsetFetchRequestTopics>> groupIdsToTopics = new HashMap<>(request.data().groups().size());
+        request.data().groups().forEach(g -> groupIdsToTopics.put(g.groupId(), g.topics()));
+        return groupIdsToTopics;
+    }
+
+    private static Map<String, Errors> errorMap(Collection<String> groups, Errors error) {
         return groups.stream().collect(Collectors.toMap(Function.identity(), unused -> error));
     }
 }

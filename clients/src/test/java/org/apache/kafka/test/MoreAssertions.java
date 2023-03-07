@@ -32,7 +32,6 @@ import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.toMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MoreAssertions {
 
@@ -45,22 +44,22 @@ public class MoreAssertions {
         OffsetFetchRequestData expected = expectedRequest.data();
         OffsetFetchRequestData actual = actualRequest.data();
 
-        assertEquals(expected.groupId(), actual.groupId());
-        assertEquals(expected.requireStable(), actual.requireStable());
+        assertEquals(expected.groupId(), actual.groupId(), "Group id mismatch");
+        assertEquals(expected.requireStable(), actual.requireStable(), "Require stable mismatch");
 
         BiConsumer<OffsetFetchRequestTopic, OffsetFetchRequestTopic> topicEvaluator = (t1, t2) -> {
-            assertEquals(t1.name(), t2.name());
+            assertEquals(t1.name(), t2.name(), "Topic name mismatch");
             assertEquals(new HashSet<>(t1.partitionIndexes()), new HashSet<>(t2.partitionIndexes()));
         };
 
         BiConsumer<OffsetFetchRequestTopics, OffsetFetchRequestTopics> topicsEvaluator = (t1, t2) -> {
-            assertEquals(t1.name(), t2.name());
-            assertEquals(t1.topicId(), t2.topicId());
+            assertEquals(t1.name(), t2.name(), "Topic name mismatch");
+            assertEquals(t1.topicId(), t2.topicId(), "Topic id mismatch");
             assertEquals(new HashSet<>(t1.partitionIndexes()), new HashSet<>(t2.partitionIndexes()));
         };
 
         BiConsumer<OffsetFetchRequestGroup, OffsetFetchRequestGroup> groupEvaluator = (g1, g2) -> {
-            assertEquals(g1.groupId(), g2.groupId());
+            assertEquals(g1.groupId(), g2.groupId(), "Group id mismatch");
             evaluate(g1.topics(), g2.topics(), g -> new TopicNameAndId(g.name(), g.topicId()), topicsEvaluator);
         };
 
@@ -75,7 +74,8 @@ public class MoreAssertions {
             BiConsumer<T, T> evaluator) {
 
         if (expected == null || actual == null) {
-            assertTrue(expected == null && actual == null);
+            assertEquals(expected, actual);
+            return;
         }
 
         Map<K, T> lhs = expected.stream().collect(toMap(classifier, identity()));
@@ -83,7 +83,7 @@ public class MoreAssertions {
 
         lhs.forEach((k, v) -> {
             T w = rhs.get(k);
-            assertNotNull(w);
+            assertNotNull(w, "Expected value for <" + k + "> was not found");
             evaluator.accept(v, w);
         });
     }
