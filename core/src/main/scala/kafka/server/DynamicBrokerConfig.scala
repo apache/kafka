@@ -263,7 +263,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     }
     addReconfigurable(kafkaServer.kafkaYammerMetrics)
     addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer.config, kafkaServer.metrics, kafkaServer.clusterId))
-    addReconfigurable(new DynamicClientQuotaCallback(new BrokerDynamicClientQuotaCallbackServer(kafkaServer)))
+    addReconfigurable(new DynamicClientQuotaCallback(kafkaServer.quotaManagers, kafkaServer.config))
 
     addBrokerReconfigurable(new BrokerDynamicThreadPool(kafkaServer))
     addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
@@ -286,7 +286,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       addReconfigurable(controller.kafkaYammerMetrics)
       addReconfigurable(new DynamicMetricsReporters(kafkaConfig.nodeId, controller.config, controller.metrics, controller.clusterId))
     }
-    addReconfigurable(new DynamicClientQuotaCallback(new ControllerDynamicClientQuotaCallbackServer(controller)))
+    addReconfigurable(new DynamicClientQuotaCallback(controller.quotaManagers, controller.config))
     addBrokerReconfigurable(new ControllerDynamicThreadPool(controller))
     // TODO: addBrokerReconfigurable(new DynamicListenerConfig(controller))
     addBrokerReconfigurable(controller.socketServer)
@@ -954,28 +954,16 @@ object DynamicListenerConfig {
   )
 }
 
-trait DynamicClientQuotaCallbackServer {
-  def quotaManagers: QuotaFactory.QuotaManagers
-  def config: KafkaConfig
-}
-
-class BrokerDynamicClientQuotaCallbackServer(broker: KafkaBroker) extends DynamicClientQuotaCallbackServer {
-  override def quotaManagers: QuotaFactory.QuotaManagers = broker.quotaManagers
-  override def config: KafkaConfig = broker.config
-}
-
-class ControllerDynamicClientQuotaCallbackServer(controller: ControllerServer) extends DynamicClientQuotaCallbackServer {
-  override def quotaManagers: QuotaFactory.QuotaManagers = controller.quotaManagers
-  override def config: KafkaConfig = controller.config
-}
-
-class DynamicClientQuotaCallback(server: DynamicClientQuotaCallbackServer) extends Reconfigurable {
+class DynamicClientQuotaCallback(
+  quotaManagers: QuotaFactory.QuotaManagers,
+  serverConfig: KafkaConfig
+) extends Reconfigurable {
 
   override def configure(configs: util.Map[String, _]): Unit = {}
 
   override def reconfigurableConfigs(): util.Set[String] = {
     val configs = new util.HashSet[String]()
-    server.quotaManagers.clientQuotaCallback.foreach {
+    quotaManagers.clientQuotaCallback.foreach {
       case callback: Reconfigurable => configs.addAll(callback.reconfigurableConfigs)
       case _ =>
     }
@@ -983,17 +971,16 @@ class DynamicClientQuotaCallback(server: DynamicClientQuotaCallbackServer) exten
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
-    server.quotaManagers.clientQuotaCallback.foreach {
+    quotaManagers.clientQuotaCallback.foreach {
       case callback: Reconfigurable => callback.validateReconfiguration(configs)
       case _ =>
     }
   }
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
-    val config = server.config
-    server.quotaManagers.clientQuotaCallback.foreach {
+    quotaManagers.clientQuotaCallback.foreach {
       case callback: Reconfigurable =>
-        config.dynamicConfig.maybeReconfigure(callback, config.dynamicConfig.currentKafkaConfig, configs)
+        serverConfig.dynamicConfig.maybeReconfigure(callback, serverConfig.dynamicConfig.currentKafkaConfig, configs)
         true
       case _ => false
     }

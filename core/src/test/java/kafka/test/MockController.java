@@ -150,7 +150,7 @@ public class MockController implements Controller {
                     setName(topic.name()).
                     setErrorCode(Errors.NONE.code());
                 try {
-                    context.record(mockTopic.numPartitions);
+                    context.applyPartitionChangeQuota(mockTopic.numPartitions);
                     creatableTopicResult.setTopicId(topicUuid);
                     topicNameToId.put(topic.name(), topicUuid);
                     topics.put(topicUuid, mockTopic);
@@ -197,7 +197,7 @@ public class MockController implements Controller {
         private final int numPartitions;
 
         MockTopic(String name, Uuid id) {
-            this(name, id, 10); // hard-code the number of partitions if left unspecified
+            this(name, id, 1);
         }
 
         MockTopic(String name, Uuid id, int numPartitions) {
@@ -274,7 +274,7 @@ public class MockController implements Controller {
                 results.put(topicId, new ApiError(Errors.UNKNOWN_TOPIC_ID));
             } else {
                 try {
-                    context.record(topic.numPartitions);
+                    context.applyPartitionChangeQuota(topic.numPartitions);
                     topics.remove(topicId);
                     topicNameToId.remove(topic.name);
                     results.put(topicId, ApiError.NONE);
@@ -450,7 +450,7 @@ public class MockController implements Controller {
         for (CreatePartitionsTopic topic : topicList) {
             if (topicNameToId.containsKey(topic.name())) {
                 try {
-                    context.record(topic.count());
+                    context.applyPartitionChangeQuota(topic.count());
                     results.add(new CreatePartitionsTopicResult().setName(topic.name()).
                         setErrorCode(Errors.NONE.code()).
                         setErrorMessage(null));

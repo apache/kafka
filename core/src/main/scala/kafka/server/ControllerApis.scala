@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.{lang, util}
-import java.util.{Collections, Optional, OptionalLong}
+import java.util.{Collections, OptionalLong}
 import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
@@ -364,9 +364,9 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   private def controllerMutationQuotaRecorderFor(controllerMutationQuota: ControllerMutationQuota) = {
-    Optional.of(new Consumer[lang.Double]() {
-      override def accept(permits: lang.Double): Unit = controllerMutationQuota.record(permits)
-    })
+    new Consumer[lang.Integer]() {
+      override def accept(permits: lang.Integer): Unit = controllerMutationQuota.record(permits.doubleValue())
+    }
   }
 
   def createTopics(
