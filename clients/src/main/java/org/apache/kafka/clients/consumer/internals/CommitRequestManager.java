@@ -219,7 +219,7 @@ public class CommitRequestManager implements RequestManager {
                             .setMemberId(generation.memberId)
                             .setGroupInstanceId(groupInstanceId)
                             .setTopics(new ArrayList<>(requestTopicDataMap.values())),
-                    false /* Support of topic ids will be added with KAFKA-14777 */);
+                    false);
             return new NetworkClientDelegate.UnsentRequest(
                     builder,
                     coordinatorRequestManager.coordinator(),

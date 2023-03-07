@@ -31,7 +31,6 @@ import java.util.Optional;
  * not to characterize the set of topics which are known by a client. Use the
  * {@link org.apache.kafka.clients.MetadataCache} for that purpose.
  */
-//@Immutable, @ThreadSafe
 public class TopicResolver {
     private final Map<String, Uuid> topicIds;
     private final Map<Uuid, String> topicNames;
@@ -47,7 +46,7 @@ public class TopicResolver {
         for (Map.Entry<String, Uuid> e: topicIds.entrySet()) {
             String conflicting = topicNames.putIfAbsent(e.getValue(), e.getKey());
             if (conflicting != null) {
-                throw new InvalidTopicException(
+                throw new IllegalStateException(
                         "Topic " + e.getKey() + " shares the same ID " + e.getValue() + " as topic " + conflicting);
             }
         }

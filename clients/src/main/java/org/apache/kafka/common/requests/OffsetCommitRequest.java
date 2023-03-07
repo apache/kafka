@@ -51,9 +51,11 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         public Builder(OffsetCommitRequestData data, boolean canUseTopicIds) {
             // Version 8 is the maximum version that can be used without topic IDs.
-            super(ApiKeys.OFFSET_COMMIT,
+            super(
+                ApiKeys.OFFSET_COMMIT,
                 ApiKeys.OFFSET_COMMIT.oldestVersion(),
-                canUseTopicIds ? ApiKeys.OFFSET_COMMIT.latestVersion() : (short) 8);
+                canUseTopicIds ? ApiKeys.OFFSET_COMMIT.latestVersion() : (short) 8
+            );
             this.data = data;
         }
 

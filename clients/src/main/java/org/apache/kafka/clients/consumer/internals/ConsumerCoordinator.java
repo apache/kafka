@@ -1278,7 +1278,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return RequestFuture.coordinatorNotAvailable();
 
         TopicResolver topicResolver = metadata.topicResolver();
-        int topicPartitionsWithoutTopicId = 0;
+        boolean canUseTopicIds = true;
 
         // create the offset commit request
         Map<String, OffsetCommitRequestData.OffsetCommitRequestTopic> requestTopicDataMap = new HashMap<>();
@@ -1290,8 +1290,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
 
             Uuid topicId = topicResolver.getTopicId(topicPartition.topic()).orElse(ZERO_UUID);
-            if (topicId.equals(ZERO_UUID)) {
-                ++topicPartitionsWithoutTopicId;
+            if (ZERO_UUID.equals(topicId)) {
+                canUseTopicIds = false;
             }
 
             OffsetCommitRequestData.OffsetCommitRequestTopic topic = requestTopicDataMap
@@ -1337,8 +1337,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             groupInstanceId = null;
         }
 
-        boolean canUseTopicIds = topicPartitionsWithoutTopicId == 0;
-
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                 new OffsetCommitRequestData()
                         .setGroupId(this.rebalanceConfig.groupId)
@@ -1360,7 +1358,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         private final TopicResolver topicResolver;
 
         private OffsetCommitResponseHandler(
-                Map<TopicPartition, OffsetAndMetadata> offsets, Generation generation, TopicResolver topicResolver) {
+                Map<TopicPartition, OffsetAndMetadata> offsets,
+                Generation generation,
+                TopicResolver topicResolver
+        ) {
             super(generation);
             this.offsets = offsets;
             this.topicResolver = topicResolver;
@@ -1378,9 +1379,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     topicName = topicResolver.getTopicName(topic.topicId()).orElse(null);
 
                     if (topicName == null) {
-                        // OffsetCommit responses version 9 must use topic IDs. The topic's ID must have been
-                        // known by the client which sent the OffsetCommitRequest but was removed from the metadata
-                        // before the response was received.
+                        // Could only happen if the broker replied with an ID which was not in the request and
+                        // unknown by this client. This would be a bug.
                         log.warn("Ignoring invalid topic ID found in OffsetCommit response: " + topic.topicId());
                         continue;
                     }
