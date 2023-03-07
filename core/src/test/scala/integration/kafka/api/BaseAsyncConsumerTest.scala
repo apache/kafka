@@ -40,7 +40,6 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     val producer = createProducer()
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
-    val cb = new CountConsumerCommitCallback
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
     consumer.commitSync();
     // TODO: commitSync will be tested after implemented consumer.committed()
