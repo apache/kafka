@@ -95,12 +95,6 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies;
     private final List<String> pluginPaths;
 
-    private static final String MANIFEST_PREFIX = "META-INF/services/";
-    private static final Class<?>[] SERVICE_LOADER_PLUGINS = new Class<?>[] {ConnectRestExtension.class, ConfigProvider.class};
-    private static final Set<String> PLUGIN_MANIFEST_FILES =
-        Arrays.stream(SERVICE_LOADER_PLUGINS).map(serviceLoaderPlugin -> MANIFEST_PREFIX + serviceLoaderPlugin.getName())
-            .collect(Collectors.toSet());
-
     // Although this classloader does not load classes directly but rather delegates loading to a
     // PluginClassLoader or its parent through its base class, because of the use of inheritance in
     // in the latter case, this classloader needs to also be declared as parallel capable to use
@@ -431,13 +425,27 @@ public class DelegatingClassLoader extends URLClassLoader {
                     log.error("Failed to discover {}{}", klass.getSimpleName(), reflectiveErrorDescription(t.getCause()), t);
                     continue;
                 }
-                result.add(pluginDesc((Class<? extends T>) pluginImpl.getClass(),
-                    versionFor(pluginImpl), loader));
+                Class<? extends T> pluginKlass = (Class<? extends T>) pluginImpl.getClass();
+                if (!isParentClassloader(pluginKlass.getClassLoader(), loader)) {
+                    log.debug("Exclude {} that is from classloader {}", pluginKlass.getSimpleName(), pluginKlass.getClassLoader());
+                    continue;
+                }
+                result.add(pluginDesc(pluginKlass, versionFor(pluginImpl), loader));
             }
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }
         return result;
+    }
+
+    private static boolean isParentClassloader(ClassLoader loader, ClassLoader parent) {
+        while (loader != null) {
+            if (loader == parent) {
+                return true;
+            }
+            loader = loader.getParent();
+        }
+        return false;
     }
 
     private static <T>  String versionFor(T pluginImpl) {
@@ -535,32 +543,5 @@ public class DelegatingClassLoader extends URLClassLoader {
                 }
             }
         }
-    }
-
-    @Override
-    public URL getResource(String name) {
-        if (serviceLoaderManifestForPlugin(name)) {
-            // Default implementation of getResource searches the parent class loader and if not available/found, its own URL paths.
-            // This will enable thePluginClassLoader to limit its resource search only to its own URL paths.
-            return null;
-        } else {
-            return super.getResource(name);
-        }
-    }
-
-    @Override
-    public Enumeration<URL> getResources(String name) throws IOException {
-        if (serviceLoaderManifestForPlugin(name)) {
-            // Default implementation of getResources searches the parent class loader and also its own URL paths. This will enable the
-            // PluginClassLoader to limit its resource search to only its own URL paths.
-            return Collections.emptyEnumeration();
-        } else {
-            return super.getResources(name);
-        }
-    }
-
-    //Visible for testing
-    static boolean serviceLoaderManifestForPlugin(String name) {
-        return PLUGIN_MANIFEST_FILES.contains(name);
     }
 }
