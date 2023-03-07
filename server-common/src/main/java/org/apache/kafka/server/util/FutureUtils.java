@@ -90,4 +90,16 @@ public class FutureUtils {
             }
         });
     }
+
+    /**
+     * Returns a new CompletableFuture that is already completed exceptionally with the given exception.
+     *
+     * @param ex    The exception.
+     * @return      The exceptionally completed CompletableFuture.
+     */
+    public static <T> CompletableFuture<T> failedFuture(Throwable ex) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        future.completeExceptionally(ex);
+        return future;
+    }
 }
