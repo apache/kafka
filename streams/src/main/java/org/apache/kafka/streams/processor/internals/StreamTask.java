@@ -105,6 +105,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
     private boolean hasPendingTxCommit = false;
+
+    private boolean suspendedFromRestoring = false;
     private Optional<Long> timeCurrentIdlingStarted;
 
     @SuppressWarnings("rawtypes")
@@ -280,6 +282,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case RESTORING:
+                suspendedFromRestoring = true;
                 transitToSuspend();
                 break;
 
@@ -354,6 +357,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 // Deleting checkpoint file before transition to RESTORING state (KAFKA-10362)
                 try {
+                    resetSuspendedFromRestoring();
                     stateMgr.deleteCheckPointFileIfEOSEnabled();
                     log.debug("Deleted check point file upon resuming with EOS enabled");
                 } catch (final IOException ioe) {
@@ -372,6 +376,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new IllegalStateException("Unknown state " + state() + " while resuming active task " + id);
         }
         timeCurrentIdlingStarted = Optional.empty();
+    }
+
+    private void resetSuspendedFromRestoring() {
+        suspendedFromRestoring = false;
     }
 
     /**
@@ -551,6 +559,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         clearCommitStatuses();
         switch (state()) {
             case SUSPENDED:
+                resetSuspendedFromRestoring();
                 stateMgr.recycle();
                 partitionGroup.close();
                 recordCollector.closeClean();
@@ -625,13 +634,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 TaskManager.executeAndMaybeSwallow(
                     clean,
                     () -> StateManagerUtil.closeStateManager(
-                        log,
-                        logPrefix,
-                        clean,
-                        eosEnabled,
-                        stateMgr,
-                        stateDirectory,
-                        TaskType.ACTIVE
+                            log,
+                            logPrefix,
+                            shouldWipeStateStore(clean, eosEnabled, suspendedFromRestoring),
+                            stateMgr,
+                            stateDirectory,
+                            TaskType.ACTIVE
                     ),
                     "state manager close",
                     log);
@@ -662,6 +670,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         closeTaskSensor.record();
 
         transitionTo(State.CLOSED);
+    }
+
+    @Override
+    boolean shouldWipeStateStore(final boolean closeClean, final boolean eosEnabled, final boolean suspendedFromRestoring) {
+        return !suspendedFromRestoring && !closeClean && eosEnabled;
     }
 
     /**

@@ -41,6 +41,7 @@ import java.util.Set;
  */
 public class StandbyTask extends AbstractTask implements Task {
     private final boolean eosEnabled;
+    private final boolean suspendedFromRestoring = false; // a standby task is never in RESTORING
     private final Sensor closeTaskSensor;
     private final StreamsMetricsImpl streamsMetrics;
 
@@ -245,13 +246,12 @@ public class StandbyTask extends AbstractTask implements Task {
                 TaskManager.executeAndMaybeSwallow(
                     clean,
                     () -> StateManagerUtil.closeStateManager(
-                        log,
-                        logPrefix,
-                        clean,
-                        eosEnabled,
-                        stateMgr,
-                        stateDirectory,
-                        TaskType.STANDBY
+                            log,
+                            logPrefix,
+                            shouldWipeStateStore(clean, eosEnabled, suspendedFromRestoring),
+                            stateMgr,
+                            stateDirectory,
+                            TaskType.STANDBY
                     ),
                     "state manager close",
                     log
@@ -274,6 +274,11 @@ public class StandbyTask extends AbstractTask implements Task {
 
         closeTaskSensor.record();
         transitionTo(State.CLOSED);
+    }
+
+    @Override
+    boolean shouldWipeStateStore(final boolean closeClean, final boolean eosEnabled, final boolean suspendedFromRestoring) {
+        return closeClean;
     }
 
     @Override

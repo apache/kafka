@@ -208,4 +208,14 @@ public abstract class AbstractTask implements Task {
             deadlineMs = NO_DEADLINE;
         }
     }
+
+    /**
+     * KAFKA-10532 Whether to wipe out state store is determined by previous state of a task, and properties of the task.
+     * Implement the method in children classes.
+     * @param closeClean part of a close clean or dirty process.
+     * @param eosEnabled task property.
+     * @param suspendedFromRestoring task state: do not need to wipe out the stores when closing a SUSPENDED task.
+     * @return flag to wipe state store upon closing.
+     */
+    abstract boolean shouldWipeStateStore(boolean closeClean, boolean eosEnabled, boolean suspendedFromRestoring);
 }

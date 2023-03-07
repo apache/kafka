@@ -111,13 +111,10 @@ final class StateManagerUtil {
      */
     static void closeStateManager(final Logger log,
                                   final String logPrefix,
-                                  final boolean closeClean,
-                                  final boolean eosEnabled,
+                                  final boolean wipeStateStore,
                                   final ProcessorStateManager stateMgr,
                                   final StateDirectory stateDirectory,
                                   final TaskType taskType) {
-        // if EOS is enabled, wipe out the whole state store for unclean close since it is now invalid
-        final boolean wipeStateStore = !closeClean && eosEnabled;
 
         final TaskId id = stateMgr.taskId();
         log.trace("Closing state manager for {} task {}", taskType, id);

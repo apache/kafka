@@ -4935,5 +4935,10 @@ public class TaskManagerTest {
                 throw new IllegalStateException("Can't process an inactive or non-running task.");
             }
         }
+
+        @Override
+        boolean shouldWipeStateStore(final boolean closeClean, final boolean eosEnabled, final boolean suspendedFromRestoring) {
+            return false;
+        }
     }
 }

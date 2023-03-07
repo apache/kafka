@@ -160,7 +160,7 @@ public class StateManagerUtilTest {
         ctrl.replay();
 
         StateManagerUtil.closeStateManager(logger,
-            "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE);
+            "logPrefix:", false, stateManager, stateDirectory, TaskType.ACTIVE);
 
         ctrl.verify();
     }
@@ -182,7 +182,7 @@ public class StateManagerUtilTest {
 
         final ProcessorStateException thrown = assertThrows(
             ProcessorStateException.class, () -> StateManagerUtil.closeStateManager(logger,
-                "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE));
+                "logPrefix:", false, stateManager, stateDirectory, TaskType.ACTIVE));
 
         // Thrown stateMgr exception will not be wrapped.
         assertEquals("state manager failed to close", thrown.getMessage());
@@ -207,7 +207,7 @@ public class StateManagerUtilTest {
         assertThrows(
             ProcessorStateException.class,
             () -> StateManagerUtil.closeStateManager(
-                logger, "logPrefix:", false, false, stateManager, stateDirectory, TaskType.ACTIVE));
+                logger, "logPrefix:", false, stateManager, stateDirectory, TaskType.ACTIVE));
 
         ctrl.verify();
     }
@@ -230,7 +230,7 @@ public class StateManagerUtilTest {
         ctrl.replay();
 
         StateManagerUtil.closeStateManager(logger,
-            "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
+            "logPrefix:", true, stateManager, stateDirectory, TaskType.ACTIVE);
 
         ctrl.verify();
     }
@@ -259,7 +259,7 @@ public class StateManagerUtilTest {
         replayAll();
 
         assertThrows(ProcessorStateException.class, () ->
-            StateManagerUtil.closeStateManager(logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE));
+            StateManagerUtil.closeStateManager(logger, "logPrefix:", true, stateManager, stateDirectory, TaskType.ACTIVE));
 
         ctrl.verify();
     }
@@ -290,7 +290,7 @@ public class StateManagerUtilTest {
 
         final ProcessorStateException thrown = assertThrows(
             ProcessorStateException.class, () -> StateManagerUtil.closeStateManager(logger,
-                "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE));
+                "logPrefix:", true, stateManager, stateDirectory, TaskType.ACTIVE));
 
         assertEquals(IOException.class, thrown.getCause().getClass());
 
@@ -312,7 +312,7 @@ public class StateManagerUtilTest {
         replayAll();
 
         StateManagerUtil.closeStateManager(
-            logger, "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE);
+            logger, "logPrefix:", true, stateManager, stateDirectory, TaskType.ACTIVE);
     }
 
     @Test
@@ -332,6 +332,6 @@ public class StateManagerUtilTest {
         replayAll();
 
         StateManagerUtil.closeStateManager(
-            logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
+            logger, "logPrefix:", false, stateManager, stateDirectory, TaskType.ACTIVE);
     }
 }
