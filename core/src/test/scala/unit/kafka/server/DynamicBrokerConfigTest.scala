@@ -487,7 +487,7 @@ class DynamicBrokerConfigTest {
     when(quotaManagers.clientQuotaCallback).thenReturn(None)
     when(kafkaServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
-    when(socketServer.reconfigurableConfigs).thenReturn(Set())
+    when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
     when(kafkaServer.socketServer).thenReturn(socketServer)
     val logManager: LogManager = mock(classOf[LogManager])
     val producerStateManagerConfig: ProducerStateManagerConfig = mock(classOf[ProducerStateManagerConfig])
@@ -534,7 +534,7 @@ class DynamicBrokerConfigTest {
     when(quotaManagers.clientQuotaCallback).thenReturn(None)
     when(controllerServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
-    when(socketServer.reconfigurableConfigs).thenReturn(Set())
+    when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
     when(controllerServer.socketServer).thenReturn(socketServer)
 
     val authorizer = new TestAuthorizer
@@ -580,7 +580,7 @@ class DynamicBrokerConfigTest {
     when(quotaManagers.clientQuotaCallback).thenReturn(None)
     when(controllerServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
-    when(socketServer.reconfigurableConfigs).thenReturn(Set())
+    when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
     when(controllerServer.socketServer).thenReturn(socketServer)
 
     val authorizer = new TestAuthorizer
