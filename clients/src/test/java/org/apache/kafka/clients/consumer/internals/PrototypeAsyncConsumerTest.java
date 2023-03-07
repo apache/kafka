@@ -43,6 +43,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 
 public class PrototypeAsyncConsumerTest {
 
@@ -85,6 +87,13 @@ public class PrototypeAsyncConsumerTest {
     }
 
     @Test
+    public void testCommitAsync() {
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        consumer.commitAsync();
+        verify(eventHandler).add(any());
+    }
+
+    @Test
     public void testUnimplementedException() {
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
         assertThrows(KafkaException.class, consumer::assignment, "not implemented exception");
@@ -98,6 +107,8 @@ public class PrototypeAsyncConsumerTest {
     private void injectConsumerConfigs() {
         consumerProps.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         consumerProps.put(DEFAULT_API_TIMEOUT_MS_CONFIG, "60000");
+        consumerProps.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        consumerProps.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     }
 
     private PrototypeAsyncConsumer<?, ?> newConsumer(final Time time,

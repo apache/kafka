@@ -81,6 +81,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private static final String CLIENT_ID_METRIC_TAG = "client-id";
     private static final String JMX_PREFIX = "kafka.consumer";
+    static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
     private final LogContext logContext;
     private final EventHandler eventHandler;
@@ -406,7 +407,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void close() {
-        throw new KafkaException("method not implemented");
+        close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
     }
 
     @Override
