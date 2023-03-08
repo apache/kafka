@@ -2033,28 +2033,29 @@ public class RequestResponseTest {
     }
 
     private OffsetCommitRequest createOffsetCommitRequest(short version) {
-        return new OffsetCommitRequest.Builder(new OffsetCommitRequestData()
-                .setGroupId("group1")
-                .setMemberId("consumer1")
-                .setGroupInstanceId(null)
-                .setGenerationId(100)
-                .setTopics(singletonList(
-                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                                .setName("test")
-                                .setPartitions(asList(
-                                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                                .setPartitionIndex(0)
-                                                .setCommittedOffset(100)
-                                                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                                                .setCommittedMetadata(""),
-                                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                                .setPartitionIndex(1)
-                                                .setCommittedOffset(200)
-                                                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                                                .setCommittedMetadata(null)
-                                ))
-                ))
-        ).build(version);
+        OffsetCommitRequestData data = new OffsetCommitRequestData()
+            .setGroupId("group1")
+            .setMemberId("consumer1")
+            .setGroupInstanceId(null)
+            .setGenerationId(100)
+            .setTopics(singletonList(
+                new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                    .setName("test")
+                    .setPartitions(asList(
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(0)
+                            .setCommittedOffset(100)
+                            .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                            .setCommittedMetadata(""),
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(1)
+                            .setCommittedOffset(200)
+                            .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                            .setCommittedMetadata(null)
+                )))
+            );
+
+        return new OffsetCommitRequest.Builder(data, true).build(version);
     }
 
     private OffsetCommitResponse createOffsetCommitResponse() {

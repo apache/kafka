@@ -45,10 +45,6 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         private final OffsetCommitRequestData data;
 
-        public Builder(OffsetCommitRequestData data) {
-            this(data, true);
-        }
-
         public Builder(OffsetCommitRequestData data, boolean canUseTopicIds) {
             // Version 8 is the maximum version that can be used without topic IDs.
             super(

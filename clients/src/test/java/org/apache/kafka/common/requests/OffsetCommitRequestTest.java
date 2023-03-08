@@ -116,7 +116,7 @@ public class OffsetCommitRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testConstructor(short version) {
-        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data).build(version);
+        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data, true).build(version);
         OffsetCommitResponse response = request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());
 
         assertEquals(data, request.data());
@@ -152,7 +152,8 @@ public class OffsetCommitRequestTest {
             new OffsetCommitRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
-                .setGroupInstanceId(groupInstanceId)
+                .setGroupInstanceId(groupInstanceId),
+            true
         );
 
         if (version >= 7) {
@@ -166,7 +167,7 @@ public class OffsetCommitRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testResolvesTopicNameIfRequiredWhenListingOffsets(short version) {
-        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data).build(version);
+        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data, true).build(version);
         List<OffsetCommitRequestTopic> topics = request.data().topics();
 
         assertEquals(2, topics.stream().flatMap(t -> t.partitions().stream()).count());
@@ -176,7 +177,7 @@ public class OffsetCommitRequestTest {
 
     @Test
     public void testUnresolvableTopicIdWhenListingOffset() {
-        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data.duplicate()).build((short) 9);
+        OffsetCommitRequest request = new OffsetCommitRequest.Builder(data.duplicate(), true).build((short) 9);
         assertThrows(UnknownTopicIdException.class,
             () -> OffsetCommitRequestTest.offsets(request, TopicResolver.emptyResolver()));
     }
