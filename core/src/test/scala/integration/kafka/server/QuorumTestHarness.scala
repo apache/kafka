@@ -32,6 +32,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
+import org.apache.kafka.common.metadata.{NoOpRecord, FeatureLevelRecord}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
@@ -40,6 +41,7 @@ import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
 import scala.compat.java8.OptionConverters._
@@ -273,13 +275,16 @@ abstract class QuorumTestHarness extends Logging {
     CoreUtils.swallow(kRaftQuorumImplementation.controllerServer.shutdown(), kRaftQuorumImplementation.log)
   }
 
+  def optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]] = None
+
   private def formatDirectories(directories: immutable.Seq[String],
                                 metaProperties: MetaProperties): Unit = {
     val stream = new ByteArrayOutputStream()
     var out: PrintStream = null
     try {
       out = new PrintStream(stream)
-      if (StorageTool.formatCommand(out, directories, metaProperties, metadataVersion, None, ignoreFormatted = false) != 0) {
+      if (StorageTool.formatCommand(out, directories, metaProperties, metadataVersion,
+                                    optionalMetadataRecords, ignoreFormatted = false) != 0) {
         throw new RuntimeException(stream.toString())
       }
       debug(s"Formatted storage directory(ies) ${directories}")
@@ -304,6 +309,18 @@ abstract class QuorumTestHarness extends Logging {
     val metadataDir = TestUtils.tempDir()
     val metaProperties = new MetaProperties(Uuid.randomUuid().toString, nodeId)
     formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties)
+
+    val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
+    metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(metadataVersion.featureLevel()), 0.toShort));
+
+    optionalMetadataRecords.foreach { metadataArguments =>
+      for (record <- metadataArguments) metadataRecords.add(record)
+    }
+    metadataRecords.add(new ApiMessageAndVersion(new NoOpRecord(), 0.toShort));
+
+    val bootstrapMetadata = new BootstrapMetadata(metadataRecords, metadataVersion, "test harness")
     props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
@@ -324,7 +341,8 @@ abstract class QuorumTestHarness extends Logging {
       controllerServer = new ControllerServer(
         sharedServer,
         KafkaRaftServer.configSchema,
-        BootstrapMetadata.fromVersion(metadataVersion, "test harness")
+        bootstrapMetadata
+//        BootstrapMetadata.fromVersion(metadataVersion, "test harness")
       )
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {
         if (e != null) {

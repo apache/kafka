@@ -27,23 +27,38 @@ import org.apache.kafka.test.TestSslUtils
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
+import java.util.Base64
+import scala.collection.mutable.ArrayBuffer
+import org.apache.kafka.server.common.{ApiMessageAndVersion}
+import org.apache.kafka.common.metadata.{UserScramCredentialRecord}
+
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
   override protected def kafkaServerSaslMechanisms = ScramMechanism.mechanismNames.asScala.toList
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramUser)
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramAdmin)
   private val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
-  override val unimplementedquorum = "kraft"
 
-  override def configureSecurityBeforeServersStart(): Unit = {
-    super.configureSecurityBeforeServersStart()
-    zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
-    // Create broker credentials before starting brokers
-    createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
+  override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
+    super.configureSecurityBeforeServersStart(testInfo)
+
+    if (!TestInfoUtils.isKRaft(testInfo)) {
+      zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
+      // Create broker credentials before starting brokers
+      createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
+    }
     TestSslUtils.convertToPemWithoutFiles(producerConfig)
     TestSslUtils.convertToPemWithoutFiles(consumerConfig)
     TestSslUtils.convertToPemWithoutFiles(adminClientConfig)
   }
+
+  def userScramCredentialRecord : ApiMessageAndVersion = new ApiMessageAndVersion(new UserScramCredentialRecord().
+                setName("scram-admin").
+                setMechanism(1).
+                setSalt(Base64.getDecoder.decode("dmc5NHY4ODdsOXZsMzYxOWF4cTAyejJuZw==")).
+                setSaltedPassword(Base64.getDecoder.decode("dtdfdTklxeGqmiFgt/srRwD0k6ztNB2gmChgUolP4f4=")).
+                setIterations(8192), 0.toShort)
+  override def optionalMetadataRecords = Some(ArrayBuffer().append(userScramCredentialRecord))
 
   override def configureListeners(props: collection.Seq[Properties]): Unit = {
     props.foreach(TestSslUtils.convertToPemWithoutFiles)
@@ -54,11 +69,9 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    if (!TestInfoUtils.isKRaft(testInfo)) {
       super.setUp(testInfo)
       // Create client credentials after starting brokers so that dynamic credential creation is also tested
       createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
       createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
-    }
   }
 }
