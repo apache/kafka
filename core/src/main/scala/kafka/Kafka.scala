@@ -22,10 +22,9 @@ import java.util.Properties
 import joptsimple.OptionParser
 import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
 import kafka.utils.Implicits._
-import kafka.utils.{CommandLineUtils, Exit, Logging}
+import kafka.utils.{Exit, Logging}
 import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
-
-import scala.jdk.CollectionConverters._
+import org.apache.kafka.server.util.CommandLineUtils
 
 object Kafka extends Logging {
 
@@ -41,12 +40,12 @@ object Kafka extends Logging {
     optionParser.accepts("version", "Print version information and exit.")
 
     if (args.isEmpty || args.contains("--help")) {
-      CommandLineUtils.printUsageAndDie(optionParser,
+      CommandLineUtils.printUsageAndExit(optionParser,
         "USAGE: java [options] %s server.properties [--override property=value]*".format(this.getClass.getCanonicalName.split('$').head))
     }
 
     if (args.contains("--version")) {
-      CommandLineUtils.printVersionAndDie()
+      CommandLineUtils.printVersionAndExit()
     }
 
     val props = Utils.loadProps(args(0))
@@ -55,10 +54,10 @@ object Kafka extends Logging {
       val options = optionParser.parse(args.slice(1, args.length): _*)
 
       if (options.nonOptionArguments().size() > 0) {
-        CommandLineUtils.printUsageAndDie(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
+        CommandLineUtils.printUsageAndExit(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
       }
 
-      props ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt).asScala)
+      props ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt))
     }
     props
   }

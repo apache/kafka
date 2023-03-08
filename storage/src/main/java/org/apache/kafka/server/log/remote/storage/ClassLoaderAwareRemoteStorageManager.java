@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
-import org.apache.kafka.server.log.internals.StorageAction;
+import org.apache.kafka.storage.internals.log.StorageAction;
 
 import java.io.IOException;
 import java.io.InputStream;

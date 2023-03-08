@@ -85,10 +85,12 @@ import java.util.stream.Collectors;
 /**
  * Abstract Herder implementation which handles connector/task lifecycle tracking. Extensions
  * must invoke the lifecycle hooks appropriately.
- *
+ * <p>
  * This class takes the following approach for sending status updates to the backing store:
  *
- * 1) When the connector or task is starting, we overwrite the previous state blindly. This ensures that
+ * <ol>
+ * <li>
+ *    When the connector or task is starting, we overwrite the previous state blindly. This ensures that
  *    every rebalance will reset the state of tasks to the proper state. The intuition is that there should
  *    be less chance of write conflicts when the worker has just received its assignment and is starting tasks.
  *    In particular, this prevents us from depending on the generation absolutely. If the group disappears
@@ -96,12 +98,14 @@ import java.util.stream.Collectors;
  *    generation with the updated one. The danger of this approach is that slow starting tasks may cause the
  *    status to be overwritten after a rebalance has completed.
  *
- * 2) If the connector or task fails or is shutdown, we use {@link StatusBackingStore#putSafe(ConnectorStatus)},
+ * <li>
+ *    If the connector or task fails or is shutdown, we use {@link StatusBackingStore#putSafe(ConnectorStatus)},
  *    which provides a little more protection if the worker is no longer in the group (in which case the
  *    task may have already been started on another worker). Obviously this is still racy. If the task has just
  *    started on another worker, we may not have the updated status cached yet. In this case, we'll overwrite
  *    the value which will cause the state to be inconsistent (most likely until the next rebalance). Until
  *    we have proper producer groups with fenced groups, there is not much else we can do.
+ * </ol>
  */
 public abstract class AbstractHerder implements Herder, TaskStatus.Listener, ConnectorStatus.Listener {
 
@@ -781,6 +785,29 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return result;
     }
 
+    public boolean taskConfigsChanged(ClusterConfigState configState, String connName, List<Map<String, String>> taskProps) {
+        int currentNumTasks = configState.taskCount(connName);
+        boolean result = false;
+        if (taskProps.size() != currentNumTasks) {
+            log.debug("Connector {} task count changed from {} to {}", connName, currentNumTasks, taskProps.size());
+            result = true;
+        } else {
+            for (int index = 0; index < currentNumTasks; index++) {
+                ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
+                if (!taskProps.get(index).equals(configState.taskConfig(taskId))) {
+                    log.debug("Connector {} has change in configuration for task {}-{}", connName, connName, index);
+                    result = true;
+                }
+            }
+        }
+        if (result) {
+            log.debug("Reconfiguring connector {}: writing new updated configurations for tasks", connName);
+        } else {
+            log.debug("Skipping reconfiguration of connector {} as generated configs appear unchanged", connName);
+        }
+        return result;
+    }
+
     // Visible for testing
     static Set<String> keysWithVariableValues(Map<String, String> rawConfig, Pattern pattern) {
         Set<String> keys = new HashSet<>();
@@ -797,12 +824,18 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public List<ConfigKeyInfo> connectorPluginConfig(String pluginName) {
-        List<ConfigKeyInfo> results = new ArrayList<>();
-        ConfigDef configDefs;
+        Plugins p = plugins();
+        Class<?> pluginClass;
         try {
-            Plugins p = plugins();
+            pluginClass = p.pluginClass(pluginName);
+        } catch (ClassNotFoundException cnfe) {
+            throw new NotFoundException("Unknown plugin " + pluginName + ".");
+        }
+
+        try (LoaderSwap loaderSwap = p.withClassLoader(pluginClass.getClassLoader())) {
             Object plugin = p.newPlugin(pluginName);
             PluginType pluginType = PluginType.from(plugin.getClass());
+            ConfigDef configDefs;
             switch (pluginType) {
                 case SINK:
                 case SOURCE:
@@ -823,13 +856,14 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 default:
                     throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
             }
-        } catch (ClassNotFoundException cnfe) {
-            throw new NotFoundException("Unknown plugin " + pluginName + ".");
+            List<ConfigKeyInfo> results = new ArrayList<>();
+            for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
+                results.add(AbstractHerder.convertConfigKey(configKey));
+            }
+            return results;
+        } catch (ClassNotFoundException e) {
+            throw new ConnectException("Failed to load plugin class or one of its dependencies", e);
         }
-        for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
-            results.add(AbstractHerder.convertConfigKey(configKey));
-        }
-        return results;
     }
 
 }

@@ -32,6 +32,7 @@ import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.{MockRawSnapshotWriter, RecordsSnapshotWriter, SnapshotWriter}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.Test
 
 import java.util
@@ -58,7 +59,7 @@ class BrokerMetadataSnapshotterTest {
             new MockRawSnapshotWriter(offsetAndEpoch, consumeSnapshotBuffer(committedOffset, committedEpoch, lastContainedLogTime))
           )
         },
-        1024,
+        4096,
         MemoryPool.NONE,
         Time.SYSTEM,
         lastContainedLogTime,
@@ -96,6 +97,7 @@ class BrokerMetadataSnapshotterTest {
   }
 
   @Test
+  @Timeout(30)
   def testCreateSnapshot(): Unit = {
     val writerBuilder = new MockSnapshotWriterBuilder()
     val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None, writerBuilder)

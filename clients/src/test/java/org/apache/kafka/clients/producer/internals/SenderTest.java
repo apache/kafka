@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
@@ -1542,7 +1543,7 @@ public class SenderTest {
 
         txnManager.beginTransaction();
         txnManager.maybeAddPartition(tp0);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce();
 
         // Send first ProduceRequest
@@ -1828,7 +1829,7 @@ public class SenderTest {
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartition(tp0);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce(); // Receive AddPartitions response
 
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
@@ -2384,7 +2385,7 @@ public class SenderTest {
 
         txnManager.beginTransaction();
         txnManager.maybeAddPartition(tp);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
         sender.runOnce();
 
         testSplitBatchAndSend(txnManager, producerIdAndEpoch, tp);
@@ -2731,7 +2732,7 @@ public class SenderTest {
 
             txnManager.beginTransaction();
             txnManager.maybeAddPartition(tp);
-            client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
+            client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
             sender.initiateClose();
             txnManager.beginCommit();
@@ -2851,7 +2852,7 @@ public class SenderTest {
 
     private void addPartitionToTxn(Sender sender, TransactionManager txnManager, TopicPartition tp) {
         txnManager.maybeAddPartition(tp);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
         runUntil(sender, () -> txnManager.isPartitionAdded(tp));
         assertFalse(txnManager.hasInFlightRequest());
     }
@@ -2892,7 +2893,7 @@ public class SenderTest {
 
             txnManager.beginTransaction();
             txnManager.maybeAddPartition(tp);
-            client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
+            client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
             sender.initiateClose();
             AssertEndTxnRequestMatcher endTxnMatcher = new AssertEndTxnRequestMatcher(TransactionResult.ABORT);
@@ -2926,7 +2927,7 @@ public class SenderTest {
 
             txnManager.beginTransaction();
             txnManager.maybeAddPartition(tp);
-            client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
+            client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
 
             // Try to commit the transaction but it won't happen as we'll forcefully close the sender
@@ -2951,7 +2952,7 @@ public class SenderTest {
         // Begin the transaction
         txnManager.beginTransaction();
         txnManager.maybeAddPartition(tp0);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
         // Run it once so that the partition is added to the transaction.
         sender.runOnce();
         // Append a record to the accumulator.
@@ -2989,7 +2990,7 @@ public class SenderTest {
 
         txnManager.beginTransaction();
         txnManager.maybeAddPartition(tp0);
-        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce();
 
         // create a producer batch with more than one record so it is eligible for splitting
@@ -3337,5 +3338,12 @@ public class SenderTest {
 
         assertTrue(transactionManager.hasProducerId());
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
+    }
+    
+    private AddPartitionsToTxnResponse buildAddPartitionsToTxnResponseData(int throttleMs, Map<TopicPartition, Errors> errors) {
+        AddPartitionsToTxnResponseData.AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
+                AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, errors);
+        AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setResultsByTopicV3AndBelow(result.topicResults()).setThrottleTimeMs(throttleMs);
+        return new AddPartitionsToTxnResponse(data);
     }
 }

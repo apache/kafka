@@ -26,32 +26,33 @@ public interface Callback {
      * A callback method the user can implement to provide asynchronous handling of request completion. This method will
      * be called when the record sent to the server has been acknowledged. When exception is not null in the callback,
      * metadata will contain the special -1 value for all fields. If topicPartition cannot be
-     * choosen, a -1 value will be assigned.
+     * chosen, a -1 value will be assigned.
      *
      * @param metadata The metadata for the record that was sent (i.e. the partition and offset). An empty metadata
      *                 with -1 value for all fields will be returned if an error occurred.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
      *                  Possible thrown exceptions include:
-     *
+     *                  <p>
      *                  Non-Retriable exceptions (fatal, the message will never be sent):
-     *
-     *                  InvalidTopicException
-     *                  OffsetMetadataTooLargeException
-     *                  RecordBatchTooLargeException
-     *                  RecordTooLargeException
-     *                  UnknownServerException
-     *                  UnknownProducerIdException
-     *                  InvalidProducerEpochException
-     *
+     *                  <ul>
+     *                  <li>InvalidTopicException
+     *                  <li>OffsetMetadataTooLargeException
+     *                  <li>RecordBatchTooLargeException
+     *                  <li>RecordTooLargeException
+     *                  <li>UnknownServerException
+     *                  <li>UnknownProducerIdException
+     *                  <li>InvalidProducerEpochException
+     *                  </ul>
      *                  Retriable exceptions (transient, may be covered by increasing #.retries):
-     *
-     *                  CorruptRecordException
-     *                  InvalidMetadataException
-     *                  NotEnoughReplicasAfterAppendException
-     *                  NotEnoughReplicasException
-     *                  OffsetOutOfRangeException
-     *                  TimeoutException
-     *                  UnknownTopicOrPartitionException
+     *                  <ul>
+     *                  <li>CorruptRecordException
+     *                  <li>InvalidMetadataException
+     *                  <li>NotEnoughReplicasAfterAppendException
+     *                  <li>NotEnoughReplicasException
+     *                  <li>OffsetOutOfRangeException
+     *                  <li>TimeoutException
+     *                  <li>UnknownTopicOrPartitionException
+     *                  </ul>
      */
     void onCompletion(RecordMetadata metadata, Exception exception);
 }

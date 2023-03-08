@@ -21,29 +21,36 @@ import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, Config, ConfigEntry, DescribeMetadataQuorumOptions, FeatureUpdate, NewPartitionReassignment, NewTopic, UpdateFeaturesOptions}
-import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo}
-import org.apache.kafka.common.message.DescribeClusterRequestData
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
-import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
-import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Tag, Test, Timeout}
-
-import java.util
-import java.util.{Arrays, Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.clients.admin._
+import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
+import org.apache.kafka.common.message.DescribeClusterRequestData
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
+import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.image.ClusterImage
+import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
+import org.apache.kafka.server.quota
+import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaType}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{Tag, Test, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.nio.file.{FileSystems, Path}
+import java.{lang, util}
+import java.util.concurrent.CompletionStage
+import java.util.{Arrays, Collections, Optional, OptionalLong, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.concurrent.ExecutionException
@@ -579,10 +586,10 @@ class KRaftClusterTest {
         assertEquals(Seq(ApiError.NONE), incrementalAlter(admin, Seq(
           (new ConfigResource(Type.BROKER, ""), Seq(
             new AlterConfigOp(new ConfigEntry("log.roll.ms", "1234567"), OpType.SET),
-            new AlterConfigOp(new ConfigEntry("max.connections.per.ip", "6"), OpType.SET))))))
+            new AlterConfigOp(new ConfigEntry("max.connections.per.ip", "60"), OpType.SET))))))
         validateConfigs(admin, Map(new ConfigResource(Type.BROKER, "") -> Seq(
           ("log.roll.ms", "1234567"),
-          ("max.connections.per.ip", "6"))), true)
+          ("max.connections.per.ip", "60"))), true)
 
         admin.createTopics(Arrays.asList(
           new NewTopic("foo", 2, 3.toShort),
@@ -949,4 +956,117 @@ class KRaftClusterTest {
       cluster.close()
     }
   }
+
+  @Test
+  def testAuthorizerFailureFoundInControllerStartup(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumControllerNodes(3).build()).
+      setConfigProp("authorizer.class.name", classOf[BadAuthorizer].getName).build()
+    try {
+      cluster.format()
+      val exception = assertThrows(classOf[ExecutionException], () => cluster.startup())
+      assertEquals("java.lang.IllegalStateException: test authorizer exception", exception.getMessage)
+      cluster.fatalFaultHandler().setIgnore(true)
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true))
+  def testReconfigureControllerClientQuotas(combinedController: Boolean): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setCoResident(combinedController).
+        setNumControllerNodes(1).build()).
+      setConfigProp("client.quota.callback.class", classOf[DummyClientQuotaCallback].getName).
+      setConfigProp(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey, "0").
+      build()
+
+    def assertConfigValue(expected: Int): Unit = {
+      TestUtils.retry(60000) {
+        assertEquals(expected, cluster.controllers().values().iterator().next().
+          quotaManagers.clientQuotaCallback.get.asInstanceOf[DummyClientQuotaCallback].value)
+        assertEquals(expected, cluster.brokers().values().iterator().next().
+          quotaManagers.clientQuotaCallback.get.asInstanceOf[DummyClientQuotaCallback].value)
+      }
+    }
+
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      assertConfigValue(0)
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        admin.incrementalAlterConfigs(
+          Collections.singletonMap(new ConfigResource(Type.BROKER, ""),
+            Collections.singletonList(new AlterConfigOp(
+              new ConfigEntry(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey, "1"), OpType.SET)))).
+          all().get()
+      } finally {
+        admin.close()
+      }
+      assertConfigValue(1)
+    } finally {
+      cluster.close()
+    }
+  }
 }
+
+class BadAuthorizer() extends Authorizer {
+
+  override def start(serverInfo: AuthorizerServerInfo): java.util.Map[Endpoint, _ <: CompletionStage[Void]] = {
+    throw new IllegalStateException("test authorizer exception")
+  }
+
+  override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = ???
+
+  override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = ???
+
+  override def close(): Unit = {}
+
+  override def configure(configs: util.Map[String, _]): Unit = {}
+
+  override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = ???
+
+  override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = ???
+}
+
+object DummyClientQuotaCallback {
+  val dummyClientQuotaCallbackValueConfigKey = "dummy.client.quota.callback.value"
+}
+
+class DummyClientQuotaCallback() extends ClientQuotaCallback with Reconfigurable {
+  var value = 0
+  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = Collections.emptyMap()
+
+  override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = 1.0
+
+  override def updateQuota(quotaType: ClientQuotaType, quotaEntity: quota.ClientQuotaEntity, newValue: Double): Unit = {}
+
+  override def removeQuota(quotaType: ClientQuotaType, quotaEntity: quota.ClientQuotaEntity): Unit = {}
+
+  override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = true
+
+  override def updateClusterMetadata(cluster: Cluster): Boolean = false
+
+  override def close(): Unit = {}
+
+  override def configure(configs: util.Map[String, _]): Unit = {
+    val newValue = configs.get(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey)
+    if (newValue != null) {
+      value = Integer.parseInt(newValue.toString)
+    }
+  }
+
+  override def reconfigurableConfigs(): util.Set[String] = Set(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey).asJava
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
+  }
+
+  override def reconfigure(configs: util.Map[String, _]): Unit = configure(configs)
+}
+

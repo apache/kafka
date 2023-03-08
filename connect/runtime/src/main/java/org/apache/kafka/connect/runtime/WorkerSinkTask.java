@@ -68,7 +68,7 @@ import static java.util.Collections.singleton;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
- * WorkerTask that uses a SinkTask to export data from Kafka.
+ * {@link WorkerTask} that uses a {@link SinkTask} to export data from Kafka.
  */
 class WorkerSinkTask extends WorkerTask {
     private static final Logger log = LoggerFactory.getLogger(WorkerSinkTask.class);
@@ -366,6 +366,10 @@ class WorkerSinkTask extends WorkerTask {
      * the write commit.
      **/
     private void doCommit(Map<TopicPartition, OffsetAndMetadata> offsets, boolean closing, int seqno) {
+        if (isCancelled()) {
+            log.debug("Skipping final offset commit as task has been cancelled");
+            return;
+        }
         if (closing) {
             doCommitSync(offsets, seqno);
         } else {
@@ -474,7 +478,7 @@ class WorkerSinkTask extends WorkerTask {
     private ConsumerRecords<byte[], byte[]> pollConsumer(long timeoutMs) {
         ConsumerRecords<byte[], byte[]> msgs = consumer.poll(Duration.ofMillis(timeoutMs));
 
-        // Exceptions raised from the task during a rebalance should be rethrown to stop the worker
+        // Exceptions raised from the task during a rebalance should be rethrown to stop the task and mark it as failed
         if (rebalanceException != null) {
             RuntimeException e = rebalanceException;
             rebalanceException = null;

@@ -21,6 +21,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -29,8 +30,13 @@ import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
 
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.junit.jupiter.api.Test;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.SOURCE_PREFIX;
+import static org.apache.kafka.connect.mirror.MirrorSourceConfig.OFFSET_LAG_MAX;
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.TASK_TOPIC_PARTITIONS;
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -55,6 +61,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class MirrorSourceConnectorTest {
 
@@ -334,4 +342,120 @@ public class MirrorSourceConnectorTest {
         assertDoesNotThrow(() -> connector.isCycle(".b"));
     }
 
+    @Test
+    public void testExactlyOnceSupport() {
+        String readCommitted = "read_committed";
+        String readUncommitted = "read_uncommitted";
+        String readGarbage = "read_garbage";
+
+        // Connector is configured correctly, but exactly-once can't be supported
+        assertExactlyOnceSupport(null, null, false);
+        assertExactlyOnceSupport(readUncommitted, null, false);
+        assertExactlyOnceSupport(null, readUncommitted, false);
+        assertExactlyOnceSupport(readUncommitted, readUncommitted, false);
+
+        // Connector is configured correctly, and exactly-once can be supported
+        assertExactlyOnceSupport(readCommitted, null, true);
+        assertExactlyOnceSupport(null, readCommitted, true);
+        assertExactlyOnceSupport(readUncommitted, readCommitted, true);
+        assertExactlyOnceSupport(readCommitted, readCommitted, true);
+
+        // Connector is configured incorrectly, but is able to react gracefully
+        assertExactlyOnceSupport(readGarbage, null, false);
+        assertExactlyOnceSupport(null, readGarbage, false);
+        assertExactlyOnceSupport(readGarbage, readGarbage, false);
+        assertExactlyOnceSupport(readCommitted, readGarbage, false);
+        assertExactlyOnceSupport(readUncommitted, readGarbage, false);
+        assertExactlyOnceSupport(readGarbage, readUncommitted, false);
+        assertExactlyOnceSupport(readGarbage, readCommitted, true);
+    }
+
+    private void assertExactlyOnceSupport(String defaultIsolationLevel, String sourceIsolationLevel, boolean expected) {
+        Map<String, String> props = makeProps();
+        if (defaultIsolationLevel != null) {
+            props.put(CONSUMER_CLIENT_PREFIX + ISOLATION_LEVEL_CONFIG, defaultIsolationLevel);
+        }
+        if (sourceIsolationLevel != null) {
+            props.put(SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX + ISOLATION_LEVEL_CONFIG, sourceIsolationLevel);
+        }
+        ExactlyOnceSupport expectedSupport = expected ? ExactlyOnceSupport.SUPPORTED : ExactlyOnceSupport.UNSUPPORTED;
+        ExactlyOnceSupport actualSupport = new MirrorSourceConnector().exactlyOnceSupport(props);
+        assertEquals(expectedSupport, actualSupport);
+    }
+
+    @Test
+    public void testExactlyOnceSupportValidation() {
+        String exactlyOnceSupport = "exactly.once.support";
+
+        Map<String, String> props = makeProps();
+        Optional<ConfigValue> configValue = validateProperty(exactlyOnceSupport, props);
+        assertEquals(Optional.empty(), configValue);
+
+        props.put(exactlyOnceSupport, "requested");
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertEquals(Optional.empty(), configValue);
+
+        props.put(exactlyOnceSupport, "garbage");
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertEquals(Optional.empty(), configValue);
+
+        props.put(exactlyOnceSupport, "required");
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertTrue(configValue.isPresent());
+        List<String> errorMessages = configValue.get().errorMessages();
+        assertEquals(1, errorMessages.size());
+        String errorMessage = errorMessages.get(0);
+        assertTrue(
+                errorMessages.get(0).contains(ISOLATION_LEVEL_CONFIG),
+                "Error message \"" + errorMessage + "\" should have mentioned the 'isolation.level' consumer property"
+        );
+
+        props.put(CONSUMER_CLIENT_PREFIX + ISOLATION_LEVEL_CONFIG, "read_committed");
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertEquals(Optional.empty(), configValue);
+
+        // Make sure that an unrelated invalid property doesn't cause an exception to be thrown and is instead handled and reported gracefully
+        props.put(OFFSET_LAG_MAX, "bad");
+        // Ensure that the issue with the invalid property is reported...
+        configValue = validateProperty(OFFSET_LAG_MAX, props);
+        assertTrue(configValue.isPresent());
+        errorMessages = configValue.get().errorMessages();
+        assertEquals(1, errorMessages.size());
+        errorMessage = errorMessages.get(0);
+        assertTrue(
+                errorMessages.get(0).contains(OFFSET_LAG_MAX),
+                "Error message \"" + errorMessage + "\" should have mentioned the 'offset.lag.max' property"
+        );
+        // ... and that it does not cause any issues with validation for exactly-once support...
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertEquals(Optional.empty(), configValue);
+
+        // ... regardless of whether validation for exactly-once support does or does not find an error
+        props.remove(CONSUMER_CLIENT_PREFIX + ISOLATION_LEVEL_CONFIG);
+        configValue = validateProperty(exactlyOnceSupport, props);
+        assertTrue(configValue.isPresent());
+        errorMessages = configValue.get().errorMessages();
+        assertEquals(1, errorMessages.size());
+        errorMessage = errorMessages.get(0);
+        assertTrue(
+                errorMessages.get(0).contains(ISOLATION_LEVEL_CONFIG),
+                "Error message \"" + errorMessage + "\" should have mentioned the 'isolation.level' consumer property"
+        );
+    }
+
+    private Optional<ConfigValue> validateProperty(String name, Map<String, String> props) {
+        List<ConfigValue> results = new MirrorSourceConnector().validate(props)
+                .configValues().stream()
+                .filter(cv -> name.equals(cv.name()))
+                .collect(Collectors.toList());
+
+        assertTrue(results.size() <= 1, "Connector produced multiple config values for '" + name + "' property");
+
+        if (results.isEmpty())
+            return Optional.empty();
+
+        ConfigValue result = results.get(0);
+        assertNotNull(result, "Connector should not have record null config value for '" + name + "' property");
+        return Optional.of(result);
+    }
 }

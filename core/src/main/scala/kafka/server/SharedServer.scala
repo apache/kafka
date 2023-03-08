@@ -30,7 +30,7 @@ import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessExitingFaultHandler}
+import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import java.util
@@ -60,7 +60,9 @@ class StandardFaultHandlerFactory extends FaultHandlerFactory {
     action: Runnable
   ): FaultHandler = {
     if (fatal) {
-      new ProcessExitingFaultHandler(action)
+      new ProcessTerminatingFaultHandler.Builder()
+        .setAction(action)
+        .build()
     } else {
       new LoggingFaultHandler(name, action)
     }
@@ -150,6 +152,12 @@ class SharedServer(
     }
   }
 
+  def raftManagerFaultHandler: FaultHandler = faultHandlerFactory.build(
+    name = "raft manager",
+    fatal = true,
+    action = () => {}
+  )
+
   /**
    * The fault handler to use when metadata loading fails.
    */
@@ -160,6 +168,17 @@ class SharedServer(
       if (brokerMetrics != null) brokerMetrics.metadataLoadErrorCount.getAndIncrement()
       if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
       snapshotsDiabledReason.compareAndSet(null, "metadata loading fault")
+    })
+
+  /**
+   * The fault handler to use when ControllerServer.startup throws an exception.
+   */
+  def controllerStartupFaultHandler: FaultHandler = faultHandlerFactory.build(
+    name = "controller startup",
+    fatal = true,
+    action = () => SharedServer.this.synchronized {
+      if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
+      snapshotsDiabledReason.compareAndSet(null, "controller startup fault")
     })
 
   /**
@@ -225,7 +244,9 @@ class SharedServer(
           time,
           metrics,
           threadNamePrefix,
-          controllerQuorumVotersFuture)
+          controllerQuorumVotersFuture,
+          raftManagerFaultHandler
+        )
         raftManager.startup()
 
         if (sharedServerConfig.processRoles.contains(ControllerRole)) {

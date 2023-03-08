@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
 
@@ -293,7 +294,7 @@ object ConsoleConsumer extends Logging {
 
     options = tryParse(parser, args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from Kafka topics and outputs it to standard output.")
+    CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from Kafka topics and outputs it to standard output.")
 
     var groupIdPassed = true
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
@@ -302,7 +303,7 @@ object ConsoleConsumer extends Logging {
     var topicArg: String = _
     var includedTopicsArg: String = _
     var filterSpec: TopicFilter = _
-    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
+    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt))
     val consumerProps = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
@@ -315,7 +316,7 @@ object ConsoleConsumer extends Logging {
       Utils.loadProps(options.valueOf(messageFormatterConfigOpt))
     else
       new Properties()
-    formatterArgs ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
+    formatterArgs ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
     val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
     val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
@@ -341,19 +342,19 @@ object ConsoleConsumer extends Logging {
     val topicOrFilterArgs = List(topicArg, includedTopicsArg).filterNot(_ == null)
     // user need to specify value for either --topic or one of the include filters options (--include or --whitelist)
     if (topicOrFilterArgs.size != 1)
-      CommandLineUtils.printUsageAndDie(parser, s"Exactly one of --include/--topic is required. " +
+      CommandLineUtils.printUsageAndExit(parser, s"Exactly one of --include/--topic is required. " +
         s"${if (options.has(whitelistOpt)) "--whitelist is DEPRECATED use --include instead; ignored if --include specified."}")
 
     if (partitionArg.isDefined) {
       if (!options.has(topicOpt))
-        CommandLineUtils.printUsageAndDie(parser, "The topic is required when partition is specified.")
+        CommandLineUtils.printUsageAndExit(parser, "The topic is required when partition is specified.")
       if (fromBeginning && options.has(offsetOpt))
-        CommandLineUtils.printUsageAndDie(parser, "Options from-beginning and offset cannot be specified together.")
+        CommandLineUtils.printUsageAndExit(parser, "Options from-beginning and offset cannot be specified together.")
     } else if (options.has(offsetOpt))
-      CommandLineUtils.printUsageAndDie(parser, "The partition is required when offset is specified.")
+      CommandLineUtils.printUsageAndExit(parser, "The partition is required when offset is specified.")
 
     def invalidOffset(offset: String): Nothing =
-      CommandLineUtils.printUsageAndDie(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
+      ToolsUtils.printUsageAndExit(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
         "'earliest', 'latest', or a non-negative long.")
 
     val offsetArg =
@@ -385,7 +386,7 @@ object ConsoleConsumer extends Logging {
     ).flatten
 
     if (groupIdsProvided.size > 1) {
-      CommandLineUtils.printUsageAndDie(parser, "The group ids provided in different places (directly using '--group', "
+      CommandLineUtils.printUsageAndExit(parser, "The group ids provided in different places (directly using '--group', "
         + "via '--consumer-property', or via '--consumer.config') do not match. "
         + s"Detected group ids: ${groupIdsProvided.mkString("'", "', '", "'")}")
     }
@@ -403,14 +404,14 @@ object ConsoleConsumer extends Logging {
     }
 
     if (groupIdPassed && partitionArg.isDefined)
-      CommandLineUtils.printUsageAndDie(parser, "Options group and partition cannot be specified together.")
+      CommandLineUtils.printUsageAndExit(parser, "Options group and partition cannot be specified together.")
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
       try
         parser.parse(args: _*)
       catch {
         case e: OptionException =>
-          CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+          ToolsUtils.printUsageAndExit(parser, e.getMessage)
       }
     }
   }

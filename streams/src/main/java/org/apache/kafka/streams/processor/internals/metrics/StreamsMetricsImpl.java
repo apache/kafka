@@ -146,6 +146,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String OPERATIONS = " operations";
     public static final String TOTAL_DESCRIPTION = "The total number of ";
     public static final String RATE_DESCRIPTION = "The average per-second number of ";
+    public static final String RATIO_DESCRIPTION = "The fraction of time the thread spent on ";
     public static final String AVG_LATENCY_DESCRIPTION = "The average latency of ";
     public static final String MAX_LATENCY_DESCRIPTION = "The maximum latency of ";
     public static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
@@ -175,6 +176,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public Version version() {
         return version;
+    }
+
+    public Metrics metricsRegistry() {
+        return metrics;
     }
 
     public RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger() {

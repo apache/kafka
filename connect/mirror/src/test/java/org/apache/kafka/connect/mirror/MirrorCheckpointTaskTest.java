@@ -52,11 +52,16 @@ public class MirrorCheckpointTaskTest {
 
     @Test
     public void testCheckpoint() {
+        long t1UpstreamOffset = 3L;
+        long t1DownstreamOffset = 4L;
+        long t2UpstreamOffset = 7L;
+        long t2DownstreamOffset = 8L;
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
+        offsetSyncStore.start();
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
             new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), Collections.emptyMap());
-        offsetSyncStore.sync(new TopicPartition("topic1", 2), 3L, 4L);
-        offsetSyncStore.sync(new TopicPartition("target2.topic5", 6), 7L, 8L);
+        offsetSyncStore.sync(new TopicPartition("topic1", 2), t1UpstreamOffset, t1DownstreamOffset);
+        offsetSyncStore.sync(new TopicPartition("target2.topic5", 6), t2UpstreamOffset, t2DownstreamOffset);
         Optional<Checkpoint> optionalCheckpoint1 = mirrorCheckpointTask.checkpoint("group9", new TopicPartition("topic1", 2),
             new OffsetAndMetadata(10, null));
         assertTrue(optionalCheckpoint1.isPresent());
@@ -70,7 +75,7 @@ public class MirrorCheckpointTaskTest {
                 "checkpoint group9 sourcePartition failed");
         assertEquals(10, checkpoint1.upstreamOffset(),
                 "checkpoint group9 upstreamOffset failed");
-        assertEquals(11, checkpoint1.downstreamOffset(),
+        assertEquals(t1DownstreamOffset + 1, checkpoint1.downstreamOffset(),
                 "checkpoint group9 downstreamOffset failed");
         assertEquals(123L, sourceRecord1.timestamp().longValue(),
                 "checkpoint group9 timestamp failed");
@@ -87,10 +92,27 @@ public class MirrorCheckpointTaskTest {
                 "checkpoint group11 sourcePartition failed");
         assertEquals(12, checkpoint2.upstreamOffset(),
                 "checkpoint group11 upstreamOffset failed");
-        assertEquals(13, checkpoint2.downstreamOffset(),
+        assertEquals(t2DownstreamOffset + 1, checkpoint2.downstreamOffset(),
                 "checkpoint group11 downstreamOffset failed");
         assertEquals(234L, sourceRecord2.timestamp().longValue(),
                     "checkpoint group11 timestamp failed");
+        Optional<Checkpoint> optionalCheckpoint3 = mirrorCheckpointTask.checkpoint("group13", new TopicPartition("target2.topic5", 6),
+                new OffsetAndMetadata(7, null));
+        assertTrue(optionalCheckpoint3.isPresent());
+        Checkpoint checkpoint3 = optionalCheckpoint3.get();
+        SourceRecord sourceRecord3 = mirrorCheckpointTask.checkpointRecord(checkpoint3, 234L);
+        assertEquals(new TopicPartition("topic5", 6), checkpoint3.topicPartition(),
+                "checkpoint group13 topic5 failed");
+        assertEquals("group13", checkpoint3.consumerGroupId(),
+                "checkpoint group13 consumerGroupId failed");
+        assertEquals("group13", Checkpoint.unwrapGroup(sourceRecord3.sourcePartition()),
+                "checkpoint group13 sourcePartition failed");
+        assertEquals(t2UpstreamOffset, checkpoint3.upstreamOffset(),
+                "checkpoint group13 upstreamOffset failed");
+        assertEquals(t2DownstreamOffset, checkpoint3.downstreamOffset(),
+                "checkpoint group13 downstreamOffset failed");
+        assertEquals(234L, sourceRecord3.timestamp().longValue(),
+                "checkpoint group13 timestamp failed");
     }
 
     @Test
@@ -150,6 +172,7 @@ public class MirrorCheckpointTaskTest {
     @Test
     public void testNoCheckpointForTopicWithoutOffsetSyncs() {
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
+        offsetSyncStore.start();
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
                 new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), Collections.emptyMap());
         offsetSyncStore.sync(new TopicPartition("topic1", 0), 3L, 4L);
@@ -165,6 +188,7 @@ public class MirrorCheckpointTaskTest {
     @Test
     public void testNoCheckpointForTopicWithNullOffsetAndMetadata() {
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
+        offsetSyncStore.start();
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
             new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), Collections.emptyMap());
         offsetSyncStore.sync(new TopicPartition("topic1", 0), 1L, 3L);

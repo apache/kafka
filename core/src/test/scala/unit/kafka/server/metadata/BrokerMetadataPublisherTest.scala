@@ -17,11 +17,14 @@
 
 package kafka.server.metadata
 
+import kafka.coordinator.transaction.TransactionCoordinator
+
 import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-import kafka.log.UnifiedLog
-import kafka.server.{BrokerServer, KafkaConfig}
+import kafka.log.{LogManager, UnifiedLog}
+import kafka.security.CredentialProvider
+import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
@@ -30,7 +33,8 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.BROKER
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
+import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, TopicImage, TopicsImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.server.fault.FaultHandler
@@ -38,7 +42,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
-import org.mockito.Mockito.doThrow
+import org.mockito.Mockito.{doThrow, mock, verify}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 
@@ -262,5 +266,43 @@ class BrokerMetadataPublisherTest {
       cluster.nonFatalFaultHandler().setIgnore(true)
       cluster.close()
     }
+  }
+
+  @Test
+  def testNewImagePushedToGroupCoordinator(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, ""))
+    val metadataCache = new KRaftMetadataCache(0)
+    val logManager = mock(classOf[LogManager])
+    val replicaManager = mock(classOf[ReplicaManager])
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val txnCoordinator = mock(classOf[TransactionCoordinator])
+    val quotaManager = mock(classOf[ClientQuotaMetadataManager])
+    val configPublisher = mock(classOf[DynamicConfigPublisher])
+    val credentialProvider = mock(classOf[CredentialProvider])
+    val faultHandler = mock(classOf[FaultHandler])
+
+    val metadataPublisher = new BrokerMetadataPublisher(
+      config,
+      metadataCache,
+      logManager,
+      replicaManager,
+      groupCoordinator,
+      txnCoordinator,
+      quotaManager,
+      configPublisher,
+      None,
+      credentialProvider,
+      faultHandler,
+      faultHandler
+    )
+
+    val image = MetadataImage.EMPTY
+    val delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
+
+    metadataPublisher.publish(delta, image)
+
+    verify(groupCoordinator).onNewMetadataImage(image, delta)
   }
 }
