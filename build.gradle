@@ -2893,7 +2893,8 @@ project(':connect:mirror') {
   }
 
   javadoc {
-    enabled = false
+    enabled = true
+    include("**/ConfigPropertyFilter.java", "**/GroupFilter.java", "**/TopicFilter.java")
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
