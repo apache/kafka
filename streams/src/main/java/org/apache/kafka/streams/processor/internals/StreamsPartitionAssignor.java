@@ -1430,7 +1430,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     "%sNumber of assigned partitions %d is not equal to "
                         + "the number of active taskIds %d, assignmentInfo=%s",
                     logPrefix, partitions.size(),
-                    info.activeTasks().size(), info.toString()
+                    info.activeTasks().size(), info
                 )
             );
         }

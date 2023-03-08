@@ -108,8 +108,11 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
 
+    private final ReplicationPolicy replicationPolicy;
+
     protected MirrorConnectorConfig(ConfigDef configDef, Map<String, String> props) {
         super(configDef, props, true);
+        replicationPolicy = getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
     }
 
     String connectorName() {
@@ -133,7 +136,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     }
 
     ReplicationPolicy replicationPolicy() {
-        return getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
+        return replicationPolicy;
     }
 
     Map<String, Object> sourceProducerConfig() {

@@ -937,15 +937,14 @@ public class KafkaConfigBackingStoreTest {
         ClusterConfigState configState = configStorage.snapshot();
         assertEquals(TargetState.STARTED, configState.targetState(CONNECTOR_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
-        assertEquals(SAMPLE_CONFIGS.subList(0, 2), configState.allTaskConfigs(CONNECTOR_IDS.get(0)));
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(new ConnectorTaskId(CONNECTOR_IDS.get(0), 0)));
+        assertEquals(SAMPLE_CONFIGS.get(1), configState.taskConfig(new ConnectorTaskId(CONNECTOR_IDS.get(0), 1)));
         assertEquals(2, configState.taskCount(CONNECTOR_IDS.get(0)));
 
         configStorage.refresh(0, TimeUnit.SECONDS);
         configState = configStorage.snapshot();
         // Connector should now be removed from the snapshot
         assertFalse(configState.contains(CONNECTOR_IDS.get(0)));
-        // Task configs for the deleted connector should also be removed from the snapshot
-        assertEquals(Collections.emptyList(), configState.allTaskConfigs(CONNECTOR_IDS.get(0)));
         assertEquals(0, configState.taskCount(CONNECTOR_IDS.get(0)));
         // Ensure that the deleted connector's deferred task updates have been cleaned up
         // in order to prevent unbounded growth of the map

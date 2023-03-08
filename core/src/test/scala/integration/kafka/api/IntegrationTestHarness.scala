@@ -18,16 +18,16 @@
 package kafka.api
 
 import java.time.Duration
-
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
-import java.util.Properties
 
+import java.util.Properties
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
+import org.apache.kafka.clients.consumer.internals.PrototypeAsyncConsumer
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -49,7 +49,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   val serverConfig = new Properties
   val controllerConfig = new Properties
 
-  private val consumers = mutable.Buffer[KafkaConsumer[_, _]]()
+  private val consumers = mutable.Buffer[Consumer[_, _]]()
   private val producers = mutable.Buffer[KafkaProducer[_, _]]()
   private val adminClients = mutable.Buffer[Admin]()
 
@@ -169,6 +169,19 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     val producer = new KafkaProducer[K, V](props, keySerializer, valueSerializer)
     producers += producer
     producer
+  }
+
+  def createAsyncConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
+                                valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
+                                configOverrides: Properties = new Properties,
+                                configsToRemove: List[String] = List()): PrototypeAsyncConsumer[K, V] = {
+    val props = new Properties
+    props ++= consumerConfig
+    props ++= configOverrides
+    configsToRemove.foreach(props.remove(_))
+    val consumer = new PrototypeAsyncConsumer[K, V](props, keyDeserializer, valueDeserializer)
+    consumers += consumer
+    consumer
   }
 
   def createConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,

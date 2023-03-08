@@ -55,7 +55,7 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
+import org.apache.kafka.server.fault.LoggingFaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.util.KafkaScheduler
@@ -396,7 +396,7 @@ class KafkaServer(
             metrics,
             threadNamePrefix,
             controllerQuorumVotersFuture,
-            fatalFaultHandler = new ProcessTerminatingFaultHandler.Builder().build()
+            fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
           val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)

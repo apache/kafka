@@ -163,7 +163,7 @@ public class ConsumeBenchWorker implements TaskWorker {
 
         private String consumerGroup() {
             return toUseRandomConsumeGroup()
-                ? "consume-bench-" + UUID.randomUUID().toString()
+                ? "consume-bench-" + UUID.randomUUID()
                 : spec.consumerGroup();
         }
 

@@ -58,9 +58,6 @@ public class SimpleHeaderConverter implements HeaderConverter {
         }
         try {
             String str = new String(value, UTF_8);
-            if (str.isEmpty()) {
-                return new SchemaAndValue(Schema.STRING_SCHEMA, str);
-            }
             return Values.parseString(str);
         } catch (NoSuchElementException e) {
             throw new DataException("Failed to deserialize value for header '" + headerKey + "' on topic '" + topic + "'", e);

@@ -22,6 +22,7 @@ import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, KafkaConfig}
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
+import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.fault.FaultHandler
 
@@ -30,9 +31,9 @@ class DynamicConfigPublisher(
   conf: KafkaConfig,
   faultHandler: FaultHandler,
   dynamicConfigHandlers: Map[String, ConfigHandler],
-  nodeType: String
-) extends Logging {
-  logIdent = s"[DynamicConfigPublisher nodeType=${nodeType} id=${conf.nodeId}] "
+  nodeType: String,
+) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
+  logIdent = s"[${name()}] "
 
   def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
     val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
@@ -99,5 +100,41 @@ class DynamicConfigPublisher(
 
   def reloadUpdatedFilesWithoutConfigChange(props: Properties): Unit = {
     conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
+  }
+
+  /**
+   * Returns the name of this publisher.
+   *
+   * @return The publisher name.
+   */
+  override def name(): String = s"DynamicConfigPublisher ${nodeType} id=${conf.nodeId}"
+
+  /**
+   * Publish a new cluster metadata snapshot that we loaded.
+   *
+   * @param delta    The delta between the previous state and the new one.
+   * @param newImage The complete new state.
+   * @param manifest The contents of what was published.
+   */
+  override def publishSnapshot(delta: MetadataDelta, newImage: MetadataImage, manifest: SnapshotManifest): Unit = {
+    publish(delta, newImage)
+  }
+
+  /**
+   * Publish a change to the cluster metadata.
+   *
+   * @param delta    The delta between the previous state and the new one.
+   * @param newImage The complete new state.
+   * @param manifest The contents of what was published.
+   */
+  override def publishLogDelta(delta: MetadataDelta, newImage: MetadataImage, manifest: LogDeltaManifest): Unit = {
+    publish(delta, newImage)
+  }
+
+  /**
+   * Close this metadata publisher.
+   */
+  override def close(): Unit = {
+    // nothing to close
   }
 }

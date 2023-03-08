@@ -19,14 +19,13 @@ package kafka.server
 import java.util.Optional
 import scala.collection.Seq
 import kafka.cluster.Partition
-import kafka.log.LogOffsetSnapshot
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, FetchParams, FetchPartitionData, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, FetchParams, FetchPartitionData, LogOffsetMetadata, LogOffsetSnapshot}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 import org.mockito.ArgumentMatchers.{any, anyInt}
@@ -152,7 +151,7 @@ class DelayedFetchTest {
     when(partition.fetchOffsetSnapshot(
       currentLeaderEpoch,
       fetchOnlyFromLeader = true))
-      .thenReturn(LogOffsetSnapshot(0L, endOffsetMetadata, endOffsetMetadata, endOffsetMetadata))
+      .thenReturn(new LogOffsetSnapshot(0L, endOffsetMetadata, endOffsetMetadata, endOffsetMetadata))
     when(partition.lastOffsetForLeaderEpoch(currentLeaderEpoch, lastFetchedEpoch.get, fetchOnlyFromLeader = false))
       .thenReturn(new EpochEndOffset()
         .setPartition(topicIdPartition.partition)

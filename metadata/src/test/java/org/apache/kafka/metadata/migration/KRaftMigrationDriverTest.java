@@ -280,7 +280,7 @@ public class KRaftMigrationDriverTest {
         driver.publishLogDelta(delta, image, new LogDeltaManifest(provenance,
             new LeaderAndEpoch(OptionalInt.of(3000), 1), 1, 100, 42));
 
-        TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationState.DUAL_WRITE),
+        TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
             "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
 
         Assertions.assertEquals(1, metadataPropagator.images);
