@@ -29,6 +29,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -50,6 +51,9 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.ConnectAssertions;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
+import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -140,7 +144,7 @@ public class ExactlyOnceSourceIntegrationTest {
         brokerProps.put("transaction.state.log.replication.factor", "1");
         brokerProps.put("transaction.state.log.min.isr", "1");
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by Kafka
         connectBuilder = new EmbeddedConnectCluster.Builder()
                 .numWorkers(DEFAULT_NUM_WORKERS)
                 .numBrokers(1)
@@ -159,7 +163,7 @@ public class ExactlyOnceSourceIntegrationTest {
     @AfterEach
     public void close() {
         try {
-            // stop all Connect, Kafka and Zk threads.
+            // stop the Connect cluster and its backing Kafka cluster.
             connect.stop();
         } finally {
             // Clear the handle for the connector. Fun fact: if you don't do this, your tests become quite flaky.
@@ -624,17 +628,18 @@ public class ExactlyOnceSourceIntegrationTest {
      */
     @Test
     public void testTasksFailOnInabilityToFence() throws Exception {
-        brokerProps.put("authorizer.class.name", "kafka.security.authorizer.AclAuthorizer");
-        brokerProps.put("sasl.enabled.mechanisms", "PLAIN");
-        brokerProps.put("sasl.mechanism.inter.broker.protocol", "PLAIN");
-        brokerProps.put("security.inter.broker.protocol", "SASL_PLAINTEXT");
-        brokerProps.put("listeners", "SASL_PLAINTEXT://localhost:0");
-        brokerProps.put("listener.name.sasl_plaintext.plain.sasl.jaas.config",
-                "org.apache.kafka.common.security.plain.PlainLoginModule required "
-                        + "username=\"super\" "
-                        + "password=\"super_pwd\" "
-                        + "user_connector=\"connector_pwd\" "
-                        + "user_super=\"super_pwd\";");
+        brokerProps.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT");
+        brokerProps.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, "org.apache.kafka.metadata.authorizer.StandardAuthorizer");
+        brokerProps.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
+        brokerProps.put(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
+        brokerProps.put(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
+        String listenerSaslJaasConfig = "org.apache.kafka.common.security.plain.PlainLoginModule required "
+                + "username=\"super\" "
+                + "password=\"super_pwd\" "
+                + "user_connector=\"connector_pwd\" "
+                + "user_super=\"super_pwd\";";
+        brokerProps.put("listener.name.external.plain.sasl.jaas.config", listenerSaslJaasConfig);
+        brokerProps.put("listener.name.controller.plain.sasl.jaas.config", listenerSaslJaasConfig);
         brokerProps.put("super.users", "User:super");
 
         Map<String, String> superUserClientConfig = new HashMap<>();

@@ -31,7 +31,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
@@ -78,7 +77,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -429,12 +427,12 @@ public class MirrorConnectorsIntegrationBaseTest {
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, topic)) {
             waitForConsumingAllRecords(primaryConsumer, expectedRecords);
         }
-        
+
         // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
         mm2Config = new MirrorMakerConfig(mm2Props);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
-        
+
         // sleep few seconds to have MM2 finish replication so that "end" consumer will consume some record
         Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
@@ -445,7 +443,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 backupTopic)) {
             waitForConsumingAllRecords(backupConsumer, expectedRecords);
         }
-        
+
         try (Admin backupClient = backup.kafka().createAdminClient()) {
             // retrieve the consumer group offset from backup cluster
             Map<TopicPartition, OffsetAndMetadata> remoteOffsets =
@@ -1160,14 +1158,11 @@ public class MirrorConnectorsIntegrationBaseTest {
      * @param records Records to send in one parallel batch
      */
     protected void produceMessages(Producer<byte[], byte[]> producer, List<ProducerRecord<byte[], byte[]>> records) {
-        List<Future<RecordMetadata>> futures = new ArrayList<>();
-        for (ProducerRecord<byte[], byte[]> record : records) {
-            futures.add(producer.send(record));
-        }
         Timer timer = Time.SYSTEM.timer(RECORD_PRODUCE_DURATION_MS);
+
         try {
-            for (Future<RecordMetadata> future : futures) {
-                future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+            for (ProducerRecord<byte[], byte[]> record : records) {
+                producer.send(record).get(timer.remainingMs(), TimeUnit.MILLISECONDS);
                 timer.update();
             }
         } catch (ExecutionException | InterruptedException | TimeoutException e) {
