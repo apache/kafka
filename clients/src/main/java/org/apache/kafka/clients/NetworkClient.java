@@ -756,6 +756,33 @@ public class NetworkClient implements KafkaClient {
     private void processDisconnection(List<ClientResponse> responses,
                                       String nodeId,
                                       long now,
+                                      ChannelState disconnectState) {
+        processDisconnection(responses, nodeId, now, disconnectState, false);
+    }
+
+    /**
+     * Post process disconnection of a node
+     *
+     * @param responses The list of responses to update
+     * @param nodeId Id of the node to be disconnected
+     * @param now The current time
+     */
+    private void processTimeoutDisconnection(List<ClientResponse> responses, String nodeId, long now) {
+        processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE, true);
+    }
+
+    /**
+     * Post process disconnection of a node
+     *
+     * @param responses The list of responses to update
+     * @param nodeId Id of the node to be disconnected
+     * @param now The current time
+     * @param disconnectState The state of the disconnected channel
+     * @param timedOut {@code true} if the connection is disconnected because of a timeout (request or connection)
+     */
+    private void processDisconnection(List<ClientResponse> responses,
+                                      String nodeId,
+                                      long now,
                                       ChannelState disconnectState,
                                       boolean timedOut) {
         connectionStates.disconnected(nodeId, now);
@@ -799,7 +826,7 @@ public class NetworkClient implements KafkaClient {
             // close connection to the node
             this.selector.close(nodeId);
             log.info("Disconnecting from node {} due to request timeout.", nodeId);
-            processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE, true);
+            processTimeoutDisconnection(responses, nodeId, now);
         }
     }
 
@@ -825,7 +852,7 @@ public class NetworkClient implements KafkaClient {
                 "The timeout value is {} ms.",
                 nodeId,
                 connectionStates.connectionSetupTimeoutMs(nodeId));
-            processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE, true);
+            processTimeoutDisconnection(responses, nodeId, now);
         }
     }
 
@@ -903,7 +930,7 @@ public class NetworkClient implements KafkaClient {
                 log.warn("Received error {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
                         Errors.forCode(apiVersionsResponse.data().errorCode()), node, req.header.correlationId());
                 this.selector.close(node);
-                processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE, false);
+                processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
             } else {
                 // Starting from Apache Kafka 2.4, ApiKeys field is populated with the supported versions of
                 // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
@@ -939,7 +966,7 @@ public class NetworkClient implements KafkaClient {
         for (Map.Entry<String, ChannelState> entry : this.selector.disconnected().entrySet()) {
             String node = entry.getKey();
             log.info("Node {} disconnected.", node);
-            processDisconnection(responses, node, now, entry.getValue(), false);
+            processDisconnection(responses, node, now, entry.getValue());
         }
     }
 
