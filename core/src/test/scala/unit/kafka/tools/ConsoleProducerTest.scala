@@ -279,7 +279,8 @@ object ConsoleProducerTest {
 
   class DumbRecordReader extends RecordReader {
     override def configure(configs: util.Map[String, _]): Unit = configureCount += 1
-    override def readRecords(inputStream: InputStream): java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] = java.util.Collections.emptyIterator()
+    override def readRecords(inputStream: InputStream): java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] =
+      java.util.Collections.emptyIterator()
 
     override def close(): Unit = closeCount += 1
   }
