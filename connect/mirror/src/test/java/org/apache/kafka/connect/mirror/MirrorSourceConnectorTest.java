@@ -185,7 +185,7 @@ public class MirrorSourceConnectorTest {
     @Deprecated
     public void testConfigPropertyFilteringWithAlterConfigs() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter());
+                new DefaultReplicationPolicy(), MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter());
         ArrayList<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
         // When set to not using incrementalAlterConfigs, the default config should be excluded
@@ -247,7 +247,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testIncrementalAlterConfigsRequested() throws Exception {
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorConnectorConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT, new DefaultConfigPropertyFilter()));
+                new DefaultReplicationPolicy(), MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT, new DefaultConfigPropertyFilter()));
         final String topic = "testtopic";
         List<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
@@ -264,7 +264,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testIncrementalAlterConfigsRequired() throws Exception {
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorConnectorConfig.REQUIRE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter()));
+                new DefaultReplicationPolicy(), MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter()));
         final String topic = "testtopic";
         List<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
@@ -279,7 +279,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testIncrementalAlterConfigsNeverUsed() throws Exception {
         MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter()));
+                new DefaultReplicationPolicy(), MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter()));
         final String topic = "testtopic";
         List<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));

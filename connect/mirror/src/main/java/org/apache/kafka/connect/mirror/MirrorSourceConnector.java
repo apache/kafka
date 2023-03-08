@@ -92,7 +92,6 @@ public class MirrorSourceConnector extends SourceConnector {
     private List<TopicPartition> knownTargetTopicPartitions = Collections.emptyList();
     private ReplicationPolicy replicationPolicy;
     private int replicationFactor;
-
     private Admin sourceAdminClient;
     private Admin targetAdminClient;
     private Admin offsetSyncsAdminClient;
@@ -485,7 +484,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private void updateTopicConfigs(Map<String, Config> topicConfigs) {
-        if (useIncrementalAlterConfigs.equals(MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)) {
+        if (useIncrementalAlterConfigs.equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)) {
             alterConfigs(topicConfigs);
         } else {
             if (incrementalAlterConfigs(topicConfigs).get()) alterConfigs(topicConfigs);
@@ -526,12 +525,12 @@ public class MirrorSourceConnector extends SourceConnector {
         log.trace("Syncing configs for {} topics.", configOps.size());
         targetAdminClient.incrementalAlterConfigs(configOps).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
-                if (useIncrementalAlterConfigs == MirrorConnectorConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT
+                if (useIncrementalAlterConfigs == MirrorSourceConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT
                         && e.getCause() instanceof UnsupportedVersionException) {
                     //Fallback logic
                     log.warn("The target cluster {} is not compatible with IncrementalAlterConfigs API. Therefore using deprecated AlterConfigs API for syncing topic configurations", sourceAndTarget.target(), e);
                     fallbackToAlterConfigs.set(true);
-                    useIncrementalAlterConfigs = MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG;
+                    useIncrementalAlterConfigs = MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG;
                 } else {
                     log.warn("Could not alter configuration of topic {}.", k.name(), e);
                 }
@@ -566,7 +565,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     Config targetConfig(Config sourceConfig) {
         List<ConfigEntry> entries;
-        if (useIncrementalAlterConfigs == MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG) {
+        if (useIncrementalAlterConfigs == MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG) {
             entries = sourceConfig.entries().stream()
                     .filter(x -> !x.isDefault() && !x.isReadOnly() && !x.isSensitive())
                     .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
