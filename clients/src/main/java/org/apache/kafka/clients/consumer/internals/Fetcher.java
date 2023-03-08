@@ -227,13 +227,11 @@ public class Fetcher<K, V> implements Closeable {
                                     throw new IllegalStateException(message);
                                 } else {
                                     long fetchOffset = requestData.fetchOffset;
+                                    short requestVersion = resp.requestHeader().apiVersion();
                                     FetchResponseData.PartitionData partitionData = entry.getValue();
 
                                     log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                             isolationLevel, fetchOffset, partition, partitionData);
-
-                                    Iterator<? extends RecordBatch> batches = FetchResponse.recordsOrFail(partitionData).batches().iterator();
-                                    short responseVersion = resp.requestHeader().apiVersion();
 
                                     CompletedFetch<K, V> completedFetch = new CompletedFetch<>(logContext,
                                             subscriptions,
@@ -245,9 +243,8 @@ public class Fetcher<K, V> implements Closeable {
                                             partition,
                                             partitionData,
                                             metricAggregator,
-                                            batches,
                                             fetchOffset,
-                                            responseVersion);
+                                            requestVersion);
                                     completedFetches.add(completedFetch);
                                 }
                             }

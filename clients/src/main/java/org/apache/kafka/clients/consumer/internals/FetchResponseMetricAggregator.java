@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,16 +29,15 @@ import java.util.Set;
  * to facilitate this incremental aggregation.
  */
 class FetchResponseMetricAggregator {
+
     private final FetchManagerMetrics sensors;
     private final Set<TopicPartition> unrecordedPartitions;
-
     private final FetchMetrics fetchMetrics = new FetchMetrics();
     private final Map<String, FetchMetrics> topicFetchMetrics = new HashMap<>();
 
-    FetchResponseMetricAggregator(FetchManagerMetrics sensors,
-                                  Set<TopicPartition> partitions) {
+    FetchResponseMetricAggregator(FetchManagerMetrics sensors, Set<TopicPartition> partitions) {
         this.sensors = sensors;
-        this.unrecordedPartitions = partitions;
+        this.unrecordedPartitions = new HashSet<>(partitions);
     }
 
     /**
@@ -50,11 +50,7 @@ class FetchResponseMetricAggregator {
 
         // collect and aggregate per-topic metrics
         String topic = partition.topic();
-        FetchMetrics topicFetchMetric = this.topicFetchMetrics.get(topic);
-        if (topicFetchMetric == null) {
-            topicFetchMetric = new FetchMetrics();
-            this.topicFetchMetrics.put(topic, topicFetchMetric);
-        }
+        FetchMetrics topicFetchMetric = this.topicFetchMetrics.computeIfAbsent(topic, t -> new FetchMetrics());
         topicFetchMetric.increment(bytes, records);
 
         if (this.unrecordedPartitions.isEmpty()) {

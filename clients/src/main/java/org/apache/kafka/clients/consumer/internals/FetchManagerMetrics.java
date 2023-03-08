@@ -90,34 +90,38 @@ class FetchManagerMetrics {
 
     void recordTopicFetchMetrics(String topic, int bytes, int records) {
         // record bytes fetched
-        String name = "topic." + topic + ".bytes-fetched";
+        String name = topicBytesFetchedMetricName(topic);
         Sensor bytesFetched = this.metrics.getSensor(name);
+
         if (bytesFetched == null) {
-            Map<String, String> metricTags = Collections.singletonMap("topic", topic.replace('.', '_'));
+            Map<String, String> metricTags = topicTags(topic);
 
             bytesFetched = this.metrics.sensor(name);
-            bytesFetched.add(this.metrics.metricInstance(metricsRegistry.topicFetchSizeAvg,
-                    metricTags), new Avg());
-            bytesFetched.add(this.metrics.metricInstance(metricsRegistry.topicFetchSizeMax,
-                    metricTags), new Max());
-            bytesFetched.add(new Meter(this.metrics.metricInstance(metricsRegistry.topicBytesConsumedRate, metricTags),
-                    this.metrics.metricInstance(metricsRegistry.topicBytesConsumedTotal, metricTags)));
+            bytesFetched.add(this.metrics.metricInstance(metricsRegistry.topicFetchSizeAvg, metricTags), new Avg());
+            bytesFetched.add(this.metrics.metricInstance(metricsRegistry.topicFetchSizeMax, metricTags), new Max());
+            bytesFetched.add(new Meter(
+                    this.metrics.metricInstance(metricsRegistry.topicBytesConsumedRate, metricTags),
+                    this.metrics.metricInstance(metricsRegistry.topicBytesConsumedTotal, metricTags)
+            ));
         }
+
         bytesFetched.record(bytes);
 
         // record records fetched
-        name = "topic." + topic + ".records-fetched";
+        name = topicRecordsFetchedMetricName(topic);
         Sensor recordsFetched = this.metrics.getSensor(name);
+
         if (recordsFetched == null) {
-            Map<String, String> metricTags = new HashMap<>(1);
-            metricTags.put("topic", topic.replace('.', '_'));
+            Map<String, String> metricTags = topicTags(topic);
 
             recordsFetched = this.metrics.sensor(name);
-            recordsFetched.add(this.metrics.metricInstance(metricsRegistry.topicRecordsPerRequestAvg,
-                    metricTags), new Avg());
-            recordsFetched.add(new Meter(this.metrics.metricInstance(metricsRegistry.topicRecordsConsumedRate, metricTags),
-                    this.metrics.metricInstance(metricsRegistry.topicRecordsConsumedTotal, metricTags)));
+            recordsFetched.add(this.metrics.metricInstance(metricsRegistry.topicRecordsPerRequestAvg, metricTags), new Avg());
+            recordsFetched.add(new Meter(
+                    this.metrics.metricInstance(metricsRegistry.topicRecordsConsumedRate, metricTags),
+                    this.metrics.metricInstance(metricsRegistry.topicRecordsConsumedTotal, metricTags)
+            ));
         }
+
         recordsFetched.record(records);
     }
 
@@ -133,10 +137,11 @@ class FetchManagerMetrics {
 
         if (this.assignmentId != newAssignmentId) {
             Set<TopicPartition> newAssignedPartitions = subscription.assignedPartitions();
+
             for (TopicPartition tp : this.assignedPartitions) {
                 if (!newAssignedPartitions.contains(tp)) {
-                    metrics.removeSensor(partitionLagMetricName(tp));
-                    metrics.removeSensor(partitionLeadMetricName(tp));
+                    metrics.removeSensor(partitionRecordsLagMetricName(tp));
+                    metrics.removeSensor(partitionRecordsLeadMetricName(tp));
                     metrics.removeMetric(partitionPreferredReadReplicaMetricName(tp));
                 }
             }
@@ -160,47 +165,62 @@ class FetchManagerMetrics {
     void recordPartitionLead(TopicPartition tp, long lead) {
         this.recordsFetchLead.record(lead);
 
-        String name = partitionLeadMetricName(tp);
+        String name = partitionRecordsLeadMetricName(tp);
         Sensor recordsLead = this.metrics.getSensor(name);
+
         if (recordsLead == null) {
             Map<String, String> metricTags = topicPartitionTags(tp);
-
             recordsLead = this.metrics.sensor(name);
-
             recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLead, metricTags), new Value());
             recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLeadMin, metricTags), new Min());
             recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLeadAvg, metricTags), new Avg());
         }
+
         recordsLead.record(lead);
     }
 
     void recordPartitionLag(TopicPartition tp, long lag) {
         this.recordsFetchLag.record(lag);
 
-        String name = partitionLagMetricName(tp);
+        String name = partitionRecordsLagMetricName(tp);
         Sensor recordsLag = this.metrics.getSensor(name);
+
         if (recordsLag == null) {
             Map<String, String> metricTags = topicPartitionTags(tp);
             recordsLag = this.metrics.sensor(name);
-
             recordsLag.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLag, metricTags), new Value());
             recordsLag.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLagMax, metricTags), new Max());
             recordsLag.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLagAvg, metricTags), new Avg());
         }
+
         recordsLag.record(lag);
     }
 
-    private static String partitionLagMetricName(TopicPartition tp) {
-        return tp + ".records-lag";
+    static String topicBytesFetchedMetricName(String topic) {
+        return "topic." + topic + ".bytes-fetched";
     }
 
-    private static String partitionLeadMetricName(TopicPartition tp) {
+    static String topicRecordsFetchedMetricName(String topic) {
+        return "topic." + topic + ".records-fetched";
+    }
+
+    static String partitionRecordsLeadMetricName(TopicPartition tp) {
         return tp + ".records-lead";
+    }
+
+    static String partitionRecordsLagMetricName(TopicPartition tp) {
+        return tp + ".records-lag";
     }
 
     private MetricName partitionPreferredReadReplicaMetricName(TopicPartition tp) {
         Map<String, String> metricTags = topicPartitionTags(tp);
         return this.metrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
+    }
+
+    private Map<String, String> topicTags(String topic) {
+        Map<String, String> metricTags = new HashMap<>(1);
+        metricTags.put("topic", topic.replace('.', '_'));
+        return metricTags;
     }
 
     private Map<String, String> topicPartitionTags(TopicPartition tp) {

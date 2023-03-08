@@ -31,6 +31,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
@@ -98,7 +99,6 @@ class CompletedFetch<K, V> {
                    TopicPartition partition,
                    FetchResponseData.PartitionData partitionData,
                    FetchResponseMetricAggregator metricAggregator,
-                   Iterator<? extends RecordBatch> batches,
                    Long fetchOffset,
                    short requestVersion) {
         this.log = logContext.logger(CompletedFetch.class);
@@ -111,7 +111,7 @@ class CompletedFetch<K, V> {
         this.partition = partition;
         this.partitionData = partitionData;
         this.metricAggregator = metricAggregator;
-        this.batches = batches;
+        this.batches = FetchResponse.recordsOrFail(partitionData).batches().iterator();
         this.nextFetchOffset = fetchOffset;
         this.requestVersion = requestVersion;
         this.lastEpoch = Optional.empty();
@@ -147,7 +147,7 @@ class CompletedFetch<K, V> {
     }
 
     private void maybeEnsureValid(RecordBatch batch) {
-        if (checkCrcs && currentBatch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+        if (checkCrcs && batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
             try {
                 batch.ensureValid();
             } catch (CorruptRecordException e) {
@@ -193,9 +193,7 @@ class CompletedFetch<K, V> {
                 }
 
                 currentBatch = batches.next();
-                lastEpoch = currentBatch.partitionLeaderEpoch() == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
-                        Optional.empty() : Optional.of(currentBatch.partitionLeaderEpoch());
-
+                lastEpoch = maybeLeaderEpoch(currentBatch.partitionLeaderEpoch());
                 maybeEnsureValid(currentBatch);
 
                 if (isolationLevel == IsolationLevel.READ_COMMITTED && currentBatch.hasProducerId()) {
@@ -256,18 +254,24 @@ class CompletedFetch<K, V> {
             return Collections.emptyList();
 
         List<ConsumerRecord<K, V>> records = new ArrayList<>();
+
         try {
             for (int i = 0; i < maxRecords; i++) {
-                // Only move to next record if there was no exception in the last fetch. Otherwise we should
+                // Only move to next record if there was no exception in the last fetch. Otherwise, we should
                 // use the last record to do deserialization again.
                 if (cachedRecordException == null) {
                     corruptLastRecord = true;
                     lastRecord = nextFetchedRecord();
                     corruptLastRecord = false;
                 }
+
                 if (lastRecord == null)
                     break;
-                records.add(parseRecord(partition, currentBatch, lastRecord));
+
+                Optional<Integer> leaderEpoch = maybeLeaderEpoch(currentBatch.partitionLeaderEpoch());
+                TimestampType timestampType = currentBatch.timestampType();
+                ConsumerRecord<K, V> record = parseRecord(partition, leaderEpoch, timestampType, lastRecord);
+                records.add(record);
                 recordsRead++;
                 bytesRead += lastRecord.sizeInBytes();
                 nextFetchOffset = lastRecord.offset() + 1;
@@ -292,14 +296,13 @@ class CompletedFetch<K, V> {
     /**
      * Parse the record entry, deserializing the key / value fields if necessary
      */
-    private ConsumerRecord<K, V> parseRecord(TopicPartition partition,
-                                             RecordBatch batch,
-                                             Record record) {
+    ConsumerRecord<K, V> parseRecord(TopicPartition partition,
+                                     Optional<Integer> leaderEpoch,
+                                     TimestampType timestampType,
+                                     Record record) {
         try {
             long offset = record.offset();
             long timestamp = record.timestamp();
-            Optional<Integer> leaderEpoch = maybeLeaderEpoch(batch.partitionLeaderEpoch());
-            TimestampType timestampType = batch.timestampType();
             Headers headers = new RecordHeaders(record.headers());
             ByteBuffer keyBytes = record.key();
             byte[] keyByteArray = keyBytes == null ? null : org.apache.kafka.common.utils.Utils.toArray(keyBytes);
