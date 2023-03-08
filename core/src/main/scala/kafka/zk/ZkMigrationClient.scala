@@ -18,6 +18,8 @@ package kafka.zk
 
 import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
+import kafka.security.authorizer.AclAuthorizer
+import kafka.security.authorizer.AclAuthorizer.{ResourceOrdering, VersionedAcls}
 import kafka.server.{ConfigEntityName, ConfigType, ZkAdminManager}
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
@@ -27,6 +29,7 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.quota.ClientQuotaEntity
+import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
@@ -211,12 +214,38 @@ class ZkMigrationClient(zkClient: KafkaZkClient) extends MigrationClient with Lo
     }
   }
 
+  def migrateAcls(recordConsumer: Consumer[util.List[ApiMessageAndVersion]]): Unit = {
+    // This is probably fairly inefficient, but it preserves the semantics from AclAuthorizer (which is non-trivial)
+    var allAcls = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(new ResourceOrdering)
+    def updateAcls(resourcePattern: ResourcePattern, versionedAcls: VersionedAcls): Unit = {
+      allAcls = allAcls.updated(resourcePattern, versionedAcls)
+    }
+
+    AclAuthorizer.loadAllAcls(zkClient, this, updateAcls)
+    allAcls.foreach { case (resourcePattern, versionedAcls) =>
+      val batch = new util.ArrayList[ApiMessageAndVersion]()
+      versionedAcls.acls.foreach { entry =>
+        batch.add(new ApiMessageAndVersion(new AccessControlEntryRecord()
+          .setId(Uuid.randomUuid())
+          .setResourceType(resourcePattern.resourceType().code())
+          .setResourceName(resourcePattern.name())
+          .setPatternType(resourcePattern.patternType().code())
+          .setPrincipal(entry.ace.principal())
+          .setHost(entry.ace.host())
+          .setOperation(entry.ace.operation().code())
+          .setPermissionType(entry.ace.permissionType().code()), AccessControlEntryRecord.HIGHEST_SUPPORTED_VERSION))
+      }
+      recordConsumer.accept(batch)
+    }
+  }
+
   override def readAllMetadata(batchConsumer: Consumer[util.List[ApiMessageAndVersion]],
                                brokerIdConsumer: Consumer[Integer]): Unit = {
     migrateTopics(batchConsumer, brokerIdConsumer)
     migrateBrokerConfigs(batchConsumer)
     migrateClientQuotas(batchConsumer)
     migrateProducerId(batchConsumer)
+    migrateAcls(batchConsumer)
   }
 
   override def readBrokerIds(): util.Set[Integer] = {
