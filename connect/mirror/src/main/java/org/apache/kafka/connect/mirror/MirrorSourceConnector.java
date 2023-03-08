@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import java.util.HashMap;
 import java.util.Map.Entry;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ForwardingAdmin;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -85,7 +86,6 @@ public class MirrorSourceConnector extends SourceConnector {
     private int replicationFactor;
     private ForwardingAdmin sourceAdminClient;
     private ForwardingAdmin targetAdminClient;
-
     private String useIncrementalAlterConfigs;
 
     public MirrorSourceConnector() {
@@ -107,6 +107,16 @@ public class MirrorSourceConnector extends SourceConnector {
         this.configPropertyFilter = configPropertyFilter;
     }
 
+    // visible for testing the deprecated setting "use.incremental.alter.configs"
+    // this constructor should be removed when the deprecated setting is removed in Kafka 4.0
+    MirrorSourceConnector(SourceAndTarget sourceAndTarget, ReplicationPolicy replicationPolicy,
+                          String useIncrementalAlterConfigs, ConfigPropertyFilter configPropertyFilter) {
+        this.sourceAndTarget = sourceAndTarget;
+        this.replicationPolicy = replicationPolicy;
+        this.configPropertyFilter = configPropertyFilter;
+        this.useIncrementalAlterConfigs = useIncrementalAlterConfigs;
+    }
+
     @Override
     public void start(Map<String, String> props) {
         long start = System.currentTimeMillis();
@@ -122,7 +132,7 @@ public class MirrorSourceConnector extends SourceConnector {
         replicationFactor = config.replicationFactor();
         sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
         targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
-        useIncrementalAlterConfigs =  config.useIncrementalAlterConfig();
+        useIncrementalAlterConfigs =  config.useIncrementalAlterConfigs();
 
         scheduler = new Scheduler(MirrorSourceConnector.class, config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
@@ -304,7 +314,8 @@ public class MirrorSourceConnector extends SourceConnector {
         updateTopicAcls(bindings);
     }
 
-    private void syncTopicConfigs()
+    // visible for testing
+    void syncTopicConfigs()
             throws InterruptedException, ExecutionException {
         Map<String, Config> sourceConfigs = describeTopicConfigs(topicsBeingReplicated());
         Map<String, Config> targetConfigs = sourceConfigs.entrySet().stream()
@@ -424,13 +435,14 @@ public class MirrorSourceConnector extends SourceConnector {
         if (useIncrementalAlterConfigs.equals(MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG)) {
             alterConfigs(topicConfigs);
         } else {
-            incrementalAlterConfigs(topicConfigs);
+            if (incrementalAlterConfigs(topicConfigs).get()) alterConfigs(topicConfigs);
         }
     }
 
-    @SuppressWarnings("deprecation")
+    // visible for testing
     // use deprecated alterConfigs API for broker compatibility back to 0.11.0
-    private void alterConfigs(Map<String, Config> topicConfigs) {
+    @SuppressWarnings("deprecation")
+    void alterConfigs(Map<String, Config> topicConfigs) {
         Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
             .collect(Collectors.toMap(x ->
                 new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), Entry::getValue));
@@ -442,7 +454,9 @@ public class MirrorSourceConnector extends SourceConnector {
         }));
     }
 
-    private void incrementalAlterConfigs(Map<String, Config> topicConfigs) {
+    // visible for testing
+    AtomicBoolean incrementalAlterConfigs(Map<String, Config> topicConfigs) {
+        AtomicBoolean fallbackToAlterConfigs = new AtomicBoolean(false);
         Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>();
         for (Map.Entry<String, Config> topicConfig : topicConfigs.entrySet()) {
             Collection<AlterConfigOp> ops = new ArrayList<>();
@@ -462,14 +476,16 @@ public class MirrorSourceConnector extends SourceConnector {
                 if (useIncrementalAlterConfigs == MirrorConnectorConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT
                         && e.getCause() instanceof UnsupportedVersionException) {
                     //Fallback logic
-                    alterConfigs(topicConfigs);
+                    log.warn("The target cluster {} is not compatible with IncrementalAlterConfigs API. Therefore using deprecated AlterConfigs API for syncing topic configurations", sourceAndTarget.target(), e);
+                    fallbackToAlterConfigs.set(true);
+                    useIncrementalAlterConfigs = MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG;
                 } else {
                     log.warn("Could not alter configuration of topic {}.", k.name(), e);
                 }
             }
         }));
+        return fallbackToAlterConfigs;
     }
-
 
     private void updateTopicAcls(List<AclBinding> bindings) {
         log.trace("Syncing {} topic ACL bindings.", bindings.size());
@@ -496,7 +512,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     Config targetConfig(Config sourceConfig) {
-        List<ConfigEntry> entries = null;
+        List<ConfigEntry> entries;
         if (useIncrementalAlterConfigs == MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG) {
             entries = sourceConfig.entries().stream()
                     .filter(x -> !x.isDefault() && !x.isReadOnly() && !x.isSensitive())

@@ -285,22 +285,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         // the configuration on the target topic should be changed to the target cluster's default
         backupConfig = getTopicConfig(backup.kafka(), backupTopic, "retention.bytes");
         assertEquals("-1", backupConfig,
-                "`retention.bytes` should be synced with default value!");
-    }
-
-    @Test
-    public void testIncrementalAlterConfigRequired() throws Exception {
-
-    }
-
-    @Test
-    public void testIncrementalAlterConfigRequested() throws Exception {
-
-    }
-
-    @Test
-    public void testIncrementalAlterConfigNever() throws Exception {
-
+                "`retention.bytes` should be synced with target's default value!");
     }
 
     @Test

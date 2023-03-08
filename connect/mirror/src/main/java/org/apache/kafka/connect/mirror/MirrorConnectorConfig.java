@@ -170,7 +170,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
             "By default, set to \"requested\", which means the IncrementalAlterConfigs is being used for syncing topic configurations " +
             "and if any request receives an error from an incompatible broker, it will fallback to using the deprecated AlterConfigs API. " +
             "If explicitly set to \"required\", the IncrementalAlterConfigs is used without the fallback logic. " +
-            "If explicitly set to \"never\", the AlterConfig is always used." +
+            "If explicitly set to \"never\", the AlterConfigs is always used." +
             "This setting will be removed in Kafka 4.0, therefore users should ensure that target broker is at least 2.3.0";
     public static final String USE_INCREMENTAL_ALTER_CONFIG_DEFAULT = "requested";
     public static final String REQUIRE_INCREMENTAL_ALTER_CONFIG = "required";
@@ -501,7 +501,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
         }
     }
 
-    String useIncrementalAlterConfig() {
+    String useIncrementalAlterConfigs() {
         String prop = getString(USE_INCREMENTAL_ALTER_CONFIG);
         if (prop.equals(NEVER_USE_INCREMENTAL_ALTER_CONFIG) || prop.equals(REQUIRE_INCREMENTAL_ALTER_CONFIG)) {
             return prop;

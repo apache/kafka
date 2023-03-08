@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
@@ -57,16 +58,16 @@ import java.util.List;
 import java.util.Map;
 
 public class MirrorSourceConnectorTest {
-    private ConfigPropertyFilter getConfigPropertyFilter(Boolean replicateConfigProperty, Boolean replicateSourceDefault) {
+    private ConfigPropertyFilter getConfigPropertyFilter() {
         return new ConfigPropertyFilter() {
             @Override
             public boolean shouldReplicateConfigProperty(String prop) {
-                return replicateConfigProperty;
+                return true;
             }
 
             @Override
             public boolean shouldReplicateSourceDefault(ConfigEntry.ConfigSource source) {
-                return replicateSourceDefault;
+                return false;
             }
         };
     }
@@ -90,7 +91,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testNoCycles() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter(true, false));
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
         assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("source.target.topic1"), "should not allow cycles");
@@ -103,7 +104,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testIdentityReplication() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new IdentityReplicationPolicy(), x -> true, getConfigPropertyFilter(true, false));
+            new IdentityReplicationPolicy(), x -> true, getConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("target.topic1"), "should allow cycles");
         assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should allow cycles");
         assertTrue(connector.shouldReplicateTopic("source.target.topic1"), "should allow cycles");
@@ -123,7 +124,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testAclFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter(true, false));
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
         assertFalse(connector.shouldReplicateAcl(
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
@@ -135,7 +136,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testAclTransformation() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter(true, false));
+            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
         AclBinding allowAllAclBinding = new AclBinding(
             new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW));
@@ -160,11 +161,34 @@ public class MirrorSourceConnectorTest {
             new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
         ArrayList<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
+        entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), ConfigEntry.ConfigType.STRING, ""));
         entries.add(new ConfigEntry("min.insync.replicas", "2"));
         Config config = new Config(entries);
         Config targetConfig = connector.targetConfig(config);
         assertTrue(targetConfig.entries().stream()
             .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
+        assertTrue(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("name-2")), "should include default properties");
+        assertFalse(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
+    }
+
+    @Test
+    @Deprecated
+    public void testConfigPropertyFilteringWithAlterConfigs() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter());
+        ArrayList<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        // When set to not using incrementalAlterConfigs, the default config should be excluded
+        entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, Collections.emptyList(), ConfigEntry.ConfigType.STRING, ""));
+        entries.add(new ConfigEntry("min.insync.replicas", "2"));
+        Config config = new Config(entries);
+        Config targetConfig = connector.targetConfig(config);
+        assertTrue(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
+        assertFalse(targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("name-2")), "should not replicate default properties");
         assertFalse(targetConfig.entries().stream()
             .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
     }
@@ -210,6 +234,53 @@ public class MirrorSourceConnectorTest {
         }).when(connector).createNewTopics(any());
         connector.createNewTopics(Collections.singleton(topic), Collections.singletonMap(topic, 1L));
         verify(connector).createNewTopics(any(), any());
+    }
+
+    @Test
+    public void testIncrementalAlterConfigsRequested() throws Exception {
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), MirrorConnectorConfig.USE_INCREMENTAL_ALTER_CONFIG_DEFAULT, new DefaultConfigPropertyFilter()));
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doReturn(new AtomicBoolean(true)).when(connector).incrementalAlterConfigs(any());
+        doNothing().when(connector).alterConfigs(any());
+        connector.syncTopicConfigs();
+        verify(connector).syncTopicConfigs();
+        verify(connector).incrementalAlterConfigs(any());
+        verify(connector).alterConfigs(any());
+    }
+
+    @Test
+    public void testIncrementalAlterConfigsRequired() throws Exception {
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), MirrorConnectorConfig.REQUIRE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter()));
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doReturn(new AtomicBoolean(false)).when(connector).incrementalAlterConfigs(any());
+        connector.syncTopicConfigs();
+        verify(connector).syncTopicConfigs();
+        verify(connector).incrementalAlterConfigs(any());
+    }
+
+    @Test
+    public void testIncrementalAlterConfigsNeverUsed() throws Exception {
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), MirrorConnectorConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIG, new DefaultConfigPropertyFilter()));
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doNothing().when(connector).alterConfigs(any());
+        connector.syncTopicConfigs();
+        verify(connector).syncTopicConfigs();
+        verify(connector).alterConfigs(any());
     }
 
     @Test
