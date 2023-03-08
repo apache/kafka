@@ -1413,10 +1413,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             future.raise(error);
                             return;
                         } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS
-                                || error == Errors.UNKNOWN_TOPIC_OR_PARTITION
-                                || error == Errors.UNKNOWN_TOPIC_ID) {
+                                || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                             // just retry
                             future.raise(error);
+                            return;
+                        } else if (error == Errors.UNKNOWN_TOPIC_ID) {
+                            // Topic IDs are not exposed in the consumer APIs.
+                            future.raise(Errors.UNKNOWN_TOPIC_OR_PARTITION);
                             return;
                         } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                                 || error == Errors.NOT_COORDINATOR

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicResolver;
 import org.apache.kafka.common.Uuid;
@@ -39,7 +40,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
+import static java.util.function.Function.identity;
 import static org.apache.kafka.common.requests.OffsetCommitRequest.getErrorResponseTopics;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -183,5 +186,39 @@ public class OffsetCommitRequestTest {
     public void maxAllowedVersionIsEightIfRequestCannotUseTopicIds(boolean canUseTopicIds) {
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data.duplicate(), canUseTopicIds);
         assertEquals(canUseTopicIds ? 9 : 8, builder.build(builder.latestAllowedVersion()).version());
+    }
+
+    /**
+     * Compares the two {@link OffsetCommitRequestData} independently of the order in which the
+     * {@link OffsetCommitRequestTopic} and {@link OffsetCommitRequestPartition} are defined in the response.
+     */
+    public static void assertRequestEquals(OffsetCommitRequest expectedRequest, OffsetCommitRequest actualRequest) {
+        if (expectedRequest.version() > 9 || actualRequest.version() > 9) {
+            throw new AssertionError("A new version of OffsetCommitRequest has been detected. Please " +
+                    "review the equality contract enforced here and add/remove fields accordingly.");
+        }
+
+        OffsetCommitRequestData expected = expectedRequest.data();
+        OffsetCommitRequestData actual = actualRequest.data();
+
+        assertEquals(expectedRequest.version(), actualRequest.version());
+        assertEquals(expected.groupId(), actual.groupId(), "Group id mismatch");
+        assertEquals(expected.groupInstanceId(), actual.groupInstanceId(), "Group instance id mismatch");
+        assertEquals(expected.generationId(), actual.generationId(), "Generation id mismatch");
+        assertEquals(expected.memberId(), actual.memberId(), "Member id mismatch");
+        assertEquals(expected.retentionTimeMs(), actual.retentionTimeMs(), "Retention time mismatch");
+        assertEquals(offsetCommitRequestPartitions(expected), offsetCommitRequestPartitions(actual));
+    }
+
+    private static Map<TopicIdPartition, OffsetCommitRequestPartition> offsetCommitRequestPartitions(
+            OffsetCommitRequestData request) {
+        return request.topics().stream()
+                .flatMap(topic -> topic.partitions().stream()
+                        .collect(Collectors.toMap(
+                                p -> new TopicIdPartition(topic.topicId(), p.partitionIndex(), topic.name()),
+                                identity()))
+                        .entrySet()
+                        .stream())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 }

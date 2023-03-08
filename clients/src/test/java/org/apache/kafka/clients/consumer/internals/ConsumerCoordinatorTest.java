@@ -43,6 +43,7 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -140,7 +141,7 @@ import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Rebala
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.EAGER;
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
-import static org.apache.kafka.test.MoreAssertions.assertRequestEquals;
+import static org.apache.kafka.common.requests.OffsetCommitRequestTest.assertRequestEquals;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -2744,8 +2745,9 @@ public abstract class ConsumerCoordinatorTest {
                 new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE)));
     }
 
-    @Test
-    public void testCommitOffsetUnknownTopicId() {
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testCommitOffsetUnknownTopicId(boolean commitSync) {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
@@ -2767,20 +2769,59 @@ public abstract class ConsumerCoordinatorTest {
         // the timeout allows. Note that since topic ids are not part of the public API of the consumer,
         // we cannot throw an UnknownTopicId to the user. By design, a false boolean indicating the
         // offset commit failed is returned.
-        assertFalse(coordinator.commitOffsetsSync(singletonMap(t1p,
-            new OffsetAndMetadata(100L, "metadata")), time.timer(timeoutMs)));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
+            t1p,
+            new OffsetAndMetadata(100L, "metadata")
+        );
+
+        if (commitSync) {
+            assertFalse(coordinator.commitOffsetsSync(offsets, time.timer(timeoutMs)));
+
+        } else {
+            AtomicBoolean callbackInvoked = new AtomicBoolean();
+            coordinator.commitOffsetsAsync(offsets, (inputOffsets, exception) -> {
+                assertSame(inputOffsets, offsets);
+                assertEquals(RetriableCommitFailedException.class, exception.getClass());
+                assertEquals(UnknownTopicOrPartitionException.class, exception.getCause().getClass());
+                callbackInvoked.set(true);
+            });
+
+            coordinator.invokeCompletedOffsetCommitCallbacks();
+            assertTrue(callbackInvoked.get());
+        }
     }
 
-    @Test
-    public void testRetryCommitUnknownTopicId() {
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testRetryCommitUnknownTopicId(boolean commitSync) {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         client.prepareResponse(offsetCommitResponse(singletonMap(ti1p, Errors.UNKNOWN_TOPIC_ID)));
         client.prepareResponse(offsetCommitResponse(singletonMap(ti1p, Errors.NONE)));
 
-        assertTrue(coordinator.commitOffsetsSync(singletonMap(t1p,
-            new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE)));
+        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
+            t1p,
+            new OffsetAndMetadata(100L, "metadata")
+        );
+
+        if (commitSync) {
+            assertTrue(coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE)));
+
+        } else {
+            AtomicBoolean callbackInvoked = new AtomicBoolean();
+            coordinator.commitOffsetsAsync(offsets, (inputOffsets, exception) -> {
+                // Unlike the commit offset sync API, the async API does not retry.
+                assertSame(inputOffsets, offsets);
+                assertEquals(RetriableCommitFailedException.class, exception.getClass());
+                assertEquals(UnknownTopicOrPartitionException.class, exception.getCause().getClass());
+                callbackInvoked.set(true);
+            });
+
+            coordinator.invokeCompletedOffsetCommitCallbacks();
+            assertTrue(callbackInvoked.get());
+        }
     }
 
     static Stream<Arguments> commitOffsetTestArgs() {
