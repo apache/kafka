@@ -1231,6 +1231,7 @@ project(':group-coordinator') {
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
+    implementation project(':metadata')
     implementation libs.slf4jApi
 
     testImplementation project(':clients').sourceSets.test.output
