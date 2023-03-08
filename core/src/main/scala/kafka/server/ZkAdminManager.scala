@@ -20,7 +20,6 @@ import java.util
 import java.util.Properties
 import kafka.admin.AdminUtils
 import kafka.common.TopicAlreadyMarkedForDeletionException
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.metadata.ZkConfigRepository
@@ -70,7 +69,7 @@ object ZkAdminManager {
 class ZkAdminManager(val config: KafkaConfig,
                      val metrics: Metrics,
                      val metadataCache: MetadataCache,
-                     val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
+                     val zkClient: KafkaZkClient) extends Logging {
 
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 

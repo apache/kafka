@@ -24,14 +24,13 @@ import kafka.common._
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFeaturesCallback}
 import kafka.coordinator.transaction.ZkProducerIdManager
-import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.metadata.ZkFinalizedFeatureCache
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
-import kafka.zk._
+import kafka.zk.{FeatureZNodeStatus, _}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.common.ElectionType
@@ -46,6 +45,7 @@ import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, Leade
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
@@ -80,7 +80,9 @@ class KafkaController(val config: KafkaConfig,
                       brokerFeatures: BrokerFeatures,
                       featureCache: ZkFinalizedFeatureCache,
                       threadNamePrefix: Option[String] = None)
-  extends ControllerEventProcessor with Logging with KafkaMetricsGroup {
+  extends ControllerEventProcessor with Logging {
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   this.logIdent = s"[Controller id=${config.brokerId}] "
 
@@ -141,19 +143,19 @@ class KafkaController(val config: KafkaConfig,
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(1, true, "delegation-token-cleaner")
 
-  newGauge("ActiveControllerCount", () => if (isActive) 1 else 0)
-  newGauge("OfflinePartitionsCount", () => offlinePartitionCount)
-  newGauge("PreferredReplicaImbalanceCount", () => preferredReplicaImbalanceCount)
-  newGauge("ControllerState", () => state.value)
-  newGauge("GlobalTopicCount", () => globalTopicCount)
-  newGauge("GlobalPartitionCount", () => globalPartitionCount)
-  newGauge("TopicsToDeleteCount", () => topicsToDeleteCount)
-  newGauge("ReplicasToDeleteCount", () => replicasToDeleteCount)
-  newGauge("TopicsIneligibleToDeleteCount", () => ineligibleTopicsToDeleteCount)
-  newGauge("ReplicasIneligibleToDeleteCount", () => ineligibleReplicasToDeleteCount)
-  newGauge("ActiveBrokerCount", () => activeBrokerCount)
+  metricsGroup.newGauge("ActiveControllerCount", () => if (isActive) 1 else 0)
+  metricsGroup.newGauge("OfflinePartitionsCount", () => offlinePartitionCount)
+  metricsGroup.newGauge("PreferredReplicaImbalanceCount", () => preferredReplicaImbalanceCount)
+  metricsGroup.newGauge("ControllerState", () => state.value)
+  metricsGroup.newGauge("GlobalTopicCount", () => globalTopicCount)
+  metricsGroup.newGauge("GlobalPartitionCount", () => globalPartitionCount)
+  metricsGroup.newGauge("TopicsToDeleteCount", () => topicsToDeleteCount)
+  metricsGroup.newGauge("ReplicasToDeleteCount", () => replicasToDeleteCount)
+  metricsGroup.newGauge("TopicsIneligibleToDeleteCount", () => ineligibleTopicsToDeleteCount)
+  metricsGroup.newGauge("ReplicasIneligibleToDeleteCount", () => ineligibleReplicasToDeleteCount)
+  metricsGroup.newGauge("ActiveBrokerCount", () => activeBrokerCount)
   // FencedBrokerCount metric is always 0 in the ZK controller.
-  newGauge("FencedBrokerCount", () => 0)
+  metricsGroup.newGauge("FencedBrokerCount", () => 0)
 
   /**
    * Returns true if this broker is the current controller.
@@ -2726,15 +2728,21 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
   }
 }
 
-private[controller] class ControllerStats extends KafkaMetricsGroup {
-  val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
+private[controller] class ControllerStats {
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+
+  val uncleanLeaderElectionRate = metricsGroup.newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
 
   val rateAndTimeMetrics: Map[ControllerState, Timer] = ControllerState.values.flatMap { state =>
     state.rateAndTimeMetricName.map { metricName =>
-      state -> newTimer(metricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
+      state -> metricsGroup.newTimer(metricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
     }
   }.toMap
 
+  // For test.
+  def removeMetric(name: String): Unit = {
+    metricsGroup.removeMetric(name)
+  }
 }
 
 sealed trait ControllerEvent {
