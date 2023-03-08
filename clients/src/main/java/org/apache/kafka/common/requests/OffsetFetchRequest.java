@@ -232,14 +232,22 @@ public class OffsetFetchRequest extends AbstractRequest {
             return data.groups();
         } else {
             OffsetFetchRequestData.OffsetFetchRequestGroup group =
-                new OffsetFetchRequestData.OffsetFetchRequestGroup().setGroupId(data.groupId());
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId(data.groupId());
 
-            data.topics().forEach(topic -> {
-                group.topics().add(new OffsetFetchRequestTopics()
-                    .setName(topic.name())
-                    .setPartitionIndexes(topic.partitionIndexes())
-                );
-            });
+            if (data.topics() == null) {
+                // If topics is null, it means that all topic-partitions should
+                // be fetched hence we preserve it.
+                group.setTopics(null);
+            } else {
+                // Otherwise, topics are translated to the new structure.
+                data.topics().forEach(topic -> {
+                    group.topics().add(new OffsetFetchRequestTopics()
+                        .setName(topic.name())
+                        .setPartitionIndexes(topic.partitionIndexes())
+                    );
+                });
+            }
 
             return Collections.singletonList(group);
         }

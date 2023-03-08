@@ -19,7 +19,7 @@ package kafka.server
 import java.io.File
 import java.util.{Collections, Optional, Properties}
 import kafka.cluster.{Partition, PartitionTest}
-import kafka.log.{LogManager, LogOffsetSnapshot, UnifiedLog}
+import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
@@ -30,7 +30,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, FetchParams, LogDirFailureChannel, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, FetchParams, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
@@ -151,11 +151,11 @@ class ReplicaManagerQuotasTest {
       val endOffsetMetadata = new LogOffsetMetadata(100L, 0L, 500)
       val partition: Partition = mock(classOf[Partition])
 
-      val offsetSnapshot = LogOffsetSnapshot(
-        logStartOffset = 0L,
-        logEndOffset = endOffsetMetadata,
-        highWatermark = endOffsetMetadata,
-        lastStableOffset = endOffsetMetadata)
+      val offsetSnapshot = new LogOffsetSnapshot(
+        0L,
+        endOffsetMetadata,
+        endOffsetMetadata,
+        endOffsetMetadata)
       when(partition.fetchOffsetSnapshot(Optional.empty(), fetchOnlyFromLeader = true))
           .thenReturn(offsetSnapshot)
 
@@ -206,11 +206,11 @@ class ReplicaManagerQuotasTest {
         new LogOffsetMetadata(150L, 50L, 500)
       val partition: Partition = mock(classOf[Partition])
 
-      val offsetSnapshot = LogOffsetSnapshot(
-        logStartOffset = 0L,
-        logEndOffset = endOffsetMetadata,
-        highWatermark = endOffsetMetadata,
-        lastStableOffset = endOffsetMetadata)
+      val offsetSnapshot = new LogOffsetSnapshot(
+        0L,
+        endOffsetMetadata,
+        endOffsetMetadata,
+        endOffsetMetadata)
       when(partition.fetchOffsetSnapshot(Optional.empty(), fetchOnlyFromLeader = true))
         .thenReturn(offsetSnapshot)
 
