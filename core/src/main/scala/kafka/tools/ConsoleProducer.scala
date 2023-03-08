@@ -38,17 +38,44 @@ import scala.annotation.nowarn
 @nowarn("cat=deprecation")
 object ConsoleProducer extends Logging {
 
-  private[tools] def newReader(className: String, inputStream: InputStream, prop: Properties): RecordReader = {
+  private[tools] def newReader(className: String, prop: Properties): RecordReader = {
     val reader = Class.forName(className).getDeclaredConstructor().newInstance()
     reader match {
       case r: RecordReader =>
-        r.configure(inputStream, prop.asInstanceOf[java.util.Map[String, _]])
+        r.configure(prop.asInstanceOf[java.util.Map[String, _]])
         r
       case r: MessageReader =>
         logger.warn("MessageReader is deprecated. Please use org.apache.kafka.server.tools.RecordReader instead")
-        r.init(inputStream, prop)
         new RecordReader {
-          override def readRecord(): ProducerRecord[Array[Byte], Array[Byte]] = r.readMessage()
+          private[this] var initialized = false
+
+          override def readRecords(inputStream: InputStream): java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] = {
+            if (initialized) throw new IllegalStateException("It is invalid to call readRecords again when the reader is based on deprecated MessageReader")
+            if (!initialized) {
+              r.init(inputStream, prop)
+              initialized = true
+            }
+            new java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] {
+              private[this] var current: ProducerRecord[Array[Byte], Array[Byte]] = null
+              // a flag used to avoid accessing readMessage again after it does return null
+              private[this] var done: Boolean = false
+
+              override def hasNext: Boolean = {
+                if (current != null) true
+                else if (done) false
+                else {
+                  current = r.readMessage()
+                  done = current == null
+                  !done
+                }
+              }
+
+              override def next(): ProducerRecord[Array[Byte], Array[Byte]] =
+                try if (hasNext) current
+                else throw new NoSuchElementException("no more records from input stream")
+                finally current = null
+            }
+          }
           override def close(): Unit = r.close()
         }
       case _ => throw new IllegalArgumentException(f"the reader must extend ${classOf[RecordReader].getName}")
@@ -57,12 +84,11 @@ object ConsoleProducer extends Logging {
 
   private[tools] def loopReader(producer: Producer[Array[Byte], Array[Byte]],
                                reader: RecordReader,
-                               sync: Boolean): Unit =
-    try while (true) {
-      val record = reader.readRecord()
-      if (record == null) return
-      else send(producer, record, sync)
-    } finally reader.close()
+                                inputStream: InputStream,
+                               sync: Boolean): Unit = {
+    val iter = reader.readRecords(inputStream)
+    try while (iter.hasNext) send(producer, iter.next(), sync) finally reader.close()
+  }
 
   def main(args: Array[String]): Unit = {
 
@@ -70,7 +96,7 @@ object ConsoleProducer extends Logging {
       val config = new ProducerConfig(args)
       val input = System.in
       val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
-      try loopReader(producer, newReader(config.readerClass, input, getReaderProps(config)), config.sync)
+      try loopReader(producer, newReader(config.readerClass, getReaderProps(config)), input, config.sync)
       finally producer.close()
       Exit.exit(0)
     } catch {

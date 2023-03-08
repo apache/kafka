@@ -17,31 +17,35 @@
 package org.apache.kafka.clients.tools;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.Configurable;
 
 import java.io.Closeable;
 import java.io.InputStream;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
- * Typical implementations of this interface convert data from an `InputStream` received via `configure` into a
- * `ProducerRecord` instance on each invocation of `readRecord`. Noted that the implementations to have a public
- * nullary constructor.
+ * Typical implementations of this interface convert data from an `InputStream` received via `readRecords` into a
+ * iterator of `ProducerRecord` instance. Noted that the implementations to have a public nullary constructor.
  *
  * This is used by the `kafka.tools.ConsoleProducer`.
  */
-public interface RecordReader extends Closeable {
+public interface RecordReader extends Closeable, Configurable {
 
-    default void configure(InputStream inputStream, Map<String, ?> configs) {}
+    default void configure(Map<String, ?> configs) {}
 
     /**
-     * read byte array from input stream and then generate a producer record
-     * @return a producer record
+     * read byte array from input stream and then generate a iterator of producer record
+     * @param inputStream of messages. the implementation does not need to close the input stream.
+     * @return a iterator of producer record. It should implement following rules. 1) the hasNext() method must be idempotent.
+     *         2) the convert error should be thrown by next() method.
      */
-    ProducerRecord<byte[], byte[]> readRecord();
+    Iterator<ProducerRecord<byte[], byte[]>> readRecords(InputStream inputStream);
 
 
     /**
-     * Closes this reader
+     * Closes this reader.
+     * This method is invoked if the iterator from readRecords either has no more records or throws exception.
      */
     default void close() {}
 }
