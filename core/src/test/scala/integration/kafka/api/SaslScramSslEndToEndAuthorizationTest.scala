@@ -19,6 +19,7 @@ package kafka.api
 import java.util.Properties
 
 import kafka.utils._
+import kafka.tools.StorageTool
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
@@ -27,10 +28,8 @@ import org.apache.kafka.test.TestSslUtils
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
-import java.util.Base64
 import scala.collection.mutable.ArrayBuffer
 import org.apache.kafka.server.common.{ApiMessageAndVersion}
-import org.apache.kafka.common.metadata.{UserScramCredentialRecord}
 
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -52,13 +51,19 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
     TestSslUtils.convertToPemWithoutFiles(adminClientConfig)
   }
 
-  def userScramCredentialRecord : ApiMessageAndVersion = new ApiMessageAndVersion(new UserScramCredentialRecord().
-                setName("scram-admin").
-                setMechanism(1).
-                setSalt(Base64.getDecoder.decode("dmc5NHY4ODdsOXZsMzYxOWF4cTAyejJuZw==")).
-                setSaltedPassword(Base64.getDecoder.decode("dtdfdTklxeGqmiFgt/srRwD0k6ztNB2gmChgUolP4f4=")).
-                setIterations(8192), 0.toShort)
-  override def optionalMetadataRecords = Some(ArrayBuffer().append(userScramCredentialRecord))
+  // Create the admin credentials for KRaft as part of controller initialization
+  override def optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]] = {
+    val args = Seq("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ", "-S",
+                   s"SCRAM-SHA-256=[name=${JaasTestUtils.KafkaScramAdmin},password=${JaasTestUtils.KafkaScramAdminPassword}]")
+    val namespace = StorageTool.parseArguments(args.toArray)
+    val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
+    StorageTool.getUserScramCredentialRecords(namespace).foreach {
+      userScramCredentialRecords => for (record <- userScramCredentialRecords) {
+        metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
+      }
+    }
+    Some(metadataRecords)
+  }
 
   override def configureListeners(props: collection.Seq[Properties]): Unit = {
     props.foreach(TestSslUtils.convertToPemWithoutFiles)

@@ -149,8 +149,7 @@ object JaasTestUtils {
   val KafkaScramUser2 = "scram-user2"
   val KafkaScramPassword2 = "scram-user2-secret"
   val KafkaScramAdmin = "scram-admin"
-//  val KafkaScramAdminPassword = "scram-admin-secret"
-  val KafkaScramAdminPassword = "admin"
+  val KafkaScramAdminPassword = "scram-admin-secret"
 
   val KafkaOAuthBearerUser = "oauthbearer-user"
   val KafkaOAuthBearerUser2 = "oauthbearer-user2"

@@ -344,7 +344,6 @@ abstract class QuorumTestHarness extends Logging {
         sharedServer,
         KafkaRaftServer.configSchema,
         bootstrapMetadata
-//        BootstrapMetadata.fromVersion(metadataVersion, "test harness")
       )
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {
         if (e != null) {
